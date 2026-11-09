@@ -8,20 +8,22 @@ pub(super) use gpui_kit::component::WindowExt as _;
 pub(super) use gpui_kit::component::select::SelectEvent;
 pub(super) use gpui_kit::test::{ClickOptions, TestWindowExt};
 pub(super) use gpui_kit::{
-    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, MouseButton, NavigationDirection, TestAppContext,
-    WindowBounds, WindowOptions, point, px, size,
+    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, InputEvent, MouseButton, NavigationDirection,
+    ScrollEvent, TestAppContext, TouchPhase, WindowBounds, WindowOptions, point, px, size,
 };
 pub(super) use serde_json::json;
 
+pub(super) use super::login_items::LoginItemStatus;
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
 pub(super) use super::{
-    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, Route,
-    TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, eyebrow_label, group_box_title,
+    ActivityState, DesktopButtonExt, DesktopView, DiscardIntent, ExternalLaunchCall, FixedRowSizeCache,
+    HandoffScriptCall, MAX_UI_EVENTS_PER_TICK, Route, SESSION_LIST_PAGE_SIZE, TestLaunchIntercept, ThemeMode,
+    WelcomePeriod, append_restored_output_page, content_page_title, eyebrow_label, group_box_title,
     opaque_path_element_id, restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label,
     workspace_picker_options,
 };
 pub(super) use crate::desktop::files::{ExternalEditor, FileEntry};
-pub(super) use crate::desktop::preferences::FileOpenDestination;
+pub(super) use crate::desktop::preferences::{CliTerminal, FileOpenDestination};
 pub(super) use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 pub(super) use crate::desktop::transcript::TranscriptItem;
 pub(super) use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
@@ -29,6 +31,16 @@ pub(super) use crate::desktop::transport::{BackendCommand, BackendEvent, Backend
 /// Redirect preference writes away from the real user home for GUI tests.
 fn isolate_preferences() -> PathBuf {
     crate::desktop::preferences::install_test_preferences_path()
+}
+
+/// Settles Kit fade animations (e.g. `pick-model-fade`, 180ms) by moving the
+/// executor clock. Since gpui-kit 0.9.0, `Animation` follows the test clock,
+/// so a fade stays at opacity 0 — and its controls fail click visibility —
+/// until the clock advances. Call after the last fade-triggering state
+/// change and before clicking faded controls; the next `render_frame`
+/// samples the settled opacity.
+fn settle_fade_animations(cx: &mut TestAppContext) {
+    cx.executor().advance_clock(Duration::from_millis(250));
 }
 
 /// A real 1x1 PNG so the renderer can decode image fixtures and thumbnails.
@@ -43,6 +55,79 @@ const TINY_PNG: &[u8] = &[
 /// directly instead of driving the workspace drop flow.
 fn test_thumbnail_image() -> std::sync::Arc<gpui_kit::Image> {
     std::sync::Arc::new(gpui_kit::Image::from_bytes(gpui_kit::ImageFormat::Png, TINY_PNG.to_vec()))
+}
+
+/// Assert one chord resolves to the expected action in the given context.
+/// Keymaps append, so a reinstalled table leaves identical duplicates behind;
+/// dispatch tries the highest-precedence hit first, which is what this pins.
+pub(super) fn assert_chord_resolves_to(
+    cx: &gpui_kit::App,
+    chord: &str,
+    context: &str,
+    expected: &dyn gpui_kit::Action,
+) {
+    let resolved = live_chord_bindings(cx, chord, context);
+    assert!(!resolved.is_empty(), "chord {chord} must stay live in {context}");
+    assert!(
+        gpui_kit::Action::partial_eq(resolved[0].action(), expected),
+        "chord {chord} resolved to the wrong action in {context}"
+    );
+}
+
+/// Assert one chord resolves exactly once to the expected action: the fresh
+/// binding with no lingering stale copy beneath it.
+pub(super) fn assert_chord_resolves_once_to(
+    cx: &gpui_kit::App,
+    chord: &str,
+    context: &str,
+    expected: &dyn gpui_kit::Action,
+) {
+    let resolved = live_chord_bindings(cx, chord, context);
+    assert_eq!(resolved.len(), 1, "chord {chord} must resolve exactly once in {context}");
+    assert!(
+        gpui_kit::Action::partial_eq(resolved[0].action(), expected),
+        "chord {chord} resolved to the wrong action in {context}"
+    );
+}
+
+/// Assert one chord resolves to nothing in the given context: unbound, or
+/// retired by a `NoAction` shadow after a rebind.
+pub(super) fn assert_chord_dead(cx: &gpui_kit::App, chord: &str, context: &str) {
+    let resolved = live_chord_bindings(cx, chord, context);
+    assert!(resolved.is_empty(), "chord {chord} must stay dead in {context}");
+}
+
+fn live_chord_bindings(cx: &gpui_kit::App, chord: &str, context: &str) -> Vec<gpui_kit::KeyBinding> {
+    // `parse` needs a `'static` source; none of these chords use `secondary-`,
+    // so the host-OS parse resolves them identically.
+    let keystroke = gpui_kit::Keystroke::parse_with_os(chord, super::shortcuts::host_operating_system()).unwrap();
+    let context = gpui_kit::KeyContext::parse(context).unwrap();
+    let keymap = cx.key_bindings();
+    let keymap = keymap.borrow();
+    let (resolved, _) = keymap.bindings_for_input(&[keystroke], &[context]);
+    resolved.into_iter().collect()
+}
+
+/// Deliver an interaction event as the selected session, the shared arrange
+/// step for interaction panel tests.
+fn deliver(
+    view: &Entity<DesktopView>,
+    interaction: vtcode_desktop_protocol::InteractionRequest,
+    cx: &mut TestAppContext,
+) {
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some(interaction.session_id.clone());
+        view.handle_backend_event(BackendEvent::Interaction(interaction), cx);
+    });
+}
+
+fn focus_panel(view: &Entity<DesktopView>, window: AnyWindowHandle, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.interaction_focus.focus(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
 }
 
 fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
@@ -73,7 +158,7 @@ fn open_desktop_sized_with_preferences_path(
     cx.update(super::super::notifications::initialize);
     let preferences = crate::desktop::preferences::Preferences::load();
     cx.update(|cx| super::init_keybindings(cx, &preferences));
-    cx.update(super::init_native_menus);
+    cx.update(super::menu_bar::init_native_menus);
     cx.update(|cx| {
         gpui_kit::open_window(
             WindowOptions {
@@ -124,7 +209,25 @@ fn pending_webmcp_pairing() -> vtcode_desktop_protocol::WebmcpPairResult {
 }
 
 fn palette_action_id(action: &super::PaletteAction) -> String {
-    super::palette_entry_element_id(action)
+    super::palette_render::palette_entry_element_id(action)
+}
+
+/// Opening prompt history fetches cross-thread recents exactly once (an
+/// in-flight guard dedups reopens); drain and pin that request so channel
+/// assertions observe the submit under test, not the fetch.
+pub(super) fn expect_recent_prompts_request(
+    requests: &mut tokio::sync::mpsc::Receiver<BackendCommand>,
+    scope: super::HistoryScope,
+) {
+    let BackendCommand::Request { method, params } =
+        requests.try_recv().expect("history open fetches cross-thread recents")
+    else {
+        panic!("expected a backend request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_RECENT_PROMPTS);
+    let decoded: vtcode_desktop_protocol::RecentPromptsParams =
+        serde_json::from_value(params).expect("typed scope params");
+    assert_eq!(decoded.scope, scope);
 }
 
 fn agent_message_update_event(session_id: &str, turn_id: &str, item_id: &str, text: &str) -> BackendEvent {
@@ -194,6 +297,72 @@ fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mu
     panic!("Tab did not reach focusable element {id}");
 }
 
+/// Modal-trap contract: Tab from the last stop wraps to the first, and
+/// Shift-Tab from the first wraps to the last — focus never escapes the
+/// dialog in either direction.
+fn assert_tab_trapped_within_dialog(
+    window: &mut gpui_kit::Window,
+    first_id: &'static str,
+    last_id: &'static str,
+    cx: &mut gpui_kit::App,
+) {
+    focus_element_by_tab(window, last_id, cx);
+    window.press("tab", cx);
+    window.render_frame(cx);
+    assert_eq!(window.find(first_id).focused(), Some(true), "tab from the last stop must wrap to the first");
+    window.press("shift-tab", cx);
+    window.render_frame(cx);
+    assert_eq!(window.find(last_id).focused(), Some(true), "shift-tab from the first stop must wrap to the last");
+}
+
+/// Click one thread tab's close button, revealing it first. Folder tabs keep
+/// their natural width and the strip scrolls, so the button can sit outside
+/// the viewport (and outside hit-testing) until revealed — the same scroll a
+/// native pointer user performs. Two frames: the first binds the scroll
+/// handle, the second applies the reveal.
+pub(super) fn click_thread_tab_close(
+    window: &mut gpui_kit::Window,
+    view: &Entity<DesktopView>,
+    session_id: &str,
+    cx: &mut gpui_kit::App,
+) {
+    if let Some(index) = view.read(cx).open_tabs.iter().position(|tab| tab == session_id) {
+        view.update(cx, |view, _| view.tab_strip_scroll.scroll_to_item(index));
+        window.render_frame(cx);
+        window.render_frame(cx);
+    }
+    window.click(format!("thread-tab-close-{session_id}"), cx);
+}
+
+/// Tab until focus leaves `scope`, then keep tabbing until it cycles back in.
+/// Route panels do not trap focus, so a fixed tab count breaks whenever any
+/// window control is added, removed, or reordered. Bounded; panics naming the
+/// scope when the cycle never leaves or never returns. The bound is headroom
+/// over the stop count, not a contract: raise it when controls are added.
+fn tab_out_and_back_into_scope(
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::App,
+    scope: &'static str,
+    mut in_scope: impl FnMut(&mut gpui_kit::Window, &mut gpui_kit::App) -> bool,
+) {
+    for _ in 0..256 {
+        if !in_scope(window, cx) {
+            break;
+        }
+        window.press("tab", cx);
+        window.render_frame(cx);
+    }
+    assert!(!in_scope(window, cx), "tab never left {scope}");
+    for _ in 0..256 {
+        if in_scope(window, cx) {
+            return;
+        }
+        window.press("tab", cx);
+        window.render_frame(cx);
+    }
+    panic!("tab never cycled back into {scope}");
+}
+
 /// Embedded-panel contract: the toolbar persists above every panel, visible
 /// navigation sits beside it, and the panel stays inside the viewport.
 fn assert_panel_embeds(window: &mut gpui_kit::Window, panel_id: &'static str) {
@@ -225,6 +394,14 @@ fn assert_panel_embeds(window: &mut gpui_kit::Window, panel_id: &'static str) {
     );
 }
 
+/// Press the editor scrim at the panel's top-left corner: inside the
+/// scrim, outside the centered dialog card in every layout. (Nav-center
+/// clicks can land inside the card and stop there, which is correct
+/// product behavior but a useless test target.)
+fn click_editor_scrim(window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
+    window.click_at("settings-panel", point(px(2.), px(2.)), cx);
+}
+
 fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mut gpui_kit::App) {
     window.press("home", cx);
     window.render_frame(cx);
@@ -234,14 +411,59 @@ fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mu
     }
 }
 
+/// Center a settings-content target in the panel viewport before clicking it.
+/// Geometry-driven, so a group added above the target cannot silently push the
+/// click out of view (Kit rejects clicks on clipped elements).
+fn scroll_settings_into_view(
+    window: &mut gpui_kit::Window,
+    target: impl Into<gpui_kit::ElementId>,
+    cx: &mut gpui_kit::App,
+) {
+    window.render_frame(cx);
+    let target = target.into();
+    // Wide viewports host the Kit container (no legacy scroller): center
+    // against the panel and scroll from the visible host, whose center
+    // sits over the content list (a below-fold target cannot anchor a
+    // scroll: test scrolls dispatch at the anchor's position).
+    let legacy = window.try_find("settings-content").is_some();
+    let viewport = window.find(if legacy { "settings-content" } else { "settings-panel" }).bounds();
+    let viewport_center = viewport.origin.y + viewport.size.height / 2.;
+    let tb = window.find(target).bounds();
+    let target_center = tb.origin.y + tb.size.height / 2.;
+    let delta = gpui_kit::ScrollDelta::Pixels(point(px(0.), viewport_center - target_center));
+    if legacy {
+        window.scroll("settings-content", delta, cx);
+    } else {
+        // The Kit host id is a state scope, not an element: scroll from
+        // the panel, whose center sits over the content list.
+        window.scroll("settings-panel", delta, cx);
+    }
+    window.render_frame(cx);
+}
+
+/// Scroll the settings content by a fixed vertical delta. Wide viewports
+/// host the Kit container (no legacy scroller), so the scroll anchors on
+/// the panel, whose center sits over the content list.
+fn scroll_settings_by(window: &mut gpui_kit::Window, dy: gpui_kit::Pixels, cx: &mut gpui_kit::App) {
+    let anchor = if window.try_find("settings-content").is_some() {
+        "settings-content"
+    } else {
+        "settings-panel"
+    };
+    window.scroll(anchor, gpui_kit::ScrollDelta::Pixels(point(px(0.), dy)), cx);
+}
+
 fn scroll_theme_into_view(
     window: &mut gpui_kit::Window,
     view: &Entity<DesktopView>,
     id: &'static str,
     cx: &mut gpui_kit::App,
 ) {
+    let theme_id = id.strip_prefix("theme-").unwrap_or(id);
+    let light = super::themes::mode_for_id(theme_id) != Some(ThemeMode::Dark);
+    let viewport_id = if light { "theme-list-light" } else { "theme-list-dark" };
     for _ in 0..120 {
-        let viewport = window.find("theme-list").bounds();
+        let viewport = window.find(viewport_id).bounds();
         let item = window.find(id).bounds();
         if item.left() >= viewport.left() - px(1.) && item.right() <= viewport.right() + px(1.) {
             return;
@@ -252,14 +474,19 @@ fn scroll_theme_into_view(
             px(112.)
         };
         view.update(cx, |view, cx| {
-            let mut offset = view.theme_scroll.offset();
+            let scroll = if light {
+                &view.theme_scroll_light
+            } else {
+                &view.theme_scroll_dark
+            };
+            let mut offset = scroll.offset();
             offset.x += delta;
-            view.theme_scroll.set_offset(offset);
+            scroll.set_offset(offset);
             cx.notify();
         });
         window.render_frame(cx);
     }
-    let viewport = window.find("theme-list").bounds();
+    let viewport = window.find(viewport_id).bounds();
     let item = window.find(id).bounds();
     panic!("theme swatch {id} did not scroll into view: viewport={viewport:?}, item={item:?}");
 }
@@ -323,6 +550,7 @@ fn swipe_history_fixture(
         })
         .collect::<Vec<_>>();
     view.update(cx, |view, _| {
+        view.preferences.swipe_navigation = true;
         view.backend = Some(BackendHandle { commands });
         view.workspace = Some(workspace.clone());
         view.sessions.clone_from(&summaries);
@@ -344,6 +572,54 @@ fn swipe_navigate(window: AnyWindowHandle, direction: NavigationDirection, cx: &
         window.click_with_options("pane-root", ClickOptions::new().with_button(MouseButton::Navigate(direction)), cx);
     })
     .unwrap();
+}
+
+fn scroll_swipe(window: AnyWindowHandle, dx_px: f32, dy_px: f32, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.scroll("pane-root", gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))), cx);
+    })
+    .unwrap();
+}
+
+/// Full-path scroll dispatch with an explicit gesture phase: `window.scroll`
+/// always sends `Moved`, so finger-lift (`Ended`) and gesture-abort
+/// (`Cancelled`) commits need this helper. The body-level swipe listener
+/// spans the window, so the viewport center always lands inside it.
+fn scroll_swipe_with_phase(
+    window: AnyWindowHandle,
+    dx_px: f32,
+    dy_px: f32,
+    phase: TouchPhase,
+    cx: &mut TestAppContext,
+) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let position = point(viewport.width * 0.5, viewport.height * 0.5);
+        let _dispatched = window.dispatch_event(
+            ScrollEvent {
+                position,
+                delta: gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))),
+                touch_phase: phase,
+                modifiers: window.modifiers(),
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
+/// Advances the background clock past the swipe settle delay and drains the
+/// resulting commit task. Deterministic: no wall-clock sleep. The clock
+/// advance runs outside `cx.update`: it polls newly-ready tasks inline, and
+/// the commit task borrows the app itself.
+fn settle_swipe_commit(cx: &mut TestAppContext) {
+    let background = cx.update(|cx| cx.background_executor().clone());
+    background.advance_clock(super::navigation_history::SWIPE_COMMIT_DELAY + Duration::from_millis(1));
+    cx.run_until_parked();
 }
 
 fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
@@ -403,6 +679,7 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
         session_id: session_id.into(),
         turn_id: Some(turn_id.into()),
         event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage {
                 input_tokens: 10,
@@ -416,48 +693,83 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
 }
 
 mod about_dialog;
+mod activity_navigation;
 mod activity_settings;
 mod activity_summary;
 mod attachment_picker;
+mod browser_navigation;
+mod changelog_viewer;
+mod cli_handoff;
+mod composer_alignment;
+mod composer_font_scale;
 mod composer_keys;
 mod config_catalog;
 mod config_deep_links;
 mod config_sessions;
 mod curated_config;
+mod custom_themes;
 mod deeplinks;
+mod diagnostic_notice;
+mod diff_settings;
+mod effort_rail;
+mod exec_controls;
 mod file_drop;
+mod files_destination;
+mod files_preview;
 mod files_webmcp;
 mod full_access_confirm;
 mod heading_tiers;
 mod inspector_appearance;
+mod inspector_chrome;
 mod inspector_files;
 mod inspector_layout;
 mod interaction_choices;
+mod licenses_viewer;
 mod loading_lifecycle;
+mod login_items;
 mod mcp_app;
 mod menu_bar_actions;
+mod model_palette;
 mod notifications;
 mod option_popups;
 mod options_misc;
 mod output_surfaces;
 mod overlay_toggles;
+mod palette_icons;
+mod panel_dismiss;
+mod plan_proposal;
+mod prompt_history;
+mod review_changes;
+mod review_diff_mode;
 mod review_output;
 mod running_confirm;
 mod search_config;
 mod secret_store;
 mod service_navigation;
+mod session_link;
+mod session_navigation;
 mod sessions_startup;
+mod settings_kit_host;
+mod settings_kit_spike;
 mod settings_panes;
 mod settings_spacing;
 mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
 mod storage_settings;
+mod swipe_navigation_debounce;
+mod tasks_viewer;
+mod theme_picker;
 mod themes_transcript;
 mod thread_tabs;
+mod transcript_inspector_ctas;
 mod transcript_navigation;
+mod transcript_readability;
+mod turn_group;
 mod turn_queue;
+mod turn_undo;
 mod turns_transcript;
+mod user_attachments;
 mod worktree_a11y;
 mod zen_options;
 mod zen_workspace;

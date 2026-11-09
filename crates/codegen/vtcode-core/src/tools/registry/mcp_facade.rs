@@ -174,7 +174,18 @@ impl ToolRegistry {
 
             let mut tools: Option<Vec<McpToolInfo>> = None;
             let mut last_err: Option<anyhow::Error> = None;
-            for attempt in 0..3 {
+            // Total list attempts (initial + retries) for one refresh cycle.
+            const REFRESH_MAX_ATTEMPTS: u32 = 3;
+            // Same 200ms-doubling, 3s-capped budget as before, via the canonical
+            // policy so the delay math has one owner.
+            let retry_policy = vtcode_commons::retry::RetryPolicy::from_retries(
+                REFRESH_MAX_ATTEMPTS - 1,
+                Duration::from_millis(200),
+                Duration::from_secs(3),
+                2.0,
+            )
+            .with_jitter(vtcode_commons::retry::RetryPolicy::DEFAULT_JITTER);
+            for attempt in 0..(REFRESH_MAX_ATTEMPTS as usize) {
                 match mcp_client.list_mcp_tools().await {
                     Ok(list) => {
                         tools = Some(list);
@@ -190,9 +201,10 @@ impl ToolRegistry {
                             );
                             break;
                         }
-                        let jitter = (attempt * 37) % 80;
-                        let pow = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent
-                        let backoff = Duration::from_millis(200 * pow + jitter).min(Duration::from_secs(3));
+                        if attempt + 1 >= REFRESH_MAX_ATTEMPTS as usize {
+                            break;
+                        }
+                        let backoff = retry_policy.delay_for_attempt(u32::try_from(attempt).unwrap_or(u32::MAX));
                         warn!(
                             attempt = attempt + 1,
                             delay_ms = %backoff.as_millis(),

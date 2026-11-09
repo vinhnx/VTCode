@@ -42,7 +42,7 @@ pub enum SessionStoreError {
 
     /// The session is already open for writing in another process.
     #[error(
-        "session {session} is already open in another process; continue there or fork a new session with --session-id <suffix>"
+        "session {session} is already open in another process; continue there or fork it with vtcode --fork-session {session}"
     )]
     SessionBusy {
         /// Session id.

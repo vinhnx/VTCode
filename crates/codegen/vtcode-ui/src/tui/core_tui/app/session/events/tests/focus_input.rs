@@ -1,6 +1,6 @@
 use super::*;
 use crate::tui::core_tui::app::types::{
-    DiffHunk, DiffOverlayRequest, DiffPreviewMode, ListOverlayRequest, LocalAgentKind,
+    DiffHunk, DiffOverlayRequest, DiffPreviewMode, ListOverlayRequest, LocalAgentKind, LocalAgentStatus,
 };
 use crate::tui::core_tui::types::LocalAgentEntry;
 
@@ -18,6 +18,7 @@ fn show_list_modal(session: &mut Session) {
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     }));
 }
 
@@ -31,7 +32,7 @@ fn open_drawer(session: &mut Session) {
             agent_name: "rust-engineer".to_string(),
             color: Some("cyan".to_string()),
             kind: LocalAgentKind::Delegated,
-            status: "running".to_string(),
+            status: LocalAgentStatus::Running,
             summary: Some("Reviewing the workspace".to_string()),
             preview: "assistant: reviewing the workspace".to_string(),
             transcript_path: None,

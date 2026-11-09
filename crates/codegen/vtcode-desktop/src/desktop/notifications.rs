@@ -1,11 +1,15 @@
 use gpui_kit::component::{WindowExt as _, notification::Notification};
-use gpui_kit::{Anchor, App, Window};
+use gpui_kit::{Anchor, App, ClickEvent, Window};
 
 use super::strings::app;
 
 struct ClipboardCopyNotification;
+struct DiagramPreviewNotification;
 struct BackgroundAgentActivityNotification;
 struct UpdateAvailableNotification;
+/// Replace marker for turn-undo outcome toasts, so rapid undos replace
+/// rather than stack. Shared with the turn-undo notifier.
+pub(super) struct TurnUndoNotification;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum BackgroundAgentActivity {
@@ -16,6 +20,32 @@ pub(super) enum BackgroundAgentActivity {
     ServiceDisconnected,
 }
 
+impl BackgroundAgentActivity {
+    /// Truthful Kit severity: terminal success stays green, anything needing
+    /// a decision warns, and disconnects error. Kit pairs each severity with
+    /// a distinct icon, so severity is never carried by color alone.
+    pub(super) fn severity(self) -> gpui_kit::component::notification::NotificationType {
+        use gpui_kit::component::notification::NotificationType::{Error, Success, Warning};
+        match self {
+            Self::Completed => Success,
+            Self::NeedsAttention | Self::PermissionRequired | Self::QuestionWaiting => Warning,
+            Self::ServiceDisconnected => Error,
+        }
+    }
+
+    /// Localized banner body. Every activity carries its own message so the
+    /// delivery split (system vs in-app) never changes what is said.
+    pub(super) fn message(self) -> String {
+        match self {
+            Self::Completed => rust_i18n::t!("app.notifications.agent_done").to_string(),
+            Self::NeedsAttention => rust_i18n::t!("app.notifications.agent_attention").to_string(),
+            Self::PermissionRequired => rust_i18n::t!("app.notifications.approval_waiting").to_string(),
+            Self::QuestionWaiting => rust_i18n::t!("app.notifications.input_waiting").to_string(),
+            Self::ServiceDisconnected => rust_i18n::t!("app.notifications.service_disconnected").to_string(),
+        }
+    }
+}
+
 pub(super) fn initialize(cx: &mut App) {
     cx.set_app_identity("com.vinhnx.vtcode.desktop", app::NAME);
 }
@@ -24,6 +54,15 @@ pub(super) fn copied_to_clipboard(window: &mut Window, cx: &mut App) {
     window.push_notification(
         Notification::success(rust_i18n::t!("app.notifications.copied").to_string())
             .id::<ClipboardCopyNotification>()
+            .placement(Anchor::BottomRight),
+        cx,
+    );
+}
+
+pub(super) fn diagram_preview_failed(window: &mut Window, message: String, cx: &mut App) {
+    window.push_notification(
+        Notification::error(message)
+            .id::<DiagramPreviewNotification>()
             .placement(Anchor::BottomRight),
         cx,
     );
@@ -68,31 +107,44 @@ pub(super) fn activity_for_interaction_kind(kind: vtcode_desktop_protocol::Inter
     }
 }
 
-pub(super) fn background_agent_activity(window: &mut Window, activity: BackgroundAgentActivity, cx: &mut App) {
-    let message = match activity {
-        BackgroundAgentActivity::Completed => rust_i18n::t!("app.notifications.agent_done").to_string(),
-        BackgroundAgentActivity::NeedsAttention => rust_i18n::t!("app.notifications.agent_attention").to_string(),
-        BackgroundAgentActivity::PermissionRequired => rust_i18n::t!("app.notifications.approval_waiting").to_string(),
-        BackgroundAgentActivity::QuestionWaiting => rust_i18n::t!("app.notifications.input_waiting").to_string(),
-        BackgroundAgentActivity::ServiceDisconnected => {
-            rust_i18n::t!("app.notifications.service_disconnected").to_string()
-        }
-    };
-    window.push_notification(
-        Notification::info(message)
-            .title(app::NAME)
-            .id::<BackgroundAgentActivityNotification>()
-            .system(),
-        cx,
-    );
+pub(super) fn background_agent_activity(
+    window: &mut Window,
+    activity: BackgroundAgentActivity,
+    system: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) {
+    let notification = Notification::new()
+        .message(activity.message())
+        .with_type(activity.severity())
+        .title(app::NAME)
+        .id::<BackgroundAgentActivityNotification>()
+        .on_click(on_click);
+    // Focused windows toast in-app where the click target lives; backgrounded
+    // windows banner through the OS center. System-banner clicks activate the
+    // window and fire this same callback, so one handler covers both paths.
+    if system {
+        window.push_notification(notification.system(), cx);
+    } else {
+        window.push_notification(notification.placement(Anchor::BottomRight), cx);
+    }
 }
 
 /// Announce a newer VT Code release. Focused windows get an in-app toast so
 /// the startup check is never silently dropped; backgrounded windows (or an
 /// explicit always-notify preference) get a system banner instead.
-pub(super) fn update_available(window: &mut Window, latest: &str, system: bool, cx: &mut App) {
+pub(super) fn update_available(
+    window: &mut Window,
+    latest: &str,
+    system: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) {
     let message = rust_i18n::t!("app.notifications.update_available", latest = latest).to_string();
-    let notification = Notification::info(message).title(app::NAME).id::<UpdateAvailableNotification>();
+    let notification = Notification::info(message)
+        .title(app::NAME)
+        .id::<UpdateAvailableNotification>()
+        .on_click(on_click);
     if system {
         window.push_notification(notification.system(), cx);
     } else {

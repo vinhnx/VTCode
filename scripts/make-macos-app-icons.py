@@ -16,6 +16,12 @@ supersampling for antialiased edges. Full-bleed art would render oversized next
 to stock icons. The mask is idempotent, so re-running on already-masked art is
 a no-op for the shape.
 
+Clear additionally gets a subtle glass tile baked under the V (translucent
+fill, bright rim, edge hairline): flat PNGs get no system glass composition,
+so without it the Clear V floats borderless. The ``Clear`` layer background
+stays transparent as the Icon Composer source; only the shipped flat PNGs
+carry the baked tile.
+
 Usage (from the repo root):
     pip install pillow  # once
     python3 scripts/make-macos-app-icons.py \
@@ -47,7 +53,7 @@ import pathlib
 import sys
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageChops, ImageFilter
 except ImportError:  # pragma: no cover - dependency hint, not logic
     print("Error: Pillow is required (pip install pillow).", file=sys.stderr)
     sys.exit(1)
@@ -59,6 +65,23 @@ CONTENT_SIZE = 824
 CONTENT_OFFSET = (WORKING_SIZE - CONTENT_SIZE) // 2
 SUPERSAMPLE = 4
 SQUIRCLE_EXPONENT = 5.0
+
+# Clear glass tile (alpha at the 824 content-box scale): macOS 26+ composes
+# Clear icons as a frosted glass tile with a bright edge, but flat PNGs get
+# no system composition (the Dock override, iTerm2 profile art, and picker
+# previews all show the raw pixels), so the tile is baked here. Without it
+# the Clear V floats borderless next to neighbors that all carry tiles.
+# Values were picked from dark/light Dock-size previews: the fill lifts a
+# dark Dock faintly and vanishes on light backgrounds, while the rim and
+# hairline keep the tile boundary defined on both.
+CLEAR_TILE_FILL = 22
+CLEAR_RIM_TOP = 96
+CLEAR_RIM_BOTTOM = 48
+CLEAR_RIM_RADIUS = 5
+CLEAR_SHEEN = 34
+CLEAR_SHEEN_FRACTION = 0.28
+CLEAR_HAIRLINE = 30
+CLEAR_HAIRLINE_RADIUS = 2
 
 # iconutil slot filename -> pixel size, rendered from the Dynamic master.
 ICONSET_SLOTS = {
@@ -171,6 +194,78 @@ def inset_masked_master(master: Image.Image, alpha: Image.Image) -> Image.Image:
     return canvas
 
 
+def _solid_layer(size: int, rgb: tuple[int, int, int], alpha: Image.Image) -> Image.Image:
+    """Opaque-RGB layer carrying the given alpha channel."""
+    bands = [Image.new("L", (size, size), value) for value in rgb]
+    bands.append(alpha)
+    merged = Image.merge("RGBA", bands)
+    return merged
+
+
+def _vertical_ramp(size: int, top: int, bottom: int, fraction: float = 1.0) -> Image.Image:
+    """L gradient holding ``top`` at row 0, fading to ``bottom`` over the top ``fraction``."""
+    rows = max(1, int(size * fraction))
+    column = Image.new("L", (1, size), bottom)
+    column_px = column.load()
+    assert column_px is not None
+    for y in range(rows):
+        column_px[0, y] = top + (bottom - top) * y // max(1, rows - 1)
+    return column.resize((size, size))
+
+
+def _erode(alpha: Image.Image, radius: int) -> Image.Image:
+    """Min-filter erosion that treats out-of-bounds as transparent.
+
+    Plain ``MinFilter`` clamps the image edge, so erosion never bites the
+    straight squircle edges (only the corners) and the rim band would miss
+    them. Padding with zeros first keeps the band uniform all around.
+    """
+    pad = radius + 1
+    size = alpha.size[0]
+    padded = Image.new("L", (size + 2 * pad, size + 2 * pad), 0)
+    padded.paste(alpha, (pad, pad))
+    eroded = padded.filter(ImageFilter.MinFilter(2 * radius + 1))
+    return eroded.crop((pad, pad, pad + size, pad + size))
+
+
+def clear_glass_tile(alpha: Image.Image) -> Image.Image:
+    """Frosted glass tile clipped by the content-box squircle ``alpha`` mask.
+
+    Layers back-to-front: translucent fill, top sheen, bright inner rim
+    (stronger at the top, like glass lit from above), and a dark outer
+    hairline for definition on light backgrounds. The V foreground is
+    composited over the result by the caller.
+    """
+    size = alpha.size[0]
+    tile = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    tile = Image.alpha_composite(tile, _solid_layer(size, (255, 255, 255),
+                                                   alpha.point(lambda v: v * CLEAR_TILE_FILL // 255)))
+    sheen = ImageChops.multiply(alpha, _vertical_ramp(size, CLEAR_SHEEN, 0, CLEAR_SHEEN_FRACTION))
+    tile = Image.alpha_composite(tile, _solid_layer(size, (255, 255, 255), sheen))
+    band = ImageChops.subtract(alpha, _erode(alpha, CLEAR_RIM_RADIUS))
+    gradient = _vertical_ramp(size, 255, 255 * CLEAR_RIM_BOTTOM // CLEAR_RIM_TOP)
+    rim = ImageChops.multiply(band, gradient).point(lambda v: v * CLEAR_RIM_TOP // 255)
+    tile = Image.alpha_composite(tile, _solid_layer(size, (255, 255, 255), rim))
+    edge = ImageChops.subtract(alpha, _erode(alpha, CLEAR_HAIRLINE_RADIUS))
+    hairline = edge.point(lambda v: v * CLEAR_HAIRLINE // 255)
+    tile = Image.alpha_composite(tile, _solid_layer(size, (0, 0, 0), hairline))
+    return tile
+
+
+def apply_clear_glass_tile(canvas: Image.Image, alpha: Image.Image) -> Image.Image:
+    """Lay the glass tile under the masked Clear V on the 1024 canvas.
+
+    The tile reuses the caller's squircle mask, so its boundary aligns
+    exactly with the V inset. The placement paste carries no mask: a
+    self-mask paste would square the translucent alphas (opaque masters
+    are unaffected, which is why :func:`inset_masked_master` gets away
+    with it).
+    """
+    tile = Image.new("RGBA", (WORKING_SIZE, WORKING_SIZE), (0, 0, 0, 0))
+    tile.paste(clear_glass_tile(alpha), (CONTENT_OFFSET, CONTENT_OFFSET))
+    return Image.alpha_composite(tile, canvas)
+
+
 def check_shape(name: str, art: Image.Image) -> None:
     """Fail loudly when the masked master misses the stock inset geometry."""
     size = art.size[0]
@@ -196,12 +291,14 @@ def check_shape(name: str, art: Image.Image) -> None:
 
 
 def check_shape_clear(name: str, art: Image.Image) -> None:
-    """Fail loudly when the Clear master misses the see-through geometry.
+    """Fail loudly when the Clear master misses the glass-tile geometry.
 
-    Clear carries no tile: the background stays transparent and only the
-    glass V strokes are opaque. Corners and edge midpoints must be clear,
-    and the opaque fraction must sit in a narrow band, which fails both on
-    opaque tiles passed as Clear and on empty/missing glyphs.
+    Clear carries a subtle translucent tile under the glass V: the canvas
+    margins stay transparent, the V counter shows only the faint fill,
+    just inside the top edge the bright rim reads well above the fill,
+    and the opaque fraction stays in the narrow glass-V band (only the
+    strokes are opaque). Fails on fully transparent backgrounds (no
+    tile), on opaque tiles passed as Clear, and on empty/missing glyphs.
     """
     size = art.size[0]
     mid = size // 2
@@ -211,6 +308,15 @@ def check_shape_clear(name: str, art: Image.Image) -> None:
     for x, y in clear_points:
         if art.getpixel((x, y))[3] > 8:
             raise ValueError(f"{name}: margin ({x}, {y}) must be transparent")
+    fill = art.getpixel((mid, mid))[3]
+    if not 8 <= fill <= 80:
+        raise ValueError(f"{name}: V counter ({mid}, {mid}) must show only the faint fill, got alpha {fill}")
+    rim = art.getpixel((mid, CONTENT_OFFSET + 3))[3]
+    if rim <= 70 or rim > 200 or rim <= fill + 40:
+        raise ValueError(
+            f"{name}: just inside the top edge must catch the bright-but-subtle rim,"
+            f" got alpha {rim} over fill {fill}"
+        )
     histogram = art.getchannel("A").histogram()
     opaque = sum(histogram[248:]) / (size * size)
     if not 0.005 <= opaque <= 0.15:
@@ -247,6 +353,8 @@ def main() -> int:
         masters = {
             name: inset_masked_master(load_working_master(path), alpha) for name, path in requested
         }
+        if "clear" in masters:
+            masters["clear"] = apply_clear_glass_tile(masters["clear"], alpha)
         for name, art in masters.items():
             if name == "clear":
                 check_shape_clear(name, art)

@@ -19,7 +19,8 @@ VT Code is a Rust-based AI coding assistant that provides:
 cargo install vtcode
 
 # Or with Homebrew
-brew install vtcode
+brew trust vinhnx/tap
+brew install vinhnx/tap/vtcode
 ```
 
 See `scripts/install.sh` for the install script and `docs/` for configuration guides.

@@ -109,16 +109,17 @@ pub(crate) async fn maybe_handle_planning_exit_trigger(
         return Ok(PlanningTransition::None);
     }
 
-    if *auto_finish_planning_attempted {
-        return Ok(PlanningTransition::None);
-    }
-
     let Some(last_user_msg) = last_user_message(working_history) else {
         return Ok(PlanningTransition::None);
     };
 
     let text = last_user_msg.content.as_text();
     if is_plan_mode_auto_continue_directive(&text) {
+        return Ok(PlanningTransition::None);
+    }
+    let normalized = vtcode_core::planning::normalize_plan_intent(&text);
+    let explicit_cancel = matches!(normalized.trim(), "cancel" | "cancel plan" | "abandon" | "abandon plan");
+    if *auto_finish_planning_attempted && !explicit_cancel {
         return Ok(PlanningTransition::None);
     }
     let assistant_prompted = assistant_recently_prompted_implementation(working_history);

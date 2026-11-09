@@ -131,6 +131,12 @@ pub(crate) fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
             ctx.push_style(Style::italic);
         }
         Tag::List(start) => {
+            // A nested list starts on a fresh row: without this flush the
+            // outer item's text and the first inner item concatenate and the
+            // inner bullet is silently dropped (the outer pending prefix is
+            // only consumed when a content line starts). No-op at top level,
+            // where the current line is always already flushed.
+            ctx.flush_line();
             let depth = ctx.list_stack.len();
             let kind = start
                 .map(|v| ListKind::Ordered { next: max(1, v as usize) })
@@ -258,6 +264,10 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
         TagEnd::Item => {
             ctx.flush_line();
             ctx.set_pending_list_continuation();
+            // Loose-by-default: sibling items are separated by exactly one
+            // blank row so long wrapped items stay distinct. `push_blank_line`
+            // dedupes, so loose lists and nested boundaries keep a single row.
+            push_blank_line(ctx.lines);
         }
         TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Superscript | TagEnd::Subscript => {
             ctx.pop_style();
@@ -502,6 +512,14 @@ pub(crate) fn flush_current_line(
     pending_list_prefix: &mut Option<String>,
     base_style: Style,
 ) {
+    // A pending continuation is whitespace-only (indent plus padding); flushing
+    // it onto an empty line would emit a junk whitespace row that stacks with
+    // real separators. Bullets always carry a non-space marker, so only they
+    // materialize here (the empty-item `-` case keeps its `• ` row).
+    if current_line.segments.is_empty() && pending_list_prefix.as_deref().is_some_and(|prefix| prefix.trim().is_empty())
+    {
+        pending_list_prefix.take();
+    }
     if current_line.segments.is_empty() && pending_list_prefix.is_some() {
         ensure_prefix(current_line, blockquote_depth, list_continuation_prefix, pending_list_prefix, base_style);
     }

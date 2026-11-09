@@ -79,8 +79,17 @@ pub(crate) fn close_research(
         .map(|text| redact_bounded(&text, 8192))
         .unwrap_or_default();
     retain_evidence(snapshot, history);
-    // A complete earlier draft must survive approval-only repair prose.
-    for message in history.iter().filter(|message| message.role == uni::MessageRole::Assistant) {
+    let request_start = history
+        .iter()
+        .rposition(|message| {
+            message.role == uni::MessageRole::User
+                && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(&message.content.as_text())
+        })
+        .unwrap_or(0);
+    for message in history[request_start..]
+        .iter()
+        .filter(|message| message.role == uni::MessageRole::Assistant)
+    {
         retain_draft(snapshot, &message.content.as_text());
     }
 }
@@ -121,6 +130,10 @@ pub(crate) fn begin_explicit_cycle(snapshot: &mut PlanningRecoverySnapshot) {
     snapshot.begin_explicit_cycle();
 }
 
+pub(crate) fn begin_user_revision(snapshot: &mut PlanningRecoverySnapshot) -> bool {
+    snapshot.best_draft_defects.take().is_some()
+}
+
 /// Old sessions cannot prove unused recovery allowance. Retain their public
 /// progress and require explicit input before admitting another model request.
 pub(crate) fn recover_legacy_session(
@@ -140,6 +153,7 @@ pub(crate) fn record_clarification(snapshot: &mut PlanningRecoverySnapshot, text
     if text.is_empty() {
         return;
     }
+    begin_user_revision(snapshot);
     let clarification = format!("\nClarification: {text}");
     let previous = redact_bounded(&snapshot.latest_request, 8192usize.saturating_sub(clarification.len()));
     snapshot.latest_request = format!("{previous}{clarification}");

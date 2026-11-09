@@ -2,30 +2,66 @@
 
 use super::*;
 
+/// Cloned render inputs for the curated overview (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale). The
+/// settings snapshot stays in the page props and is borrowed by the
+/// row builders.
+#[derive(Clone)]
+pub(super) struct CuratedProps {
+    pub(super) can_open: bool,
+    pub(super) approval_label: String,
+    pub(super) can_select_session: bool,
+    pub(super) can_edit: bool,
+    pub(super) efforts: Vec<String>,
+}
+
+impl CuratedProps {
+    /// Snapshot the view fields the curated overview reads. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            can_open: view.can_open_config_file(),
+            approval_label: view.approval_policy_label(),
+            can_select_session: view.can_select_session_options(),
+            can_edit: view.can_edit_cli_settings(),
+            efforts: view.preferences.available_efforts(),
+        }
+    }
+}
+
 impl DesktopView {
     /// Curated overview: the settings most users change, with the layer file
     /// one click away. The catalog groups stay the complete browser beneath.
-    pub(super) fn render_curated_configuration(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_curated_configuration_content(
+        props: &ConfigPageProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        let colors = cx.theme().colors;
+        let snapshot = props.snapshot.as_deref();
         div()
             .flex()
             .flex_col()
             .gap_4()
-            .child(self.render_curated_header(cx))
-            .child(self.render_curated_overview_card(cx))
+            .child(Self::render_curated_header_content(&props.curated, view.clone(), &colors))
+            .child(Self::render_curated_overview_card_content(snapshot, &props.curated, view.clone(), &colors))
             .child(
                 div()
                     .text_lg()
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                     .child(rust_i18n::t!("app.configuration.model_features").to_string()),
             )
-            .child(self.render_curated_efforts_card(cx))
-            .child(self.render_config_page_footer(cx))
+            .child(Self::render_curated_efforts_card_content(&props.curated, view.clone(), &colors))
+            .child(Self::render_config_page_footer_content(&props.cli, props.server_version.as_deref(), &colors))
             .into_any_element()
     }
 
-    fn render_curated_header(&self, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let can_open = self.can_open_config_file();
+    fn render_curated_header_content(
+        curated: &CuratedProps,
+        view: Entity<Self>,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
+        let can_open = curated.can_open;
         div()
             .flex()
             .flex_wrap()
@@ -43,7 +79,7 @@ impl DesktopView {
                             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                             .child(rust_i18n::t!("app.configuration.page_title").to_string()),
                     )
-                    .child(row_description(rust_i18n::t!("app.configuration.tagline").to_string(), &colors)),
+                    .child(row_description(rust_i18n::t!("app.configuration.tagline").to_string(), colors)),
             )
             .child(
                 desktop_button("open-config-file")
@@ -53,19 +89,25 @@ impl DesktopView {
                     .ghost()
                     .small()
                     .desktop_disabled(!can_open)
-                    .on_click(cx.listener(|view, _, _, cx| view.open_config_target_file(cx))),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.open_config_target_file(cx));
+                        }
+                    }),
             )
             .into_any_element()
     }
 
-    fn render_curated_overview_card(&self, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let mut card = GroupBox::new().flex_shrink_0().fill().content_style(card_border_style(&colors));
-        for (index, row) in curated::curated_rows().iter().enumerate() {
-            if index > 0 {
-                card = card.child(row_divider(&colors));
-            }
-            card = card.child(self.render_curated_row(row, cx));
+    fn render_curated_overview_card_content(
+        snapshot: Option<&protocol::ConfigSettingsSnapshot>,
+        curated: &CuratedProps,
+        view: Entity<Self>,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
+        let mut card = settings_group_box_untitled(colors);
+        for row in curated::curated_rows().iter() {
+            card = card.child(Self::render_curated_row_content(row, snapshot, curated, view.clone(), colors));
         }
         accessible_group_box(
             "curated-configuration-group",
@@ -74,29 +116,39 @@ impl DesktopView {
         )
     }
 
-    fn render_curated_row(&self, row: &curated::CuratedRow, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
+    fn render_curated_row_content(
+        row: &curated::CuratedRow,
+        snapshot: Option<&protocol::ConfigSettingsSnapshot>,
+        curated: &CuratedProps,
+        view: Entity<Self>,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
         match row.kind {
             curated::CuratedRowKind::PermissionPolicy => {
-                let label = self.approval_policy_label();
+                let label = curated.approval_label.clone();
                 let control = desktop_button(format!("curated-{}", row.id))
                     .label(label.clone())
                     .accessibility_label(format!("{}: {label}", row.title))
                     .dropdown_caret(true)
                     .ghost()
                     .small()
-                    .desktop_disabled(!self.can_select_session_options())
-                    .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx)));
-                settings_row(row.title.as_str(), row.description.as_str(), control, &colors).into_any_element()
+                    .desktop_disabled(!curated.can_select_session)
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.open_permissions(window, cx));
+                        }
+                    });
+                settings_row(row.title.as_str(), row.description.as_str(), control, colors).into_any_element()
             }
             curated::CuratedRowKind::ConfigValue => {
                 let path = row.path.unwrap_or_default();
-                let setting = curated::find_setting(self.cli_config_settings.as_ref(), path);
+                let setting = curated::find_setting(snapshot, path);
                 let value = setting.map_or_else(
                     || rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string(),
                     curated::setting_display_value,
                 );
-                let editable = setting.is_some_and(|setting| setting.editable) && self.can_edit_cli_settings();
+                let editable = setting.is_some_and(|setting| setting.editable) && curated.can_edit;
                 let overridden = setting.is_some_and(|setting| {
                     configuration::config_value_state(setting) == configuration::ConfigValueState::Overridden
                 });
@@ -109,23 +161,24 @@ impl DesktopView {
                     .small()
                     .when(overridden, |control| control.font_semibold())
                     .desktop_disabled(!editable)
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        view.open_cli_config_editor(path.clone(), window, cx);
-                    }));
-                let content = settings_row(row.title.as_str(), row.description.as_str(), control, &colors);
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.open_cli_config_editor(path.clone(), window, cx));
+                        }
+                    });
+                let content = settings_row(row.title.as_str(), row.description.as_str(), control, colors);
                 match setting.map(configuration::config_setting_meta) {
-                    Some(meta) => curated_value_row(row.id, content, meta, &colors),
+                    Some(meta) => curated_value_row(row.id, content, meta, colors),
                     None => content.into_any_element(),
                 }
             }
             curated::CuratedRowKind::NetworkToggle => {
-                let snapshot = self.cli_config_settings.as_ref();
                 let enabled = curated::network_access_enabled(snapshot);
                 let blocked = curated::network_policy_blocked(snapshot);
                 let editable = curated::find_setting(snapshot, curated::NETWORK_POLICY_PATH)
                     .is_some_and(|setting| setting.editable);
-                let available =
-                    curated::network_toggle_available(snapshot) && self.can_edit_cli_settings() && editable && !blocked;
+                let available = curated::network_toggle_available(snapshot) && curated.can_edit && editable && !blocked;
                 let control = gpui_kit::component::switch::Switch::new(format!("curated-{}", row.id))
                     .small()
                     .checked(enabled)
@@ -136,16 +189,19 @@ impl DesktopView {
                     } else {
                         switch_tooltip(enabled)
                     })
-                    .on_click(cx.listener(move |view, enabled, _, cx| {
-                        view.set_network_access(*enabled, cx);
-                    }));
-                settings_row(row.title.as_str(), row.description.as_str(), control, &colors).into_any_element()
+                    .on_click({
+                        let view = view.clone();
+                        move |enabled: &bool, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.set_network_access(*enabled, cx));
+                        }
+                    });
+                settings_row(row.title.as_str(), row.description.as_str(), control, colors).into_any_element()
             }
             curated::CuratedRowKind::BoolToggle => {
                 let path = row.path.unwrap_or_default();
-                let setting = curated::find_setting(self.cli_config_settings.as_ref(), path);
+                let setting = curated::find_setting(snapshot, path);
                 let enabled = setting.and_then(|setting| setting.value.as_bool()).unwrap_or(false);
-                let available = setting.is_some_and(|setting| setting.editable) && self.can_edit_cli_settings();
+                let available = setting.is_some_and(|setting| setting.editable) && curated.can_edit;
                 let path = path.to_string();
                 let control = gpui_kit::component::switch::Switch::new(format!("curated-{}", row.id))
                     .small()
@@ -153,22 +209,30 @@ impl DesktopView {
                     .disabled(!available)
                     .accessibility_label(row.title.as_str())
                     .tooltip(switch_tooltip(enabled))
-                    .on_click(cx.listener(move |view, enabled, _, cx| {
-                        view.save_cli_config_value(path.clone(), Value::Bool(*enabled), cx);
-                    }));
-                let content = settings_row(row.title.as_str(), row.description.as_str(), control, &colors);
+                    .on_click({
+                        let view = view.clone();
+                        move |enabled: &bool, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.save_cli_config_value(path.clone(), Value::Bool(*enabled), cx);
+                            });
+                        }
+                    });
+                let content = settings_row(row.title.as_str(), row.description.as_str(), control, colors);
                 match setting.map(configuration::config_setting_meta) {
-                    Some(meta) => curated_value_row(row.id, content, meta, &colors),
+                    Some(meta) => curated_value_row(row.id, content, meta, colors),
                     None => content.into_any_element(),
                 }
             }
         }
     }
 
-    fn render_curated_efforts_card(&self, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let selected = self.preferences.available_efforts();
-        let mut card = settings_group_box(rust_i18n::t!("app.configuration.available_efforts").to_string(), &colors)
+    fn render_curated_efforts_card_content(
+        curated: &CuratedProps,
+        view: Entity<Self>,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
+        let selected = &curated.efforts;
+        let mut card = settings_group_box(rust_i18n::t!("app.configuration.available_efforts").to_string(), colors)
             .child(
                 div()
                     .flex()
@@ -178,7 +242,7 @@ impl DesktopView {
                     .gap_3()
                     .child(div().flex_1().min_w_0().child(row_description(
                         rust_i18n::t!("app.configuration.reasoning_effort_hint").to_string(),
-                        &colors,
+                        colors,
                     )))
                     .child(
                         Tag::secondary().outline().small().child(
@@ -201,11 +265,13 @@ impl DesktopView {
                 } else {
                     rust_i18n::t!("app.configuration.show_in_models").to_string()
                 })
-                .on_click(cx.listener(move |view, enabled, _, cx| {
-                    view.set_available_effort(level.as_str(), *enabled, cx);
-                }));
-            card = card.child(row_divider(&colors));
-            card = card.child(settings_row(label, "", switch, &colors));
+                .on_click({
+                    let view = view.clone();
+                    move |enabled: &bool, _: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.set_available_effort(level.as_str(), *enabled, cx));
+                    }
+                });
+            card = card.child(settings_row(label, "", switch, colors));
         }
         accessible_group_box(
             "curated-efforts-group",

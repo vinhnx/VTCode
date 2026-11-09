@@ -57,6 +57,7 @@ fn cancelled_calls_are_distinct_from_errors_and_do_not_verify() {
             &format!("{id}:output"),
             activity,
             ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: id.into(),
                 tool_call_id: None,
                 output: "retained evidence".into(),
@@ -104,7 +105,11 @@ fn edit(log: &SessionEventLog, task: &str, id: &str, path: &str, status: PatchAp
         id,
         None,
         ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-            changes: vec![FileUpdateChange { path: path.into(), kind: PatchChangeKind::Update }],
+            changes: vec![FileUpdateChange {
+                path: path.into(),
+                kind: PatchChangeKind::Update,
+                terminators_normalized: None,
+            }],
             status,
             diff_incomplete: None,
             unified_diff: Some(format!("--- a/{path}\n+++ b/{path}\n@@ -3,1 +4,1 @@\n-old\n+pub fn new() {{}}\n")),
@@ -417,10 +422,12 @@ fn file_review_signals_and_line_counts_are_scoped_to_their_own_diff() {
                 FileUpdateChange {
                     path: "api.rs".into(),
                     kind: PatchChangeKind::Update,
+                    terminators_normalized: None,
                 },
                 FileUpdateChange {
                     path: "readme.md".into(),
                     kind: PatchChangeKind::Update,
+                    terminators_normalized: None,
                 },
             ],
             status: PatchApplyStatus::Completed,
@@ -458,7 +465,11 @@ fn uncaptured_diffs_are_explicitly_incomplete() {
         "edit",
         None,
         ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-            changes: vec![FileUpdateChange { path: "a.rs".into(), kind: PatchChangeKind::Update }],
+            changes: vec![FileUpdateChange {
+                path: "a.rs".into(),
+                kind: PatchChangeKind::Update,
+                terminators_normalized: None,
+            }],
             status: PatchApplyStatus::Completed,
             diff_incomplete: None,
             unified_diff: None,
@@ -486,6 +497,7 @@ fn review_signals_follow_source_positions_and_deduplicate_repeated_edits() {
                 changes: vec![FileUpdateChange {
                     path: "module.rs".into(),
                     kind: PatchChangeKind::Update,
+                    terminators_normalized: None,
                 }],
                 status: PatchApplyStatus::Completed,
                 diff_incomplete: None,
@@ -623,6 +635,7 @@ fn incomplete_or_failed_tool_output_cannot_verify_a_completed_invocation() {
     );
     let output = |status| {
         ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: "tool".into(),
             tool_call_id: None,
             spool_path: None,
@@ -762,6 +775,7 @@ fn async_verifier_aliases_complete_once_and_use_launch_time_for_freshness() {
         );
         let output = |status, exit_code| {
             ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "launch".into(),
                 tool_call_id: None,
                 spool_path: None,
@@ -867,7 +881,11 @@ fn graph_nodes_distinguish_reused_item_ids_across_tasks_and_actors() {
             (
                 "same-edit",
                 ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-                    changes: vec![FileUpdateChange { path: path.into(), kind: PatchChangeKind::Update }],
+                    changes: vec![FileUpdateChange {
+                        path: path.into(),
+                        kind: PatchChangeKind::Update,
+                        terminators_normalized: None,
+                    }],
                     status: PatchApplyStatus::Completed,
                     unified_diff: None,
                     diff_incomplete: Some(true),
@@ -944,6 +962,7 @@ fn verifier_freshness_uses_execution_start_instead_of_streamed_argument_start() 
             id: "output".into(),
             context: Some(Box::new(context.clone())),
             details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "call".into(),
                 tool_call_id: None,
                 spool_path: None,

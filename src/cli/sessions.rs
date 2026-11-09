@@ -127,7 +127,7 @@ async fn select_latest_session(
 async fn load_specific_session(identifier: &str, intent: ArchivedSessionIntent) -> Result<SessionContinuation> {
     crate::agent::agents::load_resume_session(identifier, intent)
         .await?
-        .ok_or_else(|| anyhow!("No session with identifier '{identifier}' was found."))
+        .ok_or_else(|| anyhow!("No session with identifier '{identifier}' was found. If the thread is open in VT Code Desktop, run a turn first so there is a checkpoint to fork."))
 }
 
 async fn select_session_interactively(

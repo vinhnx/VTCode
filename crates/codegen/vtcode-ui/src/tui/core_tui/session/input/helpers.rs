@@ -266,11 +266,7 @@ pub(super) fn char_index_to_byte_index(content: &str, char_index: usize) -> usiz
 pub(super) fn byte_index_to_char_index(content: &str, byte_index: usize) -> usize {
     // Clamp to the nearest char boundary so a mid-multi-byte `byte_index`
     // (e.g. from an out-of-sync selection range) never panics the slice.
-    let mut safe = byte_index.min(content.len());
-    while safe > 0 && !content.is_char_boundary(safe) {
-        safe -= 1;
-    }
-    content[..safe].chars().count()
+    content[..content.floor_char_boundary(byte_index)].chars().count()
 }
 
 pub(super) fn compact_inline_segment(content: &str) -> String {

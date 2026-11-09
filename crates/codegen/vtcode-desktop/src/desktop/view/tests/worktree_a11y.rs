@@ -12,7 +12,7 @@ fn menu_bar_setting_keeps_the_window_and_draft_when_closed(cx: &mut TestAppConte
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         assert_eq!(window.find("show-in-menu-bar").checked(), Some(false));
         window.click("show-in-menu-bar", cx);
@@ -38,7 +38,7 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         view.read(cx).contrast_focus.clone().focus(window, cx);
         window.press("right", cx);
@@ -64,10 +64,10 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
         window.press("right", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).contrast_slider.read(cx).value().start(), f32::from(before + 1));
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(3000.))), cx);
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
-        window.render_frame(cx);
+        // Geometry-driven scroll: center the reset button in the viewport
+        // from the laid-out (possibly off-screen) bounds, so the click
+        // survives card-height changes that fixed-pixel choreography cannot.
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.click("reset-appearance", cx);
     })
     .unwrap();
@@ -103,9 +103,7 @@ fn translucent_sidebar_toggle_persists_and_reset_restores_opaque(cx: &mut TestAp
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "translucent-sidebar", cx);
         assert_eq!(window.find("translucent-sidebar").checked(), Some(false));
         window.click("translucent-sidebar", cx);
         window.render_frame(cx);
@@ -114,6 +112,7 @@ fn translucent_sidebar_toggle_persists_and_reset_restores_opaque(cx: &mut TestAp
         assert!(crate::desktop::preferences::Preferences::load().translucent_sidebar);
         let root = window.root::<gpui_kit::base::Root>().flatten().unwrap();
         assert!(root.update(cx, |root, _| root.style().background.is_some()));
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.click("reset-appearance", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).preferences.translucent_sidebar);
@@ -389,11 +388,9 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 1 · a.rs"));
         assert_eq!(window.find("workspace-review-previous-file").disabled(), Some(true));
         assert_eq!(window.find("workspace-review-next-file").disabled(), Some(true));
-        for _ in 0..10 {
-            window.press("tab", cx);
-            window.render_frame(cx);
-        }
-        assert!(view.read(cx).review_focus.contains_focused(window, cx));
+        tab_out_and_back_into_scope(window, cx, "the review surface", |window, cx| {
+            view.read(cx).review_focus.contains_focused(window, cx)
+        });
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() != Route::Review);
@@ -647,7 +644,7 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
 
 #[gpui_kit::test]
 fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_sized(cx, 1280., 1100.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
@@ -656,8 +653,10 @@ fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut Tes
         assert_eq!(window.find("font-code-value").label(), Some("Code font size: 14 pixels"));
         let preview_height = window.find("appearance-code-preview").bounds().size.height;
         assert!(preview_height > px(0.), "the highlighted code sample should have rendered layout");
+        scroll_settings_into_view(window, "font-ui-1", cx);
         window.click("font-ui-1", cx);
         window.render_frame(cx);
+        scroll_settings_into_view(window, "font-code-1", cx);
         window.click("font-code-1", cx);
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
@@ -685,8 +684,8 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 1, cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        select_settings_category(window, 2, cx);
+        scroll_settings_by(window, px(-240.), cx);
         window.render_frame(cx);
         assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
         assert_eq!(window.find("reduce-motion-system").checked(), Some(true));
@@ -779,9 +778,7 @@ fn navigation_position_switch_moves_the_expanded_panel_and_persists(cx: &mut Tes
         assert!(initial_panel.right() < initial_rail_button.left());
 
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "navigation-on-right", cx);
 
         assert!(view.read(cx).preferences.navigation_on_right(), "navigation defaults to the right");
         assert_eq!(window.find("navigation-on-right").checked(), Some(true));

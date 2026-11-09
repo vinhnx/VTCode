@@ -13,10 +13,15 @@ use anyhow::{Context, Result, bail};
 
 use self::archive::{ast_grep_version, install_archive};
 use self::release::{
-    current_platform_asset_spec, download_release_asset, fetch_latest_release, select_release_asset,
-    verify_checksum_if_available,
+    current_platform_asset_spec, download_release_asset, fetch_latest_release, manual_install_guide,
+    select_release_asset, verify_checksum_if_available,
 };
 use self::state::{InstallLockGuard, InstallPaths, InstallationCache};
+
+/// Manual install steps for CLI fallback messages (issue #802).
+pub fn ast_grep_manual_install_guide() -> &'static str {
+    manual_install_guide()
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstGrepStatus {
@@ -66,14 +71,20 @@ impl AstGrepStatus {
             && !cache.failure_reason.as_deref().is_some_and(should_retry_without_cooldown)
         {
             let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
-            bail!("Previous ast-grep installation attempt failed ({reason}). Not retrying for 24 hours.");
+            if reason.contains("manually") {
+                bail!("Previous ast-grep installation attempt failed ({reason}). Not retrying for 24 hours.");
+            }
+            bail!(
+                "Previous ast-grep installation attempt failed ({reason}). Not retrying for 24 hours.\n{}",
+                manual_install_guide()
+            );
         }
 
         let install_result: Result<AstGrepInstallOutcome> = async {
-            let client = reqwest::Client::builder()
-                .user_agent("vtcode-ast-grep-installer")
-                .build()
-                .context("Failed to create HTTP client")?;
+            // Release archives are tens of megabytes on a cold cache; use the
+            // download budget (not the short request default) so a slow link
+            // does not abort a legitimate install.
+            let client = vtcode_commons::http::create_download_client("vtcode-ast-grep-installer");
 
             let release = fetch_latest_release(&client).await?;
             let platform = current_platform_asset_spec()?;
@@ -203,6 +214,10 @@ mod tests {
     fn platform_mismatch_failures_do_not_enter_cooldown() {
         assert!(should_retry_without_cooldown(
             "No ast-grep release asset matched the current platform (aarch64-apple-darwin)"
+        ));
+        assert!(should_retry_without_cooldown(
+            "No ast-grep release asset matched the current platform (x86_64-unknown-linux-gnu) in 0.51.1 \
+             (available: app-x86_64-apple-darwin.zip).\nInstall ast-grep manually and rerun `vtcode dependencies status ast-grep`"
         ));
         assert!(should_retry_without_cooldown("Unsupported platform for VT Code-managed ast-grep install"));
     }

@@ -22,22 +22,6 @@ struct TerminalState {
 ///
 /// This struct ensures that terminal state is properly saved before entering
 /// alternate screen and restored when exiting, even in the presence of errors.
-///
-/// # Example
-///
-/// ```no_run
-/// # fn main() -> anyhow::Result<()> {
-/// use vtcode_ui::tui::core_tui::alternate_screen::AlternateScreenSession;
-///
-/// // Run a closure in alternate screen with automatic cleanup
-/// let result = AlternateScreenSession::run(|| {
-///     // Your code that runs in alternate screen
-///     println!("Running in alternate screen!");
-///     Ok(())
-/// })?;
-/// # Ok(())
-/// # }
-/// ```
 pub struct AlternateScreenSession {
     /// Terminal state before entering alternate screen
     original_state: TerminalState,

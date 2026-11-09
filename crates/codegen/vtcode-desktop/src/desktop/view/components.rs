@@ -31,17 +31,96 @@ pub(super) fn accessible_group_box(
         .into_any_element()
 }
 
-/// Animated status label for an owned loading state. The Kit shimmer inherits
-/// typography and color from the call-site parent and renders static text
-/// under reduced motion, so callers only style the row, never the motion.
-/// Loop sites pass an owned domain-derived id (never a visible index), so
-/// repeated rows keep stable animation identity across reordering.
-pub(super) fn shimmer_label(id: impl Into<gpui_kit::ElementId>, text: impl Into<gpui_kit::SharedString>) -> AnyElement {
+/// The `(resting, highlight)` pair every shimmer label uses.
+///
+/// One owner so a label cannot pick a tone in one place and let Kit default the
+/// band in another: the two policies used to disagree, which painted a sweep
+/// darker than the text it crossed on palettes where muted and foreground are
+/// close (Ciapre: 0.097 apart). Under reduced motion both halves collapse to
+/// `tone`, because the static label must stay at full readable contrast.
+fn shimmer_tones(tone: gpui_kit::Hsla, cx: &App) -> (gpui_kit::Hsla, gpui_kit::Hsla) {
+    if cx.reduce_motion() {
+        return (tone, tone);
+    }
+    let colors = cx.theme().colors;
+    (themes::shimmer_resting(&colors, tone), colors.foreground)
+}
+
+/// Animated status label for an owned loading state. Typography comes from the
+/// call-site parent; this builder owns the color pair (see [`shimmer_tones`])
+/// AND the reduced-motion fallback, so callers pass their semantic tone and
+/// never style the motion. Loop sites pass an owned domain-derived id (never a
+/// visible index), so repeated rows keep stable animation identity across
+/// reordering.
+pub(super) fn shimmer_label(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    tone: gpui_kit::Hsla,
+    cx: &App,
+) -> AnyElement {
     let id = id.into();
+    let (resting, highlight) = shimmer_tones(tone, cx);
     div()
         .id(id.clone())
         .test_support()
-        .child(ShimmerText::new(text.into()).id(id))
+        .child(
+            ShimmerText::new(text.into())
+                .id(id)
+                .text_color(resting)
+                .highlight_color(highlight),
+        )
+        .into_any_element()
+}
+
+/// Full-width loading row for an owned loading state: a shimmer marker
+/// inside the caller's test identity wrapper (`Marker` cannot carry
+/// `.test_support()` itself). Same color contract as [`shimmer_label`]. Only
+/// full rows come here; inline embeddings, shrink-wrapped centered labels, and
+/// one-off typography (e.g. `text_xs` rows) keep `shimmer_label`.
+pub(super) fn loading_marker_row(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    tone: gpui_kit::Hsla,
+    cx: &App,
+) -> AnyElement {
+    loading_marker_row_inner(id, text, tone, None, cx)
+}
+
+/// Full-width loading row with an explicit leading spinner, for rows
+/// that pair a spinner with shimmer text. The caller owns the spinner's
+/// exact size and color; the text tone is the row tone.
+pub(super) fn loading_marker_row_with_spinner(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    spinner: Spinner,
+    tone: gpui_kit::Hsla,
+    cx: &App,
+) -> AnyElement {
+    loading_marker_row_inner(id, text, tone, Some((spinner, tone)), cx)
+}
+
+fn loading_marker_row_inner(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    tone: gpui_kit::Hsla,
+    leading: Option<(Spinner, gpui_kit::Hsla)>,
+    cx: &App,
+) -> AnyElement {
+    let (resting, highlight) = shimmer_tones(tone, cx);
+    // `Marker` builds its own `ShimmerText`, so the band arrives through the
+    // shimmer style and the glyph tone through `MarkerContent` (which is
+    // `Styled`). Setting either on the outer marker alone would be dropped.
+    let mut marker = Marker::new()
+        .loading(true)
+        .with_loading_style(MarkerLoadingStyle::Shimmer)
+        .with_shimmer_style(ShimmerStyle::new().highlight_color(highlight));
+    if let Some((spinner, spinner_tone)) = leading {
+        marker = marker.icon(MarkerIcon::new().child(spinner)).text_color(spinner_tone);
+    }
+    div()
+        .id(id)
+        .test_support()
+        .child(marker.content(MarkerContent::new().text(text).text_color(resting)))
         .into_any_element()
 }
 
@@ -49,7 +128,9 @@ pub(super) fn shimmer_label(id: impl Into<gpui_kit::ElementId>, text: impl Into<
 /// runs with no content yet. It lives outside the measured list on purpose:
 /// scroller geometry never churns when the row appears or clears. The label
 /// reuses the owned turn-phase status, so it tracks
-/// submitting/running/cancelling with no extra copy.
+/// submitting/running/cancelling with no extra copy. The edge inset lives on
+/// the outer wrapper (mirroring the scroller's row wrapper), so the label
+/// text starts on the transcript spine instead of one step inside it.
 pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> AnyElement {
     div()
         .id("turn-pending")
@@ -59,6 +140,7 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
         .w_full()
         .flex()
         .justify_center()
+        .px_3()
         .child(
             div()
                 .w_full()
@@ -67,20 +149,23 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
                 .flex()
                 .flex_col()
                 .gap_2()
-                .px_3()
                 .py_2()
                 .text_sm()
                 .text_color(cx.theme().colors.muted_foreground)
-                .child(shimmer_label("turn-pending-label", status)),
+                .child(loading_marker_row("turn-pending-label", status, cx.theme().colors.muted_foreground, cx)),
         )
         .into_any_element()
 }
 
-/// Shared segmented tab treatment at the ecosystem-default medium size. Dense
-/// panels chain `.small()` with a justification instead of shrinking the
-/// shared default.
-pub(super) fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
-    TabBar::new(id).segmented().w_full()
+/// Shared folder tab treatment at the ecosystem-default medium size: the
+/// selected tab joins the canvas content below it, so callers on canvas place
+/// the bar flush above that content (the picker keeps its stack gap — its
+/// popover surface never joins anyway). No width cap: Kit truncates labels
+/// only when a `max_width` is set, which this builder never does — overflow
+/// scrolls, and callers with many tabs chain `.menu(true)` for the overflow
+/// dropdown.
+pub(super) fn desktop_folder_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
+    TabBar::new(id).folder().w_full()
 }
 
 /// Sentence-case settings section heading: one rem step above body text at
@@ -94,6 +179,17 @@ pub(super) fn section_label(
         .font_semibold()
         .text_color(themes::label_foreground(colors))
         .child(text.into())
+}
+
+/// Content page title: one step above section headings, naming the visible
+/// settings page. Rendered once as the first child of the scroll content so
+/// scroll geometry is unchanged; the panel header keeps the stable dialog
+/// identity.
+pub(super) fn content_page_title(
+    text: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div().text_xl().font_semibold().text_color(colors.foreground).child(text.into())
 }
 
 /// Eyebrow section label: the single owner of the ALL-CAPS short-section
@@ -133,15 +229,28 @@ pub(super) fn panel_header(leading: impl IntoElement, trailing: impl IntoElement
 /// Pre-configured bordered card for settings sections: the fill token plus the
 /// soft 1px theme border, with the title above the surface. Callers chain
 /// `.child(...)`/`.footer(...)` as before.
+///
+/// Padding steps up to `p_6` on both axes: the fill matches the panel
+/// background, so the hairline alone must carry the card gestalt, and the
+/// even band reads as one concentric shape. The boundary (`xl`) stays
+/// airier than the gaps between rows (`lg`). Rows separate by the inherited
+/// Kit `gap_4` air (the Kit Settings rhythm): do not interleave
+/// [`row_divider`] between settings rows.
 pub(super) fn settings_group_box(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> GroupBox {
+    settings_group_box_untitled(colors).title(group_box_title(title, colors))
+}
+
+/// Untitled variant of [`settings_group_box`] for settings cards whose page
+/// header already names the surface (e.g. the curated configuration
+/// overview): same fill, border, and `p_6` rhythm, no title row.
+pub(super) fn settings_group_box_untitled(colors: &gpui_kit::component::theme::ThemeColor) -> GroupBox {
     GroupBox::new()
         .flex_shrink_0()
         .fill()
-        .content_style(card_border_style(colors))
-        .title(group_box_title(title, colors))
+        .content_style(card_border_style(colors).p_6())
 }
 
 /// 1px theme-border outline for a filled Kit `GroupBox` surface, giving cards
@@ -161,7 +270,9 @@ pub(super) fn soft_edge_color(colors: &gpui_kit::component::theme::ThemeColor) -
 }
 
 /// One settings row: title and description stacked left, a control pinned
-/// right. The row wraps so the control drops below the text in narrow pages.
+/// right and top-aligned to the title frame (never centered on the help
+/// text). The row wraps so the control drops below the text, still
+/// start-aligned, in narrow pages.
 pub(super) fn settings_row(
     title: impl Into<gpui_kit::SharedString>,
     description: impl Into<gpui_kit::SharedString>,
@@ -172,7 +283,7 @@ pub(super) fn settings_row(
     div()
         .flex()
         .flex_wrap()
-        .items_center()
+        .items_start()
         .justify_between()
         .gap_3()
         .child(
@@ -221,8 +332,10 @@ pub(super) fn row_description(
     div().text_sm().text_color(themes::muted_text(colors)).child(text.into())
 }
 
-/// 1px separator between settings rows, drawn in the softened edge tone
-/// with breathing room so it reads as a quiet hairline rather than a rule.
+/// 1px separator for non-settings surfaces (navigation chrome, inspector
+/// lists), drawn in the softened edge tone with breathing room so it reads
+/// as a quiet hairline rather than a rule. Settings groups separate rows by
+/// `gap_4` air instead (see [`settings_group_box`]).
 pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
     div()
         .w_full()
@@ -261,6 +374,28 @@ pub(super) fn pane_divider(
     }
 }
 
+/// Inspector resize-handle paint: the inspector is a separated card floating
+/// on the chrome, so a resting hairline would read as a panel border. An idle
+/// handle paints nothing while keeping the kit's 1px geometry, so layout
+/// never shifts between states; any pointer engagement delegates to the kit
+/// divider, keeping the hover/press/drag pill that advertises the resize
+/// affordance. The band, cursor, drag, splitter role, and keyboard handling
+/// stay with the handle itself.
+pub(super) fn inspector_resize_appearance() -> ResizeHandleRenderer {
+    let kit = resize_handle_appearance();
+    Rc::new(move |handle: &ResizeHandleContext, window: &mut Window, cx: &mut App| {
+        if handle.state() == ResizeHandleState::Idle {
+            let idle = div().flex_none().flex().map(|line| match handle.axis() {
+                Axis::Horizontal => line.w(px(1.)).h_full(),
+                _ => line.h(px(1.)).w_full(),
+            });
+            Some(idle.into_any_element())
+        } else {
+            kit(handle, window, cx)
+        }
+    })
+}
+
 /// Navigation group header: an eyebrow label for a sidebar-like rail. Both the
 /// settings navigation and the configuration group rail are navigation chrome,
 /// not content sections, so they share this instead of sentence-case section
@@ -278,6 +413,63 @@ pub(super) fn nav_group_header(
         .px_2()
         .child(eyebrow_label(text, colors))
         .into_any_element()
+}
+
+/// Rail glyph size shared by Lucide catalog icons and the brand mark.
+///
+/// One font-relative square (`1rem`, 16px at the default 16px UI font) — the
+/// same baseline the app's navigation rows use (`size_4`) — that grows with
+/// the UI font size setting, unlike Lucide's fixed `small` tier. Both the
+/// Lucide names and the brand SVG render through it, so the settings
+/// navigation and the configuration rail keep one glyph box per row and the
+/// rows never drift apart as the font size changes.
+pub(super) fn nav_entry_icon_size() -> gpui_kit::AbsoluteLength {
+    gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(1.0))
+}
+
+/// Navigation entry content: an icon pinned to a truncating label on one
+/// spine. Shared by the settings navigation and the configuration group
+/// rail (Kit `Button` centers its built-in icon/label pair, so rails use
+/// this custom child instead). The icon is decorative; the owning button
+/// carries the accessible name. The leading mark is any `Icon`, so a Lucide
+/// `IconName` and brand SVG bytes share one size/color path and align; both
+/// render through [`nav_entry_icon_size`] so a row never mixes glyph sizes.
+pub(super) fn nav_entry_content(
+    label_id: impl Into<gpui_kit::ElementId>,
+    icon: impl Into<Icon>,
+    icon_id: impl Into<gpui_kit::ElementId>,
+    label: String,
+) -> AnyElement {
+    div()
+        .w_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(
+            // `Icon` is `RenderOnce` with no stable id, so the sized glyph sits
+            // in an identified wrapper: rail alignment tests measure one box
+            // for the brand V and every Lucide entry.
+            div()
+                .id(icon_id)
+                .test_support()
+                .flex_shrink_0()
+                .child(Icon::new(icon).size(nav_entry_icon_size())),
+        )
+        .child(div().id(label_id).test_support().flex_1().min_w_0().truncate().child(label))
+        .into_any_element()
+}
+
+/// Brand V mark shared by the welcome empty states and the settings
+/// navigation. Uses the monochrome V artwork (`vtcode-mono.svg`); GPUI paints
+/// SVGs as tinted monochrome sprites, so the mark follows the surrounding text
+/// color in every theme.
+const VTCODE_NAV_MARK_SVG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-mono.svg");
+
+/// Settings-nav leading mark for the VT Code entry: the brand V at the same
+/// [`nav_entry_icon_size`] and inherited color as the Lucide sibling rows.
+pub(super) fn vtcode_nav_mark() -> Icon {
+    Icon::default().data(VTCODE_NAV_MARK_SVG)
 }
 
 /// Shared inspector tab container: every inspector tab (Changes, Files,
@@ -309,44 +501,21 @@ pub(super) fn diff_pane_group(
         .child(child)
 }
 
-/// Trailing settings control pairing a right-aligned label with a switch.
-///
-/// The fixed-width lane keeps every row's toggle on one trailing spine while
-/// the labels right-align against it, so rows with different label lengths
-/// still scan as one column. The lane never exceeds the row width; longer
-/// labels wrap instead of crowding the toggle. The switch keeps its accessible
-/// name and owns activation; the visible label is descriptive text.
+/// Trailing settings toggle: the row title already names the setting, so the
+/// control renders the switch alone and keeps the title as its accessible
+/// name (Kit Settings parity: fields inherit their setting's title). The
+/// row's trailing pin keeps every toggle on one spine with no label lane.
 pub(super) fn settings_switch(
     id: impl Into<gpui_kit::ElementId>,
     label: impl Into<gpui_kit::SharedString>,
     checked: bool,
     on_click: impl Fn(&bool, &mut Window, &mut App) + 'static,
-    colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
-    let label = label.into();
-    div()
-        .w_64()
-        .max_w_full()
-        .flex()
-        .items_center()
-        .justify_end()
-        .gap_2()
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_right()
-                .text_sm()
-                .text_color(colors.foreground)
-                .child(label.clone()),
-        )
-        .child(
-            gpui_kit::component::switch::Switch::new(id)
-                .flex_shrink_0()
-                .checked(checked)
-                .accessibility_label(label)
-                .on_click(on_click),
-        )
+    gpui_kit::component::switch::Switch::new(id)
+        .flex_shrink_0()
+        .checked(checked)
+        .accessibility_label(label.into())
+        .on_click(on_click)
 }
 
 /// Route container shared by the settings, browser, and review pages:
@@ -375,14 +544,25 @@ pub(super) fn modal_scrim(colors: &gpui_kit::component::theme::ThemeColor) -> gp
     colors.background.opacity(0.85)
 }
 
-/// Quiet full-width break between conversation turns on the canvas. The
-/// single-sided rhythm keeps the row compact: preceding rows already carry
-/// bottom padding, and user bubbles must start within 16px of their column.
-pub(super) fn turn_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
+/// Warning title row shared by the consent modals: an alert icon plus a
+/// large semibold title naming the decision. One shape for every consent
+/// surface — tune here, not per modal.
+pub(super) fn consent_title_row(
+    title: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
     div()
-        .w_full()
-        .py_1()
-        .child(div().h(px(1.)).bg(themes::hairline(colors.background, colors.foreground)))
+        .flex()
+        .items_center()
+        .gap_3()
+        .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
+        .child(
+            div()
+                .font_semibold()
+                .text_lg()
+                .text_color(colors.foreground)
+                .child(title.into()),
+        )
 }
 
 pub(super) fn navigation_label(
@@ -409,20 +589,29 @@ pub(super) fn navigation_label(
         )
 }
 
-/// Embed the shared artwork so packaged applications never depend on checkout paths.
+/// Full-color app-icon art for the Bot empty-state media. The About surfaces
+/// deliberately use [`brand_mark`] instead: identity is an ink mark, and the
+/// Display art (not the 512px Dock art) stays smooth at small sizes.
 pub(super) fn brand_logo(size: f32) -> impl IntoElement {
     static LOGO: std::sync::OnceLock<Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
     let image = LOGO.get_or_init(|| {
         Arc::new(gpui_kit::Image::from_bytes(
             gpui_kit::ImageFormat::Png,
-            include_bytes!("../../../../../../resources/icons/vtcode-app-dynamic-512.png").to_vec(),
+            app_icon::preview_bytes(AppIconPreference::Dynamic).to_vec(),
         ))
     });
-    img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+    img(image.clone()).w(px(size)).h(px(size))
 }
 
 /// Appearance-picker preview tile for one icon variant. Images are decoded
-/// once and shared; the `Dynamic` tile shows the split tile glyph.
+/// once and shared; the `Dynamic` tile shows the split tile glyph. The art
+/// is display-sized 128px so the 64px tiles render smooth edges (see
+/// [`app_icon::preview_bytes`]).
+///
+/// No corner clip: the art already carries the macOS squircle with
+/// transparency baked in, and `rounded_md` scales with the UI font
+/// (`0.375rem`) while the tile inset is fixed — past ~17px UI fonts the
+/// circular clip would cut into the squircle and kink the corners.
 pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl IntoElement {
     static PREVIEWS: std::sync::OnceLock<[Arc<gpui_kit::Image>; 5]> = std::sync::OnceLock::new();
     let previews = PREVIEWS.get_or_init(|| {
@@ -438,15 +627,17 @@ pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl
         AppIconPreference::Clear => clear,
         AppIconPreference::Tinted => tinted,
     };
-    img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+    img(image.clone()).w(px(size)).h(px(size))
 }
 
-pub(super) fn welcome_brand_mark(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
+/// Monochrome brand V tinted to `color`: GPUI tints SVG sprites, so one asset
+/// serves every theme (unlike the Dock art in [`brand_logo`]).
+pub(super) fn brand_mark(id: impl Into<gpui_kit::ElementId>, size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
     gpui_kit::svg()
-        .data(include_bytes!("../../../../../../resources/icons/vtcode-mark.svg"))
+        .data(VTCODE_NAV_MARK_SVG)
         .size(px(size))
         .text_color(color)
-        .id("welcome-brand-mark")
+        .id(id)
         .test_support()
 }
 
@@ -464,6 +655,97 @@ pub(super) fn error_alert(
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> AnyElement {
     status_alert(id, message, colors, colors.danger)
+}
+
+/// Severity-resolved presentation for a status marker row: icon, tone,
+/// title weight, accessibility role, and the stable status token used in
+/// the details toggle label. Single dispatch for every severity-driven
+/// choice, so callers resolve once and render from the result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct SeverityMarkerStyle {
+    pub(super) icon: IconName,
+    pub(super) tone: gpui_kit::Hsla,
+    pub(super) semibold_title: bool,
+    pub(super) role: gpui_kit::Role,
+    pub(super) status_label: &'static str,
+}
+
+/// Desktop severity mapping for status rows: errors announce as alerts in
+/// the danger tone, warnings keep their own warning tone and status role,
+/// info stays quiet muted text. Only errors earn semibold: icon + tone
+/// already carry severity.
+pub(super) fn severity_marker_style(
+    severity: NoticeSeverity,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> SeverityMarkerStyle {
+    match severity {
+        NoticeSeverity::Error => SeverityMarkerStyle {
+            icon: IconName::CircleAlert,
+            tone: colors.danger,
+            semibold_title: true,
+            role: gpui_kit::Role::Alert,
+            status_label: "error",
+        },
+        NoticeSeverity::Warning => SeverityMarkerStyle {
+            icon: IconName::TriangleAlert,
+            tone: colors.warning,
+            semibold_title: false,
+            role: gpui_kit::Role::Status,
+            status_label: "warning",
+        },
+        NoticeSeverity::Info => SeverityMarkerStyle {
+            icon: IconName::Info,
+            tone: themes::muted_text(colors),
+            semibold_title: false,
+            role: gpui_kit::Role::Status,
+            status_label: "info",
+        },
+    }
+}
+
+/// Status-marker row for transcript severity notices: one icon/title header
+/// line in severity colors, no message chrome. Callers keep test identity,
+/// roles, and aria labels on their own wrapper: `Marker` is `RenderOnce`
+/// and cannot carry `.test_support()`. Extra trailing children (e.g. the
+/// Show/Hide details toggle) compose as `Marker` siblings; the content
+/// slot holds `flex_1` so they dock at the trailing edge. The leading
+/// inset matches a small button's `px_2`, so notice titles start on the
+/// same spine as group and tool headers (inset + [`transcript_icon_slot`]
+/// + `gap_2`).
+pub(super) fn severity_marker(style: &SeverityMarkerStyle, title: impl Into<gpui_kit::SharedString>) -> Marker {
+    Marker::new()
+        .items_center()
+        .pl_2()
+        .text_color(style.tone)
+        .icon(MarkerIcon::new().child(Icon::new(style.icon).small().text_color(style.tone)))
+        .content(
+            MarkerContent::new()
+                .text(title)
+                .flex_1()
+                .when(style.semibold_title, |content| content.font_semibold()),
+        )
+}
+
+/// Fixed leading slot shared by transcript header rows: the same `size_4`
+/// centered box `MarkerIcon` renders, so group and tool titles start on
+/// the notice spine. Always rendered, even when empty, so optional
+/// content (the running spinner) never shifts the title.
+pub(super) fn transcript_icon_slot(child: impl IntoElement) -> gpui_kit::Div {
+    div().size_4().flex_none().flex().items_center().justify_center().child(child)
+}
+
+/// Fixed trailing lane for transcript disclosure chevrons: the same slot
+/// box as [`transcript_icon_slot`], tone-agnostic so each header keeps
+/// its own color (callers chain `.text_color(..)` when they need one).
+pub(super) fn transcript_chevron_lane(expanded: bool) -> gpui_kit::Div {
+    transcript_icon_slot(
+        Icon::new(if expanded {
+            IconName::ChevronDown
+        } else {
+            IconName::ChevronRight
+        })
+        .small(),
+    )
 }
 
 fn status_alert(
@@ -514,11 +796,11 @@ pub(super) fn empty_state(
     let title = title.into();
     EmptyState::new().header(
         EmptyHeader::new()
-            .media(EmptyMedia::new().child(if matches!(icon, IconName::Bot) {
-                brand_logo(40.).into_any_element()
+            .media(if matches!(icon, IconName::Bot) {
+                EmptyMedia::new().child(brand_logo(40.))
             } else {
-                Icon::new(icon).size_6().into_any_element()
-            }))
+                EmptyMedia::new().with_variant(EmptyMediaVariant::Icon).child(Icon::new(icon))
+            })
             .title(EmptyTitle::new().text_lg().font_semibold().child(title))
             .description(EmptyDescription::new().child(description.into())),
     )
@@ -581,6 +863,44 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
 }
 
+/// Ordinary visible action: a filled push button for commands that deserve a
+/// control frame (dialog secondaries, Save/Cancel pairs, labeled toolbar
+/// actions). Kit's Default variant paints the themed button fill with an input
+/// hairline; rails, nav rows, and icon-only toolbar actions stay on
+/// [`desktop_button`] + `.ghost()` instead.
+pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id)
+}
+
+/// Decision-area default commit: the one emphasized action per view, normally
+/// the Enter action. Paints the brand accent fill; never use for destructive
+/// actions even when destruction is the most likely choice.
+pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id).primary()
+}
+
+/// Destructive commitment: irreversible or data-losing actions only. Pair with
+/// an explicit confirmation for consequential work.
+pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id).danger()
+}
+
+/// Quiet header dismiss control: ghost X icon with an accessible name and a
+/// matching tooltip. Callers add sizing (usually `.small()`), disabled
+/// state, and the click handler. Icon-only X buttons without a tooltip
+/// (tab/attachment closers) and action-bound tooltips stay manual.
+pub(super) fn desktop_dismiss_button(
+    id: impl Into<gpui_kit::ElementId>,
+    label: impl Into<gpui_kit::SharedString>,
+) -> Button {
+    let label = label.into();
+    desktop_button(id)
+        .icon(IconName::X)
+        .accessibility_label(label.clone())
+        .tooltip(label)
+        .ghost()
+}
+
 /// Running-turn marker shared by every thread surface (tab strip, sidebar,
 /// browser, compact header): a muted spinner under a caller-owned stable id.
 /// The owning button already names the running state for assistive tech, so
@@ -634,12 +954,19 @@ pub(super) fn zen_fade_animation(theme: &Theme) -> Animation {
 pub(super) trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
-    /// Selected-option treatment: pressed-state metadata plus a popover
-    /// fill when selected, quiet ghost otherwise. Every call site sits on a
-    /// `secondary`-equivalent surface (settings panel, group-box fill), where
+    /// Floating-layer elevation for a decision action that sits over content
+    /// (the composer send and its running-state cluster). In-layer actions
+    /// (dialog commits) take no shadow: the dialog already carries the
+    /// elevation. Gate at the call site with `.when(enabled, ...)` so
+    /// disabled buttons stay flat: Kit replays the instance style inside its
+    /// disabled arm, after its own shadow reset.
+    fn desktop_elevated(self) -> Self;
+    /// Selected-option treatment: pressed-state metadata plus a stronger
+    /// interaction fill when selected, quiet ghost otherwise. Every call site
+    /// sits on a `secondary`-equivalent surface (settings panel, group-box fill), where
     /// a `secondary` fill would be pixel-identical to the background, so the
-    /// highlight uses `popover` like the settings navigation. Ghost-base
-    /// (theme profiles, diff layout) and label-only (reduced motion)
+    /// highlight uses the readable pressed fill. Ghost-base
+    /// (diff layout) and label-only (reduced motion)
     /// selections keep their bespoke chains.
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self;
 }
@@ -655,30 +982,19 @@ impl DesktopButtonExt for Button {
 
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self {
         self.toggled(selected)
+            .selected(selected)
             .ghost()
-            .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
+            .when(selected, |button| button.bg(colors.button_active).text_color(colors.foreground))
     }
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
         self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
     }
+
+    fn desktop_elevated(self) -> Self {
+        self.shadow_xs()
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[gpui_kit::test]
-    fn card_border_style_pins_a_1px_theme_border(cx: &mut gpui_kit::TestAppContext) {
-        cx.update(|cx| {
-            gpui_kit::init(cx);
-            let colors = cx.theme().colors;
-            let style = card_border_style(&colors);
-            assert_eq!(style.border_color, Some(soft_edge_color(&colors)));
-            let widths = style.border_widths;
-            for width in [widths.top, widths.left, widths.bottom, widths.right] {
-                assert_eq!(width, Some(gpui_kit::AbsoluteLength::Pixels(px(1.))));
-            }
-        });
-    }
-}
+mod tests;

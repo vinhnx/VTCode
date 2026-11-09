@@ -1,7 +1,6 @@
-//! Composer behavior: slash actions, suggestions, and session-option flows.
+//! Composer behavior: slash actions, suggestions, and composer pickers.
 use super::composer_controls::{
-    ComposerTriggerKind, DesktopSlashAction, capitalize_agent_label, composer_trigger, effort_at, file_mention_token,
-    position_at,
+    ComposerTriggerKind, DesktopSlashAction, composer_trigger, effort_at, file_mention_token, position_at,
 };
 use super::*;
 
@@ -71,6 +70,9 @@ impl DesktopView {
                 self.settings_tab = tab.unwrap_or(settings::SettingsTab::Appearance);
                 self.clear_submitted_command(window, cx);
                 self.open_settings(window, cx);
+                if self.settings_tab == settings::SettingsTab::VtCode {
+                    self.refresh_login_item_status(cx);
+                }
                 true
             }
             DesktopSlashAction::Permissions => {
@@ -150,6 +152,19 @@ impl DesktopView {
             DesktopSlashAction::Splash => {
                 self.clear_submitted_command(window, cx);
                 self.open_webmcp_settings(window, cx);
+                true
+            }
+            DesktopSlashAction::Cli => {
+                self.clear_submitted_command(window, cx);
+                self.open_cli_handoff(cx);
+                true
+            }
+            DesktopSlashAction::Desktop => {
+                self.clear_submitted_command(window, cx);
+                // English literal: the repo does not add locale keys without
+                // full native-quality translations.
+                self.status = "You are already using VT Code Desktop.".to_string();
+                cx.notify();
                 true
             }
             DesktopSlashAction::Go(target) => {
@@ -287,31 +302,6 @@ impl DesktopView {
         }
     }
 
-    pub(super) fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.toggle_palette_kind(PaletteKind::PromptHistory, window, cx) {
-            return;
-        }
-        let entries = self
-            .prompt_history_entries()
-            .into_iter()
-            .map(|prompt| command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt)))
-            .collect();
-        self.show_palette(
-            PaletteKind::PromptHistory,
-            vec![(rust_i18n::t!("app.palette.sections.this_thread").to_string(), entries)],
-            window,
-            cx,
-        );
-        // CLI parity: seed the filter from the draft. Cancel-restore is
-        // automatic — the palette query is separate from the composer draft.
-        let seed = self.composer.read(cx).value().trim().to_string();
-        if !seed.is_empty() {
-            if let Some(palette) = &self.palette {
-                palette.update(cx, |state, cx| state.set_query(seed, window, cx));
-            }
-        }
-    }
-
     pub(super) fn composer_resource_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
         let mut groups = vec![(
             rust_i18n::t!("app.palette.sections.add").to_string(),
@@ -324,6 +314,7 @@ impl DesktopView {
             .files
             .iter()
             .filter(|entry| !entry.is_dir)
+            .take(MAX_FILE_ROWS)
             .map(|entry| command(entry.rel_path.clone(), PaletteAction::AttachFile(entry.rel_path.clone())))
             .collect::<Vec<_>>();
         // Preserve section identities while asynchronous discovery fills empty groups.
@@ -381,6 +372,20 @@ impl DesktopView {
     }
 
     pub(super) fn update_composer_suggestions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            // Reverse search is inline: the panel shows rows only, so every
+            // draft change re-ranks from the composer text. History owns the
+            // session until accept/cancel — triggers must not hijack a search
+            // just because the filter contains `@` or `/`.
+            let draft = self.composer.read(cx).value();
+            if draft == self.palette_query {
+                // Cursor moves and clicks re-enter here with identical text:
+                // skip the re-rank so arrow-key navigation keeps its row.
+                return;
+            }
+            self.refresh_prompt_history(&draft, window, cx);
+            return;
+        }
         let value = self.composer.read(cx).value();
         let cursor = self.composer.read(cx).cursor();
         let Some(trigger) = composer_trigger(&value, cursor) else {
@@ -475,28 +480,54 @@ impl DesktopView {
         let Some(state) = self.palette.clone() else {
             return false;
         };
-        let item_count = self.palette_groups.first().map_or(0, |(_, entries)| entries.len());
+        // Flat row order across sections; the history palette appends a
+        // cross-thread recents section under the live thread.
+        let section_lens: Vec<usize> = self.palette_groups.iter().map(|(_, entries)| entries.len()).collect();
+        let item_count: usize = section_lens.iter().sum();
         if item_count == 0 {
             return false;
         }
-        let current = state.read(cx).selected_index().map(|index| index.row);
-        let step_from = |row: usize| {
+        let to_flat = |section: usize, row: usize| section_lens.iter().take(section).sum::<usize>() + row;
+        let from_flat = |flat: usize| {
+            let mut rest = flat;
+            for (section, len) in section_lens.iter().enumerate() {
+                if rest < *len {
+                    return Some((section, rest));
+                }
+                rest -= len;
+            }
+            None
+        };
+        let current = state.read(cx).selected_index().and_then(|index| {
+            section_lens
+                .get(index.section)
+                .is_some_and(|&len| index.row < len)
+                .then(|| to_flat(index.section, index.row))
+        });
+        let step_from = |flat: usize| {
             if down {
-                (row + 1) % item_count
-            } else if row == 0 {
+                (flat + 1) % item_count
+            } else if flat == 0 {
                 item_count - 1
             } else {
-                row - 1
+                flat - 1
             }
         };
-        // Kit-side filtering (prompt-history seed) hides rows, and selecting a
-        // hidden row collapses the highlight to None: step until a row sticks.
+        // The highlight resolves against Kit's installed model, which lags the
+        // host rows between a refresh and its render: step until a row sticks.
         // No `on_select` is wired, so probes are side-effect-free notifies.
         let mut candidate = current.map_or(if down { 0 } else { item_count - 1 }, step_from);
         state.update(cx, |state, cx| {
             for _ in 0..item_count {
-                state.set_selected_index(Some(gpui_kit::component::IndexPath::new(candidate)), window, cx);
-                if state.selected_index().is_some_and(|index| index.row == candidate) {
+                let Some((section, row)) = from_flat(candidate) else {
+                    candidate = step_from(candidate);
+                    continue;
+                };
+                state.set_selected_index(Some(gpui_kit::component::IndexPath::new(row).section(section)), window, cx);
+                if state
+                    .selected_index()
+                    .is_some_and(|index| index.section == section && index.row == row)
+                {
                     break;
                 }
                 candidate = step_from(candidate);
@@ -539,7 +570,7 @@ impl DesktopView {
         match self.palette_kind {
             PaletteKind::FileMentions => {
                 if !self.accept_composer_suggestion(window, cx) {
-                    self.submit_prompt(window, cx);
+                    self.submit_or_jump_to_latest(window, cx);
                 }
             }
             PaletteKind::PromptHistory => {
@@ -547,15 +578,29 @@ impl DesktopView {
                     // Empty history or a filter matching nothing: Enter
                     // submits the draft instead of dying silently.
                     self.close_palette(window, cx);
-                    self.submit_prompt(window, cx);
+                    self.submit_or_jump_to_latest(window, cx);
                 }
             }
             PaletteKind::SlashCommands => {
                 let _accepted = self.accept_composer_suggestion(window, cx);
-                self.submit_prompt(window, cx);
+                self.submit_or_jump_to_latest(window, cx);
             }
-            _ => self.submit_prompt(window, cx),
+            _ => self.submit_or_jump_to_latest(window, cx),
         }
+    }
+
+    /// Plain-Enter submit with viewport reconciliation: a non-empty draft
+    /// while scrolled away from the tail first jumps to the latest message
+    /// (draft and focus preserved) instead of submitting; the next Enter
+    /// submits. The Send button keeps immediate submit; only Enter detours.
+    fn submit_or_jump_to_latest(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let draft = self.composer.read(cx).value().to_string();
+        if !draft.trim().is_empty() && !self.message_scroller.read(cx).is_following_tail() {
+            self.transcript.follow_latest();
+            cx.notify();
+            return;
+        }
+        self.submit_prompt(window, cx);
     }
 
     pub(super) fn complete_composer_trigger(
@@ -729,243 +774,5 @@ impl DesktopView {
         self.effort_slider = Some(slider);
         self._effort_slider_subscriptions = vec![slider_observation, slider_events];
         cx.notify();
-    }
-
-    pub(super) fn can_select_session_options(&self) -> bool {
-        self.session_change_allowed(None) && !self.attachments_picker_open && self.session_options().is_some()
-    }
-
-    pub(super) fn select_session_options(
-        &mut self,
-        options: protocol::SessionOptionsSelectParams,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if !self.can_select_session_options() {
-            return false;
-        }
-        if self.session_option_is_current(&options) {
-            if let Some(choice) = options.permission_mode {
-                self.save_workspace_permission(choice);
-            }
-            return true;
-        }
-        if self.request_session_change(protocol::method::CONFIG_OPTIONS, json!(options), cx) {
-            self.pending_permission_choice = options.permission_mode;
-            self.status = rust_i18n::t!("app.permissions.updating_runtime").to_string();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn permission_workspace_key(&self) -> Option<String> {
-        self.service_info
-            .as_ref()
-            .map(|info| info.workspace.clone())
-            .or_else(|| self.workspace.as_ref().map(|path| path.to_string_lossy().into_owned()))
-    }
-
-    pub(super) fn save_workspace_permission(&mut self, choice: protocol::PermissionMode) {
-        if choice == protocol::PermissionMode::FullAccess {
-            return;
-        }
-        if let Some(workspace) = self.permission_workspace_key() {
-            self.preferences.touch_workspace(&workspace);
-            let _previous = self.preferences.workspace_permissions.insert(workspace, choice);
-            if let Err(error) = self.preferences.try_save() {
-                self.error = Some(rust_i18n::t!("app.permissions.save_failed", error = error.to_string()).to_string());
-            }
-        }
-    }
-
-    pub(super) fn restore_workspace_permission(&mut self, cx: &mut Context<Self>) {
-        let Some(choice) = self
-            .permission_workspace_key()
-            .and_then(|workspace| self.preferences.workspace_permissions.get(&workspace).copied())
-        else {
-            return;
-        };
-        let options = protocol::SessionOptionsSelectParams {
-            permission_mode: Some(choice),
-            ..Default::default()
-        };
-        if !self.session_option_is_current(&options) && !self.select_session_options(options, cx) {
-            self.error = Some(rust_i18n::t!("app.permissions.restore_failed").to_string());
-        }
-    }
-
-    pub(super) fn workspace_permission_ready(&self) -> bool {
-        if self
-            .session_options()
-            .is_some_and(|options| options.permission_mode == protocol::PermissionMode::FullAccess)
-        {
-            return true;
-        }
-        self.permission_workspace_key()
-            .and_then(|workspace| self.preferences.workspace_permissions.get(&workspace))
-            .is_none_or(|saved| self.session_options().is_some_and(|options| options.permission_mode == *saved))
-    }
-
-    pub(super) fn session_option_is_current(&self, options: &protocol::SessionOptionsSelectParams) -> bool {
-        self.session_options().is_some_and(|current| {
-            options.permission_mode.is_none_or(|mode| current.permission_mode == mode)
-                && options.mode.as_ref().is_none_or(|mode| current.mode == *mode)
-                && options
-                    .reasoning_effort
-                    .as_ref()
-                    .is_none_or(|effort| current.reasoning_effort == *effort)
-                && options.fast_mode.is_none_or(|enabled| current.fast_mode_enabled == enabled)
-        })
-    }
-
-    pub(super) fn open_permissions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.toggle_palette_kind(PaletteKind::Permissions, window, cx) {
-            return;
-        }
-        if !self.can_select_session_options() {
-            return;
-        }
-        let entries = [
-            (
-                protocol::PermissionMode::Ask,
-                permission_mode_label(protocol::PermissionMode::Ask),
-                rust_i18n::t!("app.permissions.desc_ask").to_string(),
-            ),
-            (
-                protocol::PermissionMode::AutoApproveCommands,
-                permission_mode_label(protocol::PermissionMode::AutoApproveCommands),
-                rust_i18n::t!("app.permissions.desc_auto").to_string(),
-            ),
-            (
-                protocol::PermissionMode::FullAccess,
-                permission_mode_label(protocol::PermissionMode::FullAccess),
-                rust_i18n::t!("app.permissions.desc_full").to_string(),
-            ),
-        ]
-        .into_iter()
-        .map(|(permission_mode, label, description)| {
-            let mut entry = command(
-                label,
-                PaletteAction::SelectSessionOptions(protocol::SessionOptionsSelectParams {
-                    permission_mode: Some(permission_mode),
-                    ..Default::default()
-                }),
-            );
-            entry.description = Some(description);
-            entry
-        })
-        .collect();
-        self.show_palette(
-            PaletteKind::Permissions,
-            vec![(rust_i18n::t!("app.permissions.group_next_session").to_string(), entries)],
-            window,
-            cx,
-        );
-    }
-
-    /// Cycle the primary agent forward (CLI Shift+Tab parity). The select
-    /// path enforces the mode-switch lock, so mid-run presses are dropped
-    /// exactly like the CLI busy notice.
-    pub(super) fn cycle_primary_agent(&mut self, cx: &mut Context<Self>) {
-        let Some(options) = self.session_options() else {
-            return;
-        };
-        if options.available_modes.is_empty() {
-            return;
-        }
-        // Unknown current mode (stale/custom value) starts at the first mode
-        // instead of skipping it via `unwrap_or(0)`-then-increment.
-        let next = options
-            .available_modes
-            .iter()
-            .position(|mode| mode.name == options.mode)
-            .map_or(0, |current| (current + 1) % options.available_modes.len());
-        let Some(mode) = options.available_modes.get(next).map(|mode| mode.name.clone()) else {
-            return;
-        };
-        // CLI parity: a lock-dropped cycle surfaces a busy notice instead of
-        // silently swallowing the press (`MODE_SWITCH_BUSY_NOTICE`).
-        if !self
-            .select_session_options(protocol::SessionOptionsSelectParams { mode: Some(mode), ..Default::default() }, cx)
-        {
-            self.status = rust_i18n::t!("app.composer.mode_switch_busy").to_string();
-            cx.notify();
-        }
-    }
-
-    pub(super) fn open_modes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.toggle_palette_kind(PaletteKind::Modes, window, cx) {
-            return;
-        }
-        if !self.can_select_session_options() {
-            return;
-        }
-        let entries = self
-            .session_options()
-            .into_iter()
-            .flat_map(|options| &options.available_modes)
-            .map(|mode| {
-                let mut entry = command(
-                    capitalize_agent_label(&mode.display_name),
-                    PaletteAction::SelectSessionOptions(protocol::SessionOptionsSelectParams {
-                        mode: Some(mode.name.clone()),
-                        ..Default::default()
-                    }),
-                );
-                entry.description = Some(mode.description.clone());
-                entry
-            })
-            .collect();
-        self.show_palette(
-            PaletteKind::Modes,
-            vec![(rust_i18n::t!("app.permissions.group_default_agent").to_string(), entries)],
-            window,
-            cx,
-        );
-    }
-
-    pub(super) fn render_mode_button(&self, _cx: &Context<Self>) -> AnyElement {
-        let mode = self
-            .active_primary_agent_display
-            .as_ref()
-            .filter(|active| self.selected_session_id.as_deref() == Some(active.session_id.as_str()))
-            .map(|active| active.display_name.as_str())
-            .or_else(|| {
-                self.session_options().map(|options| {
-                    options
-                        .available_modes
-                        .iter()
-                        .find(|mode| mode.name == options.mode)
-                        .map_or(options.mode.as_str(), |mode| mode.display_name.as_str())
-                })
-            })
-            .map(capitalize_agent_label)
-            .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string());
-        desktop_button("composer-mode")
-            .child(div().id("composer-mode-label").test_support().truncate().child(mode.clone()))
-            .max_w(px(180.))
-            .overflow_hidden()
-            .accessibility_label(rust_i18n::t!("app.composer.agent_mode_aria", mode = mode.as_str()).to_string())
-            .tooltip_with_action(
-                rust_i18n::t!("app.composer.choose_agent_mode").to_string(),
-                &OpenModePicker,
-                Some(key_context::DESKTOP),
-            )
-            .dropdown_caret(true)
-            .ghost()
-            .small()
-            .desktop_disabled(!self.can_select_session_options())
-            .dispatches_desktop_action(OpenModePicker, self.focus_handle.clone())
-            .into_any_element()
-    }
-}
-
-/// Short label for a session permission mode, shared by the composer
-/// permission picker and the curated configuration row.
-pub(super) fn permission_mode_label(mode: protocol::PermissionMode) -> String {
-    match mode {
-        protocol::PermissionMode::Ask => rust_i18n::t!(i18n::COMPOSER_PERMISSION_ASK).to_string(),
-        protocol::PermissionMode::AutoApproveCommands => rust_i18n::t!(i18n::COMPOSER_PERMISSION_AUTO).to_string(),
-        protocol::PermissionMode::FullAccess => rust_i18n::t!(i18n::COMPOSER_PERMISSION_FULL).to_string(),
     }
 }

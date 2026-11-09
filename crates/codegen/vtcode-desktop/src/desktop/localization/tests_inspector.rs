@@ -4,7 +4,16 @@ use super::UiLanguage;
 fn inspector_copy_is_localized_for_every_language() {
     // Correct translations that are byte-identical to English. Each entry is
     // asserted equal (not skipped) so a stale entry fails instead of hiding.
-    const IDENTICAL_TO_ENGLISH: &[(&str, &str)] = &[("it", "app.inspector.tab_output")];
+    const IDENTICAL_TO_ENGLISH: &[(&str, &str)] = &[
+        ("it", "app.inspector.tab_output"),
+        ("es", "app.inspector.tab_plan"),
+        ("fr", "app.inspector.tab_plan"),
+        ("de", "app.inspector.tab_plan"),
+        ("nl", "app.inspector.tab_plan"),
+        ("sv", "app.inspector.tab_plan"),
+        ("pl", "app.inspector.tab_plan"),
+        ("tr", "app.inspector.tab_plan"),
+    ];
     for language in UiLanguage::ALL {
         let locale = language.locale();
         for key in [
@@ -13,6 +22,9 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.tab_activity",
             "app.inspector.tab_output",
             "app.inspector.tab_utilities",
+            "app.inspector.tab_plan",
+            "app.inspector.empty_plan_title",
+            "app.inspector.empty_plan_description",
             "app.inspector.empty_output_title",
             "app.inspector.empty_output_description",
             "app.inspector.history_tag",
@@ -39,6 +51,8 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.older_excluded",
             "app.inspector.recent_activity",
             "app.inspector.view_captured_output",
+            "app.inspector.jump_to_message",
+            "app.inspector.jump_to_message_for",
             "app.inspector.partial_activity_history",
             "app.inspector.inspector_tabs",
             "app.inspector.tabs_hint",
@@ -61,6 +75,11 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.open_file",
             "app.inspector.partial_review_history",
             "app.inspector.diff_view_label",
+            "app.inspector.show_all_activity",
+            "app.inspector.show_all_files",
+            "app.inspector.jump_latest_activity",
+            "app.inspector.filter_output_lines",
+            "app.inspector.no_matching_output_lines",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -96,9 +115,18 @@ fn inspector_copy_is_localized_for_every_language() {
         assert!(statuses.contains("demo-older"), "{locale}: {statuses}");
         let shown = rust_i18n::t!("app.inspector.shown_count", locale = locale, count = 7).to_string();
         assert!(shown.contains('7'), "{locale}: {shown}");
+        let filtered = rust_i18n::t!("app.inspector.filtered_count", locale = locale, shown = 2, total = 9).to_string();
+        assert!(filtered.contains('2'), "{locale}: {filtered}");
+        assert!(filtered.contains('9'), "{locale}: {filtered}");
+        let filter =
+            rust_i18n::t!("app.inspector.filter_by_status", locale = locale, status = "demo-status").to_string();
+        assert!(filter.contains("demo-status"), "{locale}: {filter}");
         let view_output =
             rust_i18n::t!("app.inspector.view_output_for", locale = locale, title = "demo-title").to_string();
         assert!(view_output.contains("demo-title"), "{locale}: {view_output}");
+        let jump_message =
+            rust_i18n::t!("app.inspector.jump_to_message_for", locale = locale, title = "demo-title").to_string();
+        assert!(jump_message.contains("demo-title"), "{locale}: {jump_message}");
         let files = rust_i18n::t!("app.inspector.files_count", locale = locale, count = 3).to_string();
         assert!(files.contains('3'), "{locale}: {files}");
         let review =

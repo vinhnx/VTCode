@@ -96,10 +96,16 @@ pub enum AllowedToolsField {
 /// Parse SKILL.md file and extract manifest + instructions
 pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, String)> {
     let skill_md = skill_path.join("SKILL.md");
-    anyhow::ensure!(skill_md.exists(), "SKILL.md not found at {}", skill_md.display());
-
-    let content =
-        fs::read_to_string(&skill_md).context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
+    // `read_to_string` already reports a missing file, so an `exists()` probe
+    // would only add a second open/stat for the same answer. Keep the specific
+    // "not found" wording that callers and operator logs relied on.
+    let content = fs::read_to_string(&skill_md).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!("SKILL.md not found at {}", skill_md.display())
+        } else {
+            anyhow::Error::new(error).context(format!("Failed to read SKILL.md at {}", skill_md.display()))
+        }
+    })?;
 
     let (manifest, instructions) = parse_skill_content(&content)?;
 
@@ -710,6 +716,16 @@ argument-hint: "<migration-intent>"
         let content = "---\nname: empty-tools\ndescription: Test skill\nallowed-tools: []\n---\n\n# Body\n";
         let err = parse_skill_content(content).expect_err("empty allowed-tools list must fail");
         assert!(err.to_string().contains("allowed-tools"), "got: {err:#}");
+    }
+
+    #[test]
+    fn parse_skill_file_reports_a_missing_manifest_without_a_preflight_stat() {
+        let tmp = tempfile::TempDir::new().expect("temp dir");
+        // No SKILL.md: the read itself supplies the diagnostic, so the error
+        // must still say "not found" rather than a generic read failure.
+        let error = parse_skill_file(tmp.path()).expect_err("missing SKILL.md must fail");
+        let message = error.to_string();
+        assert!(message.contains("SKILL.md not found"), "{message}");
     }
 
     #[test]

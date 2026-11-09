@@ -346,7 +346,7 @@ pub(crate) async fn run_checkup_diagnostics(
         &format!("  {} passed, {} warning(s), {} failure(s)", summary.passed, summary.warnings, summary.failures),
     )?;
     if summary.failures > 0 {
-        renderer.line(MessageStyle::Error, "[FAIL] Resolve failures first, then rerun `/config checkup`.")?;
+        renderer.line(MessageStyle::Error, "[FAIL] Resolve failures first, then rerun `/doctor`.")?;
     } else if summary.warnings > 0 {
         renderer.line(MessageStyle::Warning, "[WARN] Core checks passed, but there are warnings to review.")?;
     } else {
@@ -356,8 +356,7 @@ pub(crate) async fn run_checkup_diagnostics(
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Status, "[Recommended Next Actions]")?;
     if summary.failures > 0 {
-        renderer
-            .line(MessageStyle::Info, "[FAIL] Follow the remediation hints above and run `/config checkup` again.")?;
+        renderer.line(MessageStyle::Info, "[FAIL] Follow the remediation hints above and run `/doctor` again.")?;
     }
     if summary.warnings > 0 {
         renderer.line(
@@ -368,12 +367,16 @@ pub(crate) async fn run_checkup_diagnostics(
     if options.quick {
         renderer.line(
             MessageStyle::Info,
-            "[TIP] Run `/config checkup --full` to include dependencies, MCP, links, and skills checks.",
+            "[TIP] Run `/doctor --full` to include dependencies, MCP, links, and skills checks.",
         )?;
     }
     renderer.line(
         MessageStyle::Info,
         "[TIP] For more details: `/skills list` (available skills), `/status` (session), `/compact` (conversation compaction)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "[TIP] Audit always-loaded guidance (AGENTS.md/CLAUDE.md, skills, MCP cost) with `/doctor prompt-audit`.",
     )?;
     renderer.line(MessageStyle::Info, "[DOCS] See docs/ide/troubleshooting.md for troubleshooting guidance.")?;
 
@@ -385,10 +388,10 @@ pub(crate) async fn run_checkup_diagnostics(
 
 /// Emit report-only optimization suggestions derived from the active config.
 ///
-/// These mirror the `/config checkup` spec (auto mode, slow hooks, pre-approved
-/// read-only commands, keeping skills/MCPs and CLAUDE.md lean). They are
-/// surfaced as tips rather than pass/fail checks because `/config checkup` confirms
-/// with the user before making any change.
+/// These mirror the `/doctor` setup checkup spec (auto mode, slow hooks,
+/// pre-approved read-only commands, keeping skills/MCPs and AGENTS.md lean).
+/// They are surfaced as tips rather than pass/fail checks because `/doctor`
+/// confirms with the user before making any change.
 fn render_checkup_optimizations(
     renderer: &mut AnsiRenderer,
     vt_cfg: Option<&VTCodeConfig>,
@@ -430,7 +433,7 @@ fn render_checkup_optimizations(
     renderer.line(MessageStyle::Info, "[TIP] Run `/update` or `vtcode update` to check for the latest version.")?;
     renderer.line(
         MessageStyle::Info,
-        "[TIP] Remove unused skills/MCPs and deduplicate or split your CLAUDE.md into nested files to save context.",
+        "[TIP] Remove unused skills/MCPs and deduplicate or split your AGENTS.md (or CLAUDE.md) into nested files to save context.",
     )?;
     Ok(())
 }
@@ -487,7 +490,7 @@ fn get_suggestion_for_issue(label: &str, detail: &str) -> Option<String> {
     if label_lower.contains("workspace") {
         Some("Ensure workspace directory is accessible and not deleted.".to_string())
     } else if label_lower.contains("api key") {
-        Some("Set the provider API key in your environment or vtcode.toml, then rerun `/config checkup`.".to_string())
+        Some("Set the provider API key in your environment or vtcode.toml, then rerun `/doctor`.".to_string())
     } else if label_lower.contains("config file") && detail_lower.contains("no vtcode.toml") {
         Some("Run `/init` to generate vtcode.toml with guided setup.".to_string())
     } else if label_lower.contains("node.js") {

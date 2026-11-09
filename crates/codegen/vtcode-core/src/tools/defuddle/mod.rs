@@ -227,12 +227,13 @@ async fn fetch_markdown(url: &str, timeout_secs: u64, max_bytes: usize) -> Resul
     let encoded = percent_encode_path(url);
     let target = format!("{DEFUDDLE_BASE_URL}{encoded}");
 
-    let client = reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         // Do NOT follow redirects from the upstream service. Defuddle is a
         // thin proxy; following its redirects could leak into SSRF-prone
         // behavior, and we already validated the input URL above.
-        .redirect(reqwest::redirect::Policy::none())
+        .redirect(reqwest::redirect::Policy::none());
+    let client = vtcode_commons::http::apply_connect_timeout(builder)
         .build()
         .context("defuddle_fetch: failed to build HTTP client")?;
 

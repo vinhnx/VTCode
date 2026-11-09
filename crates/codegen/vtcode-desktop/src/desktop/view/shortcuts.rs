@@ -19,6 +19,7 @@ pub(super) enum CommandId {
     Inspector,
     ZenMode,
     Cancel,
+    BackgroundOperation,
     Dismiss,
     Settings,
     SettingsSearch,
@@ -45,7 +46,7 @@ pub(super) enum CommandId {
 }
 
 impl CommandId {
-    pub(super) const ALL: [Self; 33] = [
+    pub(super) const ALL: [Self; 34] = [
         Self::Commands,
         Self::ConversationSearch,
         Self::NewSession,
@@ -56,6 +57,7 @@ impl CommandId {
         Self::Inspector,
         Self::ZenMode,
         Self::Cancel,
+        Self::BackgroundOperation,
         Self::Dismiss,
         Self::Settings,
         Self::SettingsSearch,
@@ -93,6 +95,7 @@ impl CommandId {
             Self::Inspector => "inspector",
             Self::ZenMode => "zen_mode",
             Self::Cancel => "cancel",
+            Self::BackgroundOperation => "background_operation",
             Self::Dismiss => "dismiss",
             Self::Settings => "settings",
             Self::SettingsSearch => "settings_search",
@@ -164,7 +167,7 @@ impl ShortcutCommand {
     }
 }
 
-pub(super) const COMMANDS: [ShortcutCommand; 33] = [
+pub(super) const COMMANDS: [ShortcutCommand; 34] = [
     ShortcutCommand {
         id: CommandId::Commands,
         label_key: "app.shortcuts.commands_label",
@@ -224,6 +227,12 @@ pub(super) const COMMANDS: [ShortcutCommand; 33] = [
         label_key: "app.shortcuts.cancel_label",
         description_key: "app.shortcuts.cancel_description",
         default_binding: "cmd-.",
+    },
+    ShortcutCommand {
+        id: CommandId::BackgroundOperation,
+        label_key: "app.shortcuts.background_operation_label",
+        description_key: "app.shortcuts.background_operation_description",
+        default_binding: "cmd-shift-d",
     },
     ShortcutCommand {
         id: CommandId::Dismiss,
@@ -377,6 +386,7 @@ pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
         CommandId::Inspector => Box::new(ToggleInspector),
         CommandId::ZenMode => Box::new(ToggleZenMode),
         CommandId::Cancel => Box::new(CancelRun),
+        CommandId::BackgroundOperation => Box::new(BackgroundOperation),
         CommandId::Dismiss => Box::new(DismissOverlay),
         CommandId::Settings => Box::new(OpenSettings),
         CommandId::SettingsSearch => Box::new(OpenSettingsSearch),
@@ -403,10 +413,13 @@ pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
     }
 }
 
-pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBinding>, String> {
+pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result<Vec<KeyBinding>, String> {
     if overrides.keys().any(|key| CommandId::from_id(key).is_none()) {
         return Err(rust_i18n::t!("app.shortcuts.unknown_action").to_string());
     }
+    // Validation normalizes against the host OS so headed and headless runs
+    // agree; loading resolves through the live keyboard mapper below.
+    let os = host_operating_system();
     let mut seen = HashSet::new();
     COMMANDS
         .iter()
@@ -422,11 +435,11 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
             if source.trim().is_empty() || source.split_whitespace().count() != 1 {
                 return Err(rust_i18n::t!("app.shortcuts.enter_one_combo", label = label.as_str()).to_string());
             }
-            let key = gpui_kit::Keystroke::parse(source).map_err(|error| {
+            let key = gpui_kit::Keystroke::parse_with_os(source, os).map_err(|error| {
                 rust_i18n::t!("app.shortcuts.invalid_combo", label = label.as_str(), error = error.to_string())
                     .to_string()
             })?;
-            let normalized = key.unparse();
+            let normalized = key.unparse(os);
             if [
                 "cmd-q",
                 "cmd-w",
@@ -451,6 +464,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                 && !source.contains("cmd-")
                 && !source.contains("ctrl-")
                 && !source.contains("alt-")
+                && !source.contains("secondary-")
                 && !is_function_key(&normalized)
             {
                 return Err(rust_i18n::t!("app.shortcuts.include_modifier", label = label.as_str()).to_string());
@@ -461,45 +475,76 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
             let context = gpui_kit::KeyBindingContextPredicate::parse(context_for(command.id))
                 .map_err(|error| error.to_string())?;
             let mut bindings = vec![
-                KeyBinding::load(
-                    source,
-                    action(command.id),
-                    Some(context.into()),
-                    false,
-                    None,
-                    &gpui_kit::DummyKeyboardMapper,
-                )
-                .map_err(|error| {
-                    rust_i18n::t!("app.shortcuts.invalid_shortcut", label = label.as_str(), error = error.to_string())
-                        .to_string()
-                })?,
-            ];
-            if command.id == CommandId::SettingsSearch || command.id == CommandId::Settings {
-                let context = gpui_kit::KeyBindingContextPredicate::parse(key_context::SETTINGS)
-                    .map_err(|error| error.to_string())?;
-                bindings.push(
-                    KeyBinding::load(
-                        source,
-                        action(command.id),
-                        Some(context.into()),
-                        false,
-                        None,
-                        &gpui_kit::DummyKeyboardMapper,
-                    )
-                    .map_err(|error| {
+                KeyBinding::load(source, action(command.id), Some(context.into()), false, None, cx).map_err(
+                    |error| {
                         rust_i18n::t!(
                             "app.shortcuts.invalid_shortcut",
                             label = label.as_str(),
                             error = error.to_string()
                         )
                         .to_string()
-                    })?,
+                    },
+                )?,
+            ];
+            if command.id == CommandId::SettingsSearch || command.id == CommandId::Settings {
+                let context = gpui_kit::KeyBindingContextPredicate::parse(key_context::SETTINGS)
+                    .map_err(|error| error.to_string())?;
+                bindings.push(
+                    KeyBinding::load(source, action(command.id), Some(context.into()), false, None, cx).map_err(
+                        |error| {
+                            rust_i18n::t!(
+                                "app.shortcuts.invalid_shortcut",
+                                label = label.as_str(),
+                                error = error.to_string()
+                            )
+                            .to_string()
+                        },
+                    )?,
                 );
             }
             Ok(bindings)
         })
         .collect::<Result<Vec<_>, _>>()
         .map(|bindings| bindings.into_iter().flatten().collect())
+}
+
+/// `NoAction` shadows for chords a saved table retires. GPUI keymaps only
+/// append, so rebinding after a save would otherwise leave removed or rebound
+/// chords firing their stale action until restart. Callers bind these shadows
+/// before the fresh table: same-chord conflicts resolve toward the latest
+/// binding, so shared chords take the new action while dropped chords stay
+/// dead. A table startup rejected was never bound (defaults were), so retired
+/// chords diff against defaults then; chords that no longer parse are skipped
+/// because they were never bound either.
+pub(super) fn stale_shadows(
+    old_overrides: &BTreeMap<String, String>,
+    new_overrides: &BTreeMap<String, String>,
+    cx: &App,
+) -> Vec<KeyBinding> {
+    let defaults = BTreeMap::new();
+    let old = if bindings(old_overrides, cx).is_ok() {
+        old_overrides
+    } else {
+        &defaults
+    };
+    let mut shadows = Vec::new();
+    for command in COMMANDS.iter() {
+        let retired = staged_value(old, command);
+        if retired.is_empty() || retired == staged_value(new_overrides, command) {
+            continue;
+        }
+        // Mirrors `bindings()`: Settings and SettingsSearch bind twice, once
+        // per context, so both stale chords need a shadow. Keep in sync.
+        let mut contexts = vec![context_for(command.id)];
+        if command.id == CommandId::Settings || command.id == CommandId::SettingsSearch {
+            contexts.push(key_context::SETTINGS);
+        }
+        shadows.extend(contexts.into_iter().filter_map(|context| {
+            let predicate = gpui_kit::KeyBindingContextPredicate::parse(context).ok()?;
+            KeyBinding::load(retired, Box::new(NoAction {}), Some(predicate.into()), false, None, cx).ok()
+        }));
+    }
+    shadows
 }
 
 fn is_function_key(shortcut: &str) -> bool {
@@ -554,6 +599,21 @@ pub(super) fn shortcut_matches_query(command: &ShortcutCommand, staged: &str, te
     terms.iter().all(|term| haystack.contains(term))
 }
 
+/// Host OS for keystroke parsing/formatting in contexts without an `App`.
+/// Matches `cx.platform_info().os` on native targets; unknown platforms fall
+/// back to `Unknown`, where `secondary-` resolves to ctrl.
+pub(super) fn host_operating_system() -> gpui_kit::OperatingSystem {
+    match std::env::consts::OS {
+        "macos" => gpui_kit::OperatingSystem::Mac,
+        "windows" => gpui_kit::OperatingSystem::Windows,
+        "linux" => gpui_kit::OperatingSystem::Linux,
+        "freebsd" => gpui_kit::OperatingSystem::FreeBsd,
+        "ios" => gpui_kit::OperatingSystem::Ios,
+        "android" => gpui_kit::OperatingSystem::Android,
+        _ => gpui_kit::OperatingSystem::Unknown,
+    }
+}
+
 /// Bare-modifier key names reported by GPUI key events. Capture ignores them
 /// and keeps waiting for the completed chord instead of flashing a rejection.
 pub(super) fn is_modifier_key(key: &str) -> bool {
@@ -568,7 +628,7 @@ pub(super) fn shortcut_accessibility_value(value: &str) -> String {
         return rust_i18n::t!("app.shortcuts.a11y_not_set").to_string();
     }
 
-    gpui_kit::Keystroke::parse(value)
+    gpui_kit::Keystroke::parse_with_os(value, host_operating_system())
         .map(|keystroke| Kbd::format(&keystroke))
         .unwrap_or_else(|_| rust_i18n::t!("app.shortcuts.a11y_invalid").to_string())
 }
@@ -576,6 +636,7 @@ pub(super) fn shortcut_accessibility_value(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::TestAppContext;
 
     #[test]
     fn accessible_shortcut_labels_use_the_platform_formatted_key() {
@@ -585,71 +646,85 @@ mod tests {
         assert_eq!(shortcut_accessibility_value("a-b"), "invalid shortcut");
     }
 
-    #[test]
-    fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 35);
-        assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
-        assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
-        assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 34);
-        assert_eq!(
-            bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
-                .unwrap()
-                .len(),
-            33
-        );
-        assert_eq!(
-            bindings(&BTreeMap::from([("settings".into(), String::new())])).unwrap().len(),
-            33,
-            "unbinding Settings removes both its desktop and in-settings bindings"
-        );
-        assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
-        for (action, key) in [
-            ("commands", "cmd-n"),
-            ("commands", "cmd-q"),
-            ("commands", "k"),
-            ("zen_mode", "cmd-shift-z"),
-            ("unknown", "ctrl-k"),
-        ] {
-            assert!(bindings(&BTreeMap::from([(action.into(), key.into())])).is_err(), "{action}: {key}");
-        }
+    #[gpui_kit::test]
+    fn rejects_conflicting_reserved_typing_and_unknown_shortcuts(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            assert_eq!(bindings(&BTreeMap::new(), cx).unwrap().len(), 36);
+            assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())]), cx).is_ok());
+            assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())]), cx).is_ok());
+            assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())]), cx).is_ok());
+            assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())]), cx).unwrap().len(), 35);
+            assert_eq!(
+                bindings(&BTreeMap::from([("settings_search".into(), String::new())]), cx)
+                    .unwrap()
+                    .len(),
+                34
+            );
+            assert_eq!(
+                bindings(&BTreeMap::from([("settings".into(), String::new())]), cx)
+                    .unwrap()
+                    .len(),
+                34,
+                "unbinding Settings removes both its desktop and in-settings bindings"
+            );
+            assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())]), cx).is_err());
+            for (action, key) in [
+                ("commands", "cmd-n"),
+                ("commands", "cmd-q"),
+                ("commands", "k"),
+                ("zen_mode", "cmd-shift-z"),
+                ("unknown", "ctrl-k"),
+            ] {
+                assert!(bindings(&BTreeMap::from([(action.into(), key.into())]), cx).is_err(), "{action}: {key}");
+            }
+        });
     }
 
-    #[test]
-    fn rejects_overrides_colliding_with_fixed_chords() {
-        // Every modified fixed-table chord must be rejected: the deeper fixed
-        // binding would shadow the rebind (e.g. `ctrl-m` opening the model
-        // picker instead of the rebound command in the composer). CLI import
-        // funnels through the same `bindings()` gate, so it is covered too.
-        for key in bootstrap::FIXED_RESERVED_CHORDS {
-            assert!(bindings(&BTreeMap::from([("model".into(), (*key).into())])).is_err(), "{key} must be reserved");
-        }
-        // Near-miss neighbors stay accepted (asymmetric sides).
-        assert!(bindings(&BTreeMap::from([("model".into(), "ctrl-shift-m".into())])).is_ok());
-        assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-alt-p".into())])).is_ok());
-        assert!(bindings(&BTreeMap::from([("settings".into(), "cmd-shift-]".into())])).is_ok());
+    #[gpui_kit::test]
+    fn rejects_overrides_colliding_with_fixed_chords(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            // Every modified fixed-table chord must be rejected: the deeper fixed
+            // binding would shadow the rebind (e.g. `ctrl-m` opening the model
+            // picker instead of the rebound command in the composer). CLI import
+            // funnels through the same `bindings()` gate, so it is covered too.
+            for key in bootstrap::FIXED_RESERVED_CHORDS {
+                assert!(
+                    bindings(&BTreeMap::from([("model".into(), (*key).into())]), cx).is_err(),
+                    "{key} must be reserved"
+                );
+            }
+            // Near-miss neighbors stay accepted (asymmetric sides).
+            assert!(bindings(&BTreeMap::from([("model".into(), "ctrl-shift-m".into())]), cx).is_ok());
+            assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-alt-p".into())]), cx).is_ok());
+            assert!(bindings(&BTreeMap::from([("settings".into(), "cmd-shift-]".into())]), cx).is_ok());
+        });
     }
 
-    #[test]
-    fn review_navigation_accepts_configurable_function_key_bindings() {
-        let configured = BTreeMap::from([
-            ("next_review_change".into(), "f8".into()),
-            ("previous_review_change".into(), "shift-f8".into()),
-            ("next_review_file".into(), "alt-f9".into()),
-            ("previous_review_file".into(), "alt-shift-f9".into()),
-        ]);
-        assert!(bindings(&configured).is_ok());
-        assert_eq!(context_for(CommandId::NextReviewChange), "VTCodeDiffReview");
-        assert_eq!(context_for(CommandId::PreviousReviewFile), "VTCodeDiffReview");
-        assert_eq!(context_for(CommandId::NavigateBack), "VTCodeDesktop");
-        assert!(bindings(&BTreeMap::from([("next_review_change".into(), "f25".into())])).is_err());
-        assert!(
-            bindings(&BTreeMap::from([
+    #[gpui_kit::test]
+    fn review_navigation_accepts_configurable_function_key_bindings(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let configured = BTreeMap::from([
                 ("next_review_change".into(), "f8".into()),
-                ("previous_review_change".into(), "f8".into()),
-            ]))
-            .is_err()
-        );
+                ("previous_review_change".into(), "shift-f8".into()),
+                ("next_review_file".into(), "alt-f9".into()),
+                ("previous_review_file".into(), "alt-shift-f9".into()),
+            ]);
+            assert!(bindings(&configured, cx).is_ok());
+            assert_eq!(context_for(CommandId::NextReviewChange), "VTCodeDiffReview");
+            assert_eq!(context_for(CommandId::PreviousReviewFile), "VTCodeDiffReview");
+            assert_eq!(context_for(CommandId::NavigateBack), "VTCodeDesktop");
+            assert!(bindings(&BTreeMap::from([("next_review_change".into(), "f25".into())]), cx).is_err());
+            assert!(
+                bindings(
+                    &BTreeMap::from([
+                        ("next_review_change".into(), "f8".into()),
+                        ("previous_review_change".into(), "f8".into()),
+                    ]),
+                    cx
+                )
+                .is_err()
+            );
+        });
     }
 
     #[test]
@@ -667,6 +742,7 @@ mod tests {
             "inspector",
             "zen_mode",
             "cancel",
+            "background_operation",
             "dismiss",
             "settings",
             "settings_search",
@@ -789,10 +865,136 @@ mod tests {
 
     #[test]
     fn captured_chords_round_trip_through_parse() {
+        let os = host_operating_system();
         for chord in ["cmd-shift-k", "ctrl-cmd-z", "escape", "f7", "alt-shift-f7", "cmd-["] {
-            let once = gpui_kit::Keystroke::parse(chord).unwrap().unparse();
-            let twice = gpui_kit::Keystroke::parse(&once).unwrap().unparse();
+            let once = gpui_kit::Keystroke::parse_with_os(chord, os).unwrap().unparse(os);
+            let twice = gpui_kit::Keystroke::parse_with_os(&once, os).unwrap().unparse(os);
             assert_eq!(twice, once, "{chord} must survive a capture round-trip");
         }
+    }
+
+    #[gpui_kit::test]
+    fn secondary_alias_resolves_to_the_host_modifier(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            // `y` is arbitrary but load-bearing: the letter must avoid every
+            // reserved chord on both hosts (`s` collides with the fixed
+            // Cmd+S preview save, `j` with the fixed Ctrl+J composer chord).
+            let loaded = bindings(&BTreeMap::from([("model".into(), "secondary-y".into())]), cx)
+                .expect("secondary- resolves on the host OS");
+            assert_eq!(loaded.len(), 36, "full table builds with the secondary override");
+            #[cfg(target_os = "macos")]
+            let expected = "cmd-y";
+            #[cfg(not(target_os = "macos"))]
+            let expected = "ctrl-y";
+            assert_eq!(
+                gpui_kit::Keystroke::parse_with_os("secondary-y", host_operating_system())
+                    .unwrap()
+                    .unparse(host_operating_system()),
+                expected
+            );
+        });
+    }
+
+    use super::super::tests::{assert_chord_dead, assert_chord_resolves_once_to, assert_chord_resolves_to};
+
+    /// Mirror a save reinstall through the live keymap: old table, shadows,
+    /// then the fresh table, exactly as `bootstrap::reinstall_shortcuts` binds.
+    fn reinstall(old: &BTreeMap<String, String>, new: &BTreeMap<String, String>, cx: &mut App) {
+        cx.bind_keys(bindings(old, cx).expect("old table builds"));
+        cx.bind_keys(stale_shadows(old, new, cx));
+        cx.bind_keys(bindings(new, cx).expect("new table builds"));
+    }
+
+    #[gpui_kit::test]
+    fn reinstall_retires_rebound_chord_and_keeps_new_live(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let old = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            let new = BTreeMap::from([("model".into(), "ctrl-alt-m".into())]);
+            reinstall(&old, &new, cx);
+            assert_chord_dead(cx, "ctrl-shift-m", key_context::DESKTOP);
+            assert_chord_resolves_once_to(cx, "ctrl-alt-m", key_context::DESKTOP, &OpenModelPicker);
+            assert_chord_resolves_to(cx, "cmd-k", key_context::DESKTOP, &OpenCommandPalette);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn reinstall_retires_unbound_chord_without_touching_neighbors(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let old = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            let new = BTreeMap::from([("model".into(), String::new())]);
+            reinstall(&old, &new, cx);
+            assert_chord_dead(cx, "ctrl-shift-m", key_context::DESKTOP);
+            assert_chord_resolves_to(cx, "cmd-k", key_context::DESKTOP, &OpenCommandPalette);
+            assert_chord_resolves_to(cx, "cmd-,", key_context::DESKTOP, &OpenSettings);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn unchanged_tables_emit_no_shadows(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let sparse = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            assert!(stale_shadows(&sparse, &sparse, cx).is_empty());
+            // The staged draft is a full table while disk holds sparse
+            // overrides: identical effective chords still mean no shadows.
+            let full = draft_from(&sparse);
+            assert!(stale_shadows(&sparse, &full, cx).is_empty());
+            assert!(stale_shadows(&BTreeMap::new(), &BTreeMap::new(), cx).is_empty());
+        });
+    }
+
+    #[gpui_kit::test]
+    fn invalid_old_table_retires_against_startup_defaults(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            // Startup rejects the garbage table and binds defaults instead,
+            // so the reinstall must retire the default chord, not the garbage.
+            let old = BTreeMap::from([("model".into(), "a-b".into())]);
+            let new = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            assert!(bindings(&old, cx).is_err(), "fixture must be invalid");
+            cx.bind_keys(bindings(&BTreeMap::new(), cx).expect("defaults build"));
+            cx.bind_keys(stale_shadows(&old, &new, cx));
+            cx.bind_keys(bindings(&new, cx).expect("new table builds"));
+            assert_chord_dead(cx, "cmd-shift-m", key_context::DESKTOP);
+            assert_chord_resolves_once_to(cx, "ctrl-shift-m", key_context::DESKTOP, &OpenModelPicker);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn settings_rebind_shadows_both_contexts(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let old = BTreeMap::new();
+            let new = BTreeMap::from([("settings".into(), "ctrl-,".into())]);
+            let shadows = stale_shadows(&old, &new, cx);
+            assert_eq!(shadows.len(), 2, "the dual-context binding retires twice");
+            reinstall(&old, &new, cx);
+            for context in [key_context::DESKTOP, key_context::SETTINGS] {
+                assert_chord_dead(cx, "cmd-,", context);
+                assert_chord_resolves_once_to(cx, "ctrl-,", context, &OpenSettings);
+            }
+            // The untouched twin keeps its own chord live in both contexts.
+            for context in [key_context::DESKTOP, key_context::SETTINGS] {
+                assert_chord_resolves_to(cx, "cmd-f", context, &OpenSettingsSearch);
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn retiring_the_full_table_shadows_every_binding(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            // Structural pin: retiring everything must shadow every binding,
+            // including dual-context commands. If `bindings()` gains a
+            // context, this fails until `stale_shadows` mirrors it.
+            let unbind_all: BTreeMap<String, String> = COMMANDS
+                .iter()
+                .map(|command| (command.id.as_str().to_string(), String::new()))
+                .collect();
+            let defaults = bindings(&BTreeMap::new(), cx).expect("defaults build");
+            let shadows = stale_shadows(&BTreeMap::new(), &unbind_all, cx);
+            assert_eq!(shadows.len(), defaults.len(), "one shadow per bound chord");
+            cx.bind_keys(defaults);
+            cx.bind_keys(shadows);
+            for command in COMMANDS.iter() {
+                assert_chord_dead(cx, command.default_binding, context_for(command.id));
+            }
+        });
     }
 }

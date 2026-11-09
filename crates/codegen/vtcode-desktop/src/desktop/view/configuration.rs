@@ -64,6 +64,9 @@ pub(super) struct ConfigEditor {
     expected_layer_version: Option<String>,
     options: Vec<String>,
     pub(super) option_select: Option<Entity<ConfigOptionSelectState>>,
+    /// Value text the editor opened with; scrim dismissal compares the live
+    /// input or selection against it to decide clean-close vs confirm.
+    pub(super) initial: String,
 }
 
 impl ConfigValueKind {
@@ -268,7 +271,11 @@ impl DesktopView {
         if !self.can_edit_cli_settings() {
             return;
         }
-        let groups = self.cli_config_settings.as_ref().map(config_palette_groups).unwrap_or_default();
+        let groups = self
+            .cli_config_settings
+            .as_ref()
+            .map(|snapshot| config_palette_groups(snapshot))
+            .unwrap_or_default();
         self.show_palette(PaletteKind::ConfigSettings, groups, window, cx);
     }
 
@@ -321,7 +328,7 @@ impl DesktopView {
         });
         if option_select.is_none() {
             self.config_value_input
-                .update(cx, |input, cx| input.set_value(text, window, cx));
+                .update(cx, |input, cx| input.set_value(text.clone(), window, cx));
         }
         self.config_editor_error = None;
         self.config_editor = Some(ConfigEditor {
@@ -331,6 +338,7 @@ impl DesktopView {
             expected_layer_version: self.target_version(self.config_target),
             options,
             option_select,
+            initial: text,
         });
         self.config_editor_return_focus = Some(self.settings_focus.clone());
         cx.on_next_frame(window, |view, window, cx| {
@@ -431,6 +439,50 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Whether the open editor holds an edited value: the text input or the
+    /// enum selection differs from the opening snapshot.
+    fn config_editor_has_unsaved_changes(&self, cx: &App) -> bool {
+        let Some(editor) = self.config_editor.as_ref() else {
+            return false;
+        };
+        if let Some(select) = editor.option_select.as_ref() {
+            // Untouched selects hold no selection yet (the submit path asks
+            // for one explicitly), so only a differing pick counts as dirt.
+            return select.read(cx).selected_value().is_some_and(|value| value != &editor.initial);
+        }
+        self.config_value_input.read(cx).value() != editor.initial
+    }
+
+    /// Dismiss the editor through its scrim: edited values confirm first,
+    /// untouched editors close. A write in flight pins the editor.
+    pub(super) fn request_config_editor_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.config_editor.is_none() || self.config_write_pending {
+            return;
+        }
+        if !self.config_editor_has_unsaved_changes(cx) {
+            self.close_cli_config_editor(window, cx);
+            return;
+        }
+        let path = self.config_editor.as_ref().map(|editor| editor.path.clone());
+        let Some(path) = path else {
+            return;
+        };
+        self.prompt_discard_changes(DiscardIntent::CloseConfigEditor(path), window, cx);
+    }
+
+    /// Run a confirmed editor discard after verifying the same editor is
+    /// still open — the prompt answer arrives async.
+    pub(super) fn discard_config_editor_after_confirm(
+        &mut self,
+        path: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config_editor.as_ref().is_some_and(|editor| editor.path == path) {
+            self.close_cli_config_editor(window, cx);
+        }
+    }
+
     /// The layer file can be opened whenever a backend is attached outside a
     /// settings write or reload.
     pub(super) fn can_open_config_file(&self) -> bool {
@@ -512,7 +564,7 @@ impl DesktopView {
     pub(super) fn approval_policy_label(&self) -> String {
         self.session_options().map_or_else(
             || rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string(),
-            |options| composer_actions::permission_mode_label(options.permission_mode),
+            |options| session_options::permission_mode_label(options.permission_mode),
         )
     }
 
@@ -553,7 +605,7 @@ impl DesktopView {
     pub(super) fn handle_cli_config_read_response(&mut self, result: Value, cx: &App) {
         match serde_json::from_value::<protocol::ConfigSettingsSnapshot>(result) {
             Ok(snapshot) => {
-                self.cli_config_settings = Some(snapshot);
+                self.cli_config_settings = Some(Rc::new(snapshot));
                 self.config_catalog_epoch = self.config_catalog_epoch.wrapping_add(1);
                 // Keep the reader's page across reloads (post-write refresh
                 // included); new queries and group switches reset via refresh.
@@ -883,3 +935,42 @@ pub(super) fn value_summary(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// Cloned render inputs for the CLI configuration summary group (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale). Only counts
+/// and flags cross into props — never the settings snapshot.
+#[derive(Clone)]
+pub(super) struct CliConfigurationProps {
+    pub(super) setting_count: usize,
+    pub(super) editable_count: usize,
+    pub(super) omitted_sensitive: usize,
+    pub(super) omitted_large: usize,
+    pub(super) omitted_limit: usize,
+    pub(super) read_only_count: usize,
+    pub(super) has_snapshot: bool,
+    pub(super) has_workspace: bool,
+    pub(super) target: protocol::ConfigTarget,
+    pub(super) can_edit: bool,
+}
+
+impl CliConfigurationProps {
+    /// Snapshot the view fields the summary builder reads. Both the legacy
+    /// shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        let snapshot = view.cli_config_settings.as_ref();
+        Self {
+            setting_count: snapshot.map_or(0, |snapshot| snapshot.settings.len()),
+            editable_count: snapshot
+                .map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| setting.editable).count()),
+            omitted_sensitive: snapshot.map_or(0, |snapshot| snapshot.omitted_sensitive),
+            omitted_large: snapshot.map_or(0, |snapshot| snapshot.omitted_large),
+            omitted_limit: snapshot.map_or(0, |snapshot| snapshot.omitted_limit),
+            read_only_count: snapshot
+                .map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| !setting.editable).count()),
+            has_snapshot: snapshot.is_some(),
+            has_workspace: view.workspace.is_some(),
+            target: view.config_target,
+            can_edit: view.can_edit_cli_settings(),
+        }
+    }
+}

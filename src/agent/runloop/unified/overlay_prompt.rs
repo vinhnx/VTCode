@@ -8,6 +8,7 @@ use vtcode_ui::tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientRe
 
 use super::state::CtrlCState;
 
+#[derive(Debug)]
 pub(crate) enum OverlayWaitOutcome<T> {
     Submitted(T),
     Cancelled,
@@ -134,7 +135,14 @@ where
                     submission = "received",
                     "wait_for_overlay_submission: submitted event"
                 );
-                ctrl_c_state.reset();
+                if ctrl_c_state.is_cancel_requested() {
+                    // A stop arrived while the answer was in flight (desktop
+                    // stop dual-delivers beside queued input): the stop wins,
+                    // so preserve the latch instead of acting on the answer.
+                    close_overlay(handle).await;
+                    return Ok(OverlayWaitOutcome::Interrupted);
+                }
+                ctrl_c_state.reset_handled_cancel();
                 if let Some(mapped) = map_submission(submission) {
                     close_overlay(handle).await;
                     return Ok(OverlayWaitOutcome::Submitted(mapped));
@@ -145,7 +153,15 @@ where
                     target: "vtcode.planning_workflow",
                     "wait_for_overlay_submission: cancelled event"
                 );
-                ctrl_c_state.reset();
+                if ctrl_c_state.is_cancel_requested() {
+                    // A stop arrived with the dismiss (desktop stop queues a
+                    // dismiss beside its out-of-band signal): report
+                    // interruption without resetting the latch, so the turn
+                    // stops instead of continuing as a plain denial.
+                    close_overlay(handle).await;
+                    return Ok(OverlayWaitOutcome::Interrupted);
+                }
+                ctrl_c_state.reset_handled_cancel();
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Cancelled);
             }
@@ -154,7 +170,7 @@ where
                     target: "vtcode.planning_workflow",
                     "wait_for_overlay_submission: exit event"
                 );
-                ctrl_c_state.reset();
+                ctrl_c_state.reset_handled_cancel();
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Exit);
             }
@@ -271,6 +287,7 @@ mod tests {
                 search: None,
                 hotkeys: Vec::new(),
                 status: None,
+                plan_markdown: None,
             }),
             &Arc::new(CtrlCState::new()),
             &Arc::new(Notify::new()),
@@ -335,6 +352,7 @@ mod tests {
                 search: None,
                 hotkeys: vec![],
                 status: None,
+                plan_markdown: None,
             });
             let result = show_permission_and_wait(
                 &handle,
@@ -373,6 +391,88 @@ mod tests {
                     ProgramStatusUpdate::Resume { token }
                 ]
             );
+        }
+    }
+
+    /// Desktop stop dual-delivers while the wait is parked: an out-of-band
+    /// stop signal plus a queued dismiss event. Whichever select branch wins,
+    /// the stop must win the outcome: `Interrupted` with the latch preserved,
+    /// never a reset that downgrades the stop into a plain denial and lets
+    /// the turn continue. Iterated because the pre-fix race resolves
+    /// per-iteration; post-fix every interleaving reports interruption.
+    #[tokio::test]
+    async fn stop_with_queued_dismiss_reports_interruption() {
+        use std::time::Duration;
+
+        for transient in [false, true] {
+            for _ in 0..24 {
+                let mut host = new_host_session();
+                let handle = host.session.handle.clone();
+                let ctrl_c_state = Arc::new(CtrlCState::new());
+                let ctrl_c_notify = Arc::new(Notify::new());
+                let input = host.input.clone();
+                let deliver = async {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                    crate::agent::runloop::unified::stop_requests::request_local_cancel(&ctrl_c_state, &ctrl_c_notify);
+                    let event = if transient {
+                        InlineEvent::Transient(TransientEvent::Cancelled)
+                    } else {
+                        InlineEvent::Cancel
+                    };
+                    input.send(event).expect("queue dismiss");
+                };
+                let (outcome, _) = tokio::join!(
+                    wait_for_overlay_submission(&handle, &mut host.session, &ctrl_c_state, &ctrl_c_notify, |_| {
+                        None::<()>
+                    },),
+                    deliver,
+                );
+                assert!(
+                    matches!(outcome, Ok(OverlayWaitOutcome::Interrupted)),
+                    "a stop in flight must interrupt the wait, got {outcome:?}",
+                );
+                assert!(ctrl_c_state.is_cancel_requested(), "the dismiss must not reset a latched stop",);
+            }
+        }
+    }
+
+    /// Same stop-wins contract for an answer racing the stop: acting on the
+    /// approval (e.g. running the approved tool) after the user pressed stop
+    /// is wrong; the wait must report interruption instead.
+    #[tokio::test]
+    async fn stop_with_queued_answer_reports_interruption() {
+        use std::time::Duration;
+        use vtcode_ui::tui::app::InlineListSelection;
+
+        for _ in 0..24 {
+            let mut host = new_host_session();
+            let handle = host.session.handle.clone();
+            let ctrl_c_state = Arc::new(CtrlCState::new());
+            let ctrl_c_notify = Arc::new(Notify::new());
+            let input = host.input.clone();
+            let deliver = async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                crate::agent::runloop::unified::stop_requests::request_local_cancel(&ctrl_c_state, &ctrl_c_notify);
+                input
+                    .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                        InlineListSelection::ToolApproval(true),
+                    ))))
+                    .expect("queue answer");
+            };
+            let (outcome, _) = tokio::join!(
+                wait_for_overlay_submission(&handle, &mut host.session, &ctrl_c_state, &ctrl_c_notify, |answer| {
+                    match answer {
+                        TransientSubmission::Selection(InlineListSelection::ToolApproval(value)) => Some(value),
+                        _ => None,
+                    }
+                },),
+                deliver,
+            );
+            assert!(
+                matches!(outcome, Ok(OverlayWaitOutcome::Interrupted)),
+                "a stop in flight must interrupt the wait, got {outcome:?}",
+            );
+            assert!(ctrl_c_state.is_cancel_requested(), "the answer must not reset a latched stop",);
         }
     }
 }

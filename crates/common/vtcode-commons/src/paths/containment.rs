@@ -1,6 +1,7 @@
 use super::canonicalize::{canonicalize, canonicalize_async};
 use super::normalize::normalize_path;
 use anyhow::{Context, Result, anyhow, bail};
+use std::fs::FileType;
 use std::path::{Component, Path, PathBuf};
 use tracing::warn;
 
@@ -69,37 +70,151 @@ pub fn validate_no_escaping_symlink_ancestors(path: &Path, allow_missing_tail: b
 /// diagnostic never hides that it refers to an external location. The
 /// filesystem-resolved comparison handles workspace aliases and symlink
 /// escapes without requiring callers to canonicalize their candidate first.
+///
+/// This is the one-shot form. Loops that render many entries should build a
+/// [`WorkspacePathDisplay`] once instead, so the workspace root is
+/// canonicalized a single time rather than once per entry.
 pub fn workspace_relative_display(workspace_root: &Path, path: &Path) -> String {
-    let candidate = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        workspace_root.join(path)
-    };
+    WorkspacePathDisplay::new(workspace_root).render(path)
+}
 
-    if let Ok(canonical_workspace) = canonicalize(workspace_root) {
-        // A successful canonicalization is authoritative: a path that
-        // resolves outside the workspace must not fall back to lexical
-        // containment through an escaping symlink.
-        match canonicalize_for_display(&candidate) {
-            DisplayResolution::Resolved(canonical_candidate) => {
-                return canonical_candidate
-                    .strip_prefix(&canonical_workspace)
-                    .map(|relative| relative.to_string_lossy().into_owned())
-                    .unwrap_or_else(|_| path.to_string_lossy().into_owned());
-            }
-            DisplayResolution::Unresolved => return path.to_string_lossy().into_owned(),
+/// Render a working directory for tool metadata: workspace-relative, `/`-separated.
+///
+/// Session backends report the directory they run in, and the shape is a user-visible
+/// contract shared by the PTY and pipe executors: paths inside the workspace are
+/// relative, the workspace root itself is `"."`, separators are always `/` so the
+/// value is stable across platforms, and paths outside the workspace stay absolute.
+pub fn workspace_relative_slash(workspace_root: &Path, path: &Path) -> String {
+    match path.strip_prefix(workspace_root) {
+        Ok(relative) if relative.as_os_str().is_empty() => ".".into(),
+        Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
+        Err(_) => path.to_string_lossy().into_owned(),
+    }
+}
+
+/// Renders workspace-relative display paths for many entries under one root.
+///
+/// [`workspace_relative_display`] canonicalizes the workspace root on every
+/// call. That is invisible for a single diagnostic, but directory listings and
+/// tree walks render one path per entry, so the repeated `realpath` dominates
+/// the loop while always producing the same answer. This type resolves the
+/// root once and reuses it.
+#[derive(Clone)]
+pub struct WorkspacePathDisplay {
+    workspace_root: PathBuf,
+    /// Workspace root as resolved on the filesystem, when it exists.
+    canonical_root: Option<PathBuf>,
+}
+
+impl WorkspacePathDisplay {
+    /// Resolve the workspace root once, reusing it for every later [`Self::render`].
+    pub fn new(workspace_root: &Path) -> Self {
+        let canonical_root = canonicalize(workspace_root).ok();
+        Self {
+            workspace_root: workspace_root.to_path_buf(),
+            canonical_root,
         }
     }
 
-    // If the candidate cannot be resolved yet (for example, a new file with a
-    // missing tail), retain the cheap lexical behavior for paths that are
-    // clearly under the workspace.
-    let normalized_candidate = normalize_path(&candidate);
-    let normalized_workspace = normalize_path(workspace_root);
-    if let Ok(relative) = normalized_candidate.strip_prefix(normalized_workspace) {
-        return relative.to_string_lossy().into_owned();
+    /// Render `path` relative to the workspace, matching
+    /// [`workspace_relative_display`] exactly.
+    pub fn render(&self, path: &Path) -> String {
+        let candidate = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.workspace_root.join(path)
+        };
+
+        if let Some(canonical_workspace) = self.canonical_root.as_ref() {
+            // A successful canonicalization is authoritative: a path that
+            // resolves outside the workspace must not fall back to lexical
+            // containment through an escaping symlink.
+            match canonicalize_for_display(&candidate) {
+                DisplayResolution::Resolved(canonical_candidate) => {
+                    return canonical_candidate
+                        .strip_prefix(canonical_workspace)
+                        .map(|relative| relative.to_string_lossy().into_owned())
+                        .unwrap_or_else(|_| path.to_string_lossy().into_owned());
+                }
+                DisplayResolution::Unresolved => return path.to_string_lossy().into_owned(),
+            }
+        }
+
+        // If the candidate cannot be resolved yet (for example, a new file with a
+        // missing tail), retain the cheap lexical behavior for paths that are
+        // clearly under the workspace.
+        let normalized_candidate = normalize_path(&candidate);
+        let normalized_workspace = normalize_path(&self.workspace_root);
+        if let Ok(relative) = normalized_candidate.strip_prefix(normalized_workspace) {
+            return relative.to_string_lossy().into_owned();
+        }
+        path.to_string_lossy().into_owned()
     }
-    path.to_string_lossy().into_owned()
+
+    /// Render a path produced by a traversal that cannot cross a symlink.
+    ///
+    /// # Preconditions
+    ///
+    /// The caller must know both of the following, which hold for entries from
+    /// [`build_default_walker`](crate::walk::build_default_walker) (it does not
+    /// follow links) and for direct children of an already canonical directory:
+    ///
+    /// - `file_type` is the entry's own type, or `None` when unknown;
+    /// - no ancestor between the workspace root and `path` is a symlink.
+    ///
+    /// Under those conditions the resolved path equals the lexically stripped
+    /// path, so the per-entry `realpath` is redundant. Anything else — an
+    /// unknown type, or a symlinked leaf that may point outside the workspace —
+    /// falls back to [`Self::render`], which stays authoritative.
+    pub fn render_entry(&self, path: &Path, file_type: Option<FileType>) -> String {
+        if file_type.is_some_and(|file_type| !file_type.is_symlink())
+            && let Some(relative) = self.lexical_relative(path)
+        {
+            return relative;
+        }
+        self.render(path)
+    }
+
+    /// Strip whichever known root `path` lexically sits under, without any syscall.
+    ///
+    /// This is [`Self::render_entry`]'s core, exposed for callers that must
+    /// build *keys* rather than display strings (for example indexing children
+    /// by parent directory). It carries the same preconditions documented on
+    /// [`Self::render_entry`]: the caller must know the path came from a
+    /// traversal that cannot cross a symlink.
+    ///
+    /// Returns `None` for relative paths and for any `.`/`..` component, where
+    /// lexical stripping would disagree with the resolved form; callers fall
+    /// back to [`Self::render`].
+    pub fn relative_lexical(&self, path: &Path) -> Option<String> {
+        self.lexical_relative(path)
+    }
+
+    /// Strip whichever of the two known roots the path lexically sits under.
+    ///
+    /// Rejects relative paths and any `.`/`..` component: stripping is lexical
+    /// while [`Self::render`] resolves those components, so a path containing
+    /// them can strip to a different answer than the resolved form.
+    fn lexical_relative(&self, path: &Path) -> Option<String> {
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
+            return None;
+        }
+        let candidate = path;
+
+        self.canonical_root
+            .iter()
+            .chain(std::iter::once(&self.workspace_root))
+            .find_map(|root| {
+                candidate
+                    .strip_prefix(normalize_path(root))
+                    .ok()
+                    .map(|relative| relative.to_string_lossy().into_owned())
+            })
+    }
 }
 
 enum DisplayResolution {
@@ -358,6 +473,80 @@ mod tests {
         symlink(temp.path().join("missing-target"), &path).unwrap();
 
         assert_eq!(workspace_relative_display(&workspace, &path), path.to_string_lossy());
+    }
+
+    #[test]
+    fn path_display_matches_one_shot_render_for_many_entries() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = canonicalize(workspace.path()).unwrap();
+        std::fs::create_dir_all(root.join("src/nested")).unwrap();
+        std::fs::write(root.join("src/nested/lib.rs"), "x").unwrap();
+
+        let display = WorkspacePathDisplay::new(workspace.path());
+        for relative in ["src", "src/nested", "src/nested/lib.rs"] {
+            let path = root.join(relative);
+            assert_eq!(display.render(&path), workspace_relative_display(workspace.path(), &path));
+            assert_eq!(display.render(&path), relative);
+        }
+    }
+
+    #[test]
+    fn path_display_entry_fast_path_agrees_with_render() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = canonicalize(workspace.path()).unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "x").unwrap();
+
+        let display = WorkspacePathDisplay::new(workspace.path());
+        let file_type = std::fs::symlink_metadata(root.join("src/lib.rs")).unwrap().file_type();
+
+        assert_eq!(display.render_entry(&root.join("src/lib.rs"), Some(file_type)), "src/lib.rs");
+        // Identity: the fast path must never disagree with the authoritative form.
+        assert_eq!(
+            display.render_entry(&root.join("src/lib.rs"), Some(file_type)),
+            display.render(&root.join("src/lib.rs"))
+        );
+        // Unknown type must fall back rather than guess.
+        assert_eq!(display.render_entry(&root.join("src/lib.rs"), None), display.render(&root.join("src/lib.rs")));
+    }
+
+    #[test]
+    fn path_display_entry_fast_path_rejects_dot_components() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = canonicalize(workspace.path()).unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+
+        let display = WorkspacePathDisplay::new(workspace.path());
+        let dotted = root.join("src").join("..").join("src").join("lib.rs");
+        let file_type = std::fs::symlink_metadata(root.join("src")).unwrap().file_type();
+
+        // Stripping is lexical but `render` resolves, so the fast path must
+        // defer instead of emitting `src/../src/lib.rs`.
+        assert_eq!(display.render_entry(&dotted, Some(file_type)), display.render(&dotted));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_display_entry_fast_path_defers_for_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let workspace = temp.path().join("workspace");
+        let outside = temp.path().join("outside");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), "secret").unwrap();
+        let link = workspace.join("linked-outside");
+        symlink(&outside, &link).unwrap();
+
+        let display = WorkspacePathDisplay::new(&workspace);
+        let link_type = std::fs::symlink_metadata(&link).unwrap().file_type();
+        assert!(link_type.is_symlink());
+
+        // A symlinked leaf can leave the workspace, so it must not take the
+        // lexical fast path even though it lexically starts with the root.
+        assert_eq!(display.render_entry(&link, Some(link_type)), display.render(&link));
+        assert_eq!(display.render_entry(&link, Some(link_type)), link.to_string_lossy());
     }
 
     #[test]

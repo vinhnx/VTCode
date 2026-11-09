@@ -3,7 +3,7 @@ use crate::config::core::{GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::llm::cgp::{CanDescribeProvider, ProviderMetadataProvider};
 use crate::llm::factory::{self, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::{LLMError, LLMProvider};
-use crate::llm::provider_builder::ProviderConfig as LegacyProviderConfig;
+use crate::llm::provider_builder::ProviderSpec;
 
 macro_rules! define_provider_config {
     ($(#[$meta:meta])* $name:ident, $key:literal, $display:literal, $default_model:expr, $api_base:expr, $env_var:expr, $prompt_cache_settings:ty) => {
@@ -18,7 +18,7 @@ macro_rules! define_provider_config {
             const BASE_URL_ENV_VAR: Option<&'static str> = $env_var;
         }
 
-        impl LegacyProviderConfig for $name {
+        impl ProviderSpec for $name {
             const PROVIDER_KEY: &'static str = <Self as CanDescribeProvider>::PROVIDER_KEY;
             const DISPLAY_NAME: &'static str = <Self as CanDescribeProvider>::DISPLAY_NAME;
             const DEFAULT_MODEL: &'static str = <Self as CanDescribeProvider>::DEFAULT_MODEL;
@@ -394,8 +394,8 @@ mod tests {
     }
 
     #[test]
-    fn legacy_provider_config_create_provider_routes_through_factory() {
-        let provider = <OpenAIProviderConfig as crate::llm::provider_builder::ProviderConfig>::create_provider(
+    fn provider_spec_create_provider_routes_through_factory() {
+        let provider = <OpenAIProviderConfig as ProviderSpec>::create_provider(
             "test-key".to_string(),
             crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
             crate::config::constants::urls::OPENAI_API_BASE.to_string(),

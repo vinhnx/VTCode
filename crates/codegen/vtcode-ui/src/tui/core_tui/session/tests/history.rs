@@ -136,6 +136,31 @@ fn history_picker_renders_search_field_above_results() {
 }
 
 #[test]
+fn history_picker_header_shows_scope_and_footer_names_scope_shortcut() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.core.set_input("cargo test".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    let lines = rendered_app_session_lines(&mut session, 20);
+    assert!(
+        lines.iter().any(|line| line.contains("Search prompts · everywhere")),
+        "header names the default scope: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| line.contains("Ctrl+S to scope")),
+        "footer advertises scope cycling: {lines:?}"
+    );
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+    let lines = rendered_app_session_lines(&mut session, 20);
+    assert!(
+        lines.iter().any(|line| line.contains("Search prompts · project")),
+        "Ctrl+S advances the scoped header: {lines:?}"
+    );
+}
+
+#[test]
 fn history_picker_seeds_filter_from_composer_draft() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     session.core.set_input("cargo test".to_string());

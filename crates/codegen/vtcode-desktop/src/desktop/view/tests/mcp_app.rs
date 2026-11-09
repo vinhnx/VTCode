@@ -97,16 +97,16 @@ fn mcp_app_cards_render_only_under_the_static_tier(cx: &mut TestAppContext) {
         assert!(window.try_find("mcp-app-preview-app-1-0").is_none());
 
         view.update(cx, |view, _| {
-            view.cli_config_settings = Some(tier_snapshot("off"));
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("off")));
             assert!(!view.mcp_apps_preview_enabled());
         });
         window.render_frame(cx);
         assert!(window.try_find("mcp-app-preview-app-1-0").is_none());
 
         view.update(cx, |view, _| {
-            view.cli_config_settings = Some(tier_snapshot("interactive"));
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("interactive")));
             assert!(!view.mcp_apps_preview_enabled(), "no engine renders interactive yet");
-            view.cli_config_settings = Some(tier_snapshot("static"));
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
             assert!(view.mcp_apps_preview_enabled());
             assert_eq!(
                 view.mcp_app_bodies.insert(
@@ -133,7 +133,7 @@ fn mcp_app_expand_fetches_once_and_skips_settled_uris(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(tier_snapshot("static"));
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
             view.transcript.push(preview_item());
             view.request_mcp_app_previews("app-1", cx);
             assert_eq!(view.mcp_app_pending.len(), 1);
@@ -176,7 +176,7 @@ fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(tier_snapshot("static"));
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
             view.transcript.push(preview_item());
             assert_eq!(
                 view.mcp_app_errors.insert(
@@ -206,6 +206,35 @@ fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
             panic!("expected a request command");
         };
         assert_eq!(method, vtcode_desktop_protocol::method::MCP_APP_READ);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn mcp_app_loading_row_shows_while_read_pending(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
+            view.transcript.push(preview_item());
+            view.request_mcp_app_previews("app-1", cx);
+            assert_eq!(view.mcp_app_pending.len(), 1);
+        });
+        window.render_frame(cx);
+        assert!(window.find("mcp-app-loading-label-app-1-0").bounds().size.height > px(0.));
+
+        view.update(cx, |view, _| {
+            let key = McpAppBodyKey {
+                item_id: "app-1".into(),
+                uri: "ui://demo/app.html".into(),
+            };
+            assert_eq!(view.mcp_app_bodies.insert(key, app_body()), None);
+            view.mcp_app_pending.clear();
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("mcp-app-loading-label-app-1-0").is_none());
     })
     .unwrap();
 }

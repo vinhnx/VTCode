@@ -204,6 +204,19 @@ impl CtrlCState {
         self.last_signal_time.store(0, Ordering::SeqCst);
     }
 
+    /// Clear only a cancellation already consumed by the runloop. A new
+    /// cancellation racing a submission must remain pending.
+    pub(crate) fn reset_handled_cancel(&self) -> bool {
+        let cleared = self
+            .phase
+            .compare_exchange(CtrlCPhase::ExitArmed as u8, CtrlCPhase::Idle as u8, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok();
+        if cleared {
+            self.last_signal_time.store(0, Ordering::SeqCst);
+        }
+        cleared
+    }
+
     /// Record that the UI event callback accepted a Steer input on the live
     /// steering channel. Called from the callback before the event reaches
     /// the runloop. Safe to call once per delivered steer in a burst.

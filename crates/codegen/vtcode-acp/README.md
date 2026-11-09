@@ -30,5 +30,5 @@ See [docs.rs/vtcode-acp](https://docs.rs/vtcode-acp).
 
 ## Related docs
 
-- [ACP integration guide](../docs/acp/ACP_INTEGRATION.md)
-- [ACP quick reference](../docs/acp/ACP_QUICK_REFERENCE.md)
+- [ACP integration guide](../../../docs/acp/ACP_INTEGRATION.md)
+- [ACP quick reference](../../../docs/acp/ACP_QUICK_REFERENCE.md)

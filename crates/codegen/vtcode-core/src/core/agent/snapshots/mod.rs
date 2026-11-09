@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use types::{
     ActionSnapshot, DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS, FileEncoding,
     FileSnapshot, REWIND_ACTIVE_KEEP, RevertScope, RollbackResult, SnapshotConfig, SnapshotMetadata,
-    SnapshotTurnContext, SnapshotTurnDiagnostics, StoredSnapshot,
+    SnapshotSkippedPath, SnapshotSkippedPaths, SnapshotTurnContext, SnapshotTurnDiagnostics, StoredSnapshot,
 };
 use types::{
     MAX_DESCRIPTION_LEN, NEXT_ACTION_NUMBER, SNAPSHOT_SCHEMA_VERSION, collect_turn_numbers, normalized_prompt_text,
@@ -108,6 +108,69 @@ fn acquire_verified_rewind_lock(lock_path: &Path) -> std::io::Result<fs::File> {
         "{} kept changing identity; retry the turn",
         lock_path.file_name().and_then(|name| name.to_str()).unwrap_or("lock file")
     )))
+}
+
+/// Context marker attached when this session's checkpoint lock is already
+/// held. Shared by the lock site and [`classify_begin_prompt_error`] so a
+/// reworded message cannot silently break contention detection.
+pub(crate) const SESSION_BUSY_CONTEXT: &str = "Another turn is using this session";
+
+/// Marker prefix for errors reporting an interrupted rewind with pending
+/// recovery state. Shared by the guard sites and [`classify_begin_prompt_error`].
+pub(crate) const INTERRUPTED_REWIND_MARKER: &str = "Interrupted rewind";
+
+/// Why a turn-start checkpoint could not be taken.
+///
+/// Classified from the full error chain (see [`classify_begin_prompt_error`]);
+/// drives both the user-facing notice and whether the turn may proceed
+/// without a checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BeginPromptFailure {
+    /// This same session already has a running turn holding its checkpoint
+    /// lock. Fail closed: a second writer would corrupt the session's
+    /// navigation state.
+    SessionBusy,
+    /// A previous rewind was interrupted and still holds pending recovery
+    /// state. Fail closed: the user must run `/rewind` to auto-recover first.
+    InterruptedRewind,
+    /// Anything else: storage, capture, or worker failures with no concurrent
+    /// writer. The turn may proceed without a checkpoint (no rewind for it).
+    Other,
+}
+
+/// Classify a `begin_prompt` failure from its full error chain.
+///
+/// The busy branch recognizes both VT Code's session-lock marker and
+/// filesnap's typed [`filesnap::SnapshotError::SessionBusy`], so a contended
+/// filesnap session is never misreported as a generic outage.
+pub fn classify_begin_prompt_error(err: &anyhow::Error) -> BeginPromptFailure {
+    let mut interrupted = false;
+    for layer in err.chain() {
+        if layer
+            .downcast_ref::<filesnap::SnapshotError>()
+            .is_some_and(|snapshot| matches!(snapshot, filesnap::SnapshotError::SessionBusy { .. }))
+            || layer.to_string().contains(SESSION_BUSY_CONTEXT)
+        {
+            return BeginPromptFailure::SessionBusy;
+        }
+        if layer.to_string().contains(INTERRUPTED_REWIND_MARKER) {
+            interrupted = true;
+        }
+    }
+    if interrupted {
+        BeginPromptFailure::InterruptedRewind
+    } else {
+        BeginPromptFailure::Other
+    }
+}
+
+/// Whether a turn may proceed without its start-of-turn checkpoint.
+///
+/// Only [`BeginPromptFailure::Other`] proceeds: contention and pending-rewind
+/// states imply another writer (or a half-restored workspace) and stay
+/// fail-closed with the prompt kept for retry.
+pub fn checkpoint_failure_is_recoverable(failure: BeginPromptFailure) -> bool {
+    matches!(failure, BeginPromptFailure::Other)
 }
 
 /// Remove a lock file only while holding its lock on the current inode.
@@ -417,7 +480,10 @@ impl SnapshotManager {
             let store = filesnap::WorkspaceStore::open(&storage, &workspace)?;
             let turn = format!("vt-{}", uuid::Uuid::new_v4());
             let checkpoint = store.checkpoint(&turn, &turn, absolute_paths.iter().cloned())?;
-            anyhow::ensure!(checkpoint.stats.dropped == 0, "Checkpoint could not capture every selected file");
+            if checkpoint.stats.dropped != 0 {
+                let skipped = native::skipped_paths_record(&workspace, &checkpoint);
+                anyhow::bail!("Checkpoint could not capture every selected file: {}", skipped.summary());
+            }
             Ok(paths
                 .into_iter()
                 .zip(absolute_paths)
@@ -455,6 +521,7 @@ impl SnapshotManager {
             runtime_turn_id: turn_context.runtime_turn_id,
             session_turn_number: turn_context.session_turn_number,
             turn_diagnostics: turn_context.turn_diagnostics,
+            skipped_paths: None,
         };
 
         let stored = StoredSnapshot {

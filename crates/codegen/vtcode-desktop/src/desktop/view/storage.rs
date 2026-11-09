@@ -4,6 +4,12 @@ use super::*;
 use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::plot::shape::BarAlignment;
 
+/// Fixed-pixel frame for the usage chart. The kit chart paints its own
+/// geometry (labels, bands) at constant pixel sizes, so a rem-based frame
+/// would drift against its content under interface zoom; matching pixels
+/// keeps the frame:content ratio stable at any zoom.
+const STORAGE_CHART_HEIGHT_PX: f32 = 144.;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum StorageView {
     #[default]
@@ -21,6 +27,34 @@ pub(super) struct StorageState {
     pub(super) worktrees: Vec<protocol::WorktreeEntry>,
     pub(super) worktrees_loading: bool,
     pub(super) worktrees_error: Option<String>,
+}
+
+/// Cloned render inputs for the storage pane (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct StorageSettingsProps {
+    pub(super) storage: StorageState,
+    pub(super) sessions: Vec<SessionSummary>,
+    pub(super) selected_session_id: Option<String>,
+}
+
+impl StorageSettingsProps {
+    /// Snapshot the view fields the storage builders read. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        // Only the review view reads the session list; the summary and
+        // worktree views skip the clone on every settings render.
+        let sessions = if view.storage.view == StorageView::ReviewSessions {
+            view.sessions.clone()
+        } else {
+            Vec::new()
+        };
+        Self {
+            storage: view.storage.clone(),
+            sessions,
+            selected_session_id: view.selected_session_id.clone(),
+        }
+    }
 }
 
 /// Human-readable byte count: "0 bytes", "1 byte", "1.6 GB".
@@ -63,12 +97,22 @@ pub(super) fn review_order(sessions: &[SessionSummary]) -> Vec<&SessionSummary> 
 }
 
 impl DesktopView {
-    pub(super) fn render_storage_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        match self.storage.view {
-            StorageView::Summary => self.render_storage_summary(cx),
-            StorageView::ReviewSessions => self.render_storage_review(cx),
-            StorageView::ManageWorktrees => self.render_storage_worktrees(cx),
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_storage_settings_content(
+        props: StorageSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        match props.storage.view {
+            StorageView::Summary => Self::render_storage_summary_content(&props, view, cx),
+            StorageView::ReviewSessions => Self::render_storage_review_content(&props, view, cx),
+            StorageView::ManageWorktrees => Self::render_storage_worktrees_content(&props, view, cx),
         }
+    }
+
+    pub(super) fn render_storage_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        Self::render_storage_settings_content(StorageSettingsProps::capture(self), cx.entity(), cx)
     }
 
     pub(super) fn maybe_request_storage_summary(&mut self, cx: &mut Context<Self>) {
@@ -78,10 +122,14 @@ impl DesktopView {
     }
 
     pub(super) fn request_storage_summary(&mut self, cx: &mut Context<Self>) {
-        self.storage.loading = true;
-        self.storage.error = None;
-        let _ = self.request(protocol::method::STORAGE_SUMMARY, json!({}));
-        cx.notify();
+        // Mark loading only when the send queues (see `request_session_list`):
+        // a failed send with no backend would otherwise stick the page on
+        // its loading skeleton with no round-trip to clear it.
+        if self.request(protocol::method::STORAGE_SUMMARY, json!({})) {
+            self.storage.loading = true;
+            self.storage.error = None;
+            cx.notify();
+        }
     }
 
     /// Storage-scoped summary error: the inline error carries it; the
@@ -154,7 +202,8 @@ impl DesktopView {
     fn open_storage_review(&mut self, cx: &mut Context<Self>) {
         self.storage.view = StorageView::ReviewSessions;
         self.storage.error = None;
-        let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+        // Deletion review manages the full set, not the visible page.
+        let _queued = self.request_session_list(protocol::MAX_SESSION_LIST_LIMIT);
         cx.notify();
     }
 
@@ -247,7 +296,7 @@ impl DesktopView {
         .detach();
     }
 
-    fn render_storage_summary(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_storage_summary_content(props: &StorageSettingsProps, view: Entity<Self>, cx: &mut App) -> AnyElement {
         let colors = cx.theme().colors;
         let device_title = rust_i18n::t!("app.settings.storage.device_title").to_string();
         let cleanup_title = rust_i18n::t!("app.settings.storage.cleanup_title").to_string();
@@ -266,8 +315,8 @@ impl DesktopView {
                         rust_i18n::t!("app.settings.storage.device_description").to_string(),
                         &colors,
                     ))
-                    .child(self.render_storage_total(cx, &colors))
-                    .child(self.render_storage_bar(cx, &colors)),
+                    .child(Self::render_storage_total_content(props, view.clone(), cx, &colors))
+                    .child(Self::render_storage_bar_content(props, view.clone(), cx, &colors)),
             ))
             .child(accessible_group_box(
                 "storage-cleanup-group",
@@ -278,7 +327,12 @@ impl DesktopView {
                     desktop_button("storage-review")
                         .label(rust_i18n::t!("app.settings.storage.review").to_string())
                         .accessibility_label(rust_i18n::t!("app.settings.storage.cleanup_title").to_string())
-                        .on_click(cx.listener(|view, _, _, cx| view.open_storage_review(cx))),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| view.open_storage_review(cx));
+                            }
+                        }),
                     &colors,
                 )),
             ))
@@ -291,19 +345,25 @@ impl DesktopView {
                     desktop_button("storage-manage-worktrees")
                         .label(rust_i18n::t!("app.settings.storage.manage").to_string())
                         .accessibility_label(rust_i18n::t!("app.settings.storage.worktrees_title").to_string())
-                        .on_click(cx.listener(|view, _, _, cx| view.open_storage_worktrees(cx))),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| view.open_storage_worktrees(cx));
+                            }
+                        }),
                     &colors,
                 )),
             ))
             .into_any_element()
     }
 
-    fn render_storage_total(
-        &self,
-        cx: &mut Context<Self>,
+    fn render_storage_total_content(
+        props: &StorageSettingsProps,
+        view: Entity<Self>,
+        _cx: &mut App,
         colors: &gpui_kit::component::theme::ThemeColor,
     ) -> AnyElement {
-        let total = match self.storage.summary.as_ref() {
+        let total = match props.storage.summary.as_ref() {
             Some(summary) => {
                 rust_i18n::t!("app.settings.storage.used_by", size = format_bytes(summary.total_bytes)).to_string()
             }
@@ -319,18 +379,24 @@ impl DesktopView {
                 desktop_button("storage-refresh")
                     .label(rust_i18n::t!("app.settings.storage.refresh").to_string())
                     .small()
-                    .disabled(self.storage.loading)
-                    .on_click(cx.listener(|view, _, _, cx| view.request_storage_summary(cx))),
+                    .disabled(props.storage.loading)
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.request_storage_summary(cx));
+                        }
+                    }),
             )
             .into_any_element()
     }
 
-    fn render_storage_bar(
-        &self,
-        cx: &mut Context<Self>,
+    fn render_storage_bar_content(
+        props: &StorageSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
         colors: &gpui_kit::component::theme::ThemeColor,
     ) -> AnyElement {
-        if self.storage.loading && self.storage.summary.is_none() {
+        if props.storage.loading && props.storage.summary.is_none() {
             return div()
                 .flex()
                 .items_center()
@@ -339,14 +405,21 @@ impl DesktopView {
                 .child(div().text_sm().text_color(themes::muted_text(colors)).child(shimmer_label(
                     "storage-loading-label",
                     rust_i18n::t!("app.settings.storage.loading").to_string(),
+                    themes::muted_text(colors),
+                    cx,
                 )))
                 .into_any_element();
         }
-        if let Some(error) = self.storage.error.as_ref() {
+        if let Some(error) = props.storage.error.as_ref() {
             let retry = desktop_button("storage-retry")
                 .label(rust_i18n::t!("app.settings.storage.retry").to_string())
                 .small()
-                .on_click(cx.listener(|view, _, _, cx| view.request_storage_summary(cx)));
+                .on_click({
+                    let view = view.clone();
+                    move |_, _: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.request_storage_summary(cx));
+                    }
+                });
             return div()
                 .flex()
                 .flex_col()
@@ -355,7 +428,7 @@ impl DesktopView {
                 .child(retry)
                 .into_any_element();
         }
-        let Some(summary) = self.storage.summary.as_ref() else {
+        let Some(summary) = props.storage.summary.as_ref() else {
             return div().into_any_element();
         };
         let chart_data = [
@@ -386,7 +459,7 @@ impl DesktopView {
                     .aria_label(rust_i18n::t!("app.settings.storage.usage", breakdown = breakdown).to_string())
                     .w_full()
                     .when(summary.total_bytes > 0, |chart| {
-                        chart.h(px(144.)).child(
+                        chart.h(px(STORAGE_CHART_HEIGHT_PX)).child(
                             BarChart::new(chart_data.to_vec())
                                 .band(|datum| datum.0.clone())
                                 .value(|datum| datum.1 as f64)
@@ -396,6 +469,16 @@ impl DesktopView {
                                 .interactive(false)
                                 .appear(false)
                                 .fill(|datum, _, _, _| datum.2),
+                        )
+                    })
+                    .when(summary.total_bytes == 0, |chart| {
+                        chart.child(
+                            div()
+                                .id("storage-usage-empty")
+                                .test_support()
+                                .text_sm()
+                                .text_color(themes::muted_text(colors))
+                                .child(rust_i18n::t!("app.settings.storage.no_usage").to_string()),
                         )
                     }),
             )
@@ -435,7 +518,7 @@ impl DesktopView {
             .into_any_element()
     }
 
-    fn render_storage_review(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_storage_review_content(props: &StorageSettingsProps, view: Entity<Self>, cx: &mut App) -> AnyElement {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!("app.settings.storage.cleanup_title").to_string();
         let mut content = div()
@@ -449,7 +532,12 @@ impl DesktopView {
                     .label(rust_i18n::t!("app.settings.storage.back").to_string())
                     .ghost()
                     .small()
-                    .on_click(cx.listener(|view, _, _, cx| view.back_to_storage_summary(cx))),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.back_to_storage_summary(cx));
+                        }
+                    }),
             )
             .child(accessible_group_box(
                 "storage-review-group",
@@ -459,7 +547,7 @@ impl DesktopView {
                     &colors,
                 )),
             ));
-        if let Some(error) = self.storage.error.as_ref() {
+        if let Some(error) = props.storage.error.as_ref() {
             content = content.child(
                 div()
                     .flex()
@@ -470,17 +558,22 @@ impl DesktopView {
                         desktop_button("storage-review-retry")
                             .label(rust_i18n::t!("app.settings.storage.retry").to_string())
                             .small()
-                            .on_click(cx.listener(|view, _, _, cx| view.open_storage_review(cx))),
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| view.open_storage_review(cx));
+                                }
+                            }),
                     ),
             );
         }
-        let sessions = review_order(&self.sessions);
+        let sessions = review_order(&props.sessions);
         if sessions.is_empty() {
             content =
                 content.child(row_description(rust_i18n::t!("app.settings.storage.no_sessions").to_string(), &colors));
         }
         content
-            .child(div().flex().flex_col().gap_3().children(sessions.into_iter().map(|session| {
+            .child(div().flex().flex_col().gap_4().children(sessions.into_iter().map(|session| {
                 let name = session
                     .title
                     .clone()
@@ -488,14 +581,24 @@ impl DesktopView {
                     .unwrap_or_else(|| session.session_id.clone());
                 let meta =
                     format!("{} · {}", format_archive_date(session.updated_at), format_bytes(session.size_bytes));
-                let row = settings_row(name.clone(), meta, self.storage_review_action(session, cx), &colors);
-                div().flex().flex_col().child(row_divider(&colors)).child(row)
+                let is_current = props.selected_session_id.as_deref() == Some(session.session_id.as_str());
+                settings_row(
+                    name.clone(),
+                    meta,
+                    Self::storage_review_action_content(session, is_current, view.clone(), cx),
+                    &colors,
+                )
             })))
             .into_any_element()
     }
 
-    fn storage_review_action(&self, session: &SessionSummary, cx: &mut Context<Self>) -> AnyElement {
-        if self.selected_session_id.as_deref() == Some(session.session_id.as_str()) {
+    fn storage_review_action_content(
+        session: &SessionSummary,
+        is_current: bool,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        if is_current {
             return row_description(
                 rust_i18n::t!("app.settings.storage.current_session").to_string(),
                 &cx.theme().colors,
@@ -508,18 +611,22 @@ impl DesktopView {
             .clone()
             .filter(|title| !title.trim().is_empty())
             .unwrap_or_else(|| session.session_id.clone());
-        desktop_button(format!("delete-session-{session_id}"))
+        desktop_danger_button(format!("delete-session-{session_id}"))
             .label(rust_i18n::t!("app.settings.storage.delete").to_string())
             .accessibility_label(rust_i18n::t!("app.settings.storage.delete_title", name = name).to_string())
-            .danger()
             .small()
-            .on_click(cx.listener(move |view, _, window, cx| {
-                view.confirm_delete_session(session_id.clone(), name.clone(), window, cx);
-            }))
+            .on_click({
+                let view = view.clone();
+                move |_, window: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        view.confirm_delete_session(session_id.clone(), name.clone(), window, cx);
+                    });
+                }
+            })
             .into_any_element()
     }
 
-    fn render_storage_worktrees(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_storage_worktrees_content(props: &StorageSettingsProps, view: Entity<Self>, cx: &mut App) -> AnyElement {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!("app.settings.storage.worktrees_title").to_string();
         let mut content = div()
@@ -533,7 +640,12 @@ impl DesktopView {
                     .label(rust_i18n::t!("app.settings.storage.back").to_string())
                     .ghost()
                     .small()
-                    .on_click(cx.listener(|view, _, _, cx| view.back_to_storage_summary(cx))),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.back_to_storage_summary(cx));
+                        }
+                    }),
             )
             .child(accessible_group_box(
                 "storage-worktrees-list-group",
@@ -543,7 +655,7 @@ impl DesktopView {
                     &colors,
                 )),
             ));
-        if self.storage.worktrees_loading && self.storage.worktrees.is_empty() {
+        if props.storage.worktrees_loading && props.storage.worktrees.is_empty() {
             content = content.child(
                 div()
                     .flex()
@@ -553,10 +665,12 @@ impl DesktopView {
                     .child(div().text_sm().text_color(themes::muted_text(&colors)).child(shimmer_label(
                         "storage-worktrees-loading-label",
                         rust_i18n::t!("app.settings.storage.loading").to_string(),
+                        themes::muted_text(&colors),
+                        cx,
                     ))),
             );
         }
-        if let Some(error) = self.storage.worktrees_error.as_ref() {
+        if let Some(error) = props.storage.worktrees_error.as_ref() {
             content = content.child(
                 div()
                     .flex()
@@ -567,11 +681,16 @@ impl DesktopView {
                         desktop_button("storage-worktrees-retry")
                             .label(rust_i18n::t!("app.settings.storage.retry").to_string())
                             .small()
-                            .on_click(cx.listener(|view, _, _, cx| view.open_storage_worktrees(cx))),
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| view.open_storage_worktrees(cx));
+                                }
+                            }),
                     ),
             );
         }
-        if !self.storage.worktrees_loading && self.storage.worktrees.is_empty() {
+        if !props.storage.worktrees_loading && props.storage.worktrees.is_empty() {
             content =
                 content.child(row_description(rust_i18n::t!("app.settings.storage.no_worktrees").to_string(), &colors));
         }
@@ -580,8 +699,8 @@ impl DesktopView {
                 div()
                     .flex()
                     .flex_col()
-                    .gap_3()
-                    .children(self.storage.worktrees.iter().map(|entry| {
+                    .gap_4()
+                    .children(props.storage.worktrees.iter().map(|entry| {
                         let head = entry.head.as_deref().map(|head| head.chars().take(7).collect::<String>());
                         let meta = if entry.is_dirty {
                             rust_i18n::t!("app.settings.storage.dirty").to_string()
@@ -590,22 +709,25 @@ impl DesktopView {
                         };
                         let name = entry.name.clone();
                         let is_dirty = entry.is_dirty;
-                        let row = settings_row(
+                        settings_row(
                             entry.name.clone(),
                             meta,
-                            desktop_button(format!("remove-worktree-{name}"))
+                            desktop_danger_button(format!("remove-worktree-{name}"))
                                 .label(rust_i18n::t!("app.settings.storage.remove").to_string())
                                 .accessibility_label(
                                     rust_i18n::t!("app.settings.storage.remove_title", name = name).to_string(),
                                 )
-                                .danger()
                                 .small()
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    view.confirm_remove_worktree(name.clone(), is_dirty, window, cx);
-                                })),
+                                .on_click({
+                                    let view = view.clone();
+                                    move |_, window: &mut Window, cx: &mut App| {
+                                        view.update(cx, |view, cx| {
+                                            view.confirm_remove_worktree(name.clone(), is_dirty, window, cx);
+                                        });
+                                    }
+                                }),
                             &colors,
-                        );
-                        div().flex().flex_col().child(row_divider(&colors)).child(row)
+                        )
                     })),
             )
             .into_any_element()

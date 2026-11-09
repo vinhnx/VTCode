@@ -393,7 +393,7 @@ impl TestTurnProcessingBacking {
     pub(crate) fn activate_planning_for_test(&mut self) {
         self.tool_registry.enable_planning();
         self.plan_session
-            .enter(vtcode_core::core::interfaces::session::PlanningEntrySource::UserRequest);
+            .enter(vtcode_core::core::interfaces::session::PlanningEntrySource::AgentSuggestion);
     }
 
     pub(crate) fn mark_interview_denied_for_test(&mut self) {

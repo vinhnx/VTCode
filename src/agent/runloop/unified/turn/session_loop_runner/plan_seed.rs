@@ -6,7 +6,7 @@ pub(super) async fn load_active_plan_seed(
     tool_registry: &vtcode_core::tools::registry::ToolRegistry,
 ) -> Option<String> {
     let plan_state = tool_registry.planning_workflow_state();
-    let plan_file = plan_state.get_plan_file().await?;
+    let plan_file = plan_state.get_plan_file()?;
     let plan_content = tokio::fs::read_to_string(&plan_file).await.ok();
     let tracker_file = tracker_file_for_plan_file(&plan_file);
     let tracker_content = if let Some(path) = tracker_file {

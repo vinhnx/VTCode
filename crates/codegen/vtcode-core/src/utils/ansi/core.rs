@@ -50,6 +50,9 @@ impl AnsiRenderer {
             reasoning_visible: true,
             screen_reader_mode: false,
             show_diagnostics_in_transcript: false,
+            show_message_timestamps: true,
+            pending_response_footer: false,
+            defer_turn_footer: false,
             tool_display_mode: ToolDisplayMode::Compact,
             diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
             compact_command_group: None,
@@ -193,6 +196,25 @@ impl AnsiRenderer {
 
     pub fn set_show_diagnostics_in_transcript(&mut self, enabled: bool) {
         self.show_diagnostics_in_transcript = if cfg!(debug_assertions) { enabled } else { false };
+    }
+
+    /// Start a fresh turn: arm footer deferral and drop any pending footer left
+    /// by aborted output so it cannot leak into this turn's final message.
+    pub fn begin_turn_message_timestamp(&mut self) {
+        self.pending_response_footer = false;
+        self.defer_turn_footer = true;
+    }
+
+    /// Show one wall-clock footer under the turn's final agent response.
+    ///
+    /// Enabled by default so headless and unwired paths stay consistent;
+    /// sessions apply `ui.show_message_timestamps` through this setter.
+    pub fn set_show_message_timestamps(&mut self, enabled: bool) {
+        self.show_message_timestamps = enabled;
+    }
+
+    pub fn show_message_timestamps(&self) -> bool {
+        self.show_message_timestamps
     }
 
     pub fn set_tool_display_mode(&mut self, mode: ToolDisplayMode) {

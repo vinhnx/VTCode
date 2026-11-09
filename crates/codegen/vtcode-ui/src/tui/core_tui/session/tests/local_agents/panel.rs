@@ -96,11 +96,11 @@ fn combined_drawer_and_pty_hint_styles_both_shortcuts_once_in_header() {
 #[test]
 fn live_and_finished_counts_split_loading_from_history() {
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
-    running.status = "running".to_string();
+    running.status = crate::tui::core_tui::types::LocalAgentStatus::Running;
     let mut finished = sample_local_agent_entry_with_id("a2", "done-agent", app_types::LocalAgentKind::Delegated);
-    finished.status = "completed".to_string();
+    finished.status = crate::tui::core_tui::types::LocalAgentStatus::Completed;
     let mut failed_bg = sample_local_agent_entry_with_id("b1", "failed-bg", app_types::LocalAgentKind::Background);
-    failed_bg.status = "error".to_string();
+    failed_bg.status = crate::tui::core_tui::types::LocalAgentStatus::Error;
 
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![running, finished, failed_bg] });
@@ -116,7 +116,7 @@ fn live_and_finished_counts_split_loading_from_history() {
 #[test]
 fn finished_summary_applies_when_no_live_work_remains() {
     let mut finished = sample_local_agent_entry_with_id("a1", "done-agent", app_types::LocalAgentKind::Delegated);
-    finished.status = "completed".to_string();
+    finished.status = crate::tui::core_tui::types::LocalAgentStatus::Completed;
 
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![finished.clone(), finished] });
@@ -326,7 +326,7 @@ fn background_shortcut_rebound_still_toggles_panel() {
 #[test]
 fn background_indicator_hit_targets_status_text() {
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
-    running.status = "running".to_string();
+    running.status = crate::tui::core_tui::types::LocalAgentStatus::Running;
 
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![running] });
@@ -350,7 +350,7 @@ fn background_indicator_hit_targets_status_text() {
 #[test]
 fn combined_hint_hit_covers_key_background_not_local_agents_label() {
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
-    running.status = "running".to_string();
+    running.status = crate::tui::core_tui::types::LocalAgentStatus::Running;
 
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![running] });
@@ -393,7 +393,7 @@ fn click_on_background_indicator_toggles_window() {
     use tokio::sync::mpsc::unbounded_channel;
 
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
-    running.status = "running".to_string();
+    running.status = crate::tui::core_tui::types::LocalAgentStatus::Running;
 
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![running] });

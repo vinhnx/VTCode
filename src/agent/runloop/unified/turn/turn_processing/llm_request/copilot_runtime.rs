@@ -484,6 +484,9 @@ impl<'a> CopilotRuntimeHost<'a> {
             if let Some(guidance) = loop_tracker.take_verifier_failed_guidance() {
                 response = append_tool_reply_guidance(response, &guidance);
             }
+            if let Some(guidance) = loop_tracker.take_verifier_stalled_guidance() {
+                response = append_tool_reply_guidance(response, &guidance);
+            }
         }
         Ok(response)
     }

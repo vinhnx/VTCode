@@ -24,10 +24,13 @@ fn python_verification_arguments(arguments: &[String]) -> bool {
     match target.map(String::as_str) {
         Some("-m") => arguments.next().is_some_and(|module| module == "pytest"),
         Some(script) => {
+            // The known lint scripts stay read-only under trailing path
+            // operands (`check_markdown.py README.md`); any flag keeps the
+            // conservative rejection so `--fix`/`--list`/`--help` never verify.
             ["scripts/check_markdown.py", "scripts/check_docs_links.py"]
                 .iter()
                 .any(|known| Path::new(script).ends_with(known))
-                && arguments.next().is_none()
+                && arguments.all(|argument| !argument.starts_with('-'))
         }
         None => false,
     }

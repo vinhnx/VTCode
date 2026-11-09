@@ -2,6 +2,7 @@ mod eval;
 mod event_output;
 mod prep;
 mod run;
+mod status;
 
 use anyhow::{Result, bail};
 use std::path::PathBuf;
@@ -29,9 +30,14 @@ pub async fn handle_exec_command(
     vt_cfg: &VTCodeConfig,
     options: ExecCommandOptions,
 ) -> Result<()> {
+    let program_status = status::ExecProgramStatus::start(vt_cfg.ui.program_status.enabled, config.quiet, options.json);
     tokio::select! {
-        res = run::handle_exec_command_impl(config, vt_cfg, options) => res,
+        res = run::handle_exec_command_impl(config, vt_cfg, options) => {
+            program_status.finish(res.is_ok());
+            res
+        }
         _ = vtcode_core::shutdown::shutdown_signal() => {
+            program_status.cancel();
             vtcode_commons::diagnostics::stderr(format_args!("{}", crate::cli::messages::warn("Cancelled by user.")));
             bail!("Operation cancelled");
         }
@@ -375,6 +381,7 @@ mod tests {
             total_cost_usd: None,
             warnings: Vec::new(),
             thread_events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),

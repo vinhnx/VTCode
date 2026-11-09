@@ -77,7 +77,7 @@ use vtcode_commons::{StaticWorkspacePaths, NoopTelemetry, NoopErrorReporter};
 
 ## Related docs
 
-- [`docs/modules/vtcode_commons_reference.md`](../docs/modules/vtcode_commons_reference.md)
+- [`docs/modules/vtcode_commons_reference.md`](../../../docs/modules/vtcode_commons_reference.md)
 
 ## API reference
 

@@ -1,7 +1,15 @@
 use super::*;
 
 fn open_settings_search(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
-    let (window, view) = open_desktop(cx);
+    open_settings_search_sized(cx, 1280., 900.)
+}
+
+fn open_settings_search_sized(
+    cx: &mut TestAppContext,
+    width: f32,
+    height: f32,
+) -> (AnyWindowHandle, Entity<DesktopView>) {
+    let (window, view) = open_desktop_sized(cx, width, height);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
@@ -18,7 +26,10 @@ fn open_settings_search(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Des
 fn reopen_settings_search(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("settings-filter-search", cx);
+        // The legacy search button is gone on wide viewports (Kit owns
+        // the sidebar there), so reopen through the same palette entry
+        // the button dispatches instead of clicking it.
+        view.update(cx, |view, cx| view.open_settings_search_palette(window, cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
@@ -31,19 +42,20 @@ fn reopen_settings_search(window: AnyWindowHandle, view: &Entity<DesktopView>, c
 fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut TestAppContext) {
     let (window, view) = open_settings_search(cx);
     cx.update_window(window, |_, window, cx| {
-        window.within("command-palette").input("Open source licenses", cx);
+        window.within("command-palette").input("license", cx);
         window.render_frame(cx);
-        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::About);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("About"));
         window.within("command-palette").click(palette_action_id(&action), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find("open-source-licenses").role(), Some(gpui_kit::Role::Button));
-        assert_eq!(window.find("open-source-licenses").label(), Some("Open source licenses"));
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::About);
+        assert_eq!(window.find("about-settings-license").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("about-settings-license").label(), Some("VT Code license"));
+        assert_eq!(window.find("about-settings-acknowledgments").label(), Some("Acknowledgments"));
     })
     .unwrap();
     reopen_settings_search(window, &view, cx);
@@ -60,29 +72,31 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.within("command-palette").input("third-party notices", cx);
         window.render_frame(cx);
-        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::About);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("About"));
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn clicking_settings_navigation_dismisses_the_search(cx: &mut TestAppContext) {
-    let (window, view) = open_settings_search(cx);
+fn clicking_settings_chrome_dismisses_the_search(cx: &mut TestAppContext) {
+    let (window, _view) = open_settings_search(cx);
     cx.update_window(window, |_, window, cx| {
         assert!(window.try_find("command-palette").is_some(), "search renders inline");
-        window.click("settings-nav-storage", cx);
+        // The palette replaces the hosted content while open, so the Kit
+        // sidebar is unreachable: an outside click lands on the panel
+        // header, which dismisses through the shared panel handler.
+        window.click("settings-title", cx);
         window.render_frame(cx);
         assert!(window.try_find("command-palette").is_none(), "outside click dismisses the search");
-        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Storage);
-        assert!(window.try_find("storage-settings").is_some(), "the selected tab content renders");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
 fn clicking_the_search_button_again_closes_the_search(cx: &mut TestAppContext) {
-    let (window, _view) = open_settings_search(cx);
+    // The search button lives in the legacy navigation: narrow keeps it.
+    let (window, _view) = open_settings_search_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         assert!(window.try_find("command-palette").is_some(), "search renders inline");
         window.click("settings-filter-search", cx);
@@ -126,7 +140,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -144,7 +158,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
@@ -185,7 +199,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
         assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Appearance);
 
-        window.click("settings-filter-search", cx);
+        view.update(cx, |view, cx| view.open_settings_search_palette(window, cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
@@ -221,7 +235,7 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -239,14 +253,15 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
-            let snapshot = view.cli_config_settings.as_mut().unwrap();
-            let mut reference = snapshot.settings[0].clone();
+            }));
+            let mut owned = view.cli_config_settings.as_deref().unwrap().clone();
+            let mut reference = owned.settings[0].clone();
             reference.path = "tools.example".into();
             reference.group = Some("Tools".into());
             reference.label = Some("Tool reference".into());
             reference.editable = false;
-            snapshot.settings.push(reference);
+            owned.settings.push(reference);
+            view.cli_config_settings = Some(std::rc::Rc::new(owned));
             view.slash_commands = vec![vtcode_desktop_protocol::SlashCommandInfo {
                 name: "config".into(),
                 description: "Open CLI configuration".into(),
@@ -320,13 +335,13 @@ fn cli_config_page_keeps_header_fixed_while_catalog_scrolls_in_short_windows(cx:
                     )
                 })
                 .collect();
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings,
                 target_versions: Vec::new(),
                 omitted_sensitive: 1,
                 omitted_large: 1,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -385,13 +400,13 @@ fn config_rail_sits_beside_content_when_wide_and_above_when_narrow(cx: &mut Test
                     )
                 })
                 .collect();
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings,
                 target_versions: Vec::new(),
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -430,7 +445,7 @@ fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut Te
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![
                     config_page_setting("agent.verbose", json!(true), "Model & Provider"),
                     config_page_setting("agent.quiet", json!(false), "Model & Provider"),
@@ -439,7 +454,7 @@ fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut Te
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_group = Some("Model & Provider".into());
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -489,7 +504,7 @@ fn config_page_footer_shows_reset_hint_and_write_notice(cx: &mut TestAppContext)
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![config_page_setting(
                     "agent.default_model",
                     json!("model-a"),
@@ -499,7 +514,7 @@ fn config_page_footer_shows_reset_hint_and_write_notice(cx: &mut TestAppContext)
                 omitted_sensitive: 1,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_write_notice = Some("Saved agent.default_model to workspace configuration.".into());
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -535,7 +550,7 @@ fn command_palette_refreshes_recent_threads_on_demand(cx: &mut TestAppContext) {
         panic!("expected recent thread refresh request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
-    assert_eq!(params, json!({}));
+    assert_eq!(params, json!({ "limit": SESSION_LIST_PAGE_SIZE }));
 }
 
 #[gpui_kit::test]
@@ -586,6 +601,7 @@ fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx:
         let target_action = super::super::PaletteAction::JumpToTranscriptItem {
             session_id: session_id.clone(),
             item_id: target_id.clone(),
+            from_search: true,
         };
         window.within("command-palette").input("Needle phrase", cx);
         window.render_frame(cx);
@@ -846,6 +862,8 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
         request_id,
         start_index: 1,
         messages: vec![SessionHistoryMessage {
+            event_item_id: None,
+            phase: None,
             hidden: false,
             archive_index: Some(1),
             role: "tool".into(),
@@ -943,7 +961,7 @@ fn config_target_switch_flips_selected_accessibility_state(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![config_page_setting(
                     "agent.default_model",
                     json!("model-a"),
@@ -953,7 +971,7 @@ fn config_target_switch_flips_selected_accessibility_state(cx: &mut TestAppConte
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });

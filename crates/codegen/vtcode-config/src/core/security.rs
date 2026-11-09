@@ -39,11 +39,11 @@ pub struct SecurityConfig {
     auto_apply_detected_patches: bool,
 
     /// Enable zero-trust checks between components.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub zero_trust_mode: bool,
 
     /// Encrypt payloads passed across executors.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     encrypt_payloads: bool,
 
     /// Enable runtime integrity tagging for critical paths.
@@ -65,8 +65,8 @@ impl Default for SecurityConfig {
             human_in_the_loop: default_true(),
             require_write_tool_for_claims: default_true(),
             auto_apply_detected_patches: false,
-            zero_trust_mode: true,
-            encrypt_payloads: true,
+            zero_trust_mode: default_true(),
+            encrypt_payloads: default_true(),
             integrity_checks: default_true(),
             hitl_notification_bell: default_true(),
             gatekeeper: GatekeeperConfig::default(),

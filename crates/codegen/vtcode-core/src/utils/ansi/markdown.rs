@@ -58,6 +58,23 @@ impl AnsiRenderer {
             let last_empty =
                 sink.write_markdown(text, indent, base_style, Self::message_kind(style), preserve_code_indentation)?;
             self.last_line_was_empty = last_empty;
+            if matches!(style, MessageStyle::Response)
+                && self.show_message_timestamps
+                && !sink.in_transcript_batch()
+                && !text.trim().is_empty()
+            {
+                if self.defer_turn_footer {
+                    // Inside a turn the footer is emitted once at turn end, so
+                    // intermediate responses (pre-tool commentary, plan prose)
+                    // stay unstamped.
+                    self.pending_response_footer = true;
+                } else {
+                    // Out-of-turn output (session-exit reprint, pre-turn prompt
+                    // replies) owns no boundary to flush at, so it stamps now.
+                    sink.append_response_timestamp_footer(styles.status, indent)?;
+                    self.last_line_was_empty = false;
+                }
+            }
             return Ok(());
         }
         let highlight_cfg = if self.highlight_config.enabled {
@@ -89,6 +106,40 @@ impl AnsiRenderer {
         for line in lines {
             self.write_markdown_line(style, indent, line)?;
         }
+        if matches!(style, MessageStyle::Response) && self.show_message_timestamps && !text.trim().is_empty() {
+            if self.defer_turn_footer {
+                // Direct (non-inline) output defers the footer to turn end too,
+                // so one turn shows exactly one clock after its final message.
+                self.pending_response_footer = true;
+            } else {
+                self.write_response_timestamp_footer(indent)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Write the wall-clock footer for the turn that just completed in
+    /// direct-mode (non-inline) output.
+    ///
+    /// Mirrors [`AnsiRenderer::flush`] without recording the global transcript
+    /// log: the footer is chrome, and the log feeds tail-matching,
+    /// session-end hooks, and snapshot assertions that must not see it.
+    pub(super) fn write_response_timestamp_footer(&mut self, indent: &str) -> Result<()> {
+        let footer = vtcode_commons::message_timestamp::current_message_timestamp_footer();
+        self.buffer.clear();
+        if !indent.is_empty() {
+            self.buffer.push_str(indent);
+        }
+        self.buffer.push_str(&footer);
+        let style = theme::active_styles().status;
+        if self.color {
+            writeln!(self.writer, "{style}{}{Reset}", self.buffer)?;
+        } else {
+            writeln!(self.writer, "{}", self.buffer)?;
+        }
+        self.writer.flush()?;
+        self.last_line_was_empty = false;
+        self.buffer.clear();
         Ok(())
     }
 

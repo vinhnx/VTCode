@@ -29,16 +29,13 @@ impl EnqueueMode {
     }
 }
 
-/// Busy/idle decision made under the state lock; the runtime send and the
-/// notifications happen after the lock is released.
+/// Busy/idle decision made under the state lock; notifications happen after
+/// the lock is released.
 enum EnqueuePlan {
     Immediate {
-        input: mpsc::UnboundedSender<InlineEvent>,
-        stop: StopHandleSlot,
-        submission: SubmittedInput,
+        turn_id: String,
     },
     Queued {
-        stop: StopHandleSlot,
         status: protocol::TurnQueueStatus,
         dropped: usize,
     },
@@ -55,17 +52,36 @@ pub(super) struct DrainedTurn {
 impl ServerState {
     /// Snapshot the authoritative queue state for `turn/queue-status`.
     pub(super) fn queue_status(&self, session_id: &str) -> protocol::TurnQueueStatus {
+        let bounded = self.queue.iter().take(protocol::MAX_QUEUE_STATUS_PREVIEWS);
         protocol::TurnQueueStatus {
             session_id: session_id.to_string(),
             queue_depth: self.queue.len(),
-            previews: self
-                .queue
-                .iter()
-                .take(protocol::MAX_QUEUE_STATUS_PREVIEWS)
+            previews: bounded
+                .clone()
                 .map(|queued| protocol::queue_preview_label(&queued.input.text))
                 .collect(),
+            entry_ids: bounded.clone().map(|queued| queued.entry_id()).collect(),
+            queued_for_secs: bounded.map(|queued| queued.wait_secs()).collect(),
             dropped_total: self.queue_dropped_total,
         }
+    }
+
+    /// Mint a fresh bounded entry id for a queue entry stamp.
+    pub(super) fn mint_entry_id() -> String {
+        format!("qe-{}", uuid::Uuid::new_v4())
+    }
+
+    /// Take the active turn exactly once: clears the cancel request and
+    /// resolves the turn's interactions. Whoever takes `Some` owns the single
+    /// terminal emission for the turn — the pump terminal path, pump exit, and
+    /// cancel escalation race through here.
+    pub(super) fn take_active_turn(&mut self, session_id: &str) -> Option<String> {
+        let turn_id = self.active_turn_id.take()?;
+        self.cancel_requested_turn = None;
+        self.interaction_registry.finish_turn(session_id, &turn_id);
+        self.pending_interactions
+            .retain(|_, interaction| interaction.session_id != session_id || interaction.turn_id != turn_id);
+        Some(turn_id)
     }
 
     /// Pop the next batch for dispatch after a terminal event, recording its
@@ -78,7 +94,7 @@ impl ServerState {
             .as_ref()
             .filter(|runtime| !runtime.input.is_closed())
             .map(|runtime| runtime.input.clone())?;
-        if self.active_turn_id.is_some() {
+        if self.session_transitioning || self.active_turn_id.is_some() {
             return None;
         }
         let batch = pop_batched_submission(&mut self.queue, &mut false)?;
@@ -132,39 +148,36 @@ pub(super) async fn enqueue_turn(
                 bail!("selected session runtime has stopped; reload the session to continue");
             }
             let input = runtime.input.clone();
-            let stop = runtime.stop.clone();
+            // Clear the previous turn's handled stop before exposing the new
+            // turn to cancellation, and preserve Submit/Cancel ordering.
+            stop_requests::reset_handled_stop(&runtime.stop);
+            input
+                .send(InlineEvent::Submit(submission))
+                .map_err(|_error| anyhow!("selected session runtime has stopped; reload the session to continue"))?;
             state.cancel_requested_turn = None;
             state.active_turn_id = Some(turn_id.clone());
-            EnqueuePlan::Immediate { input, stop, submission }
+            EnqueuePlan::Immediate { turn_id }
         } else if mode.queueable() {
             // A turn is running: queue behind it with CLI batching semantics
             // instead of rejecting. Pending interactions do not block
             // queueing; the prompt dispatches once the turn ends (CLI parity:
             // the TUI queues regardless of overlays).
-            let stop = state
-                .runtime
-                .as_ref()
-                .filter(|runtime| !runtime.input.is_closed())
-                .map(|runtime| runtime.stop.clone());
-            let Some(stop) = stop else {
+            let runtime = state.runtime.as_ref().filter(|runtime| !runtime.input.is_closed());
+            if runtime.is_none() {
                 bail!("selected session runtime has stopped; reload the session to continue");
-            };
-            let dropped = push_capped(&mut state.queue, QueuedInput::new(submission, None));
-            state.queue_dropped_total += dropped;
-            EnqueuePlan::Queued {
-                stop,
-                status: state.queue_status(session_id),
-                dropped,
             }
+            let dropped = push_capped(
+                &mut state.queue,
+                QueuedInput::new(submission, None).stamped(ServerState::mint_entry_id(), Instant::now()),
+            );
+            state.queue_dropped_total += dropped;
+            EnqueuePlan::Queued { status: state.queue_status(session_id), dropped }
         } else {
             bail!("another turn is already running");
         }
     };
     match plan {
-        EnqueuePlan::Queued { stop, status, dropped } => {
-            // TUI parity: a fresh submission clears a handled cancellation so
-            // a stop pressed during initialization resumes instead of wedging.
-            stop_requests::reset_handled_stop(&stop);
+        EnqueuePlan::Queued { status, dropped } => {
             publish_queue_status_sync(notifications, &status);
             Ok(protocol::TurnAccepted {
                 session_id: session_id.to_string(),
@@ -177,19 +190,7 @@ pub(super) async fn enqueue_turn(
                 dropped,
             })
         }
-        EnqueuePlan::Immediate { input, stop, submission } => {
-            if input.send(InlineEvent::Submit(submission)).is_err() {
-                let mut state = state.lock().await;
-                if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
-                    state.active_turn_id = None;
-                    state.cancel_requested_turn = None;
-                }
-                bail!("selected session runtime has stopped; reload the session to continue");
-            }
-            // TUI parity: a fresh submission clears a handled cancellation (see
-            // the queued arm above). Only after a successful send: a dead
-            // runtime owns no stop state worth clearing.
-            stop_requests::reset_handled_stop(&stop);
+        EnqueuePlan::Immediate { turn_id } => {
             // The prompt has crossed the runtime boundary. Status is advisory: waiting
             // for this queue here can deadlock the request loop, and reporting failure
             // after delivery could cause a client to submit the same prompt twice.
@@ -228,6 +229,69 @@ pub(super) fn publish_queue_status_sync(
     }
 }
 
+/// Resume a queue preserved across a runtime restart only after startup and
+/// the session transition have both completed.
+pub(super) fn spawn_resume_queue(
+    session_id: String,
+    generation: uuid::Uuid,
+    stop: StopHandleSlot,
+    input: mpsc::UnboundedSender<InlineEvent>,
+    state: std::sync::Arc<Mutex<ServerState>>,
+    notifications: mpsc::Sender<protocol::Notification>,
+    turn_finished: std::sync::Arc<Notify>,
+) {
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = stop_requests::wait_for_host_turns_ready(&stop) => {}
+            _ = input.closed() => return,
+        }
+        loop {
+            let notified = turn_finished.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            let drained = {
+                let mut state = state.lock().await;
+                if state.session_id.as_deref() != Some(session_id.as_str())
+                    || state.runtime_generation != Some(generation)
+                {
+                    return;
+                }
+                if state.session_transitioning
+                    || state.active_turn_id.is_some()
+                    || !state.pending_interactions.is_empty()
+                {
+                    None
+                } else if state.queue.is_empty() {
+                    return;
+                } else {
+                    state.pop_next_queued_turn()
+                }
+            };
+            if let Some(drained) = drained {
+                if let Err(error) = dispatch_drained_turn(
+                    &state,
+                    &notifications,
+                    &turn_finished,
+                    &session_id,
+                    drained.turn_id,
+                    drained.batch,
+                    drained.input,
+                )
+                .await
+                {
+                    tracing::warn!(target: "vtcode.desktop", %error, "failed to resume queued turn");
+                    continue;
+                }
+                return;
+            }
+            tokio::select! {
+                _ = &mut notified => {}
+                _ = input.closed() => return,
+            }
+        }
+    });
+}
+
 /// Submit the batch drained after a terminal event. The turn id is already
 /// recorded under the state lock; this only crosses the runtime boundary and
 /// publishes the new turn plus the updated queue state. On delivery failure
@@ -235,18 +299,23 @@ pub(super) fn publish_queue_status_sync(
 pub(super) async fn dispatch_drained_turn(
     state: &Mutex<ServerState>,
     notifications: &mpsc::Sender<protocol::Notification>,
+    turn_finished: &Notify,
     session_id: &str,
     turn_id: String,
     batch: QueuedInput,
     input: mpsc::UnboundedSender<InlineEvent>,
 ) -> Result<()> {
-    // The send consumes its value, so dispatch a clone and keep the batch for
-    // the failure path. Drain runs once per turn; the copy is negligible.
-    if input.send(InlineEvent::Submit(batch.input.clone())).is_err() {
-        let mut state = state.lock().await;
-        if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
-            state.active_turn_id = None;
-            state.cancel_requested_turn = None;
+    // Recheck ownership and deliver while holding the turn lock. A session
+    // transition may have started while the terminal notification was queued.
+    let mut guard = state.lock().await;
+    let current = guard.session_id.as_deref() == Some(session_id)
+        && !guard.session_transitioning
+        && guard.active_turn_id.as_deref() == Some(turn_id.as_str())
+        && guard.runtime.as_ref().is_some_and(|runtime| runtime.input.same_channel(&input));
+    if !current || input.send(InlineEvent::Submit(batch.input.clone())).is_err() {
+        if guard.active_turn_id.as_deref() == Some(turn_id.as_str()) {
+            guard.active_turn_id = None;
+            guard.cancel_requested_turn = None;
         }
         // Restore unless the session moved on: teardown intentionally drops
         // ephemeral queue state with the session, but a changed turn slot
@@ -254,21 +323,31 @@ pub(super) async fn dispatch_drained_turn(
         // batch. The batch left from the front; restoring it there preserves
         // order. A concurrent refill can transiently overshoot the soft cap
         // by one; the next accept trims from the front with exact accounting.
-        if state.session_id.as_deref() == Some(session_id) {
-            state.queue.push_front(batch);
-            let status = state.queue_status(session_id);
-            drop(state);
+        if guard.session_id.as_deref() == Some(session_id) {
+            guard.queue.push_front(batch);
+            let status = guard.queue_status(session_id);
+            drop(guard);
             publish_queue_status_sync(notifications, &status);
         }
+        turn_finished.notify_waiters();
         bail!("selected session runtime has stopped; reload the session to continue");
     }
-    send_notification(
+    let generation = guard.runtime_generation;
+    drop(guard);
+    send_runtime_notification(
         notifications,
         protocol::method::TURN_STATUS,
         json!({ "sessionId": session_id, "turnId": turn_id, "status": "running" }),
+        generation,
     )
     .await?;
     let status = state.lock().await.queue_status(session_id);
-    send_notification(notifications, protocol::method::TURN_QUEUE_STATUS, serde_json::to_value(status)?).await?;
+    send_runtime_notification(
+        notifications,
+        protocol::method::TURN_QUEUE_STATUS,
+        serde_json::to_value(status)?,
+        generation,
+    )
+    .await?;
     Ok(())
 }

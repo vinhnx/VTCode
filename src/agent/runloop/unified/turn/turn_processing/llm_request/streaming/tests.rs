@@ -164,7 +164,7 @@ async fn completion_only_output_reaches_latency_and_harness_observers() {
     assert_eq!(phases, [ProgressPhase::Processing, ProgressPhase::ReceivingResponse]);
     assert!(latency.first_event);
     assert!(latency.first_visible, "completion rendering must record both visible-output latency metrics");
-    assert!(bridge.assistant_output_observed());
+    assert!(bridge.assistant_item_id().is_some());
 }
 
 #[test]

@@ -44,7 +44,8 @@ impl HarnessTurnState {
             out_of_band_tool_progress: false,
             final_response_rendered: false,
             final_response_event_emitted: false,
-            streamed_response_event_emitted: false,
+            streamed_response_item_id: None,
+            final_response_item_id: None,
             final_response_was_fallback: false,
             turn_refused: false,
             consecutive_spool_chunk_reads: 0,
@@ -793,18 +794,28 @@ impl HarnessTurnState {
 
     pub(crate) fn mark_final_response_event_emitted(&mut self) {
         self.final_response_event_emitted = true;
+        self.final_response_item_id.clone_from(&self.streamed_response_item_id);
     }
 
-    pub(crate) fn mark_streamed_response_event_emitted(&mut self) {
-        self.streamed_response_event_emitted = true;
+    pub(crate) fn mark_final_response_item_emitted(&mut self, item_id: Option<String>) {
+        self.final_response_event_emitted = true;
+        self.final_response_item_id = item_id;
+    }
+
+    pub(crate) fn final_response_item_id(&self) -> Option<&str> {
+        self.final_response_item_id.as_deref()
+    }
+
+    pub(crate) fn mark_streamed_response_event_emitted(&mut self, item_id: String) {
+        self.streamed_response_item_id = Some(item_id);
     }
 
     pub(crate) fn reset_streamed_response_event_emitted(&mut self) {
-        self.streamed_response_event_emitted = false;
+        self.streamed_response_item_id = None;
     }
 
     pub(crate) fn streamed_response_event_emitted(&self) -> bool {
-        self.streamed_response_event_emitted
+        self.streamed_response_item_id.is_some()
     }
 
     pub(crate) fn mark_final_response_fallback(&mut self) {

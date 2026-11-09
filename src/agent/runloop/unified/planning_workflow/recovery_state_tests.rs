@@ -38,6 +38,49 @@ fn approval_prose_never_replaces_best_draft_or_changes_readiness() {
 }
 
 #[test]
+fn clarified_request_prefers_new_draft_without_discarding_previous_progress() {
+    let revised_draft = "## Summary\nRepair the endpoint.\n## Implementation Steps\n1. Update endpoint";
+    let mut snapshot = PlanningRecoverySnapshot::default();
+    retain_draft(&mut snapshot, DRAFT);
+    record_clarification(&mut snapshot, "  ", false);
+    retain_draft(&mut snapshot, revised_draft);
+    assert_eq!(snapshot.best_draft.as_deref(), Some(DRAFT));
+
+    record_clarification(&mut snapshot, "Plan the endpoint instead", false);
+    assert_eq!(snapshot.best_draft.as_deref(), Some(DRAFT));
+    retain_draft(&mut snapshot, revised_draft);
+    assert_eq!(snapshot.best_draft.as_deref(), Some(revised_draft));
+    assert!(
+        snapshot
+            .validation_report
+            .as_deref()
+            .is_some_and(|report| !report.contains("retained draft validates"))
+    );
+    assert!(snapshot.best_draft_defects.is_some());
+}
+
+#[test]
+fn closing_research_does_not_replace_current_draft_with_previous_task() {
+    let current_draft = "## Summary\nRepair the current endpoint.\n## Implementation Steps\n1. Update endpoint";
+    let history = vec![
+        uni::Message::user("plan the parser".into()),
+        uni::Message::assistant(DRAFT.into()),
+        uni::Message::user("plan the endpoint".into()),
+        uni::Message::assistant(current_draft.into()),
+    ];
+    let mut snapshot = PlanningRecoverySnapshot::default();
+    retain_draft(&mut snapshot, current_draft);
+    close_research(&mut snapshot, &history, "ollama", "test");
+    assert_eq!(snapshot.best_draft.as_deref(), Some(current_draft));
+    assert!(
+        snapshot
+            .validation_report
+            .as_deref()
+            .is_some_and(|report| !report.contains("retained draft validates"))
+    );
+}
+
+#[test]
 fn private_reasoning_is_classified_without_becoming_a_draft() {
     let response = LLMResponse {
         reasoning: Some(DRAFT.into()),

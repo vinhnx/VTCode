@@ -25,6 +25,7 @@ async fn terminal_events_release_accepted_turns_without_a_start_event() {
         (
             "dropped-start",
             ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
@@ -139,6 +140,96 @@ async fn old_session_events_do_not_reach_the_selected_session() {
     assert_eq!(state.lock().await.active_turn_id.as_deref(), Some("selected-turn"));
     assert!(received.try_recv().is_err());
 }
+
+#[tokio::test]
+async fn old_runtime_pump_cannot_change_a_replacement_turn_in_the_same_session() {
+    use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
+    use vtcode_core::exec::events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+    use vtcode_ui::tui::app::{ListOverlayRequest, TransientRequest};
+
+    let old_generation = uuid::Uuid::new_v4();
+    let current_generation = uuid::Uuid::new_v4();
+    let state = std::sync::Arc::new(Mutex::new(ServerState {
+        session_id: Some("session".into()),
+        runtime_generation: Some(current_generation),
+        active_turn_id: Some("replacement".into()),
+        ..Default::default()
+    }));
+    let (notifications, mut received) = mpsc::channel(8);
+    let finished = std::sync::Arc::new(Notify::new());
+    let (commands, command_receiver) = mpsc::channel(3);
+    let (events, event_receiver) = protocol::live_event_channel(2);
+    let old_pump = spawn_session_pump(
+        "session".into(),
+        command_receiver,
+        event_receiver,
+        state.clone(),
+        notifications.clone(),
+        finished.clone(),
+        Some(old_generation),
+    );
+    commands
+        .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+            operation: ProgressOperation::start(),
+            phase: ProgressPhase::Processing,
+        }))
+        .await
+        .unwrap();
+    commands
+        .send(InlineCommand::SetPrimaryAgent { name: Some("old agent".into()), color: None })
+        .await
+        .unwrap();
+    commands
+        .send(InlineCommand::ShowTransient {
+            request: Box::new(TransientRequest::List(ListOverlayRequest {
+                title: "old interaction".into(),
+                lines: Vec::new(),
+                footer_hint: None,
+                items: Vec::new(),
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+                status: None,
+                plan_markdown: None,
+            })),
+        })
+        .await
+        .unwrap();
+    let completed = || {
+        VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
+            completed_at: None,
+            usage: Usage::default(),
+            in_progress_exec_sessions: Vec::new(),
+        }))
+    };
+    events.publish(completed()).unwrap();
+    drop(commands);
+    drop(events);
+    timeout(Duration::from_secs(1), old_pump).await.unwrap().unwrap();
+    assert_eq!(state.lock().await.active_turn_id.as_deref(), Some("replacement"));
+    assert!(state.lock().await.pending_interactions.is_empty());
+    assert!(received.try_recv().is_err(), "stale progress and terminal events must be suppressed");
+
+    let (commands, command_receiver) = mpsc::channel(1);
+    let (events, event_receiver) = protocol::live_event_channel(1);
+    let current_pump = spawn_session_pump(
+        "session".into(),
+        command_receiver,
+        event_receiver,
+        state.clone(),
+        notifications,
+        finished,
+        Some(current_generation),
+    );
+    events.publish(completed()).unwrap();
+    drop(commands);
+    drop(events);
+    timeout(Duration::from_secs(1), current_pump).await.unwrap().unwrap();
+    assert!(state.lock().await.active_turn_id.is_none());
+    assert_eq!(received.recv().await.unwrap().method, protocol::method::THREAD_EVENT);
+    assert_eq!(received.recv().await.unwrap().params["turnId"], "replacement");
+}
 #[tokio::test]
 async fn primary_agent_updates_are_bounded_sanitized_and_session_scoped() {
     let state = Mutex::new(ServerState {
@@ -179,13 +270,14 @@ async fn session_pump_projects_primary_agent_host_commands() {
     let (commands, command_receiver) = mpsc::channel(1);
     let (event_sender, event_receiver) = protocol::live_event_channel(1);
     let (notifications, mut received) = mpsc::channel(1);
-    spawn_session_pump(
+    let _pump = spawn_session_pump(
         "session-a".into(),
         command_receiver,
         event_receiver,
         state,
         notifications,
         std::sync::Arc::new(Notify::new()),
+        None,
     );
 
     commands
@@ -214,13 +306,14 @@ async fn session_pump_ignores_stale_progress_and_clears_on_finish() {
     let (commands, command_receiver) = mpsc::channel(8);
     let (event_sender, event_receiver) = protocol::live_event_channel(1);
     let (notifications, mut received) = mpsc::channel(8);
-    spawn_session_pump(
+    let _pump = spawn_session_pump(
         "session-a".into(),
         command_receiver,
         event_receiver,
         state,
         notifications,
         std::sync::Arc::new(Notify::new()),
+        None,
     );
     let old = ProgressOperation::start();
     let new = ProgressOperation::start();
@@ -249,7 +342,7 @@ async fn session_pump_ignores_stale_progress_and_clears_on_finish() {
 #[tokio::test]
 async fn session_pump_tracks_live_background_and_blocked_states() {
     use vtcode_commons::ui_protocol::ActivityState;
-    use vtcode_ui::tui::app::{LocalAgentEntry, LocalAgentKind};
+    use vtcode_ui::tui::app::{LocalAgentEntry, LocalAgentKind, LocalAgentStatus};
     let state = std::sync::Arc::new(Mutex::new(ServerState {
         session_id: Some("session-b".into()),
         ..Default::default()
@@ -257,13 +350,14 @@ async fn session_pump_tracks_live_background_and_blocked_states() {
     let (commands, command_receiver) = mpsc::channel(8);
     let (event_sender, event_receiver) = protocol::live_event_channel(1);
     let (notifications, mut received) = mpsc::channel(8);
-    spawn_session_pump(
+    let _pump = spawn_session_pump(
         "session-b".into(),
         command_receiver,
         event_receiver,
         state,
         notifications,
         std::sync::Arc::new(Notify::new()),
+        None,
     );
     let entry = LocalAgentEntry {
         id: "job".into(),
@@ -273,7 +367,7 @@ async fn session_pump_tracks_live_background_and_blocked_states() {
         kind: LocalAgentKind::ExecSession,
         program_status: vtcode_commons::program_status::ProgramState::Working,
         updated_at: 0,
-        status: "running".into(),
+        status: LocalAgentStatus::Running,
         summary: None,
         preview: String::new(),
         transcript_path: None,
@@ -312,13 +406,14 @@ async fn session_pump_drops_progress_after_session_switch() {
     let (commands, command_receiver) = mpsc::channel(8);
     let (event_sender, event_receiver) = protocol::live_event_channel(1);
     let (notifications, mut received) = mpsc::channel(8);
-    spawn_session_pump(
+    let _pump = spawn_session_pump(
         "session-a".into(),
         command_receiver,
         event_receiver,
         state.clone(),
         notifications,
         std::sync::Arc::new(Notify::new()),
+        None,
     );
     commands
         .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
@@ -356,13 +451,14 @@ async fn session_pump_clears_live_progress_on_shutdown() {
     let (commands, command_receiver) = mpsc::channel(2);
     let (event_sender, event_receiver) = protocol::live_event_channel(1);
     let (notifications, mut received) = mpsc::channel(4);
-    spawn_session_pump(
+    let _pump = spawn_session_pump(
         "session-c".into(),
         command_receiver,
         event_receiver,
         state,
         notifications,
         std::sync::Arc::new(Notify::new()),
+        None,
     );
     commands
         .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
@@ -395,13 +491,14 @@ async fn shutdown_clears_progress_after_full_queue_without_delaying_turn_cleanup
     let waiting = finished.notified();
     tokio::pin!(waiting);
     waiting.as_mut().enable();
-    spawn_session_pump(
+    let _pump = spawn_session_pump(
         "session-full".into(),
         command_receiver,
         event_receiver,
         state.clone(),
         notifications,
         finished.clone(),
+        None,
     );
     commands
         .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {

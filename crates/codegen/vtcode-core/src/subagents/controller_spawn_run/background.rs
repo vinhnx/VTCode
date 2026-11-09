@@ -220,26 +220,24 @@ impl SubagentController {
         self.closing.store(false, Ordering::Relaxed);
     }
 
-    /// Signal that the program is shutting down. Subsequent calls to
-    /// `save_background_state` will be skipped. All running child handles
-    /// are aborted so subagent tasks do not outlive the parent session.
+    /// Request shutdown and await owned child tasks and matrix reconciliation.
+    /// If the caller stops waiting, a later call retains the pending handles.
+    /// Background state is not saved after shutdown begins.
     pub async fn signal_shutdown(&self) {
-        if let Err(error) = self.cancel_matrix().await {
-            self.matrix.cancellation.read().cancel();
-            tracing::warn!(%error, "failed to persist matrix shutdown cancellation");
-        }
         self.shutdown_requested.store(true, Ordering::Relaxed);
-        self.stop_background_completion_monitor().await;
-        let nested = {
+        self.request_matrix_stop();
+        // Keep child task handles in controller-owned state while awaiting them.
+        // If the caller's shutdown deadline expires, a later call can still
+        // observe their completion rather than losing ownership on drop.
+        let mut shutdown_handles = self.shutdown_handles.lock().await;
+        let mut nested = {
             let mut state = self.state.write().await;
             let mut nested = Vec::new();
-            for record in state.children.values_mut() {
+            for (id, record) in &mut state.children {
                 if let Some(handle) = record.handle.take() {
                     handle.abort();
+                    assert!(shutdown_handles.insert(id.clone(), handle).is_none(), "duplicate owned subagent handle");
                 }
-                record.status = SubagentStatus::Closed;
-                record.completed_at = Some(Utc::now());
-                record.notify.notify_waiters();
                 if let Some(controller) = record.child_controller.clone() {
                     nested.push((controller, record.session_id.clone()));
                 }
@@ -254,16 +252,73 @@ impl SubagentController {
             controller.begin_close().await;
             controller.stop_background_completion_monitor().await;
         }
+        if let Err(error) = self.cancel_matrix().await {
+            self.matrix.cancellation.read().cancel();
+            tracing::warn!(%error, "failed to persist matrix shutdown cancellation");
+        }
+        self.stop_background_completion_monitor().await;
+        while let Some(id) = shutdown_handles.keys().next().cloned() {
+            if let Some(handle) = shutdown_handles.get_mut(&id) {
+                if let Err(error) = handle.await
+                    && !error.is_cancelled()
+                {
+                    tracing::warn!(%error, "subagent task failed during shutdown");
+                }
+            }
+            shutdown_handles.remove(&id);
+        }
+        // Matrix workers have their own driver task. Do not finish shutdown
+        // while that driver is still reconciling cancelled work.
+        let _ = self.wait_matrix_idle().await;
+        // A child may have installed its scoped controller just before its
+        // abort took effect. Once the child has exited the rescan is stable.
+        let late = {
+            let state = self.state.read().await;
+            state
+                .children
+                .values()
+                .filter_map(|record| {
+                    record
+                        .child_controller
+                        .clone()
+                        .map(|controller| (controller, record.session_id.clone()))
+                })
+                .collect::<Vec<_>>()
+        };
+        for (controller, session_id) in late {
+            if nested
+                .iter()
+                .any(|(known, id)| Arc::ptr_eq(known, &controller) && id == &session_id)
+            {
+                continue;
+            }
+            controller.shutdown_requested.store(true, Ordering::Relaxed);
+            controller.begin_close().await;
+            controller.stop_background_completion_monitor().await;
+            nested.push((controller, session_id));
+        }
         // Cascade shutdown to child-scoped controllers so grandchildren tasks
         // are aborted too; otherwise their tokio tasks keep running detached.
+        let mut nested_failed = false;
         for (controller, session_id) in nested {
             let ids = controller.spawn_child_ids_for_parent(&session_id).await;
             for id in ids {
                 if let Err(err) = controller.close_tree(&id).await {
+                    nested_failed = true;
                     tracing::warn!(node_id = id.as_str(), error = %err, "Failed to close nested subagent subtree during shutdown");
                 }
             }
         }
+        let mut state = self.state.write().await;
+        if !nested_failed {
+            for record in state.children.values_mut() {
+                record.status = SubagentStatus::Closed;
+                record.completed_at = Some(Utc::now());
+                record.notify.notify_waiters();
+            }
+        }
+        drop(state);
+        drop(shutdown_handles);
     }
 
     pub(in crate::subagents) async fn save_background_state(&self) -> Result<()> {

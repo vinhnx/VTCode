@@ -1,6 +1,6 @@
 # Rust Skills
 
-193 Rust rules your AI coding agent can use to write better code.
+194 Rust rules your AI coding agent can use to write better code.
 
 Works with Claude Code, Cursor, Windsurf, Copilot, Codex, Aider, Zed, Amp, Cline, and pretty much any other agent that supports skills.
 
@@ -32,7 +32,7 @@ The agent loads the relevant rules and applies them to your code.
 
 ## What's in here
 
-193 rules split into 14 categories:
+194 rules split into 14 categories:
 
 | Category | Rules | What it covers |
 |----------|-------|----------------|
@@ -49,7 +49,7 @@ The agent loads the relevant rules and applies them to your code.
 | **Performance** | 11 | Iterators, entry API, collect patterns |
 | **Project Structure** | 12 | Workspaces, module layout, semver/feature hygiene |
 | **Linting** | 12 | Clippy config, CI setup, `#[expect]` over `#[allow]` |
-| **Anti-patterns** | 16 | Common mistakes and how to fix them, unsound APIs |
+| **Anti-patterns** | 17 | Common mistakes and how to fix them, unsound APIs, byte-offset text cuts |
 
 Each rule has:
 - Why it matters

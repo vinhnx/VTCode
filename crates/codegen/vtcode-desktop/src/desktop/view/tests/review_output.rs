@@ -1,328 +1,307 @@
 use super::*;
+use crate::desktop::inspector as output_inspector;
 
-#[gpui_kit::test]
-fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("welcome").label(), Some("VT Code welcome"));
-        assert!(window.find_all("thread-header").is_empty());
-        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
-            assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
-        }
-        window.click("nav-utilities", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
-        assert_eq!(window.find("nav-utilities").label(), Some("Workspace utilities (selected)"));
-        assert!(view.read(cx).selected_session_id.is_none());
-        assert_eq!(window.find("send-prompt").label(), Some("Send message"));
-        view.update(cx, |view, _| {
-            view.workspace = None;
-            view.inspector_open = false;
-            view.welcome_copy_index = 0;
-        });
-        window.render_frame(cx);
-        assert!(window.find_all("open-first-workspace").is_empty());
-        view.update(cx, |view, _| {
-            view.workspace = Some(std::env::temp_dir());
-            view.transcript.push(TranscriptItem::new(
-                "first-message".into(),
-                "user".into(),
-                "You".into(),
-                "Inspect this workspace".into(),
-            ));
-        });
-        window.render_frame(cx);
-        assert!(window.find_all("welcome").is_empty());
-        assert_eq!(window.find_all("thread-header").len(), 1);
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mut TestAppContext) {
-    use gpui_kit::component::diff::{DiffLineRange, DiffMode, DiffSide};
-    use vtcode_exec_events::{
-        FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
-        ThreadItem, ThreadItemDetails,
-    };
-
-    fn notification(id: &str, path: &str, patch: &str) -> BackendEvent {
-        BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
-            session_id: "review-session".into(),
-            turn_id: None,
-            event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                item: ThreadItem {
-                    context: None,
-                    id: id.into(),
-                    details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-                        changes: vec![FileUpdateChange { path: path.into(), kind: PatchChangeKind::Update }],
-                        status: PatchApplyStatus::Completed,
-                        unified_diff: Some(patch.into()),
-                        diff_incomplete: Some(false),
-                        additions: None,
-                        deletions: None,
-                    })),
-                },
-            })),
-        })
+fn shell_call(id: &str, command: &str) -> vtcode_exec_events::ThreadItem {
+    use vtcode_exec_events::*;
+    ThreadItem {
+        id: id.into(),
+        context: None,
+        details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+            tool_name: "exec_command".into(),
+            arguments: Some(json!({"command": command})),
+            tool_call_id: None,
+            status: ToolCallStatus::InProgress,
+            outcome: None,
+        })),
     }
-    let first = "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1 @@\n-old\n+first\n";
-    let latest = "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1,2 @@\n-first\n+latest one\n+latest two\n";
-    let unrelated = "--- a/docs/app.rs.bak\n+++ b/docs/app.rs.bak\n@@ -1 +1 @@\n-note\n+mentions src/app.rs\n";
-    let (window, view) = open_desktop(cx);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.selected_session_id = Some("review-session".into());
-            view.handle_backend_event(notification("edit", "src/app.rs", first), cx);
-        });
-        window.render_frame(cx);
-        window.click(opaque_path_element_id("change-row", "src/app.rs"), cx);
-        let viewer = view.read(cx).change_viewer.as_ref().unwrap().clone();
-        viewer.update(cx, |viewer, cx| {
-            viewer.set_mode(DiffMode::Split, cx);
-            viewer.set_selected_lines(Some(DiffLineRange::new("src/app.rs", DiffSide::Modified, 1, 1)), cx);
-        });
-        let selection = viewer.read(cx).selected_lines();
-        assert!(selection.is_some());
-        window.click("expand-change-review", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).current_route() == Route::Review);
-        view.update(cx, |view, cx| view.handle_backend_event(notification("other", "docs/app.rs.bak", unrelated), cx));
-        window.render_frame(cx);
-        assert_eq!(
-            window.find(opaque_path_element_id("change-row", "docs/app.rs.bak")).label(),
-            Some("Review docs/app.rs.bak")
-        );
-        assert_eq!(
-            window.find(opaque_path_element_id("change-row", "src/app.rs")).label(),
-            Some("Review src/app.rs (selected)"),
-            "a newly inserted row must not inherit an existing file's accessibility node"
-        );
-        assert_eq!(viewer.read(cx).selected_lines(), selection, "unrelated events preserve review selection");
-        // Updating the same item id exercises the streaming/upsert path, not only a new change-set.
-        view.update(cx, |view, cx| view.handle_backend_event(notification("edit", "src/app.rs", latest), cx));
-        window.render_frame(cx);
-        assert_eq!(viewer.read(cx).files()[0].additions(), 2, "the retained viewer must receive the accepted update");
-        assert_eq!(viewer.read(cx).mode(), DiffMode::Split);
-        assert!(viewer.read(cx).selected_lines().is_none(), "new text invalidates an old line selection");
-        window.within("diff-review-panel").click("copy-change-patch", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(latest));
-        window
-            .within("diff-review-panel")
-            .click(opaque_path_element_id("change-row", "docs/app.rs.bak"), cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).selected_change.as_deref(), Some("docs/app.rs.bak"));
-        assert_eq!(view.read(cx).change_viewer.as_ref().unwrap().read(cx).mode(), DiffMode::Split);
-        window
-            .within("diff-review-panel")
-            .click(opaque_path_element_id("change-row", "src/app.rs"), cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/app.rs"));
-        // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
-        view.update(cx, |view, cx| {
-            view.event_tx.send(notification("edit", "src/app.rs", "invalid patch")).unwrap();
-            let _batch_full = view.drain_events(window, cx);
-            assert!(view.selected_change.is_none());
-            assert!(view.change_viewer.is_none());
-            assert!(view.current_route() != Route::Review);
-            assert!(!view.review_focus.contains_focused(window, cx));
-            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
-        });
-        assert!(view.read(cx).selected_change.is_none());
-        assert!(view.read(cx).change_viewer.is_none());
-        window.render_frame(cx);
-        assert!(view.read(cx).current_route() != Route::Review);
-        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
-    })
-    .unwrap();
+}
+
+fn shell_output(
+    id: &str,
+    call: &str,
+    output: &str,
+    status: vtcode_exec_events::ToolCallStatus,
+    delta: bool,
+) -> vtcode_exec_events::ThreadItem {
+    use vtcode_exec_events::*;
+    ThreadItem {
+        id: id.into(),
+        context: None,
+        details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: call.into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: output.into(),
+            is_delta: delta.then_some(true),
+            exit_code: None,
+            status,
+            app_previews: Vec::new(),
+        })),
+    }
 }
 
 #[gpui_kit::test]
-fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut TestAppContext) {
+fn shell_invocations_share_rows_with_interleaved_output(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::*;
     let (window, view) = open_desktop(cx);
-    let patch = format!(
-        "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1 @@\n-{}\n+{}\n",
-        "original word ".repeat(30),
-        "restored word ".repeat(35)
-    );
-    let item = ThreadItem {
-        context: None,
-        id: "saved-edit".into(),
-        details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-            changes: vec![FileUpdateChange {
-                path: "src/app.rs".into(),
-                kind: PatchChangeKind::Update,
-            }],
-            status: PatchApplyStatus::Completed,
-            unified_diff: Some(patch.clone()),
-            diff_incomplete: Some(false),
-            additions: None,
-            deletions: None,
-        })),
-    };
-    cx.update_window(window, |_, _window, cx| {
-        view.update(cx, |view, cx| {
-            view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
-            view.handle_backend_event(BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
-                error: None,
-                result: Some(json!({
-                    "session": {"sessionId": "restored", "title": "Saved work", "workspace": "/workspace", "completed": true, "resumable": true},
-                    "messages": [{"role": "user", "text": "Make this change"}],
-                    "reviewItems": [item], "reviewHistoryIncomplete": true,
-                })),
-            }, cx);
-            assert!(!view.running);
-            assert!(view.active_turn_id.is_none());
-            assert_eq!(view.selected_session_id, None);
-            assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
-        });
-    }).unwrap();
-    cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, _| {
-            assert_eq!(view.selected_session_id.as_deref(), Some("restored"));
-            assert!(view.status.contains("partial"));
-            assert!(view.restored_review_history_incomplete);
-            assert!(!view.restored_activity_history_incomplete);
-            assert_eq!(view.changes.entries().len(), 1);
-            assert_eq!(view.changes.patch_for(&view.transcript, "src/app.rs").as_deref(), Some(patch.as_str()));
-            view.inspector_open = true;
-            view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
+            view.selected_session_id = Some("session".into());
+            let notification = |event| ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some("turn".into()),
+                event: VersionedThreadEvent::new(event),
+            };
+            for (id, command) in [("call-a", "echo alpha"), ("call-b", "echo beta")] {
+                view.handle_thread_event(notification(ThreadEvent::ItemStarted(ItemStartedEvent {
+                    item: shell_call(id, command),
+                })));
+            }
+            for (id, call, text) in [
+                ("out-a", "call-a", "alpha "),
+                ("out-b", "call-b", "beta"),
+                ("out-a", "call-a", "tail"),
+            ] {
+                view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                    item: shell_output(id, call, text, ToolCallStatus::InProgress, true),
+                })));
+            }
+            assert_eq!(view.transcript.items().filter(|row| row.role == "tool").count(), 2);
+            let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
+            assert_eq!(row.title, "echo alpha");
+            assert_eq!(row.output.as_deref(), Some("alpha tail"));
+            assert_eq!(row.output_item_id.as_deref(), Some("out-a"));
+            assert_eq!(output_inspector::output_for(&view.transcript, &[], Some("out-b")).unwrap().text, "beta");
+            view.handle_thread_event(notification(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: shell_output("out-a", "call-a", "final", ToolCallStatus::Failed, false),
+            })));
+            let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
+            assert_eq!(row.output.as_deref(), Some("final"));
+            assert!(row.text.starts_with("failed"));
         });
-        window.render_frame(cx);
-        let warning = window.find("review-history-warning");
-        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(warning.label(), Some("Saved change history is partial. Some historical patches are unavailable."));
-        window.click(opaque_path_element_id("change-row", "src/app.rs"), cx);
-        window.render_frame(cx);
-        window.click("copy-change-patch", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch.as_str()));
-        window.click("expand-change-review", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).current_route() == Route::Review);
-        window.click("review-split", cx);
-        window.render_frame(cx);
-        window.render_frame(cx);
-        let viewport = window.find("change-diff-view").bounds();
-        let original = window.within(("old", 0usize)).find("source").bounds();
-        let modified = window.within(("new", 0usize)).find("source").bounds();
-        assert!(original.size.width > px(100.));
-        assert!(modified.size.width > px(100.));
-        assert!(original.right() <= modified.left());
-        assert!(modified.right() <= viewport.right() + px(1.), "both wrapped split columns must remain visible");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn changes_inspector_lists_structured_paths_without_diff_previews(cx: &mut TestAppContext) {
+fn restored_shell_activity_preserves_capture_identity(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.project_runtime_item(&shell_call("call", "cargo check"), true);
+        view.project_runtime_item(&shell_output("capture", "call", "output", ToolCallStatus::Completed, false), true);
+        assert_eq!(view.restored_activity.len(), 1);
+        assert_eq!(view.restored_activity[0].id, "call");
+        assert_eq!(view.restored_activity[0].output_item_id.as_deref(), Some("capture"));
+        let output = output_inspector::output_for(&view.transcript, &view.restored_activity, Some("capture")).unwrap();
+        assert_eq!(output.id, "capture");
+        assert_eq!(output.text, "output");
+        let mut item = view.restored_activity[0].clone();
+        let mut pages = std::collections::HashMap::new();
+        let mut page = vtcode_desktop_protocol::SessionOutputPage {
+            session_id: "session".into(),
+            request_id: "request".into(),
+            item_id: "capture".into(),
+            offset: 0,
+            next_offset: 5,
+            total_bytes: 5,
+            text: " tail".into(),
+            has_more: false,
+        };
+        assert!(append_restored_output_page(&mut item, &mut pages, &mut page));
+        assert_eq!(restored_output_for_copy("capture", item.output.as_ref().unwrap(), &pages, false), "output tail");
+    });
+}
+
+#[gpui_kit::test]
+fn merged_shell_row_opens_its_canonical_capture(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.project_runtime_item(&shell_call("call", "cargo check"), false);
+            view.project_runtime_item(
+                &shell_output("capture", "call", "compiler output", ToolCallStatus::Completed, false),
+                false,
+            );
+        });
+        window.render_frame(cx);
+        window.click("tool-call", cx);
+        window.render_frame(cx);
+        window.click("tool-open-output-call", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).selected_output_id.as_deref(), Some("capture"));
+        assert_eq!(window.find("output-body").label(), Some("compiler output"));
+        assert!(window.try_find("tool-capture").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn shell_output_does_not_merge_across_turns_or_into_non_shell_calls(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::*;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let notification = |turn: &str, event| ThreadEventNotification {
+            session_id: "session".into(),
+            turn_id: Some(turn.into()),
+            event: VersionedThreadEvent::new(event),
+        };
+        view.handle_thread_event(notification(
+            "turn-a",
+            ThreadEvent::ItemStarted(ItemStartedEvent { item: shell_call("call", "echo safe") }),
+        ));
+        view.handle_thread_event(notification(
+            "turn-b",
+            ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                item: shell_output("capture", "call", "foreign", ToolCallStatus::InProgress, true),
+            }),
+        ));
+        let call = view.transcript.items().find(|row| row.id == "call").unwrap();
+        assert!(call.output.is_none());
+        assert!(view.transcript.items().all(|row| row.id != "capture"));
+        let mut read = shell_call("read", "file");
+        if let ThreadItemDetails::ToolInvocation(invocation) = &mut read.details {
+            invocation.tool_name = "read_file".into();
+        }
+        view.project_runtime_item(&read, false);
+        view.project_runtime_item(
+            &shell_output("read-output", "read", "data", ToolCallStatus::Completed, false),
+            false,
+        );
+        assert!(view.transcript.items().any(|row| row.id == "read-output"));
+        assert!(view.transcript.items().find(|row| row.id == "read").unwrap().output.is_none());
+    });
+}
+
+#[gpui_kit::test]
+fn merged_restored_row_pages_by_its_capture_identity(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let prefix = "merged prefix";
+    let tail = " tail";
+    let total_bytes = u64::try_from(prefix.len() + tail.len()).expect("test page length fits in u64");
+    cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.workspace = Some(std::env::temp_dir());
-            view.inspector_open = true;
-            view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
-            view.upsert_diff_card(
-                "change-no-preview".into(),
-                &vtcode_exec_events::FileChangeItem {
-                    diff_incomplete: Some(true),
-                    changes: vec![vtcode_exec_events::FileUpdateChange {
-                        path: "src/updated.rs".into(),
-                        kind: vtcode_exec_events::PatchChangeKind::Update,
-                    }],
-                    status: vtcode_exec_events::PatchApplyStatus::Completed,
-                    unified_diff: None,
-                    additions: None,
-                    deletions: None,
+            view.project_runtime_item(&shell_call("merged-call", "cargo check"), true);
+            view.project_runtime_item(
+                &shell_output("merged-capture", "merged-call", prefix, ToolCallStatus::Completed, false),
+                true,
+            );
+            assert_eq!(view.restored_activity.len(), 1);
+            assert_eq!(view.restored_activity[0].id, "merged-call");
+            // Both the row id and the capture id resolve to the same capture.
+            for selected in ["merged-call", "merged-capture"] {
+                let output =
+                    output_inspector::output_for(&view.transcript, &view.restored_activity, Some(selected)).unwrap();
+                assert_eq!(output.id, "merged-capture");
+            }
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("archive-session".into());
+            view.selected_output_id = Some("merged-capture".into());
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+            let _previous = view.restored_output_cursors.insert(
+                "merged-capture".into(),
+                vtcode_desktop_protocol::SessionOutputCursor {
+                    item_id: "merged-capture".into(),
+                    next_offset: prefix.len() as u64,
+                    total_bytes,
                 },
             );
-            assert_eq!(view.changes.entries().len(), 1);
-            assert_eq!(view.changes.totals(), None);
             cx.notify();
         });
         window.render_frame(cx);
-        let row = window.find(opaque_path_element_id("change-row", "src/updated.rs"));
-        assert_eq!(row.disabled(), Some(true));
-        assert_eq!(row.label(), Some("Diff preview unavailable for src/updated.rs"));
-        assert_eq!(window.find("previous-change-file").disabled(), Some(true));
-        assert_eq!(window.find("next-change-file").disabled(), Some(true));
+        window.click("load-more-output", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("merged capture page request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_OUTPUT_READ);
+    assert_eq!(params["sessionId"], "archive-session");
+    assert_eq!(params["itemId"], "merged-capture");
+    assert_eq!(params["offset"], prefix.len());
+    let request_id = params["requestId"].as_str().unwrap().to_string();
+    let page = vtcode_desktop_protocol::SessionOutputPage {
+        session_id: "archive-session".into(),
+        request_id: request_id.clone(),
+        item_id: "merged-capture".into(),
+        offset: prefix.len() as u64,
+        next_offset: total_bytes,
+        total_bytes,
+        text: tail.into(),
+        has_more: false,
+    };
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::SessionOutputResponse { request_id, result: Some(json!(page)), error: None },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, _| {
+            assert_eq!(view.restored_activity[0].id, "merged-call");
+            assert_eq!(view.restored_activity[0].output.as_deref(), Some("merged prefix tail"));
+            assert!(!view.restored_output_cursors.contains_key("merged-capture"));
+            assert!(view.output_page_pending.is_none());
+            assert!(view.output_page_error.is_none());
+        });
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("merged prefix tail"));
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: &mut TestAppContext) {
-    use vtcode_exec_events::{FileChangeItem, FileUpdateChange, PatchApplyStatus, PatchChangeKind};
-
-    let (window, view) = open_desktop(cx);
-    let file_count = 120;
-    let changes = (0..file_count)
-        .map(|index| FileUpdateChange {
-            path: format!("src/file-{index}.rs"),
-            kind: PatchChangeKind::Update,
-        })
-        .collect::<Vec<_>>();
-    let patch = (0..file_count)
-        .map(|index| {
-            format!(
-                "diff --git a/src/file-{index}.rs b/src/file-{index}.rs\n--- a/src/file-{index}.rs\n+++ b/src/file-{index}.rs\n@@ -1 +1 @@\n-before\n+after\n"
-            )
-        })
-        .collect::<String>();
-
-    view.update(cx, |view, cx| {
-        view.inspector_open = true;
-        view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
-        view.upsert_diff_card(
-            "many-changes".into(),
-            &FileChangeItem {
-                diff_incomplete: Some(false),
-                changes,
-                status: PatchApplyStatus::Completed,
-                unified_diff: Some(patch),
-                additions: Some(file_count as u64),
-                deletions: Some(file_count as u64),
+fn live_output_supersedes_a_restored_merged_row(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.project_runtime_item(&shell_call("resume-call", "cargo check"), true);
+        view.project_runtime_item(
+            &shell_output("resume-capture", "resume-call", "stale output", ToolCallStatus::InProgress, true),
+            true,
+        );
+        assert_eq!(view.restored_activity.len(), 1);
+        let _previous = view.restored_output_cursors.insert(
+            "resume-capture".into(),
+            vtcode_desktop_protocol::SessionOutputCursor {
+                item_id: "resume-capture".into(),
+                next_offset: 12,
+                total_bytes: 24,
             },
         );
-        assert_eq!(view.changes.entries().len(), file_count);
-        cx.notify();
+        view.output_page_pending = Some(super::super::PendingOutputPage {
+            request_id: "stale-page".into(),
+            session_id: "archive-session".into(),
+            item_id: "resume-capture".into(),
+            offset: 12,
+        });
+        view.update_runtime_item(&shell_output(
+            "resume-capture",
+            "resume-call",
+            "live output",
+            ToolCallStatus::InProgress,
+            true,
+        ));
+        // The restored merged row, its cursor, and its pending page are gone.
+        assert!(view.restored_activity.is_empty());
+        assert!(view.restored_output_cursors.is_empty());
+        assert!(view.output_page_pending.is_none());
+        // The invocation never went live, so the output keeps a standalone row.
+        let rows: Vec<_> = view.transcript.items().filter(|row| row.role == "tool").collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "resume-capture");
+        assert_eq!(rows[0].output.as_deref(), Some("live output"));
     });
-
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        let first_row = opaque_path_element_id("change-row", "src/file-0.rs");
-        let last_row = opaque_path_element_id("change-row", "src/file-119.rs");
-        let list = window.find("change-list");
-        assert_eq!(list.role(), Some(gpui_kit::Role::List));
-        assert_eq!(list.label(), Some("Changed files"));
-        let first_item = window.find(opaque_path_element_id("change-list-item", "src/file-0.rs"));
-        assert_eq!(first_item.role(), Some(gpui_kit::Role::ListItem));
-        assert_eq!(first_item.label(), Some("Modified src/file-0.rs, +1 −1"));
-        assert_eq!(first_item.selected(), Some(false));
-        assert!(window.try_find(first_row.clone()).is_some(), "the first changed file is visible initially");
-        assert!(
-            window.try_find(last_row.clone()).is_none(),
-            "offscreen changed files are not built into the UI tree"
-        );
-
-        view.update(cx, |view, cx| view.select_change("src/file-119.rs".into(), cx));
-        window.render_frame(cx);
-
-        assert!(window.try_find(last_row).is_some(), "selecting a file scrolls its row into view");
-        assert!(window.try_find(first_row).is_none(), "rows outside the selected range leave the UI tree");
-        assert_eq!(
-            window
-                .find(opaque_path_element_id("change-list-item", "src/file-119.rs"))
-                .selected(),
-            Some(true),
-            "the selected state is exposed to assistive technology"
-        );
-    })
-    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -386,9 +365,9 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             );
             assert!(!view.transcript.get(0).unwrap().expanded);
             assert!(!view.transcript.get(0).unwrap().has_activity_status);
-            assert_eq!(rows.rows[0].state, ActivityState::Completed);
-            assert_eq!(rows.rows[1].status, "interrupted");
-            assert_eq!(rows.rows[1].state, ActivityState::Interrupted);
+            assert_eq!(rows.rows[0].status, "interrupted", "newest activity leads");
+            assert_eq!(rows.rows[0].state, ActivityState::Interrupted);
+            assert_eq!(rows.rows[1].state, ActivityState::Completed);
             assert!(rows.rows[0].has_output);
             assert!(rows.rows[1].has_output);
             assert!(view.transcript.items().any(|item| item.text == "Unstructured archive result"));
@@ -730,6 +709,29 @@ fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
     assert!(!copied.ends_with(truncation_suffix));
 }
 
+#[test]
+fn restored_output_pages_keep_split_terminal_sequences_in_capture() {
+    let suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+    let mut item = TranscriptItem::new("output".into(), "tool".into(), "Command".into(), "completed".into());
+    item.output = Some(format!("before\u{1b}[3{suffix}").into());
+    let mut pages = std::collections::HashMap::new();
+    let mut page = vtcode_desktop_protocol::SessionOutputPage {
+        session_id: "session".into(),
+        request_id: "request".into(),
+        item_id: "output".into(),
+        offset: 0,
+        next_offset: 6,
+        total_bytes: 6,
+        text: "1mred!".into(),
+        has_more: false,
+    };
+    assert!(append_restored_output_page(&mut item, &mut pages, &mut page));
+    let captured = item.output.as_ref().unwrap();
+    assert_eq!(captured.as_ref(), "before\u{1b}[31mred!");
+    assert_eq!(restored_output_for_copy("output", captured, &pages, false), "before\u{1b}[31mred!");
+    assert_eq!(output_inspector::display_output_tail(captured), "beforered!");
+}
+
 #[gpui_kit::test]
 fn stale_output_page_error_does_not_clear_the_current_request(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
@@ -808,114 +810,84 @@ fn failed_historical_output_page_keeps_the_incomplete_marker_and_retry_control(c
     .unwrap();
 }
 
-fn restored_file_change(path: &str, patch: &str) -> vtcode_exec_events::FileChangeItem {
-    vtcode_exec_events::FileChangeItem {
-        changes: vec![vtcode_exec_events::FileUpdateChange {
-            path: path.into(),
-            kind: vtcode_exec_events::PatchChangeKind::Update,
-        }],
-        status: vtcode_exec_events::PatchApplyStatus::Completed,
-        unified_diff: Some(patch.into()),
-        diff_incomplete: Some(false),
-        additions: None,
-        deletions: None,
-    }
-}
-
-fn restored_review_item(id: &str, path: &str, patch: &str) -> vtcode_exec_events::ThreadItem {
-    vtcode_exec_events::ThreadItem {
-        context: None,
-        id: id.into(),
-        details: vtcode_exec_events::ThreadItemDetails::FileChange(Box::new(restored_file_change(path, patch))),
-    }
-}
-
 #[gpui_kit::test]
-fn restored_review_batch_matches_single_rebuild_with_newest_wins(cx: &mut TestAppContext) {
-    let old_patch = "--- a/src/shared.rs\n+++ b/src/shared.rs\n@@ -1 +1 @@\n-old\n+old\n";
-    let new_patch = "--- a/src/shared.rs\n+++ b/src/shared.rs\n@@ -1 +1 @@\n-old\n+new\n";
-    let only_patch = "--- a/src/only.rs\n+++ b/src/only.rs\n@@ -1 +1 @@\n-before\n+after\n";
-    // Asymmetric batch: two change-sets overlap on src/shared.rs with
-    // different patches, plus one non-change item the batch must skip.
-    let batch = vec![
-        restored_review_item("rev-old", "src/shared.rs", old_patch),
-        vtcode_exec_events::ThreadItem {
-            context: None,
-            id: "note".into(),
-            details: vtcode_exec_events::ThreadItemDetails::AgentMessage(vtcode_exec_events::AgentMessageItem {
-                text: "not a change-set".into(),
-            }),
-        },
-        restored_review_item("rev-new", "src/shared.rs", new_patch),
-        restored_review_item("rev-only", "src/only.rs", only_patch),
-    ];
-
+fn live_tool_output_keeps_interleaved_chunks_and_replaces_them_on_completion(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::*;
     let (window, view) = open_desktop(cx);
-    view.update(cx, |view, _cx| {
-        view.project_restored_review(&batch);
-
-        let diff_rows = view.transcript.items().filter(|item| item.is_diff()).count();
-        assert_eq!(diff_rows, 3, "every change-set stages one diff row; other items are skipped");
-
-        // Independent oracle: the batch result must equal one rebuild of the
-        // final transcript, which is the projection's stated contract.
-        let expected = super::super::ChangesProjection::rebuild(&view.transcript);
-        let paths = |projection: &super::super::ChangesProjection| {
-            projection.entries().iter().map(|entry| entry.path.clone()).collect::<Vec<_>>()
-        };
-        assert_eq!(paths(&view.changes), paths(&expected));
-        assert_eq!(view.changes.totals(), expected.totals());
-        assert_eq!(view.changes.entries().len(), 2);
-        assert_eq!(
-            view.changes.patch_for(&view.transcript, "src/shared.rs").as_deref(),
-            Some(new_patch),
-            "the newest change-set wins for an overlapping path"
-        );
-        assert_eq!(
-            view.changes.entries().first().map(|entry| entry.path.as_str()),
-            Some("src/only.rs"),
-            "entries list newest change-sets first"
-        );
-    });
-    // Render once so layout consumes the batched rows without divergence.
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn restored_review_batch_dirties_viewer_only_when_selected_patch_changes(cx: &mut TestAppContext) {
-    let stable_patch = "--- a/src/stable.rs\n+++ b/src/stable.rs\n@@ -1 +1 @@\n-a\n+b\n";
-    let other_patch = "--- a/src/other.rs\n+++ b/src/other.rs\n@@ -1 +1 @@\n-a\n+b\n";
-    let updated_patch = "--- a/src/stable.rs\n+++ b/src/stable.rs\n@@ -1 +1 @@\n-b\n+c\n";
-
-    let (window, view) = open_desktop(cx);
-    view.update(cx, |view, _cx| {
-        // Pre-stage a selected change so the dirty flag has both outcomes.
-        view.upsert_diff_card("stable-card".into(), &restored_file_change("src/stable.rs", stable_patch));
-        view.selected_change = Some("src/stable.rs".into());
-        assert!(!view.change_viewer_dirty);
-
-        // A batch that only touches other paths leaves the viewer clean.
-        view.project_restored_review(&[restored_review_item("rev-other", "src/other.rs", other_patch)]);
-        assert!(!view.change_viewer_dirty, "untouched selections stay clean");
-        assert_eq!(view.changes.entries().len(), 2);
-
-        // A batch that replaces the selected patch dirties the viewer.
-        view.project_restored_review(&[restored_review_item("rev-stable", "src/stable.rs", updated_patch)]);
-        assert!(view.change_viewer_dirty, "a replaced selected patch refreshes the viewer");
-        assert_eq!(view.changes.patch_for(&view.transcript, "src/stable.rs").as_deref(), Some(updated_patch));
-
-        // An empty batch is a no-op: no rebuild, no dirty flag, no rows.
-        view.change_viewer_dirty = false;
-        let rows_before = view.transcript.len();
-        view.project_restored_review(&[]);
-        assert!(!view.change_viewer_dirty);
-        assert_eq!(view.transcript.len(), rows_before);
-    });
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("session".into());
+            let item = |id: &str, text: &str, status| ThreadItem {
+                id: id.into(),
+                context: None,
+                details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: Some(true),
+                    call_id: id.into(),
+                    tool_call_id: None,
+                    spool_path: None,
+                    output: text.into(),
+                    exit_code: None,
+                    status,
+                    app_previews: Vec::new(),
+                })),
+            };
+            let notification = |event| ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: None,
+                event: VersionedThreadEvent::new(event),
+            };
+            let first = item("a", "alpha ", ToolCallStatus::InProgress);
+            let next = item("a", "omega", ToolCallStatus::InProgress);
+            let wrap =
+                |item| BackendEvent::ThreadEvent(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item })));
+            assert!(!super::super::can_coalesce_item_updates(&wrap(first.clone()), &wrap(next.clone())));
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: first })));
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                item: item("b", "other", ToolCallStatus::InProgress),
+            })));
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: next })));
+            let output = |view: &DesktopView, id: &str| {
+                view.transcript
+                    .items()
+                    .find(|row| row.id == id)
+                    .and_then(|row| row.output.as_deref())
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            assert_eq!(output(view, "a"), "alpha omega");
+            assert_eq!(output(view, "b"), "other");
+            for chunk in ["\u{1b}[3", "1m warning\u{1b}[0m"] {
+                view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                    item: item("a", chunk, ToolCallStatus::InProgress),
+                })));
+            }
+            let preview: gpui_kit::SharedString = output(view, "a").into();
+            assert_eq!(output_inspector::display_output_tail(&preview), "alpha omega warning");
+            let mut snapshot = item("b", "other extended", ToolCallStatus::InProgress);
+            if let ThreadItemDetails::ToolOutput(value) = &mut snapshot.details {
+                value.is_delta = None;
+            }
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: snapshot })));
+            assert_eq!(output(view, "b"), "other extended");
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                item: item("a", &"x".repeat(65_537), ToolCallStatus::InProgress),
+            })));
+            let preview = crate::desktop::inspector::output_for(&view.transcript, &[], Some("a")).unwrap();
+            assert!(preview.truncated);
+            assert!(preview.text.contains("Earlier output truncated"));
+            assert_eq!(output(view, "a").len(), 65_536);
+            view.handle_thread_event(notification(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: item("a", "final result", ToolCallStatus::Failed),
+            })));
+            assert_eq!(output(view, "a"), "final result");
+            assert!(
+                !crate::desktop::inspector::output_for(&view.transcript, &[], Some("a"))
+                    .unwrap()
+                    .truncated
+            );
+            assert_eq!(output(view, "b"), "other extended");
+        });
     })
     .unwrap();
 }

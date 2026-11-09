@@ -126,6 +126,11 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        if self.license_viewer.is_some() {
+            self.discard_license_viewer();
+            cx.notify();
+        }
+        self.close_attachment_picker(window, cx);
         self.focus_composer(window, cx);
         cx.notify();
     }
@@ -160,16 +165,32 @@ impl DesktopView {
             self.shortcuts_editing = false;
             self.shortcut_message = None;
         }
+        // A staged custom theme is page-local too; reopening always starts fresh
+        // and folded.
+        self.theme_editor.draft = None;
+        self.theme_editor.expanded = false;
     }
 
     /// Focus the entry point of a route: the panel focus for panels, the
-    /// composer for the workspace.
+    /// composer for the workspace. The browser lands in its session list so
+    /// arrows work immediately; header buttons stay one Shift+Tab away.
     pub(super) fn focus_route(&mut self, route: Route, window: &mut Window, cx: &mut Context<Self>) {
         match route {
-            Route::Settings => self.settings_navigation_focus.focus(window, cx),
-            Route::Browser => self.browser_focus.focus(window, cx),
+            Route::Settings => self.focus_settings_selection(window, cx),
+            Route::Browser => self.focus_browser_list(window, cx),
             Route::Review => self.review_focus.focus(window, cx),
             Route::Workspace => self.focus_composer(window, cx),
+        }
+    }
+
+    /// Focus the browser's actionable list when it renders. The empty
+    /// browser shows no list, so focus keeps the panel instead of a handle
+    /// with no element.
+    fn focus_browser_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.sessions.is_empty() {
+            self.browser_focus.focus(window, cx);
+        } else {
+            self.browser_list_focus.focus(window, cx);
         }
     }
 
@@ -184,6 +205,90 @@ impl DesktopView {
         // See close_browser: route close always lands in the composer.
         self.focus_composer(window, cx);
         cx.notify();
+    }
+
+    /// Staged page state a pointer dismissal must confirm before dropping:
+    /// unsaved shortcut edits or an open custom-theme draft. Interior layers
+    /// (config editor, capture) unwind first instead — see
+    /// [`Self::request_panel_dismiss`].
+    fn panel_has_unsaved_changes(&self) -> bool {
+        self.shortcuts_editing || self.custom_theme_editor_open()
+    }
+
+    /// One dismiss step for pointer gestures (dismiss buttons, gutter press,
+    /// session rows): unwind one interior layer when one is open, else close
+    /// the route — prompting first when staged state would be lost. A config
+    /// write in flight pins everything, like [`Self::go_route_back`].
+    pub(super) fn request_panel_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let route = self.current_route();
+        if route == Route::Workspace {
+            return;
+        }
+        if self.config_write_pending {
+            return;
+        }
+        if self.config_editor.is_some() {
+            self.request_config_editor_dismiss(window, cx);
+            return;
+        }
+        if self.shortcut_capture.is_some() {
+            self.cancel_shortcut_capture(window, cx);
+            return;
+        }
+        if !self.panel_has_unsaved_changes() {
+            self.close_active_route(window, cx);
+            return;
+        }
+        // The prompt copy names settings edits: only Settings stages page
+        // state today, so any other route reaching this is a future dirt
+        // source that needs its own copy.
+        self.prompt_discard_changes(DiscardIntent::CloseRoute(route), window, cx);
+    }
+
+    /// Native warning prompt guarding staged state, mirroring the delete
+    /// confirms. Headless-untestable like them, so the post-confirm step
+    /// lives in [`Self::discard_after_confirm`], which tests drive directly.
+    pub(super) fn prompt_discard_changes(
+        &mut self,
+        intent: DiscardIntent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (title, detail) = discard_prompt_text(&intent);
+        let discard = rust_i18n::t!("app.navigation.discard").to_string();
+        let cancel = rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string();
+        let answer = window.prompt(
+            gpui_kit::PromptLevel::Warning,
+            title.as_str(),
+            Some(detail.as_str()),
+            &[discard.as_str(), cancel.as_str()],
+            cx,
+        );
+        cx.spawn_in(window, async move |view, cx| {
+            if matches!(answer.await, Ok(0)) {
+                let _updated = view.update_in(cx, |view, window, cx| {
+                    view.discard_after_confirm(intent, window, cx);
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Run a confirmed discard. Verifies the context is unchanged first —
+    /// the prompt answer arrives async, so the surface may have moved on.
+    pub(super) fn discard_after_confirm(&mut self, intent: DiscardIntent, window: &mut Window, cx: &mut Context<Self>) {
+        match intent {
+            DiscardIntent::CloseRoute(route) if self.current_route() == route => {
+                self.close_active_route(window, cx);
+            }
+            DiscardIntent::CloseConfigEditor(path) => {
+                self.discard_config_editor_after_confirm(&path, window, cx);
+            }
+            DiscardIntent::CancelRename(rel_path) => {
+                self.discard_rename_after_confirm(&rel_path, window, cx);
+            }
+            _ => {}
+        }
     }
 
     /// Persist the native zoomed state when it changes. Fullscreen is not
@@ -221,7 +326,13 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        self.close_attachment_picker(window, cx);
+        // Entries can reach Settings while the viewer is open (deeplinks, the
+        // slash command); the viewer would layer over the page it came from.
+        self.discard_license_viewer();
         self.route_history.open(Route::Settings);
+        // One native read per open; render and scroll use the cache.
+        self.refresh_login_item_status(cx);
         if self.settings_tab == settings::SettingsTab::Storage {
             self.maybe_request_storage_summary(cx);
         }
@@ -255,6 +366,7 @@ impl DesktopView {
             && (self.config_editor.is_some()
                 || self.shortcut_capture.is_some()
                 || self.palette.is_some()
+                || self.license_viewer.is_some()
                 || self.config_page_open
                 || self.route_history.can_back())
     }
@@ -267,6 +379,10 @@ impl DesktopView {
         if self.current_route() == Route::Workspace {
             return false;
         }
+        if self.license_viewer.is_some() {
+            self.close_license_viewer(window, cx);
+            return true;
+        }
         if self.config_editor.is_some() {
             if self.config_write_pending {
                 return true;
@@ -274,6 +390,8 @@ impl DesktopView {
             self.close_cli_config_editor(window, cx);
         } else if self.shortcut_capture.is_some() {
             self.cancel_shortcut_capture(window, cx);
+        } else if self.custom_theme_editor_open() {
+            self.cancel_custom_theme_editor(cx);
         } else if self.palette.is_some() {
             self.close_palette(window, cx);
         } else if self.config_page_open {
@@ -308,6 +426,7 @@ impl DesktopView {
         if self.current_route() != Route::Settings {
             return;
         }
+        self.discard_license_viewer();
         self.teardown_settings();
         self.route_history.dismiss_to_workspace();
         // See close_browser: route close always lands in the composer.
@@ -319,7 +438,14 @@ impl DesktopView {
         // The inspector hides while a panel owns the content slot; flipping
         // invisible state would surprise on return, so the toggle waits.
         if self.workspace.is_some() && self.current_route() == Route::Workspace {
-            self.inspector_open = !self.inspector_open;
+            if self.zen_mode {
+                // Zen hides the inspector regardless of state, so there is
+                // nothing visible to close: reveal the current tab instead of
+                // flipping (and persisting) invisible state.
+                self.open_inspector_tab(self.inspector_tab, cx);
+            } else {
+                self.inspector_open = !self.inspector_open;
+            }
             self.save_preferences();
             cx.notify();
         }
@@ -333,6 +459,7 @@ impl DesktopView {
         } else {
             self.focus_composer(window, cx);
         }
+        self.save_preferences();
         cx.notify();
     }
 
@@ -364,7 +491,17 @@ impl DesktopView {
             self.palette_kind,
             PaletteKind::ConfigSettings | PaletteKind::Fonts(_) | PaletteKind::SettingsSearch
         ) && self.palette.is_some();
+        // Reverse search types the filter into the composer: every dismissal
+        // (Esc, Ctrl+G, click-out, Kit cancel, palette switch) restores the
+        // pre-search draft. Accept is safe: it inserts after closing, and
+        // Enter-with-no-match submits the restored original.
+        let restore_history_draft = self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory;
         self.clear_palette_state();
+        if restore_history_draft {
+            let stash = std::mem::take(&mut self.history_filter_stash);
+            self.composer.update(cx, |input, cx| input.replace_all(stash, window, cx));
+            self.move_composer_caret_to_end(window, cx);
+        }
         if let Some(focus) = self.palette_return_focus.take() {
             focus.focus(window, cx);
         } else {
@@ -390,7 +527,7 @@ impl DesktopView {
         let full_screen = window.is_fullscreen();
         if full_screen != self.menus_show_exit_full_screen {
             self.menus_show_exit_full_screen = full_screen;
-            bootstrap::set_native_menus(cx, full_screen);
+            menu_bar::set_native_menus(cx, full_screen);
         }
     }
 
@@ -413,6 +550,16 @@ impl DesktopView {
         } else if self.full_access_confirm.is_some() {
             self.disarm_double_escape();
             self.cancel_full_access_confirm(window, cx);
+        } else if self.file_rename.is_some() {
+            self.disarm_double_escape();
+            self.cancel_file_rename(window, cx);
+        } else if self.changelog_open {
+            // Painted above the license viewer, so Escape reaches it first.
+            self.disarm_double_escape();
+            self.close_changelog(window, cx);
+        } else if self.license_viewer.is_some() {
+            self.disarm_double_escape();
+            self.close_license_viewer(window, cx);
         } else if self.attachment_picker.is_some() {
             self.disarm_double_escape();
             self.close_attachment_picker(window, cx);
@@ -427,9 +574,25 @@ impl DesktopView {
         } else if self.palette.is_some() {
             self.disarm_double_escape();
             self.close_palette(window, cx);
+        } else if self.file_preview.as_ref().is_some_and(|preview| preview.editing) {
+            // Editing eats the first Escape: the editable source consumes Tab
+            // for indentation, so leaving edit mode restores Tab navigation
+            // before a second Escape dismisses the preview. The draft stays
+            // in the editor state for re-entry.
+            self.disarm_double_escape();
+            if let Some(preview) = self.file_preview.as_mut() {
+                preview.editing = false;
+            }
+            cx.notify();
         } else if self.file_preview.is_some() {
             self.disarm_double_escape();
             self.close_file_preview(window, cx);
+        } else if self.swipe_arming.pending_direction().is_some() {
+            // Armed swipe sits beneath every modal and panel above: those
+            // dismiss first, then the gesture state. A stale arm (overlay
+            // opened mid-arm) evaporates here instead of lingering.
+            self.disarm_double_escape();
+            self.cancel_pending_swipe(cx);
         } else if self.composer.read(cx).focus_handle(cx).is_focused(window)
             && !self.composer.read(cx).value().is_empty()
         {
@@ -456,8 +619,8 @@ impl DesktopView {
                 self.last_escape_press = Some((now, draft));
                 cx.propagate();
             }
-        } else if self.transcript_focus.is_focused(window) {
-            // Leave transcript navigation where it is and return to the composer.
+        } else if self.transcript_focus.is_focused(window) || self.session_focus.is_focused(window) {
+            // Leave list navigation where it is and return to the composer.
             self.focus_composer(window, cx);
         } else {
             cx.propagate();
@@ -484,6 +647,7 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        self.close_attachment_picker(window, cx);
         self.route_history.open(Route::Review);
         self.focus_route(Route::Review, window, cx);
         cx.notify();
@@ -509,6 +673,7 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        self.close_attachment_picker(window, cx);
         self.route_history.open(Route::Browser);
         self.focus_route(Route::Browser, window, cx);
         cx.notify();
@@ -532,9 +697,71 @@ impl DesktopView {
     }
 }
 
+/// What a discard prompt protects: the staged state dropped when the user
+/// confirms. Carries enough identity to verify the context is unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum DiscardIntent {
+    /// Close the route page, dropping staged shortcut/theme edits.
+    CloseRoute(Route),
+    /// Close the CLI config editor, dropping the typed value.
+    CloseConfigEditor(String),
+    /// Cancel the rename dialog, dropping the typed name.
+    CancelRename(String),
+}
+
+/// Localized title/detail for one discard intent. Pure so unit tests pin
+/// the interpolation without rendering.
+fn discard_prompt_text(intent: &DiscardIntent) -> (String, String) {
+    match intent {
+        DiscardIntent::CloseRoute(_) => (
+            rust_i18n::t!("app.settings.discard_title").to_string(),
+            rust_i18n::t!("app.settings.discard_detail").to_string(),
+        ),
+        DiscardIntent::CloseConfigEditor(path) => (
+            rust_i18n::t!("app.configuration.discard_title").to_string(),
+            rust_i18n::t!("app.configuration.discard_detail", path = path).to_string(),
+        ),
+        DiscardIntent::CancelRename(_) => (
+            rust_i18n::t!("app.files.discard_title").to_string(),
+            rust_i18n::t!("app.files.discard_detail").to_string(),
+        ),
+    }
+}
+
+/// Route container with gutter dismissal: presses on the padded area around
+/// the centered panel dismiss through [`DesktopView::request_panel_dismiss`].
+/// Each page stops its own presses, so only true background presses arrive
+/// here — toolbar and sidebar chrome never does.
+pub(super) fn dismissable_route_page(panel: impl IntoElement, cx: &mut Context<DesktopView>) -> impl IntoElement {
+    div()
+        .id("route-page-gutter")
+        .test_support()
+        .flex_1()
+        .min_w_0()
+        .h_full()
+        .flex()
+        .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| view.request_panel_dismiss(window, cx)))
+        .child(route_page(panel))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Route, RouteHistory};
+    use super::{DiscardIntent, Route, RouteHistory, discard_prompt_text};
+
+    #[test]
+    fn discard_prompt_text_names_each_surface() {
+        crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
+        let (title, detail) = discard_prompt_text(&DiscardIntent::CloseRoute(Route::Settings));
+        assert_eq!(title, "Discard unsaved changes?");
+        assert_eq!(detail, "Unsaved shortcut and theme edits will be lost.");
+        // Asymmetric path proves the interpolation lands in the detail.
+        let (title, detail) = discard_prompt_text(&DiscardIntent::CloseConfigEditor("agent.default_model".into()));
+        assert_eq!(title, "Discard unsaved value?");
+        assert_eq!(detail, "Changes to agent.default_model will be lost.");
+        let (title, detail) = discard_prompt_text(&DiscardIntent::CancelRename("README.md".into()));
+        assert_eq!(title, "Discard rename?");
+        assert_eq!(detail, "The name change will be lost.");
+    }
 
     #[test]
     fn starts_on_the_workspace_base() {

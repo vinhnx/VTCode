@@ -129,7 +129,7 @@ pub(crate) fn status_line_shows_auto_components(status_config: Option<&StatusLin
 }
 
 pub(crate) fn status_line_shows_clock(status_config: Option<&StatusLineConfig>) -> bool {
-    status_config.map(|cfg| cfg.show_clock).unwrap_or(true)
+    status_config.map(|cfg| cfg.show_clock).unwrap_or(false)
 }
 
 fn now_statusline_clock() -> String {
@@ -659,7 +659,7 @@ mod tests {
 
     #[test]
     fn status_line_clock_respects_show_clock_config() {
-        assert!(status_line_shows_clock(None), "unset config defaults to showing the clock");
+        assert!(!status_line_shows_clock(None), "unset config defaults to hiding the clock");
 
         let on = StatusLineConfig { show_clock: true, ..StatusLineConfig::default() };
         assert!(status_line_shows_clock(Some(&on)));

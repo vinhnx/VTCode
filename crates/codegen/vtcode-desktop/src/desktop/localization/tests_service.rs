@@ -65,6 +65,9 @@ fn service_copy_is_localized_for_every_language() {
             "app.service.reconnect_with_draft",
             "app.service.reconnect_plain",
             "app.service.authentication_failed",
+            "app.service.background_accepted",
+            "app.service.force_cancel_accepted",
+            "app.service.turn_recovered",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

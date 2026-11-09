@@ -174,7 +174,7 @@ r"\x1b\[38;2;(\d+);(\d+);(\d+)m"
 
 ## Program Status Protocol
 
-VT Code emits bounded OSC 7501 reports on the interactive TUI terminal by default (`[ui.program_status] enabled = true`).
+VT Code emits bounded OSC 7501 reports on the interactive TUI terminal by default (`[ui.program_status] enabled = true`), plus single-shot working/done/error records from headless exec runs on TTY stderr.
 The sequence is `ESC ] 7501 ; state=working:id=<owned-id>:app=vtcode:title=<base64>:msg=<base64> ESC \`.
 Reports use complete replacements, generic labels, and session-owned opaque IDs. `clear` removes an owned record
 and its descendants; VT Code never clears the terminal root. Direct iTerm2 sessions also get the OSC 21337

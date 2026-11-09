@@ -212,7 +212,9 @@ pub struct ModelCapabilities {
     pub input_modalities: Vec<String>,
 }
 
-/// Parameters for selecting a provider and model for the next session.
+/// Parameters for selecting a provider and model. The service restarts the
+/// selected session's runtime under the same session id; the thread keeps its
+/// history and the new route applies to subsequent turns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSelectParams {

@@ -34,6 +34,47 @@ fn diagnostic_recorder_preserves_payload_redacts_and_deduplicates_transitions() 
     assert!(!diagnostics[0].agent_details.contains("recorder-private-secret"));
     assert_eq!(diagnostics[1].agent_details, "attempt=3");
 }
+
+#[test]
+fn record_exec_session_output_fans_out_tracker_snapshots() {
+    use super::*;
+    let mut recorder = ExecEventRecorder::new("thread-tracker", None, None);
+    recorder.record_exec_session_output(
+        "call-tracker",
+        "task_tracker",
+        &serde_json::json!({"action": "update", "index": 1, "status": "completed"}),
+        &serde_json::json!({"checklist": {
+            "title": "Release",
+            "completed": 1,
+            "total": 2,
+            "items": [
+                {"index": 1, "description": "Write code", "status": "completed"},
+                {"index": 2, "description": "Ship it", "status": "pending"},
+            ],
+        }}),
+    );
+    // Asymmetric twin: an unrelated tool result must not emit a snapshot.
+    recorder.record_exec_session_output(
+        "call-other",
+        "exec_command",
+        &serde_json::json!({"cmd": "true"}),
+        &serde_json::json!({"exit_code": 0}),
+    );
+    let snapshots: Vec<_> = recorder
+        .take_events()
+        .into_iter()
+        .filter_map(|event| {
+            let ThreadEvent::TrackerUpdated(snapshot) = event else {
+                return None;
+            };
+            Some(snapshot)
+        })
+        .collect();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].title, "Release");
+    assert_eq!((snapshots[0].completed, snapshots[0].total), (1, 2));
+    assert_eq!(snapshots[0].items.len(), 2);
+}
 #[tokio::test]
 async fn planning_checkpoint_is_durable_before_admission_and_replay_preserves_allowance() {
     use crate::exec::events::{
@@ -178,6 +219,7 @@ async fn exec_session_verification_launched_before_a_mutation_remains_stale() {
                 changes: vec![crate::exec::events::FileUpdateChange {
                     path: "parser.rs".into(),
                     kind: crate::exec::events::PatchChangeKind::Update,
+                    terminators_normalized: None,
                 }],
                 status: crate::exec::events::PatchApplyStatus::Completed,
                 unified_diff: None,
@@ -390,6 +432,7 @@ async fn session_store_sink_preserves_order_when_queue_is_small() {
         ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread".to_string() }),
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
@@ -529,6 +572,7 @@ fn session_store_sink_saturation_fails_closed() {
     };
     let first = ThreadEvent::TurnStarted(TurnStartedEvent::default());
     let second = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),

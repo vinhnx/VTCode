@@ -10,6 +10,7 @@ use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::runtime::AgentRuntime;
 use crate::llm::provider::{Message, SamplingOverrides};
 use crate::llm::providers::gemini::wire::Part;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 
 /// Per-turn inputs derived before building an LLM request.
 pub(super) struct TurnRequestInputs {
@@ -96,7 +97,7 @@ impl AgentRunner {
                     match content.role.as_str() {
                         "model" => Message::assistant(text),
                         _ => {
-                            let tokens = text.len().saturating_div(4);
+                            let tokens = heuristic_tokens_from_byte_len(text.len());
                             Message::user(text).with_metadata(
                                 crate::core::message_metadata::MessageMetadata::harness_notice(now, tokens),
                             )

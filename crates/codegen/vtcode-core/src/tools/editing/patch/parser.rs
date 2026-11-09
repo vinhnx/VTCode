@@ -133,6 +133,13 @@ fn parse_operation(lines: &[&str], line_number: usize) -> Result<(PatchOperation
         parse_delete_file(path)
     } else if let Some(path) = header.strip_prefix(UPDATE_FILE_MARKER) {
         parse_update_file(path, &lines[1..], line_number)
+    } else if header.starts_with("@@") {
+        Err(invalid_hunk(
+            line_number,
+            "stray '@@' line outside an update hunk. '@@' context markers belong inside \
+             '*** Update File' hunks (a single '@@' directly after '*** Add File:' is skipped); \
+             start a new operation with '*** Add File:', '*** Delete File:', or '*** Update File:'",
+        ))
     } else {
         Err(invalid_hunk(
             line_number,
@@ -147,10 +154,22 @@ fn parse_add_file(path_text: &str, remaining: &[&str]) -> Result<(PatchOperation
     let path = path_text.trim();
     validate_patch_path("Add File", path)?;
 
-    let mut content = String::new();
-    let mut consumed = 1usize;
+    // Tolerate a single Update-shaped `@@` context line directly after the
+    // header: models often copy the `*** Update File` shape (`@@`, then `+`
+    // lines) after `*** Add File:`. A bare `@@` line can never be Add File
+    // content (content lines carry a `+` prefix; `+@@ ...` still parses as
+    // content), so skipping it only turns a hard parse error into the file
+    // the caller intended. Observed in live sessions (Nov 2026 README task).
+    let skip_marker = matches!(
+        remaining.first().map(|line| line.trim()),
+        Some(marker) if marker == EMPTY_CONTEXT_MARKER || marker.starts_with(CONTEXT_MARKER_PREFIX)
+    );
+    let skipped = usize::from(skip_marker);
 
-    for line in remaining {
+    let mut content = String::new();
+    let mut consumed = 1usize + skipped;
+
+    for line in remaining.iter().skip(skipped) {
         if let Some(body) = line.strip_prefix('+') {
             content.push_str(body);
             content.push('\n');
@@ -430,5 +449,65 @@ mod tests {
         )
         .expect("interior end marker should parse");
         assert_eq!(ops.len(), 2);
+    }
+
+    #[test]
+    fn add_file_with_bare_context_marker_is_tolerated() {
+        // Observed in live sessions: the model copies the Update shape (`@@`,
+        // then `+` lines) after `*** Add File:`, which previously failed with
+        // "invalid hunk header '@@'" on the `@@` line.
+        let ops = parse("*** Begin Patch\n*** Add File: f.txt\n@@\n+hello\n+world\n*** End Patch")
+            .expect("bare @@ after Add File should be skipped");
+        assert_eq!(ops.len(), 1);
+        match &ops[0] {
+            PatchOperation::AddFile { path, content } => {
+                assert_eq!(path, "f.txt");
+                assert_eq!(content, "hello\nworld\n", "marker must not leak into content");
+            }
+            other => panic!("expected AddFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_file_with_context_text_marker_is_tolerated() {
+        let ops = parse("*** Begin Patch\n*** Add File: f.txt\n@@ new file\n+hello\n*** End Patch")
+            .expect("@@ with context after Add File should be skipped");
+        match &ops[0] {
+            PatchOperation::AddFile { content, .. } => assert_eq!(content, "hello\n"),
+            other => panic!("expected AddFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_file_prefixed_context_marker_stays_content() {
+        // Asymmetry: `+@@ ...` IS content (it carries the `+` prefix); only a
+        // bare `@@` line is skipped.
+        let ops = parse("*** Begin Patch\n*** Add File: f.txt\n+@@ not a marker\n*** End Patch")
+            .expect("prefixed @@ is content");
+        match &ops[0] {
+            PatchOperation::AddFile { content, .. } => assert_eq!(content, "@@ not a marker\n"),
+            other => panic!("expected AddFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn second_context_marker_after_add_file_still_fails_actionably() {
+        // Only ONE leading `@@` is skipped; a second one is stray and must
+        // fail with the targeted message, not the generic hunk-header text.
+        let err = parse("*** Begin Patch\n*** Add File: f.txt\n@@\n@@\n+hi\n*** End Patch")
+            .expect_err("second @@ should still fail");
+        let msg = err.to_string();
+        assert!(msg.contains("stray '@@'"), "error should name the stray marker: {msg}");
+        assert!(msg.contains("Update File"), "error should point at update hunks: {msg}");
+    }
+
+    #[test]
+    fn stray_context_marker_between_operations_fails_actionably() {
+        let err =
+            parse("*** Begin Patch\n*** Delete File: gone.txt\n@@\n*** Update File: f.txt\n@@\n+hi\n*** End Patch")
+                .expect_err("stray @@ should fail");
+        let msg = err.to_string();
+        assert!(msg.contains("stray '@@'"), "error should name the stray marker: {msg}");
+        assert!(msg.contains("Update File"), "error should point at update hunks: {msg}");
     }
 }

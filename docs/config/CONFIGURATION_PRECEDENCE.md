@@ -148,44 +148,25 @@ examples, see the [Lifecycle Hooks Guide](../../docs/guides/lifecycle-hooks.md).
 
 ## Experimental Features
 
-### Smart Conversation Summarization
+### Automatic context compaction
 
-**Status:** EXPERIMENTAL - Disabled by default
-
-Smart summarization automatically compresses conversation history when context grows too large. This feature uses
-advanced algorithms for intelligent compression while preserving critical information.
+When the transcript approaches the model's context window, VT Code compacts it so
+the session can continue. Compaction is controlled from the agent harness, not a
+separate `[agent.smart_summarization]` section (that table does not exist and its
+`VTCODE_SMART_SUMMARIZATION_*` environment variables were never read).
 
 **Configuration:**
 
 ```toml
-[agent.smart_summarization]
-enabled = false  # Experimental feature, disabled by default
-min_summary_interval_secs = 30
-max_concurrent_tasks = 4
-min_turns_threshold = 20
-token_threshold_percent = 0.6
-max_turn_content_length = 2000
-aggressive_compression_threshold = 15000
+[agent.harness]
+auto_compaction_enabled = true
+auto_compaction_threshold_tokens = 120000   # optional; defaults to a fraction of the window
+auto_compaction_instructions = "..."        # optional; extra guidance for the summarizer
+auto_compaction_pause_after = false
 ```
 
-**Environment Variables** (override TOML config):
-
-- `VTCODE_SMART_SUMMARIZATION_ENABLED=true` - Enable the feature
-- `VTCODE_SMART_SUMMARIZATION_INTERVAL=30` - Min seconds between summarizations
-- `VTCODE_SMART_SUMMARIZATION_MAX_CONCURRENT=4` - Max concurrent tasks
-- `VTCODE_SMART_SUMMARIZATION_MAX_TURN_LENGTH=2000` - Max chars per turn
-- `VTCODE_SMART_SUMMARIZATION_AGGRESSIVE_THRESHOLD=15000` - Compression threshold
-
-**Features:**
-
-- Rule-based compression with importance scoring
-- Semantic similarity detection (Jaccard)
-- Extractive summarization for long messages
-- Advanced error pattern analysis with temporal clustering
-- Comprehensive summary generation with metrics
-
-**Warning:** This feature is experimental and may affect conversation quality. Enable only for testing long-running
-sessions.
+See [agent guidance, memory, and context](./agent-memory.md) for the full
+compaction workflow and the `/compact` command.
 
 ## Developer Tips
 

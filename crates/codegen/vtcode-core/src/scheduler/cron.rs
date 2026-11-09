@@ -13,17 +13,20 @@ pub(crate) struct ParsedCron {
 
 impl ParsedCron {
     pub(crate) fn parse(expression: &str) -> Result<Self> {
+        // Destructure in one step: the fixed five-field shape is checked by
+        // the pattern itself, so the length guard and the four following
+        // indexings collapse into a single fallible binding.
         let parts = expression.split_whitespace().collect::<Vec<_>>();
-        if parts.len() != 5 {
+        let [minute, hour, day_of_month, month, day_of_week] = parts.as_slice() else {
             bail!("Cron expressions require exactly 5 fields");
-        }
+        };
 
         Ok(Self {
-            minute: CronField::parse(parts[0], 0, 59, false)?,
-            hour: CronField::parse(parts[1], 0, 23, false)?,
-            day_of_month: CronField::parse(parts[2], 1, 31, false)?,
-            month: CronField::parse(parts[3], 1, 12, false)?,
-            day_of_week: CronField::parse(parts[4], 0, 7, true)?,
+            minute: CronField::parse(minute, 0, 59, false)?,
+            hour: CronField::parse(hour, 0, 23, false)?,
+            day_of_month: CronField::parse(day_of_month, 1, 31, false)?,
+            month: CronField::parse(month, 1, 12, false)?,
+            day_of_week: CronField::parse(day_of_week, 0, 7, true)?,
         })
     }
 

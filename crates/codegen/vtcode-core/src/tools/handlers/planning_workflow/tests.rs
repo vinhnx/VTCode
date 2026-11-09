@@ -18,7 +18,7 @@ async fn start_planning_blank_paths_use_default_destination() {
             .await
             .unwrap();
         assert!(state.is_active());
-        assert_eq!(state.get_plan_file().await.unwrap(), workspace.path().join(".vtcode/plans/blank-path.md"));
+        assert_eq!(state.get_plan_file().unwrap(), workspace.path().join(".vtcode/plans/blank-path.md"));
     }
 }
 
@@ -30,9 +30,9 @@ async fn start_planning_failed_destination_preserves_inactive_or_active_state() 
             let state = PlanningWorkflowState::new(workspace.path().to_path_buf());
             let preceding = workspace.path().join("old-plan.md");
             std::fs::write(&preceding, "existing plan").unwrap();
-            state.set_plan_file(Some(preceding.clone())).await;
+            state.set_plan_file(Some(preceding.clone()));
             let baseline = std::time::SystemTime::UNIX_EPOCH;
-            state.set_plan_baseline(Some(baseline)).await;
+            state.set_plan_baseline(Some(baseline));
             if active {
                 state.enable();
             }
@@ -48,8 +48,8 @@ async fn start_planning_failed_destination_preserves_inactive_or_active_state() 
             let error = tool.execute(json!({"plan_path":target})).await.unwrap_err();
             assert!(format!("{error:#}").contains(&target.display().to_string()));
             assert_eq!(state.is_active(), active);
-            assert_eq!(state.get_plan_file().await, Some(preceding.clone()));
-            assert_eq!(state.plan_baseline().await, Some(baseline));
+            assert_eq!(state.get_plan_file(), Some(preceding.clone()));
+            assert_eq!(state.plan_baseline(), Some(baseline));
             assert_eq!(std::fs::read_to_string(preceding).unwrap(), "existing plan");
         }
     }
@@ -64,10 +64,10 @@ async fn start_planning_explicit_destination_initializes_before_activation() {
         .await
         .unwrap();
     let target = workspace.path().join("docs/design/repair.md");
-    assert_eq!(state.get_plan_file().await, Some(target.clone()));
+    assert_eq!(state.get_plan_file(), Some(target.clone()));
     assert!(state.is_active());
     assert!(std::fs::read_to_string(target).unwrap().contains("repair tracker"));
-    assert!(state.plan_baseline().await.is_some());
+    assert!(state.plan_baseline().is_some());
 }
 
 #[tokio::test]
@@ -78,9 +78,9 @@ async fn start_planning_replacement_does_not_inspect_unusable_old_destination() 
     std::fs::create_dir(&previous_parent).unwrap();
     let previous = previous_parent.join("plan.md");
     std::fs::write(&previous, "preceding plan").unwrap();
-    state.set_plan_file(Some(previous.clone())).await;
+    state.set_plan_file(Some(previous.clone()));
     let baseline = std::time::SystemTime::UNIX_EPOCH;
-    state.set_plan_baseline(Some(baseline)).await;
+    state.set_plan_baseline(Some(baseline));
     state.enable();
     std::fs::rename(&previous_parent, workspace.path().join("displaced")).unwrap();
     std::fs::write(&previous_parent, "now a regular file").unwrap();
@@ -90,15 +90,15 @@ async fn start_planning_replacement_does_not_inspect_unusable_old_destination() 
         let error = tool.execute(arguments).await.unwrap_err();
         assert!(format!("{error:#}").contains(&previous.display().to_string()));
         assert!(state.is_active());
-        assert_eq!(state.get_plan_file().await, Some(previous.clone()));
-        assert_eq!(state.plan_baseline().await, Some(baseline));
+        assert_eq!(state.get_plan_file(), Some(previous.clone()));
+        assert_eq!(state.plan_baseline(), Some(baseline));
     }
 
     tool.execute(json!({"plan_path":"replacement/plan.md"})).await.unwrap();
     let replacement = workspace.path().join("replacement/plan.md");
     assert!(state.is_active());
-    assert_eq!(state.get_plan_file().await, Some(replacement.clone()));
-    assert_ne!(state.plan_baseline().await, Some(baseline));
+    assert_eq!(state.get_plan_file(), Some(replacement.clone()));
+    assert_ne!(state.plan_baseline(), Some(baseline));
     assert!(std::fs::read_to_string(replacement).unwrap().contains("Status: drafting"));
     assert_eq!(std::fs::read_to_string(workspace.path().join("displaced/plan.md")).unwrap(), "preceding plan");
 }
@@ -126,7 +126,7 @@ async fn test_start_planning() {
     assert_eq!(result["status"], "success");
 
     // Plan file should exist
-    let plan_file = state.get_plan_file().await.unwrap();
+    let plan_file = state.get_plan_file().unwrap();
     assert!(plan_file.exists());
     assert_eq!(plan_file, temp_dir.path().join(".vtcode").join("plans").join("test-plan.md"));
 
@@ -158,7 +158,7 @@ async fn test_start_planning_returns_pending_confirmation_when_requested() {
     assert_eq!(result["status"], "pending_confirmation");
     assert_eq!(result["requires_confirmation"], true);
     assert!(!state.is_active());
-    assert!(state.get_plan_file().await.is_none());
+    assert!(state.get_plan_file().is_none());
 }
 
 #[test]
@@ -197,7 +197,7 @@ async fn test_already_in_planning_workflow() {
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("test.md");
     std::fs::write(&plan_file, "# Test Plan\n").unwrap();
-    state.set_plan_file(Some(plan_file)).await;
+    state.set_plan_file(Some(plan_file));
 
     let tool = StartPlanningTool::new(state);
     let result = tool.execute(json!({})).await.unwrap();
@@ -220,7 +220,7 @@ async fn test_already_active_initializes_missing_plan_file() {
         .unwrap();
 
     assert_eq!(result["status"], "already_active");
-    let plan_file = state.get_plan_file().await.expect("plan file should be set");
+    let plan_file = state.get_plan_file().expect("plan file should be set");
     assert!(plan_file.exists());
     assert!(
         plan_file
@@ -355,7 +355,7 @@ async fn persist_plan_draft_initializes_missing_file_for_active_workflow() {
     .unwrap();
 
     assert!(persisted.plan_file.starts_with(temp_dir.path().join(".vtcode/plans")));
-    assert_eq!(state.get_plan_file().await, Some(persisted.plan_file.clone()));
+    assert_eq!(state.get_plan_file(), Some(persisted.plan_file.clone()));
     let content = tokio::fs::read_to_string(&persisted.plan_file).await.unwrap();
     assert!(content.contains("Persist a plan emitted by the dedicated plan agent."));
 }

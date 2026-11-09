@@ -235,15 +235,15 @@ impl<'a> InlineEventLoop<'a> {
             return Ok(action);
         }
 
+        if let Some(event) = maybe_event {
+            // The event has already left the channel. Process it before a
+            // newly arrived stop notice so a submitted turn is not lost.
+            return self.process_buffered_event(event).await;
+        }
         if let Some(action) = self.ensure_interrupt_notice()? {
             return Ok(action);
         }
-
-        let Some(event) = maybe_event else {
-            return Ok(InlineLoopAction::Continue);
-        };
-
-        self.process_buffered_event(event).await
+        Ok(InlineLoopAction::Continue)
     }
 
     async fn process_buffered_event(&mut self, event: InlineEvent) -> Result<InlineLoopAction> {

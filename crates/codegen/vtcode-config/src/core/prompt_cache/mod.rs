@@ -370,34 +370,45 @@ pub fn build_openai_prompt_cache_key(
     }
 }
 
+/// Wire namespace for a provider's session-affinity key (`vtcode:{namespace}:{lineage}`).
+/// `None` means the provider carries no session lineage. Single source of truth
+/// for the affinity provider set: the gate and key builders below derive
+/// membership from this instead of repeating provider lists.
+fn affinity_namespace(provider_name: &str) -> Option<&'static str> {
+    match provider_name.trim().to_ascii_lowercase().as_str() {
+        "openai" => Some("openai"),
+        "merge-gateway" => Some("merge"),
+        "openrouter" => Some("openrouter"),
+        "xai" => Some("xai"),
+        "opencode-go" => Some("opencode-go"),
+        _ => None,
+    }
+}
+
 /// Rewrite an OpenAI-style cache key for routes that share the wire shape but
 /// need distinct routing stickiness. Keeps the stable session identifier while
 /// namespacing gateway/session-affinity traffic apart from native OpenAI.
 #[must_use]
 pub fn map_prompt_cache_key_for_provider(provider_name: &str, key: String) -> String {
-    let provider = provider_name.trim().to_ascii_lowercase();
-    match provider.as_str() {
-        "merge-gateway" => key.replacen("vtcode:openai:", "vtcode:merge:", 1),
-        "openrouter" => key.replacen("vtcode:openai:", "vtcode:openrouter:", 1),
-        "xai" => key.replacen("vtcode:openai:", "vtcode:xai:", 1),
-        _ => key,
+    match affinity_namespace(provider_name) {
+        Some(namespace) => key.replacen("vtcode:openai:", &format!("vtcode:{namespace}:"), 1),
+        None => key,
     }
 }
 
 /// Providers that send lineage-stable session/cache identity on the wire.
 #[must_use]
 pub fn session_affinity_provider(provider_name: &str) -> bool {
-    matches!(
-        provider_name.trim().to_ascii_lowercase().as_str(),
-        "openai" | "merge-gateway" | "openrouter" | "xai"
-    )
+    affinity_namespace(provider_name).is_some()
 }
 
 /// Whether `LLMRequest.prompt_cache_key` should carry session lineage for this provider.
 ///
 /// OpenAI/Merge keep the OpenAI prompt-cache enablement gate.
-/// OpenRouter/xAI need lineage for documented session affinity even when the
-/// OpenAI-specific cache block is off (global prompt-cache master switch still applies).
+/// OpenRouter/xAI/OpenCode Go need lineage for documented session affinity even
+/// when the OpenAI-specific cache block is off (global prompt-cache master
+/// switch still applies). OpenCode Go rejects requests without its session
+/// header, so its lineage must not depend on the OpenAI cache flag.
 #[must_use]
 pub fn session_affinity_key_enabled(
     provider_name: &str,
@@ -407,18 +418,18 @@ pub fn session_affinity_key_enabled(
     if !global_prompt_cache_enabled {
         return false;
     }
-    match provider_name.trim().to_ascii_lowercase().as_str() {
+    let provider = provider_name.trim().to_ascii_lowercase();
+    match provider.as_str() {
         "openai" | "merge-gateway" => openai_prompt_cache_enabled,
-        "openrouter" | "xai" => true,
-        _ => false,
+        _ => affinity_namespace(&provider).is_some(),
     }
 }
 
 /// Build the namespaced session-affinity / prompt-cache key for a request.
 ///
-/// OpenAI/Merge honor [`OpenAIPromptCacheKeyMode`]. OpenRouter/xAI always use a
-/// stable session namespace when the affinity gate is on: sticky routing is
-/// independent of the OpenAI prompt-cache key mode.
+/// OpenAI/Merge honor [`OpenAIPromptCacheKeyMode`]. OpenRouter/xAI/OpenCode Go
+/// always use a stable session namespace when the affinity gate is on: sticky
+/// routing is independent of the OpenAI prompt-cache key mode.
 #[must_use]
 pub fn build_session_affinity_prompt_cache_key(
     provider_name: &str,
@@ -438,8 +449,7 @@ pub fn build_session_affinity_prompt_cache_key(
             }
             OpenAIPromptCacheKeyMode::Off => None,
         },
-        "openrouter" | "xai" => Some(format!("vtcode:{provider}:{lineage}")),
-        _ => None,
+        _ => affinity_namespace(&provider).map(|namespace| format!("vtcode:{namespace}:{lineage}")),
     }
 }
 

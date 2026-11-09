@@ -72,7 +72,15 @@ impl DesktopView {
             PaletteKind::GoTo => rust_i18n::t!(i18n::PALETTE_TITLE_GO_TO).to_string(),
         };
         let quick_model = self.palette_kind == PaletteKind::ModelOptions;
-        let catalog_empty = confirm_groups.is_empty();
+        // Prompt history filters host-side, so its rows are empty whenever the
+        // query misses. "No history yet" must then come from the unfiltered
+        // catalog, never from an empty filtered list — otherwise a typo reads
+        // as a wiped history.
+        let catalog_empty = if prompt_history {
+            self.prompt_history_is_empty()
+        } else {
+            confirm_groups.is_empty()
+        };
         let placeholder = if self.palette_kind == PaletteKind::SettingsSearch {
             rust_i18n::t!("app.settings.search.placeholder").to_string()
         } else if self.palette_kind == PaletteKind::ConfigSettings {
@@ -90,7 +98,7 @@ impl DesktopView {
         } else if conversation_search {
             rust_i18n::t!("app.palette.placeholder.conversation").to_string()
         } else if prompt_history {
-            rust_i18n::t!("app.palette.placeholder.prompts").to_string()
+            rust_i18n::t!("app.palette.placeholder.filter_history").to_string()
         } else if modes {
             rust_i18n::t!("app.palette.placeholder.modes").to_string()
         } else {
@@ -136,6 +144,43 @@ impl DesktopView {
                         .child(rust_i18n::t!("app.palette.conversation_search_header").to_string())
                 })
             })
+            .when(prompt_history, |command| {
+                let scope_weak = weak.clone();
+                let palette_id = state.entity_id();
+                let current = self.history_scope;
+                let scopes = [HistoryScope::Everywhere, HistoryScope::Project, HistoryScope::Session];
+                command.header(move |_, _, _| {
+                    let weak = scope_weak.clone();
+                    div().id("history-scope-header").px_3().py_2().child(
+                        gpui_kit::component::button::ToggleGroup::new("history-scope")
+                            .segmented()
+                            .small()
+                            .children(scopes.map(|scope| {
+                                Toggle::new(format!("history-scope-{}", scope.label()))
+                                    .label(scope.title())
+                                    .checked(scope == current)
+                            }))
+                            .on_click(move |states, _, cx| {
+                                let _updated = weak.update(cx, |view, cx| {
+                                    if view.palette_kind != PaletteKind::PromptHistory
+                                        || !view.palette_is_current(palette_id)
+                                    {
+                                        return;
+                                    }
+                                    // Segmented toggles flip independently: the
+                                    // scope whose state differs from the render
+                                    // is the click target.
+                                    let clicked = states.iter().enumerate().position(|(index, on)| {
+                                        *on != scopes.get(index).is_some_and(|scope| *scope == view.history_scope)
+                                    });
+                                    if let Some(scope) = clicked.and_then(|index| scopes.get(index).copied()) {
+                                        view.set_history_scope(scope, cx);
+                                    }
+                                });
+                            }),
+                    )
+                })
+            })
             .empty(move |_, _, _| {
                 if quick_model {
                     div().h(px(0.)).into_any_element()
@@ -144,6 +189,15 @@ impl DesktopView {
                 }
             });
         if inline_completion {
+            command = command.searchable(false);
+        }
+        if prompt_history {
+            // The prompt-history rows are already matched, ranked, deduped and
+            // capped by the shared CLI ranker, so Kit must not re-filter them:
+            // its substring test is exactly the divergence this replaced.
+            command = command.filterable(false);
+            // Reverse search is inline: the composer text is the filter, so
+            // the panel shows rows only and keeps no search field of its own.
             command = command.searchable(false);
         }
         let show_history_control =
@@ -218,10 +272,8 @@ impl DesktopView {
             });
             let speed_toggle_view = weak.clone();
             let label = configuration.as_ref().map(|config| {
-                self.models
-                    .iter()
-                    .find(|model| model.provider == config.provider && model.id == config.model)
-                    .map(|model| model.display_name.clone())
+                self.model_display_name(&config.provider, &config.model)
+                    .map(str::to_owned)
                     .unwrap_or_else(|| config.model.clone())
             });
             let effort_focus = self.effort_focus.clone();
@@ -329,6 +381,15 @@ impl DesktopView {
                     .unwrap_or_else(|| label.clone());
                 let permission_icon = permission_palette_mode(self.palette_kind, &entry.action)
                     .map(|mode| composer_controls::permission_indicator(Some(mode), colors));
+                // Commands rows always reserve the leading slot (even when a
+                // future action maps to no icon) so labels share one spine.
+                // Hoisted: the row closure below is `'static` and cannot borrow `self`.
+                let is_commands = self.palette_kind == PaletteKind::Commands;
+                let commands_icon = if is_commands {
+                    palette_action_icon(&entry.action)
+                } else {
+                    None
+                };
                 group = group.item(
                     CommandItem::new()
                         .disabled(!enabled)
@@ -349,6 +410,19 @@ impl DesktopView {
                                 .py_1()
                                 .role(gpui_kit::Role::Label)
                                 .aria_label(accessible_label.clone())
+                                .when(is_commands, |row| {
+                                    row.child(
+                                        transcript_icon_slot(match commands_icon {
+                                            Some(icon) => Icon::new(icon)
+                                                .small()
+                                                .text_color(colors.muted_foreground)
+                                                .into_any_element(),
+                                            None => div().into_any_element(),
+                                        })
+                                        .id(format!("{id}-icon"))
+                                        .test_support(),
+                                    )
+                                })
                                 .when_some(permission_icon, |row, (icon, color)| {
                                     row.child(Icon::new(icon).small().text_color(color))
                                 })
@@ -408,6 +482,9 @@ impl DesktopView {
                     if !view.palette_is_current(palette_id) {
                         return;
                     }
+                    // No PromptHistory arm: the panel is rows-only
+                    // (`searchable(false)`), so Kit never calls back — the
+                    // draft drives refreshes instead.
                     view.palette_query = query.into();
                     cx.notify();
                 });
@@ -529,7 +606,7 @@ impl DesktopView {
         if staged.is_empty() {
             return None;
         }
-        gpui_kit::Keystroke::parse(staged).ok()
+        gpui_kit::Keystroke::parse_with_os(staged, shortcuts::host_operating_system()).ok()
     }
 }
 
@@ -552,6 +629,77 @@ pub(super) fn palette_action_command_id(action: &PaletteAction) -> Option<shortc
         },
         _ => None,
     }
+}
+
+/// Keep palette label identity attached to the command when search/filtering changes row order.
+/// Hash payloads so file paths and draft text do not appear in rendered element IDs.
+pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::mem::discriminant(action).hash(&mut hasher);
+    match action {
+        PaletteAction::SelectFont { target, family } => {
+            match target {
+                FontTarget::Ui => 0_u8,
+                FontTarget::Code => 1_u8,
+            }
+            .hash(&mut hasher);
+            family.hash(&mut hasher);
+        }
+        PaletteAction::EditConfigSetting(value)
+        | PaletteAction::LoadSession(value)
+        | PaletteAction::PreviewFile(value)
+        | PaletteAction::SelectWorkspaceReviewFile(value)
+        | PaletteAction::AttachFile(value)
+        | PaletteAction::InsertFileMention(value)
+        | PaletteAction::CompleteSlashCommand(value)
+        | PaletteAction::InsertHistoryPrompt(value)
+        | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
+        PaletteAction::OpenConversationSearch { session_id } => session_id.hash(&mut hasher),
+        PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search } => {
+            session_id.hash(&mut hasher);
+            item_id.hash(&mut hasher);
+            from_search.hash(&mut hasher);
+        }
+        PaletteAction::ShowActivityOutput { session_id, item_id } => {
+            session_id.hash(&mut hasher);
+            item_id.hash(&mut hasher);
+        }
+        PaletteAction::SelectSettingsTab(tab) => std::mem::discriminant(tab).hash(&mut hasher),
+        PaletteAction::SelectModel { provider, model } => {
+            provider.hash(&mut hasher);
+            model.hash(&mut hasher);
+        }
+        PaletteAction::SelectSessionOptions(options) => {
+            match options.permission_mode {
+                None => 0_u8,
+                Some(protocol::PermissionMode::Ask) => 1,
+                Some(protocol::PermissionMode::AutoApproveCommands) => 2,
+                Some(protocol::PermissionMode::FullAccess) => 3,
+            }
+            .hash(&mut hasher);
+            options.mode.hash(&mut hasher);
+            options.reasoning_effort.hash(&mut hasher);
+            options.fast_mode.hash(&mut hasher);
+        }
+        PaletteAction::OpenDeepLink(link) => link.path().unwrap_or_else(|| format!("{link:?}")).hash(&mut hasher),
+        PaletteAction::NewSession
+        | PaletteAction::CloseSession
+        | PaletteAction::CopyThreadTitle
+        | PaletteAction::CloseOtherTabs
+        | PaletteAction::OpenInCli
+        | PaletteAction::CopyLatestMessage
+        | PaletteAction::ChooseModel
+        | PaletteAction::ChooseWorkspace
+        | PaletteAction::RefreshSessions
+        | PaletteAction::RefreshFiles
+        | PaletteAction::BrowseThreads
+        | PaletteAction::ToggleInspector
+        | PaletteAction::ToggleZenMode
+        | PaletteAction::ToggleTheme
+        | PaletteAction::AttachFiles
+        | PaletteAction::OpenGoTo => {}
+    }
+    format!("palette-label-{:016x}", hasher.finish())
 }
 
 #[cfg(test)]

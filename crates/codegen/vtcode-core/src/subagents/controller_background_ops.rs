@@ -37,8 +37,6 @@ use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 )]
 use super::*;
 
-const BACKGROUND_COMPLETION_IDENTITY_CAPACITY: usize = 256;
-
 impl SubagentController {
     fn clone_for_background_completion_monitor(&self) -> Self {
         Self {
@@ -54,6 +52,7 @@ impl SubagentController {
             background_completion_notify: Arc::clone(&self.background_completion_notify),
             background_completion_shutdown: self.background_completion_shutdown.clone(),
             background_completion_monitor: Arc::clone(&self.background_completion_monitor),
+            shutdown_handles: Arc::clone(&self.shutdown_handles),
             background_completion_owners: Arc::clone(&self.background_completion_owners),
             background_completion_monitor_owner: false,
         }
@@ -94,10 +93,11 @@ impl SubagentController {
 
     pub(super) async fn stop_background_completion_monitor(&self) {
         self.background_completion_shutdown.cancel();
-        let monitor = self.background_completion_monitor.lock().await.take();
-        if let Some(monitor) = monitor {
+        let mut slot = self.background_completion_monitor.lock().await;
+        if let Some(monitor) = slot.as_mut() {
             monitor.abort();
-            let _ = monitor.await;
+            let _ = (&mut *monitor).await;
+            *slot = None;
         }
     }
 

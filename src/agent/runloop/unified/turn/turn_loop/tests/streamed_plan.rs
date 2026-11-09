@@ -1,6 +1,73 @@
 use super::*;
 
 #[tokio::test]
+async fn explicit_plan_request_in_full_auto_reaches_user_approval() {
+    explicit_plan_request_requires_approval(false).await;
+}
+
+#[tokio::test]
+async fn explicit_plan_request_during_suggested_planning_requires_approval() {
+    explicit_plan_request_requires_approval(true).await;
+}
+
+async fn explicit_plan_request_requires_approval(already_active: bool) {
+    use vtcode_ui::tui::app::{
+        InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientRequest,
+    };
+
+    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(command_tx);
+    let mut session = InlineSession {
+        handle: handle.clone(),
+        events: event_rx,
+        worker: None,
+    };
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    event_tx
+        .send(InlineEvent::Transient(TransientEvent::Cancelled))
+        .expect("cancel approval");
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    if already_active {
+        backing.activate_planning_for_test();
+    }
+    backing.set_skip_confirmations_for_test(true);
+    let harness = backing.enable_harness_emitter();
+    let calls = Arc::new(AtomicUsize::new(0));
+    backing.set_provider(Box::new(StreamedPlanProvider {
+        script: StreamedPlanScript::Valid,
+        calls: calls.clone(),
+    }));
+    let mut history = vec![uni::Message::user("use plan mode, refine @README.md".into())];
+    let mut ctx = backing.turn_loop_context();
+    ctx.handle = &handle;
+    ctx.session = &mut session;
+    ctx.renderer = &mut renderer;
+    ctx.full_auto = true;
+
+    let outcome = run_turn_loop(&mut history, ctx).await.expect("explicit planning turn");
+    assert!(!outcome.plan_approved_execution_pending);
+    assert!(outcome.turn_modified_files.is_empty());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let mut approval_found = false;
+    while let Ok(command) = command_rx.try_recv() {
+        if let InlineCommand::ShowTransient { request } = command
+            && let TransientRequest::List(list) = *request
+            && list
+                .items
+                .iter()
+                .any(|item| item.selection == Some(InlineListSelection::PlanApprovalExecute))
+        {
+            approval_found = true;
+        }
+    }
+    assert!(approval_found, "explicit planning must present approval");
+    let events = fs::read_to_string(harness).expect("approval events");
+    assert_eq!(events.matches("\"type\":\"plan.approval.requested\"").count(), 1);
+    assert!(!events.contains("auto_accept"));
+}
+
+#[tokio::test]
 async fn streamed_invalid_plan_uses_one_bounded_repair_without_approval_artifacts() {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut backing = TestTurnProcessingBacking::new(4).await;
@@ -61,7 +128,7 @@ async fn streamed_invalid_plan_repairs_to_valid_plan_and_persists_it() {
         calls: calls.clone(),
     }));
 
-    let mut history = vec![uni::Message::user("make a plan for the streamed handoff".to_string())];
+    let mut history = vec![uni::Message::user("investigate the streamed handoff".to_string())];
     let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
         .await
         .expect("a valid repair should reach the approval handoff");
@@ -126,9 +193,7 @@ async fn streamed_invalid_plan_repair_is_admitted_after_prior_plain_response() {
         calls: calls.clone(),
     }));
 
-    let mut history = vec![uni::Message::user(
-        "make a plan after the interview fallback".to_string(),
-    )];
+    let mut history = vec![uni::Message::user("investigate the interview fallback".to_string())];
     let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
         .await
         .expect("a repair after an earlier plain response should reach the approval handoff");
@@ -241,7 +306,7 @@ async fn streamed_valid_plan_is_persisted_and_publishes_approval_ready_events() 
         calls: calls.clone(),
     }));
 
-    let mut history = vec![uni::Message::user("make a plan for the streamed handoff".to_string())];
+    let mut history = vec![uni::Message::user("investigate the streamed handoff".to_string())];
     let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
         .await
         .expect("valid streamed plan should reach the approval handoff");

@@ -842,6 +842,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             search: None,
             hotkeys,
     status: None,
+    plan_markdown: None,
 }),
         ctrl_c_state,
         ctrl_c_notify,
@@ -957,6 +958,7 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     };
 
     let overlay = TransientRequest::List(request);

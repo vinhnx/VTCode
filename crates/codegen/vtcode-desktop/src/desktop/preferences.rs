@@ -12,21 +12,25 @@ use objc2_foundation::NSDictionary;
 
 use gpui_kit::SharedString;
 use gpui_kit::component::IndexPath;
+use gpui_kit::component::diff::DiffMode;
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{SearchableVec, SelectState};
 use gpui_kit::component::theme::ThemeMode;
 use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
+use super::diff_preferences;
 use super::files::ExternalEditor;
 use super::localization::UiLanguage;
+use super::themes;
 
 const MAX_RECENT_WORKSPACES: usize = 8;
 const DEFAULT_SIDEBAR_WIDTH: f32 = 270.0;
-/// Fits the five-tab inspector rail without scrolling at the default UI
-/// size (the rail needs ~407px plus its insets); narrower widths stay usable
-/// through the tab scroller.
-const DEFAULT_INSPECTOR_WIDTH: f32 = 440.0;
+/// Fits the five-tab inspector rail plus its trailing close control without
+/// scrolling at the default UI size (the rail needs ~407px plus its insets,
+/// the rail gap, and the close button); narrower widths stay usable through
+/// the tab scroller.
+pub(super) const DEFAULT_INSPECTOR_WIDTH: f32 = 474.0;
 pub(super) const MIN_PANE_WIDTH: f32 = 180.0;
 pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
 /// Smallest UI base size: keeps the tiniest labels (`text_xs` = 0.75rem) at
@@ -134,6 +138,11 @@ pub(super) fn system_motion_baseline(cx: &mut App) -> bool {
 }
 
 /// Applies a saved override or returns GPUI to the current OS preference.
+///
+/// The caret follows the effective motion state: steady when reduced, Kit's
+/// default blink otherwise. Component `Theme::update` projects the policy
+/// onto the base theme and survives mode changes; never write the base
+/// global directly (Kit rebuilds it on sync).
 pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_baseline: bool, cx: &mut App) {
     match preference {
         ReducedMotionPreference::System => {
@@ -143,6 +152,14 @@ pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_b
         ReducedMotionPreference::On => cx.set_reduce_motion(true),
         ReducedMotionPreference::Off => cx.set_reduce_motion(false),
     }
+    let blink = if cx.reduce_motion() {
+        gpui_kit::base::input::CursorBlink::steady()
+    } else {
+        gpui_kit::base::input::CursorBlink::default()
+    };
+    gpui_kit::component::theme::Theme::update(cx, |theme| {
+        theme.cursor_blink = blink;
+    });
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -334,6 +351,107 @@ impl SearchableListItem for FileDestinationOption {
 
 pub(super) type FileDestinationSelectState = SelectState<SearchableVec<FileDestinationOption>>;
 
+/// Terminal used by the CLI handoff ("Continue in terminal").
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum CliTerminal {
+    #[default]
+    Terminal,
+    ITerm2,
+    Ghostty,
+}
+
+impl CliTerminal {
+    pub(super) const ALL: [Self; 3] = [Self::Terminal, Self::ITerm2, Self::Ghostty];
+
+    pub(super) const fn id(self) -> &'static str {
+        match self {
+            Self::Terminal => "terminal",
+            Self::ITerm2 => "iterm2",
+            Self::Ghostty => "ghostty",
+        }
+    }
+
+    pub(super) const fn external_editor(self) -> ExternalEditor {
+        match self {
+            Self::Terminal => ExternalEditor::Terminal,
+            Self::ITerm2 => ExternalEditor::ITerm2,
+            Self::Ghostty => ExternalEditor::Ghostty,
+        }
+    }
+
+    /// Dropdown options in canonical order: Terminal always (it ships on the
+    /// sealed system volume and cannot be uninstalled), the rest when
+    /// detected, plus the saved choice even when undetected so the control
+    /// never renders blank and reinstalls restore behavior.
+    pub(super) fn offered(saved: Self, detected: &[ExternalEditor]) -> Vec<Self> {
+        Self::ALL
+            .into_iter()
+            .filter(|terminal| {
+                matches!(terminal, Self::Terminal)
+                    || *terminal == saved
+                    || detected.contains(&terminal.external_editor())
+            })
+            .collect()
+    }
+
+    /// Display label. Terminal brand names are proper nouns and stay as-is.
+    pub(super) fn label(self) -> String {
+        match self {
+            Self::Terminal => "Terminal".to_string(),
+            Self::ITerm2 => "iTerm2".to_string(),
+            Self::Ghostty => "Ghostty".to_string(),
+        }
+    }
+
+    /// Parse a saved id. Missing or unknown values fall back to the default
+    /// so a corrupt preference never breaks the handoff.
+    pub(super) fn from_saved(value: Option<&str>) -> Self {
+        let Some(id) = value.map(str::trim) else {
+            return Self::default();
+        };
+        Self::ALL
+            .into_iter()
+            .find(|terminal| terminal.id().eq_ignore_ascii_case(id))
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct CliTerminalOption(CliTerminal);
+
+impl CliTerminalOption {
+    pub(super) fn for_terminals(terminals: &[CliTerminal]) -> SearchableVec<Self> {
+        SearchableVec::new(terminals.iter().map(|terminal| Self(*terminal)).collect::<Vec<_>>())
+    }
+
+    pub(super) fn selected_index(terminals: &[CliTerminal], terminal: CliTerminal) -> Option<IndexPath> {
+        terminals.iter().position(|option| *option == terminal).map(IndexPath::new)
+    }
+}
+
+impl SearchableListItem for CliTerminalOption {
+    type Value = CliTerminal;
+
+    fn title(&self) -> SharedString {
+        self.0.label().into()
+    }
+
+    fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
+        super::accessible_select_option(format!("terminal-option-{}", self.0.id()), self.title())
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.0
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        self.0.label().to_lowercase().contains(&query) || self.0.id().contains(&query)
+    }
+}
+
+pub(super) type CliTerminalSelectState = SelectState<SearchableVec<CliTerminalOption>>;
+
 /// When turn-terminal notifications (completed, failed, blocked) post.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum TurnCompletionMode {
@@ -436,6 +554,11 @@ pub(super) struct NotificationPreferences {
     pub updates: Option<bool>,
     /// Latest release version already announced; suppresses repeat banners.
     pub last_notified_update: Option<String>,
+    /// Legacy client-local marker for the post-update "what's new" moment.
+    /// The shared update cache owns the real seen marker now (so the CLI and
+    /// desktop never repeat one release); this field is kept only so older
+    /// preference files deserialize without loss.
+    pub last_seen_changelog_version: Option<String>,
 }
 
 impl NotificationPreferences {
@@ -471,10 +594,25 @@ pub(super) struct Preferences {
     pub ui_language: Option<String>,
     /// Default file open destination id. Unknown values fall back to the viewer.
     pub file_open_destination: Option<String>,
+    /// Terminal for CLI handoff id. Unknown values fall back to Terminal.
+    pub cli_terminal: Option<String>,
+    /// Legacy diff viewer layout id (`unified`/`split`): only a read fallback
+    /// for installs that never saved the new `diff` struct below.
+    pub diff_mode: Option<String>,
+    /// Diff viewer presentation choices; owns every diff option going forward.
+    pub diff: diff_preferences::DiffPreferences,
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
     pub shortcuts: std::collections::BTreeMap<String, String>,
+    /// Experimental vim-style navigation (`j`/`k`/`g`/`G`/`h`/`l`, `i`, `/`).
+    /// Missing values keep existing installs on the default off behavior.
+    pub vim_navigation: bool,
+    /// Navigate thread history with a trackpad swipe; off by default.
+    /// Missing values keep swipe disabled. Physical mouse back/forward
+    /// buttons share the swipe event and follow this gate; toolbar buttons
+    /// and keyboard shortcuts bypass it and keep working.
+    pub swipe_navigation: bool,
     pub ui_font_family: Option<String>,
     pub code_font_family: Option<String>,
     pub ui_font_size: Option<u8>,
@@ -490,6 +628,10 @@ pub(super) struct Preferences {
     pub dark_theme: Option<String>,
     pub light_typography: Option<TypographyProfile>,
     pub dark_typography: Option<TypographyProfile>,
+    /// Desktop-only user-authored themes, in creation order. They never sync
+    /// to the CLI, which owns only its own palette registry.
+    #[serde(default, deserialize_with = "themes::deserialize_custom_themes")]
+    pub custom_themes: Vec<themes::CustomTheme>,
     /// None preserves legacy explicit theme choices; new profiles follow the CLI.
     pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.
@@ -501,6 +643,8 @@ pub(super) struct Preferences {
     pub available_efforts: Option<Vec<String>>,
     /// Last inspector state, retained for compatibility; launch always starts collapsed.
     pub inspector_open: Option<bool>,
+    /// Last zen layout choice. Missing values keep fresh installs in zen.
+    pub zen_mode: Option<bool>,
     /// Place the project and thread navigation on the right side of the workspace.
     /// Missing values keep existing installs on the new right-side default.
     pub navigation_on_right: Option<bool>,
@@ -510,6 +654,9 @@ pub(super) struct Preferences {
     pub translucent_sidebar: bool,
     /// Keep the main window available from the macOS status bar when closed.
     pub show_in_menu_bar: bool,
+    /// Launch at login through the main-app login item. Missing values keep
+    /// existing installs off; the OS status wins at launch either way.
+    pub launch_at_login: Option<bool>,
     /// Additional foreground contrast, from 0 (theme default) to 100.
     pub contrast: u8,
     /// Sidebar width in logical pixels.
@@ -551,6 +698,27 @@ impl Preferences {
         self.file_open_destination = Some(destination.id().to_owned());
     }
 
+    pub(super) fn cli_terminal(&self) -> CliTerminal {
+        CliTerminal::from_saved(self.cli_terminal.as_deref())
+    }
+
+    pub(super) fn set_cli_terminal(&mut self, terminal: CliTerminal) {
+        self.cli_terminal = Some(terminal.id().to_owned());
+    }
+
+    pub(super) fn diff_mode(&self) -> DiffMode {
+        // New installs write `diff.mode`; the legacy top-level key still
+        // applies for installs that never saved the new struct.
+        if self.diff.mode.is_none() {
+            return diff_preferences::mode_from_saved(self.diff_mode.as_deref());
+        }
+        self.diff.mode()
+    }
+
+    pub(super) fn set_diff_mode(&mut self, mode: DiffMode) {
+        self.diff.set_mode(mode);
+    }
+
     pub(super) fn code_font_size(&self) -> u8 {
         self.code_font_size.unwrap_or(14).clamp(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE)
     }
@@ -561,6 +729,14 @@ impl Preferences {
 
     pub(super) fn navigation_visible(&self) -> bool {
         self.navigation_visible.unwrap_or(true)
+    }
+
+    pub(super) fn zen_mode(&self) -> bool {
+        self.zen_mode.unwrap_or(true)
+    }
+
+    pub(super) fn launch_at_login_enabled(&self) -> bool {
+        self.launch_at_login.unwrap_or(false)
     }
 
     pub(super) fn typography_for(&self, mode: ThemeMode) -> TypographySettings<'_> {
@@ -715,20 +891,43 @@ impl Preferences {
         dirs::home_dir().map(|home| home.join(".vtcode").join("desktop").join("preferences.json"))
     }
 
-    /// Load preferences, returning defaults for a missing or corrupt file.
+    /// Load preferences, returning defaults for a missing file. A corrupt
+    /// file is quarantined beside the original before falling back, so the
+    /// next save cannot silently overwrite the evidence with defaults.
     pub(super) fn load() -> Self {
         let Some(path) = Self::preferences_path() else {
             return Self::default();
         };
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or_default()
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(_) => return Self::default(),
+        };
+        match serde_json::from_str(&content) {
+            Ok(preferences) => preferences,
+            Err(error) => {
+                let quarantined = path.with_extension("json.corrupt");
+                if let Err(rename_error) = std::fs::rename(&path, &quarantined) {
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "failed to quarantine corrupt desktop preferences ({}): {rename_error}",
+                        quarantined.display()
+                    ));
+                } else {
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "desktop preferences corrupt ({error}); moved to {}",
+                        quarantined.display()
+                    ));
+                }
+                Self::default()
+            }
+        }
     }
 
-    /// Best-effort saves for existing comfort controls.
+    /// Best-effort saves for existing comfort controls. Failures are loud on
+    /// stderr so a silently unpersisted setting stays diagnosable.
     pub(super) fn save(&self) {
-        drop(self.try_save());
+        if let Err(error) = self.try_save() {
+            vtcode_commons::diagnostics::stderr(format_args!("failed to save desktop preferences: {error}"));
+        }
     }
 
     pub(super) fn try_save(&self) -> Result<(), String> {

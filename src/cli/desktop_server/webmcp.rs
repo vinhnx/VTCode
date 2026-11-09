@@ -67,6 +67,37 @@ impl RuntimeAdapter for DesktopWebmcpRuntime {
     }
 }
 
+/// Fail fast when another process already holds the session's exclusive
+/// event-log lock (for example an interactive CLI on the same thread).
+/// Without this, `start_session` installs a runtime whose runloop dies
+/// asynchronously with `SessionBusy`, leaving a zombie thread whose turns
+/// fail with "runtime has stopped" even though reloads cannot help. A held
+/// lock implies an existing session directory, so a missing directory skips
+/// the probe (and its directory creation) without changing the verdict;
+/// in-process reopens share state and succeed, so reloading the service's
+/// own session still passes. Residual race: a foreign process can grab the
+/// lock between this probe and runloop startup, which keeps today's async
+/// behavior for that millisecond window.
+pub(super) async fn ensure_session_not_held_elsewhere(workspace: &Path, session_id: &str) -> Result<()> {
+    if !vtcode_memory::session_directory(workspace, session_id).is_dir() {
+        return Ok(());
+    }
+    let workspace = workspace.to_path_buf();
+    let session_id = session_id.to_string();
+    let probe = tokio::task::spawn_blocking(move || {
+        vtcode_memory::open_exclusive(&workspace, &session_id, vtcode_memory::DEFAULT_MAX_EVENTS).map(|_| ())
+    })
+    .await
+    .context("session lock probe task failed")?;
+    match probe {
+        Ok(()) => Ok(()),
+        Err(vtcode_memory::SessionStoreError::SessionBusy { session }) => {
+            bail!("session {session} is already open in another process; close it there and reload")
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
 pub(super) async fn start_session(
     context: &ServiceContext,
     session_id: String,
@@ -146,18 +177,32 @@ pub(super) async fn install_session_runtime(
     events: protocol::LiveEventReceiver,
 ) {
     let session_id = runtime.session_id.clone();
+    let stop = runtime.stop.clone();
+    let input = runtime.input.clone();
+    let generation = uuid::Uuid::new_v4();
     {
         let mut state = context.state.lock().await;
         state.session_id = Some(session_id.clone());
+        state.runtime_generation = Some(generation);
         state.runtime = Some(runtime);
     }
-    spawn_session_pump(
-        session_id,
+    let _pump = spawn_session_pump(
+        session_id.clone(),
         commands,
         events,
         std::sync::Arc::clone(&context.state),
         context.notifications.clone(),
         std::sync::Arc::clone(&context.turn_finished),
+        Some(generation),
+    );
+    turn_queue::spawn_resume_queue(
+        session_id,
+        generation,
+        stop,
+        input,
+        context.state.clone(),
+        context.notifications.clone(),
+        context.turn_finished.clone(),
     );
 }
 

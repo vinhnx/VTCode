@@ -285,10 +285,7 @@ impl Session {
             // Bound the expand payload so paste floods cannot grow without limit.
             let max_bytes = ui::TUI_COLLAPSED_PASTE_MAX_BYTES;
             let full_text = if text.len() > max_bytes {
-                let mut start = text.len() - max_bytes;
-                while start < text.len() && !text.is_char_boundary(start) {
-                    start += 1;
-                }
+                let start = text.ceil_char_boundary(text.len() - max_bytes);
                 text[start..].to_string()
             } else {
                 text
@@ -416,6 +413,8 @@ impl Session {
             return false;
         };
 
+        let previous_max_offset = self.current_max_scroll_offset();
+        let was_following = self.scroll_manager.offset() == 0;
         let collapsed = self.collapsed_pastes.remove(index);
         let revision = self.next_revision();
         let Some(line) = self.lines.get_mut(collapsed.line_index) else {
@@ -430,6 +429,10 @@ impl Session {
         line.revision = revision;
         self.mark_line_dirty(collapsed.line_index);
         self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
+        if was_following {
+            self.pin_viewport_after_expansion(previous_max_offset);
+        }
         true
     }
 
@@ -511,6 +514,8 @@ impl Session {
         }
 
         let collapsed = self.thinking_collapsed(start);
+        let previous_max_offset = self.current_max_scroll_offset();
+        let was_following = self.scroll_manager.offset() == 0;
         self.thinking_runs.set_collapsed(start, !collapsed);
 
         // Bump the revision of every line in the run so the reflow cache
@@ -526,6 +531,10 @@ impl Session {
         }
         self.mark_line_dirty(start);
         self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
+        if collapsed && was_following {
+            self.pin_viewport_after_expansion(previous_max_offset);
+        }
         // Drop the cached visible-window: it is keyed only by viewport
         // offset/width/height, so without this the post-toggle render would
         // keep returning the stale (pre-toggle) lines even though the reflow

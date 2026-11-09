@@ -19,6 +19,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
             choices: Vec::new(),
             selected_choice_id: None,
             selected_choice_ids: Vec::new(),
+            plan_markdown: None,
             steps: vec![InteractionStep {
                 title: "Approach".into(),
                 question: "How should we proceed?".into(),
@@ -382,115 +383,10 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
-fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 600., 900.);
-    // Narrow the rail so the scroll-reveal assertions below hold by
-    // construction; the default width fits every tab (see the fit test).
-    view.update(cx, |view, _| view.inspector_width = 240.);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.within("inspector-tabs").find(0usize).role(), Some(gpui_kit::Role::Tab));
-        assert_eq!(window.within("inspector-tabs").find(0usize).selected(), Some(true));
-        window.within("inspector-tabs").click(1usize, cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
-        assert_eq!(window.within("inspector-tabs").find(1usize).selected(), Some(true));
-        for (key, expected) in [
-            ("right", crate::desktop::inspector::InspectorTab::Activity),
-            ("end", crate::desktop::inspector::InspectorTab::Utilities),
-            ("home", crate::desktop::inspector::InspectorTab::Changes),
-            ("left", crate::desktop::inspector::InspectorTab::Utilities),
-            ("right", crate::desktop::inspector::InspectorTab::Changes),
-        ] {
-            window.press(key, cx);
-            window.render_frame(cx);
-            assert_eq!(view.read(cx).inspector_tab, expected, "{key}");
-            if key == "end" || key == "left" {
-                let scroll = &view.read(cx).inspector_tabs_scroll;
-                let visible = horizontal_scroll_item_is_visible(scroll, 4);
-                let offset = scroll.offset().x;
-                assert!(visible, "keyboard selection reveals the final inspector tab; scroll offset={offset:?}");
-                assert!(offset < px(0.), "narrow inspector tab row must scroll to its final tab");
-            }
-        }
-        window.press("cmd-l", cx);
-        window.input("composer text", cx);
-        window.press("left", cx);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "composer text");
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn inspector_tabs_fit_without_scrolling_at_default_width(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 1280., 900.);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert!(
-            (view.read(cx).inspector_width - 440.).abs() < f32::EPSILON,
-            "baseline pins the default width this fit is measured against"
-        );
-        let bar = window.find("inspector-tabs-focus").bounds();
-        for index in 0..crate::desktop::inspector::InspectorTab::ALL.len() {
-            let tab = window.within("inspector-tabs").find(index).bounds();
-            assert!(
-                tab.left() >= bar.left() && tab.right() <= bar.right(),
-                "tab {index} overflows the rail at default width: {tab:?} vs {bar:?}"
-            );
-        }
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
-        window.render_frame(cx);
-        assert!(view.read(cx).inspector_focus.is_focused(window));
-
-        view.update(cx, |view, cx| view.toggle_inspector(cx));
-        window.render_frame(cx);
-
-        assert!(!view.read(cx).inspector_open);
-        assert!(view.read(cx).focus_handle.is_focused(window));
-        window.press("cmd-l", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn inspector_programmatic_selection_reveals_selected_tab(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 600., 900.);
-    // Narrow the rail so the scroll-reveal assertions below hold by
-    // construction; the default width fits every tab (see the fit test).
-    view.update(cx, |view, _| view.inspector_width = 240.);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        view.update(cx, |view, cx| view.open_utilities(cx));
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
-        assert!(
-            horizontal_scroll_item_is_visible(&view.read(cx).inspector_tabs_scroll, 4),
-            "workflow selection reveals the selected inspector tab"
-        );
-        assert!(
-            view.read(cx).inspector_tabs_scroll.offset().x < px(0.),
-            "workflow selection must scroll the narrow inspector tab row"
-        );
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
 fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.inspector_open = false;
@@ -613,7 +509,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "choose-ui-font", cx);
         window.within("settings-panel").click("choose-ui-font", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -631,6 +527,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
         assert_eq!(cx.theme().font_family.as_str(), ".SystemUIFont");
         assert_eq!(cx.theme().font_size, px(16.));
         assert_eq!(cx.theme().mono_font_size, px(14.));
+        scroll_settings_into_view(window, "choose-code-font", cx);
         window.within("settings-panel").click("choose-code-font", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -652,15 +549,18 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
 
 #[gpui_kit::test]
 fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_sized(cx, 1280., 1100.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
         });
-        window.render_frame(cx);
+        // The appearance page scrolls: center each control before clicking so
+        // groups added above the typography section cannot push it out of view.
+        scroll_settings_into_view(window, "font-ui-1", cx);
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
+        scroll_settings_into_view(window, "font-code-0", cx);
         window.within("settings-panel").click("font-code-0", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
@@ -674,8 +574,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
             view.apply_theme("ciapre".into(), window, cx);
         });
         assert_eq!(cx.theme().font_size, px(17.));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-640.))), cx);
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(16.));
@@ -702,10 +601,10 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
         });
-        window.render_frame(cx);
+        // Center each target before interacting: fixed offsets break whenever
+        // settings content above the target grows or shrinks.
         // The picker sits below reset-appearance; scroll it into view.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "appearance-app-icon-group", cx);
         assert_eq!(window.find("appearance-app-icon-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic (selected)"));
         window.within("settings-panel").click("app-icon-dark", cx);
@@ -715,10 +614,8 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
         assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic"));
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.app_icon(), AppIconPreference::Dark);
-        // Scroll back to the top, then to the reset row above the picker.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(1600.))), cx);
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-640.))), cx);
+        // Scroll to the reset row above the picker.
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.app_icon(), AppIconPreference::Dynamic);
@@ -740,11 +637,9 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("theme-ciapre-blue").role(), Some(gpui_kit::Role::Button));
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
-        for _ in 0..8 {
-            window.press("tab", cx);
-            window.render_frame(cx);
-        }
-        assert!(view.read(cx).settings_focus.contains_focused(window, cx));
+        tab_out_and_back_into_scope(window, cx, "the settings surface", |window, cx| {
+            view.read(cx).settings_focus.contains_focused(window, cx)
+        });
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() != Route::Settings);

@@ -209,6 +209,13 @@ pub(crate) fn deterministic_error_diagnosis(error: &ToolExecutionError, failure_
         error_message
     );
     let mismatch_kind = error_mismatch(error);
+    if error.is_redacted_patch_context() {
+        return ToolFailureDiagnosis::new(
+            observed,
+            "The patch matches a redacted view of source, but the hidden content cannot be matched safely.",
+            "Repeated reads will show the same redaction. Split the edit around the hidden line if possible; ask the user for help if it must change.",
+        );
+    }
     if error.edit_failure.is_some() {
         return ToolFailureDiagnosis::new(
             observed,

@@ -25,8 +25,9 @@ use super::overlay::{
 use crate::tui::core_tui::session::config::AppearanceConfig;
 pub use crate::tui::core_tui::types::SubmittedInput;
 use crate::tui::core_tui::types::{
-    ActivityState, ExecSessionAction, InlineHeaderContext, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry, SecurePromptConfig,
+    ActivePlanEntry, ActivityState, ExecSessionAction, InlineHeaderContext, InlineListItem, InlineListSearchConfig,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry,
+    SecurePromptConfig,
 };
 use crate::tui::options::FullscreenInteractionSettings;
 
@@ -67,6 +68,7 @@ pub struct ArchivedPromptEntry {
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub session_label: String,
+    pub in_workspace: bool,
 }
 
 define_inline_message_commands! {
@@ -171,6 +173,12 @@ define_inline_message_commands! {
         SetLocalAgents {
             entries: Vec<LocalAgentEntry>,
         },
+        /// Sidebar snapshot of the session's approved plan (`None` clears it).
+        /// Pushed once at the approval boundary; cleared on the next planning
+        /// entry. Handled at the app layer like `SetLocalAgents`.
+        SetActivePlan {
+            entry: Option<ActivePlanEntry>,
+        },
         /// Inject archived prompts from previous sessions into the history picker.
         SetArchivedHistory {
             entries: Vec<ArchivedPromptEntry>,
@@ -226,8 +234,8 @@ pub enum InlineEvent {
     /// Submit text from the WebMCP bridge without interpreting slash commands.
     WebmcpSubmit(SubmittedInput),
     QueueSubmit(SubmittedInput),
-    /// Mid-turn steer from external embedders (mirrors the core protocol's
-    /// reserved steering path).
+    /// Mid-turn steer (mirrors the core protocol: external embedders plus
+    /// busy plain-Enter text when `ui.busy_enter_behavior` is `steer`).
     Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
@@ -587,6 +595,10 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetLocalAgents { entries });
     }
 
+    pub fn set_active_plan(&self, entry: Option<ActivePlanEntry>) {
+        self.send_command(InlineCommand::SetActivePlan { entry });
+    }
+
     pub fn set_archived_history(&self, entries: Vec<ArchivedPromptEntry>) {
         self.send_command(InlineCommand::SetArchivedHistory { entries });
     }
@@ -659,6 +671,7 @@ impl InlineHandle {
             footer_hint,
             hotkeys: Vec::new(),
             status,
+            plan_markdown: None,
         }));
     }
 

@@ -4,6 +4,7 @@
 //! with performance optimizations for large transcripts.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::{Session, message::TranscriptLine};
 use crate::tui::ui::tui::types::InlineMessageKind;
@@ -353,6 +354,18 @@ impl Session {
         self.visible_lines_cache = Some((start_row, width, max_rows, Arc::clone(&arc_lines)));
 
         arc_lines
+    }
+
+    /// Resolve the live jump-landing tint to its current reflowed row range.
+    /// Message-index keying keeps the range reflow-safe; expiry is checked
+    /// lazily so idle frames never paint a stale tint.
+    pub(crate) fn transcript_flash_rows(&mut self, width: u16) -> Option<(usize, usize)> {
+        let line_idx = self
+            .transcript_flash
+            .as_ref()
+            .filter(|flash| Instant::now() < flash.expires_at)?
+            .line_idx;
+        self.transcript_message_row_range(width, line_idx)
     }
 
     /// Return the reflowed row range occupied by one logical message.

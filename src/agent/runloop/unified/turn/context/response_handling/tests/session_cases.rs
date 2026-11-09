@@ -39,6 +39,90 @@ async fn denied_interview_retry_queues_bounded_cap_allowance() {
     );
 }
 #[tokio::test]
+async fn explicit_plan_mode_requires_approval_with_full_auto_enabled() {
+    use vtcode_ui::tui::app::{
+        InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientRequest,
+    };
+
+    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(command_tx);
+    let mut session = InlineSession {
+        handle: handle.clone(),
+        events: event_rx,
+        worker: None,
+    };
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    event_tx
+        .send(InlineEvent::Transient(TransientEvent::Cancelled))
+        .expect("cancel approval");
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let events_path = backing.enable_harness_emitter();
+    let mut ctx = backing.turn_processing_context();
+    ctx.plan_session.mark_explicit_plan_request();
+    ctx.handle = &handle;
+    ctx.renderer = &mut renderer;
+    ctx.session = &mut session;
+    ctx.skip_confirmations = true;
+    ctx.full_auto = true;
+    ctx.working_history
+        .push(uni::Message::user("use plan mode, refine @README.md".into()));
+
+    let outcome = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some(EXECUTION_REVISION_PLAN.into()), false)
+        .await
+        .expect("present explicit plan for approval");
+    assert!(matches!(
+        outcome,
+        TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false })
+    ));
+    assert!(ctx.tool_registry.is_planning_active());
+    let mut approval_found = false;
+    while let Ok(command) = command_rx.try_recv() {
+        if let InlineCommand::ShowTransient { request } = command
+            && let TransientRequest::List(list) = *request
+            && list
+                .items
+                .iter()
+                .any(|item| item.selection == Some(InlineListSelection::PlanApprovalExecute))
+        {
+            approval_found = true;
+        }
+    }
+    assert!(approval_found);
+    let events = tokio::fs::read_to_string(events_path).await.expect("approval events");
+    assert_eq!(events.matches("\"type\":\"plan.approval.requested\"").count(), 1);
+    assert!(!events.contains("auto_accept"));
+}
+
+#[tokio::test]
+async fn explicit_plan_mode_waits_without_inline_approval_ui() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let events_path = backing.enable_harness_emitter();
+    let mut renderer = AnsiRenderer::stdout();
+    let mut ctx = backing.turn_processing_context();
+    ctx.renderer = &mut renderer;
+    ctx.plan_session.mark_explicit_plan_request();
+    ctx.skip_confirmations = true;
+    ctx.full_auto = true;
+    let outcome = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some(EXECUTION_REVISION_PLAN.into()), false)
+        .await
+        .expect("wait for explicit approval");
+    assert!(matches!(
+        outcome,
+        TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false })
+    ));
+    assert!(ctx.tool_registry.is_planning_active());
+    assert!(last_final_answer_text(&ctx).contains("awaiting approval"));
+    let events = tokio::fs::read_to_string(events_path).await.expect("approval events");
+    assert_eq!(events.matches("\"type\":\"plan.approval.requested\"").count(), 1);
+    assert!(!events.contains("\"type\":\"plan.approval.resolved\""));
+}
+
+#[tokio::test]
 async fn session_161453_draft_reaches_repair_then_persisted_approval_request() {
     use vtcode_ui::tui::app::{
         InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientRequest,

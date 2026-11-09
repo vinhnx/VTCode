@@ -1,7 +1,6 @@
 #![expect(
-    clippy::indexing_slicing,
     clippy::cast_possible_truncation,
-    reason = "Arena offsets are bounded by the compact interner representation and IDs are range-checked by construction."
+    reason = "Arena offsets are bounded by the compact interner representation and every handle is range-checked in `get_bytes`."
 )]
 
 //! Arena-based string interner for memory-efficient string deduplication.
@@ -121,8 +120,14 @@ impl StringInterner {
     }
 
     /// Get the raw bytes for a StringId.
+    ///
+    /// The range check lives here and not only at interning time: `get` is
+    /// public and returns `Option`, so a stale or foreign handle must be a
+    /// recoverable miss. Indexing `offsets` directly would panic on a handle
+    /// this interner never issued, and would abort the caller instead of
+    /// letting it drop the entry.
     fn get_bytes(&self, id: StringId) -> Option<&[u8]> {
-        let (start, len) = self.offsets[id.0 as usize];
+        let (start, len) = *self.offsets.get(usize::try_from(id.0).ok()?)?;
         self.arena.get(start as usize..(start as usize + len as usize))
     }
 
@@ -181,5 +186,21 @@ mod tests {
         let id_src = interner.intern("src");
         assert_eq!(interner.get_id("src"), Some(id_src));
         assert_eq!(interner.get_id("nonexistent"), None);
+    }
+
+    #[test]
+    fn stale_handle_is_a_miss_not_a_panic() {
+        // `get` is public and returns `Option`, so a handle this interner
+        // never issued must resolve to `None`. Indexing the offset table
+        // directly panicked here instead of reporting the miss.
+        let interner = StringInterner::new();
+        let never_issued = StringId::new(u32::MAX);
+        assert_eq!(interner.get(never_issued), None);
+
+        let mut populated = StringInterner::new();
+        let issued = populated.intern("src");
+        let beyond_len = StringId::new(issued.as_u32() + 1);
+        assert_eq!(populated.get(beyond_len), None, "handle past the offset table must miss");
+        assert_eq!(populated.get(issued), Some("src"), "live handle must still resolve");
     }
 }

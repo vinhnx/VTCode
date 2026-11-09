@@ -1,6 +1,11 @@
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
+/// Floor for the HTTP timeout keys. Values in `1..MIN` are almost always a unit
+/// mistake (a caller meaning milliseconds), so they are rejected at load time
+/// rather than turned into reliably-failing clients.
+const MIN_HTTP_TIMEOUT_SECONDS: u64 = 5;
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TimeoutsConfig {
@@ -31,6 +36,18 @@ pub struct TimeoutsConfig {
     /// Minimum timeout floor in milliseconds when applying adaptive clamps.
     #[serde(default = "TimeoutsConfig::default_min_floor_ms")]
     pub adaptive_min_floor_ms: u64,
+    /// Timeout (in seconds) for the connect phase of outbound HTTP clients.
+    /// `0` disables the limit. Also settable via `VTCODE_HTTP_CONNECT_TIMEOUT_SECS`.
+    #[serde(default = "TimeoutsConfig::default_http_connect_seconds")]
+    pub http_connect_seconds: u64,
+    /// Timeout (in seconds) for a whole outbound HTTP request, including body.
+    /// `0` disables the limit. Also settable via `VTCODE_HTTP_REQUEST_TIMEOUT_SECS`.
+    #[serde(default = "TimeoutsConfig::default_http_request_seconds")]
+    pub http_request_seconds: u64,
+    /// Timeout (in seconds) for large HTTP transfers such as release downloads.
+    /// `0` disables the limit. Also settable via `VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS`.
+    #[serde(default = "TimeoutsConfig::default_http_download_seconds")]
+    pub http_download_seconds: u64,
 }
 
 impl Default for TimeoutsConfig {
@@ -45,6 +62,9 @@ impl Default for TimeoutsConfig {
             adaptive_decay_ratio: Self::default_decay_ratio(),
             adaptive_success_streak: Self::default_success_streak(),
             adaptive_min_floor_ms: Self::default_min_floor_ms(),
+            http_connect_seconds: Self::default_http_connect_seconds(),
+            http_request_seconds: Self::default_http_request_seconds(),
+            http_download_seconds: Self::default_http_download_seconds(),
         }
     }
 }
@@ -88,12 +108,40 @@ impl TimeoutsConfig {
         1_000
     }
 
+    // The HTTP keys are the escape hatch for the "my connection is slower than
+    // the author's" case, so they also honor an environment variable. Matching
+    // `VTCODE_FULLSCREEN_SCROLL_SPEED`, the env var applies only when the TOML
+    // key is absent, which keeps `vtcode.toml` authoritative when both are set.
+    fn default_http_connect_seconds() -> u64 {
+        env_seconds(crate::constants::env_vars::VTCODE_HTTP_CONNECT_TIMEOUT_SECS).unwrap_or(5)
+    }
+
+    fn default_http_request_seconds() -> u64 {
+        env_seconds(crate::constants::env_vars::VTCODE_HTTP_REQUEST_TIMEOUT_SECS).unwrap_or(30)
+    }
+
+    fn default_http_download_seconds() -> u64 {
+        env_seconds(crate::constants::env_vars::VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS).unwrap_or(300)
+    }
+
     /// Convert the configured threshold into a fraction (0.0-1.0).
     pub fn warning_threshold_fraction(&self) -> f32 {
         f32::from(self.warning_threshold_percent) / 100.0
     }
 
+    /// Resolve the outbound HTTP timeout defaults for
+    /// [`vtcode_commons::http::install_http_timeouts`].
+    #[must_use]
+    pub fn http_timeouts(&self) -> vtcode_commons::http::HttpTimeouts {
+        vtcode_commons::http::HttpTimeouts::from_seconds(
+            self.http_connect_seconds,
+            self.http_request_seconds,
+            self.http_download_seconds,
+        )
+    }
+
     /// Normalize a ceiling value into an optional duration.
+    #[must_use]
     pub fn ceiling_duration(&self, seconds: u64) -> Option<std::time::Duration> {
         if seconds == 0 {
             None
@@ -146,24 +194,44 @@ impl TimeoutsConfig {
             Self::MIN_CEILING_SECONDS
         );
 
+        for (name, seconds) in [
+            ("http_connect_seconds", self.http_connect_seconds),
+            ("http_request_seconds", self.http_request_seconds),
+            ("http_download_seconds", self.http_download_seconds),
+        ] {
+            ensure!(
+                seconds == 0 || seconds >= MIN_HTTP_TIMEOUT_SECONDS,
+                "timeouts.{name} must be at least {MIN_HTTP_TIMEOUT_SECONDS} seconds (or 0 to disable)",
+            );
+        }
+
         Ok(())
     }
 }
 
-/// Resolve a user-supplied timeout into a bounded, non-zero value.
-pub fn resolve_timeout(user_timeout: Option<u64>) -> u64 {
-    use crate::constants::execution::{DEFAULT_TIMEOUT_SECS, MAX_TIMEOUT_SECS, MIN_TIMEOUT_SECS};
+/// Parse a `VTCODE_*_TIMEOUT_SECS`-style environment override.
+///
+/// Empty, non-numeric, and zero values are ignored so a stray `=0` in a CI
+/// environment cannot silently disable every HTTP deadline.
+fn env_seconds(name: &str) -> Option<u64> {
+    crate::env_helpers::read_env_var(name)
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|v| *v > 0)
+}
 
-    match user_timeout {
-        None | Some(0) => DEFAULT_TIMEOUT_SECS,
-        Some(value) if value < MIN_TIMEOUT_SECS => MIN_TIMEOUT_SECS,
-        Some(value) if value > MAX_TIMEOUT_SECS => MAX_TIMEOUT_SECS,
-        Some(value) => value,
-    }
+/// Resolve a user-supplied timeout into a bounded, non-zero value.
+///
+/// Single runtime entry point; the bounds live in
+/// [`crate::constants::execution::resolve_timeout`] so the two spellings
+/// cannot drift apart.
+#[must_use]
+pub fn resolve_timeout(user_timeout: Option<u64>) -> u64 {
+    crate::constants::execution::resolve_timeout(user_timeout)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::MIN_HTTP_TIMEOUT_SECONDS;
     use super::TimeoutsConfig;
     use super::resolve_timeout;
     use crate::constants::execution::{DEFAULT_TIMEOUT_SECS, MAX_TIMEOUT_SECS, MIN_TIMEOUT_SECS};
@@ -188,6 +256,14 @@ mod tests {
     }
 
     #[test]
+    fn nonzero_ceiling_maps_to_exact_duration() {
+        let config = TimeoutsConfig::default();
+        assert_eq!(config.ceiling_duration(1), Some(std::time::Duration::from_secs(1)));
+        assert_eq!(config.ceiling_duration(3_600), Some(std::time::Duration::from_secs(3_600)));
+        assert_eq!(config.ceiling_duration(u64::MAX), Some(std::time::Duration::from_secs(u64::MAX)));
+    }
+
+    #[test]
     fn warning_threshold_bounds_are_enforced() {
         let config_low = TimeoutsConfig { warning_threshold_percent: 0, ..Default::default() };
         assert!(config_low.validate().is_err());
@@ -206,5 +282,72 @@ mod tests {
         assert_eq!(resolve_timeout(Some(1)), MIN_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(MAX_TIMEOUT_SECS + 1)), MAX_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(120)), 120);
+    }
+
+    #[test]
+    fn http_timeout_defaults_match_commons_http_defaults() {
+        let config = TimeoutsConfig::default();
+        assert_eq!(config.http_connect_seconds, 5);
+        assert_eq!(config.http_request_seconds, 30);
+        assert_eq!(config.http_download_seconds, 300);
+
+        let resolved = config.http_timeouts();
+        let defaults = vtcode_commons::http::HttpTimeouts::default();
+        assert_eq!(resolved, defaults);
+    }
+
+    #[test]
+    fn http_timeouts_map_zero_to_disabled() {
+        let config = TimeoutsConfig {
+            http_connect_seconds: 0,
+            http_request_seconds: 0,
+            http_download_seconds: 0,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+
+        let resolved = config.http_timeouts();
+        assert_eq!(resolved.connect, None);
+        assert_eq!(resolved.request, None);
+        assert_eq!(resolved.download, None);
+    }
+
+    #[test]
+    fn http_timeouts_reject_sub_second_typos_but_allow_minimum() {
+        for seconds in 1..MIN_HTTP_TIMEOUT_SECONDS {
+            let config = TimeoutsConfig {
+                http_request_seconds: seconds,
+                ..Default::default()
+            };
+            assert!(config.validate().is_err(), "{seconds}s must be rejected as a likely unit mistake");
+        }
+
+        let config = TimeoutsConfig {
+            http_request_seconds: MIN_HTTP_TIMEOUT_SECONDS,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn http_env_overrides_back_the_defaults() {
+        // `#[serde(default)]` resolves through the env-aware fns, so an unset
+        // TOML key can still be steered from the environment.
+        let defaults = TimeoutsConfig::default();
+        assert_eq!(defaults.http_request_seconds, 30);
+
+        crate::env_helpers::test_env_overrides::set("VTCODE_HTTP_REQUEST_TIMEOUT_SECS", Some("120"));
+        crate::env_helpers::test_env_overrides::set("VTCODE_HTTP_CONNECT_TIMEOUT_SECS", Some("15"));
+        // A zero override must not silently disable the deadline.
+        crate::env_helpers::test_env_overrides::set("VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS", Some("0"));
+
+        let overridden = TimeoutsConfig::default();
+        crate::env_helpers::test_env_overrides::set("VTCODE_HTTP_REQUEST_TIMEOUT_SECS", None);
+        crate::env_helpers::test_env_overrides::set("VTCODE_HTTP_CONNECT_TIMEOUT_SECS", None);
+        crate::env_helpers::test_env_overrides::set("VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS", None);
+
+        assert_eq!(overridden.http_request_seconds, 120);
+        assert_eq!(overridden.http_connect_seconds, 15);
+        assert_eq!(overridden.http_download_seconds, 300, "a zero env override is ignored");
     }
 }

@@ -158,7 +158,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-header").is_none());
         assert!(window.try_find("composer-context").is_none());
-        assert!(window.try_find("attach-files").is_none());
+        assert!(window.try_find("attach-files").is_some(), "zen keeps the attach action");
         assert!(window.try_find("composer-policy").is_some());
         assert!(window.try_find("composer-mode").is_some());
         assert!(window.try_find("pick-model").is_some());
@@ -169,10 +169,16 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
             zen_frame.size.width < normal_frame.size.width,
             "zen composer narrows: {zen_frame:?} vs {normal_frame:?}"
         );
-        assert!(zen_frame.size.width <= px(600.), "zen column cap: {zen_frame:?}");
+        let zen_cap = view.read(cx).content_width();
         assert!(
-            window.find("send-prompt").bounds().size.height < normal_send.size.height,
-            "zen send action shrinks with the composer"
+            (600.0..=720.0).contains(&zen_cap),
+            "zen stays a narrow reading column under the 768 normal width: {zen_cap}"
+        );
+        assert!(zen_frame.size.width <= px(zen_cap), "zen column cap: {zen_frame:?}");
+        assert_eq!(
+            window.find("send-prompt").bounds().size.height,
+            normal_send.size.height,
+            "zen keeps the send action at the composer size"
         );
         assert_eq!(
             window.find("transcript-content-zen-message").bounds().center().x,
@@ -530,12 +536,16 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
     let (window, view) = open_desktop(cx);
     let session_id = "archive-session";
     let prompt = SessionHistoryMessage {
+        event_item_id: None,
+        phase: None,
         hidden: false,
         archive_index: None,
         role: "user".into(),
         text: "Question".into(),
     };
     let answer = SessionHistoryMessage {
+        event_item_id: None,
+        phase: None,
         hidden: false,
         archive_index: None,
         role: "assistant".into(),
@@ -551,6 +561,8 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
         assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
 
         let inserted = SessionHistoryMessage {
+            event_item_id: None,
+            phase: None,
             hidden: false,
             archive_index: None,
             role: "user".into(),
@@ -563,6 +575,8 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
                 prompt,
                 answer,
                 SessionHistoryMessage {
+                    event_item_id: None,
+                    phase: None,
                     hidden: false,
                     archive_index: None,
                     role: "assistant".into(),
@@ -588,12 +602,16 @@ fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
         session_id,
         vec![
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(160),
                 role: "assistant".into(),
                 text: "Repeated".into(),
             },
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(161),
                 role: "assistant".into(),
@@ -608,18 +626,24 @@ fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
         session_id,
         vec![
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(158),
                 role: "user".into(),
                 text: "Earlier".into(),
             },
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(159),
                 role: "assistant".into(),
                 text: "Context".into(),
             },
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(160),
                 role: "assistant".into(),
@@ -643,6 +667,8 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         view.history_has_earlier = true;
         let messages = (160..170)
             .map(|index| SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(index),
                 role: "assistant".into(),
@@ -681,6 +707,8 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         start_index: 157,
         messages: (157..160)
             .map(|index| SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(index),
                 role: "assistant".into(),
@@ -739,27 +767,6 @@ fn hidden_history_page_advances_without_showing_runtime_context(cx: &mut TestApp
         assert_eq!(window.find("load-earlier-history").role(), Some(gpui_kit::Role::Button));
     })
     .unwrap();
-}
-
-#[test]
-fn hidden_history_marker_does_not_suppress_user_messages() {
-    let messages = vec![
-        vtcode_desktop_protocol::SessionHistoryMessage {
-            hidden: true,
-            archive_index: Some(0),
-            role: "system".into(),
-            text: "model context".into(),
-        },
-        vtcode_desktop_protocol::SessionHistoryMessage {
-            hidden: true,
-            archive_index: Some(1),
-            role: "user".into(),
-            text: "keep my message".into(),
-        },
-    ];
-    let rows = super::super::prepare_session_history("session", messages);
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].text.as_ref(), "keep my message");
 }
 
 #[gpui_kit::test]
@@ -933,10 +940,13 @@ fn zen_composer_pairs_option_controls_with_send_action(cx: &mut TestAppContext) 
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("attach-files").is_none());
+        assert!(window.try_find("attach-files").is_some(), "zen keeps the attach action");
         assert_eq!(window.find("pick-model").label(), Some("claude-sonnet-5 · Medium · Ultrafast"));
         assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Ask before protected actions"));
+        let attach = window.find("attach-files").bounds();
+        let model = window.find("pick-model").bounds();
+        assert!(attach.right() <= model.left(), "attach leads the zen option cluster: {attach:?} vs {model:?}");
         let context = window.find("zen-composer-context").bounds();
         let send = window.find("send-prompt").bounds();
         assert!(

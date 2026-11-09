@@ -459,6 +459,86 @@ fn retained_checkpoint_scope_review_accepts_explicit_readme_only_expectation() {
 }
 
 #[test]
+fn scope_review_accepts_no_other_tracked_edits_expectation() {
+    // Session-shaped step 6 from session-vtcode-20261102T034357Z: the
+    // expectation lives in the action text as "no other tracked edits",
+    // which is semantically an exclusive changed-file expectation.
+    for action in [
+        "Confirm scope limited to README.md and expect status lists only README.md with no other tracked edits",
+        "Confirm scope limited to README.md and expect status lists only README.md with no other tracked edit",
+    ] {
+        let plan = scope_review_plan(
+            action,
+            "README.md",
+            "wc -l README.md, git status --short -- README.md",
+            "scope check recorded",
+        );
+        let report = validate_plan_content(&plan);
+        assert!(report.is_ready(), "tracked-edits expectation must validate ({action}): {report:?}");
+        assert_eq!(report.scope_review_step_count, 1);
+    }
+}
+
+#[test]
+fn full_session_plan_with_tracked_edits_scope_review_is_ready() {
+    // Verbatim rejected draft from session-vtcode-20261102T034357Z: the
+    // validator ended the turn instead of presenting the plan, because step
+    // 6 ("no other tracked edits") was not accepted as an exclusive
+    // changed-file expectation. The whole artifact must validate so the
+    // draft reaches the approval gate instead of a terminal rejection.
+    let plan = r#"## Summary
+Restructure README.md install, desktop, docs, and contribution sections while preserving uncommitted prebuilt-asset installer wording and working links.
+
+## Scope
+In: README.md hero, Overview, Quick start install/configure, Usage, Desktop app, Documentation catalog, Development, Contributing/Community/Thanks/Support, License headings and links.
+Out: No code, installer scripts, desktop sources, docs content, contributor list, screenshots, badges, or sponsorship changes.
+
+## Implementation Steps
+1. Consolidate Quick start install variants into one Install flow -> files: [README.md] -> verify: [grep -n '^### 1. Install' README.md, grep -n 'NATIVE_INSTALLERS.md' README.md]
+2. Merge Desktop app download, installer offer, update with-desktop, and from-source fallback into one path -> files: [README.md] -> verify: [grep -n '^## Desktop app' README.md, grep -n 'desktop-workspace.md' README.md]
+3. Deduplicate Documentation catalog against Quick start and Usage links -> files: [README.md] -> verify: [grep -n '^## Documentation' README.md, grep -n 'docs/INDEX.md' README.md]
+4. Consolidate Contributing, Community, Thanks contributors, and Support sections without losing conduct, templates, or sponsor note -> files: [README.md] -> verify: [grep -n '^## Contributing' README.md, grep -n 'CODE_OF_CONDUCT.md' README.md]
+5. Tighten Overview and Usage wording and repair heading anchors after renames -> files: [README.md] -> verify: [grep -n '^#{1,4} ' README.md, grep -n 'planning-workflow.md' README.md]
+6. Confirm scope limited to README.md and expect status lists only README.md with no other tracked edits -> files: [README.md] -> verify: [wc -l README.md, git status --short -- README.md]
+
+## Test Cases and Validation
+- Single Install, Desktop, Documentation, and Contributing headings remain: grep -n '^#{1,4} ' README.md
+- Desktop and installer references resolve: grep -n 'desktop-workspace.md' README.md, grep -n 'NATIVE_INSTALLERS.md' README.md
+- Preserved uncommitted installer wording visible: git diff -- README.md
+- Length stays under 1000-line ceiling: wc -l README.md
+- Markdown lint if available, otherwise report skipped: npx markdownlint-cli2 README.md
+
+## Assumptions and Defaults
+- Preserve existing uncommitted README.md installer and desktop asset wording in meaning.
+- Restructure means merge and retitle, not delete coverage for install methods, desktop signing, docs entry points, or contribution channels.
+- README.md only; linked docs files are read-only references.
+
+## Expected Outcomes
+- Shorter README.md with one Install path, one Desktop path, one docs catalog, and one contribution block.
+- All retained headings, anchors, and docs paths resolve with user edits intact.
+
+## Dependencies and Prerequisites
+- No new tooling; Markdown lint optional and skippable if unavailable.
+"#;
+    let report = validate_plan_content(plan);
+    assert!(report.is_ready(), "session draft must validate: {report:?}");
+    assert_eq!(report.implementation_step_count, 6);
+    assert_eq!(report.scope_review_step_count, 1);
+    // Asymmetric boundary: dropping the changed-file wording must fail on
+    // exactly step 6, proving the expectation check bites rather than the
+    // test passing because scope-review detection was skipped.
+    let without_expectation = plan.replace(" with no other tracked edits", "");
+    let report = validate_plan_content(&without_expectation);
+    assert!(!report.is_ready(), "scope review without a changed-file expectation must stay invalid");
+    assert_eq!(report.invalid_implementation_steps.len(), 1);
+    assert!(
+        report.invalid_implementation_steps[0].starts_with("step 6:"),
+        "only the scope-review step must fail: {:?}",
+        report.invalid_implementation_steps
+    );
+}
+
+#[test]
 fn multiline_scope_review_preserves_separate_metadata_in_tracker() {
     let plan = scope_review_plan(
         "Review scope",

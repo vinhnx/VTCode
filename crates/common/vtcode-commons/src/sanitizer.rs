@@ -181,10 +181,7 @@ impl StreamingSecretRedactor {
 
         let carry_split = self.pending.len().saturating_sub(STREAMING_REDACTION_CARRY_BYTES);
         let line_split = self.pending.rfind('\n').map(|index| index + 1).unwrap_or(0);
-        let mut split_at = carry_split.max(line_split);
-        while split_at > 0 && !self.pending.is_char_boundary(split_at) {
-            split_at -= 1;
-        }
+        let split_at = self.pending.floor_char_boundary(carry_split.max(line_split));
         let prefix: String = self.pending.drain(..split_at).collect();
         redact_secrets(prefix)
     }

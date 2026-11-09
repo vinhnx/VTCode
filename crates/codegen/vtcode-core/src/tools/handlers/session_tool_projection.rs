@@ -6,6 +6,7 @@ use crate::tools::handlers::session_tool_catalog::ToolCatalogEntry;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::OnceLock;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 
 #[derive(Debug)]
 pub(super) struct ToolEntryProjection {
@@ -30,7 +31,7 @@ impl ToolEntryProjection {
                 description: self.description.as_str(),
                 parameters: &self.parameters,
             })
-            .map(|serialized| serialized.len() / 4)
+            .map(|serialized| heuristic_tokens_from_byte_len(serialized.len()))
             .unwrap_or(0)
         })
     }

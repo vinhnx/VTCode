@@ -3,7 +3,7 @@ use clap::Parser;
 
 #[test]
 fn long_version_includes_expected_sections() {
-    let text = long_version();
+    let text = long_version("0.181.3+test");
     assert!(text.contains("Authors:"));
     assert!(text.contains("Config directory:"));
     assert!(text.contains("Data directory:"));
@@ -19,10 +19,17 @@ fn long_version_includes_expected_sections() {
 }
 
 #[test]
-fn long_version_starts_with_build_git_info() {
-    let text = long_version();
-    let expected = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
-    assert!(text.starts_with(expected));
+fn long_version_first_line_is_the_caller_supplied_stamp() {
+    // Asymmetric fixtures: a stamped dev build, a dirty-tree stamp, and a
+    // bare release version. The first line must be exactly the stamp in every
+    // case, with no extra tokens — the desktop updater parses that line
+    // strictly, and a previous `option_env!` read here silently produced the
+    // bare fallback on every build (cargo:rustc-env never crosses packages).
+    for stamp in ["0.181.3+f19a52f2f1a2b", "0.181.3+f19a52f2f1a2b.dirty", "0.181.3"] {
+        let text = long_version(stamp);
+        let first_line = text.lines().next().unwrap_or_default();
+        assert_eq!(first_line, stamp);
+    }
 }
 
 #[test]

@@ -43,7 +43,8 @@ impl AcpClientBuilder {
 
     /// Build the client
     fn build(self) -> AcpResult<AcpClient> {
-        let http_client = HttpClient::builder().timeout(self.timeout).build()?;
+        let builder = HttpClient::builder().timeout(self.timeout);
+        let http_client = vtcode_commons::http::apply_connect_timeout(builder).build()?;
 
         Ok(AcpClient {
             http_client,

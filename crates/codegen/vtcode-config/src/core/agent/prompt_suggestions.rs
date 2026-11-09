@@ -15,7 +15,7 @@ pub struct AgentPromptSuggestionsConfig {
     #[serde(default)]
     pub model: String,
 
-    /// Temperature for inline prompt suggestion generation.
+    /// Temperature for inline prompt suggestion generation (0.0-1.0).
     #[serde(default = "default_prompt_suggestions_temperature")]
     pub temperature: f32,
 

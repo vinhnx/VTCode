@@ -615,6 +615,47 @@ impl RecoveryModalFixture {
         })
     }
 
+    fn answer_host_retry_and_cancel_approval(&mut self) -> tokio::task::JoinHandle<()> {
+        use vtcode_ui::tui::app::{HostInteractionKind, host_interaction_from_command, host_interaction_response};
+
+        let (_, replacement) = tokio::sync::mpsc::unbounded_channel();
+        let mut commands = std::mem::replace(&mut self.commands, replacement);
+        let events = self.events.as_ref().expect("host event sender").clone();
+        tokio::spawn(async move {
+            let mut saw_retry = false;
+            loop {
+                let command = tokio::time::timeout(Duration::from_secs(3), commands.recv())
+                    .await
+                    .expect("host interaction must be presented")
+                    .expect("host command channel");
+                let Some(interaction) = host_interaction_from_command(&command) else {
+                    continue;
+                };
+                match interaction.kind {
+                    HostInteractionKind::Question if !saw_retry => {
+                        let choice = interaction.steps[0]
+                            .choices
+                            .iter()
+                            .find(|choice| choice.label.contains("Retry from retained evidence"))
+                            .expect("desktop recovery retry option");
+                        let response =
+                            host_interaction_response(&interaction, std::slice::from_ref(&choice.id), &[], false)
+                                .expect("desktop retry response");
+                        events.send(response).expect("submit desktop retry");
+                        saw_retry = true;
+                    }
+                    HostInteractionKind::PlanApproval if saw_retry => {
+                        let response = host_interaction_response(&interaction, &[], &[], true)
+                            .expect("desktop approval cancellation");
+                        events.send(response).expect("cancel desktop approval");
+                        break;
+                    }
+                    other => panic!("unexpected host interaction: {other:?}"),
+                }
+            }
+        })
+    }
+
     fn wizard_count(&mut self) -> usize {
         let mut count = 0;
         while let Ok(command) = self.commands.try_recv() {
@@ -638,6 +679,120 @@ fn exhausted_recovery_snapshot() -> PlanningRecoverySnapshot {
         evidence: vec!["retained public evidence".into()],
         ..Default::default()
     }
+}
+
+#[tokio::test]
+async fn terminal_plan_validation_cancel_retains_draft_without_approval() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let harness = backing.enable_harness_emitter();
+    let mut modal = RecoveryModalFixture::new();
+    modal
+        .events
+        .as_ref()
+        .expect("modal event sender")
+        .send(InlineEvent::Transient(TransientEvent::Cancelled))
+        .expect("cancel recovery prompt");
+    let mut ctx = backing.turn_processing_context();
+    ctx.plan_session.mark_plan_validation_repair_used();
+    ctx.plan_session.mark_plan_validation_repair_used();
+    ctx.handle = &modal.handle;
+    ctx.session = &mut modal.session;
+    ctx.renderer = &mut modal.renderer;
+
+    let outcome = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some(RETAINED_DRAFT.into()), false)
+        .await
+        .expect("cancel recovery choices");
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+    assert_eq!(ctx.plan_session.recovery.outcome, PlanningOutcome::AwaitingInput);
+    assert_eq!(ctx.plan_session.recovery.cycle, 0);
+    assert!(ctx.plan_session.recovery.input_prompt_shown);
+    assert!(ctx.plan_session.recovery.research_closed);
+    assert!(
+        ctx.plan_session
+            .recovery
+            .best_draft
+            .as_deref()
+            .is_some_and(|draft| draft.contains("review it"))
+    );
+    assert!(ctx.tool_registry.is_planning_active());
+    assert_eq!(
+        ctx.working_history
+            .iter()
+            .map(|message| message.content.as_text().matches("verify: [review it]").count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(modal.wizard_count(), 1);
+    assert!(
+        !events(&harness)
+            .iter()
+            .any(|event| matches!(event, ThreadEvent::PlanApprovalRequested(_)))
+    );
+}
+
+#[tokio::test]
+async fn terminal_plan_validation_retry_reaches_separate_approval() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    backing.set_skip_confirmations_for_test(false);
+    let harness = backing.enable_harness_emitter();
+    let mut modal = RecoveryModalFixture::new();
+    let popup = modal.answer_host_retry_and_cancel_approval();
+    let mut ctx = backing.turn_processing_context();
+    ctx.plan_session.mark_plan_validation_repair_used();
+    ctx.plan_session.mark_plan_validation_repair_used();
+    ctx.handle = &modal.handle;
+    ctx.session = &mut modal.session;
+    ctx.renderer = &mut modal.renderer;
+
+    let rejected = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some(RETAINED_DRAFT.into()), false)
+        .await
+        .expect("present recovery choices for invalid draft");
+    assert!(matches!(rejected, TurnHandlerOutcome::Continue));
+    assert_eq!(ctx.plan_session.recovery.cycle, 1);
+    assert!(
+        ctx.plan_session
+            .recovery
+            .best_draft
+            .as_deref()
+            .is_some_and(|draft| draft.contains("review it"))
+    );
+    assert!(ctx.recovery_is_tool_free());
+    assert!(
+        !events(&harness)
+            .iter()
+            .any(|event| matches!(event, ThreadEvent::PlanApprovalRequested(_)))
+    );
+
+    assert!(ctx.admit_planning_recovery_request("test-model").await.expect("admit retry"));
+    assert!(ctx.consume_recovery_pass());
+    let repaired = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some(REPAIRED_DRAFT.into()), false)
+        .await
+        .expect("present repaired plan for approval");
+    assert!(matches!(
+        repaired,
+        TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false })
+    ));
+    assert!(ctx.tool_registry.is_planning_active());
+    popup.await.expect("desktop recovery and approval interactions");
+    let approval_events = events(&harness);
+    assert_eq!(
+        approval_events
+            .iter()
+            .filter(|event| matches!(event, ThreadEvent::PlanApprovalRequested(_)))
+            .count(),
+        1
+    );
+    assert!(
+        approval_events
+            .iter()
+            .any(|event| matches!(event, ThreadEvent::PlanApprovalResolved(resolved)
+        if !resolved.automatic && resolved.decision == vtcode_core::exec::events::PlanApprovalDecision::Cancel))
+    );
 }
 
 #[tokio::test]
@@ -694,7 +849,10 @@ async fn planning_recovery_runtime_retry_answer_starts_one_cycle_without_approva
     let mut modal = RecoveryModalFixture::new();
     let popup = modal.answer_displayed_options(vec![vec![PopupAnswer::Option(0)]], false);
     let mut ctx = backing.turn_processing_context();
-    ctx.plan_session.recovery = exhausted_recovery_snapshot();
+    ctx.plan_session.recovery = PlanningRecoverySnapshot {
+        research_closed: false,
+        ..exhausted_recovery_snapshot()
+    };
     ctx.handle = &modal.handle;
     ctx.session = &mut modal.session;
     ctx.renderer = &mut modal.renderer;
@@ -727,7 +885,7 @@ async fn planning_recovery_runtime_clarification_preserves_text_and_requires_exp
             vec![
                 vec![PopupAnswer::Option(1)],
                 vec![
-                    PopupAnswer::Text("The newly missing fact is the configured model endpoint."),
+                    PopupAnswer::Text("Do not approve yet; the missing fact is the configured model endpoint."),
                     PopupAnswer::Option(usize::from(request_research)),
                 ],
             ],
@@ -750,8 +908,9 @@ async fn planning_recovery_runtime_clarification_preserves_text_and_requires_exp
             ctx.plan_session
                 .recovery
                 .latest_request
-                .contains("The newly missing fact is the configured model endpoint.")
+                .contains("Do not approve yet; the missing fact is the configured model endpoint.")
         );
+        assert!(*ctx.auto_finish_planning_attempted, "clarification must not trigger plan approval");
         assert_eq!(ctx.plan_session.recovery.targeted_research.is_some(), request_research);
         assert_eq!(ctx.plan_session.recovery.evidence, ["retained public evidence"]);
         assert_eq!(popup.await.expect("clarification popup interaction"), 2);
@@ -771,7 +930,10 @@ async fn planning_recovery_runtime_model_answer_waits_for_explicit_picker_select
     let mut modal = RecoveryModalFixture::new();
     let popup = modal.answer_displayed_options(vec![vec![PopupAnswer::Option(2)]], false);
     let mut ctx = backing.turn_processing_context();
-    ctx.plan_session.recovery = exhausted_recovery_snapshot();
+    ctx.plan_session.recovery = PlanningRecoverySnapshot {
+        research_closed: false,
+        ..exhausted_recovery_snapshot()
+    };
     ctx.handle = &modal.handle;
     ctx.session = &mut modal.session;
     ctx.renderer = &mut modal.renderer;
@@ -782,6 +944,7 @@ async fn planning_recovery_runtime_model_answer_waits_for_explicit_picker_select
     assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
     assert_eq!(ctx.plan_session.recovery.outcome, PlanningOutcome::AwaitingInput);
     assert!(ctx.plan_session.recovery.model_selection_pending);
+    assert!(ctx.plan_session.recovery.research_closed);
     assert_eq!(ctx.plan_session.recovery.requests_used, 3);
     assert_eq!(ctx.plan_session.recovery.cycle, 0);
     assert_eq!(popup.await.expect("model popup interaction"), 1);

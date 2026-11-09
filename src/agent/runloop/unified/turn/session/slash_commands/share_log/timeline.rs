@@ -266,6 +266,7 @@ mod tests {
                     id: "call:output".into(),
                     context: None,
                     details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                        is_delta: None,
                         call_id: "call".into(),
                         tool_call_id: Some("raw-call".into()),
                         output: text.into(),
@@ -405,6 +406,7 @@ mod tests {
             sample_event_record(
                 3,
                 ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
                     completed_at: None,
                     usage: Usage {
                         input_tokens: 10,

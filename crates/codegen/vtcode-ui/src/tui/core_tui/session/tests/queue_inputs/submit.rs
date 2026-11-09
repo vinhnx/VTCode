@@ -136,3 +136,76 @@ fn busy_resume_command_emits_resume_event() {
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(event, Some(app_types::InlineEvent::Resume)));
 }
+
+fn push_scrolled_transcript(session: &mut Session) {
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.apply_transcript_rows(6);
+    for index in 0..10 {
+        session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("line {index}"))]);
+    }
+    session.ensure_scroll_metrics();
+    session.scroll_page_up();
+    assert!(session.scroll_offset() > 0, "fixture must leave the bottom");
+}
+
+#[test]
+fn scrolled_enter_with_draft_jumps_to_latest_before_submitting() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    push_scrolled_transcript(&mut session);
+    session.set_input("keep this draft".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(event.is_none(), "first Enter jumps instead of submitting");
+    assert_eq!(session.scroll_offset(), 0);
+    assert_eq!(session.input_manager.content(), "keep this draft");
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(
+        matches!(event, Some(InlineEvent::Submit(value)) if value == "keep this draft"),
+        "second Enter submits"
+    );
+}
+
+#[test]
+fn app_scrolled_enter_with_draft_jumps_to_latest_before_submitting() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    push_scrolled_transcript(&mut session.core);
+    session.core.set_input("app draft".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(event.is_none(), "first Enter jumps instead of submitting");
+    assert_eq!(session.core.scroll_offset(), 0);
+    assert_eq!(session.core.input_manager.content(), "app draft");
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(
+        matches!(event, Some(app_types::InlineEvent::Submit(value)) if value == "app draft"),
+        "second Enter submits"
+    );
+}
+
+#[test]
+fn scrolled_enter_with_empty_draft_rejoins_tail_silently() {
+    // Pre-existing take behavior: submitting (even blank) re-follows the
+    // tail. The jump gate only changes the non-empty case (draft kept).
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    push_scrolled_transcript(&mut session);
+    session.set_input("   ".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(event.is_none(), "blank Enter submits nothing");
+    assert_eq!(session.scroll_offset(), 0, "blank Enter rejoins the tail");
+}
+
+#[test]
+fn scrolled_control_enter_keeps_immediate_submit() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    push_scrolled_transcript(&mut session);
+    session.set_input("send now".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    assert!(
+        matches!(event, Some(InlineEvent::Submit(value)) if value == "send now"),
+        "explicit queue intent bypasses the jump"
+    );
+}

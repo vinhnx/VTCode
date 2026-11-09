@@ -38,6 +38,7 @@ fn failed_interaction_delivery_keeps_response_retryable() {
         steps: Vec::new(),
         selected_choice_id: None,
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     };
     let response = protocol::InteractionResponse {
         session_id: interaction.session_id.clone(),
@@ -48,6 +49,7 @@ fn failed_interaction_delivery_keeps_response_retryable() {
         text: None,
         answer_texts: Vec::new(),
         cancelled: true,
+        hotkey: None,
     };
     let view = HostInteraction {
         kind: vtcode_ui::tui::app::HostInteractionKind::Question,
@@ -56,6 +58,7 @@ fn failed_interaction_delivery_keeps_response_retryable() {
         details: Vec::new(),
         steps: Vec::new(),
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     };
     let mut state = ServerState::default();
     state.interaction_registry.insert(&interaction).expect("register interaction");
@@ -84,6 +87,109 @@ fn failed_interaction_delivery_keeps_response_retryable() {
     assert!(dispatch_interaction_response(&mut state, &response, &[], &[], &live_input).is_err());
     assert!(live_receiver.try_recv().is_err(), "a consumed response must not be delivered twice");
 }
+
+fn pending_plan_approval() -> (InteractionRequest, HostInteraction) {
+    let interaction = InteractionRequest {
+        session_id: "session-a".into(),
+        turn_id: "turn-9".into(),
+        interaction_id: "interaction-plan".into(),
+        kind: InteractionKind::PlanApproval,
+        wizard: false,
+        title: "Ready to code?".into(),
+        details: Vec::new(),
+        choices: Vec::new(),
+        steps: Vec::new(),
+        selected_choice_id: None,
+        selected_choice_ids: Vec::new(),
+        plan_markdown: Some("# Plan\n\nDo the thing.".into()),
+    };
+    let view = HostInteraction {
+        kind: vtcode_ui::tui::app::HostInteractionKind::PlanApproval,
+        wizard: false,
+        title: interaction.title.clone(),
+        details: Vec::new(),
+        steps: Vec::new(),
+        selected_choice_ids: Vec::new(),
+        plan_markdown: interaction.plan_markdown.clone(),
+    };
+    (interaction, view)
+}
+
+fn hotkey_response(interaction: &InteractionRequest) -> protocol::InteractionResponse {
+    protocol::InteractionResponse {
+        session_id: interaction.session_id.clone(),
+        turn_id: interaction.turn_id.clone(),
+        interaction_id: interaction.interaction_id.clone(),
+        choice_id: None,
+        choice_ids: Vec::new(),
+        text: None,
+        answer_texts: Vec::new(),
+        cancelled: false,
+        hotkey: Some(protocol::InteractionHotkey::LaunchEditor),
+    }
+}
+
+#[test]
+fn interaction_hotkey_launch_editor_reaches_runtime_for_plan_approval() {
+    use vtcode_ui::tui::app::{TransientEvent, TransientSubmission};
+
+    let (interaction, view) = pending_plan_approval();
+    let mut state = ServerState::default();
+    state.interaction_registry.insert(&interaction).expect("register interaction");
+    state.pending_interactions.insert(
+        interaction.interaction_id.clone(),
+        PendingInteraction {
+            session_id: interaction.session_id.clone(),
+            turn_id: interaction.turn_id.clone(),
+            view,
+        },
+    );
+
+    let response = hotkey_response(&interaction);
+    let (live_input, mut live_receiver) = mpsc::unbounded_channel();
+    dispatch_interaction_response(&mut state, &response, &[], &[], &live_input).expect("hotkey reaches runtime");
+    assert!(matches!(
+        live_receiver.try_recv(),
+        Ok(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(_))))
+    ));
+    assert!(!state.pending_interactions.contains_key(&interaction.interaction_id));
+}
+
+#[test]
+fn interaction_hotkey_outside_plan_approval_is_rejected_and_stays_pending() {
+    let (mut interaction, _) = pending_plan_approval();
+    interaction.interaction_id = "interaction-question".into();
+    interaction.kind = InteractionKind::Question;
+    interaction.plan_markdown = None;
+    let view = HostInteraction {
+        kind: vtcode_ui::tui::app::HostInteractionKind::Question,
+        wizard: false,
+        title: interaction.title.clone(),
+        details: Vec::new(),
+        steps: Vec::new(),
+        selected_choice_ids: Vec::new(),
+        plan_markdown: None,
+    };
+    let mut state = ServerState::default();
+    state.interaction_registry.insert(&interaction).expect("register interaction");
+    state.pending_interactions.insert(
+        interaction.interaction_id.clone(),
+        PendingInteraction {
+            session_id: interaction.session_id.clone(),
+            turn_id: interaction.turn_id.clone(),
+            view,
+        },
+    );
+
+    let response = hotkey_response(&interaction);
+    let (live_input, mut live_receiver) = mpsc::unbounded_channel();
+    let error = dispatch_interaction_response(&mut state, &response, &[], &[], &live_input)
+        .expect_err("non-plan hotkey is rejected");
+    assert!(error.to_string().contains("hotkey is invalid"));
+    assert!(state.pending_interactions.contains_key(&interaction.interaction_id));
+    assert!(live_receiver.try_recv().is_err(), "rejected hotkey must not reach the runtime");
+}
+
 #[cfg(unix)]
 #[test]
 fn restored_review_uses_latest_canonical_items_without_lifecycle_replay() {
@@ -101,8 +207,20 @@ fn restored_review_uses_latest_canonical_items_without_lifecycle_replay() {
     log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: review_item("first", "latest patch") }))
         .unwrap();
     log.flush().unwrap();
-    let RestoredInspectorHistory { items, incomplete, .. } = restored_inspector_history(&workspace, "review").unwrap();
+    let RestoredInspectorHistory {
+        items,
+        incomplete,
+        timeline_events,
+        timeline_incomplete,
+        ..
+    } = restored_inspector_history(&workspace, "review").unwrap();
     assert!(!incomplete);
+    assert!(!timeline_incomplete);
+    assert_eq!(timeline_events.len(), 4);
+    assert!(matches!(timeline_events[0].event(), ThreadEvent::ThreadStarted(_)));
+    assert!(matches!(timeline_events[1].event(), ThreadEvent::ItemStarted(event) if event.item.id == "first"));
+    assert!(matches!(timeline_events[2].event(), ThreadEvent::ItemCompleted(event) if event.item.id == "other"));
+    assert!(matches!(timeline_events[3].event(), ThreadEvent::ItemCompleted(event) if event.item.id == "first"));
     assert_eq!(
         items,
         vec![

@@ -57,34 +57,32 @@ pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
 /// * `normalized` - A normalized path (output from `normalize_path`)
 ///
 /// # Returns
-/// The canonical path, or the normalized path if no parent exists
+/// The canonical path, or the normalized path if no parent exists. Existing
+/// symlinks must resolve, including symlinks whose targets do not yet exist.
 pub async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
-    // If the path exists, canonicalize it directly
-    if tokio::fs::try_exists(normalized).await.unwrap_or(false) {
-        return canonicalize_async(normalized)
-            .await
-            .map_err(|e| anyhow!("Failed to resolve canonical path for '{}': {}", normalized.display(), e));
-    }
-
-    // Walk up the directory tree to find the nearest existing ancestor
+    // Inspect the link itself: try_exists follows symlinks and reports a
+    // dangling link as absent, which would leave it unresolved in the result.
     let mut current = normalized.to_path_buf();
-    while let Some(parent) = current.parent() {
-        if tokio::fs::try_exists(parent).await.unwrap_or(false) {
-            // Canonicalize the existing parent
-            let canonical_parent = canonicalize_async(parent)
-                .await
-                .map_err(|e| anyhow!("Failed to resolve canonical path for '{}': {}", parent.display(), e))?;
+    loop {
+        match tokio::fs::symlink_metadata(&current).await {
+            Ok(_) => {
+                let canonical_parent = canonicalize_async(&current)
+                    .await
+                    .map_err(|e| anyhow!("Failed to resolve canonical path for '{}': {}", current.display(), e))?;
 
-            // Get the remaining path components
-            let remainder = normalized.strip_prefix(parent).unwrap_or_else(|_| Path::new(""));
+                let remainder = normalized.strip_prefix(&current).unwrap_or_else(|_| Path::new(""));
 
-            // Return the canonical parent + remaining components
-            return if remainder.as_os_str().is_empty() {
-                Ok(canonical_parent)
-            } else {
-                Ok(canonical_parent.join(remainder))
-            };
+                // Return the canonical parent + remaining components
+                return if remainder.as_os_str().is_empty() {
+                    Ok(canonical_parent)
+                } else {
+                    Ok(canonical_parent.join(remainder))
+                };
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(anyhow!("Failed to inspect path '{}': {}", current.display(), error)),
         }
+        let Some(parent) = current.parent() else { break };
         current = parent.to_path_buf();
     }
 
@@ -155,5 +153,21 @@ mod tests {
 
         // Cleanup
         drop(tokio::fs::remove_dir(&test_dir).await);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn dangling_symlink_is_not_treated_as_a_missing_component() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let link = workspace.path().join("link");
+        std::os::unix::fs::symlink(outside.path().join("missing"), &link).unwrap();
+        assert!(canonicalize_allow_missing(&link).await.is_err());
+        assert!(canonicalize_allow_missing(&link.join("child")).await.is_err());
+        assert!(canonicalize_allow_missing(&workspace.path().join("new/child")).await.is_ok());
+        let valid_link = workspace.path().join("valid");
+        std::os::unix::fs::symlink(outside.path(), &valid_link).unwrap();
+        let resolved = canonicalize_allow_missing(&valid_link.join("new/child")).await.unwrap();
+        assert_eq!(resolved, canonicalize_async(outside.path()).await.unwrap().join("new/child"));
     }
 }

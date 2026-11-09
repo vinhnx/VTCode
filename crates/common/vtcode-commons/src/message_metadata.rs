@@ -45,6 +45,9 @@ pub struct MessageMetadata {
     /// messages remain wire-compatible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     intent_id: Option<String>,
+    /// Canonical event item that produced this message, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    event_item_id: Option<String>,
 }
 
 impl MessageMetadata {
@@ -57,6 +60,7 @@ impl MessageMetadata {
             estimated_tokens,
             source: Some("user_input".into()),
             intent_id: None,
+            event_item_id: None,
         }
     }
 
@@ -69,6 +73,7 @@ impl MessageMetadata {
             estimated_tokens,
             source: Some("llm_response".into()),
             intent_id: None,
+            event_item_id: None,
         }
     }
 
@@ -81,6 +86,7 @@ impl MessageMetadata {
             estimated_tokens,
             source: Some("tool_result".into()),
             intent_id: None,
+            event_item_id: None,
         }
     }
 
@@ -93,6 +99,7 @@ impl MessageMetadata {
             estimated_tokens,
             source: Some("system".into()),
             intent_id: None,
+            event_item_id: None,
         }
     }
 
@@ -105,6 +112,7 @@ impl MessageMetadata {
             estimated_tokens,
             source: Some("synthetic".into()),
             intent_id: None,
+            event_item_id: None,
         }
     }
 
@@ -144,6 +152,17 @@ impl MessageMetadata {
     #[must_use]
     pub fn intent_id(&self) -> Option<&str> {
         self.intent_id.as_deref()
+    }
+
+    /// Record the canonical event identity for durable transcript correlation.
+    pub fn set_event_item_id(&mut self, item_id: String) {
+        self.event_item_id = Some(item_id);
+    }
+
+    /// Return the canonical event identity when one was recorded.
+    #[must_use]
+    pub fn event_item_id(&self) -> Option<&str> {
+        self.event_item_id.as_deref()
     }
 
     /// Mark this message as compressed, recording the original and new token counts.
@@ -287,5 +306,17 @@ mod tests {
         let legacy = r#"{"timestamp":1000,"importance_score":0.5,"compression_status":"uncompressed","estimated_tokens":50,"source":"user_input"}"#;
         let restored: MessageMetadata = serde_json::from_str(legacy).unwrap();
         assert_eq!(restored.intent_id(), None);
+    }
+
+    #[test]
+    fn event_item_identity_round_trips_and_legacy_metadata_has_none() {
+        let mut metadata = MessageMetadata::llm_response(42, 7);
+        metadata.set_event_item_id("event-1".into());
+        let encoded = serde_json::to_string(&metadata).unwrap();
+        let decoded: MessageMetadata = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.event_item_id(), Some("event-1"));
+        let legacy = r#"{"timestamp":1000,"importance_score":0.5,"compression_status":"uncompressed","estimated_tokens":50,"source":"user_input"}"#;
+        let decoded: MessageMetadata = serde_json::from_str(legacy).unwrap();
+        assert_eq!(decoded.event_item_id(), None);
     }
 }

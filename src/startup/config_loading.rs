@@ -108,6 +108,11 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     apply_cli_provider_selection(&mut config, args);
     apply_aux_dotconfig_provider_defaults(&mut config, &manager, args.provider.is_some()).await;
 
+    // Install the configured HTTP timeout defaults before any outbound client
+    // is built (provider probes, update check, marketplace). Live reload
+    // re-installs them from the same resolver.
+    vtcode_commons::http::install_http_timeouts(config.timeouts.http_timeouts());
+
     let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
         Some(value) if value.trim().is_empty() => (true, None),
         Some(value) => (true, Some(value)),
@@ -303,6 +308,60 @@ enable_tracing = true
         let loaded = load_startup_config(&args).await.expect("startup config should load");
 
         assert!(loaded.config.debug.enable_tracing);
+    }
+
+    /// Restores the process-global HTTP defaults on drop so a failing assertion
+    /// cannot leak installed timeouts into sibling tests.
+    struct HttpTimeoutsGuard(vtcode_commons::http::HttpTimeouts);
+
+    impl HttpTimeoutsGuard {
+        fn recording_current() -> Self {
+            Self(vtcode_commons::http::http_timeouts())
+        }
+    }
+
+    impl Drop for HttpTimeoutsGuard {
+        fn drop(&mut self) {
+            vtcode_commons::http::install_http_timeouts(self.0);
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn startup_installs_configured_http_timeouts() {
+        // End-to-end guard for the "my network is slower than yours" escape
+        // hatch: a `[timeouts]` value in a real config file must reach the
+        // process-global HTTP defaults that every outbound client reads.
+        let _guard = SessionOverrideGuard::reset();
+        let _http_guard = HttpTimeoutsGuard::recording_current();
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let workspace = temp_dir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace dir");
+        std::fs::create_dir_all(workspace.join(".vtcode")).expect("workspace dot dir");
+
+        let config_path = temp_dir.path().join("slow-network.toml");
+        std::fs::write(
+            &config_path,
+            "[timeouts]\nhttp_connect_seconds = 12\nhttp_request_seconds = 90\nhttp_download_seconds = 1200\n",
+        )
+        .expect("custom config");
+
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--config",
+            config_path.to_str().expect("config path"),
+        ]);
+
+        let loaded = load_startup_config(&args).await.expect("startup config should load");
+        let installed = vtcode_commons::http::http_timeouts();
+
+        assert_eq!(loaded.config.timeouts.http_request_seconds, 90);
+        assert_eq!(installed.connect, Some(std::time::Duration::from_secs(12)));
+        assert_eq!(installed.request, Some(std::time::Duration::from_secs(90)));
+        assert_eq!(installed.download, Some(std::time::Duration::from_secs(1200)));
     }
 
     #[tokio::test]

@@ -1,5 +1,6 @@
 //! Transcript state and conversation rendering: rows, items, tool and diff cards.
 
+use super::turn_undo::{TurnUndoState, undo_turn_id};
 use super::*;
 
 /// Owned welcome-screen text shared by the default and Zen empty states.
@@ -20,6 +21,37 @@ impl DesktopView {
         WelcomeHeader { copy, greeting, workspace_name, prompt }
     }
 
+    /// Shared greeting scaffold for the welcome and Zen empty states: one
+    /// owner for the brand mark, title type, and gap, so the two greetings
+    /// cannot drift apart in size. Callers pass their own title content
+    /// (workspace link vs plain text) and wrap the scaffold in their own
+    /// labelled group.
+    fn greeting_empty_state(
+        &self,
+        title: impl IntoElement,
+        colors: gpui_kit::component::theme::ThemeColor,
+    ) -> impl IntoElement {
+        EmptyState::new()
+            .header(
+                EmptyHeader::new()
+                    .max_w(px(self.content_width()))
+                    .gap_6()
+                    .media(
+                        EmptyMedia::new()
+                            .mb_0()
+                            .child(brand_mark("welcome-brand-mark", 36., colors.primary)),
+                    )
+                    .title(
+                        EmptyTitle::new()
+                            .text_size(gpui_kit::rems(1.75))
+                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                            .text_color(colors.foreground)
+                            .child(title),
+                    ),
+            )
+            .size_full()
+    }
+
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
             id,
@@ -36,6 +68,7 @@ impl DesktopView {
     pub(super) fn load_history(&mut self, history: Vec<TranscriptItem>) {
         self.reset_session_state();
         self.transcript.replace_prepared(history);
+        self.transcript.group_archived_prefix(usize::MAX);
         self.transcript.follow_latest();
     }
 
@@ -89,6 +122,7 @@ impl DesktopView {
             && self.history_page_error.is_none();
         let content = if self.pending_blank_transition() {
             let label = rust_i18n::t!(i18n::SESSION_PREPARING_NEW_THREAD).to_string();
+            let colors = cx.theme().colors;
             div()
                 .id("new-thread-pending")
                 .test_support()
@@ -98,8 +132,8 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_color(cx.theme().colors.foreground)
-                .child(shimmer_label("new-thread-pending-label", label))
+                .text_color(colors.foreground)
+                .child(shimmer_label("new-thread-pending-label", label, colors.foreground, cx))
                 .into_any_element()
         } else if empty_conversation && !self.zen_mode {
             let colors = cx.theme().colors;
@@ -109,101 +143,93 @@ impl DesktopView {
                 workspace_name,
                 prompt,
             } = self.welcome_header();
-            let title = EmptyTitle::new()
-                .text_size(gpui_kit::rems(1.75))
-                .font_weight(gpui_kit::FontWeight::NORMAL)
-                .text_color(colors.foreground)
-                .child(
-                    div()
-                        .id("welcome-prompt")
-                        .test_support()
-                        .role(gpui_kit::Role::Heading)
-                        .aria_label(prompt.clone())
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_center()
-                        .gap_2()
-                        .child(if workspace_name.is_some() {
-                            format!("{greeting}. {}", welcome_copy.workspace_action)
-                        } else {
-                            prompt
-                        })
-                        .when_some(workspace_name, |title, name| {
-                            title.child(
-                                desktop_button("welcome-workspace")
-                                    .accessibility_label(
-                                        rust_i18n::t!("app.transcript.change_workspace", name = name.as_str())
-                                            .to_string(),
-                                    )
-                                    .tooltip_with_action(
-                                        rust_i18n::t!("app.transcript.choose_workspace").to_string(),
-                                        &ChooseWorkspace,
-                                        Some(key_context::DESKTOP),
-                                    )
-                                    .text()
-                                    .text_color(colors.foreground)
-                                    .h_auto()
-                                    .p_0()
-                                    .min_w_0()
-                                    .max_w_full()
-                                    .desktop_disabled(
-                                        !self.workspace_switch_idle()
-                                            || self.workspace_picker_open
-                                            || self.retained_submission.is_some(),
-                                    )
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_size(gpui_kit::rems(1.75))
-                                            .font_weight(gpui_kit::FontWeight::NORMAL)
-                                            .border_b_1()
-                                            .border_dashed()
-                                            .border_color(colors.muted_foreground)
-                                            .child(format!("{name}?")),
-                                    )
-                                    .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
+            let title = div()
+                .id("welcome-prompt")
+                .test_support()
+                .role(gpui_kit::Role::Heading)
+                .aria_label(prompt.clone())
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .child(if workspace_name.is_some() {
+                    format!("{greeting}. {}", welcome_copy.workspace_action)
+                } else {
+                    prompt
+                })
+                .when_some(workspace_name, |title, name| {
+                    title.child(
+                        desktop_button("welcome-workspace")
+                            .accessibility_label(
+                                rust_i18n::t!("app.transcript.change_workspace", name = name.as_str()).to_string(),
                             )
-                        }),
-                );
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.transcript.choose_workspace").to_string(),
+                                &ChooseWorkspace,
+                                Some(key_context::DESKTOP),
+                            )
+                            .text()
+                            .text_color(colors.foreground)
+                            .h_auto()
+                            .p_0()
+                            .min_w_0()
+                            .max_w_full()
+                            .desktop_disabled(
+                                !self.workspace_switch_idle()
+                                    || self.workspace_picker_open
+                                    || self.retained_submission.is_some(),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(gpui_kit::rems(1.75))
+                                    .font_weight(gpui_kit::FontWeight::NORMAL)
+                                    .border_b_1()
+                                    .border_dashed()
+                                    .border_color(colors.muted_foreground)
+                                    .child(format!("{name}?")),
+                            )
+                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
+                    )
+                });
             div()
                 .id("welcome")
                 .test_support()
                 .role(gpui_kit::Role::Group)
                 .aria_label(rust_i18n::t!("app.transcript.welcome_label").to_string())
                 .size_full()
-                .child(
-                    EmptyState::new()
-                        .header(
-                            EmptyHeader::new()
-                                .max_w(px(self.content_width()))
-                                .gap_6()
-                                .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
-                                .title(title),
-                        )
-                        .size_full(),
-                )
+                .child(self.greeting_empty_state(title, colors))
                 .into_any_element()
         } else if empty_conversation {
             self.render_zen_empty_state(cx)
         } else {
             let remaining_history_capacity = self.transcript.remaining_capacity();
+            let colors = cx.theme().colors;
             let mut transcript_content = div().size_full().min_h_0().flex().flex_col();
             if self.history_has_earlier || self.history_page_loading || self.history_page_error.is_some() {
                 let mut history_bar = div().w_full().flex().flex_col().items_center().gap_1().px_3().py_1();
                 if let Some(error) = &self.history_page_error {
-                    history_bar =
-                        history_bar.child(warning_alert("history-page-error", error.clone(), &cx.theme().colors));
+                    history_bar = history_bar.child(warning_alert("history-page-error", error.clone(), &colors));
                 }
                 if self.history_has_earlier && remaining_history_capacity == 0 {
                     history_bar = history_bar.child(
                         div()
                             .id("history-page-limit")
+                            .test_support()
                             .role(gpui_kit::Role::Status)
-                            .text_xs()
-                            .text_color(cx.theme().colors.muted_foreground)
-                            .child(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
+                            .w_full()
+                            .child(
+                                Marker::new()
+                                    .with_variant(MarkerVariant::Separator)
+                                    .text_xs()
+                                    .text_color(colors.muted_foreground)
+                                    .content(
+                                        MarkerContent::new()
+                                            .text(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
+                                    ),
+                            ),
                     );
                 } else if self.history_has_earlier {
                     history_bar = history_bar.child(
@@ -221,30 +247,48 @@ impl DesktopView {
                     );
                 }
                 if self.history_page_loading {
-                    history_bar = history_bar.child(shimmer_label(
+                    // The old label inherited the 16px root foreground (no
+                    // ancestor sets a size); the marker normalizes it to
+                    // text_sm muted like every sibling loading row.
+                    history_bar = history_bar.child(loading_marker_row(
                         "history-loading-label",
                         rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string(),
+                        colors.muted_foreground,
+                        cx,
                     ));
                 }
                 transcript_content = transcript_content.child(history_bar);
             }
-            let scroller = MessageScroller::new(
-                "transcript-scroller",
-                self.message_scroller.clone(),
-                cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
-            )
-            .with_jump_button_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
-            .with_jump_button_renderer(|button| {
-                button.accessibility_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
-            })
-            // Row spacing is applied by render_transcript_row so collapsed tool
-            // placeholders do not each reserve the scroller's default 32 px gap.
-            .with_row_style(gpui_kit::StyleRefinement::default().pb_0())
-            .w_full()
-            .flex_1()
-            .min_h_0()
-            .py_6()
-            .into_any_element();
+            // Relative column mirroring the original flex structure exactly: the
+            // scroller keeps its flex_1 relationship, and the absolutely
+            // positioned overlay sibling takes no layout space.
+            let scroller = div()
+                .relative()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(
+                    MessageScroller::new(
+                        "transcript-scroller",
+                        self.message_scroller.clone(),
+                        cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
+                    )
+                    .with_jump_button_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
+                    .with_jump_button_renderer(|button| {
+                        button.accessibility_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
+                    })
+                    // Row spacing is applied by render_transcript_row so collapsed tool
+                    // placeholders do not each reserve the scroller's default 32 px gap.
+                    .with_row_style(gpui_kit::StyleRefinement::default().pb_0())
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .py_6(),
+                )
+                .children(self.render_transcript_overlays(cx))
+                .into_any_element();
             transcript_content = transcript_content.child(scroller);
             if self.turn_awaiting_content() {
                 transcript_content =
@@ -252,6 +296,14 @@ impl DesktopView {
             }
             transcript_content.into_any_element()
         };
+        // The first transcript layout settles list readers; overlay
+        // visibility waits for it. Set after content is built so this very
+        // render still suppresses the overlay. One extra frame, guarded by
+        // the flag so it can never loop.
+        if !self.transcript_layout_settled && !self.pending_blank_transition() && !empty_conversation {
+            self.transcript_layout_settled = true;
+            cx.notify();
+        }
         div()
             .id("transcript-scroll")
             .aria_label(rust_i18n::t!("app.transcript.conversation_label").to_string())
@@ -262,6 +314,8 @@ impl DesktopView {
             .key_context(key_context::TRANSCRIPT)
             .on_action(cx.listener(|view, _: &TranscriptPrevious, _, cx| view.move_transcript_focus(false, cx)))
             .on_action(cx.listener(|view, _: &TranscriptNext, _, cx| view.move_transcript_focus(true, cx)))
+            .on_action(cx.listener(|view, _: &TranscriptFirst, _, cx| view.move_transcript_focus_edge(true, cx)))
+            .on_action(cx.listener(|view, _: &TranscriptLast, _, cx| view.move_transcript_focus_edge(false, cx)))
             .flex_1()
             .min_h_0()
             .w_full()
@@ -273,6 +327,8 @@ impl DesktopView {
     /// focal point, followed by one greeting line; the workspace name renders
     /// as plain text because Zen hides the title-bar identity. The workspace
     /// picker stays reachable through the composer context row when none is set.
+    /// Mark, title, and gap come from the shared greeting scaffold, so
+    /// toggling modes never resizes the greeting.
     fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let WelcomeHeader { prompt, .. } = self.welcome_header();
@@ -283,28 +339,15 @@ impl DesktopView {
             .aria_label(rust_i18n::t!("app.transcript.zen_start_label").to_string())
             .size_full()
             .child(
-                EmptyState::new()
-                    .header(
-                        EmptyHeader::new()
-                            .max_w(px(self.content_width()))
-                            .gap_4()
-                            .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(40., colors.primary)))
-                            .title(
-                                EmptyTitle::new()
-                                    .text_size(gpui_kit::rems(1.5))
-                                    .font_weight(gpui_kit::FontWeight::NORMAL)
-                                    .text_color(colors.foreground)
-                                    .child(
-                                        div()
-                                            .id("zen-welcome-prompt")
-                                            .test_support()
-                                            .role(gpui_kit::Role::Heading)
-                                            .aria_label(prompt.clone())
-                                            .child(prompt),
-                                    ),
-                            ),
-                    )
-                    .size_full(),
+                self.greeting_empty_state(
+                    div()
+                        .id("zen-welcome-prompt")
+                        .test_support()
+                        .role(gpui_kit::Role::Heading)
+                        .aria_label(prompt.clone())
+                        .child(prompt),
+                    colors,
+                ),
             )
             .into_any_element()
     }
@@ -330,6 +373,7 @@ impl DesktopView {
             Some(NavigationDirection::Forward) => rust_i18n::t!("app.transcript.navigating_forward").to_string(),
             None => rust_i18n::t!("app.transcript.navigating").to_string(),
         };
+        let muted = cx.theme().colors.muted_foreground;
         div()
             .id("navigation-loading")
             .test_support()
@@ -342,55 +386,9 @@ impl DesktopView {
             .gap_2()
             .py_1()
             .text_xs()
-            .text_color(cx.theme().colors.muted_foreground)
-            .child(Spinner::new().small().color(cx.theme().colors.muted_foreground))
-            .child(shimmer_label("navigation-loading-label", label))
-    }
-
-    /// Rows the renderer hides (collapsed activity members) are also skipped by
-    /// keyboard navigation, so the highlight never lands on an invisible row.
-    fn transcript_row_visible(item: &TranscriptItem) -> bool {
-        !(item.activity_grouped && !item.activity_group_head && !item.activity_expanded)
-    }
-
-    /// Move the keyboard highlight across messages (Up/Down with the
-    /// transcript focused). Clamps at both ends and scrolls the row into view.
-    pub(super) fn move_transcript_focus(&mut self, down: bool, cx: &mut Context<Self>) {
-        let visible: Vec<usize> = self
-            .transcript
-            .items()
-            .enumerate()
-            .filter(|(_, item)| Self::transcript_row_visible(item))
-            .map(|(index, _)| index)
-            .collect();
-        if visible.is_empty() {
-            return;
-        }
-        let current = self.keyboard_focused_message.as_deref().and_then(|id| {
-            visible
-                .iter()
-                .position(|&index| self.transcript.get(index).is_some_and(|item| item.id.as_str() == id))
-        });
-        let next = match (current, down) {
-            (Some(position), true) => (position + 1).min(visible.len() - 1),
-            (Some(position), false) => position.saturating_sub(1),
-            (None, true) => 0,
-            (None, false) => visible.len() - 1,
-        };
-        let Some(&index) = visible.get(next) else {
-            return;
-        };
-        let Some(item) = self.transcript.get(index) else {
-            return;
-        };
-        self.keyboard_focused_message = Some(item.id.clone());
-        // Kit limitation: `scroll_to_item` pins to viewport top and the
-        // scroller exposes no visible-range query, so reveal-only-if-outside
-        // is unimplementable; every step recenters.
-        self.message_scroller.update(cx, |state, cx| {
-            let _scrolled = state.scroll_to_item(index, cx);
-        });
-        cx.notify();
+            .text_color(muted)
+            .child(Spinner::new().small().color(muted))
+            .child(shimmer_label("navigation-loading-label", label, muted, cx))
     }
 
     fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -403,12 +401,42 @@ impl DesktopView {
         if !Self::transcript_row_visible(item) {
             return div().into_any_element();
         }
+        let colors = cx.theme().colors;
         let group_header = item
             .activity_group_head
             .then(|| self.transcript.activity_group(index))
             .flatten()
             .map(|range| self.render_activity_group(range, cx));
-        let show_item = !item.activity_grouped || item.activity_expanded;
+        let show_turn_item = !item.turn_grouped || item.turn_group_expanded;
+        let show_item = show_turn_item && (!item.activity_grouped || item.activity_expanded);
+        let turn_header = if item.turn_group_head {
+            item.turn_id.as_ref().map(|turn_id| {
+                let turn_id = turn_id.to_string();
+                let expanded = item.turn_group_expanded;
+                desktop_button(format!("turn-work-{turn_id}"))
+                    .label(InspectorTab::Activity.label())
+                    .accessibility_label(format!(
+                        "{} {}",
+                        if expanded {
+                            rust_i18n::t!("app.transcript.collapse")
+                        } else {
+                            rust_i18n::t!("app.transcript.expand")
+                        },
+                        InspectorTab::Activity.label()
+                    ))
+                    .toggled(expanded)
+                    .child(transcript_chevron_lane(expanded))
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.transcript.set_turn_group_expanded(&turn_id, !expanded);
+                        cx.notify();
+                    }))
+                    .into_any_element()
+            })
+        } else {
+            None
+        };
         let content = div()
             .id(format!("transcript-content-{}", item.id))
             .test_support()
@@ -417,25 +445,164 @@ impl DesktopView {
             .min_w_0()
             .flex()
             .flex_col()
-            .children(group_header)
-            .when(item.is_user() && index > 0, |column| {
-                column.child(
-                    div()
-                        .id(format!("turn-divider-{}", item.id))
-                        .test_support()
-                        .child(turn_divider(&cx.theme().colors)),
-                )
-            })
-            .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)));
+            .children(turn_header)
+            .when(show_turn_item, |column| column.children(group_header))
+            .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)))
+            .when(!item.turn_files.is_empty(), |column| {
+                let path = item.turn_files.first().map(|entry| entry.file.path.clone());
+                let undo_control = undo_turn_id(item).map(|turn_id| {
+                    let turn_id = turn_id.to_owned();
+                    if self.turn_undos.get(turn_id.as_str()) == Some(&TurnUndoState::Undone) {
+                        div()
+                            .text_sm()
+                            .text_color(themes::muted_text(&colors))
+                            .child(rust_i18n::t!("app.transcript.turn_undone").to_string())
+                            .into_any_element()
+                    } else {
+                        let pending = self.turn_undos.contains_key(turn_id.as_str());
+                        desktop_button(format!("turn-undo-{turn_id}"))
+                            .label(rust_i18n::t!("app.transcript.turn_undo").to_string())
+                            .accessibility_label(rust_i18n::t!("app.transcript.turn_undo_action").to_string())
+                            .ghost()
+                            .small()
+                            .disabled(pending)
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                let _sent = view.request_turn_undo(&turn_id);
+                                cx.notify();
+                            }))
+                            .into_any_element()
+                    }
+                });
+                let mut card = div()
+                    .w_full()
+                    .rounded_md()
+                    .bg(colors.secondary)
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        rust_i18n::t!("app.inspector.files_count", count = item.turn_files.len())
+                                            .to_string(),
+                                    )
+                                    .when(item.turn_files_incomplete, |summary| {
+                                        summary.child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(themes::muted_text(&colors))
+                                                .child(rust_i18n::t!("app.inspector.partial_diff").to_string()),
+                                        )
+                                    })
+                                    .when_some(item.turn_file_totals, |summary, (added, deleted)| {
+                                        summary.child(
+                                            div()
+                                                .flex()
+                                                .gap_2()
+                                                .text_sm()
+                                                .child(div().text_color(colors.success).child(format!("+{added}")))
+                                                .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                div().flex().items_center().gap_2().children(undo_control).child(
+                                    desktop_button(format!("turn-changes-{}", item.id))
+                                        .label(InspectorTab::Changes.label())
+                                        .ghost()
+                                        .small()
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            if let Some(path) =
+                                                path.as_ref().filter(|path| view.changes.has_preview(path))
+                                            {
+                                                view.select_change(path.clone(), cx);
+                                            } else {
+                                                view.open_inspector_tab(InspectorTab::Changes, cx);
+                                            }
+                                        })),
+                                ),
+                            ),
+                    );
+                let start = item.turn_files_offset.min(item.turn_files.len());
+                let count = if start == 0 { 3 } else { 50 };
+                let end = start.saturating_add(count).min(item.turn_files.len());
+                for file in item.turn_files.iter().skip(start).take(count) {
+                    card = card.child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .min_w_0()
+                            .text_sm()
+                            .text_color(themes::muted_text(&colors))
+                            .child(div().min_w_0().flex_1().truncate().child(file.file.path.clone()))
+                            .when_some(file.counts, |row, (added, deleted)| {
+                                row.child(
+                                    div()
+                                        .flex()
+                                        .flex_shrink_0()
+                                        .gap_1()
+                                        .child(div().text_color(colors.success).child(format!("+{added}")))
+                                        .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
+                                )
+                            }),
+                    );
+                }
+                if item.turn_files.len() > 3 {
+                    let id = item.id.clone();
+                    let label = if end == item.turn_files.len() {
+                        rust_i18n::t!("app.transcript.collapse").to_string()
+                    } else {
+                        rust_i18n::t!("app.configuration.show_more", remaining = item.turn_files.len() - end)
+                            .to_string()
+                    };
+                    card = card.child(
+                        desktop_button(format!("turn-files-toggle-{id}"))
+                            .label(label)
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.transcript.toggle_turn_files(&id);
+                                cx.notify();
+                            })),
+                    );
+                }
+                column.child(card)
+            });
         let message_id = item.id.clone();
+        let clicked_id = item.id.clone();
         let keyboard_focused = self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
+        let flashed = self.transcript_row_flashed(item.id.as_str());
+        // Active-descendant announcements need a role, so user/assistant rows
+        // (deliberately role-less) stay silent.
+        let announceable = item.is_tool() || item.is_diff();
         div()
             .id(format!("transcript-row-{}", item.id))
-            .when(item.is_tool() || item.is_diff(), |row| row.role(gpui_kit::Role::ListItem))
+            .when(announceable, |row| row.role(gpui_kit::Role::ListItem))
+            .when(keyboard_focused && announceable, |row| row.aria_active_descendant())
             .test_support()
             .w_full()
             .flex()
             .justify_center()
+            // Clicking a row anchors the keyboard highlight as position
+            // memory (and reveals its actions); the row is already visible,
+            // so no scroll is needed. Child controls keep their own clicks.
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.keyboard_focused_message = Some(clicked_id.clone());
+                cx.notify();
+            }))
             // Absolutely positioned so the highlight never reflows the row.
             .when(keyboard_focused, |row| {
                 row.child(
@@ -447,14 +614,35 @@ impl DesktopView {
                         .top_0()
                         .bottom_0()
                         .w(px(2.))
-                        .bg(cx.theme().colors.accent),
+                        .bg(colors.accent),
                 )
             })
-            // MessageScroller owns the shared horizontal row inset.
+            // Transient search/deeplink tint: absolute like the rail, so the
+            // flash never reflows the row; an earlier child than the content,
+            // so the wash sits below the text and it stays crisp.
+            .when(flashed, |row| {
+                row.child(
+                    div()
+                        .id(format!("transcript-flash-{}", item.id))
+                        .test_support()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .top_0()
+                        .bottom_0()
+                        .bg(colors.accent.opacity(0.12)),
+                )
+            })
+            // MessageScroller owns the shared horizontal row inset. The bottom
+            // tiers encode the relationship: conversation turns (user +
+            // assistant) breathe at the section tier while metadata clusters
+            // (tools tight, diffs/notices grouped) stay tucked beneath them.
             .when(item.is_tool(), |row| row.pb_1())
-            .when(item.is_user(), |row| row.pb_6())
-            .when(!item.is_tool() && !item.is_user(), |row| row.pb_3())
-            .when(item.is_assistant(), |row| {
+            .when(item.is_user() || item.is_assistant(), |row| row.pb_6())
+            .when(!item.is_tool() && !item.is_user() && !item.is_assistant(), |row| row.pb_3())
+            // Hover tracking covers every row with revealable actions:
+            // assistant copy plus the group, diff, and tool-row jumps.
+            .when(item.is_assistant() || item.is_tool() || item.is_diff(), |row| {
                 row.on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
                     let next = hovered.then(|| message_id.clone());
                     if view.hovered_message != next {
@@ -465,6 +653,21 @@ impl DesktopView {
             })
             .child(content)
             .into_any_element()
+    }
+
+    /// Whether a transcript row's secondary actions are currently revealed:
+    /// mouse hover or keyboard highlight (row clicks, Up/Down navigation, and
+    /// palette jumps all anchor it). Toggles, labels, and status always
+    /// render; only inspector-navigation jumps recede, and every destination
+    /// stays reachable through the inspector toggle plus tab keys.
+    pub(super) fn transcript_row_revealed(&self, id: &str) -> bool {
+        self.hovered_message.as_deref() == Some(id) || self.keyboard_focused_message.as_deref() == Some(id)
+    }
+
+    /// Whether this row carries the transient search/deeplink tint. Named
+    /// predicate shared by the row renderer and its tests.
+    pub(super) fn transcript_row_flashed(&self, id: &str) -> bool {
+        self.transcript_flash.as_ref().is_some_and(|flash| flash.item_id == id)
     }
 
     fn render_transcript_item(
@@ -501,7 +704,13 @@ impl DesktopView {
             })
             .w_full()
             .max_w(px(self.content_width()))
+            .min_w_0()
             .gap_1()
+            // Assistant prose insets to the header title spine: leading
+            // slot + gap + small-button padding (32px). Symmetric so the
+            // column centering contracts keep holding. User pills stay
+            // trailing and keep their own shape.
+            .when(!user, |message| message.px_8())
             .content(
                 MessageContent::new().bubble(
                     Bubble::new()
@@ -522,38 +731,63 @@ impl DesktopView {
                                 .when(user, |surface| {
                                     surface.bg(colors.secondary).text_color(colors.foreground).px_4().py_2()
                                 })
-                                .child(
-                                    div()
-                                        .id(format!("message-body-{}", item.id))
-                                        .role(gpui_kit::Role::Label)
-                                        .aria_label(format!("{label}: {}", item.accessibility_text))
-                                        .test_support()
-                                        // The kit bubble pins text_sm (14px); the
-                                        // message body is the primary content and
-                                        // reads at the user's full base size, which
-                                        // also rasterizes more smoothly at weight
-                                        // 400 on dark surfaces. Markdown inherits
-                                        // this ambient size; code keeps its own.
-                                        .text_base()
-                                        .child(render_markdown_with_style(
-                                            format!("markdown-{}", item.id),
-                                            item.markdown.clone(),
-                                            item.is_assistant(),
-                                            self.transcript_markdown_style
-                                                .clone()
-                                                .unwrap_or_else(|| markdown_style(cx)),
-                                        )),
-                                ),
+                                .child({
+                                    // Cards first: the call reborrows `cx` mutably, which must
+                                    // end before the body closure below captures it.
+                                    let cards = if item.user_attachments.is_empty() {
+                                        None
+                                    } else {
+                                        Some(self.user_attachment_cards(&item.id, &item.user_attachments, cx))
+                                    };
+                                    // One builder for the prompt body: attachment echoes stack
+                                    // the file cards above it, while text-only rows keep the
+                                    // previous single-child shape exactly.
+                                    let body = || {
+                                        div()
+                                            .id(format!("message-body-{}", item.id))
+                                            .role(gpui_kit::Role::Label)
+                                            .aria_label(format!("{label}: {}", item.accessibility_text))
+                                            .test_support()
+                                            // The kit bubble pins text_sm (14px); the
+                                            // message body is the primary content and
+                                            // reads at the user's full base size, which
+                                            // also rasterizes more smoothly at weight
+                                            // 400 on dark surfaces. Markdown inherits
+                                            // this ambient size; code keeps its own.
+                                            .text_base()
+                                            .child(render_markdown_with_style(
+                                                format!("markdown-{}", item.id),
+                                                item.markdown.clone(),
+                                                item.is_assistant(),
+                                                self.transcript_markdown_style
+                                                    .clone()
+                                                    .unwrap_or_else(|| markdown_style(cx)),
+                                            ))
+                                    };
+                                    match cards {
+                                        None => body().into_any_element(),
+                                        Some(cards) => div()
+                                            .flex()
+                                            .flex_col()
+                                            .min_w_0()
+                                            .gap_2()
+                                            .child(cards)
+                                            .child(body())
+                                            .into_any_element(),
+                                    }
+                                }),
                         ),
                 ),
             )
             .when(!user, |message| {
                 // Message actions reveal on hover or keyboard highlight; the
                 // slot keeps the xsmall button height so rows never reflow.
-                // Keyboard and screen-reader users can also copy through the
-                // palette command.
-                let revealed = self.hovered_message.as_deref() == Some(item.id.as_str())
-                    || self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
+                // Only the final turn response offers inline copy; intermediate
+                // commentary stays copyable through the palette command.
+                // The copy action docks at the trailing edge so timestamps
+                // keep the leading spine.
+                let revealed = self.transcript_row_revealed(item.id.as_str());
+                let copyable = revealed && self.transcript.is_final_turn_response(item.id.as_str());
                 message.footer(
                     MessageFooter::new().child(
                         div()
@@ -562,9 +796,13 @@ impl DesktopView {
                             .min_h_5()
                             .flex()
                             .items_center()
-                            .when(revealed, |slot| {
+                            .children(item.completed_at.as_ref().map(|time| {
+                                div().text_xs().text_color(themes::muted_text(&colors)).child(time.clone())
+                            }))
+                            .when(copyable, |slot| {
                                 slot.child(
                                     desktop_button(format!("copy-message-{}", item.id))
+                                        .ml_auto()
                                         .icon(IconName::Copy)
                                         .accessibility_label(rust_i18n::t!("app.transcript.copy_message").to_string())
                                         .tooltip(rust_i18n::t!("app.transcript.copy_message").to_string())
@@ -582,38 +820,6 @@ impl DesktopView {
                     ),
                 )
             })
-            .into_any_element()
-    }
-
-    /// Severity rows for runtime errors, compaction/reset notices, and run
-    /// status: a compact icon/title/body row in severity colors, with no
-    /// message bubble, Markdown, or copy action.
-    fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let (icon, tone, role) = match item.notice_severity {
-            NoticeSeverity::Error => (IconName::CircleAlert, colors.danger, gpui_kit::Role::Alert),
-            NoticeSeverity::Warning => (IconName::TriangleAlert, colors.warning, gpui_kit::Role::Status),
-            NoticeSeverity::Info => (IconName::Info, themes::muted_text(&colors), gpui_kit::Role::Status),
-        };
-        div()
-            .id(format!("notice-{}", item.id))
-            .test_support()
-            .role(role)
-            .aria_label(format!("{}: {}", item.title, item.accessibility_text))
-            .w_full()
-            .max_w(px(self.content_width()))
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(Icon::new(icon).small().text_color(tone))
-                    .child(div().text_sm().font_semibold().text_color(tone).child(item.title.clone())),
-            )
-            .child(div().text_sm().text_color(colors.foreground).child(item.text.clone()))
             .into_any_element()
     }
 
@@ -659,9 +865,16 @@ impl DesktopView {
                         .gap_2()
                         .min_w_0()
                         .w_full()
-                        .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
+                        .child(transcript_icon_slot(Self::render_activity_status_indicator(
+                            "tool-indicator",
+                            &item.id,
+                            state,
+                            status_color,
+                        )))
                         .child(
                             div()
+                                .id(format!("tool-title-{}", item.id))
+                                .test_support()
                                 .min_w_0()
                                 .flex_1()
                                 .truncate()
@@ -686,16 +899,7 @@ impl DesktopView {
                                     .child(status.to_string()),
                             )
                         })
-                        .child(
-                            Icon::new(if item.expanded {
-                                IconName::ChevronDown
-                            } else {
-                                IconName::ChevronRight
-                            })
-                            .small()
-                            .flex_shrink_0()
-                            .text_color(themes::muted_text(&colors)),
-                        ),
+                        .child(transcript_chevron_lane(item.expanded).text_color(themes::muted_text(&colors))),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.transcript.toggle_tool(&id);
@@ -707,40 +911,54 @@ impl DesktopView {
         );
         // Grouped rows nest under their shared header; single tool rows stay flush.
         panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
+        // Tracker rows replay the newest checklist snapshot inline: header plus
+        // current task when collapsed, the bounded tree when expanded.
+        if item.activity_category == Some(ToolCategory::Tracker)
+            && let Some(block) = self.render_tracker_inline_block(item.id.as_str(), item.expanded, &colors)
+        {
+            panel = panel.child(div().id(format!("tracker-inline-{}", item.id)).test_support().child(block));
+        }
         if item.expanded {
-            let output = item
-                .output
-                .as_ref()
-                .filter(|output| !output.is_empty())
-                .cloned()
-                .unwrap_or_else(|| item.text.clone());
-            let full_output = output.clone();
+            let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());
+            let full_output = inspector::output_with_truncation_notice(&output, item.output_truncated);
             // Pre-resolved by the row through the revision-keyed tail cache;
             // the direct computation only runs if a future caller passes `None`.
-            let output_excerpt = tool_tail.unwrap_or_else(|| inspector::output_tail(&output));
+            let output_excerpt = inspector::output_with_truncation_notice(
+                &tool_tail.unwrap_or_else(|| inspector::compact_output_tail(&output)),
+                item.output_truncated,
+            );
             panel = panel.child(
                 div()
                     .flex()
                     .flex_col()
                     .gap_1()
                     .child(
-                        div().flex().justify_end().child(
-                            desktop_button(format!("copy-tool-output-{}", item.id))
-                                .icon(IconName::Copy)
-                                .accessibility_label(
-                                    rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
-                                        .to_string(),
-                                )
-                                .tooltip(rust_i18n::t!("app.transcript.copy_full_output").to_string())
-                                .ghost()
-                                .xsmall()
-                                .on_click(move |_, window, app| {
-                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                        full_output.to_string(),
-                                    ));
-                                    super::super::notifications::copied_to_clipboard(window, app);
-                                }),
-                        ),
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap_1()
+                            .child(
+                                desktop_button(format!("copy-tool-output-{}", item.id))
+                                    .icon(IconName::Copy)
+                                    .accessibility_label(
+                                        rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
+                                            .to_string(),
+                                    )
+                                    .tooltip(if item.output_truncated {
+                                        rust_i18n::t!("app.inspector.copy_loaded_notice").to_string()
+                                    } else {
+                                        rust_i18n::t!("app.transcript.copy_full_output").to_string()
+                                    })
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click(move |_, window, app| {
+                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                            full_output.to_string(),
+                                        ));
+                                        super::super::notifications::copied_to_clipboard(window, app);
+                                    }),
+                            )
+                            .when(item.has_output(), |row| row.child(Self::tool_output_cta(item, cx))),
                     )
                     .child(
                         div()
@@ -766,196 +984,6 @@ impl DesktopView {
                     .child(self.render_mcp_app_previews(item, cx)),
             );
         }
-        panel.into_any_element()
-    }
-
-    fn render_diff_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let diff_foreground =
-            themes::diff_text_foreground(colors.background, colors.foreground, colors.success, colors.danger);
-        let mono_font = cx.theme().mono_font_family.clone();
-        let Some(diff) = item.diff.as_ref() else {
-            return div().into_any_element();
-        };
-        let id = item.id.clone();
-        let status_label = if diff.failed {
-            rust_i18n::t!("app.transcript.patch_failed").to_string()
-        } else if diff.incomplete {
-            rust_i18n::t!("app.transcript.preview_incomplete").to_string()
-        } else {
-            rust_i18n::t!("app.transcript.applied").to_string()
-        };
-        let toggle_id = id.clone();
-        let mut stats = div().flex().items_center().gap_2().text_sm();
-        if let Some(additions) = diff.additions {
-            stats = stats.child(div().text_color(colors.success).child(format!("+{additions}")));
-        }
-        if let Some(deletions) = diff.deletions {
-            stats = stats.child(div().text_color(colors.danger).child(format!("−{deletions}")));
-        }
-
-        let mut header = div()
-            .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .px_3()
-            .py_2()
-            .bg(colors.secondary)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().font_medium().child(item.title.clone()))
-                    .child(stats)
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(if diff.failed {
-                                colors.danger
-                            } else {
-                                themes::muted_text(&colors)
-                            })
-                            .child(status_label),
-                    ),
-            )
-            .child(
-                desktop_button(format!("diff-{}", item.id))
-                    .label(if item.expanded {
-                        rust_i18n::t!("app.transcript.hide_diff").to_string()
-                    } else {
-                        rust_i18n::t!("app.transcript.show_diff").to_string()
-                    })
-                    .ghost()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.transcript.toggle_diff(&toggle_id);
-                        cx.notify();
-                    })),
-            );
-
-        if !diff.patch.is_empty() {
-            let copy_id = id.clone();
-            header = header.child(
-                desktop_button(format!("copy-patch-{}", item.id))
-                    .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
-                    .ghost()
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        let Some(patch) = view
-                            .transcript
-                            .items_newest_first()
-                            .find(|candidate| candidate.id == copy_id)
-                            .and_then(|candidate| candidate.diff.as_ref())
-                            .map(|diff| diff.patch.clone())
-                            .filter(|patch| !patch.is_empty())
-                        else {
-                            return;
-                        };
-                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch));
-                        super::super::notifications::copied_to_clipboard(window, cx);
-                    })),
-            );
-        }
-
-        let mut panel = div()
-            .relative()
-            .w_full()
-            .max_w(px(self.content_width()))
-            .rounded_md()
-            .overflow_hidden()
-            .child(header);
-
-        let mut body = div().w_full().flex().flex_col().px_3().py_2().gap_1();
-        for file in &diff.files {
-            let (kind_label, kind_color) = match file.kind {
-                DiffFileKind::Add => ("added", colors.success),
-                DiffFileKind::Delete => ("deleted", colors.danger),
-                DiffFileKind::Update => ("modified", colors.muted_foreground),
-            };
-            body = body.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_sm().font_family(mono_font.clone()).child(file.path.clone()))
-                    .child(div().text_xs().text_color(kind_color).child(kind_label)),
-            );
-        }
-        if diff.incomplete {
-            body = body.child(
-                div()
-                    .text_xs()
-                    .text_color(colors.muted_foreground)
-                    .child(rust_i18n::t!("app.transcript.previews_unavailable").to_string()),
-            );
-        }
-
-        if item.expanded && !diff.patch.is_empty() {
-            let mut lines = ClassifiedDiffLines::new(&diff.patch);
-            let mut diff_view = div()
-                .id(format!("diff-lines-{}", item.id))
-                .test_support()
-                .w_full()
-                .flex()
-                .flex_col()
-                .mt_2()
-                .rounded_md()
-                .overflow_hidden()
-                .overflow_x_scroll()
-                .bg(colors.background);
-            for line in &mut lines {
-                let (line_color, line_bg, marker_color) = match line.kind {
-                    DiffLineKind::Added => (
-                        diff_foreground,
-                        themes::diff_line_background(colors.background, diff_foreground, colors.success),
-                        Some(("+", "+", colors.success)),
-                    ),
-                    DiffLineKind::Removed => (
-                        diff_foreground,
-                        themes::diff_line_background(colors.background, diff_foreground, colors.danger),
-                        Some(("-", "−", colors.danger)),
-                    ),
-                    DiffLineKind::Hunk => (colors.muted_foreground, colors.secondary, None),
-                    DiffLineKind::Header | DiffLineKind::Context => (colors.foreground, colors.background, None),
-                };
-                let mut row = div()
-                    .w_full()
-                    .px_2()
-                    .text_xs()
-                    .font_family(mono_font.clone())
-                    .whitespace_nowrap()
-                    .bg(line_bg);
-                if let Some((source_marker, marker, marker_color)) = marker_color {
-                    let content = line.text.strip_prefix(source_marker).unwrap_or_default();
-                    row = row
-                        .flex()
-                        .child(
-                            div()
-                                .w_4()
-                                .flex_shrink_0()
-                                .font_semibold()
-                                .text_color(marker_color)
-                                .child(marker),
-                        )
-                        .child(div().text_color(line_color).child(content.to_string()));
-                } else {
-                    row = row.text_color(line_color).child(line.text.to_string());
-                }
-                diff_view = diff_view.child(row);
-            }
-            if lines.truncated {
-                diff_view = diff_view.child(
-                    div()
-                        .w_full()
-                        .px_2()
-                        .text_xs()
-                        .text_color(colors.muted_foreground)
-                        .child(rust_i18n::t!("app.transcript.diff_truncated").to_string()),
-                );
-            }
-            body = body.child(diff_view);
-        }
-        panel = panel.child(body);
         panel.into_any_element()
     }
 }

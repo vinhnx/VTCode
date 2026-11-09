@@ -39,6 +39,18 @@ const VERIFIER_WAIT_MAX_SECS: u64 = 8;
 /// Largest doubling step, so the schedule is 1s, 2s, 4s, 8s, 8s, …
 const VERIFIER_WAIT_MAX_SHIFT: u32 = 3;
 
+/// Identity of one failed verifier run for stall detection: the command as
+/// executed plus its verdict. Compared by value — only a byte-identical rerun
+/// (same command, exit code, trimmed streams) with no mutation or success in
+/// between counts as stalled.
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct FailedVerifierRun {
+    command: String,
+    exit_code: i64,
+    stdout: String,
+    stderr: String,
+}
+
 /// Optimized loop detection with bounded signature keys and exponential backoff.
 pub(crate) struct LoopTracker {
     attempts: FxHashMap<String, (usize, Instant)>,
@@ -89,6 +101,14 @@ pub(crate) struct LoopTracker {
     pub verifier_wait_polls: u32,
     /// Feedback for an observed terminal verifier failure, never a lost result.
     pub(super) verifier_failed_notice_pending: bool,
+    /// Last failed verifier run, for stall detection. Turn-scoped and
+    /// single-entry (tool outputs are already bounded upstream); cleared by
+    /// any mutation or verification success.
+    last_failed_verifier_run: Option<FailedVerifierRun>,
+    /// Set when a failed verifier run is byte-identical to the previous one:
+    /// the repair loop made no progress. Replaces the standard failed
+    /// guidance for that run; consumed by the same handlers.
+    verifier_stalled_notice_pending: bool,
     /// Counter for consecutive read/search operations without action or synthesis
     pub consecutive_navigations: usize,
     /// Number of times navigation-loop recovery has fired in this session.
@@ -123,6 +143,10 @@ pub(crate) struct LoopTracker {
 }
 
 impl LoopTracker {
+    #[cfg(test)]
+    pub(super) fn evidence_count_for_test(&self) -> usize {
+        self.navigation_evidence_signatures.len()
+    }
     pub(crate) fn new() -> Self {
         Self {
             attempts: FxHashMap::with_capacity_and_hasher(16, Default::default()),
@@ -141,6 +165,8 @@ impl LoopTracker {
             pending_verifier_session_id: None,
             verifier_wait_polls: 0,
             verifier_failed_notice_pending: false,
+            last_failed_verifier_run: None,
+            verifier_stalled_notice_pending: false,
             consecutive_navigations: 0,
             navigation_loop_recoveries: 0,
             tracker_observation_warning_emitted: false,
@@ -249,6 +275,43 @@ impl LoopTracker {
                 Some(MismatchKind::VerifierFailed),
             )
         })
+    }
+
+    /// Record a failed verifier run; returns true when it is byte-identical
+    /// to the previous failed run (same command, exit code, trimmed streams)
+    /// with no mutation or verification success in between — the repair loop
+    /// made no progress. Callers surface the stalled guidance instead of the
+    /// standard failed-verifier guidance in that case. Streams are trimmed
+    /// before comparison so trailing blank lines cannot hide a stall, while
+    /// volatile lines (timings, PIDs) still defeat detection — which fails
+    /// safe toward the standard guidance.
+    pub(crate) fn record_failed_verifier_run(
+        &mut self,
+        command: String,
+        exit_code: i64,
+        stdout: &str,
+        stderr: &str,
+    ) -> bool {
+        let run = FailedVerifierRun {
+            command,
+            exit_code,
+            stdout: stdout.trim().to_string(),
+            stderr: stderr.trim().to_string(),
+        };
+        let stalled = self.last_failed_verifier_run.as_ref() == Some(&run);
+        self.last_failed_verifier_run = Some(run);
+        self.verifier_stalled_notice_pending = stalled;
+        stalled
+    }
+
+    pub(crate) fn take_verifier_stalled_guidance(&mut self) -> Option<String> {
+        if !std::mem::take(&mut self.verifier_stalled_notice_pending) {
+            return None;
+        }
+        Some(append_revision_guidance(
+            "The verifier produced identical output on consecutive runs: no progress since the last run. Do not re-run the same command. Repair the flagged findings first and confirm the artifact changed; if no permitted repair converges, report the findings and stop instead of looping. This notice grants no permissions or extra repair edits.",
+            Some(MismatchKind::RepeatedEvidence),
+        ))
     }
 
     pub(crate) fn clear_navigation_evidence(&mut self) {
@@ -437,6 +500,9 @@ impl LoopTracker {
 
     pub(super) fn record_successful_mutation(&mut self) {
         self.clear_navigation_evidence();
+        // New content invalidates the previous failure's verdict: the next
+        // identical-looking run verifies a changed artifact, not a stall.
+        self.last_failed_verifier_run = None;
         self.record_required_verifier_progress(None);
         // A verifier launched before this edit cannot establish completion.
         if self.pending_verifier_session_id.take().is_some() {
@@ -507,6 +573,8 @@ impl LoopTracker {
     pub(crate) fn mark_verification_complete(&mut self) {
         self.pending_verifier_session_id = None;
         self.verifier_failed_notice_pending = false;
+        self.last_failed_verifier_run = None;
+        self.verifier_stalled_notice_pending = false;
         self.consecutive_mutations = 0;
         self.verification_pending = false;
         self.verification_warning_emitted = false;

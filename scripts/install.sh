@@ -31,6 +31,8 @@ WITH_COMPLETIONS=0
 WITH_DESKTOP=1
 WITH_DESKTOP_EXPLICIT=0
 DESKTOP_APP_NAME="VT Code.app"
+DESKTOP_INSTALL_DIR="${DESKTOP_INSTALL_DIR:-}"
+DESKTOP_NEEDS_SUDO=0
 # Set by main() before the EXIT trap is installed. The trap handler cannot use
 # main()'s locals: they are unset by the time EXIT fires.
 VTCODE_WORK_DIR=""
@@ -289,6 +291,7 @@ verify_checksum() {
     local binary_file="$1"
     local release_tag="$2"
     local release_filename="${3:-}"
+    local strict="${4:-0}"
 
     log_info "Verifying binary integrity..."
 
@@ -323,6 +326,7 @@ verify_checksum() {
     rm -f "$temp_checksums"
     
     if [[ -z "$expected_checksum" ]]; then
+        [[ "$strict" -eq 1 ]] && log_error "Checksum not found for $basename_file; refusing to install it unverified" && return 1
         log_warning "Checksum not found for $basename_file, skipping verification"
         return 0
     fi
@@ -336,6 +340,7 @@ verify_checksum() {
     elif command -v sha256 &> /dev/null; then
         actual_checksum=$(sha256 -q "$binary_file")
     else
+        [[ "$strict" -eq 1 ]] && log_error "No checksum tool (sha256sum/shasum/sha256) found; refusing to install unverified" && return 1
         log_warning "No checksum tool (sha256sum/shasum/sha256) found, skipping verification"
         return 0
     fi
@@ -437,26 +442,18 @@ install_man_and_completions() {
     fi
 
     if [[ -d "$completions_source" ]]; then
-        if [[ -f "$completions_source/bash/vtcode" ]]; then
-            local bash_dir="$share_dir/bash-completion/completions"
-            mkdir -p "$bash_dir"
-            cp "$completions_source/bash/vtcode" "$bash_dir/vtcode"
-            log_success "Bash completions installed to $bash_dir/vtcode"
-        fi
-
-        if [[ -f "$completions_source/zsh/_vtcode" ]]; then
-            local zsh_dir="$share_dir/zsh/site-functions"
-            mkdir -p "$zsh_dir"
-            cp "$completions_source/zsh/_vtcode" "$zsh_dir/_vtcode"
-            log_success "Zsh completions installed to $zsh_dir/_vtcode"
-        fi
-
-        if [[ -f "$completions_source/fish/vtcode.fish" ]]; then
-            local fish_dir="$share_dir/fish/vendor_completions.d"
-            mkdir -p "$fish_dir"
-            cp "$completions_source/fish/vtcode.fish" "$fish_dir/vtcode.fish"
-            log_success "Fish completions installed to $fish_dir/vtcode.fish"
-        fi
+        local spec label src_rel dest_rel dest_name src_file dest_dir
+        for spec in "Bash|bash/vtcode|bash-completion/completions|vtcode" \
+            "Zsh|zsh/_vtcode|zsh/site-functions|_vtcode" \
+            "Fish|fish/vtcode.fish|fish/vendor_completions.d|vtcode.fish"; do
+            IFS='|' read -r label src_rel dest_rel dest_name <<<"$spec"
+            src_file="$completions_source/$src_rel"
+            [[ -f "$src_file" ]] || continue
+            dest_dir="$share_dir/$dest_rel"
+            mkdir -p "$dest_dir"
+            cp "$src_file" "$dest_dir/$dest_name"
+            log_success "$label completions installed to $dest_dir/$dest_name"
+        done
     fi
 
     echo ""
@@ -478,14 +475,13 @@ find_installed_desktop_app() {
     return 1
 }
 
-# Fail-fast checks for a from-source desktop build. Returns nonzero (never
-# exits) so the caller can report context.
-check_desktop_prerequisites() {
+# OS gate for the desktop app. Applies to both install paths: the prebuilt
+# release asset and the from-source build both require macOS 15+.
+check_desktop_os() {
     if [[ "$(uname -s)" != "Darwin" ]]; then
         log_error "The VT Code desktop app requires macOS."
         return 1
     fi
-
     local macos_version macos_major
     macos_version="$(sw_vers -productVersion 2>/dev/null || echo "")"
     macos_major="${macos_version%%.*}"
@@ -493,7 +489,12 @@ check_desktop_prerequisites() {
         log_error "VT Code Desktop requires macOS 15 or newer; found ${macos_version:-unknown}."
         return 1
     fi
+}
 
+# Fail-fast checks for a from-source desktop build. Returns nonzero (never
+# exits) so the caller can report context.
+check_desktop_prerequisites() {
+    check_desktop_os || return 1
     local missing=()
     local tool
     for tool in git cargo codesign ditto sips iconutil plutil; do
@@ -509,14 +510,105 @@ check_desktop_prerequisites() {
     return 0
 }
 
-# Build the desktop app from source at the installed release tag and install
-# it to ~/Applications. Returns nonzero on failure; never prompts (install.sh
-# often runs via curl | bash with no usable stdin).
+# Print the first published desktop asset for the tag (nonzero when none). ARM probes native then Intel; Intel probes native only.
+find_desktop_release_asset() {
+    local release_tag="$1"
+    local version="${release_tag#v}"
+    local targets=("x86_64-apple-darwin")
+    if [[ "$(uname -m)" == "arm64" ]]; then
+        targets=("aarch64-apple-darwin" "x86_64-apple-darwin")
+    fi
+    local target asset
+    for target in "${targets[@]}"; do
+        asset="vtcode-desktop-${version}-${target}.zip"
+        if curl -fIsL --connect-timeout 5 "${GITHUB_RELEASES}/${release_tag}/${asset}" >/dev/null 2>&1; then
+            echo "$asset"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Install from a prebuilt release asset (curl, shasum, and ditto only).
+install_desktop_release_asset() {
+    local release_tag="$1" asset_name="$2" work_dir="$3"
+    local archive_file="$work_dir/vtcode-desktop.zip"
+    # Inline download: download_binary exits the installer, but desktop
+    # failure must stay best-effort (explicit --with-desktop fails via caller).
+    log_info "Downloading prebuilt desktop app: $asset_name"
+    if ! curl -fSL -# -o "$archive_file" "${GITHUB_RELEASES}/${release_tag}/${asset_name}"; then
+        log_error "Failed to download the desktop app ($asset_name)"
+        return 1
+    fi
+    # Subshell: verify_checksum exits on mismatch instead of returning. Strict
+    # (4th arg): a missing checksum or checksum tool fails instead of warning.
+    if ! (verify_checksum "$archive_file" "$release_tag" "$asset_name" 1); then
+        return 1
+    fi
+
+    local extract_dir="$work_dir/desktop-extract"
+    # Start clean: a shared work dir may hold a previous extraction whose
+    # FIRST-LAUNCH.txt would wrongly mark this build as unsigned.
+    rm -rf "$extract_dir"
+    mkdir -p "$extract_dir"
+    log_info "Extracting desktop app..."
+    if ! ditto -x -k "$archive_file" "$extract_dir"; then
+        log_error "Failed to extract the desktop app archive"
+        return 1
+    fi
+
+    local staged_app="$extract_dir/$DESKTOP_APP_NAME"
+    if [[ ! -f "$staged_app/Contents/Info.plist" || ! -f "$staged_app/Contents/MacOS/vtcode-desktop" ]]; then
+        log_error "Desktop archive is not a valid app bundle"
+        return 1
+    fi
+    install_staged_desktop_app "$staged_app" || return 1
+    # Notarized builds omit FIRST-LAUNCH.txt and need no approval steps.
+    if [[ -f "$extract_dir/FIRST-LAUNCH.txt" ]]; then
+        print_gatekeeper_note
+    fi
+    log_info "Open it anytime with: vtcode desktop"
+    return 0
+}
+
+# One-time macOS security approval for ad hoc builds (mirrors FIRST-LAUNCH.txt).
+# macOS 15+ has no right-click > Open bypass, and Open Anyway only appears for
+# about an hour after a blocked launch; both facts belong in the steps.
+print_gatekeeper_note() {
+    log_warning "ONE-TIME macOS SECURITY STEP REQUIRED. This build is not notarized, so macOS blocks the first launch.\n  1. Open the app from Applications so macOS records the block\n  2. Click Open Anyway in System Settings > Privacy & Security\n  3. Open the app again: vtcode desktop\nOpen Anyway only appears for about an hour after a blocked launch."
+}
+
+# Copy a staged app bundle to the desktop location and verify it. Shared by
+# the prebuilt-asset and from-source install paths. Elevates with sudo when
+# the destination is not user-writable (system-wide /Applications install).
+install_staged_desktop_app() {
+    local staged_app="$1" applications_dir="${DESKTOP_INSTALL_DIR:-$HOME/Applications}"
+    local target="$applications_dir/$DESKTOP_APP_NAME"
+    [[ -w "$applications_dir" ]] || [[ ! -e "$applications_dir" && -w "$(dirname "$applications_dir")" ]] \
+        || DESKTOP_NEEDS_SUDO=1
+    log_info "Installing to $target..."
+    run_desktop_install_step mkdir -p -- "$applications_dir" || return 1
+    # Remove any previous install first so stale bundle files never survive.
+    run_desktop_install_step rm -rf -- "$target" || return 1
+    if ! run_desktop_install_step ditto "$staged_app" "$target"; then
+        log_error "Failed to install the desktop app to $target"
+        return 1
+    fi
+    if [[ ! -f "$target/Contents/Info.plist" || ! -f "$target/Contents/MacOS/vtcode-desktop" ]]; then
+        log_error "Desktop install verification failed: $target is not a valid app bundle"
+        return 1
+    fi
+    log_success "Desktop app installed to $target"
+}
+
+run_desktop_install_step() { if (( DESKTOP_NEEDS_SUDO )); then sudo "$@"; else "$@"; fi; }
+
+# Install at the release tag (prebuilt asset first, from-source fallback). Never prompts.
 install_desktop_app() {
     local release_tag="$1"
     local work_dir="$2"
 
-    if ! check_desktop_prerequisites; then
+    if ! check_desktop_os; then
         return 1
     fi
 
@@ -527,9 +619,17 @@ install_desktop_app() {
         return 0
     fi
 
-    local user_applications="$HOME/Applications"
-    local target="$user_applications/$DESKTOP_APP_NAME"
+    local desktop_asset
+    if desktop_asset=$(find_desktop_release_asset "$release_tag"); then
+        install_desktop_release_asset "$release_tag" "$desktop_asset" "$work_dir" || return 1
+        return 0
+    fi
 
+    if ! check_desktop_prerequisites; then
+        return 1
+    fi
+
+    log_warning "No prebuilt desktop app found for this host; falling back to a from-source build."
     log_info "Installing VT Code Desktop ($release_tag)..."
     log_warning "The desktop build compiles from source and can take several minutes."
 
@@ -547,27 +647,50 @@ install_desktop_app() {
         return 1
     fi
 
-    log_info "Installing to $target..."
-    mkdir -p "$user_applications"
-    if ! ditto "$staged_app" "$target"; then
-        log_error "Failed to install the desktop app to $target"
-        return 1
-    fi
-    if [[ ! -f "$target/Contents/Info.plist" ]]; then
-        log_error "Desktop install verification failed: $target is not a valid app bundle"
-        return 1
-    fi
-
-    log_success "Desktop app installed to $target"
-    echo ""
-    log_warning "First launch: right-click the app and choose Open (or allow it in Settings > Privacy & Security)."
+    install_staged_desktop_app "$staged_app" || return 1
+    print_gatekeeper_note
     log_info "After that, open it anytime with: vtcode desktop"
     return 0
 }
 
+# Read a yes/no answer (0 = yes); $1 prompt, $2 default; stdin wired by caller; empty/EOF takes default.
+ask_yes_no() {
+    local prompt_text="$1" default="$2" reply="" hint="[Y/n]"
+    [[ "$default" == "n" ]] && hint="[y/N]"
+    printf '%s %s ' "$prompt_text" "$hint" >&2
+    IFS= read -r reply || true
+
+    reply=$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+    [[ -z "$reply" ]] && reply="$default"
+    [[ "$reply" == "y" || "$reply" == "yes" ]]
+}
+
+# Ask yes/no on the best input (stdin TTY, /dev/tty for curl|bash, else default).
+ask_interactive() {
+    if [[ -t 0 ]]; then
+        ask_yes_no "$1" "$2"
+    elif [[ -r /dev/tty && -w /dev/tty ]]; then
+        ask_yes_no "$1" "$2" </dev/tty
+    else
+        [[ "$2" == "y" ]]
+    fi
+}
+
+resolve_desktop_choice() { # 0=install, 1=declined, 2=no prompt needed.
+    [[ "$WITH_DESKTOP" -eq 1 && "$WITH_DESKTOP_EXPLICIT" -eq 0 && "$(uname -s)" == "Darwin" ]] || return 2
+    ! find_installed_desktop_app >/dev/null 2>&1 || return 2
+    ask_interactive "Install the VT Code desktop app?" "y"
+}
+
+resolve_desktop_location() { # Presets and explicit flags skip the question.
+    [[ -z "$DESKTOP_INSTALL_DIR" ]] || return 0
+    DESKTOP_INSTALL_DIR="$HOME/Applications"
+    [[ "$WITH_DESKTOP_EXPLICIT" -eq 0 ]] && ask_interactive "Install for all users (/Applications, may need sudo)?" "n" && DESKTOP_INSTALL_DIR="/Applications" || true
+}
+
 # Install the desktop app when wanted. Explicit --with-desktop fails hard when the
-# app is unavailable; the macOS default stays best-effort so a missing toolchain
-# never breaks the CLI install. Returns nonzero only for a failed explicit request.
+# app is unavailable; the macOS default stays best-effort so a missing asset or
+# toolchain never breaks the CLI install. Returns nonzero only for a failed explicit request.
 maybe_install_desktop_app() {
     local release_tag="$1"
     local work_dir="$2"
@@ -613,18 +736,10 @@ add_to_path() {
     echo ""
     
     case "$shell_name" in
-        bash)
-            echo "Add to: ~/.bashrc or ~/.bash_profile"
-            ;;
-        zsh)
-            echo "Add to: ~/.zshrc"
-            ;;
-        fish)
-            echo "Add to: ~/.config/fish/config.fish (using: set -gx PATH $install_path \$PATH)"
-            ;;
-        *)
-            echo "Add to: ~/.${shell_name}rc or equivalent"
-            ;;
+        bash) echo "Add to: ~/.bashrc or ~/.bash_profile" ;;
+        zsh) echo "Add to: ~/.zshrc" ;;
+        fish) echo "Add to: ~/.config/fish/config.fish (using: set -gx PATH $install_path \$PATH)" ;;
+        *) echo "Add to: ~/.${shell_name}rc or equivalent" ;;
     esac
 }
 
@@ -760,8 +875,17 @@ main() {
         install_optional_dependency "$target_path" "ast-grep" "ast-grep"
     fi
 
+    local desktop_choice=0; resolve_desktop_choice || desktop_choice=$?
+    if (( desktop_choice == 1 )); then
+        WITH_DESKTOP=0
+        log_info "Skipping the desktop app (re-run with --with-desktop to install it later)."
+    fi
+
     if [[ "$WITH_DESKTOP" -eq 1 ]]; then
         echo ""
+        if ! find_installed_desktop_app >/dev/null 2>&1; then
+            resolve_desktop_location
+        fi
         if ! maybe_install_desktop_app "$release_tag" "$temp_dir"; then
             log_error "Desktop installation failed, but the CLI is installed and ready at $target_path"
             exit 1
@@ -790,12 +914,16 @@ Options:
   --without-search-tools Skip ripgrep and ast-grep during install
   --with-ast-grep    Install VT Code-managed ast-grep after VT Code is installed
   --with-completions Install man page and shell completions (bash/zsh/fish)
-  --with-desktop     Require the macOS desktop app (default on macOS 15+; explicit use fails if unavailable)
-  --without-desktop  Skip the macOS desktop app
+  --with-desktop     Install the macOS desktop app without prompting (fails if unavailable)
+  --without-desktop  Skip the macOS desktop app without prompting
   -h, --help         Show this help message
 
+Without either desktop flag, the installer asks when interactive (default:
+install). The app installs from a prebuilt release asset (no toolchain);
+releases without one fall back to a from-source build.
+
 Examples:
-  ./install.sh                           # Install VT Code, ripgrep, ast-grep (plus the desktop app on macOS)
+  ./install.sh                           # Install VT Code, ripgrep, ast-grep (asks about the desktop app on macOS)
   ./install.sh --without-search-tools    # Install VT Code only
   ./install.sh --with-ast-grep           # Install VT Code and managed ast-grep only
   ./install.sh --with-completions        # Install with man page and shell completions

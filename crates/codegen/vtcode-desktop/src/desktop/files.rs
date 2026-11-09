@@ -1,6 +1,6 @@
-//! Bounded read-only workspace file listing and previews for the sidebar.
+//! Bounded workspace file listing and previews for the sidebar, plus the
+//! confined mutation helpers (`mutate`) behind the file context menu.
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -8,16 +8,24 @@ use std::sync::Arc;
 
 use super::strings::bundle;
 
-/// Bounds on retained sidebar rows and recursive traversal depth.
-const MAX_ENTRIES: usize = 400;
-const MAX_DEPTH: usize = 8;
+mod launch;
+mod model;
+mod mutate;
+
+pub(super) use launch::{
+    CLI_FORK_SESSION_FLAG, build_handoff_script, open_in_browser, open_in_editor, open_script_in_terminal,
+    open_terminal_at, reveal_in_finder, sweep_stale_previews, terminal_runs_handoff_script, write_handoff_script,
+    write_preview_html,
+};
+pub(super) use model::{SEARCH_MAX_HITS, SNAPSHOT_MAX_ENTRIES, fuzzy_search, fuzzy_search_files, scan_snapshot};
+#[cfg(test)]
+pub(super) use mutate::trash_entry_into;
+pub(super) use mutate::{rename_entry, trash_entry, validated_file_name};
+
 /// Preview read bound; a `usize` so buffer sizing never truncates.
 const MAX_PREVIEW_BYTES: usize = 64 * 1024;
 /// Image read bound for thumbnails and the preview viewer.
 const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
-
-/// Directories that never carry interesting source and can be enormous.
-const SKIPPED_DIR_NAMES: &[&str] = &["target", "node_modules", ".git", ".venv", "dist", "build"];
 
 /// Canonicalize a workspace candidate and confirm it is a directory.
 /// Call from a GPUI background task because both operations access the filesystem.
@@ -48,6 +56,12 @@ pub(super) struct FilePreview {
     pub truncated: bool,
     /// Decoded-ready image bytes for image files; `None` for text previews.
     pub image: Option<Arc<gpui_kit::Image>>,
+    /// Markdown previews start rendered; the header toggle flips to the raw
+    /// source surface. Owned per preview so every open starts rendered.
+    pub show_source: bool,
+    /// The source surface is read-only until the Edit toggle arms it; edits
+    /// persist only through Save. Owned per preview like `show_source`.
+    pub editing: bool,
 }
 
 /// Whether a workspace-relative path points at an image the app can render
@@ -55,6 +69,16 @@ pub(super) struct FilePreview {
 /// is the single source of truth, mirroring `ContentPart::validate_image`.
 pub(super) fn is_image_path(rel_path: &str) -> bool {
     vtcode_commons::image::has_supported_image_extension(Path::new(rel_path))
+}
+
+/// Whether a workspace-relative path points at a markdown document the file
+/// preview renders through the shared markdown viewer. Mirrors the
+/// `md | markdown` pair `ast_grep` uses for language detection.
+pub(super) fn is_markdown_path(rel_path: &str) -> bool {
+    rel_path
+        .rsplit('.')
+        .next()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown"))
 }
 
 /// Map a provider-supported image extension to the renderer's decoders.
@@ -94,61 +118,6 @@ pub(super) fn read_image(root: &Path, rel_path: &str) -> Option<Arc<gpui_kit::Im
         return None;
     }
     Some(Arc::new(gpui_kit::Image::from_bytes(format, fs::read(&path).ok()?)))
-}
-
-/// List workspace entries breadth-first, skipping dependency and VCS
-/// directories, hidden entries, and anything past the entry or depth bounds.
-#[cfg(test)]
-pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
-    scan_workspace_cancellable(root, || false).unwrap_or_default()
-}
-
-/// Scan a workspace until the caller cancels the request. A cancelled scan
-/// returns no partial listing so obsolete results cannot replace current UI.
-pub(super) fn scan_workspace_cancellable(root: &Path, is_cancelled: impl Fn() -> bool) -> Option<Vec<FileEntry>> {
-    let mut entries = Vec::new();
-    let mut queue = std::collections::VecDeque::from(vec![(root.to_path_buf(), 0_usize)]);
-    while let Some((dir, depth)) = queue.pop_front() {
-        if is_cancelled() {
-            return None;
-        }
-        if entries.len() >= MAX_ENTRIES {
-            break;
-        }
-        let Ok(read_dir) = fs::read_dir(&dir) else {
-            continue;
-        };
-        let remaining = MAX_ENTRIES - entries.len();
-        // Keep the sorted prefix bounded; paths are allocated only for rows that survive the cap.
-        let mut children = BTreeMap::new();
-        for entry in read_dir.flatten() {
-            if is_cancelled() {
-                return None;
-            }
-            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-            let name = entry.file_name();
-            let Some(name_str) = name.to_str() else {
-                continue;
-            };
-            if name_str.starts_with('.') || (is_dir && SKIPPED_DIR_NAMES.contains(&name_str)) {
-                continue;
-            }
-            let _previous = children.insert((!is_dir, name), (entry, is_dir));
-            if children.len() > remaining {
-                let _removed = children.pop_last();
-            }
-        }
-        for (_, (entry, is_dir)) in children {
-            let Some(rel) = entry.path().strip_prefix(root).ok().map(|path| path.display().to_string()) else {
-                continue;
-            };
-            entries.push(FileEntry { rel_path: rel.replace('\\', "/"), depth, is_dir });
-            if is_dir && depth + 1 < MAX_DEPTH {
-                queue.push_back((entry.path(), depth + 1));
-            }
-        }
-    }
-    Some(entries)
 }
 
 /// Read the current git branch for a workspace, walking up to the repository
@@ -218,7 +187,25 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
         text: text.to_string(),
         truncated,
         image: None,
+        show_source: false,
+        editing: false,
     })
+}
+
+/// Persist edited preview text back to the previewed file. The caller owns
+/// dirty tracking and must refuse truncated previews (their editor holds
+/// only the head, so writing would destroy the tail); this only resolves,
+/// writes, and reports a display-ready error. Call from a background task.
+///
+/// The target resolves through the same confinement boundary as the read
+/// path, so traversal and symlink escapes fail closed and a file deleted
+/// after opening errors instead of being recreated. Absolute previews —
+/// which only arrive from explicit user attachments — resolve directly,
+/// mirroring [`read_preview`].
+pub(super) fn write_preview_text(root: &Path, rel_path: &str, text: &str) -> Result<(), String> {
+    let path = resolve_attachment_path(root, Path::new(rel_path))
+        .map_err(|()| format!("Could not save \"{rel_path}\": it is outside the workspace or no longer exists"))?;
+    fs::write(&path, text).map_err(|error| format!("Could not save \"{rel_path}\": {error}"))
 }
 
 /// External applications supported by the file preview.
@@ -297,67 +284,6 @@ impl ExternalEditor {
             Self::Terminal | Self::ITerm2 | Self::Ghostty => OpenAction::OpenDirectory,
             Self::System | Self::VsCode | Self::Sublime | Self::Xcode | Self::AndroidStudio => OpenAction::Open,
         }
-    }
-}
-
-fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command {
-    let mut command = std::process::Command::new("/usr/bin/open");
-    match editor {
-        ExternalEditor::System => {
-            let _command = command.arg("-t");
-        }
-        ExternalEditor::Finder => {
-            let _command = command.arg("-R");
-        }
-        editor => match editor.bundle_id() {
-            Some(id) => {
-                let _command = command.args(["-b", id]);
-            }
-            // Only System and Finder lack identifiers, and both match above.
-            // Fall back to the system default rather than launching nothing.
-            None => {
-                let _command = command.arg("-t");
-            }
-        },
-    }
-    let _command = command.arg(path);
-    command
-}
-
-/// Resolve the launch target: the file itself, or its containing directory
-/// for terminal emulators. Pure filesystem work, safe to unit test.
-fn launch_path(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<PathBuf, String> {
-    let path = resolve_attachment_path(root, Path::new(rel_path))
-        .map_err(|_error| rust_i18n::t!("app.files.missing").to_string())?;
-    if !fs::metadata(&path).map(|metadata| metadata.is_file()).unwrap_or(false) {
-        return Err(rust_i18n::t!("app.files.not_regular").to_string());
-    }
-    if editor.open_action() == OpenAction::OpenDirectory {
-        return path
-            .parent()
-            .map(Path::to_path_buf)
-            .ok_or_else(|| rust_i18n::t!("app.files.no_parent").to_string());
-    }
-    Ok(path)
-}
-
-/// Resolve the file again at launch time, and never pass a shell command.
-/// This function performs filesystem and process work and must run in the background.
-pub(super) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<(), String> {
-    let path = launch_path(root, rel_path, editor)?;
-    let output = editor_command(editor, &path)
-        .output()
-        .map_err(|error| rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string())?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        let detail = String::from_utf8_lossy(&output.stderr);
-        let detail: String = detail.chars().filter(|c| !c.is_control() || *c == ' ').take(300).collect();
-        Err(if detail.trim().is_empty() {
-            rust_i18n::t!("app.files.open_failed").to_string()
-        } else {
-            rust_i18n::t!("app.files.open_failed_detail", detail = detail.trim()).to_string()
-        })
     }
 }
 
@@ -559,6 +485,16 @@ mod tests {
     }
 
     #[test]
+    fn markdown_paths_route_to_the_shared_viewer() {
+        for path in ["notes.md", "README.MD", "guide.markdown", "docs/plan.Markdown"] {
+            assert!(is_markdown_path(path), "{path} must be markdown");
+        }
+        for path in ["main.rs", "notes.mdx", "archive.zip", "noext", "shot.png", "mddoc"] {
+            assert!(!is_markdown_path(path), "{path} must not be markdown");
+        }
+    }
+
+    #[test]
     fn binary_image_formats_reject_with_a_clear_notice() {
         let workspace = temp_workspace();
         fs::write(workspace.path().join("legacy.bmp"), b"BM\x00binary").unwrap();
@@ -635,44 +571,6 @@ mod tests {
     }
 
     #[test]
-    fn editor_launch_uses_argument_boundaries_and_confines_paths() {
-        use std::os::unix::fs::symlink;
-        let workspace = temp_workspace();
-        let outside = temp_workspace();
-        let name = "-weird $(touch nope).rs";
-        fs::write(workspace.path().join(name), "hello").unwrap();
-        fs::write(outside.path().join("outside.rs"), "private").unwrap();
-        symlink(outside.path(), workspace.path().join("escape")).unwrap();
-        let path = vtcode_commons::paths::resolve_workspace_path(workspace.path(), Path::new(name)).unwrap();
-        // Independent oracle: every variant's launch flags, stated separately
-        // from the implementation.
-        for editor in ExternalEditor::ALL {
-            let expected: &[&str] = match editor {
-                ExternalEditor::System => &["-t"],
-                ExternalEditor::Finder => &["-R"],
-                ExternalEditor::VsCode => &["-b", "com.microsoft.VSCode"],
-                ExternalEditor::Sublime => &["-b", "com.sublimetext.4"],
-                ExternalEditor::Xcode => &["-b", "com.apple.dt.Xcode"],
-                ExternalEditor::AndroidStudio => &["-b", "com.google.android.studio"],
-                ExternalEditor::Terminal => &["-b", "com.apple.Terminal"],
-                ExternalEditor::ITerm2 => &["-b", "com.googlecode.iterm2"],
-                ExternalEditor::Ghostty => &["-b", "com.mitchellh.ghostty"],
-            };
-            let command = editor_command(editor, &path);
-            let args = command.get_args().collect::<Vec<_>>();
-            assert_eq!(args.len(), expected.len() + 1, "{editor:?} flags");
-            for (actual, expected) in args.iter().zip(expected) {
-                assert_eq!(*actual, *expected);
-            }
-            assert_eq!(args.last().unwrap(), &path.as_os_str());
-        }
-        assert!(open_in_editor(workspace.path(), "escape/outside.rs", ExternalEditor::System).is_err());
-        assert!(open_in_editor(workspace.path(), "missing", ExternalEditor::VsCode).is_err());
-        assert!(open_in_editor(workspace.path(), ".", ExternalEditor::System).is_err());
-        assert!(!workspace.path().join("nope").exists());
-    }
-
-    #[test]
     fn editor_catalog_partitions_always_available_and_detectable_targets() {
         assert_eq!(ExternalEditor::ALL.len(), 9, "extend this test when adding an editor");
         for editor in ExternalEditor::ALL {
@@ -704,43 +602,6 @@ mod tests {
         ] {
             assert_eq!(editor.open_action(), OpenAction::Open, "{editor:?} opens the file");
         }
-    }
-
-    #[test]
-    fn launch_paths_resolve_files_and_terminal_directories_without_shelling_out() {
-        let workspace = temp_workspace();
-        let nested = workspace.path().join("nested");
-        fs::create_dir(&nested).unwrap();
-        fs::write(nested.join("deep.rs"), "code").unwrap();
-        fs::write(workspace.path().join("top.rs"), "code").unwrap();
-        let root = vtcode_commons::paths::canonicalize(workspace.path()).unwrap();
-
-        for editor in [ExternalEditor::VsCode, ExternalEditor::Finder, ExternalEditor::System] {
-            assert_eq!(
-                launch_path(&root, "nested/deep.rs", editor).unwrap(),
-                root.join("nested/deep.rs"),
-                "{editor:?} targets the file"
-            );
-        }
-        for editor in [
-            ExternalEditor::Terminal,
-            ExternalEditor::ITerm2,
-            ExternalEditor::Ghostty,
-        ] {
-            assert_eq!(
-                launch_path(&root, "nested/deep.rs", editor).unwrap(),
-                root.join("nested"),
-                "{editor:?} targets the containing directory"
-            );
-        }
-        assert_eq!(
-            launch_path(&root, "top.rs", ExternalEditor::Terminal).unwrap(),
-            root,
-            "a root-level file opens the workspace root itself"
-        );
-        assert!(launch_path(&root, "missing.rs", ExternalEditor::Ghostty).is_err());
-        assert!(launch_path(&root, "../escape.rs", ExternalEditor::Terminal).is_err());
-        assert!(launch_path(&root, "nested", ExternalEditor::VsCode).is_err(), "directories are rejected");
     }
 
     #[test]
@@ -798,98 +659,6 @@ mod tests {
         assert_eq!(canonicalize_workspace_folder(&candidate), Some(expected));
         assert_eq!(canonicalize_workspace_folder(&workspace.path().join("file.txt")), None);
         assert_eq!(canonicalize_workspace_folder(&workspace.path().join("missing")), None);
-    }
-
-    #[test]
-    fn scan_skips_dependency_dirs_and_hidden_entries() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        for dir in ["src", "src/nested", "target/debug", ".git/objects", "node_modules/pkg"] {
-            fs::create_dir_all(root.join(dir)).expect("create dir");
-        }
-        fs::write(root.join("src/main.rs"), b"fn main() {}").expect("write");
-        fs::write(root.join("src/nested/mod.rs"), b"").expect("write");
-        fs::write(root.join(".hidden"), b"").expect("write");
-        fs::write(root.join("target/debug/artifact"), b"").expect("write");
-
-        let entries = scan_workspace(root);
-        let paths: Vec<&str> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
-        assert!(paths.contains(&"src"));
-        assert!(paths.contains(&"src/main.rs"));
-        assert!(paths.contains(&"src/nested/mod.rs"), "nested source files are listed");
-        assert!(!paths.iter().any(|path| path.starts_with("target") || path.starts_with(".git")));
-        assert!(!paths.contains(&".hidden"));
-        let src = entries.iter().find(|entry| entry.rel_path == "src").expect("src entry");
-        assert!(src.is_dir);
-        assert_eq!(src.depth, 0);
-    }
-
-    #[test]
-    fn scan_is_bounded_in_count() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        for index in 0..(MAX_ENTRIES + 50) {
-            fs::write(root.join(format!("file-{index:03}.txt")), b"x").expect("write");
-        }
-
-        let entries = scan_workspace(root);
-        assert_eq!(entries.len(), MAX_ENTRIES, "entry count is capped");
-        assert_eq!(entries.first().map(|entry| entry.rel_path.as_str()), Some("file-000.txt"));
-        assert_eq!(
-            entries.last().map(|entry| entry.rel_path.as_str()),
-            Some("file-399.txt"),
-            "the sorted prefix remains stable when the directory is wider than the row limit"
-        );
-    }
-
-    #[test]
-    fn cancelled_workspace_scan_discards_partial_results() {
-        let workspace = temp_workspace();
-        for index in 0..100 {
-            fs::write(workspace.path().join(format!("file-{index:03}.txt")), b"x").expect("write file");
-        }
-
-        let checks = std::cell::Cell::new(0);
-        let entries = scan_workspace_cancellable(workspace.path(), || {
-            let checked = checks.get();
-            checks.set(checked + 1);
-            checked >= 5
-        });
-
-        assert!(entries.is_none(), "cancelled scans must not publish a partial file tree");
-        assert!(checks.get() < 10, "the scanner should stop checking entries promptly");
-    }
-
-    #[test]
-    fn scan_keeps_directories_before_files_and_sorts_names() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        for name in ["z-dir", "a-dir"] {
-            fs::create_dir(root.join(name)).expect("create directory");
-        }
-        for name in ["z.txt", "a.txt"] {
-            fs::write(root.join(name), b"x").expect("write file");
-        }
-
-        let entries = scan_workspace(root);
-        let paths: Vec<_> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
-        assert_eq!(paths, ["a-dir", "z-dir", "a.txt", "z.txt"]);
-    }
-
-    #[test]
-    fn scan_includes_nested_paths_through_the_depth_bound() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        let visible_directory = "a/b/c/d/e/f/g/h";
-        let beyond_bound = "a/b/c/d/e/f/g/h/i";
-        fs::create_dir_all(root.join(beyond_bound)).expect("create deep dirs");
-        fs::write(root.join(beyond_bound).join("buried.txt"), b"x").expect("write");
-
-        let entries = scan_workspace(root);
-        let paths: Vec<_> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
-        assert!(paths.contains(&visible_directory), "directory at the depth boundary is visible");
-        assert!(!paths.contains(&beyond_bound), "directories beyond the depth bound are omitted");
-        assert!(!paths.contains(&"a/b/c/d/e/f/g/h/i/buried.txt"), "files beyond the depth bound are omitted");
     }
 
     #[test]

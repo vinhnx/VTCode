@@ -6,36 +6,16 @@ use crate::tui::core_tui::session::list_panel::{
     fixed_section_rows, input_styles_from_theme, render_shared_list_panel, rows_to_u16,
 };
 use ratatui::widgets::Clear;
+use vtcode_commons::prompt_history::prompt_history_row_label;
 
 /// Collapsed single-line display for a history entry.
 ///
-/// Shows the first line only, with `· <time>` and `· +N lines` suffixes.
-/// Control characters from the original command are sanitized so embedded
-/// newlines/tabs can never break the single-row list layout. The full
-/// multiline content is preserved in `HistoryMatch::content` and restored
-/// into the composer on accept.
-pub(crate) fn collapsed_history_display(content: &str, time_label: &str) -> String {
-    let mut lines = content.lines();
-    let first = lines.next().unwrap_or("");
-    let extra_lines = lines.count();
-    let sanitized: String = first.chars().map(|ch| if ch.is_control() { ' ' } else { ch }).collect();
-    let first = if sanitized.is_empty() && extra_lines > 0 {
-        "…"
-    } else {
-        sanitized.as_str()
-    };
-    let mut parts = vec![first.to_owned()];
-    if !time_label.is_empty() {
-        parts.push(time_label.to_owned());
-    }
-    if extra_lines > 0 {
-        if extra_lines == 1 {
-            parts.push("+1 line".to_owned());
-        } else {
-            parts.push(format!("+{extra_lines} lines"));
-        }
-    }
-    parts.join(" \u{b7} ")
+/// Shows the first line only, with `· <time>` and `· +N lines` suffixes; the
+/// full multiline content stays in `HistoryMatch::content` and is restored
+/// into the composer on accept. The format itself is shared with the desktop
+/// history palette via [`prompt_history_row_label`].
+fn collapsed_history_display(content: &str, time_label: &str) -> String {
+    prompt_history_row_label(content, time_label)
 }
 
 struct HistoryPickerPanelModel {
@@ -160,27 +140,31 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
 
     frame.render_widget(Clear, area);
 
-    let (query, selected_idx, current_offset, matches) = {
+    let (query, selected_idx, current_offset, matches, scope_label) = {
         let picker = &session.history_picker_state;
         (
             picker.search_query.clone(),
             picker.navigator.selected(),
             picker.navigator.scroll_offset(),
             picker.matches.clone(),
+            picker.scope.label(),
         )
     };
     let default_style = default_style(session);
     let muted_style = session.core.styles.muted_text_style();
     let highlight_style = modal_list_highlight_style(session);
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("History".to_owned(), highlight_style))],
+        header: vec![Line::from(Span::styled(
+            format!("Search prompts · {scope_label}"),
+            highlight_style,
+        ))],
         info: vec![Line::from(Span::styled(
-            "↑↓ Navigate · Enter accept · Esc cancel".to_owned(),
+            "↑/↓ to nav · Enter to use · Esc to cancel · Ctrl+S to scope".to_owned(),
             default_style,
         ))],
         search: Some(SharedSearchField {
             label: String::new(),
-            placeholder: Some("history text".to_owned()),
+            placeholder: Some("Filter history…".to_owned()),
             query,
         }),
     };

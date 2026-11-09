@@ -327,6 +327,7 @@ pub(crate) async fn refresh_runtime_config_from_manager(
     config.reasoning_effort = runtime_config.agent.reasoning_effort;
     config.theme.clone_from(&runtime_config.agent.theme);
     renderer.set_show_diagnostics_in_transcript(runtime_config.ui.show_diagnostics_in_transcript);
+    renderer.set_show_message_timestamps(runtime_config.ui.show_message_timestamps);
     renderer.set_tool_display_mode(runtime_config.ui.tool_display_mode);
     vtcode_ui::tui::panic_hook::set_show_diagnostics(runtime_config.ui.show_diagnostics_in_transcript);
 

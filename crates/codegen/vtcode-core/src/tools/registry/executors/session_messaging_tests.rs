@@ -121,6 +121,7 @@ async fn list_sessions_filters_self_unless_requested() -> TestResult {
         let log = vtcode_memory::open(dir.path(), session, vtcode_memory::DEFAULT_MAX_EVENTS)?;
         log.append(&crate::exec::events::ThreadEvent::TurnStarted(Default::default()))?;
         log.append(&crate::exec::events::ThreadEvent::TurnCompleted(crate::exec::events::TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: crate::exec::events::Usage::default(),
             in_progress_exec_sessions: Vec::new(),

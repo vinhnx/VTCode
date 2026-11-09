@@ -7,7 +7,7 @@ fn open_config_panes(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Deskto
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![
                     config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
                     config_page_setting("tools.auto_approve", json!(true), "Tools"),
@@ -16,7 +16,7 @@ fn open_config_panes(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Deskto
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -42,6 +42,30 @@ fn config_rail_entries_share_a_leading_spine_when_wide(cx: &mut TestAppContext) 
             curated.origin.x, model.origin.x,
             "the overview entry aligns with catalog groups: curated={curated:?} model={model:?}"
         );
+    })
+    .unwrap();
+}
+
+/// Catalog glyphs and the settings navigation's brand V share one explicit
+/// rail box: `nav_entry_content` sizes both from `nav_entry_icon_size`, so a
+/// Lucide row and the brand row can never mix the fixed 14px `small` tier
+/// with the font-relative 16px app baseline as the UI font size changes.
+#[gpui_kit::test]
+fn navigation_glyphs_share_one_box(cx: &mut TestAppContext) {
+    // The brand V-mark lives in the legacy navigation: narrow keeps it
+    // (wide viewports host the Kit sidebar, which takes a Lucide glyph).
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert_eq!(cx.theme().font_size, px(16.), "default UI font size");
+        assert_eq!(
+            super::super::nav_entry_icon_size(),
+            gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(1.0)),
+            "the rail box stays font-relative so it tracks the UI font size"
+        );
+        let bounds = window.find("settings-nav-icon-vtcode").bounds();
+        assert_eq!(bounds.size, size(px(16.), px(16.)), "brand V fills the rail box: {bounds:?}");
     })
     .unwrap();
 }
@@ -98,20 +122,24 @@ fn config_rail_marks_the_selected_group(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn settings_pane_divider_sits_between_navigation_and_content(cx: &mut TestAppContext) {
+fn settings_sidebar_sits_beside_content_when_wide_and_stacks_when_narrow(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        let navigation = window.find("settings-navigation").bounds();
-        let divider = window.find("settings-pane-divider").bounds();
-        let content = window.find("settings-content").bounds();
-        assert_eq!(divider.size.width, px(1.), "wide divider is a 1px vertical line: {divider:?}");
-        assert!(divider.size.height > px(0.), "the divider spans the panel height: {divider:?}");
+        // Wide viewports host the Kit container: its sidebar rows sit
+        // beside the hosted pane content (no legacy divider involved).
+        for ix in 0..9 {
+            assert!(
+                window.try_find(format!("0-{ix}")).is_some(),
+                "Kit sidebar row 0-{ix} missing from settings navigation"
+            );
+        }
+        let sidebar_row = window.find("0-0").bounds();
+        let content = window.find("appearance-settings").bounds();
         assert!(
-            navigation.origin.x + navigation.size.width <= divider.origin.x + px(1.)
-                && divider.origin.x + divider.size.width <= content.origin.x + px(1.),
-            "wide viewports put the divider between nav and content: navigation={navigation:?} divider={divider:?} content={content:?}"
+            sidebar_row.origin.x + sidebar_row.size.width <= content.origin.x + px(1.),
+            "wide viewports put the Kit sidebar beside content: row={sidebar_row:?} content={content:?}"
         );
     })
     .unwrap();
@@ -135,7 +163,9 @@ fn settings_pane_divider_sits_between_navigation_and_content(cx: &mut TestAppCon
 
 #[gpui_kit::test]
 fn settings_navigation_groups_desktop_tabs_and_cli_config(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    // Tab grouping lives in the legacy navigation: narrow keeps it (the
+    // Kit sidebar stays flat until upstream sidebar sections land).
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
@@ -261,6 +291,36 @@ fn windowed_zen_route_pages_start_below_the_traffic_lights(cx: &mut TestAppConte
             px(0.),
             "fullscreen hides the lights, so review reserves nothing: review={review:?}"
         );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
+    // The per-tab Heading lives in the legacy content: narrow keeps it
+    // (Kit pages title themselves without a Heading role).
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        // Asymmetric pair: the second and last tabs prove the title follows
+        // selection instead of pinning one label.
+        select_settings_category(window, 1, cx);
+        window.render_frame(cx);
+        let title = window.find("settings-page-title");
+        assert_eq!(title.role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(title.label(), Some("Appearance"));
+        select_settings_category(window, 7, cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-page-title").label(), Some("About"));
+    })
+    .unwrap();
+
+    // The config page carries its own headers, so the shared title stays out.
+    let (config_window, _config_view) = open_config_panes(cx);
+    cx.update_window(config_window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("settings-page-title").is_none());
     })
     .unwrap();
 }

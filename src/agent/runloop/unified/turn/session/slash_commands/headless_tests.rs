@@ -8,9 +8,10 @@
 //! hanging the suite.
 
 use super::handlers::{
-    handle_clear_screen, handle_manage_skills, handle_oauth_login, handle_open_donate_links, handle_show_log_viewer,
-    handle_show_memory_config, handle_show_permissions, handle_show_settings_reset, handle_show_transcript_stats,
-    handle_start_mode_palette, handle_start_session_palette, handle_start_theme_palette,
+    handle_clear_screen, handle_manage_skills, handle_oauth_login, handle_open_donate_links,
+    handle_run_instruction_audit, handle_show_log_viewer, handle_show_memory_config, handle_show_permissions,
+    handle_show_settings_reset, handle_show_transcript_stats, handle_start_mode_palette, handle_start_session_palette,
+    handle_start_theme_palette, handle_toggle_planning_workflow,
 };
 use super::secrets::handle_manage_secrets;
 use super::{SlashCommandContext, SlashCommandControl};
@@ -126,7 +127,7 @@ impl HeadlessHarness {
             loaded_skills: &mut *self.loaded_skills,
             checkpoint_manager: None,
             lifecycle_hooks: None,
-            harness_emitter: None,
+            harness_emitter: turn.harness_emitter,
         }
     }
 
@@ -154,6 +155,61 @@ async fn headless_mode_palette_lists_without_parking_modal_state() {
         .expect("mode handler");
     assert!(matches!(control, SlashCommandControl::Continue));
     assert!(harness.palette_state().is_none(), "mode list must not park modal state");
+}
+
+#[tokio::test]
+async fn explicit_plan_on_promotes_existing_suggested_planning() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut harness = HeadlessHarness::new().await;
+    harness.backing.enable_planning();
+    harness.plan_session.enter(PlanningEntrySource::AgentSuggestion);
+    assert!(!harness.plan_session.requires_explicit_plan_approval());
+
+    expect_continue(
+        timeout(HEADLESS_TEST_TIMEOUT, handle_toggle_planning_workflow(harness.ctx(), Some(true))).await,
+        "explicit plan on",
+    )
+    .await;
+    assert!(harness.plan_session.requires_explicit_plan_approval());
+}
+
+#[tokio::test]
+async fn plan_task_is_not_an_approval() {
+    let mut harness = HeadlessHarness::new().await;
+    harness.backing.enable_planning();
+    let event_path = harness.backing.enable_harness_emitter();
+    harness.backing.persist_plan_for_test(
+        "## Summary\nRepair the parser.\n## Implementation Steps\n1. Validate input -> files: [src/parser.rs] -> verify: [cargo check --locked]\n## Test Cases and Validation\n- cargo check --locked exits 0.\n## Assumptions and Defaults\n- Preserve the API.",
+    ).await;
+    harness.plan_session.recovery.research_closed = true;
+    harness.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+    harness.plan_session.recovery.best_draft = Some("old draft".to_owned());
+    harness.plan_session.set_previous_primary_agent(Some("build".to_owned()));
+    harness
+        .conversation_history
+        .push(uni::Message::system("Planning recovery: old directive".to_owned()));
+    let control = super::handle_outcome(
+        super::SlashCommandOutcome::TogglePlanningWorkflow {
+            enable: Some(true),
+            prompt: Some("review how users approve requests".to_owned()),
+        },
+        harness.ctx(),
+    )
+    .await
+    .expect("plan task");
+    assert!(matches!(control, SlashCommandControl::SubmitPrompt(_)));
+    assert!(!harness.plan_session.recovery.research_closed);
+    assert!(harness.plan_session.recovery.best_draft.is_none());
+    assert_eq!(harness.plan_session.restore_agent_after_planning(), Some("build"));
+    assert!(harness.conversation_history.is_empty());
+    assert!(harness.ctx().tool_registry.planning_workflow_state().get_plan_file().is_none());
+    let events = std::fs::read_to_string(event_path).expect("planning checkpoint");
+    assert!(events.contains("planning-recovery"));
+    assert!(!events.contains("old draft"));
+    harness.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval;
+    harness.plan_session.begin_explicit_recovery_cycle_for_user_input();
+    assert!(harness.plan_session.take_recovery_input_pending());
 }
 
 #[tokio::test]
@@ -236,6 +292,17 @@ async fn headless_skills_doctor_renders_populated_report_without_waiting() {
     )
     .await;
     assert!(harness.palette_state().is_none(), "/skills doctor must not park modal state");
+}
+
+#[tokio::test]
+async fn headless_doctor_prompt_audit_renders_without_waiting() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(
+        timeout(HEADLESS_TEST_TIMEOUT, handle_run_instruction_audit(harness.ctx())).await,
+        "/doctor prompt-audit",
+    )
+    .await;
+    assert!(harness.palette_state().is_none(), "/doctor prompt-audit must not park modal state");
 }
 
 #[tokio::test]

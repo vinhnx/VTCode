@@ -30,6 +30,7 @@ pub(super) mod keys {
     pub const PROMPT: &str = "prompt";
     pub const ATTACHMENTS: &str = "attachments";
     pub const BATCHABLE: &str = "batchable";
+    pub const ENTRY_ID: &str = "entryId";
     pub const CLEAR_QUEUE: &str = "clearQueue";
     pub const BEFORE_INDEX: &str = "beforeIndex";
     pub const LIMIT: &str = "limit";
@@ -56,6 +57,9 @@ pub(super) mod key_context {
     pub const INSPECTOR: &str = "VTCodeInspector";
     pub const COMPOSER: &str = "VTCodeComposer";
     pub const TRANSCRIPT: &str = "VTCodeTranscript";
+    pub const SESSIONS: &str = "VTCodeSessions";
+    pub const THREAD_TABS: &str = "VTCodeThreadTabs";
+    pub const ACTIVITY: &str = "VTCodeActivity";
 }
 
 /// macOS app-bundle layout fragments shared by backend resolution and
@@ -98,7 +102,8 @@ pub(super) mod i18n {
     pub const FILE_PREVIEW_COPY: &str = "app.file_preview.copy";
     pub const FILES_REFRESH_TOOLTIP: &str = "app.files.refresh_tooltip";
     pub const INSPECTOR_EMPTY_ACTIVITY_TITLE: &str = "app.inspector.empty_activity_title";
-    pub const LICENSES_TITLE: &str = "app.settings.licenses.title";
+    pub const LICENSES_TITLE: &str = "app.licenses.title";
+    pub const LICENSES_VIEW: &str = "app.licenses.view";
     pub const NAVIGATION_CLOSE_THREAD: &str = "app.navigation.close_thread";
     pub const NAVIGATION_NEW_THREAD: &str = "app.navigation.new_thread";
     pub const NAVIGATION_SEARCH_COMMANDS: &str = "app.navigation.search_commands";
@@ -128,6 +133,7 @@ pub(super) mod i18n {
     pub const SESSION_PREPARING_NEW_THREAD: &str = "app.session.preparing_new_thread";
     pub const SESSION_RUNNING_THREAD_LABEL: &str = "app.session.running_thread_label";
     pub const SESSION_THREAD_READY: &str = "app.session.thread_ready";
+    pub const SETTINGS_CONNECTIONS_TERMINAL: &str = "app.settings.connections.terminal";
     pub const SETTINGS_SEARCH_TITLE: &str = "app.settings.search.title";
     pub const SETTINGS_TITLE: &str = "app.settings.title";
     pub const SHORTCUTS_SEARCH_ARIA: &str = "app.shortcuts.search_aria";
@@ -164,7 +170,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 61] = [
+        const KEYS: [&str; 63] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -186,6 +192,7 @@ mod tests {
             i18n::FILES_REFRESH_TOOLTIP,
             i18n::INSPECTOR_EMPTY_ACTIVITY_TITLE,
             i18n::LICENSES_TITLE,
+            i18n::LICENSES_VIEW,
             i18n::NAVIGATION_CLOSE_THREAD,
             i18n::NAVIGATION_NEW_THREAD,
             i18n::NAVIGATION_SEARCH_COMMANDS,
@@ -215,6 +222,7 @@ mod tests {
             i18n::SESSION_PREPARING_NEW_THREAD,
             i18n::SESSION_RUNNING_THREAD_LABEL,
             i18n::SESSION_THREAD_READY,
+            i18n::SETTINGS_CONNECTIONS_TERMINAL,
             i18n::SETTINGS_SEARCH_TITLE,
             i18n::SETTINGS_TITLE,
             i18n::SHORTCUTS_SEARCH_ARIA,

@@ -30,14 +30,7 @@ use super::LoopbackPeer;
     reason = "Only the byte pump is measured here; other private entrypoints have unit tests."
 )]
 mod sse;
-#[path = "../../../vtcode-llm/src/providers/shared/utf8.rs"]
-#[allow(
-    dead_code,
-    unused_imports,
-    unused_results,
-    reason = "Only direct byte decoding is measured in this helper benchmark."
-)]
-mod utf8;
+use vtcode_commons::Utf8StreamDecoder;
 
 fn recorded_stream(event_count: usize, crlf: bool) -> Vec<u8> {
     let ending = if crlf { "\r\n\r\n" } else { "\n\n" };
@@ -59,7 +52,7 @@ fn recorded_stream(event_count: usize, crlf: bool) -> Vec<u8> {
 }
 
 fn pump(bytes: &[u8], chunk_size: usize) -> usize {
-    let mut decoder = utf8::Utf8StreamDecoder::default();
+    let mut decoder = Utf8StreamDecoder::default();
     let mut buffer = Vec::new();
     let mut offset = 0;
     let mut events = 0;

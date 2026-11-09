@@ -26,6 +26,12 @@ impl DesktopView {
     }
 
     fn submit_prompt_with_batching(&mut self, window: &mut Window, cx: &mut Context<Self>, batchable: bool) {
+        // Reverse search types the filter into the composer: abandon the
+        // search (restoring the pre-search draft) before reading anything to
+        // submit, so Cmd+Enter submits the draft instead of filter text.
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            self.close_palette(window, cx);
+        }
         let prompt = self.composer.read(cx).value().to_string();
         // Reset before every early return: webmcp and slash handlers consume
         // the draft without reaching the send block below.
@@ -191,6 +197,11 @@ impl DesktopView {
             return;
         }
         self.cancel_requested = true;
+        // Every user press re-sends: a first signal can be lost when the
+        // runloop resets its latch while processing the Submit, and the
+        // service re-fires the out-of-band signal on repeats while deduping
+        // the queued event. Swallowing repeats here would wedge the turn.
+        self.cancel_request_sent = false;
         self.status = rust_i18n::t!("app.composer.cancelling_turn").to_string();
         self.try_send_pending_cancel();
         cx.notify();
@@ -211,9 +222,10 @@ impl DesktopView {
         let clear_queue = self.armed_running_switch.is_some();
         if self.request(
             protocol::method::TURN_CANCEL,
-            json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id, keys::CLEAR_QUEUE: clear_queue }),
+            json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id.clone(), keys::CLEAR_QUEUE: clear_queue }),
         ) {
             self.cancel_request_sent = true;
+            self.cancel_sent_turn_id = Some(turn_id);
         } else {
             self.error = Some(rust_i18n::t!("app.composer.cancellation_not_queued").to_string());
         }
@@ -246,9 +258,13 @@ impl DesktopView {
     pub(super) fn clear_pending_interaction(&mut self) {
         self.interaction = None;
         self.pending_interaction_response = None;
+        self.interaction_edit_pending = false;
         self.interaction_choice_ids.clear();
         self.interaction_answer_texts.clear();
         self.interaction_step_index = 0;
+        self.interaction_immediate_choice_id = None;
+        self.interaction_plan_expanded = false;
+        self.reset_hidden_inspector_tab_if_stranded();
     }
 
     pub(super) fn submit_interaction(
@@ -280,7 +296,39 @@ impl DesktopView {
             text: answer_texts.iter().flatten().next().cloned(),
             answer_texts,
             cancelled,
+            hotkey: None,
         };
+        self.send_interaction_response(response, false, cx);
+    }
+
+    /// Signal a plan-edit hotkey for the pending approval. The service opens
+    /// its configured editor and re-shows the approval; the panel stays
+    /// locked until that follow-up request arrives.
+    pub(super) fn submit_interaction_hotkey(&mut self, cx: &mut Context<Self>) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
+        let Some(interaction) = self.interaction.clone() else {
+            return;
+        };
+        if !has_viewable_plan_markdown(interaction.plan_markdown.as_deref()) {
+            return;
+        }
+        let response = InteractionResponse {
+            session_id: interaction.session_id,
+            turn_id: interaction.turn_id,
+            interaction_id: interaction.interaction_id,
+            choice_id: None,
+            choice_ids: Vec::new(),
+            text: None,
+            answer_texts: Vec::new(),
+            cancelled: false,
+            hotkey: Some(protocol::InteractionHotkey::LaunchEditor),
+        };
+        self.send_interaction_response(response, true, cx);
+    }
+
+    fn send_interaction_response(&mut self, response: InteractionResponse, editing: bool, cx: &mut Context<Self>) {
         let params = json!(response);
         if !request_fits_frame(protocol::method::INTERACTION_RESPOND, &params) {
             self.error = Some(rust_i18n::t!("app.composer.answers_too_long").to_string());
@@ -289,8 +337,13 @@ impl DesktopView {
         }
         if self.request(protocol::method::INTERACTION_RESPOND, params) {
             self.pending_interaction_response = Some(response.interaction_id);
+            self.interaction_edit_pending = editing;
             self.clear_error();
-            self.status = rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string();
+            self.status = if editing {
+                rust_i18n::t!("app.interaction.editing_plan").to_string()
+            } else {
+                rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string()
+            };
         } else {
             self.error = Some(rust_i18n::t!("app.composer.decision_not_sent").to_string());
         }
@@ -301,7 +354,7 @@ impl DesktopView {
         &mut self,
         step_index: usize,
         choice_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_interaction_response.is_some() {
@@ -310,7 +363,7 @@ impl DesktopView {
         let Some(interaction) = self.interaction.as_ref() else {
             return;
         };
-        if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
+        if interaction_render::is_wizard_interaction(interaction) {
             if step_index != self.interaction_step_index
                 || !interaction
                     .steps
@@ -326,7 +379,57 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Immediate choices are select-then-confirm: activating the checked
+        // card is a Kit-level no-op, so without a selection step the
+        // preselected row could never be submitted by mouse.
+        if !interaction_render::visible_choices(interaction, self.interaction_step_index)
+            .iter()
+            .any(|choice| choice.id == choice_id)
+        {
+            return;
+        }
+        self.interaction_immediate_choice_id = Some(choice_id);
+        self.clear_error();
+        cx.notify();
+    }
+
+    /// Submit the highlighted immediate choice (mouse selection, else the
+    /// service default). Digit shortcuts bypass this and commit directly.
+    pub(super) fn confirm_immediate_choice(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
+        // Wizards commit through Next/Submit with per-step answers; a single
+        // immediate choice would silently discard the other steps.
+        if self.interaction.as_ref().is_some_and(interaction_render::is_wizard_interaction) {
+            return;
+        }
+        let Some(choice_id) = self.effective_immediate_choice_id() else {
+            return;
+        };
         self.submit_interaction(vec![choice_id], false, window, cx);
+    }
+
+    /// The row Confirm submits: the mouse selection when it still names a
+    /// visible row, else the service default (selected row, else first row).
+    pub(super) fn effective_immediate_choice_id(&self) -> Option<String> {
+        let interaction = self.interaction.as_ref()?;
+        let choices = interaction_render::visible_choices(interaction, self.interaction_step_index);
+        if choices.is_empty() {
+            return None;
+        }
+        if self
+            .interaction_immediate_choice_id
+            .as_deref()
+            .is_some_and(|selected| choices.iter().any(|choice| choice.id == selected))
+        {
+            return self.interaction_immediate_choice_id.clone();
+        }
+        choices
+            .iter()
+            .find(|choice| Some(choice.id.as_str()) == interaction.selected_choice_id.as_deref())
+            .or(choices.first())
+            .map(|choice| choice.id.clone())
     }
 
     fn store_current_interaction_answer(&mut self, cx: &App) {

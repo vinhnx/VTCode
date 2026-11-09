@@ -16,6 +16,7 @@ pub(super) use crate::utils::path::canonicalize_workspace;
 
 mod background_completion;
 mod background_slots;
+mod monitor;
 mod pipe_buffer;
 mod session_basics;
 mod terminate;

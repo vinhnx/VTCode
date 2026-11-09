@@ -43,6 +43,7 @@ fn turn_completed(session_id: &str, turn_id: &str) -> BackendEvent {
         session_id: session_id.into(),
         turn_id: Some(turn_id.into()),
         event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage {
                 input_tokens: 0,
@@ -71,8 +72,8 @@ fn running_thread_marks_every_surface_and_keeps_new_thread_enabled(cx: &mut Test
         assert!(window.try_find("thread-tab-running-thread-b").is_some());
         assert!(window.try_find("thread-tab-running-thread-a").is_none());
         assert!(window.try_find("thread-tab-running-thread-c").is_none());
-        assert_eq!(window.find("thread-tab-thread-b").label(), Some("Second thread (running)"));
-        assert_eq!(window.find("thread-tab-thread-a").label(), Some("Switch to thread: First thread"));
+        assert_eq!(window.within("thread-tabs").find(1usize).label(), Some("Second thread (running)"));
+        assert_eq!(window.within("thread-tabs").find(0usize).label(), Some("Switch to thread: First thread"));
         assert_ne!(window.find("thread-tab-new").disabled(), Some(true), "new thread stays enabled mid-turn");
 
         // Sidebar rows mirror the strip; the selected row is not a load target.
@@ -171,6 +172,7 @@ fn running_confirm_warns_about_queued_prompts_only_when_queued(cx: &mut TestAppC
     view.update(cx, |view, _| {
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-queued".into(),
+            entry_id: None,
             prompt: "queued behind the turn".into(),
             acknowledged: false,
         });
@@ -496,7 +498,7 @@ fn tab_close_mid_turn_confirms_then_untabs_on_drain(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("thread-tab-close-thread-b", cx);
+        click_thread_tab_close(window, &view, "thread-b", cx);
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_some(), "closing the running tab confirms");
         assert!(requests.try_recv().is_err());
@@ -519,13 +521,13 @@ fn tab_close_mid_turn_confirms_then_untabs_on_drain(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("thread-tab-close-thread-b", cx);
+        click_thread_tab_close(window, &view, "thread-b", cx);
         window.render_frame(cx);
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(requests.try_recv().is_err(), "declining sends nothing");
         view.update(cx, |view, _| assert_eq!(view.open_tabs.as_slice(), ["thread-a", "thread-b", "thread-c"]));
-        window.click("thread-tab-close-thread-a", cx);
+        click_thread_tab_close(window, &view, "thread-a", cx);
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_none(), "idle tabs untab freely mid-turn");
         view.update(cx, |view, _| assert_eq!(view.open_tabs.as_slice(), ["thread-b", "thread-c"]));
@@ -605,6 +607,7 @@ fn armed_switch_fails_loud_when_blocked_at_drain(cx: &mut TestAppContext) {
                 steps: Vec::new(),
                 selected_choice_id: None,
                 selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             });
         });
         view.update(cx, |view, cx| {
@@ -653,7 +656,10 @@ fn browser_row_cancel_returns_focus_to_browser(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(requests.try_recv().is_err());
         assert!(window.try_find("thread-browser").is_some(), "the browser stays open behind the modal");
-        assert!(view.read(cx).browser_focus.is_focused(window), "cancel returns focus to the visible route");
+        assert!(
+            view.read(cx).browser_list_focus.is_focused(window),
+            "cancel returns focus to the visible route's list"
+        );
     })
     .unwrap();
 }
@@ -759,4 +765,168 @@ fn delete_selected_thread_refused_in_every_state_but_idle_other_still_prompts(cx
         assert_eq!(view.sessions.len(), 3);
         assert!(view.error.is_none(), "the non-selected delete raises no refusal");
     });
+}
+
+#[gpui_kit::test]
+fn repeated_cancel_presses_resend_turn_cancel(cx: &mut TestAppContext) {
+    // A first stop signal can be lost when the runloop resets its latch
+    // while processing the Submit; every press must re-send so repeats
+    // re-assert the out-of-band signal instead of wedging silently.
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        for press in 1..=2 {
+            view.update(cx, |view, cx| view.cancel_turn(cx));
+            let (method, params) = take_request(&mut requests);
+            assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL, "press {press} sends");
+            assert_eq!(
+                params,
+                json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false }),
+                "press {press} names the live turn"
+            );
+        }
+        assert!(view.read(cx).cancel_requested);
+        assert!(view.read(cx).cancel_request_sent);
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
+        });
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "no duplicate send for the same presses");
+    view.update(cx, |view, cx| {
+        assert!(!view.running);
+        view.cancel_turn(cx);
+    });
+    assert!(requests.try_recv().is_err(), "an idle press sends nothing");
+}
+
+#[gpui_kit::test]
+fn stale_cancel_error_reconciles_running_state(cx: &mut TestAppContext) {
+    // The service rejected our cancel for the live turn, so the turn is
+    // already gone server-side (e.g. a dropped terminal event): clear the
+    // stale running state instead of spinning forever.
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        let (method, _) = take_request(&mut requests);
+        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        view.update(cx, |view, _| {
+            assert_eq!(view.cancel_sent_turn_id.as_deref(), Some("turn-1"));
+        });
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::TURN_CANCEL.into(),
+                    result: None,
+                    error: Some("turn is no longer active".into()),
+                },
+                cx,
+            );
+        });
+        view.update(cx, |view, _| {
+            assert!(!view.running, "stale running state reconciles");
+            assert!(view.active_turn_id.is_none());
+            assert!(!view.cancel_requested);
+            assert!(!view.cancel_request_sent);
+        });
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "reconcile sends nothing further");
+}
+
+#[gpui_kit::test]
+fn late_cancel_error_ignores_newer_turn(cx: &mut TestAppContext) {
+    // Asymmetric guard: an error for an older cancel must not clear a
+    // newer turn that started since the send.
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        let _ = take_request(&mut requests);
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
+        });
+        // A newer turn starts before the stale error lands.
+        view.update(cx, |view, _| {
+            view.running = true;
+            view.active_turn_id = Some("turn-2".into());
+        });
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::TURN_CANCEL.into(),
+                    result: None,
+                    error: Some("turn is no longer active".into()),
+                },
+                cx,
+            );
+        });
+        view.update(cx, |view, _| {
+            assert!(view.running, "the newer turn keeps running");
+            assert_eq!(view.active_turn_id.as_deref(), Some("turn-2"));
+        });
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "the late error sends nothing");
+}
+
+#[gpui_kit::test]
+fn cancel_button_click_sends_turn_cancel(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("cancel-turn", cx);
+    })
+    .unwrap();
+    let (method, params) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    assert_eq!(
+        params,
+        json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false }),
+        "the button names the live turn"
+    );
+    assert!(requests.try_recv().is_err(), "one click sends once");
+    cx.update(|cx| {
+        assert!(view.read(cx).cancel_requested);
+        assert!(view.read(cx).cancel_request_sent);
+    });
+}
+
+#[gpui_kit::test]
+fn clicking_outside_cancels_the_running_confirm(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("thread-tab-thread-a", cx);
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_err(), "switching waits for the confirm answer");
+        assert!(window.try_find("running-confirm-dialog").is_some());
+
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_err(), "clicking away sends nothing");
+        assert!(window.try_find("running-confirm-dialog").is_none());
+        view.update(cx, |view, _| {
+            assert_eq!(view.selected_session_id.as_deref(), Some("thread-b"));
+            assert!(view.running, "clicking away never touches the turn");
+            assert!(view.armed_running_switch.is_none());
+            assert_eq!(view.open_tabs.as_slice(), ["thread-a", "thread-b", "thread-c"]);
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn running_confirm_traps_tab_between_its_actions(cx: &mut TestAppContext) {
+    let (window, _view, _requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("thread-tab-new", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("running-confirm-dialog").is_some());
+        assert_tab_trapped_within_dialog(window, "running-confirm-cancel", "running-confirm-stop", cx);
+    })
+    .unwrap();
 }

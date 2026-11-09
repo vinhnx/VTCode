@@ -73,7 +73,7 @@ impl DesktopView {
             selected_file: None,
             include_untracked: false,
             error: None,
-            mode: DiffMode::Unified,
+            mode: self.preferences.diff_mode(),
         });
         self.show_review(window, cx);
     }
@@ -123,7 +123,11 @@ impl DesktopView {
                 .filter(|patch| !patch.is_empty())
                 .and_then(|patch| DiffFile::parse(patch).ok())
                 .filter(|files| !files.is_empty())
-                .map(|files| cx.new(|cx| DiffState::new(files, cx).with_mode(review.mode)))
+                .map(|files| {
+                    cx.new(|cx| {
+                        super::super::diff_preferences::new_diff_state(files, review.mode, &self.preferences.diff, cx)
+                    })
+                })
         };
         if let Some(viewer) = &review.viewer {
             let files = viewer.read(cx).files();
@@ -239,6 +243,9 @@ impl DesktopView {
                 viewer.update(cx, |viewer, cx| viewer.set_mode(mode, cx));
             }
         }
+        self.preferences.set_diff_mode(mode);
+        self.preferences.save();
+        cx.notify();
     }
 
     pub(super) fn render_workspace_review_content(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -392,6 +399,8 @@ impl DesktopView {
                 .child(div().font_medium().child(shimmer_label(
                     "workspace-review-loading-label",
                     rust_i18n::t!("app.workspace_review.reading_git_changes_progress").to_string(),
+                    colors.muted_foreground,
+                    cx,
                 )))
                 .child(
                     div()
@@ -599,7 +608,14 @@ impl DesktopView {
                             .flex_1()
                             .min_h_0()
                             .w_full()
-                            .child(Diff::new(viewer).line_number(true).soft_wrap(true).text_color(diff_foreground)),
+                            .child(
+                                super::super::diff_preferences::apply_diff_appearance(
+                                    Diff::new(viewer),
+                                    &self.preferences.diff,
+                                    self.preferences.diff.soft_wrap(),
+                                )
+                                .text_color(diff_foreground),
+                            ),
                     )
                     .into_any_element()
                 } else {

@@ -228,6 +228,14 @@ or scheduler-latency metric. Compare idle controls and cache hits, retain noisy 
 Metadata is warm, the global ignore matcher has its normal empty default, and no cold-disk, loaded-ignore, live-provider,
 or whole-agent latency claim follows from these workloads.
 
+### Memory-stall attribution
+
+Wall time cannot tell a compute-bound loop from a memory-stalled one. For suspected memory-bound grouping or
+aggregation code, capture stall counters alongside timing with `scripts/perf/memstat.sh <command>`: it records
+cache-miss and instruction counters via Linux `perf stat` and runs the command without counters (with guidance) where
+`perf` is unavailable. See [Memory Latency & Cache-First Aggregation](rust-performance-principles.md#memory-latency--cache-first-aggregation)
+for the decision rules.
+
 ### Directory listing experiment (2026-10-07)
 
 A private basic-list candidate moved the full directory scan into one blocking task per cache miss, following
@@ -470,6 +478,15 @@ The trace is silent when unset and reports only duration records for bootstrap, 
 validation, authentication, session setup, and first UI render. It is initialized before tracing is configured so early
 startup work is observable without adding work to normal launches.
 
+The desktop app reports the same way: launch phases (`desktop_preferences_and_localization`, `desktop_kit_init`,
+`desktop_chrome`, `desktop_window_open`) plus a one-line summary at window open, with backend/session readiness as
+later individual signals (`desktop_backend_ready` and `desktop_session_ready` milestones, `desktop_session_decode`
+phase) since welcome-screen launches may never reach them:
+
+```bash
+VTCODE_STARTUP_TRACE=1 ./target/release/vtcode-desktop
+```
+
 ### Patterns that pay off on the startup path
 
 - **Join independent disk I/O.** `initialize_dot_folder`, `init_global_guardian`, `determine_theme`, and
@@ -514,8 +531,8 @@ startup work is observable without adding work to normal launches.
   config.
 - **Join pre-paint builders.** `ToolRegistry` construction overlaps `discover_controller_subagents`, and prompt-template
   discovery overlaps the dot-config load, via `tokio::join!`.
-- **Lazy `--version` diagnostics.** `build_augmented_cli_command` only formats `long_version()` (storage paths + env
-  dump) when argv contains a version flag; interactive launches use the static crate version.
+- **Lazy `--version` diagnostics.** `build_augmented_cli_command` only formats `long_version(git_info)` (storage
+  paths + env dump) when argv contains a version flag; interactive launches use the static crate version.
 - **Reuse subagent discovery.** Critical path caches `DiscoveredSubagents` in `SessionState`; hydration builds via
   `SubagentController::new_with_discovered` instead of a second workspace/plugin scan.
 - **Skeleton-first slash palette.** TUI spawns with built-ins only; workspace templates merge post-paint via app-level

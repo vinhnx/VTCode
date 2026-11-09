@@ -3,6 +3,7 @@
 use super::*;
 
 mod create;
+mod monitor;
 
 #[derive(Default)]
 pub(crate) struct SessionPreviewState {
@@ -24,6 +25,7 @@ pub struct ExecSessionManager {
     background_shortcut_result: Arc<ParkingMutex<Option<BackgroundShortcutResult>>>,
     completion_tx: broadcast::Sender<ExecSessionCompletionEvent>,
     completion_notify: Arc<Notify>,
+    monitor_drain_cursor: Arc<ParkingMutex<Option<ExecSessionId>>>,
 }
 
 impl ExecSessionManager {
@@ -43,6 +45,7 @@ impl ExecSessionManager {
             background_shortcut_result: Arc::new(ParkingMutex::new(None)),
             completion_tx,
             completion_notify: Arc::new(Notify::new()),
+            monitor_drain_cursor: Arc::new(ParkingMutex::new(None)),
         }
     }
 
@@ -455,10 +458,11 @@ impl ExecSessionManager {
     /// Returns `true` when the session was already complete and was closed.
     pub async fn force_terminate_or_close(&self, session_id: &str) -> Result<bool> {
         let completed = self.is_session_completed(session_id).await?.is_some();
+        // A completed pipe wait can represent an error rather than an
+        // observed exit; confirm before either retaining or closing it.
+        self.force_terminate_session(session_id).await?;
         if completed {
             self.close_session(session_id).await?;
-        } else {
-            self.force_terminate_session(session_id).await?;
         }
         Ok(completed)
     }
@@ -631,10 +635,12 @@ impl ExecSessionManager {
         let mut failed = 0usize;
         for session_id in ids {
             let was_running = self.is_session_completed(session_id.as_str()).await.ok().flatten().is_none();
-            if was_running {
-                if let Err(error) = self.force_terminate_session(session_id.as_str()).await {
-                    tracing::warn!(%session_id, %error, "force-cancel terminate failed");
-                }
+            // Even an apparently completed pipe may have a failed wait; ask
+            // the backend to confirm its direct child before detaching it.
+            if let Err(error) = self.force_terminate_session(session_id.as_str()).await {
+                tracing::warn!(%session_id, %error, "force-cancel terminate failed");
+                failed += 1;
+                continue;
             }
             match self.close_session(session_id.as_str()).await {
                 Ok(_) => {

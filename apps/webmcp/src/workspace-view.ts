@@ -1,6 +1,7 @@
 import { $ } from "./app-elements.ts";
 import { MAX_FILE_BYTES, type InMemoryBackend, type VtCodeBackend } from "./backend.ts";
 import { fileName, snapshotSizeBytes, webMcpFileNotFoundError } from "./app-feedback.ts";
+import { diagramActionState } from "./diagrams.ts";
 import type { CodeEditor } from "./editor.ts";
 import type { ClientProposal, FileSnapshot, PatchProposal, TreeNode, WorkspaceFile } from "./types.ts";
 
@@ -196,7 +197,16 @@ export function createWorkspaceView(options: WorkspaceViewOptions) {
     $("editorState").classList.toggle("dirty", Boolean(changed || conflict));
   }
 
+  function refreshDiagramAction(): void {
+    const selected = state.selected;
+    const action = diagramActionState(selected, selected ? current(state, selected) : "");
+    const button = $("previewDiagram");
+    button.disabled = action.disabled;
+    button.title = action.title;
+  }
+
   function renderSelectedEditor(): void {
+    refreshDiagramAction();
     if (!state.selected || !snapshot(state, state.selected)) return;
     const path = state.selected;
     editor.open(path, current(state, path), isDirty(state, path));
@@ -247,7 +257,7 @@ export function createWorkspaceView(options: WorkspaceViewOptions) {
   }
 
   return {
-    renderTree, renderTabs, updateEditorFooter, renderSelectedEditor,
+    renderTree, renderTabs, updateEditorFooter, renderSelectedEditor, refreshDiagramAction,
     openFile, refreshFile, invalidatePendingOpens,
   };
 }

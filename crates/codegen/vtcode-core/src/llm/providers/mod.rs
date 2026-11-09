@@ -26,7 +26,6 @@ pub use vtcode_commons::tool_types::{
 // anthropic request_builder, shared stream utilities).
 pub use vtcode_llm::providers::anthropic;
 pub use vtcode_llm::providers::anthropic_types;
-pub use vtcode_llm::providers::base;
 pub use vtcode_llm::providers::common;
 pub use vtcode_llm::providers::copilot;
 pub use vtcode_llm::providers::error_handling;

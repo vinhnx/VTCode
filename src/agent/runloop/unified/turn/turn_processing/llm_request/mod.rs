@@ -104,8 +104,8 @@ fn finish_streaming_bridge_success(ctx: &mut TurnProcessingContext<'_>, stream_b
         .map(|(call_id, (item_id, tool_name))| (call_id, StreamedToolCallItem { item_id, tool_name }));
     ctx.harness_state.remember_streamed_tool_call_items(streamed_items);
     stream_bridge.complete_open_items();
-    if stream_bridge.assistant_output_observed() {
-        ctx.harness_state.mark_streamed_response_event_emitted();
+    if let Some(item_id) = stream_bridge.assistant_item_id() {
+        ctx.harness_state.mark_streamed_response_event_emitted(item_id.to_string());
     }
 }
 

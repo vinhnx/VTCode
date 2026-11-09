@@ -169,7 +169,8 @@ pub struct AgentConfig {
     #[serde(default)]
     pub onboarding: AgentOnboardingConfig,
 
-    /// Maximum bytes of AGENTS.md/CLAUDE.md content to load from project hierarchy
+    /// Deprecated and ignored: kept so existing configs still parse. Instruction loading,
+    /// including welcome-screen highlights, uses `instruction_max_bytes`.
     #[serde(default = "default_project_doc_max_bytes")]
     pub project_doc_max_bytes: usize,
 
@@ -487,6 +488,15 @@ impl Default for AgentConfig {
     }
 }
 
+/// Reject an agent-tier sampling temperature outside the unit range.
+/// NaN fails the range check, so unrepresentable TOML floats cannot slip through.
+fn validate_unit_temperature(name: &str, value: f32) -> Result<(), String> {
+    if !(0.0..=1.0).contains(&value) {
+        return Err(format!("{name} must be between 0.0 and 1.0, got {value}"));
+    }
+    Ok(())
+}
+
 impl AgentConfig {
     /// Determine whether structured reasoning tag instructions should be included.
     pub fn should_include_structured_reasoning_tags(&self) -> bool {
@@ -495,14 +505,12 @@ impl AgentConfig {
 
     /// Validate LLM generation parameters
     pub(crate) fn validate_llm_params(&self) -> Result<(), String> {
-        // Validate temperature range
-        if !(0.0..=1.0).contains(&self.temperature) {
-            return Err(format!("temperature must be between 0.0 and 1.0, got {}", self.temperature));
-        }
-
-        if !(0.0..=1.0).contains(&self.refine_temperature) {
-            return Err(format!("refine_temperature must be between 0.0 and 1.0, got {}", self.refine_temperature));
-        }
+        // Agent-tier sampling temperatures share the unit range; custom
+        // providers allow 0.0-2.0 and validate separately.
+        validate_unit_temperature("temperature", self.temperature)?;
+        validate_unit_temperature("refine_temperature", self.refine_temperature)?;
+        validate_unit_temperature("small_model.temperature", self.small_model.temperature)?;
+        validate_unit_temperature("prompt_suggestions.temperature", self.prompt_suggestions.temperature)?;
 
         if self.instruction_import_max_depth == 0 {
             return Err("instruction_import_max_depth must be greater than 0".to_string());

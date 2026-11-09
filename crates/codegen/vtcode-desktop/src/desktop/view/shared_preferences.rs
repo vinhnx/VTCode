@@ -5,6 +5,37 @@ fn known_theme(id: &str) -> bool {
     id == themes::SYSTEM_LIGHT_ID || id == themes::SYSTEM_DARK_ID || themes::find(id).is_some()
 }
 
+/// Cloned render inputs for the shared CLI-preferences group (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct SharedPreferencesProps {
+    pub(super) shared_theme: Option<String>,
+    pub(super) follow_cli_theme: Option<bool>,
+    pub(super) desktop_theme: Option<String>,
+    pub(super) focus_handle: FocusHandle,
+    pub(super) can_sync: bool,
+    pub(super) can_reload: bool,
+}
+
+impl SharedPreferencesProps {
+    /// Snapshot the view fields the shared-preferences builder reads.
+    /// Both the legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            shared_theme: view
+                .configuration
+                .as_ref()
+                .and_then(|configuration| configuration.shared_ui.as_ref())
+                .map(|shared| shared.theme.clone()),
+            follow_cli_theme: view.preferences.follow_cli_theme,
+            desktop_theme: view.preferences.theme.clone(),
+            focus_handle: view.focus_handle.clone(),
+            can_sync: view.can_sync_theme_to_cli(),
+            can_reload: view.can_reload_cli_settings(),
+        }
+    }
+}
+
 impl DesktopView {
     fn has_unresolved_submission(&self) -> bool {
         self.retained_submission.is_some() || self.pending_submission.is_some() || self.first_submission.is_some()
@@ -102,13 +133,13 @@ impl DesktopView {
         self.apply_theme_state(theme, None, cx);
     }
 
-    pub(super) fn render_shared_preferences(&self, cx: &Context<Self>) -> AnyElement {
-        let shared = self
-            .configuration
-            .as_ref()
-            .and_then(|configuration| configuration.shared_ui.as_ref());
-        let theme = shared.map(|preferences| preferences.theme.clone());
-        let follows = self.preferences.follow_cli_theme.unwrap_or(self.preferences.theme.is_none());
+    pub(super) fn render_shared_preferences_content(
+        props: &SharedPreferencesProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        let theme = props.shared_theme.clone();
+        let follows = props.follow_cli_theme.unwrap_or(props.desktop_theme.is_none());
         let sync_label = rust_i18n::t!("app.settings.cli_sync.sync_theme").to_string();
         let reload_label = rust_i18n::t!("app.settings.cli_sync.reload_settings").to_string();
         let use_theme_label = rust_i18n::t!("app.settings.cli_sync.use_theme").to_string();
@@ -130,37 +161,39 @@ impl DesktopView {
                     .flex_wrap()
                     .gap_2()
                     .child(
-                        desktop_button("sync-cli-theme")
+                        desktop_default_button("sync-cli-theme")
                             .label(sync_label.as_str())
-                            .ghost()
                             .tooltip_with_action(sync_label.as_str(), &SyncCliTheme, Some(key_context::DESKTOP))
-                            .desktop_disabled(!self.can_sync_theme_to_cli())
-                            .dispatches_desktop_action(SyncCliTheme, self.focus_handle.clone()),
+                            .desktop_disabled(!props.can_sync)
+                            .dispatches_desktop_action(SyncCliTheme, props.focus_handle.clone()),
                     )
                     .child(
-                        desktop_button("reload-cli-settings")
+                        desktop_default_button("reload-cli-settings")
                             .label(reload_label.as_str())
-                            .ghost()
                             .tooltip_with_action(reload_label.as_str(), &ReloadCliSettings, Some(key_context::DESKTOP))
-                            .desktop_disabled(!self.can_reload_cli_settings())
-                            .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
+                            .desktop_disabled(!props.can_reload)
+                            .dispatches_desktop_action(ReloadCliSettings, props.focus_handle.clone()),
                     )
                     .child(
-                        desktop_button("use-cli-theme")
+                        desktop_default_button("use-cli-theme")
                             .label(use_theme_label.as_str())
-                            .ghost()
                             .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                let theme = view
-                                    .configuration
-                                    .as_ref()
-                                    .and_then(|configuration| configuration.shared_ui.as_ref())
-                                    .map(|preferences| preferences.theme.clone());
-                                if let Some(theme) = theme.filter(|theme| known_theme(theme)) {
-                                    view.preferences.follow_cli_theme = Some(true);
-                                    view.apply_theme_state(theme, Some(window), cx);
+                            .on_click({
+                                let view = view.clone();
+                                move |_, window: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| {
+                                        let theme = view
+                                            .configuration
+                                            .as_ref()
+                                            .and_then(|configuration| configuration.shared_ui.as_ref())
+                                            .map(|preferences| preferences.theme.clone());
+                                        if let Some(theme) = theme.filter(|theme| known_theme(theme)) {
+                                            view.preferences.follow_cli_theme = Some(true);
+                                            view.apply_theme_state(theme, Some(window), cx);
+                                        }
+                                    });
                                 }
-                            })),
+                            }),
                     ),
             )
             .footer(rust_i18n::t!("app.settings.cli_sync.footer").to_string());
@@ -191,16 +224,17 @@ impl DesktopView {
                 .shortcuts
                 .insert(action.clone(), keys.first().cloned().unwrap_or_default());
         }
-        let message = match shortcuts::bindings(&preferences.shortcuts) {
+        let message = match shortcuts::bindings(&preferences.shortcuts, cx) {
             Err(error) => error,
             Ok(_) => match preferences.try_save() {
                 Err(error) => error,
                 Ok(()) => {
+                    bootstrap::reinstall_shortcuts(cx, &self.preferences.shortcuts, &preferences.shortcuts);
                     self.shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
                     self.shortcut_capture = None;
                     self.preferences = preferences;
                     self.shortcuts_editing = false;
-                    self.settings_navigation_focus.focus(window, cx);
+                    self.focus_settings_selection(window, cx);
                     if shared.shortcut_warnings.is_empty() {
                         rust_i18n::t!("app.shortcuts.cli_imported").to_string()
                     } else {

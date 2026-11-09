@@ -38,7 +38,7 @@ mod viewer;
 pub(super) use emit::emit_inline_event;
 use history::input_history_entries;
 pub(super) use history::open_history_picker;
-use key_actions::{handle_enter_key, handle_escape_key};
+use key_actions::{handle_enter_key, handle_escape_key, handle_left_key, handle_right_key};
 use modal_keys::{is_inline_lists_toggle_shortcut, maybe_show_help_modal};
 pub(super) use paste::handle_paste;
 use paste::{
@@ -771,62 +771,8 @@ fn process_key_with_clipboard_readers(
             }
             None
         }
-        KeyCode::Left => {
-            if session.core.input_enabled() {
-                let tmux_queue_edit = has_shift
-                    && !has_control
-                    && !has_command
-                    && !has_alt
-                    && crate::tui::core_tui::session::terminal_capabilities::queued_input_edit_uses_shift_left()
-                    && !session.core.queued_inputs.is_empty();
-                if tmux_queue_edit {
-                    if let Some(latest) = session.pop_latest_queued_input() {
-                        session.clear_inline_prompt_suggestion();
-                        session.core.input_manager.set_content(latest);
-                        session
-                            .core
-                            .set_input_compact_mode(session.input_compact_placeholder().is_some());
-                        session.core.scroll_manager.set_offset(0);
-                        slash::update_slash_suggestions(session);
-                    }
-                    session.mark_dirty();
-                    return Some(InlineEvent::EditQueue);
-                }
-
-                session.clear_inline_prompt_suggestion();
-                if has_shift && has_command {
-                    session.select_to_start_of_line();
-                } else if has_shift {
-                    session.select_left();
-                } else if has_command {
-                    session.move_to_start_of_line();
-                } else if has_alt {
-                    session.move_left_word();
-                } else {
-                    session.move_left();
-                }
-                session.mark_dirty();
-            }
-            None
-        }
-        KeyCode::Right => {
-            if session.core.input_enabled() {
-                session.clear_inline_prompt_suggestion();
-                if has_shift && has_command {
-                    session.select_to_end_of_line();
-                } else if has_shift {
-                    session.select_right();
-                } else if has_command {
-                    session.move_to_end_of_line();
-                } else if has_alt {
-                    session.move_right_word();
-                } else {
-                    session.move_right();
-                }
-                session.mark_dirty();
-            }
-            None // Right arrow never triggers any event, including editor launch
-        }
+        KeyCode::Left => handle_left_key(session, has_control, has_shift, has_alt, has_command),
+        KeyCode::Right => handle_right_key(session, has_shift, has_alt, has_command),
         KeyCode::Home => {
             if session.core.input_enabled() {
                 session.clear_inline_prompt_suggestion();

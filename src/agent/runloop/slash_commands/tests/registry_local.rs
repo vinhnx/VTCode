@@ -51,7 +51,6 @@ async fn slash_command_aliases_resolve_to_canonical_backends() {
         "subprocess",
         "subprocesses",
         "models",
-        "doctor",
         "permissions",
         "tasks",
         "jobs",
@@ -82,7 +81,8 @@ async fn config_consolidated_sections_match_hidden_aliases() {
         ("config subprocess", "subprocess"),
         ("config notify hello", "notify hello"),
         ("config checkup --quick", "checkup --quick"),
-        ("config checkup", "doctor"),
+        ("config checkup", "config doctor"),
+        ("config checkup --quick", "config doctor --quick"),
     ] {
         let mut canonical_renderer = renderer_for_tests();
         let canonical_outcome = handle_slash_command(canonical, &mut canonical_renderer, workspace.path())
@@ -100,6 +100,28 @@ async fn config_consolidated_sections_match_hidden_aliases() {
         );
     }
 }
+#[tokio::test]
+async fn doctor_runs_checkup_or_routes_prompt_audit() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+
+    for command in ["doctor", "doctor --full", "doctor --quick"] {
+        let mut renderer = renderer_for_tests();
+        let outcome = handle_slash_command(command, &mut renderer, workspace.path())
+            .await
+            .unwrap_or_else(|error| panic!("{command} should parse: {error}"));
+        assert!(
+            matches!(outcome, SlashCommandOutcome::StartCheckupInteractive | SlashCommandOutcome::RunCheckup { .. }),
+            "{command} must run the setup checkup"
+        );
+    }
+
+    let mut renderer = renderer_for_tests();
+    let outcome = handle_slash_command("doctor prompt-audit", &mut renderer, workspace.path())
+        .await
+        .expect("prompt audit should parse");
+    assert!(matches!(outcome, SlashCommandOutcome::AuditInstructions));
+}
+
 #[tokio::test]
 async fn local_no_args_returns_interactive() {
     let mut renderer = renderer_for_tests();
@@ -232,5 +254,23 @@ async fn local_help_renders_usage() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
     let outcome = handle_slash_command("local help", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}
+#[tokio::test]
+async fn desktop_opens_the_desktop_app_without_arguments() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let mut renderer = renderer_for_tests();
+    let outcome = handle_slash_command("desktop", &mut renderer, workspace.path())
+        .await
+        .expect("desktop should parse");
+    assert!(matches!(outcome, SlashCommandOutcome::OpenDesktop));
+}
+#[tokio::test]
+async fn desktop_with_arguments_renders_usage() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let mut renderer = renderer_for_tests();
+    let outcome = handle_slash_command("desktop extra", &mut renderer, workspace.path())
+        .await
+        .expect("desktop should parse");
     assert!(matches!(outcome, SlashCommandOutcome::Handled));
 }

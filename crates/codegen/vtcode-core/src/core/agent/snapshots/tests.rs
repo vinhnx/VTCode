@@ -304,6 +304,7 @@ async fn load_snapshot_hydrates_prompt_metadata_for_legacy_files() -> Result<()>
             runtime_turn_id: None,
             session_turn_number: None,
             turn_diagnostics: None,
+            skipped_paths: None,
         },
         conversation: vec![
             SessionMessage::new(crate::llm::provider::MessageRole::User, "Legacy prompt"),
@@ -341,6 +342,7 @@ fn legacy_snapshot_versions_migrate_without_inventing_diagnostics() -> Result<()
             runtime_turn_id: None,
             session_turn_number: None,
             turn_diagnostics: None,
+            skipped_paths: None,
         },
         conversation: Vec::new(),
         files: Vec::new(),
@@ -355,6 +357,33 @@ fn legacy_snapshot_versions_migrate_without_inventing_diagnostics() -> Result<()
         StoredSnapshot { schema_version: Some(SchemaVersion::V1), ..legacy }.migrate(SNAPSHOT_SCHEMA_VERSION)?;
     assert_eq!(migrated_v1.schema_version, Some(SNAPSHOT_SCHEMA_VERSION));
     assert!(migrated_v1.metadata.turn_diagnostics.is_none());
+    Ok(())
+}
+
+#[test]
+fn records_without_skipped_paths_parse_as_complete() -> Result<()> {
+    let raw = serde_json::json!({
+        "metadata": {
+            "id": "turn_1",
+            "turn_number": 1,
+            "created_at": 1,
+            "description": "pre-exclusions",
+            "message_count": 0,
+            "file_count": 0
+        },
+        "conversation": [],
+        "files": [],
+    });
+    let stored: StoredSnapshot = serde_json::from_value(raw)?;
+    assert!(stored.metadata.skipped_paths.is_none());
+    // Clean records serialize exactly as before (no new keys).
+    let value = serde_json::to_value(&stored)?;
+    assert!(
+        !value["metadata"]
+            .as_object()
+            .expect("metadata map")
+            .contains_key("skipped_paths")
+    );
     Ok(())
 }
 
@@ -754,4 +783,55 @@ async fn cleanup_reclaims_stale_unheld_session_locks() -> Result<()> {
     assert!(manager.storage_dir.join("rewind.lock").exists(), "the shared cleanup mutex persists across rounds");
     drop(held);
     Ok(())
+}
+
+#[test]
+fn classify_locked_session_marker_as_busy() {
+    // Mirrors the lock site: an io error wrapped with the busy context.
+    let err: anyhow::Error =
+        Err::<(), std::io::Error>(std::io::Error::new(std::io::ErrorKind::WouldBlock, "operation would block"))
+            .context("Another turn is using this session")
+            .unwrap_err();
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::SessionBusy);
+}
+
+#[test]
+fn classify_would_block_without_marker_as_other() {
+    // Asymmetric pair: the same WouldBlock kind without the marker must not
+    // read as contention — the marker, not the kind, carries the meaning.
+    let err = anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::WouldBlock, "operation would block"));
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::Other);
+}
+
+#[test]
+fn classify_typed_filesnap_busy_as_busy() {
+    let err = anyhow::Error::new(filesnap::SnapshotError::SessionBusy { session: "watch".to_string() });
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::SessionBusy);
+}
+
+#[test]
+fn classify_other_filesnap_errors_as_other() {
+    // Asymmetric pair: same error enum, different variant — only SessionBusy
+    // implies a concurrent writer.
+    let err = anyhow::Error::new(filesnap::SnapshotError::MissingBlob("deadbeef".to_string()));
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::Other);
+}
+
+#[test]
+fn classify_interrupted_rewind_marker() {
+    let err = anyhow::anyhow!("Interrupted rewind; run /rewind-recover before continuing");
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::InterruptedRewind);
+}
+
+#[test]
+fn classify_worker_failures_as_other() {
+    let err = anyhow::anyhow!("checkpoint preparation worker failed: join error");
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::Other);
+}
+
+#[test]
+fn only_other_failures_may_proceed_without_checkpoint() {
+    assert!(!checkpoint_failure_is_recoverable(BeginPromptFailure::SessionBusy));
+    assert!(!checkpoint_failure_is_recoverable(BeginPromptFailure::InterruptedRewind));
+    assert!(checkpoint_failure_is_recoverable(BeginPromptFailure::Other));
 }

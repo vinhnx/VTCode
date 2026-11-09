@@ -502,6 +502,13 @@ pub(crate) fn build_plan_confirmation_request_with_context(
         InlineListSelection::PlanApprovalExecute
     };
 
+    // Non-terminal hosts never see the transcript copy, so they receive the
+    // same normalized markdown the TUI appends there. Empty-after-cleanup
+    // yields `None`: clients hide expansion UI instead of showing a blank.
+    let (display_markdown, _warnings) =
+        crate::agent::runloop::unified::plan_blocks::prepare_plan_markdown_for_display(&plan.raw_content);
+    let plan_markdown = (!display_markdown.trim().is_empty()).then_some(display_markdown);
+
     TransientRequest::List(ListOverlayRequest {
         title: "Ready to code?".to_string(),
         lines,
@@ -514,6 +521,7 @@ pub(crate) fn build_plan_confirmation_request_with_context(
             action: TransientHotkeyAction::LaunchEditor,
         }],
         status: None,
+        plan_markdown,
     })
 }
 
@@ -839,7 +847,6 @@ pub(crate) async fn load_plan_text_for_approval(
     let plan_file = tool_registry
         .planning_workflow_state()
         .get_plan_file()
-        .await
         .ok_or(PlanArtifactError::Missing)?;
     let text = tokio::fs::read_to_string(&plan_file)
         .await

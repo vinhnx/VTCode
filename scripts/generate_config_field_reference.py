@@ -20,6 +20,7 @@ CARGO_SCHEMA_CMD = [
     "cargo",
     "run",
     "-q",
+    "--locked",
     "-p",
     "vtcode-config",
     "--features",
@@ -66,8 +67,9 @@ def load_schema_from_cargo() -> dict[str, Any]:
             "Failed to export configuration schema.\n"
             "Remediation:\n"
             "1. Ensure Rust toolchain is installed and `cargo` is available.\n"
-            "2. Run: cargo run -p vtcode-config --features schema --example schema_dump\n"
-            f"3. Cargo stderr:\n{stderr}"
+            "2. Run: cargo run --locked -p vtcode-config --features schema --example schema_dump\n"
+            "3. If the lock file is stale, update it explicitly first (never via this script).\n"
+            f"4. Cargo stderr:\n{stderr}"
         )
 
     try:
@@ -144,7 +146,26 @@ def normalize_schema_node(
     return normalized
 
 
+def portable_default(value: Any, home: str | None = None) -> Any:
+    """Render path defaults under the generating user's home as `~/...`.
+
+    Defaults are computed on the machine that runs the generator, so absolute home
+    paths would leak that user's name and make the reference differ per machine.
+    """
+    home = str(Path.home()) if home is None else home
+    if isinstance(value, str):
+        if value == home:
+            return "~"
+        return "~" + value[len(home):] if value.startswith(home + "/") else value
+    if isinstance(value, list):
+        return [portable_default(item, home) for item in value]
+    if isinstance(value, dict):
+        return {key: portable_default(item, home) for key, item in value.items()}
+    return value
+
+
 def format_default(value: Any, float_format: str | None = None) -> str:
+    value = portable_default(value)
     if isinstance(value, float) and float_format == "float":
         # schemars widens `f32` defaults to `f64`, leaving binary tails like
         # 0.699999988079071 for 0.7. Render the shortest decimal that still
@@ -362,6 +383,8 @@ def render_markdown(entries: list[FieldEntry]) -> str:
         "# Config Field Reference",
         "",
         "Generated from `vtcode-config` schema (`VTCodeConfig`) for complete field coverage.",
+        "Path defaults under the home directory are shown as `~/...`; their layout follows the",
+        "platform that generated this file (macOS and Linux place state and cache dirs differently).",
         "",
         "Regenerate:",
         "",

@@ -313,3 +313,29 @@ fn styled_aggregate_summary_keeps_totals_as_plain_text() {
     assert!(plain.contains("+3"), "aggregate must sum additions: {plain:?}");
     assert!(plain.contains("-3"), "aggregate must sum deletions: {plain:?}");
 }
+
+#[test]
+fn list_dir_render_survives_an_extreme_page_value() {
+    // `page`/`per_page` arrive from the tool payload as raw JSON numbers. The
+    // summary line computes `(page - 1) * per_page + 1`, which overflows — and
+    // release keeps `overflow-checks = true`, so this used to abort the CLI.
+    use crate::agent::runloop::tool_output::collect_inline_output;
+    use serde_json::json;
+    use vtcode_core::ui::InlineHandle;
+    use vtcode_core::utils::ansi::AnsiRenderer;
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+    let payload = json!({
+        "count": 2,
+        "total": 10,
+        "page": 9_223_372_036_854_775_808_u64,
+        "per_page": 20,
+        "path": "src",
+        "items": [{"name": "a.rs", "type": "file"}, {"name": "b.rs", "type": "file"}]
+    });
+
+    render_list_dir_output(&mut renderer, &payload, &LsStyles::from_env()).expect("extreme page must render");
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("Showing 2 of 10 items"), "got: {output:?}");
+}

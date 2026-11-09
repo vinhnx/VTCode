@@ -41,14 +41,7 @@ pub(super) fn format_line(bytes: &[u8]) -> String {
 }
 
 fn take_bytes_at_char_boundary(s: &str, limit: usize) -> &str {
-    if limit >= s.len() {
-        return s;
-    }
-    let mut i = limit;
-    while i > 0 && !s.is_char_boundary(i) {
-        i -= 1;
-    }
-    &s[..i]
+    &s[..s.floor_char_boundary(limit)]
 }
 
 pub(super) fn trim_empty_lines(out: &mut VecDeque<&LineRecord>) {

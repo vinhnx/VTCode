@@ -257,10 +257,15 @@ OpenAI-specific cache block / `prompt_cache_key_mode`): OpenRouter body `session
 `vtcode:openrouter:{lineage}`; xAI body `prompt_cache_key` + header `x-grok-conv-id` from `vtcode:xai:{lineage}`. Blank
 lineage omits the wire fields.
 
+OpenCode Go receives `vtcode:opencode-go:{lineage}` under the same gate and sends header `x-opencode-session` on
+every request (chat-completions and Messages-API models alike). Unlike the providers above, blank lineage does not
+omit the header: the Go endpoint rejects headerless requests with `MissingSessionID`, so the provider falls back to
+an instance-stable id for that process.
+
 Merge Gateway native `/v1/responses` also sends session identity for automatic cache-aware routing: body `session_id`
 and HTTP header `X-Session-Id`, both equal to the session lineage id (the cache key with any
-`vtcode:merge:`/`vtcode:openai:`/`vtcode:openrouter:`/`vtcode:xai:` prefix and any residual `-{16 hex}` prefix-hash
-suffix stripped). Blank lineage omits both fields.
+`vtcode:merge:`/`vtcode:openai:`/`vtcode:openrouter:`/`vtcode:xai:`/`vtcode:opencode-go:` prefix and any residual
+`-{16 hex}` prefix-hash suffix stripped). Blank lineage omits both fields.
 
 ### Provider cache affinity (session keys)
 
@@ -270,6 +275,7 @@ suffix stripped). Blank lineage omits both fields.
 | Merge Gateway native                                   | `session_id` + `X-Session-Id` (+ `prompt_cache_key`) | Automatic caching on many upstream routes; no explicit `prompt_cache_breakpoint` markers (Merge rejects the field with 400) |
 | OpenRouter                                             | body `session_id` + header `x-session-id`            | Sticky provider routing; body wins over header; **requires global `[prompt_cache] enabled=true`**                           |
 | xAI native Chat Completions                            | header `x-grok-conv-id` + body `prompt_cache_key`    | Per-server cache affinity; **requires global `[prompt_cache] enabled=true`**                                                |
+| OpenCode Go                                            | header `x-opencode-session`                          | Required on every request; lineage value, else an instance-stable fallback id                                               |
 | Anthropic / Gemini / DeepSeek / Moonshot / Z.AI native | automatic or `cache_control`                         | No client session key                                                                                                       |
 
 Usage telemetry: OpenAI-style hosts report cache reads as `prompt_tokens_details.cached_tokens` /

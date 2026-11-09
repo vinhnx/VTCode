@@ -82,7 +82,7 @@ pub(super) fn append_bounded_capture(target: &mut String, chunk: &str) {
     }
 
     let half = EXEC_CAPTURE_WINDOW_BYTES / 2;
-    let head_end = floor_exec_char_boundary(target, half);
+    let head_end = target.floor_char_boundary(half);
     let tail_start = target.len().saturating_sub(half);
     let tail_start = target.ceil_char_boundary(tail_start);
     let head = target[..head_end].to_owned();
@@ -281,18 +281,6 @@ pub(super) fn max_output_tokens_from_payload(payload: &serde_json::Map<String, V
         .map(|value| value as usize)
 }
 
-pub(super) fn floor_exec_char_boundary(text: &str, index: usize) -> usize {
-    if index >= text.len() {
-        return text.len();
-    }
-
-    let mut boundary = index;
-    while boundary > 0 && !text.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    boundary
-}
-
 /// Resolve a candidate path inside the workspace, rejecting paths that escape
 /// via `..` traversal or a symlink pointing outside the workspace root.
 ///
@@ -344,7 +332,14 @@ pub(super) async fn read_bounded_spool_file(workspace_root: &Path, path: &Path, 
 
     let truncated = bytes.len() > cap;
     bytes.truncate(cap);
-    Ok((String::from_utf8_lossy(&bytes).into_owned(), truncated))
+    // Decode with the stream decoder so a character split by the cap is dropped
+    // instead of becoming U+FFFD; an untruncated file flushes its tail as usual.
+    let mut decoder = vtcode_commons::Utf8StreamDecoder::new();
+    let mut text = decoder.push(&bytes);
+    if !truncated {
+        text.push_str(&decoder.finish());
+    }
+    Ok((text, truncated))
 }
 
 fn path_is_tool_accessible_from_workspace(workspace_root: &Path, raw_path: &str) -> bool {
@@ -441,5 +436,37 @@ mod input_policy_tests {
         assert!(enforce_exec_input_line_policy("printf '%s\\n' hello\n").is_ok());
         // Prefix matches must land on the program token, not substrings.
         assert!(enforce_exec_input_line_policy("bashism\n").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod spool_read_tests {
+    use super::read_bounded_spool_file;
+
+    #[tokio::test]
+    async fn capped_spool_read_drops_a_split_trailing_char_instead_of_replacing_it() -> anyhow::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = vtcode_commons::canonicalize(temp.path())?;
+        let spool = root.join(".vtcode/context/tool_outputs/out.txt");
+        std::fs::create_dir_all(spool.parent().unwrap())?;
+        // "ab" then the 3-byte `世`: a 4-byte cap splits it.
+        std::fs::write(&spool, "ab世界")?;
+
+        assert_eq!(read_bounded_spool_file(&root, &spool, 4).await?, ("ab".to_string(), true));
+        assert_eq!(read_bounded_spool_file(&root, &spool, 5).await?, ("ab世".to_string(), true));
+        assert_eq!(read_bounded_spool_file(&root, &spool, 8).await?, ("ab世界".to_string(), false));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn untruncated_spool_keeps_invalid_tail_bytes_visible() -> anyhow::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = vtcode_commons::canonicalize(temp.path())?;
+        let spool = root.join(".vtcode/context/tool_outputs/out.txt");
+        std::fs::create_dir_all(spool.parent().unwrap())?;
+        std::fs::write(&spool, [b'o', b'k', 0xE4, 0xB8])?;
+
+        assert_eq!(read_bounded_spool_file(&root, &spool, 64).await?, ("ok\u{FFFD}".to_string(), false));
+        Ok(())
     }
 }

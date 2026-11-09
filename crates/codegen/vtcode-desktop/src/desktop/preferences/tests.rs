@@ -206,6 +206,70 @@ fn offered_destinations_combine_always_available_detected_and_saved() {
 }
 
 #[test]
+fn cli_terminal_round_trips_and_invalid_values_fall_back_to_terminal() {
+    assert_eq!(CliTerminal::default(), CliTerminal::Terminal);
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.cli_terminal(), CliTerminal::Terminal);
+
+    for terminal in CliTerminal::ALL {
+        let mut preferences = Preferences::default();
+        preferences.set_cli_terminal(terminal);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(
+            serialized.contains(&format!("\"cliTerminal\":\"{}\"", terminal.id())),
+            "saved id is stable for {terminal:?}: {serialized}"
+        );
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.cli_terminal(), terminal);
+        assert_eq!(loaded.cli_terminal, Some(terminal.id().to_owned()));
+    }
+    assert_eq!(CliTerminal::ALL.len(), 3, "extend this table when adding a terminal");
+    for (terminal, label, editor) in [
+        (CliTerminal::Terminal, "Terminal", ExternalEditor::Terminal),
+        (CliTerminal::ITerm2, "iTerm2", ExternalEditor::ITerm2),
+        (CliTerminal::Ghostty, "Ghostty", ExternalEditor::Ghostty),
+    ] {
+        assert_eq!(terminal.label(), label);
+        assert_eq!(terminal.external_editor(), editor);
+    }
+
+    // Parsing is case-insensitive and trims whitespace, like destination ids.
+    assert_eq!(CliTerminal::from_saved(Some("  ITERM2 ")), CliTerminal::ITerm2);
+    assert_eq!(CliTerminal::from_saved(Some("Ghostty")), CliTerminal::Ghostty);
+
+    // Unknown or empty ids fall back without touching other preferences.
+    for saved in ["konsole", "", "   "] {
+        let content = format!(r#"{{"theme":"ciapre","cliTerminal":{saved:?}}}"#);
+        let loaded: Preferences = serde_json::from_str(&content).unwrap();
+        assert_eq!(loaded.cli_terminal(), CliTerminal::Terminal, "saved {saved:?}");
+        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    }
+}
+
+#[test]
+fn offered_terminals_combine_always_available_detected_and_saved() {
+    // Terminal alone when nothing is detected: it ships with macOS.
+    assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[]), vec![CliTerminal::Terminal]);
+
+    // Detected terminals join in canonical order, not detection order.
+    assert_eq!(
+        CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::Ghostty, ExternalEditor::ITerm2]),
+        vec![CliTerminal::Terminal, CliTerminal::ITerm2, CliTerminal::Ghostty]
+    );
+
+    // Non-terminal detections never leak into the terminal picker.
+    assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::VsCode]), vec![CliTerminal::Terminal]);
+
+    // The saved choice stays selectable even when its app is missing, so
+    // the control never renders blank and reinstalls restore behavior.
+    assert_eq!(CliTerminal::offered(CliTerminal::Ghostty, &[]), vec![CliTerminal::Terminal, CliTerminal::Ghostty]);
+
+    // A saved choice that is also detected appears exactly once.
+    let present = CliTerminal::offered(CliTerminal::ITerm2, &[ExternalEditor::ITerm2]);
+    assert_eq!(present.iter().filter(|t| **t == CliTerminal::ITerm2).count(), 1);
+}
+
+#[test]
 fn destination_availability_matches_editor_availability() {
     // The viewer has no editor; every other always-available destination
     // maps to an always-available editor, and vice versa.
@@ -247,6 +311,56 @@ fn system_motion_baseline_initializes_once_without_redundant_global_notification
     });
     assert_eq!(notifications.get(), 1, "reading the existing baseline does not notify observers");
     drop(observer);
+}
+
+#[gpui_kit::test]
+fn caret_blink_follows_effective_reduced_motion(cx: &mut gpui_kit::TestAppContext) {
+    use gpui_kit::base::input::CursorBlink;
+    use gpui_kit::component::theme::Theme;
+
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        // Explicit choices win over a stale opposite baseline (asymmetric).
+        apply_reduced_motion(ReducedMotionPreference::On, false, cx);
+        assert!(cx.reduce_motion());
+        assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
+        assert_eq!(
+            gpui_kit::base::Theme::global(cx).cursor_blink,
+            CursorBlink::steady(),
+            "component update projects onto the base theme inputs read"
+        );
+
+        apply_reduced_motion(ReducedMotionPreference::Off, true, cx);
+        assert!(!cx.reduce_motion());
+        assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::default());
+
+        // The System arm tracks the live OS value, whatever the baseline said.
+        apply_reduced_motion(ReducedMotionPreference::System, true, cx);
+        let expected = if cx.reduce_motion() {
+            CursorBlink::steady()
+        } else {
+            CursorBlink::default()
+        };
+        assert_eq!(Theme::global(cx).cursor_blink, expected);
+    });
+}
+
+#[test]
+fn vim_navigation_defaults_off_and_round_trips() {
+    let old: Preferences = serde_json::from_str("{}").unwrap();
+    assert!(!old.vim_navigation);
+    let enabled = Preferences { vim_navigation: true, ..old };
+    let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&enabled).unwrap()).unwrap();
+    assert!(loaded.vim_navigation);
+}
+
+#[test]
+fn swipe_navigation_defaults_off_and_round_trips() {
+    let old: Preferences = serde_json::from_str("{}").unwrap();
+    assert!(!old.swipe_navigation);
+    let enabled = Preferences { swipe_navigation: true, ..old };
+    let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&enabled).unwrap()).unwrap();
+    assert!(loaded.swipe_navigation);
 }
 
 #[test]
@@ -451,6 +565,7 @@ fn notification_preferences_default_on_and_round_trip() {
     assert!(notifications.questions());
     assert!(notifications.updates());
     assert_eq!(notifications.last_notified_update, None);
+    assert_eq!(notifications.last_seen_changelog_version, None);
 
     // Asymmetric fixtures: explicit choices survive a round trip while
     // untouched toggles keep their defaults.
@@ -459,6 +574,7 @@ fn notification_preferences_default_on_and_round_trip() {
     preferences.notifications.set_turn_completion(TurnCompletionMode::Always);
     preferences.notifications.questions = Some(false);
     preferences.notifications.last_notified_update = Some("0.181.0".to_string());
+    preferences.notifications.last_seen_changelog_version = Some("0.181.0".to_string());
     let serialized = serde_json::to_string(&preferences).unwrap();
     assert!(serialized.contains(r#""turnCompletion":"always""#), "{serialized}");
     let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
@@ -468,6 +584,7 @@ fn notification_preferences_default_on_and_round_trip() {
     assert!(!loaded.notifications.questions());
     assert!(loaded.notifications.updates());
     assert_eq!(loaded.notifications.last_notified_update.as_deref(), Some("0.181.0"));
+    assert_eq!(loaded.notifications.last_seen_changelog_version.as_deref(), Some("0.181.0"));
 }
 
 #[test]
@@ -515,4 +632,111 @@ fn ui_font_size_follows_the_system_scale_only_when_unset() {
     // An explicit user choice overrides the system scale, still clamped.
     assert_eq!(scaled_ui_font_size(Some(18), 1.5), 18);
     assert_eq!(scaled_ui_font_size(Some(12), 1.0), MIN_UI_FONT_SIZE);
+}
+
+#[test]
+fn diff_mode_round_trips_and_invalid_values_fall_back_to_unified() {
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.diff_mode(), DiffMode::Unified);
+
+    let mut preferences = legacy;
+    for mode in [DiffMode::Split, DiffMode::Unified] {
+        preferences.set_diff_mode(mode);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.diff_mode(), mode);
+        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    }
+
+    for saved in ["", "  ", "sideways"] {
+        let parsed: Preferences = serde_json::from_str(&format!(r#"{{"diffMode":"{saved}"}}"#)).unwrap();
+        assert_eq!(parsed.diff_mode(), DiffMode::Unified, "{saved:?}");
+    }
+    let cased: Preferences = serde_json::from_str(r#"{"diffMode":"  SPLIT "}"#).unwrap();
+    assert_eq!(cased.diff_mode(), DiffMode::Split);
+}
+
+#[test]
+fn new_diff_struct_wins_over_legacy_layout_key() {
+    let both: Preferences = serde_json::from_str(r#"{"diffMode":"split","diff":{"mode":"unified"}}"#).unwrap();
+    assert_eq!(both.diff_mode(), DiffMode::Unified);
+    let legacy: Preferences = serde_json::from_str(r#"{"diffMode":"split"}"#).unwrap();
+    assert_eq!(legacy.diff_mode(), DiffMode::Split);
+
+    let mut upgraded = legacy;
+    upgraded.set_diff_mode(DiffMode::Unified);
+    assert_eq!(upgraded.diff.mode.as_deref(), Some("unified"));
+    assert_eq!(upgraded.diff_mode.as_deref(), Some("split"), "the legacy key stays inert, never rewritten");
+}
+
+#[test]
+fn try_save_reports_an_unwritable_preferences_path() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = tempfile::tempdir().expect("isolated unwritable probe");
+    let blocked = dir.path().join("blocked");
+    std::fs::create_dir(&blocked).expect("seed blocked directory");
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o555)).expect("remove write permission");
+    set_test_preferences_path(blocked.join("preferences.json"));
+    let result = Preferences::default().try_save();
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o755)).expect("restore write permission");
+    assert!(result.is_err(), "an unwritable path must fail loudly instead of dropping the save");
+}
+
+#[test]
+fn corrupt_preferences_file_is_quarantined_and_defaults_loaded() {
+    let dir = tempfile::tempdir().expect("isolated corrupt-file probe");
+    let path = dir.path().join("preferences.json");
+    let corrupt = r#"{"theme":"ciapre","contrast":oops"#;
+    std::fs::write(&path, corrupt).expect("seed corrupt preferences");
+    set_test_preferences_path(path.clone());
+
+    let loaded = Preferences::load();
+
+    assert!(loaded.theme.is_none(), "corrupt content must not partially load");
+    assert!(loaded.shortcuts.is_empty());
+    assert!(!path.exists(), "the corrupt file must move aside");
+    let quarantined = path.with_extension("json.corrupt");
+    assert_eq!(std::fs::read_to_string(&quarantined).expect("quarantine holds the evidence"), corrupt);
+}
+
+#[test]
+fn missing_preferences_file_loads_defaults_without_quarantine() {
+    let dir = tempfile::tempdir().expect("isolated missing-file probe");
+    let path = dir.path().join("preferences.json");
+    set_test_preferences_path(path.clone());
+
+    let loaded = Preferences::load();
+
+    assert!(loaded.theme.is_none());
+    assert!(loaded.shortcuts.is_empty());
+    assert!(!path.with_extension("json.corrupt").exists(), "a missing file is not corruption");
+}
+
+#[test]
+fn valid_preferences_file_loads_values_without_quarantine() {
+    let dir = tempfile::tempdir().expect("isolated valid-file probe");
+    let path = dir.path().join("preferences.json");
+    std::fs::write(&path, r#"{"theme":"ciapre","contrast":42}"#).expect("seed valid preferences");
+    set_test_preferences_path(path.clone());
+
+    let loaded = Preferences::load();
+
+    assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    assert_eq!(loaded.contrast(), 42);
+    assert!(!path.with_extension("json.corrupt").exists(), "a valid file must not quarantine");
+}
+
+#[test]
+fn zen_mode_defaults_to_zen_and_round_trips_both_choices() {
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert!(legacy.zen_mode(), "missing values keep fresh installs in zen");
+
+    for choice in [false, true] {
+        let preferences = Preferences { zen_mode: Some(choice), ..Preferences::default() };
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(serialized.contains(&format!("\"zenMode\":{choice}")), "saved key is stable: {serialized}");
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.zen_mode(), choice);
+    }
 }

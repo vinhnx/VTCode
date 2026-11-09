@@ -264,13 +264,26 @@ mod tests {
     #[test]
     fn build_status_line_uses_shimmer_phase_for_visible_running_status() {
         let styles = SessionStyles::new(InlineTheme::default());
-        let widget = FooterWidget::new(&styles).left_status("Approval required").shimmer_phase(0.5);
+        // Probe mid-sweep: tui-shimmer runs a 4s cycle with a 0.6s delay and a
+        // 1.0s sweep, so only phases in (0.15, 0.40) show the highlight band
+        // on the text. Later phases (e.g. 0.5) are post-sweep and correctly
+        // render one uniform span.
+        let widget = FooterWidget::new(&styles).left_status("Approval required").shimmer_phase(0.25);
 
         let line = widget.build_status_line(40);
 
         assert!(line.spans.len() > 1);
         let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
         assert!(rendered.contains("Approval required"));
+
+        // Post-sweep the highlight has left the text: uniform style is correct.
+        let settled = FooterWidget::new(&styles)
+            .left_status("Approval required")
+            .shimmer_phase(0.5)
+            .build_status_line(40);
+        assert_eq!(settled.spans.len(), 1);
+        let settled_rendered = settled.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
+        assert!(settled_rendered.contains("Approval required"));
     }
 
     #[test]

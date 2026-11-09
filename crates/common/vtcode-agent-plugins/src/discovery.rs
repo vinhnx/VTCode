@@ -114,7 +114,8 @@ fn discover_skills(plugin_root: &Path) -> Result<Vec<DiscoveredSkill>, PluginErr
     for entry in std::fs::read_dir(&skills_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if !path.is_dir() {
+        // `readdir` already reported the type; skip the extra `stat`.
+        if !vtcode_commons::walk::entry_is_dir(&entry) {
             continue;
         }
         // Immediate child escaping via symlink is skipped, not fatal.

@@ -105,3 +105,12 @@ fn parse_field_docs_has_known_entry() {
             .is_some()
     );
 }
+
+#[test]
+fn parse_field_docs_extracts_busy_enter_cycle_options() {
+    let doc = FIELD_DOCS
+        .lookup("ui.busy_enter_behavior")
+        .expect("regenerated field reference should document ui.busy_enter_behavior");
+    assert_eq!(doc.options, vec!["queue".to_string(), "steer".to_string()]);
+    assert_eq!(doc.default_value, "\"queue\"");
+}

@@ -221,6 +221,7 @@ where
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         }),
         ctrl_c_state,
         ctrl_c_notify,

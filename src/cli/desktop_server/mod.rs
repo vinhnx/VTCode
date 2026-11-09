@@ -33,8 +33,8 @@ use vtcode_desktop_protocol::{
     ThreadEventNotification,
 };
 use vtcode_ui::tui::app::{
-    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, host_interaction_from_command,
-    host_interaction_response, new_host_session,
+    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, TransientHotkeyAction,
+    host_interaction_from_command, host_interaction_hotkey_response, host_interaction_response, new_host_session,
 };
 use vtcode_webmcp::runtime::{
     AppliedChange, CheckResult, FileSnapshot, PatchProposal, RuntimeAdapter, RuntimeStatus, TurnResult, WorkspaceFile,
@@ -47,24 +47,32 @@ use crate::agent::runloop::unified::stop_requests::StopHandleSlot;
 use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_host;
 use crate::startup::StartupContext;
 
+mod cancel;
+#[cfg(test)]
+use cancel::{CANCEL_ESCALATION, EscalationWaits};
+use cancel::{escalation_waits_for, spawn_cancel_refire, spawn_cancel_watchdog, spawn_late_stop_signal};
 mod catalog;
 mod dispatch;
 use dispatch::{
-    dispatch_interaction_response, ensure_no_active_turn, handle_request, parse_params, protocol_interaction_kind,
-    resolve_review_scope, send_notification, session_summary, shutdown_current_session, signal_runloop_stop,
+    ensure_no_active_turn, handle_request, join_host_command_bridge, parse_params, protocol_interaction_kind,
+    send_notification, shutdown_current_session,
 };
+mod interaction_respond;
+use interaction_respond::dispatch_interaction_response;
 mod pump;
+mod recent_prompts;
 #[cfg(test)]
 use pump::{publish_interaction, sanitize_primary_agent_display};
 #[cfg(test)]
 use pump::{publish_primary_agent_changed, publish_thread_event};
-use pump::{respond_to_interaction, spawn_session_pump};
+use pump::{respond_to_interaction, send_runtime_notification, spawn_session_pump};
 mod turn_queue;
 use turn_queue::{EnqueueMode, dispatch_drained_turn, enqueue_turn, publish_queue_status_sync};
+mod turn_undo;
 mod webmcp;
 #[cfg(test)]
 use webmcp::install_session_runtime;
-use webmcp::{DesktopWebmcpRuntime, start_session};
+use webmcp::{DesktopWebmcpRuntime, ensure_session_not_held_elsewhere, start_session};
 mod restore;
 mod secret_store;
 mod storage;
@@ -76,12 +84,12 @@ use restore::{RestoredInspectorHistory, read_restored_spool_page, restored_histo
 #[cfg(test)]
 use restore::{read_restored_spool_text, restore_spooled_tool_output};
 
-const MAX_SESSIONS: usize = 200;
 const MAX_RESTORED_MESSAGES: usize = protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES;
 const MAX_RESTORED_MESSAGE_BYTES: usize = 4 * 1024;
 const MAX_RESTORED_HISTORY_BYTES: usize = 700 * 1024;
 const MAX_RESTORED_SPOOLED_OUTPUT_BYTES: usize = protocol::MAX_SESSION_OUTPUT_PAGE_BYTES;
 const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+const INTERNAL_RUNTIME_GENERATION: &str = "_vtcodeRuntimeGeneration";
 const SESSION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
 const RUNLOOP_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -94,9 +102,15 @@ struct ServerState {
     initialized: bool,
     session_id: Option<String>,
     runtime: Option<RuntimeSession>,
+    /// Identity of the installed runtime, distinct from the durable session id.
+    runtime_generation: Option<uuid::Uuid>,
     active_turn_id: Option<String>,
     session_transitioning: bool,
     cancel_requested_turn: Option<String>,
+    /// Test-only escalation bounds so cancel-watchdog regressions run with
+    /// short deterministic waits instead of the production grace periods.
+    #[cfg(test)]
+    escalation_waits: Option<EscalationWaits>,
     /// Prompts queued behind the active turn; drained FIFO on terminal events
     /// with CLI batching semantics. Desktop agent switches require an idle
     /// session, so every entry carries `primary_agent: None`.
@@ -211,7 +225,7 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
             }
             notification = notification_rx.recv() => {
                 if let Some(notification) = notification {
-                    protocol::write_frame(&mut stdout, &notification).await?;
+                    write_runtime_checked_notification(&context, &mut stdout, notification).await?;
                 }
             }
         }
@@ -264,7 +278,7 @@ where
             tokio::select! {
                 result = &mut request_future => break result,
                 Some(notification) = notifications.recv() => {
-                    protocol::write_frame(stdout, &notification).await?;
+                    write_runtime_checked_notification(context, stdout, notification).await?;
                 }
             }
         }
@@ -278,7 +292,7 @@ where
             let Ok(notification) = notifications.try_recv() else {
                 break;
             };
-            protocol::write_frame(stdout, &notification).await?;
+            write_runtime_checked_notification(context, stdout, notification).await?;
         }
     }
     match response {
@@ -301,583 +315,29 @@ where
     }
 }
 
-async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
-    use protocol::method;
-
-    if request.method == method::INITIALIZE {
-        let params: protocol::InitializeParams = parse_params(&request.params)?;
-        let selected = params.protocol.negotiate(protocol::PROTOCOL_VERSION)?;
-        let result = protocol::InitializeResult {
-            protocol: selected,
-            workspace: context.workspace.to_string_lossy().into_owned(),
-            server_version: env!("CARGO_PKG_VERSION").to_string(),
-            slash_commands: vtcode_core::ui::slash::visible_commands_for_desktop()
-                .into_iter()
-                .map(|command| protocol::SlashCommandInfo {
-                    name: command.name.to_string(),
-                    description: command.description.to_string(),
-                })
-                .collect(),
-        };
-        context.state.lock().await.initialized = true;
-        return Ok((serde_json::to_value(result)?, false));
+/// Runtime-originated notifications can remain buffered across a restart.
+/// The tag is internal to this service and is removed before protocol output.
+async fn write_runtime_checked_notification<W>(
+    context: &ServiceContext,
+    stdout: &mut W,
+    mut notification: protocol::Notification,
+) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    if let Some(tag) = notification
+        .params
+        .as_object_mut()
+        .and_then(|params| params.remove(INTERNAL_RUNTIME_GENERATION))
+    {
+        let generation = tag.as_str().and_then(|value| uuid::Uuid::parse_str(value).ok());
+        let state = context.state.lock().await;
+        if generation.is_none() || generation != state.runtime_generation {
+            return Ok(());
+        }
     }
-
-    if request.method == method::SHUTDOWN {
-        shutdown_current_session(context, true).await?;
-        return Ok((json!({ "shutdown": true }), true));
-    }
-
-    if !context.state.lock().await.initialized {
-        bail!("desktop/initialize must be the first request");
-    }
-
-    match request.method.as_str() {
-        method::WORKSPACE_REVIEW => {
-            let params: protocol::WorkspaceReviewParams = parse_params(&request.params)?;
-            if params.request_id.is_empty() || params.request_id.len() > 128 {
-                bail!("invalid workspace review request identity");
-            }
-            let mut result = protocol::WorkspaceReviewResult {
-                include_untracked: params.include_untracked,
-                scope: String::new(),
-                request_id: params.request_id,
-                workspace: context.workspace.to_string_lossy().into_owned(),
-                captured_at: chrono::Utc::now().to_rfc3339(),
-                patch: None,
-                truncated: false,
-                note: String::new(),
-            };
-            match resolve_review_scope(&context.workspace, params.scope.as_deref()) {
-                Ok(scope_path) => {
-                    result.scope = scope_path
-                        .strip_prefix(&context.workspace)
-                        .context("Git review scope escaped workspace")?
-                        .to_string_lossy()
-                        .into_owned();
-                    let snapshot =
-                        vtcode_core::git::capture_workspace_review_diff(&scope_path, params.include_untracked).await;
-                    result.captured_at = snapshot.captured_at;
-                    result.patch = snapshot.text;
-                    result.truncated = snapshot.truncated;
-                    result.note = snapshot.note;
-                }
-                Err(error) => {
-                    result.note = format!("Git review unavailable: {}", sanitize_public_error(&error.to_string()))
-                }
-            }
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::CONFIG_DISCOVER => {
-            let agent = active_agent_config(context).await;
-            let snapshot = configuration_snapshot(context, &agent).await?;
-            Ok((serde_json::to_value(snapshot)?, false))
-        }
-        method::CONFIG_SETTINGS_READ => {
-            let snapshot = config_settings::read(context.workspace.clone()).await?;
-            Ok((serde_json::to_value(snapshot)?, false))
-        }
-        method::CONFIG_SETTINGS_WRITE => {
-            let params: protocol::ConfigSettingsWriteParams = parse_params(&request.params)?;
-            ensure_no_active_turn(context).await?;
-            if !context.state.lock().await.pending_interactions.is_empty() {
-                bail!("Resolve the pending CLI interaction before changing configuration");
-            }
-            let result = config_settings::write(context.workspace.clone(), params).await?;
-            shutdown_current_session(context, false).await?;
-            stop_webmcp_bridge(context).await;
-            context.state.lock().await.session_id = None;
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::CONFIG_OPEN_FILE => {
-            let params: protocol::ConfigOpenFileParams = parse_params(&request.params)?;
-            config_settings::open_file(context.workspace.clone(), params.target).await?;
-            Ok((json!({ "opened": true }), false))
-        }
-        method::WEBMCP_STATUS => {
-            let status = webmcp_status(context).await;
-            Ok((serde_json::to_value(status)?, false))
-        }
-        method::WEBMCP_PAIR => {
-            let params: protocol::WebmcpPairParams = parse_params(&request.params)?;
-            let result = pair_webmcp(context, params).await?;
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::WEBMCP_STOP => {
-            stop_webmcp_bridge(context).await;
-            Ok((json!({ "stopped": true }), false))
-        }
-        method::UPDATE_STATUS => {
-            let status = update_status_snapshot()?;
-            Ok((serde_json::to_value(status)?, false))
-        }
-        method::CONFIG_MODELS => {
-            let (provider, model) = {
-                let agent = active_agent_config(context).await;
-                (agent.provider.clone(), agent.model.clone())
-            };
-            let models = catalog_models(&provider, &model);
-            Ok((serde_json::to_value(models)?, false))
-        }
-        method::CONFIG_SELECT => {
-            let params: ModelSelectParams = parse_params(&request.params)?;
-            ensure_no_active_turn(context).await?;
-            if !catalog_models(&params.provider, &params.model)
-                .iter()
-                .any(|model| model.provider == params.provider && model.id == params.model)
-            {
-                bail!("unknown provider/model selection");
-            }
-            shutdown_current_session(context, false).await?;
-            // Re-resolve credentials for the newly selected provider so later
-            // turns authenticate as that provider. A failed resolution keeps
-            // the selection but reports `authenticated: false`; the desktop
-            // guides recovery instead of disconnecting.
-            let api_key_env = if params.provider.eq_ignore_ascii_case(&context.startup.agent_config.provider) {
-                context.startup.agent_config.api_key_env.clone()
-            } else if let Some(custom) = context.startup.config.custom_provider(&params.provider) {
-                custom.resolved_api_key_env()
-            } else {
-                vtcode_config::api_keys::api_key_env_var(&params.provider)
-            };
-            let override_auth =
-                catalog::resolve_override_auth(context, &params.provider, &params.model, &api_key_env).await;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
-                state.model_override = Some(params);
-                state.model_override_auth = Some(override_auth);
-                state.session_options.reasoning_effort = None;
-            }
-            let agent = active_agent_config(context).await;
-            let snapshot = configuration_snapshot(context, &agent).await?;
-            Ok((serde_json::to_value(snapshot)?, false))
-        }
-        method::CONFIG_SECRET_STORE => {
-            let params: protocol::SecretStoreParams = parse_params(&request.params)?;
-            let result = secret_store::store(context, params).await?;
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::COMPOSER_RESOURCES => {
-            ensure_no_active_turn(context).await?;
-            let resources = timeout(Duration::from_secs(3), composer_resources::discover(context.workspace.clone()))
-                .await
-                .context("CLI resource discovery timed out")??;
-            Ok((serde_json::to_value(resources)?, false))
-        }
-        method::CONFIG_OPTIONS => {
-            let params: protocol::SessionOptionsSelectParams = parse_params(&request.params)?;
-            ensure_no_active_turn(context).await?;
-            if params.permission_mode == Some(protocol::PermissionMode::FullAccess)
-                && context.startup.full_auto_requested
-            {
-                bail!("Full access cannot be combined with Full auto");
-            }
-            let agent = active_agent_config(context).await;
-            let speed_supported =
-                crate::agent::runloop::unified::fast_mode::supports_fast_mode(&agent, &context.startup.config);
-            let modes = session_options::discover_modes(context.workspace.clone()).await?;
-            session_options::validate(&params, &agent.provider, &agent.model, speed_supported, &modes)?;
-            if params.fast_mode.is_some() || params.mode.is_some() {
-                session_preferences::persist(
-                    context.workspace.clone(),
-                    agent.clone(),
-                    params.fast_mode,
-                    params.mode.clone(),
-                )
-                .await?;
-            }
-            shutdown_current_session(context, false).await?;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
-                if let Some(enabled) = params.fast_mode {
-                    state.fast_mode_overrides.insert(agent.provider.to_ascii_lowercase(), enabled);
-                }
-                if params.permission_mode == Some(protocol::PermissionMode::FullAccess)
-                    && state.session_options.permission_mode != Some(protocol::PermissionMode::FullAccess)
-                {
-                    state.permission_before_full_access = Some(state.session_options.permission_mode.unwrap_or(
-                        if context.startup.skip_confirmations {
-                            protocol::PermissionMode::AutoApproveCommands
-                        } else {
-                            protocol::PermissionMode::Ask
-                        },
-                    ));
-                } else if params.permission_mode.is_some()
-                    && params.permission_mode != Some(protocol::PermissionMode::FullAccess)
-                {
-                    state.permission_before_full_access = None;
-                }
-                session_options::merge(&mut state.session_options, params);
-            }
-            let agent = active_agent_config(context).await;
-            Ok((serde_json::to_value(configuration_snapshot(context, &agent).await?)?, false))
-        }
-        method::CONFIG_THEME => {
-            let params: protocol::ThemePreferenceSelectParams = parse_params(&request.params)?;
-            ensure_no_active_turn(context).await?;
-            let theme = theme_preferences::persist(context.workspace.clone(), params.theme).await?;
-            shutdown_current_session(context, false).await?;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
-                state.theme_override = Some(theme.clone());
-            }
-            let agent = active_agent_config(context).await;
-            let mut snapshot = configuration_snapshot(context, &agent).await?;
-            if let Some(shared) = snapshot.shared_ui.as_mut() {
-                shared.theme = theme;
-            }
-            Ok((serde_json::to_value(snapshot)?, false))
-        }
-        method::SESSION_LIST => {
-            let sessions = list_recent_session_summaries_in_workspace(MAX_SESSIONS, &context.workspace).await?;
-            let sessions = sessions
-                .into_iter()
-                .map(|session| SessionSummary {
-                    session_id: session.identifier,
-                    title: session.title,
-                    workspace: session.workspace_path,
-                    completed: session.completed,
-                    resumable: session.resumable,
-                    size_bytes: session.size_bytes,
-                    updated_at: (session.updated_at != 0).then_some(session.updated_at),
-                })
-                .collect::<Vec<_>>();
-            Ok((serde_json::to_value(sessions)?, false))
-        }
-        method::SESSION_CREATE => {
-            let params: protocol::SessionCreateParams = parse_params(&request.params)?;
-            ensure_no_active_turn(context).await?;
-            let create_started = Instant::now();
-            let shutdown_started = Instant::now();
-            let had_session = context.state.lock().await.session_id.is_some();
-            shutdown_current_session(context, false).await?;
-            if had_session {
-                let mut state = context.state.lock().await;
-                if state.session_options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
-                    state.session_options.permission_mode = state.permission_before_full_access.take();
-                }
-            }
-            let shutdown_elapsed = shutdown_started.elapsed();
-            let workspace_label = workspace_label(&context.workspace);
-            let identifier_started = Instant::now();
-            let session_id = if history_persistence_enabled() {
-                reserve_session_archive_identifier(&workspace_label, None).await?
-            } else {
-                generate_session_archive_identifier(&workspace_label, None)
-            };
-            let identifier_elapsed = identifier_started.elapsed();
-            let runtime_started = Instant::now();
-            start_session(context, session_id.clone(), None).await?;
-            let runtime_elapsed = runtime_started.elapsed();
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = Some(session_id.clone());
-                state.restored_output_spools.clear();
-            }
-            tracing::debug!(
-                target: "vtcode.desktop",
-                shutdown_ms = shutdown_elapsed.as_millis(),
-                archive_identifier_ms = identifier_elapsed.as_millis(),
-                runtime_start_ms = runtime_elapsed.as_millis(),
-                total_ms = create_started.elapsed().as_millis(),
-                "desktop session created"
-            );
-            Ok((
-                serde_json::to_value(SessionSummary {
-                    session_id,
-                    title: params.title,
-                    workspace: context.workspace.to_string_lossy().into_owned(),
-                    completed: false,
-                    resumable: history_persistence_enabled(),
-                    size_bytes: 0,
-                    updated_at: None,
-                })?,
-                false,
-            ))
-        }
-        method::SESSION_LOAD => {
-            let load_started = Instant::now();
-            let params: protocol::SessionIdParams = parse_params(&request.params)?;
-            ensure_no_active_turn(context).await?;
-            let archive_started = Instant::now();
-            let listing = find_session_by_identifier(&params.session_id)
-                .await?
-                .ok_or_else(|| anyhow!("saved session was not found"))?;
-            if !listing_matches_workspace(&listing, &context.workspace) {
-                bail!("saved session belongs to a different workspace");
-            }
-            let resume = load_resume_session(&params.session_id, ArchivedSessionIntent::ResumeInPlace)
-                .await?
-                .ok_or_else(|| anyhow!("saved session could not be loaded"))?;
-            let archive_elapsed = archive_started.elapsed();
-            let previous_session_id = context.state.lock().await.session_id.clone();
-            let shutdown_started = Instant::now();
-            shutdown_current_session(context, false).await?;
-            let shutdown_elapsed = shutdown_started.elapsed();
-            {
-                let mut state = context.state.lock().await;
-                if previous_session_id.as_deref().is_some_and(|id| id != params.session_id)
-                    && state.session_options.permission_mode == Some(protocol::PermissionMode::FullAccess)
-                {
-                    state.session_options.permission_mode = state.permission_before_full_access.take();
-                }
-            }
-            let workspace = context.workspace.clone();
-            let history_session_id = params.session_id.clone();
-            let inspector_started = Instant::now();
-            let inspector_history =
-                tokio::task::spawn_blocking(move || restored_inspector_history(&workspace, &history_session_id))
-                    .await
-                    .context("inspector history task failed")??;
-            let inspector_elapsed = inspector_started.elapsed();
-            let resume_started = Instant::now();
-            start_session(context, params.session_id.clone(), Some(resume)).await?;
-            let resume_elapsed = resume_started.elapsed();
-            let RestoredInspectorHistory {
-                items: review_items,
-                incomplete: review_history_incomplete,
-                activity_items,
-                activity_incomplete: activity_history_incomplete,
-                activity_output_cursors,
-                output_spools,
-            } = inspector_history;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = Some(params.session_id.clone());
-                state.restored_output_spools = output_spools;
-            }
-            let history = restored_history_page(&listing.snapshot.messages, None, MAX_RESTORED_MESSAGES);
-            let result = protocol::SessionLoadResult {
-                session: session_summary(&listing),
-                messages: history.messages,
-                history_start_index: history.start_index,
-                history_has_earlier: history.has_earlier,
-                review_items,
-                review_history_incomplete,
-                activity_items,
-                activity_output_cursors,
-                activity_history_incomplete,
-            };
-            let payload = serde_json::to_value(result)?;
-            tracing::debug!(
-                target: "vtcode.desktop",
-                archive_ms = archive_elapsed.as_millis(),
-                shutdown_ms = shutdown_elapsed.as_millis(),
-                inspector_ms = inspector_elapsed.as_millis(),
-                resume_ms = resume_elapsed.as_millis(),
-                total_ms = load_started.elapsed().as_millis(),
-                "desktop session loaded"
-            );
-            Ok((payload, false))
-        }
-        method::SESSION_HISTORY => {
-            let params: protocol::SessionHistoryParams = parse_params(&request.params)?;
-            if params.request_id.is_empty() || params.request_id.len() > 128 {
-                bail!("invalid session history request identity");
-            }
-            if params.limit == 0 || params.limit > protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES {
-                bail!("invalid session history page size");
-            }
-            let selected_id = context.state.lock().await.session_id.clone();
-            if selected_id.as_deref() != Some(params.session_id.as_str()) {
-                bail!("session is not selected");
-            }
-            let listing = find_session_by_identifier(&params.session_id)
-                .await?
-                .ok_or_else(|| anyhow!("saved session was not found"))?;
-            if !listing_matches_workspace(&listing, &context.workspace) {
-                bail!("saved session belongs to a different workspace");
-            }
-            if params.before_index > listing.snapshot.messages.len() {
-                bail!("session history cursor is out of range");
-            }
-            let page = restored_history_page(&listing.snapshot.messages, Some(params.before_index), params.limit);
-            let result = protocol::SessionHistoryPage {
-                session_id: params.session_id,
-                request_id: params.request_id,
-                start_index: page.start_index,
-                messages: page.messages,
-                has_earlier: page.has_earlier,
-            };
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::SESSION_OUTPUT_READ => {
-            let params: protocol::SessionOutputReadParams = parse_params(&request.params)?;
-            if params.request_id.is_empty() || params.request_id.len() > 128 {
-                bail!("invalid session output request identity");
-            }
-            if params.item_id.is_empty() || params.item_id.len() > 512 {
-                bail!("invalid session output item identity");
-            }
-            let spool_path = {
-                let state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                state
-                    .restored_output_spools
-                    .get(&params.item_id)
-                    .cloned()
-                    .ok_or_else(|| anyhow!("no more captured output is available"))?
-            };
-            let workspace = context.workspace.clone();
-            let offset = params.offset;
-            let text_page =
-                tokio::task::spawn_blocking(move || read_restored_spool_page(&workspace, &spool_path, offset))
-                    .await
-                    .context("tool output page task failed")??;
-            let page = protocol::SessionOutputPage {
-                session_id: params.session_id,
-                request_id: params.request_id,
-                item_id: params.item_id,
-                offset,
-                next_offset: text_page.next_offset,
-                total_bytes: text_page.total_bytes,
-                text: text_page.text,
-                has_more: text_page.next_offset < text_page.total_bytes,
-            };
-            Ok((serde_json::to_value(page)?, false))
-        }
-        method::MCP_APP_READ => {
-            let params: protocol::McpAppReadParams = parse_params(&request.params)?;
-            let result = mcp_app::read(context.workspace.clone(), params).await?;
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::SESSION_CLOSE => {
-            let params: protocol::SessionIdParams = parse_params(&request.params)?;
-            let selected_id = context.state.lock().await.session_id.clone();
-            if selected_id.as_deref() != Some(params.session_id.as_str()) {
-                bail!("session is not selected");
-            }
-            ensure_no_active_turn(context).await?;
-            shutdown_current_session(context, false).await?;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
-                if state.session_options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
-                    state.session_options.permission_mode = state.permission_before_full_access.take();
-                }
-                state.restored_output_spools.clear();
-            }
-            Ok((json!({ "closed": true }), false))
-        }
-        method::TURN_SUBMIT => {
-            let params: protocol::TurnSubmitParams = parse_params(&request.params)?;
-            // Client-read attachments become inline text parts, framed with
-            // their paths so the model can cite them.
-            let attachment_parts = params
-                .attachments
-                .iter()
-                .map(|attachment| ContentPart::Text {
-                    text: format!("--- {} ---\n{}", attachment.path, attachment.text),
-                })
-                .collect::<Vec<_>>();
-            let accepted = enqueue_turn(
-                &context.state,
-                &context.notifications,
-                &params.session_id,
-                params.prompt,
-                attachment_parts,
-                EnqueueMode::Queueable { batchable: params.batchable },
-            )
-            .await?;
-            Ok((serde_json::to_value(accepted)?, false))
-        }
-        method::TURN_CANCEL => {
-            let params: protocol::TurnCancelParams = parse_params(&request.params)?;
-            let (input, stop, should_send) = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str())
-                    || state.active_turn_id.as_deref() != Some(params.turn_id.as_str())
-                {
-                    bail!("turn is no longer active");
-                }
-                let runtime = state
-                    .runtime
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("selected session is not running"))?;
-                let input = runtime.input.clone();
-                let stop = runtime.stop.clone();
-                let should_send = state.cancel_requested_turn.as_deref() != Some(params.turn_id.as_str());
-                if should_send {
-                    state.cancel_requested_turn = Some(params.turn_id.clone());
-                }
-                (input, stop, should_send)
-            };
-            if should_send {
-                // The out-of-band signal is what stops the running turn; the
-                // queued event only dismisses overlay waits. A closed channel
-                // proves the runtime is gone, so skip the publish wait and go
-                // straight to the send-failure bail below.
-                if !input.is_closed() {
-                    signal_runloop_stop(&stop).await;
-                }
-                if input.send(InlineEvent::Cancel).is_err() {
-                    let mut state = context.state.lock().await;
-                    if state.cancel_requested_turn.as_deref() == Some(params.turn_id.as_str()) {
-                        state.cancel_requested_turn = None;
-                    }
-                    bail!("selected session runtime has stopped");
-                }
-            }
-            // Outside the duplicate-cancel gate: a flagged re-send after a
-            // plain stop must still discard, and the discard is idempotent.
-            if params.clear_queue {
-                let status = {
-                    let mut state = context.state.lock().await;
-                    // The lock was released for the runloop signal above, so
-                    // the session may have moved on; teardown already owns
-                    // that queue.
-                    if state.session_id.as_deref() != Some(params.session_id.as_str()) || state.queue.is_empty() {
-                        None
-                    } else {
-                        state.queue.clear();
-                        Some(state.queue_status(&params.session_id))
-                    }
-                };
-                if let Some(status) = status {
-                    publish_queue_status_sync(&context.notifications, &status);
-                }
-            }
-            Ok((json!({ "cancelRequested": true }), false))
-        }
-        method::TURN_QUEUE_TAKE_LATEST => {
-            let params: protocol::TurnQueueTakeLatestParams = parse_params(&request.params)?;
-            let (result, status) = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                // Text-only restore mirrors the CLI queue edit: attachments
-                // stay with their dispatched turn and the composer re-attaches
-                // on resubmit.
-                let text = state.queue.pop_back().map(|queued| queued.input.text);
-                let result = protocol::TurnQueueTakeLatestResult {
-                    session_id: params.session_id,
-                    queue_depth: state.queue.len(),
-                    text,
-                };
-                let status = result.text.is_some().then(|| state.queue_status(&result.session_id));
-                (result, status)
-            };
-            if let Some(status) = status {
-                publish_queue_status_sync(&context.notifications, &status);
-            }
-            Ok((serde_json::to_value(result)?, false))
-        }
-        method::INTERACTION_RESPOND => {
-            let response: protocol::InteractionResponse = parse_params(&request.params)?;
-            respond_to_interaction(context, response).await?;
-            Ok((json!({ "accepted": true }), false))
-        }
-        method::STORAGE_SUMMARY | method::SESSION_DELETE | method::WORKTREE_LIST | method::WORKTREE_REMOVE => {
-            storage::handle_storage_request(context, request).await
-        }
-        _ => bail!("unknown desktop method"),
-    }
+    protocol::write_frame(stdout, &notification).await?;
+    Ok(())
 }
 
 async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus {

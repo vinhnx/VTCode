@@ -13,8 +13,13 @@ pub(super) fn parse_workspace_directory(raw: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
-pub fn long_version() -> String {
-    let git_info = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
+/// Multi-line `--version` report whose first line is the caller-supplied
+/// build stamp (`{version}+{sha}[.dirty]` from the root build script, or the
+/// bare crate version). The stamp is a parameter — not `option_env!` — because
+/// `cargo:rustc-env` never crosses package boundaries, so only the root crate
+/// can read what its own build script sets. Keep the stamp to a single token:
+/// the desktop updater parses this first line strictly.
+pub fn long_version(git_info: &str) -> String {
     let path_diagnostics = match vtcode_commons::VtCodePaths::resolve() {
         Ok(paths) => format!(
             "Config directory: {}\nData directory: {}\nState directory: {}\nCache directory: {}\nRuntime directory: {}\nExecutable directory: {}\nLegacy directory: {}\nMigration marker: {}\nMigration report: {}",

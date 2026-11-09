@@ -323,12 +323,14 @@ pub(crate) fn exec_output_has_changes(output: &Value) -> bool {
         || crate::tools::file_ops::diff_output_has_effective_change(output) == Some(true)
 }
 
-/// Path-prefixed globs cannot expand into options. Keep this narrower than
+/// Path- and dot-prefixed globs cannot expand into options. Keep this narrower than
 /// general expansion: variables, substitutions, bare globs and dynamic heads
 /// remain unproven, and the parent command still checks program/options.
 fn is_literal_path_glob(word: &str) -> bool {
-    let Some((prefix, _)) = word.split_once('/') else {
-        return false;
+    let prefix = match word.split_once('/') {
+        Some((prefix, _)) => prefix,
+        None if word.starts_with('.') => ".",
+        None => return false,
     };
     !prefix.starts_with('-')
         && !prefix.contains(['*', '?', '[', ']'])
@@ -350,6 +352,28 @@ fn is_literal_grep_filter(word: &str) -> bool {
         && !pattern.chars().any(|c| c.is_whitespace() || "\"'$`\\{}()<>&;|~!".contains(c))
 }
 
+/// Recognize the shell's file-existence test on one quoted variable. Other
+/// test expressions can contain substitutions or arithmetic with effects.
+fn is_quoted_variable_file_test(text: &str) -> bool {
+    let Some(expression) = text.strip_prefix('[').and_then(|s| s.strip_suffix(']')) else {
+        return false;
+    };
+    let Some(operand) = expression.trim().strip_prefix("-f ") else {
+        return false;
+    };
+    let Some(variable) = operand
+        .trim()
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .and_then(|s| s.strip_prefix('$'))
+    else {
+        return false;
+    };
+    let mut chars = variable.chars();
+    chars.next().is_some_and(|ch| ch == '_' || ch.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
 /// Walk every supported node, including commands nested in substitutions.
 /// Unlike command extraction, this proof must never discard unknown syntax.
 fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
@@ -358,6 +382,7 @@ fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
         return false;
     };
     match node.kind() {
+        "test_command" => return is_quoted_variable_file_test(text),
         "command" => {
             let Some(name) = node.child_by_field_name("name") else {
                 return false;

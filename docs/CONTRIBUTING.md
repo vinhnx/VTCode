@@ -296,7 +296,7 @@ ship a big change to help. Curiosity is enough to start.
 3. Run `./scripts/check-dev.sh` and the relevant `cargo nextest run` target, then paste the result in the PR.
 4. Review will focus on tests, docs, and boundaries - not on your experience level. Disagreeing with reasoning is
    welcome too.
-5. Once merged, your avatar joins the [README contributor grid](../README.md#community-and-support).
+5. Once merged, your avatar joins the [README contributor grid](../README.md#thanks-to-our-contributors).
 
 ### Community standards
 

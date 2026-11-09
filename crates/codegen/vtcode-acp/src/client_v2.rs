@@ -117,8 +117,8 @@ impl AcpClientV2Builder {
 
     /// Build the client
     fn build(self) -> AcpResult<AcpClientV2> {
-        let http_client = HttpClient::builder()
-            .timeout(self.timeout)
+        let builder = HttpClient::builder().timeout(self.timeout);
+        let http_client = vtcode_commons::http::apply_connect_timeout(builder)
             .build()
             .map_err(|e| AcpError::ConfigError(format!("Failed to create HTTP client: {e}")))?;
 
@@ -489,7 +489,6 @@ impl AcpClientV2 {
 
         let url = format!("{}/sse/session/{}", self.base_url.trim_end_matches('/'), session_id);
 
-        let _http_client = self.http_client.clone();
         let auth_token = self.auth_token.read().await.clone();
 
         // Spawn SSE listener task
@@ -508,7 +507,9 @@ impl AcpClientV2 {
         auth_token: Option<String>,
         tx: mpsc::Sender<SessionUpdateNotification>,
     ) -> AcpResult<()> {
-        let client = HttpClient::new();
+        // Streaming client by design: an SSE stream is long-lived, so only the
+        // connect phase is bounded and no total deadline can kill the stream.
+        let client = vtcode_commons::http::create_streaming_client();
 
         let mut req = client.get(&url);
         if let Some(token) = auth_token {

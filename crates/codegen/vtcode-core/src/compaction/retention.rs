@@ -1,7 +1,7 @@
 //! Retention scoring, tool-output pruning, and message retention.
 
 use super::*;
-
+use vtcode_commons::tokens::CHARS_PER_TOKEN;
 /// Per-message cap applied to tool outputs in summarizer inputs. Large dumps
 /// (file reads, command output) otherwise evict whole protocol groups from the
 /// bounded fork. Call IDs and pairing metadata are preserved by
@@ -50,7 +50,7 @@ pub(crate) fn bounded_message_preview(message: &Message, token_budget: usize) ->
     if let Some(tool_calls) = preview.tool_calls.as_mut() {
         for call in tool_calls {
             if let Some(function) = call.function.as_mut()
-                && function.arguments.len() > available.saturating_mul(4)
+                && function.arguments.len() > available.saturating_mul(CHARS_PER_TOKEN)
             {
                 function.arguments = "{}".to_string();
             }

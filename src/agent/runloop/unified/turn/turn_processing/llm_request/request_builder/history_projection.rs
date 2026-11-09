@@ -144,10 +144,7 @@ fn compact_verifier_waits(messages: &mut Vec<uni::Message>) {
                 output.push_str(&batch.output);
                 if output.len() > VERIFIER_WAIT_OUTPUT_BYTES {
                     output_truncated = true;
-                    let mut boundary = output.len() - VERIFIER_WAIT_OUTPUT_BYTES;
-                    while !output.is_char_boundary(boundary) {
-                        boundary += 1;
-                    }
+                    let boundary = output.ceil_char_boundary(output.len() - VERIFIER_WAIT_OUTPUT_BYTES);
                     output.drain(..boundary);
                 }
             }

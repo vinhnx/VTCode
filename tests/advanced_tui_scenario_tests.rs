@@ -50,6 +50,7 @@ fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetSubprocessEntries { .. } => "SetSubprocessEntries",
         InlineCommand::SetSubagentPreview { .. } => "SetSubagentPreview",
         InlineCommand::SetLocalAgents { .. } => "SetLocalAgents",
+        InlineCommand::SetActivePlan { .. } => "SetActivePlan",
         InlineCommand::SetArchivedHistory { .. } => "SetArchivedHistory",
         InlineCommand::SetPrimaryAgent { .. } => "SetPrimaryAgent",
         InlineCommand::SetCursorVisible(_) => "SetCursorVisible",

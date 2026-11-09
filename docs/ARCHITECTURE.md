@@ -214,7 +214,7 @@ The command-line interface is built on specific principles for robustness and in
 
 ### Workspace crates
 
-The workspace has 23 crates: the root `vtcode` binary plus 22 library crates under `crates/codegen/` (runtime) and
+The workspace has 25 crates: the root `vtcode` binary plus 24 library crates under `crates/codegen/` (runtime) and
 `crates/common/` (shared contracts and utilities). `default-members` build only the root, `vtcode-core`, and `vtcode-ui`.
 New reusable logic belongs in an existing small crate (or a new one) rather than in `vtcode-core` by default.
 
@@ -242,6 +242,8 @@ New reusable logic belongs in an existing small crate (or a new one) rather than
 | `vtcode-safety`             | Command safety detection, execution policies, sandboxing.                                   |
 | `vtcode-a2a`                | Agent2Agent (A2A) protocol client and server.                                               |
 | `vtcode-mcp`                | Model Context Protocol client, connection pooling, tool discovery.                          |
+| `vtcode-desktop-protocol`   | Versioned JSON-RPC protocol shared by desktop hosts.                                        |
+| `vtcode-desktop`            | Local macOS desktop workspace (non-publishable GPUI app).                                   |
 | `xtask`                     | Release packaging automation.                                                               |
 
 ### TUI Architecture

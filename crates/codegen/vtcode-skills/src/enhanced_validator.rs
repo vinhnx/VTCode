@@ -4,6 +4,10 @@
 //! instead of failing on the first error.
 
 use crate::file_references::FileReferenceValidator;
+use crate::limits::{
+    MAX_ALLOWED_TOOLS, MAX_COMPATIBILITY_CHARS, MAX_LICENSE_CHARS, MAX_SKILL_DESCRIPTION_CHARS, MAX_SKILL_NAME_CHARS,
+    allowed_tool_count,
+};
 use crate::types::{SkillManifest, resolve_skill_dir};
 use crate::validation_report::SkillValidationReport;
 use std::path::Path;
@@ -54,11 +58,11 @@ impl ComprehensiveSkillValidator {
         }
 
         // Check length
-        if manifest.name.len() > 64 {
+        if manifest.name.len() > MAX_SKILL_NAME_CHARS {
             report.add_error(
                 Some("name".to_string()),
-                format!("name exceeds maximum length: {} characters (max 64)", manifest.name.len()),
-                Some("Use a shorter name (1-64 characters)".to_string()),
+                format!("name exceeds maximum length: {} characters (max {MAX_SKILL_NAME_CHARS})", manifest.name.len()),
+                Some(format!("Use a shorter name (1-{MAX_SKILL_NAME_CHARS} characters)")),
             );
         }
 
@@ -122,11 +126,14 @@ impl ComprehensiveSkillValidator {
             return;
         }
 
-        if manifest.description.len() > 1024 {
+        if manifest.description.len() > MAX_SKILL_DESCRIPTION_CHARS {
             report.add_error(
                 Some("description".to_string()),
-                format!("description exceeds maximum length: {} characters (max 1024)", manifest.description.len()),
-                Some("Shorten the description to 1024 characters or less".to_string()),
+                format!(
+                    "description exceeds maximum length: {} characters (max {MAX_SKILL_DESCRIPTION_CHARS})",
+                    manifest.description.len()
+                ),
+                Some(format!("Shorten the description to {MAX_SKILL_DESCRIPTION_CHARS} characters or less")),
             );
         }
 
@@ -156,17 +163,17 @@ impl ComprehensiveSkillValidator {
     fn validate_optional_fields(&self, manifest: &SkillManifest, report: &mut SkillValidationReport) {
         // Validate allowed-tools field
         if let Some(allowed_tools) = &manifest.allowed_tools {
-            let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
+            let tool_count = allowed_tool_count(allowed_tools);
 
-            if tools.len() > 16 {
+            if tool_count > MAX_ALLOWED_TOOLS {
                 report.add_error(
                     Some("allowed-tools".to_string()),
-                    format!("allowed-tools exceeds maximum tool count: {} tools (max 16)", tools.len()),
-                    Some("Reduce the number of tools to 16 or fewer".to_string()),
+                    format!("allowed-tools exceeds maximum tool count: {tool_count} tools (max {MAX_ALLOWED_TOOLS})"),
+                    Some(format!("Reduce the number of tools to {MAX_ALLOWED_TOOLS} or fewer")),
                 );
             }
 
-            if tools.is_empty() {
+            if tool_count == 0 {
                 report.add_error(
                     Some("allowed-tools".to_string()),
                     "allowed-tools must not be empty if specified".to_string(),
@@ -177,11 +184,11 @@ impl ComprehensiveSkillValidator {
 
         // Validate license field
         if let Some(license) = &manifest.license
-            && license.len() > 512
+            && license.len() > MAX_LICENSE_CHARS
         {
             report.add_error(
                 Some("license".to_string()),
-                format!("license exceeds maximum length: {} characters (max 512)", license.len()),
+                format!("license exceeds maximum length: {} characters (max {MAX_LICENSE_CHARS})", license.len()),
                 Some("Shorten the license field".to_string()),
             );
         }
@@ -194,10 +201,13 @@ impl ComprehensiveSkillValidator {
                     "compatibility must not be empty if specified".to_string(),
                     Some("Either remove the field or add meaningful compatibility info".to_string()),
                 );
-            } else if compatibility.len() > 500 {
+            } else if compatibility.len() > MAX_COMPATIBILITY_CHARS {
                 report.add_error(
                     Some("compatibility".to_string()),
-                    format!("compatibility exceeds maximum length: {} characters (max 500)", compatibility.len()),
+                    format!(
+                        "compatibility exceeds maximum length: {} characters (max {MAX_COMPATIBILITY_CHARS})",
+                        compatibility.len()
+                    ),
                     Some("Shorten the compatibility field".to_string()),
                 );
             }
@@ -337,6 +347,41 @@ mod tests {
 
         // Should have some suggestions for missing fields
         assert!(report.suggestions.iter().any(|s| s.field == Some("license".to_string())));
+    }
+
+    /// The comprehensive validator reports the same limit the strict one
+    /// enforces; keep both ends of the boundary in one place so a future edit
+    /// cannot make the two validators disagree. Asserted through `to_json`
+    /// because issue fields are private to `validation_report`.
+    #[test]
+    fn reports_allowed_tools_limit_at_the_same_boundary() {
+        let validator = ComprehensiveSkillValidator::new();
+        let report_for = |count: usize| {
+            let tools = (0..count).map(|i| format!("Tool{i}")).collect::<Vec<_>>().join(" ");
+            let manifest = SkillManifest {
+                name: "test-skill".to_string(),
+                description: "A test skill for validation".to_string(),
+                allowed_tools: Some(tools),
+                ..Default::default()
+            };
+            validator
+                .validate_manifest(&manifest, PathBuf::from("/tmp/nonexistent").as_path())
+                .to_json()
+                .expect("report serializes")
+        };
+
+        let over_limit = report_for(MAX_ALLOWED_TOOLS + 1);
+        assert!(
+            over_limit.contains("allowed-tools exceeds maximum tool count"),
+            "expected an allowed-tools error, got {over_limit}"
+        );
+
+        let at_limit = report_for(MAX_ALLOWED_TOOLS);
+        assert!(
+            !at_limit.contains("allowed-tools"),
+            "{} tools is the inclusive limit and must not error, got {at_limit}",
+            MAX_ALLOWED_TOOLS
+        );
     }
 
     #[test]

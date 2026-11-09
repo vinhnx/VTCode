@@ -260,6 +260,8 @@ Check for and install updates.
 - `--unpin` - Remove version pin
 - `--channel <CHANNEL>` - Set release channel
 - `--show-config` - Show current configuration
+- `--with-desktop` - Install/update the macOS desktop app without prompting
+- `--without-desktop` - Skip the macOS desktop app step without prompting
 
 **Examples:**
 
@@ -287,9 +289,53 @@ vtcode update --channel beta
 If VT Code was installed via a package manager, the update system will detect this and provide the appropriate update
 command:
 
-- **Homebrew**: `brew upgrade vtcode`
+- **Homebrew**: `brew upgrade vinhnx/tap/vtcode`
 - **Cargo**: `cargo install vtcode --force`
+- **Scoop**: `scoop update vtcode`
+- **Snap**: `sudo snap refresh vtcode`
+- **Flatpak**: `flatpak update com.vinhnx.Vtcode`
+- **Nix**: `nix profile upgrade vtcode`
+- **Winget**: `winget upgrade vtcode`
 - **Standalone**: Direct update via `vtcode update`
+
+### Desktop App (macOS)
+
+After the CLI step, `vtcode update` also offers the macOS desktop app: when it is missing or older than the installed
+CLI, the command asks whether to install it (default: yes) and downloads the prebuilt
+`vtcode-desktop-<version>-<target>.zip` release asset — no build toolchain needed. The install verifies the published
+SHA-256 checksum, rejects unsafe zip paths, extracts with `ditto`, and replaces the app bundle (stale bundle files
+are removed first). Updates reinstall into the existing install's directory; fresh installs ask between
+`~/Applications` (default) and `/Applications` (all users, elevates with sudo when not user-writable). When the
+desktop app is already current, the command reports that and never prompts.
+
+- `--with-desktop` installs/updates without prompting (fails on non-macOS). Fresh installs go to
+  `~/Applications`; only the interactive prompt asks about `/Applications`.
+- `--without-desktop` skips the step without prompting.
+- Non-interactive runs print a `vtcode update --with-desktop` hint instead of prompting.
+- While the CLI is pinned, the prompt is skipped (the pin means "leave my versions alone"); an explicit
+  `--with-desktop` still proceeds.
+- Prompt mode is best-effort: a desktop failure warns and the CLI update still succeeds. Explicit
+  `--with-desktop` fails the command instead.
+- The bundle needs macOS 15+: below it (or when the version is unreadable), an explicit request fails while
+  the prompt path warns and skips.
+- `--with-desktop` combined with `--check`, `--list`, `--pin`, `--unpin`, `--channel`, or `--show-config`
+  warns that the flag has no effect in that mode.
+- When the release has no desktop asset for the host, the command errors and points at `scripts/install.sh`,
+  which can still build from source.
+- Outside an update, `vtcode desktop --install` installs or updates the app on its own and reports the installed
+  `VT Code.app` path.
+
+Homebrew cask installs are managed by Homebrew instead: `brew upgrade --cask vinhnx/tap/vtcode-desktop` updates the
+bundle (macOS 15+, Apple Silicon). The cask places the app in `/Applications`, which `vtcode desktop` and
+`vtcode update --with-desktop` also detect. Pick one owner per machine: updating a cask-managed bundle with the
+built-in updater leaves Homebrew's version record stale, so keep using `brew upgrade --cask` (or
+`brew reinstall --cask` to re-align it) rather than mixing both.
+
+> [!WARNING]
+> **First launch after installing needs a one-time macOS security approval.** Release builds are ad hoc signed, not
+> notarized, so Gatekeeper blocks the first launch — for cask installs too, because Homebrew quarantines the download.
+> Open the app once so macOS records the block, click **Open Anyway** in **System Settings › Privacy & Security**, then
+> open it again. The button only shows for about an hour after a blocked launch. Notarized releases skip this step.
 
 ### Backup and Rollback
 

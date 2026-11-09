@@ -28,7 +28,7 @@ pub struct SessionConfig {
 
 // Re-export shared enums from vtcode-commons.
 pub use vtcode_commons::ui_protocol::{
-    DiffPreviewMode, LayoutModeOverride, ReasoningDisplayMode, ThinkingBlockState, UiMode,
+    BusyEnterBehavior, DiffPreviewMode, LayoutModeOverride, ReasoningDisplayMode, ThinkingBlockState, UiMode,
 };
 
 /// UI appearance configuration
@@ -98,6 +98,10 @@ pub struct AppearanceConfig {
     #[serde(default)]
     pub readline_mode: bool,
 
+    /// How plain Enter submits while a turn is running (queue or steer).
+    #[serde(default)]
+    pub busy_enter_behavior: BusyEnterBehavior,
+
     /// Screen reader mode (disables animation-heavy rendering paths)
     #[serde(default)]
     pub screen_reader_mode: bool,
@@ -164,6 +168,7 @@ impl Default for AppearanceConfig {
             thinking_display: ThinkingBlockState::Collapsed,
             vim_mode: false,
             readline_mode: false,
+            busy_enter_behavior: BusyEnterBehavior::Queue,
             screen_reader_mode: false,
             reduce_motion_mode: false,
             reduce_motion_keep_progress_animation: false,

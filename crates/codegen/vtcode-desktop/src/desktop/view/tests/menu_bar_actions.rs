@@ -8,7 +8,7 @@ fn init_without_window(cx: &mut TestAppContext) {
     cx.update(crate::desktop::notifications::initialize);
     let preferences = crate::desktop::preferences::Preferences::load();
     cx.update(|cx| super::super::init_keybindings(cx, &preferences));
-    cx.update(super::super::init_native_menus);
+    cx.update(super::super::menu_bar::init_native_menus);
 }
 
 #[gpui_kit::test]

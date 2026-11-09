@@ -4,8 +4,12 @@ Run `python3 scripts/check_markdown.py` locally and in CI. It uses
 `markdownlint-cli2@0.23.3` and requires Node.js 22 or newer. Run `npm install`
 once so the pinned linter is available locally (a `devDependencies` entry);
 without the local install the script falls back to a pinned `npx` fetch, which
-needs network access. Use `--list` to inspect the selected paths, or `--fix` to
-apply supported formatting fixes.
+needs network access. If `npx` is not on PATH the script reports a toolchain
+error and exits 2 (distinct from a lint failure, exit 1). Use `--list` to
+inspect the selected paths, or `--fix` to apply supported formatting fixes.
+Pass maintained paths (`python3 scripts/check_markdown.py README.md`) to lint
+only those files; unknown or excluded paths fail closed instead of silently
+linting nothing.
 
 Normal checks report the selected file count, diagnostics, and exit status without
 repeating the entire path list. Use `--list` when the full file inventory is needed.
@@ -30,4 +34,4 @@ generated output at its generator so regeneration remains lint-clean.
 | --- | --- |
 | Maintained Markdown | `python3 scripts/check_markdown.py` |
 | Selection regressions | `python3 scripts/tests/test_check_markdown.py` |
-| Core documentation links | `python3 scripts/check_docs_links.py` |
+| Links in all maintained Markdown (also in `check-dev.sh`) | `python3 scripts/check_docs_links.py` |

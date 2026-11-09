@@ -17,9 +17,32 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 - **Flags**: pass installer flags after `--` (see `./install.sh --help` for all flags)
 - **Version**: the installer always resolves the latest compatible release; pinned-version installs are not supported
 - **Install dir**: `INSTALL_DIR=/usr/local/bin bash install.sh`
-- **Desktop (macOS 15+ only)**: installed by default when the build toolchain is present (best-effort: a missing
-  toolchain or failed build only warns). `--with-desktop` requires it and fails if unavailable; `--without-desktop`
-  skips it. The from-source build needs Xcode command line tools, Rust, and git, and takes several minutes.
+- **Desktop (macOS 15+ only)**: the installer asks before installing it when run interactively (default: install).
+  It installs from the prebuilt `vtcode-desktop-<version>-<target>.zip` release asset when one exists for the host, so
+  no build toolchain is needed; only releases without a desktop asset fall back to a from-source build (best-effort: a
+  missing asset or toolchain only warns). `--with-desktop` installs without prompting and fails if unavailable;
+  `--without-desktop` skips without prompting. The from-source fallback needs Xcode command line tools, Rust, and git,
+  and takes several minutes. Once the CLI is installed, `vtcode desktop --install` installs or updates the app anytime.
+  Either way, the first launch needs a one-time macOS security approval — see
+  [First launch](#first-launch-macos-approval) below.
+- **Desktop location**: fresh installs ask where to put the app — `~/Applications` (default, no sudo) or
+  `/Applications` (all users, elevates with sudo when not user-writable). Non-interactive runs use `~/Applications`;
+  setting `DESKTOP_INSTALL_DIR` beforehand selects the location without prompting.
+
+### First launch (macOS approval)
+
+Release builds are ad hoc signed, not notarized, so macOS blocks the first launch. Allow it once, then open the app
+again:
+
+1. Open the app from Applications so macOS records the block
+2. Open **System Settings › Privacy & Security**
+3. Click **Open Anyway** next to the VT Code message
+4. Open the app again — from Finder, or run `vtcode desktop`
+
+**Open Anyway only appears for about an hour after a blocked launch.** If it is gone, open the app again to re-trigger
+the block. macOS 15+ removed the old right-click › Open shortcut for unnotarized apps, so the Privacy & Security route
+is the one that works. Every installer prints this as a highlighted `ACTION REQUIRED` banner and writes the same steps
+beside the bundle (`FIRST-LAUNCH.txt`). Notarized releases skip this step.
 
 ### How It Works
 
@@ -28,7 +51,8 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 3. Downloads release tarball from GitHub Releases
 4. Extracts and installs to `$INSTALL_DIR/vtcode`
 5. Prints the `export PATH` line to add when the install dir is not on PATH
-6. Installs the desktop app by default on macOS 15+ (best-effort), unless `--without-desktop` is passed
+6. Asks about the desktop app on macOS 15+ when interactive (best-effort install from the prebuilt release asset),
+   unless `--with-desktop`/`--without-desktop` was passed
 
 ### Supported Platforms
 
@@ -38,8 +62,10 @@ CLI:
 - Linux x86_64
 - WSL (use install.ps1 for native Windows)
 
-Desktop app (macOS only, installed by default): macOS 15+ on Apple Silicon or Intel; the from-source build needs
-Xcode command line tools, Rust 1.99.1+, and git (`--without-desktop` skips it). See
+Desktop app (macOS only, offered by default): macOS 15+ on Apple Silicon or Intel. It installs from a prebuilt
+release asset (no toolchain needed); only releases without a desktop asset fall back to a from-source build needing
+Xcode command line tools, Rust 1.99.1+, and git (`--without-desktop` skips it). The first launch requires a one-time
+macOS security approval (see [First launch](#first-launch-macos-approval)). See
 [desktop system requirements](../development/desktop-workspace.md#system-requirements).
 
 Linux `aarch64` hosts are detected by the installer, but native `aarch64` release artifacts are not published by default

@@ -86,8 +86,12 @@ impl ToolOutputViewerState {
             return;
         };
         self.scroll_top = line.min(self.max_scroll(height));
+        self.arm_flash(line);
     }
     pub(crate) fn recompute_matches(&mut self) {
+        // A full rescan rebuilds match identity; the jump that follows re-arms
+        // the tint, while mode toggles and 0-match commits correctly clear it.
+        self.flash = None;
         self.search.matches.clear();
         if self.search.query.is_empty() {
             self.search.current_match = None;

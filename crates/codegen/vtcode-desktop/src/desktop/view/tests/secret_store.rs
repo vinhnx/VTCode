@@ -33,7 +33,7 @@ fn feed_discover(view: &Entity<DesktopView>, snapshot: serde_json::Value, cx: &m
 fn open_provider_settings(window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
     window.click("open-settings", cx);
     window.render_frame(cx);
-    select_settings_category(window, 3, cx);
+    select_settings_category(window, 0, cx);
     window.render_frame(cx);
 }
 

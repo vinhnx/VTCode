@@ -389,7 +389,6 @@ pub(crate) async fn create_task_tracker_from_active_plan(
     }
     let plan_file = plan_state
         .get_plan_file()
-        .await
         .context("approved plan is missing its persisted plan file")?;
     let plan_content = tokio::fs::read_to_string(&plan_file)
         .await

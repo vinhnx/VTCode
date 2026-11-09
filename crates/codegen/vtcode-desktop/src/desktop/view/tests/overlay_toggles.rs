@@ -136,15 +136,22 @@ fn narrow_panels_collapse_the_sidebar_to_its_rail(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("project-thread-sidebar").is_some(), "sidebar starts expanded");
+        assert!(window.try_find("navigation-rail").is_some(), "narrow workspace keeps the rail");
+        assert!(
+            window.try_find("project-thread-sidebar").is_none(),
+            "narrow workspace yields the sidebar so main keeps its width"
+        );
+        assert!(view.read(cx).sidebar_open, "collapse keeps the preference");
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         assert!(window.try_find("navigation-rail").is_some(), "rail persists under the panel");
         assert!(window.try_find("project-thread-sidebar").is_none(), "panel collapses the sidebar");
-        assert!(view.read(cx).sidebar_open, "collapse keeps the preference");
-        view.update(cx, |view, cx| view.close_settings(window, cx));
-        window.render_frame(cx);
-        assert!(window.try_find("project-thread-sidebar").is_some(), "sidebar returns after close");
+    })
+    .unwrap();
+    let (wide_window, _wide_view) = open_desktop_sized(cx, 1200., 700.);
+    cx.update_window(wide_window, |_, wide_window, wide_cx| {
+        wide_window.render_frame(wide_cx);
+        assert!(wide_window.try_find("project-thread-sidebar").is_some(), "a wide window keeps the sidebar expanded");
     })
     .unwrap();
 }
@@ -172,7 +179,7 @@ fn toolbar_back_pops_the_panel_and_forward_reopens_it(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings, "forward reopens the panel");
-        assert_eq!(window.find("settings-navigation").focused(), Some(true), "reopened panel takes focus");
+        assert_eq!(window.find("settings-panel").focused(), Some(true), "reopened panel takes focus");
     })
     .unwrap();
 }
@@ -185,7 +192,9 @@ fn forward_reopens_each_panel_with_its_focus(cx: &mut TestAppContext) {
             let (panel, focus_id) = match index {
                 0 => {
                     view.update(cx, |view, cx| view.open_settings(window, cx));
-                    ("settings-panel", "settings-navigation")
+                    // Wide viewports host the Kit container (click-only
+                    // sidebar), so reopening focuses the panel root.
+                    ("settings-panel", "settings-panel")
                 }
                 1 => {
                     view.update(cx, |view, cx| view.open_thread_browser(window, cx));
@@ -258,7 +267,7 @@ fn route_back_peels_settings_layers_in_order(cx: &mut TestAppContext) {
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: vec![vtcode_desktop_protocol::ConfigSetting {
                 path: "agent.default_model".into(),
                 value: serde_json::json!("model-a"),
@@ -276,12 +285,12 @@ fn route_back_peels_settings_layers_in_order(cx: &mut TestAppContext) {
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
     });
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.click("shortcut-edit-commands", cx);
         view.update(cx, |view, cx| {
             view.open_cli_config_editor("agent.default_model".into(), window, cx);
@@ -451,6 +460,439 @@ fn toolbar_back_prefers_the_panel_over_session_history(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
+fn palette_and_attachment_picker_are_mutually_exclusive(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let (commands, _) = tokio::sync::mpsc::channel(2);
+        view.backend = Some(BackendHandle { commands });
+    });
+    cx.update_window(window, |_, window, cx| {
+        // Picker open, then a centered palette modal: only the palette survives.
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-tabs").is_some());
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "a modal palette closes the picker");
+        assert!(window.try_find("attachment-picker-tabs").is_none());
+        assert!(window.try_find("command-palette").is_some());
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+
+        // Picker open, then a composer-anchored popup (the screenshot overlap):
+        // opening the Models popup must drop the picker first.
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-tabs").is_some());
+        view.update(cx, |view, cx| view.open_model_palette(window, cx));
+        window.render_frame(cx);
+        let state = view.read(cx);
+        assert!(state.attachment_picker.is_none(), "a palette popup closes the picker");
+        assert!(window.try_find("attachment-picker-tabs").is_none());
+        assert!(state.palette.is_some());
+        assert!(state.palette_kind == super::super::PaletteKind::Models);
+        assert!(window.try_find("command-palette").is_some());
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+
+        // Asymmetric reverse: opening the picker drops an open palette.
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_some());
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "the picker closes an open palette");
+        assert!(window.try_find("command-palette").is_none());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn second_attach_trigger_closes_the_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-tabs").is_some());
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "second trigger closes the picker");
+        assert!(window.try_find("attachment-picker-tabs").is_none());
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-tabs").is_some(), "third trigger reopens");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn clicking_away_closes_the_attachment_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-tabs").is_some());
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "clicking away closes the picker");
+        assert!(window.try_find("attachment-picker-tabs").is_none());
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "click-away lands focus in the composer"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn opening_a_route_drops_the_attachment_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    for index in 0..3 {
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+            window.render_frame(cx);
+            assert!(window.try_find("attachment-picker-tabs").is_some());
+            match index {
+                0 => view.update(cx, |view, cx| view.open_settings(window, cx)),
+                1 => view.update(cx, |view, cx| view.open_thread_browser(window, cx)),
+                _ => view.update(cx, |view, cx| view.show_review(window, cx)),
+            }
+            window.render_frame(cx);
+            assert!(view.read(cx).attachment_picker.is_none(), "route {index} drops the composer-anchored picker");
+            assert!(window.try_find("attachment-picker-tabs").is_none());
+            view.update(cx, |view, cx| view.close_active_route(window, cx));
+            window.render_frame(cx);
+            assert!(
+                view.read(cx).attachment_picker.is_none(),
+                "returning to the workspace must not resurrect the picker"
+            );
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop_sized(cx, 600., 560.);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        // The fixture carries a speed, but the narrowed main column hides
+        // the tag alongside the workspace suffix (both need 760px of main).
+        view.configuration = Some(runtime_options_config());
+    });
+    // Bounds follow the main column (pane-root), not the viewport: the bar
+    // lives beside the navigation, so viewport fit alone would let buttons
+    // hide underneath the sidebar.
+    let assert_inside_main = |window: &mut gpui_kit::Window, id: &'static str| {
+        let pane = window.find("pane-root").bounds();
+        let bounds = window.find(id).bounds();
+        assert!(
+            bounds.origin.x >= pane.origin.x && bounds.origin.x + bounds.size.width <= pane.origin.x + pane.size.width,
+            "{id} escapes the main column horizontally: bounds={bounds:?}, pane={pane:?}"
+        );
+    };
+    let chrome_ids = [
+        "navigate-back",
+        "navigate-forward",
+        "toggle-sidebar",
+        "search-commands",
+        "toggle-inspector",
+        "open-settings",
+        "header-overflow",
+        "zen-mode-toggle",
+    ];
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("project-thread-sidebar").is_none(), "a 600px window yields the sidebar to its rail");
+        assert!(window.try_find("navigation-rail").is_some());
+        assert!(
+            window.find_all("title-bar-workspace").is_empty(),
+            "the workspace suffix collapses below the breakpoint"
+        );
+        for id in chrome_ids {
+            assert_inside_main(window, id);
+        }
+        // Hiding navigation hands the whole window to main; every id is
+        // rechecked because the bar re-lays-out around the wider column.
+        view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
+        window.render_frame(cx);
+        for id in chrome_ids.into_iter().chain(["top-new-thread", "top-utilities"]) {
+            assert_inside_main(window, id);
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn title_bar_workspace_label_returns_above_the_breakpoint_capped(cx: &mut TestAppContext) {
+    // 1200px leaves main at ~874 with the full sidebar: past the 760px
+    // main-column breakpoint, so the details return.
+    let (window, view) = open_desktop_sized(cx, 1200., 700.);
+    view.update(cx, |view, _| {
+        view.workspace = Some(PathBuf::from(format!("/projects/{}", "w".repeat(40))));
+        view.configuration = Some(runtime_options_config());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let label = window.find("title-bar-workspace");
+        // Literal, not the const: changing WORKSPACE_LABEL_MAX_WIDTH must
+        // re-prove the breakpoint arithmetic in view.rs, not silently follow.
+        assert!(
+            label.bounds().size.width <= px(161.),
+            "a 40-char workspace caps at the label bound: {:?}",
+            label.bounds()
+        );
+        view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
+        window.render_frame(cx);
+        let pane = window.find("pane-root").bounds();
+        for id in [
+            "navigate-back",
+            "toggle-sidebar",
+            "top-new-thread",
+            "search-commands",
+            "header-overflow",
+            "zen-mode-toggle",
+        ] {
+            let bounds = window.find(id).bounds();
+            assert!(
+                bounds.origin.x >= pane.origin.x
+                    && bounds.origin.x + bounds.size.width <= pane.origin.x + pane.size.width,
+                "{id} escapes the main column horizontally: bounds={bounds:?}, pane={pane:?}"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn attachment_picker_stays_inside_a_narrow_window(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.files = vec![
+            FileEntry {
+                rel_path: "notes.md".into(),
+                depth: 0,
+                is_dir: false,
+            },
+            FileEntry {
+                rel_path: "shot.png".into(),
+                depth: 0,
+                is_dir: false,
+            },
+        ];
+        view.file_directory_paths = std::sync::Arc::new(Default::default());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        for id in ["attachment-picker-tabs", "picker-file-notes.md", "picker-file-shot.png"] {
+            let bounds = window.find(id).bounds();
+            assert!(
+                bounds.origin.x >= px(0.) && bounds.origin.y >= px(0.),
+                "{id} starts outside the viewport: bounds={bounds:?}, viewport={viewport:?}"
+            );
+            assert!(
+                bounds.origin.x + bounds.size.width <= viewport.width
+                    && bounds.origin.y + bounds.size.height <= viewport.height,
+                "{id} exceeds the viewport: bounds={bounds:?}, viewport={viewport:?}"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn scrim_press_dismisses_clean_editors_and_holds_edited_ones(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.files = vec![FileEntry {
+            rel_path: "README.md".into(),
+            depth: 0,
+            is_dir: false,
+        }];
+        view.file_directory_paths = std::sync::Arc::new(Default::default());
+    });
+    // Prefill-intact rename carries no edits: the scrim press dismisses it.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_rename("README.md".to_string(), window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("file-rename-dialog").is_some());
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_none(), "clean rename dismisses on scrim press");
+    })
+    .unwrap();
+    // An edited name holds the dialog for the discard prompt instead. The
+    // native prompt never answers headless, so the confirm path is driven
+    // directly — mirroring the file-delete test.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_rename("README.md".to_string(), window, cx));
+        window.render_frame(cx);
+        window.input("Renamed.md", cx);
+        window.render_frame(cx);
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_some(), "edited rename waits for the prompt");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CancelRename("OTHER.md".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_some(), "stale confirm is a no-op");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CancelRename("README.md".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_none(), "confirmed discard closes the dialog");
+    })
+    .unwrap();
+    // Same policy for the typed settings editor on its own route.
+    view.update(cx, |view, _| {
+        let (commands, _) = tokio::sync::mpsc::channel(2);
+        view.backend = Some(BackendHandle { commands });
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            settings: vec![vtcode_desktop_protocol::ConfigSetting {
+                path: "agent.default_model".into(),
+                value: serde_json::json!("model-a"),
+                origin: Some("workspace".into()),
+                label: Some("Default model".into()),
+                type_name: Some("string".into()),
+                default_value: None,
+                description: None,
+                options: Vec::new(),
+                group: None,
+                group_description: None,
+                editable: true,
+            }],
+            target_versions: Vec::new(),
+            omitted_sensitive: 0,
+            omitted_large: 0,
+            omitted_limit: 0,
+        }));
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.open_cli_config_editor("agent.default_model".into(), window, cx);
+        });
+        window.render_frame(cx);
+        // The focus-trap wrapper consumes the root id; the cancel control
+        // proves the editor mounted.
+        assert!(window.try_find("cancel-cli-config-edit").is_some());
+        // Untouched editor: the scrim press closes it, staying on Settings.
+        click_editor_scrim(window, cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_none(), "clean editor dismisses on scrim press");
+        assert!(view.read(cx).current_route() == Route::Settings);
+        // Edited editor: holds for the prompt.
+        view.update(cx, |view, cx| {
+            view.open_cli_config_editor("agent.default_model".into(), window, cx);
+            view.config_value_input
+                .update(cx, |input, cx| input.set_value("model-b", window, cx));
+        });
+        window.render_frame(cx);
+        click_editor_scrim(window, cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_some(), "edited editor waits for the prompt");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CloseConfigEditor("other.path".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_some(), "stale confirm is a no-op");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CloseConfigEditor("agent.default_model".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_none(), "confirmed discard closes the editor");
+        assert!(view.read(cx).current_route() == Route::Settings);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn opening_a_modal_drops_the_attachment_picker(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("notes.md"), "hello").expect("write file");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.files = vec![FileEntry {
+            rel_path: "notes.md".into(),
+            depth: 0,
+            is_dir: false,
+        }];
+        view.file_directory_paths = std::sync::Arc::new(Default::default());
+    });
+    // Deferred popovers paint above modal scrims: every modal opener drops
+    // the picker so it cannot float over the modal.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-tabs").is_some());
+        view.update(cx, |view, cx| view.open_about(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "about drops the picker");
+        assert!(window.try_find("about-dialog").is_some());
+        view.update(cx, |view, cx| view.close_about(window, cx));
+
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        view.update(cx, |view, cx| view.open_running_confirm(super::super::RunningSwitchIntent::NewThread, window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "running confirm drops the picker");
+        assert!(window.try_find("running-confirm-dialog").is_some());
+        view.update(cx, |view, cx| view.cancel_running_confirm(window, cx));
+
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        view.update(cx, |view, cx| view.open_license_viewer(super::super::licenses::LicenseDocument::Mit, window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "license viewer drops the picker");
+        assert!(window.try_find("license-viewer").is_some());
+        view.update(cx, |view, cx| view.close_license_viewer(window, cx));
+
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        view.update(cx, |view, cx| view.open_file_rename("notes.md".to_string(), window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "rename drops the picker");
+        assert!(window.try_find("file-rename-dialog").is_some());
+        view.update(cx, |view, cx| view.cancel_file_rename(window, cx));
+
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        view.update(cx, |view, cx| {
+            view.open_full_access_confirm(
+                vtcode_desktop_protocol::SessionOptionsSelectParams {
+                    permission_mode: Some(vtcode_desktop_protocol::PermissionMode::FullAccess),
+                    ..Default::default()
+                },
+                window,
+                cx,
+            )
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "full-access confirm drops the picker");
+        assert!(window.try_find("full-access-confirm-dialog").is_some());
+        view.update(cx, |view, cx| view.cancel_full_access_confirm(window, cx));
+
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+        view.update(cx, |view, cx| view.open_file_preview_overlay("notes.md".to_string(), window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "file preview drops the picker");
+        assert!(window.try_find("file-preview").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn new_session_action_pops_an_open_panel(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
@@ -472,6 +914,30 @@ fn new_session_action_pops_an_open_panel(cx: &mut TestAppContext) {
             view.read(cx).current_route() == Route::Workspace,
             "starting a thread leaves the panel for the workspace"
         );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn file_rename_traps_tab_across_input_and_actions(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.files = vec![FileEntry {
+            rel_path: "README.md".into(),
+            depth: 0,
+            is_dir: false,
+        }];
+        view.file_directory_paths = std::sync::Arc::new(Default::default());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_rename("README.md".to_string(), window, cx));
+        window.render_frame(cx);
+        // A non-blank name enables commit, so all three stops participate.
+        window.input("Renamed.md", cx);
+        window.render_frame(cx);
+        assert_tab_trapped_within_dialog(window, "file-rename-input", "file-rename-commit", cx);
     })
     .unwrap();
 }

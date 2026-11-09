@@ -50,6 +50,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::interactive_list::SelectionInterrupted;
 
 use crate::agent::runloop::unified::state::CtrlCState;
+pub(crate) use config_persistence::ensure_provider_whitelisted;
 use interaction::{
     ModelSelectionListOutcome, select_decisions_probe_with_ratatui, select_model_with_ratatui_list,
     select_reasoning_with_ratatui, select_service_tier_with_ratatui,

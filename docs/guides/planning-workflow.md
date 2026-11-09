@@ -32,6 +32,14 @@ are retained for validation before fallback interviews: invalid drafts receive b
 drafts reach the same persistence and approval gate. Clarifying questions still wait for user input; exhausted repair
 attempts end with the validator's reasons instead of claiming readiness. During an approved handoff, the runtime creates
 and persists the `task_tracker` before handing off to the write-capable `build` agent or configured `auto` workflow.
+An explicit Plan-mode request, `/plan`, or Plan agent selection always requires a separate plan approval, even when
+full-auto or command auto-approval is enabled. Without an interactive approval surface, the plan waits for input.
+Resumed active plans also require approval because their original entry source may not be available.
+Submitting `/plan <task>` while planning is active starts a new planning request, retaining the old plan file on disk
+but clearing its active approval and recovery state. Use ordinary input to clarify or retry the current request.
+After approval, the plan stays visible in the TUI sidebar Plan section (wide terminals only) for the rest of the plan
+session: approval target, plan file path, and step titles. The viewer is read-only and session-scoped — a new `/plan`
+entry or session end clears it, while the plan file on disk is retained.
 
 The built-in `plan` agent's permission rules allow `read`, `request_user_input`, and `bash` so its wire catalog keeps
 `exec_command`, `code_search`, `grep_file`, and the interview tool visible. Read-only enforcement is not delegated to
@@ -251,7 +259,11 @@ explicitly selected. Auto does not receive broader authority, larger blocked- ca
 path, verification, budget, or recovery safeguards.
 
 The approval overlay shows a compact synopsis so its choices remain visible, while the complete plan markdown is
-appended to the scrollable TUI transcript and remains available from the persisted plan file. The queued implementation
+appended to the scrollable TUI transcript and remains available from the persisted plan file. On desktop the same
+markdown travels with the approval request: the panel offers Show full plan inline plus an Open in inspector shortcut
+to a transient Plan tab that leaves the rail when the approval resolves. Edit plan signals the service to open its
+configured external editor (the TUI Ctrl+G equivalent) and keeps the panel locked on an editing state until the
+edited approval is re-shown. The queued implementation
 turn revalidates the handoff, exits any stale planning gate, and refreshes the selected agent's permission snapshot
 before tools are exposed. Mouse-wheel events outside the floating overlay are passed through to the transcript, so the
 full plan can be reviewed without dismissing the approval gate. Approval also distills the plan's numbered and checkbox
@@ -355,11 +367,11 @@ checkpoint persistence.
 
 On exhaustion, a runtime-generated interview offers these choices without another model response:
 
-| Choice | Result |
-| --- | --- |
-| Retry from retained evidence | One explicitly requested synthesis cycle; research stays closed. |
-| Add clarification | Free text revises the retained plan and starts a bounded cycle. |
-| Choose another model | The existing picker opens; synthesis waits for an explicit selection. |
+| Choice                       | Result                                                                |
+| ---------------------------- | --------------------------------------------------------------------- |
+| Retry from retained evidence | One explicitly requested synthesis cycle; research stays closed.      |
+| Add clarification            | Free text revises the retained plan and starts a bounded cycle.       |
+| Choose another model         | The existing picker opens; synthesis waits for an explicit selection. |
 
 No option submits automatically. Dismissal leaves planning idle and resumable. A genuine clarifying question may pause
 before exhaustion. Headless or unavailable interviews produce a structured `planning.awaiting_input` diagnostic with

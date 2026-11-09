@@ -29,6 +29,23 @@ class ConfigReferenceTests(unittest.TestCase):
             self.assertIn("| `example` |", output.read_text())
             self.assertIn(str(output), report.call_args.args[0])
 
+    def test_home_paths_render_portably_on_both_sides_of_the_prefix(self):
+        home = "/home/alice"
+        self.assertEqual(module.portable_default("/home/alice/.cache/vtcode", home), "~/.cache/vtcode")
+        self.assertEqual(module.portable_default("/home/alice", home), "~")
+        # A sibling directory sharing the prefix text is not under home.
+        self.assertEqual(module.portable_default("/home/alice2/x", home), "/home/alice2/x")
+        self.assertEqual(module.portable_default(".vtcode/bin", home), ".vtcode/bin")
+        self.assertEqual(
+            module.portable_default({"dirs": ["/home/alice/bin", "/opt/bin"], "n": 3}, home),
+            {"dirs": ["~/bin", "/opt/bin"], "n": 3},
+        )
+
+    def test_format_default_never_emits_the_generating_home(self):
+        rendered = module.format_default(str(Path.home() / ".local" / "state"))
+        self.assertNotIn(str(Path.home()), rendered)
+        self.assertIn("~/.local/state", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

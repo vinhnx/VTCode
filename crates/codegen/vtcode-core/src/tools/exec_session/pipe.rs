@@ -10,6 +10,7 @@ pub(crate) struct PipeSessionRecord {
     exit_task: Mutex<Option<JoinHandle<()>>>,
     activity_tx: watch::Sender<u64>,
     spool: PipeSpoolState,
+    pub(crate) monitor: Arc<ParkingMutex<Option<MonitorState>>>,
 }
 
 pub(crate) struct PipeSpoolState {
@@ -47,6 +48,7 @@ impl PipeSessionRecord {
         exit_task: JoinHandle<()>,
         activity_tx: watch::Sender<u64>,
         spool: PipeSpoolState,
+        monitor: Arc<ParkingMutex<Option<MonitorState>>>,
     ) -> Self {
         Self {
             metadata,
@@ -56,6 +58,7 @@ impl PipeSessionRecord {
             exit_task: Mutex::new(Some(exit_task)),
             activity_tx,
             spool,
+            monitor,
         }
     }
 }
@@ -167,6 +170,8 @@ impl PipeSessionManager {
         let spool_finished_for_task = Arc::clone(&spool_finished);
         let spool_integrity = Arc::new(ParkingMutex::new(None));
         let spool_integrity_for_task = Arc::clone(&spool_integrity);
+        let monitor = Arc::new(ParkingMutex::new(None::<MonitorState>));
+        let monitor_for_task = Arc::clone(&monitor);
         let output_task = tokio::spawn(async move {
             let mut spool_file = spool_file.map(tokio::fs::File::from_std);
             if spool_file.is_none() {
@@ -178,14 +183,15 @@ impl PipeSessionManager {
             let mut spool_hasher = Sha256::new();
             let mut spool_byte_count = 0_u64;
             let mut spool_lines = SpoolLineCounter::default();
+            // Reads can split a multibyte character; decode across chunk boundaries.
+            let mut utf8_decoder = vtcode_commons::Utf8StreamDecoder::new();
             loop {
                 match tokio::time::timeout(tokio::time::Duration::from_millis(15), output_rx.recv()).await {
                     Ok(Some(chunk)) => {
-                        // Keep the decoded text as a `Cow<str>` so that the
-                        // common case (valid UTF-8) borrows `chunk` with zero
-                        // allocation. `.into_owned()` would force a String copy
-                        // on every chunk even when the bytes are already valid.
-                        let text = String::from_utf8_lossy(&chunk);
+                        // `push_cow` borrows `chunk` with zero allocation in the
+                        // common case (nothing pending, valid UTF-8) and only
+                        // buffers a character split across reads.
+                        let text = utf8_decoder.push_cow(&chunk);
                         if let Some(file) = spool_file.as_mut() {
                             let sanitized = spool_redactor.push(&text);
                             if !sanitized.is_empty() {
@@ -200,6 +206,12 @@ impl PipeSessionManager {
                             }
                         }
                         output_clone.append(&text, chunk.len()).await;
+                        {
+                            let mut guard = monitor_for_task.lock();
+                            if let Some(state) = guard.as_mut() {
+                                state.push_text(&text);
+                            }
+                        }
                         output_activity_tx.send_modify(|version| *version += 1);
                     }
                     Ok(None) => break,
@@ -209,8 +221,25 @@ impl PipeSessionManager {
                     Err(_) => continue,
                 }
             }
+            // A truncated final character becomes one U+FFFD rather than vanishing.
+            // Its bytes were already counted when they arrived, hence a raw count of 0.
+            let tail = utf8_decoder.finish();
+            if !tail.is_empty() {
+                output_clone.append(&tail, 0).await;
+                output_activity_tx.send_modify(|version| *version += 1);
+            }
+            {
+                let mut guard = monitor_for_task.lock();
+                if let Some(state) = guard.as_mut() {
+                    if !tail.is_empty() {
+                        state.push_text(&tail);
+                    }
+                    state.flush();
+                }
+            }
             if let Some(file) = spool_file.as_mut() {
-                let sanitized = spool_redactor.finish();
+                let mut sanitized = spool_redactor.push(&tail);
+                sanitized.push_str(&spool_redactor.finish());
                 let write_failed = !sanitized.is_empty() && file.write_all(sanitized.as_bytes()).await.is_err();
                 if !write_failed && !sanitized.is_empty() {
                     spool_hasher.update(sanitized.as_bytes());
@@ -252,6 +281,7 @@ impl PipeSessionManager {
                 finished: spool_finished,
                 integrity: spool_integrity,
             },
+            monitor,
         ));
 
         sessions.insert(session_id, record);
@@ -339,8 +369,23 @@ impl PipeSessionManager {
 
     pub(crate) async fn force_terminate_session(&self, session_id: &str) -> Result<()> {
         let record = self.session_record(session_id).await?;
-        record.handle.terminate_process();
-        Ok(())
+        record
+            .handle
+            .try_terminate_process()
+            .with_context(|| format!("failed to force terminate exec session '{session_id}'"))?;
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                if record.handle.has_observed_exit() {
+                    return Ok(());
+                }
+                if record.handle.has_exited() {
+                    bail!("exec session '{session_id}' child wait failed; exit was not confirmed");
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .map_err(|_elapsed| anyhow!("exec session '{session_id}' child exit was not confirmed before timeout"))?
     }
 
     pub(crate) async fn close_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
@@ -428,11 +473,8 @@ impl PipeSessionManager {
         ensure_path_within_workspace(candidate, &self.workspace_root).map(|_| ())
     }
 
+    /// Delegates to the shared contract so pipe and PTY sessions cannot drift.
     fn format_working_dir(&self, path: &Path) -> String {
-        match path.strip_prefix(&self.workspace_root) {
-            Ok(relative) if relative.as_os_str().is_empty() => ".".into(),
-            Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
-            Err(_) => path.to_string_lossy().into_owned(),
-        }
+        vtcode_commons::workspace_relative_slash(&self.workspace_root, path)
     }
 }

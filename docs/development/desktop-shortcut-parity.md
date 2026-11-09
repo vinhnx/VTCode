@@ -35,11 +35,11 @@ word jump + `shift` select variants, `tab`/`shift+tab` indent/outdent,
 `cmd+[/]` outdent/indent, `enter`/`shift-enter`/`secondary-enter`.
 
 Propagated (reach desktop bindings): `escape` (nothing to dismiss),
-`cmd/ctrl+.` (`ToggleCodeActions` unhandled), `cmd/ctrl+f` + `cmd+shift+f`
-+ `ctrl+h` (`Search`/`Replace` propagate when not `searchable`).
+`cmd/ctrl+.` (`ToggleCodeActions` unhandled), `cmd/ctrl+f`, `cmd+shift+f`,
+and `ctrl+h` (`Search`/`Replace` propagate when not `searchable`).
 
-Free chords (unbound in `Input`, available app-side): `ctrl+b/d/g/j/k/l/m/n/o/p/q/r/s/t/u/w`,
-`alt+t/u/l/c/backquote`, `alt+\`, `alt+enter`, `alt+up/down`, `ctrl+enter`.
+Free chords (unbound in `Input`, available app-side): `ctrl+b/d/g/j/k/l/m/n/o/p/q/r/t/u/w`,
+`alt+t/u/l/c/backquote`, `alt+\`, `alt+enter`, `alt+up/down`, `ctrl+enter` (`ctrl-s` now cycles history scope).
 
 ## Parity matrix
 
@@ -50,8 +50,8 @@ difference; **oos** = out of scope (terminal-only).
 ### Composer submit / queue / newline
 
 | CLI | Desktop | Status |
-|---|---|---|
-| `Enter` submit, queue while running | `handle_composer_enter` + `enqueue_queued_submission` | done |
+| --- | --- | --- |
+| `Enter` submit, queue while running; scrolled + draft jumps to latest first | `handle_composer_enter` → `submit_or_jump_to_latest` + `enqueue_queued_submission` | done (`enter_with_draft_while_scrolled…` test) |
 | `Ctrl+Enter` batchable queue | `cmd-enter` → `QueueBatched` | done (fixed secondary-Enter fallthrough; `cmd_enter_keypress…` test) |
 | `Tab` accept suggestion first | `IndentInline` capture → suggestion accept, else focus-next | done |
 | `Shift+Enter` newline | Kit `Enter{shift}` inserts newline | native |
@@ -63,17 +63,19 @@ difference; **oos** = out of scope (terminal-only).
 ### History recall / picker
 
 | CLI | Desktop | Status |
-|---|---|---|
+| --- | --- | --- |
 | `Up/Down` single-line composer → history prev/next (live draft stashed) | `recall_history` via `MoveUp/Down` capture (single-visual-row gate, clamps, stash restore) | done (`history_recall_traverses…` test) |
 | `Ctrl+P/N` always traverse | `HistoryPrevious/Next` composer-context bindings | done (`ctrl_p_recalls_from_multiline…` test) |
-| `Ctrl+R`/`Ctrl+S` history picker | `ctrl-r` → `OpenPromptHistory` (toggle, draft-prefilter, `Enter` accept, `Esc` close, first-match preselect) | done (`ctrl_r_opens_prefiltered…` test) |
-| Picker cycle (`Tab`/`Shift+Tab`/`Ctrl+R`), `Ctrl+K/J/P/N` nav | Kit `Command`: `Up/Down/Enter/Esc`; arrows work, `Tab` falls to suggestion accept | partial |
-| Picker archived prompts + attachment restore | this-thread user echoes only, text-only | gap (needs protocol source) |
+| `Ctrl+R` history picker | `ctrl-r` → `OpenPromptHistory` (draft-prefilter, `Enter` accept, `Esc` close, first-match preselect); rows matched/ranked by the shared `vtcode_commons::prompt_history` nucleo ranker, so multi-token queries like `impl chg` span the phrase | done (`ctrl_r_opens_prefiltered…`, `history_search_matches_non_contiguous…` tests) |
+| History scope (Everywhere/Project/Session) + `Ctrl+S` cycle | fixed `ctrl-s` → `CycleHistoryScope` (opens when closed) + segmented switcher in the palette header; scope kept across opens | done (`ctrl_s_cycles_scope…`, `scope_switcher_click…` tests) |
+| Picker cycle (`Tab`/`Shift+Tab`), `Ctrl+R`, `Ctrl+P/N` nav | Kit `Command` `Up/Down/Enter/Esc` + `HistoryPrevious/Next` capture; `Tab`/`Shift+Tab` and a repeat `Ctrl+R` cycle matches; `Ctrl+G` cancels and restores the draft | done (`ctrl_r_cycles…`, `tab_cycles_history…`, `ctrl_g_cancels…` tests) |
+| Picker cross-thread prompts (`Everyone/Project/Session` scopes, 200 cap) | `session/recent-prompts` merged under the live thread ("Other threads" section); each section ranked by the shared ranker and deduped against the live thread; one merged 200-row budget split live-thread-first so recents cannot be starved or double the budget; silent on older services | done (`prompt_history` tests) |
+| Picker attachment restore | text-only | gap (needs protocol surface) |
 
 ### Line editing / readline
 
 | CLI | Desktop | Status |
-|---|---|---|
+| --- | --- | --- |
 | `Ctrl+A/E` line edges; `Cmd+Left/Right`; `Home/End`; `Cmd+Up/Down` buffer edges | Kit bindings | native |
 | `Alt+Left/Right` word jump; `Alt+Backspace/Delete` word delete | Kit bindings | native |
 | `Ctrl+Z/Y` undo/redo | Kit bindings | native |
@@ -88,7 +90,7 @@ difference; **oos** = out of scope (terminal-only).
 ### Agent / mode / quick commands
 
 | CLI | Desktop | Status |
-|---|---|---|
+| --- | --- | --- |
 | `Shift+Tab` cycle agent | `OutdentInline` capture → suggestion-up when open, else `cycle_primary_agent` (mode-switch lock + busy notice); multiline drafts keep Kit's native outdent (CLI always cycles) | done (`shift_tab_cycles…`, `shift_tab_on_multiline…` tests) |
 | `?` shortcut overlay | Settings→Shortcuts page | delta |
 | `@` file/subagent, `/` slash triggers | triggers + slash routing + suggestion keyboard | done |
@@ -100,7 +102,7 @@ difference; **oos** = out of scope (terminal-only).
 ### Cancel / Escape
 
 | CLI | Desktop | Status |
-|---|---|---|
+| --- | --- | --- |
 | `Ctrl+C` interrupt, no auto-resume | `cmd+.` → `CancelRun` (falls through from `Input`) | done (`keyboard_shortcuts_share_session_and_cancellation_guards`) |
 | `Esc` dismiss topmost, restore focus | `dismiss_overlay` chain + `*_return_focus` | done (overlay/palette/preview tests) |
 | `Esc` from transcript → composer | `transcript_focus` branch in `dismiss_overlay` | done (`transcript_arrows…` test) |
@@ -109,12 +111,22 @@ difference; **oos** = out of scope (terminal-only).
 ### Transcript / review / scroll
 
 | CLI | Desktop | Status |
-|---|---|---|
+| --- | --- | --- |
 | Message-list `Up/Down` row nav | `VTCodeTranscript` context: highlight + reveal + `scroll_to_item`, clamps, skips hidden rows | done (`transcript_arrows…`, `transcript_nav_skips…` tests) |
 | Review route vim keys (`/`, `n/N`, `j/k`, `g/G`, `r`, `v`, `q`) | review route + `F7` nav only | gap |
 | `PgUp/PgDn` scroll; `Ctrl+End` jump-to-last-change | scroll regions exist; no jump target | gap |
 | `Ctrl+L` clear screen | no transcript-clear surface | gap (needs product decision) |
 | `F8` diagnostics, `Alt+G` task panel, `Alt+S` subprocesses | inspector/terminal/output tabs exist | gap (needs command bindings) |
+
+### Threads / panels / experimental vim
+
+| CLI | Desktop | Status |
+| --- | --- | --- |
+| Thread-list keyboard nav | `VTCodeSessions` context: `Up/Down/Home/End` highlight + focus rail, `Enter` loads via the row-click path (running-confirm guards shared) | done (`session_arrows…`, `session_enter…`, `session_click…` tests) |
+| Vim list motions | `j/k/g/G` in threads + transcript, gated on the experimental Settings toggle (off by default, persisted) | done (`vim_motions…`, `vim_keys_are_inert…` tests) |
+| Vim tab motions | `h/l` cycle the inspector + settings rails under the same gate | done (`vim_hl…` test) |
+| Vim `i` / `/` | focus composer / open conversation search under the same gate; typing in inputs never triggers vim actions | done (`vim_i…`, `vim_keys_typed…` tests) |
+| Reset keyboard config | Reset restores shortcut defaults (staged, Save persists) and turns the vim toggle off (immediate, no draft) | done (`vim_toggle_persists…` test) |
 
 ## Shipped in this increment
 
@@ -126,7 +138,8 @@ difference; **oos** = out of scope (terminal-only).
 
 ## Remaining gaps (ranked)
 
-1. Medium: palette `PgUp/PgDn`/folder-ref/digits; review vim keymap.
+1. Medium: palette `PgUp/PgDn`/folder-ref/digits; review-route vim keymap (the desktop vim layer covers
+   threads/transcript/tabs only — review stays F7-only).
 2. Medium: transpose/case edits (needs Kit primitives or undo-safe surgery).
 3. Low: `!`/`#` triggers verification; `Ctrl+L`/`F8` product decisions; jump-to-last-change.
 4. Service gaps (protocol work): archived-prompt history, rewind, external-editor round-trip.

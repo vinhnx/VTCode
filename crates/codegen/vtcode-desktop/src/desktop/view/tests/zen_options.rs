@@ -18,8 +18,8 @@ fn zen_model_button_opens_options_and_commits_effort(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
-        let track = window.find("slider-bar-container").bounds();
-        window.click_at("slider-bar-container", point(track.size.width - px(2.), track.size.height / 2.), cx);
+        // Levels render highest-first; index 2 is high in the low/medium/high fixture.
+        window.click(("effort-label", 2usize), cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -264,6 +264,283 @@ fn zen_drag_strip_restores_window_dragging_in_windowed_zen(cx: &mut TestAppConte
         assert!(!window.is_fullscreen(), "dispatch must exit full screen");
         assert!(window.try_find("title-bar").is_some(), "normal mode restores the toolbar");
         assert!(window.try_find("zen-drag-strip").is_none(), "normal mode has no zen strip");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_speed_suffix_renders_quiet_text_and_restores_badge_on_exit(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.configuration = Some(runtime_options_config());
+            view.zen_mode = true;
+        });
+        window.render_frame(cx);
+        // The accessible contract is identical in both modes: the model
+        // summary and the speed readout keep their names.
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
+        let quiet = window.find("composer-model-speed");
+        assert_eq!(quiet.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(quiet.label(), Some("Processing speed: Ultrafast"));
+        let zen_width = quiet.bounds().size.width;
+        let effort_width = window.find("composer-model-effort").bounds().size.width;
+
+        // Exiting zen restores the filled badge: same readout, louder paint.
+        // The badge carries pill padding plus an icon around the same word,
+        // so it must measure wider than the quiet text.
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode);
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
+        let badge = window.find("composer-model-speed");
+        assert_eq!(badge.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(badge.label(), Some("Processing speed: Ultrafast"));
+        let badge_width = badge.bounds().size.width;
+        assert!(
+            badge_width > zen_width,
+            "the filled badge must measure wider than zen quiet text: badge={badge_width:?} quiet={zen_width:?}"
+        );
+        // Control: the effort suffix is quiet in both modes, so its width
+        // must not move across the toggle.
+        assert_eq!(
+            window.find("composer-model-effort").bounds().size.width,
+            effort_width,
+            "effort keeps one paint across the toggle"
+        );
+
+        // Re-entering zen restores the quiet text exactly.
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+        assert_eq!(window.find("composer-model-speed").bounds().size.width, zen_width);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_option_cluster_orders_attach_model_mode_policy_before_send(cx: &mut TestAppContext) {
+    use gpui_kit::component::theme::Theme;
+
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.configuration = Some({
+            let mut configuration = runtime_options_config();
+            configuration.provider = "anthropic".into();
+            // Asymmetric extreme: a long name forces truncation pressure
+            // while the mode/policy siblings keep their short labels.
+            configuration.model = "claude-sonnet-5-extended-thinking-marathon".into();
+            configuration
+        });
+        view.zen_mode = true;
+    });
+
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let attach = window.find("attach-files").bounds();
+            let model = window.find("pick-model").bounds();
+            let mode = window.find("composer-mode").bounds();
+            let policy = window.find("composer-policy").bounds();
+            let send = window.find("send-prompt").bounds();
+            assert!(
+                attach.right() <= model.left() && model.right() <= mode.left() && mode.right() <= policy.left(),
+                "cluster reads attach, model, mode, policy left to right at {base_size}px: attach={attach:?} model={model:?} mode={mode:?} policy={policy:?}"
+            );
+            for (name, button) in [("attach", attach), ("mode", mode), ("policy", policy), ("send", send)] {
+                let drift = (button.center().y - model.center().y).abs();
+                assert!(
+                    drift <= px(1.),
+                    "cluster shares one center line at {base_size}px: {name} drifts {drift:?}"
+                );
+            }
+            let cluster = window.find("zen-composer-context").bounds();
+            assert!(
+                cluster.right() <= send.left(),
+                "the option cluster must end before the send action at {base_size}px: {cluster:?} vs {send:?}"
+            );
+        })
+        .unwrap();
+    }
+
+    // Without a processing tier the speed suffix disappears but the cluster
+    // order still holds.
+    view.update(cx, |view, _| {
+        let mut configuration = runtime_options_config();
+        configuration.provider = "anthropic".into();
+        configuration.model = "claude-sonnet-5".into();
+        let options = configuration.session_options.as_mut().unwrap();
+        options.speed = None;
+        options.fast_mode_enabled = false;
+        view.configuration = Some(configuration);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("composer-model-speed").is_none());
+        let attach = window.find("attach-files").bounds();
+        let model = window.find("pick-model").bounds();
+        let mode = window.find("composer-mode").bounds();
+        let policy = window.find("composer-policy").bounds();
+        assert!(
+            attach.right() <= model.left() && model.right() <= mode.left() && mode.right() <= policy.left(),
+            "cluster order holds without a speed suffix: attach={attach:?} model={model:?} mode={mode:?} policy={policy:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_toggle_round_trips_through_command_palette(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!view.read(cx).zen_mode);
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        let toggle = palette_action_id(&super::super::PaletteAction::ToggleZenMode);
+        assert!(window.try_find(toggle).is_some(), "zen toggle row renders in the palette");
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("Toggle Zen", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode, "palette entry enters zen");
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
+
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("Toggle Zen", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode, "palette entry exits zen");
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_empty_state_matches_welcome_title_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        // No workspace: both empty states render the identical greeting text,
+        // so any height difference is the title size, not the copy.
+        view.workspace = None;
+        view.welcome_period = WelcomePeriod::Morning;
+        view.welcome_copy_index = 0;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        // Suite baseline is normal mode: record the welcome title height.
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_some());
+        let normal_title = window.find("welcome-prompt").bounds();
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+        let zen_title = window.find("zen-welcome-prompt").bounds();
+        assert!(
+            (zen_title.size.height - normal_title.size.height).abs() <= px(1.),
+            "zen greeting keeps the welcome title size: zen={zen_title:?} normal={normal_title:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_toggle_persists_and_relaunch_restores_both_modes(cx: &mut TestAppContext) {
+    // One shared preferences file across simulated relaunches; the fresh
+    // windows skip the normal-mode test baseline so construction restore is
+    // observed untouched.
+    let path = isolate_preferences();
+    let (window, view) = open_desktop_with_preferences_path(cx, path.clone());
+
+    cx.update_window(window, |_, window, cx| {
+        assert!(!view.read(cx).zen_mode, "suite baseline starts in normal mode");
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+    })
+    .unwrap();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().zen_mode,
+        Some(true),
+        "the toggle persists the explicit choice"
+    );
+    let (_zen_window, zen_view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., path.clone(), false);
+    cx.update(|cx| assert!(zen_view.read(cx).zen_mode, "relaunch restores zen"));
+
+    cx.update_window(window, |_, window, cx| {
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode);
+    })
+    .unwrap();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().zen_mode,
+        Some(false),
+        "the toggle persists the way back too"
+    );
+    let (_normal_window, normal_view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., path, false);
+    cx.update(|cx| assert!(!normal_view.read(cx).zen_mode, "relaunch restores normal mode"));
+}
+
+#[gpui_kit::test]
+fn zen_attach_button_opens_the_picker_with_workspace_and_disables_without(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    // Without a workspace the zen attach is a no-op, like normal mode.
+    view.update(cx, |view, _| {
+        view.workspace = None;
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "disabled attach opens nothing");
+    })
+    .unwrap();
+    // With a workspace it opens the same tabbed picker.
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-trap").is_some(), "zen attach opens the picker");
+        assert!(view.read(cx).attachment_picker.is_some());
     })
     .unwrap();
 }

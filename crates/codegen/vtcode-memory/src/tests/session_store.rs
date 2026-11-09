@@ -31,6 +31,7 @@ fn event_log_batches_appends_until_turn_boundary() {
     assert_eq!(fs::metadata(&events_path).expect("metadata").len(), 0);
 
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),
@@ -93,6 +94,37 @@ fn reopening_after_drop_scans_bytes_flushed_without_metadata() {
 }
 
 #[test]
+fn reopening_unterminated_tail_keeps_new_events_separate() {
+    for (session, tail, expected_count) in [("partial-tail", "{\"schema_version\":", 1), ("complete-tail", "", 2)] {
+        let dir = TempDir::new().expect("tempdir");
+        drop(open(dir.path(), session, DEFAULT_MAX_EVENTS).expect("create session"));
+        let path = sessions_root(dir.path()).join(session).join("events.jsonl");
+        let old = if tail.is_empty() {
+            serde_json::to_string(&VersionedThreadEvent::new(ThreadEvent::ThreadStarted(ThreadStartedEvent {
+                thread_id: "old".to_string(),
+            })))
+            .expect("serialize event")
+        } else {
+            tail.to_string()
+        };
+        fs::write(&path, &old).expect("simulate interrupted record");
+        {
+            let log = open(dir.path(), session, DEFAULT_MAX_EVENTS).expect("reopen");
+            log.append(&ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "new".to_string() }))
+                .expect("append");
+            log.flush().expect("flush");
+        }
+        let bytes = fs::read_to_string(&path).expect("read log");
+        assert!(bytes.starts_with(&format!("{old}\n")));
+        let reopened = open(dir.path(), session, DEFAULT_MAX_EVENTS).expect("reopen after append");
+        assert_eq!(reopened.event_count(), expected_count);
+        let last = bytes.lines().last().expect("new event");
+        let event: VersionedThreadEvent = serde_json::from_str(last).expect("new event remains valid");
+        assert!(matches!(event.into_event(), ThreadEvent::ThreadStarted(event) if event.thread_id == "new"));
+    }
+}
+
+#[test]
 fn reopening_mid_turn_preserves_state_for_completion() {
     let dir = TempDir::new().expect("tempdir");
     {
@@ -105,6 +137,7 @@ fn reopening_mid_turn_preserves_state_for_completion() {
     let reopened = open(dir.path(), "sess-mid-turn-resume", DEFAULT_MAX_EVENTS).expect("reopen");
     reopened
         .append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
@@ -223,7 +256,7 @@ fn exclusive_open_fails_when_held_elsewhere_and_recovers_on_release() {
         "must fail closed with SessionBusy, got: {err}"
     );
     assert!(err.to_string().contains("sess-busy"), "must name the session: {err}");
-    assert!(err.to_string().contains("--session-id"), "must name the remedy: {err}");
+    assert!(err.to_string().contains("--fork-session"), "must name the remedy: {err}");
     assert_eq!(
         fs::read(&manifest_path).expect("manifest"),
         manifest_before,

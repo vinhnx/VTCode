@@ -33,7 +33,8 @@ repair this retained draft against validator-owned defects. Artifact validation 
 
 ## Input and model choice
 
-The runtime creates the recovery interview without requiring another successful model response. Retry and clarification
+The runtime creates the recovery interview without requiring another successful model response, including when normal
+plan validation exhausts its repair attempts. Retry and clarification
 start an explicit cycle using saved evidence with research closed. Model choice opens the existing picker; cancellation
 leaves the plan idle. No option is submitted automatically, and none is plan approval. Recovered plans require a
 separate explicit approval even when confirmation bypass is configured. Headless sessions receive the

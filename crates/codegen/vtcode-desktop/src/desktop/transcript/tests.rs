@@ -1,8 +1,18 @@
-use super::{ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, Transcript, TranscriptItem, TranscriptRole};
+use super::{
+    ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, ToolCategory, ToolCategoryCounts, Transcript,
+    TranscriptItem, TranscriptRole, UserAttachment, describe_activity_verbs, tool_row_gist,
+};
+use vtcode_exec_events::{
+    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, ErrorItem, FileChangeItem,
+    HarnessEventItem, HarnessEventKind, McpToolCallItem, PatchApplyStatus, PlanItem, ReasoningItem, ThreadItemDetails,
+    ToolCallStatus, ToolInvocationItem, ToolOutputItem, WebSearchItem,
+};
 
 fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
     TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
 }
+
+mod turn_tests;
 
 #[test]
 fn tool_and_diff_rows_skip_unused_markdown_projections() {
@@ -280,6 +290,11 @@ fn output_only_updates_preserve_transcript_geometry_and_existing_capture() {
     assert!(transcript.take_layout_changes().is_empty());
     let output = transcript.get(0).and_then(|row| row.output.as_ref()).map(ToString::to_string);
     assert_eq!(output.as_deref(), Some("updated output"));
+
+    transcript.toggle_tool("1");
+    let _expanded_layout = transcript.take_layout_changes();
+    transcript.set_output("1", Some("a longer\noutput".into()));
+    assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::RemeasureItems(0..1)]);
 }
 
 #[test]
@@ -492,4 +507,463 @@ fn append_text_sanitizes_markup_across_delta_boundaries() {
     assert_eq!(row.text.as_str(), "<a href=\"u\">z</a>");
     assert_eq!(row.markdown.as_str(), "z");
     assert_eq!(row.accessibility_text.as_str(), "z");
+}
+
+#[test]
+fn consecutive_full_remeasures_collapse_to_one_probe() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "assistant", "A **stable** response."));
+    let _initial_layout = transcript.take_layout_changes();
+
+    // Theme browsing while the transcript is unmounted: twenty clicks
+    // enqueue twenty bursts, but the drain must carry one full probe so
+    // the consumer remeasures rows once instead of once per click.
+    for _ in 0..20 {
+        transcript.remeasure();
+    }
+    assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::Remeasure]);
+
+    // Interleaved work breaks the run: a row pushed between two probes
+    // keeps both probes, since the second measures newer state.
+    transcript.remeasure();
+    transcript.push(item(2, "assistant", "Another response."));
+    transcript.remeasure();
+    assert_eq!(
+        transcript.take_layout_changes(),
+        vec![
+            super::TranscriptLayoutChange::Remeasure,
+            super::TranscriptLayoutChange::Splice { range: 1..1, count: 1 },
+            super::TranscriptLayoutChange::Remeasure,
+        ]
+    );
+}
+
+#[test]
+fn diagnostic_notices_toggle_details_while_plain_notices_stay_fixed() {
+    use super::NoticeSeverity;
+    let mut transcript = Transcript::default();
+    transcript.push(TranscriptItem::diagnostic_notice(
+        "diag-1".into(),
+        "Tool 'task_tracker' failed.".into(),
+        "Likely cause: duplicate create.".to_string(),
+        NoticeSeverity::Warning,
+    ));
+    transcript.push(TranscriptItem::notice(
+        "plain-1".into(),
+        "Run status".into(),
+        "Turn ended.".to_string(),
+        NoticeSeverity::Info,
+    ));
+
+    transcript.toggle_notice("diag-1");
+    assert!(transcript.get(0).unwrap().expanded);
+    assert!(!transcript.get(1).unwrap().expanded, "plain notices have no details toggle");
+
+    let before = transcript.revision();
+    transcript.toggle_notice("plain-1");
+    transcript.toggle_notice("missing");
+    assert_eq!(transcript.revision(), before, "no-op toggles must not bump");
+
+    // A streaming refresh keeps expansion and swaps the payload.
+    transcript.upsert(TranscriptItem::diagnostic_notice(
+        "diag-1".into(),
+        "Tool 'task_tracker' failed.".into(),
+        "Likely cause: duplicate create. Attempts: 2.".to_string(),
+        NoticeSeverity::Warning,
+    ));
+    let stored = transcript.get(0).unwrap();
+    assert!(stored.expanded, "streaming updates preserve expansion");
+    assert!(stored.text.contains("Attempts: 2"), "streaming updates refresh the details");
+
+    // Boundary: empty evidence offers no toggle.
+    transcript.push(TranscriptItem::diagnostic_notice(
+        "diag-empty".into(),
+        "Tool 'noop' failed.".into(),
+        "   ".to_string(),
+        NoticeSeverity::Error,
+    ));
+    let before = transcript.revision();
+    transcript.toggle_notice("diag-empty");
+    assert_eq!(transcript.revision(), before, "empty evidence must not toggle");
+    assert!(!transcript.get(2).unwrap().expanded);
+}
+
+fn invocation(name: &str) -> ThreadItemDetails {
+    ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+        tool_name: name.into(),
+        arguments: None,
+        tool_call_id: None,
+        status: ToolCallStatus::Completed,
+        outcome: None,
+    }))
+}
+
+fn invocation_with_action(name: &str, action: &str) -> ThreadItemDetails {
+    ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+        tool_name: name.into(),
+        arguments: Some(serde_json::json!({"action": action})),
+        tool_call_id: None,
+        status: ToolCallStatus::Completed,
+        outcome: None,
+    }))
+}
+
+#[test]
+fn tool_category_mirrors_service_labels_at_summary_granularity() {
+    use ToolCategory::{Edit, Other, Read, Run, Search, Tracker};
+    let classified = [
+        ("read_file", Read),
+        ("read_pty_session", Read),
+        ("web_fetch", Read),
+        ("fetch_url", Read),
+        ("defuddle_fetch", Read),
+        ("fetch", Read),
+        ("get_errors", Read),
+        ("list_files", Read),
+        ("edit_file", Edit),
+        ("write_file", Edit),
+        ("create_file", Edit),
+        ("delete_file", Edit),
+        ("apply_patch", Edit),
+        ("search_replace", Edit),
+        ("exec_command", Run),
+        ("code_search", Search),
+        ("grep", Search),
+        ("grep_file", Search),
+        ("task_tracker", Tracker),
+        ("request_user_input", Other),
+        ("some_future_tool", Other),
+    ];
+    for (name, expected) in classified {
+        assert_eq!(ToolCategory::from_details(&invocation(name)), Some(expected), "tool {name}");
+    }
+    // MCP prefixes normalize to the suffixed builtin, matching the service.
+    assert_eq!(ToolCategory::from_details(&invocation("mcp__github__read_file")), Some(Read));
+    assert_eq!(ToolCategory::from_details(&invocation("mcp::github::exec_command")), Some(Run));
+    assert_eq!(ToolCategory::from_details(&invocation("mcp__github__list_issues")), Some(Other));
+    // Unified tools dispatch on their action arg; a missing action reads
+    // (file) or runs (exec), and matching is case-insensitive.
+    assert_eq!(ToolCategory::from_details(&invocation("file_operation_internal")), Some(Read));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("file_operation_internal", "edit")), Some(Edit));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("file_operation_internal", "DELETE")), Some(Edit));
+    assert_eq!(
+        ToolCategory::from_details(&invocation_with_action("file_operation_internal", "frobnicate")),
+        Some(Other)
+    );
+    assert_eq!(ToolCategory::from_details(&invocation("command_session_internal")), Some(Run));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("command_session_internal", "poll")), Some(Read));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("command_session_internal", "wait")), Some(Other));
+}
+
+#[test]
+fn tool_category_covers_every_event_variant() {
+    assert_eq!(
+        ToolCategory::from_details(&ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "cargo check".into(),
+            arguments: None,
+            aggregated_output: String::new(),
+            exit_code: None,
+            status: CommandExecutionStatus::Completed,
+        }))),
+        Some(ToolCategory::Run)
+    );
+    assert_eq!(
+        ToolCategory::from_details(&ThreadItemDetails::WebSearch(Box::new(WebSearchItem {
+            query: "gpui".into(),
+            provider: None,
+            results: None,
+        }))),
+        Some(ToolCategory::Search)
+    );
+    for details in [
+        ThreadItemDetails::McpToolCall(Box::new(McpToolCallItem {
+            tool_name: "list_issues".into(),
+            arguments: None,
+            result: None,
+            status: None,
+        })),
+        ThreadItemDetails::Harness(Box::new(HarnessEventItem::new(HarnessEventKind::PlanningStarted))),
+        ThreadItemDetails::Error(ErrorItem { message: "boom".into() }),
+    ] {
+        assert_eq!(ToolCategory::from_details(&details), Some(ToolCategory::Other));
+    }
+    // Follow-up output keeps its invocation's category; non-tool rows carry none.
+    for details in [
+        ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
+            call_id: "call".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: "done".into(),
+            exit_code: None,
+            status: ToolCallStatus::Completed,
+            app_previews: Vec::new(),
+        })),
+        ThreadItemDetails::AgentMessage(AgentMessageItem { text: "hi".into() }),
+        ThreadItemDetails::Plan(PlanItem { text: "plan".into() }),
+        ThreadItemDetails::Reasoning(Box::new(ReasoningItem { diagnostic: None, text: "why".into(), stage: None })),
+        ThreadItemDetails::Decision(Box::new(DecisionItem {
+            summary: "s".into(),
+            rationale: "r".into(),
+            alternatives: Vec::new(),
+            evidence_ids: Vec::new(),
+        })),
+        ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+            diff_incomplete: None,
+            changes: Vec::new(),
+            status: PatchApplyStatus::Completed,
+            unified_diff: None,
+            additions: None,
+            deletions: None,
+        })),
+    ] {
+        assert_eq!(ToolCategory::from_details(&details), None);
+    }
+}
+
+#[test]
+fn activity_verbs_compose_in_fixed_order_with_english_plurals() {
+    assert_eq!(describe_activity_verbs(&ToolCategoryCounts::default()), None);
+    let mut other_only = ToolCategoryCounts::default();
+    other_only.add(ToolCategory::Other);
+    other_only.add(ToolCategory::Other);
+    assert_eq!(describe_activity_verbs(&other_only), None, "verb-less groups keep the count label");
+    assert!(!other_only.has_verbs());
+    // Asymmetric insertion: edits arrive before reads, but Read still leads.
+    let mut counts = ToolCategoryCounts::default();
+    assert!(!counts.has_verbs());
+    counts.add(ToolCategory::Edit);
+    counts.add(ToolCategory::Edit);
+    counts.add(ToolCategory::Read);
+    counts.add(ToolCategory::Run);
+    counts.add(ToolCategory::Search);
+    counts.add(ToolCategory::Search);
+    counts.add(ToolCategory::Other);
+    assert!(counts.has_verbs());
+    assert_eq!(
+        describe_activity_verbs(&counts).as_deref(),
+        Some("Read 1 file · Edited 2 files · Ran 1 command · Searched 2 queries · 1 other action")
+    );
+    let mut single = ToolCategoryCounts::default();
+    single.add(ToolCategory::Run);
+    single.add(ToolCategory::Other);
+    single.add(ToolCategory::Other);
+    assert_eq!(describe_activity_verbs(&single).as_deref(), Some("Ran 1 command · 2 other actions"));
+    // Tracker rows name their verb instead of collapsing into "other actions".
+    let mut tracker = ToolCategoryCounts::default();
+    assert!(!tracker.has_verbs());
+    tracker.add(ToolCategory::Tracker);
+    tracker.add(ToolCategory::Tracker);
+    assert!(tracker.has_verbs());
+    assert_eq!(describe_activity_verbs(&tracker).as_deref(), Some("Updated 2 task lists"));
+}
+
+fn invocation_item(name: &str, arguments: Option<serde_json::Value>) -> ToolInvocationItem {
+    ToolInvocationItem {
+        tool_name: name.into(),
+        arguments,
+        tool_call_id: None,
+        status: ToolCallStatus::Completed,
+        outcome: None,
+    }
+}
+
+fn gist(name: &str, arguments: serde_json::Value) -> String {
+    tool_row_gist(&invocation_item(name, Some(arguments)))
+}
+
+#[test]
+fn tool_row_gist_verbs_file_objects_with_basenames() {
+    use serde_json::json;
+    assert_eq!(gist("read_file", json!({"path": "src/lib/Cargo.toml"})), "Read Cargo.toml");
+    assert_eq!(gist("edit_file", json!({"file_path": "crates/x/main.rs"})), "Edited main.rs");
+    assert_eq!(gist("write_file", json!({"filepath": "notes.txt"})), "Edited notes.txt");
+    assert_eq!(gist("delete_file", json!({"target_path": "/tmp/stale.log"})), "Edited stale.log");
+    // Trailing separators resolve to the last real segment; separators alone
+    // carry no name and fall back.
+    assert_eq!(gist("read_file", json!({"path": "src/"})), "Read src");
+    assert_eq!(gist("read_file", json!({"path": "C:\\work\\lib.rs"})), "Read lib.rs");
+    assert_eq!(gist("read_file", json!({"path": "///"})), "read_file");
+    // Fetch tools read URLs, which keep the host: a basename would mislead.
+    assert_eq!(
+        gist("web_fetch", json!({"url": "https://example.com/page?x=1"})),
+        "Read https://example.com/page?x=1"
+    );
+}
+
+#[test]
+fn tool_row_gist_key_order_matches_service_precedence() {
+    use serde_json::json;
+    // Every adjacent pair disagrees, so each assert pins one precedence edge.
+    assert_eq!(gist("read_file", json!({"path": "a.rs", "file_path": "b.rs"})), "Read a.rs");
+    assert_eq!(gist("read_file", json!({"file_path": "b.rs", "filepath": "c.rs"})), "Read b.rs");
+    assert_eq!(gist("read_file", json!({"filepath": "c.rs", "target_path": "d.rs"})), "Read c.rs");
+    assert_eq!(gist("code_search", json!({"query": "Widget", "pattern": "Widg.*"})), "Widget");
+    assert_eq!(gist("exec_command", json!({"command": "cargo check", "cmd": "cargo build"})), "cargo check");
+    // A blank winner does not shadow a usable fallback key.
+    assert_eq!(gist("read_file", json!({"path": "  ", "file_path": "fallback.rs"})), "Read fallback.rs");
+}
+
+#[test]
+fn tool_row_gist_renders_commands_and_queries_bare() {
+    use serde_json::json;
+    assert_eq!(gist("exec_command", json!({"cmd": "cargo check --all"})), "cargo check --all");
+    assert_eq!(gist("exec_command", json!({"command": "  make test  "})), "make test");
+    assert_eq!(gist("exec_command", json!({"command": ["cargo", "check", "--all"]})), "cargo check --all");
+    assert_eq!(gist("exec_command", json!({"command": ["echo", 42, true, "hi"]})), "echo hi");
+    assert_eq!(gist("code_search", json!({"query": "Widget"})), "Widget");
+    // Grep scope stays out: the pattern alone matches the WebSearch row shape.
+    assert_eq!(gist("grep", json!({"pattern": "TODO", "path": "src"})), "TODO");
+}
+
+#[test]
+fn tool_row_gist_renders_all_launch_tools_like_exec_command() {
+    use serde_json::json;
+    // Mirrors `tool_intent::is_command_run_tool_call`: every launch tool shows its
+    // command bare and classifies Run so its output merges into its row.
+    for name in ["run_pty_cmd", "create_pty_session", "shell", "bash"] {
+        assert_eq!(gist(name, json!({"command": "cargo check"})), "cargo check");
+        let details =
+            ThreadItemDetails::ToolInvocation(Box::new(invocation_item(name, Some(json!({"command": "cargo check"})))));
+        assert_eq!(ToolCategory::from_details(&details), Some(ToolCategory::Run), "{name}");
+    }
+}
+
+#[test]
+fn tool_row_gist_falls_back_to_raw_tool_name() {
+    use serde_json::json;
+    assert_eq!(tool_row_gist(&invocation_item("read_file", None)), "read_file");
+    for arguments in [
+        json!({}),
+        json!({"path": ""}),
+        json!({"path": "   "}),
+        json!({"path": 42}),
+        json!({"path": true}),
+        json!({"path": ["a.rs"]}),
+        json!({"path": null}),
+        json!({"command": ["", 42]}),
+    ] {
+        assert_eq!(gist("read_file", arguments.clone()), "read_file");
+        assert_eq!(gist("exec_command", arguments), "exec_command");
+    }
+    // Other-category tools keep raw names even with file-shaped args.
+    assert_eq!(gist("task_tracker", json!({"path": "plan.md"})), "task_tracker");
+    assert_eq!(gist("request_user_input", json!({"query": "color?"})), "request_user_input");
+}
+
+#[test]
+fn tool_row_gist_covers_unified_and_mcp_names() {
+    use serde_json::json;
+    assert_eq!(gist("file_operation_internal", json!({"action": "edit", "path": "src/main.rs"})), "Edited main.rs");
+    assert_eq!(gist("file_operation_internal", json!({"action": "read", "path": "README.md"})), "Read README.md");
+    assert_eq!(gist("command_session_internal", json!({"action": "run", "cmd": "ls"})), "ls");
+    assert_eq!(
+        gist("command_session_internal", json!({"action": "poll", "session_id": "run-1"})),
+        "Read command session"
+    );
+    assert_eq!(gist("mcp__github__read_file", json!({"path": "issues.md"})), "Read issues.md");
+}
+
+#[test]
+fn tool_row_gist_titles_session_followups_like_cli() {
+    use serde_json::json;
+    // Fixed follow-up labels.
+    assert_eq!(gist("send_pty_input", json!({"session_id": "s"})), "Send command input");
+    assert_eq!(gist("read_pty_session", json!({"session_id": "run-1"})), "Read command session");
+    // write_stdin: explicit actions win; otherwise input sniffing decides.
+    assert_eq!(gist("write_stdin", json!({"action": "wait", "session_id": "s"})), "Wait for command session");
+    assert_eq!(gist("write_stdin", json!({"session_id": "s", "input": "ls"})), "Send command input");
+    assert_eq!(gist("write_stdin", json!({"session_id": "s"})), "Read command session");
+    // Asymmetric: explicit write with empty input polls instead of sending.
+    assert_eq!(
+        gist("write_stdin", json!({"action": "write", "session_id": "s", "input": ""})),
+        "Read command session"
+    );
+    assert_eq!(
+        gist("write_stdin", json!({"action": "write", "session_id": "s", "input": "ls"})),
+        "Send command input"
+    );
+    // Unified action labels; launches keep the bare-command gist.
+    assert_eq!(
+        gist("command_session_internal", json!({"action": "wait", "session_id": "s"})),
+        "Wait for command session"
+    );
+    assert_eq!(gist("command_session_internal", json!({"code": "print(1)"})), "Run code");
+    assert_eq!(gist("command_session_internal", json!({"action": "frobnicate"})), "Exec action");
+    // MCP-wrapped session tools strip to the same titles.
+    assert_eq!(
+        gist("mcp__tmux__write_stdin", json!({"action": "wait", "session_id": "s"})),
+        "Wait for command session"
+    );
+}
+
+#[test]
+fn user_echo_with_attachments_keeps_bare_prompt_and_announces_paths() {
+    let mut transcript = Transcript::default();
+    let mut echo = item(1, "user", "Review these files");
+    // Asymmetric fixtures: a text file with content bytes and an image with none.
+    echo.user_attachments = vec![
+        UserAttachment {
+            path: "src/main.rs".into(),
+            byte_len: 120,
+            is_image: false,
+        },
+        UserAttachment {
+            path: "shot.png".into(),
+            byte_len: 0,
+            is_image: true,
+        },
+    ];
+    transcript.push(echo);
+    let row = transcript.get(0).unwrap();
+    assert_eq!(row.text.as_str(), "Review these files");
+    assert_eq!(row.markdown.as_str(), "Review these files", "filenames must not leak into the Markdown body");
+    assert!(row.accessibility_text.contains("Review these files"));
+    assert!(row.accessibility_text.contains("src/main.rs"), "text-file path stays announced");
+    assert!(row.accessibility_text.contains("shot.png"), "image path stays announced");
+    let keywords = row.search_keywords();
+    assert_eq!(keywords.len(), 4, "title, body, and both attached paths");
+    assert!(keywords.iter().any(|keyword| keyword.contains("main.rs")));
+    assert!(keywords.iter().any(|keyword| keyword.contains("shot.png")));
+}
+
+#[test]
+fn attachment_accessibility_suffix_skips_plain_and_non_user_rows() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "user", "Plain follow-up"));
+    assert_eq!(
+        transcript.get(0).unwrap().accessibility_text.as_str(),
+        "Plain follow-up",
+        "text-only echoes keep the previous label shape"
+    );
+
+    let mut assistant = item(2, "assistant", "A response.");
+    assistant.user_attachments = vec![UserAttachment {
+        path: "stray.txt".into(),
+        byte_len: 1,
+        is_image: false,
+    }];
+    transcript.push(assistant);
+    assert!(
+        !transcript.get(1).unwrap().accessibility_text.contains("stray.txt"),
+        "the suffix guard is role-scoped"
+    );
+}
+
+#[test]
+fn activity_category_survives_follow_up_output_upserts() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "tool", "in-progress\n\nmeta"));
+    transcript.set_activity_category("1", ToolCategory::Read);
+    assert_eq!(transcript.get(0).unwrap().activity_category, Some(ToolCategory::Read));
+    // Follow-up output arrives as a fresh unclassified row for the same id.
+    let mut output = item(1, "tool", "completed\n\nmeta");
+    output.output = Some("done".into());
+    transcript.upsert(output);
+    assert_eq!(
+        transcript.get(0).unwrap().activity_category,
+        Some(ToolCategory::Read),
+        "output upsert must not wipe the invocation's verb"
+    );
+    assert_eq!(transcript.get(0).unwrap().output.as_deref(), Some("done"));
 }

@@ -126,6 +126,27 @@ fn diff_preview_mode_defaults_to_inline_and_parses_side_by_side() {
 }
 
 #[test]
+fn busy_enter_behavior_defaults_to_queue_and_parses_steer() {
+    assert_eq!(UiConfig::default().busy_enter_behavior, BusyEnterBehavior::Queue);
+    assert_eq!(toml::from_str::<UiConfig>("").expect("empty parses").busy_enter_behavior, BusyEnterBehavior::Queue);
+
+    let steer: UiConfig = toml::from_str("busy_enter_behavior = \"steer\"").expect("steer mode parses");
+    assert_eq!(steer.busy_enter_behavior, BusyEnterBehavior::Steer);
+
+    let queue: UiConfig = toml::from_str("busy_enter_behavior = \"queue\"").expect("queue mode parses");
+    assert_eq!(queue.busy_enter_behavior, BusyEnterBehavior::Queue);
+
+    let round_trip = toml::to_string(&steer).expect("steer mode serializes");
+    assert!(round_trip.contains("busy_enter_behavior = \"steer\""));
+    assert_eq!(
+        toml::from_str::<UiConfig>(&round_trip)
+            .expect("steer mode round trips")
+            .busy_enter_behavior,
+        BusyEnterBehavior::Steer
+    );
+}
+
+#[test]
 fn transcript_review_controls_and_keybindings_parse() {
     let ui: UiConfig = toml::from_str(
         r#"
@@ -153,6 +174,15 @@ fn task_panel_defaults_to_hidden_and_parses() {
     let enabled: UiConfig = toml::from_str("show_task_panel = true").expect("show_task_panel parses");
     assert!(enabled.show_task_panel);
     assert!(!toml::from_str::<UiConfig>("").expect("empty parses").show_task_panel);
+}
+
+#[test]
+fn message_timestamps_default_to_shown_and_parse() {
+    assert!(UiConfig::default().show_message_timestamps);
+
+    let disabled: UiConfig = toml::from_str("show_message_timestamps = false").expect("show_message_timestamps parses");
+    assert!(!disabled.show_message_timestamps);
+    assert!(toml::from_str::<UiConfig>("").expect("empty parses").show_message_timestamps);
 }
 
 #[test]

@@ -65,6 +65,14 @@ keybinding configuration. Use `/config` to cycle `ui.tool_display_mode` and pers
 
 Explicit `expanded` mode preserves the existing per-call summary and live-output layout.
 
+## Desktop parity
+
+The desktop transcript mirrors these summaries in `crates/codegen/vtcode-desktop/src/desktop/transcript/tool_summary.rs`:
+expanded tool rows show the headline plus filtered detail lines and a bounded output tail, never a raw
+JSON dump of the tool call. Exec-session follow-ups collapse to the same one-line session row, and full
+captures stay in the inspector Output tab. The agent core still receives complete arguments and results
+through `ThreadEvent`; only the user-visible projection is concise.
+
 ## Exec-session calls (`write_stdin` and the session readers)
 
 Exec-session calls repeat on every poll or wait of a long command, so their transcript rows stay minimal: the session

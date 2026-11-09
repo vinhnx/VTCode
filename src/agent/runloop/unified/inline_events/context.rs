@@ -241,9 +241,17 @@ impl<'a> InlineEventContext<'a> {
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
             InlineEvent::BackgroundOperation => {
-                if let Some(exec_sessions) = self.exec_sessions.as_ref()
-                    && let Some(result) = exec_sessions.take_background_shortcut_result()
-                {
+                // Host adapters (desktop) queue this event without the TUI
+                // send-time callback that pre-requests the promotion, so
+                // request it here when no shortcut result exists. The TUI
+                // flow is unchanged: its callback already requested, and
+                // take() finds that result first.
+                let result = self.exec_sessions.as_ref().and_then(|exec_sessions| {
+                    exec_sessions
+                        .take_background_shortcut_result()
+                        .or_else(|| exec_sessions.request_foreground_background())
+                });
+                if let Some(result) = result {
                     match result {
                         vtcode_core::tools::exec_session::BackgroundShortcutResult::Requested => {
                             self.handle.show_local_agents();

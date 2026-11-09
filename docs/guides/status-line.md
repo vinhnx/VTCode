@@ -2,8 +2,9 @@
 
 The inline UI can display a single-line status bar beneath the prompt. By default VT Code shows the current git branch
 (with an asterisk when the working tree is dirty) on the left and the active model with its reasoning effort on the
-right, with the current clock time (24-hour `HH:MM:SS`) rightmost. The `[ui.status_line]` table in `vtcode.toml` lets
-you override this behaviour or turn the status line off entirely.
+right. Each completed turn carries one wall-clock footer after its final agent message (see `ui.show_message_timestamps`),
+which replaced the old ticking status-line clock; the clock remains available as an opt-in. The `[ui.status_line]` table
+in `vtcode.toml` lets you override this behaviour or turn the status line off entirely.
 
 If you want VT Code to scaffold the command setup for you, run `/statusline` in an interactive session. VT Code asks
 whether to persist the script in the user config layer (`~/.config/vtcode/statusline.sh`) or the current workspace
@@ -14,7 +15,7 @@ modal.
 
 The `mode` key accepts three values:
 
-- `auto` (default) keeps the built-in git and model summary, with the clock time appended on the right.
+- `auto` (default) keeps the built-in git and model summary.
 - `command` runs a user-provided command and renders the first line of stdout.
 - `hidden` disables the status line.
 
@@ -50,8 +51,9 @@ command_timeout_ms = 200
 - `refresh_interval_ms` throttles how often the command runs. A value of `0` refreshes on every render tick.
 - `command_timeout_ms` aborts the command if it takes too long. The default is 200 ms.
 - If `command` is omitted or resolves to an empty string, VT Code falls back to `auto` mode.
-- `show_clock` (default `true`) controls whether the current time (`HH:MM:SS`, 24-hour clock) is appended to the right
-  edge of the status line in `auto` mode. Set it to `false` to hide the clock.
+- `show_clock` (default `false`) controls whether the current time (`HH:MM:SS`, 24-hour clock) is appended to the
+  right edge of the status line in `auto` mode. Per-message timestamps replaced it; set it to `true` only if you
+  want the old ticking clock back.
 
 ## Command payload structure
 

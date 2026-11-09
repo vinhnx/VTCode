@@ -256,8 +256,9 @@ pub trait ToolExecutor: Send + Sync {
 
     /// Execute multiple tools in batch.
     ///
-    /// The default implementation runs them sequentially.
-    /// Implementors can override this to provide parallel execution.
+    /// The default implementation runs them concurrently via
+    /// `futures::future::join_all`. Implementors can override this to
+    /// customize scheduling (e.g. bounded concurrency).
     async fn execute_batch(&self, calls: Vec<(String, Value)>) -> Vec<Result<Value>> {
         let futures = calls
             .into_iter()

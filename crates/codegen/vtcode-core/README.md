@@ -189,4 +189,4 @@ See [docs.rs/vtcode-core](https://docs.rs/vtcode-core).
 
 ## Related docs
 
-- [Architecture overview](../docs/ARCHITECTURE.md)
+- [Architecture overview](../../../docs/ARCHITECTURE.md)

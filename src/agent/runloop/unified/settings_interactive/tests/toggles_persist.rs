@@ -132,6 +132,34 @@ fn interface_terminal_group_exposes_copy_on_select_toggle() {
     assert_eq!(item.kind, vtcode_commons::ui_protocol::InlineItemKind::Setting);
 }
 #[test]
+fn interface_terminal_group_exposes_message_timestamps_toggle() {
+    let state = SettingsPaletteState {
+        workspace: PathBuf::from("."),
+        source_path: PathBuf::from("vtcode.toml"),
+        source_label: None,
+        draft: VTCodeConfig::default(),
+        view_path: Some(format!("{SETTINGS_GROUP_PREFIX}interface_terminal")),
+        last_selection: None,
+        selection_by_view: BTreeMap::new(),
+        pending_edit_path: None,
+        status: None,
+    };
+    let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
+
+    let items = build_settings_items(&state, &draft).expect("settings items");
+    let item = items
+        .iter()
+        .find(|item| {
+            item.selection.as_ref().is_some_and(|selection| {
+                matches!(selection, InlineListSelection::ConfigAction(action)
+                    if action == "settings:set:ui.show_message_timestamps:toggle")
+            })
+        })
+        .expect("message timestamps entry in Interface & Terminal");
+    assert_eq!(item.badge.as_deref(), None, "boolean state lives in the value slot");
+    assert_eq!(item.kind, vtcode_commons::ui_protocol::InlineItemKind::Setting);
+}
+#[test]
 fn copy_on_select_toggle_persists_manual_mode_to_disk() {
     let temp = tempfile::tempdir().expect("temp dir");
     let source_path = temp.path().join("vtcode.toml");

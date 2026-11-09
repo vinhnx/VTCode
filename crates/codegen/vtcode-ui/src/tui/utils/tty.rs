@@ -1,9 +1,11 @@
-//! TTY detection and capability utilities using crossterm's IsTty trait.
+//! TTY detection and capability utilities.
 //!
-//! This module provides safe and convenient TTY detection across the codebase,
-//! abstracting away platform differences for TTY detection.
+//! The canonical [`TtyExt`] trait lives in [`vtcode_commons::tty`] and is
+//! re-exported here so existing `crate::tui::utils::tty::*` import paths
+//! keep resolving. [`TtyCapabilities`] and [`terminal_size()`] remain UI-side
+//! helpers built on that trait.
 //!
-//! # Usage
+//! # Example
 //!
 //! ```rust
 //! use vtcode_ui::tui::utils::tty::TtyExt;
@@ -13,111 +15,12 @@
 //! if io::stdout().is_tty_ext() {
 //!     // Apply terminal-specific features
 //! }
-//!
-//! // Check if stdin is a TTY
-//! if io::stdin().is_tty_ext() {
-//!     // Interactive input available
-//! }
 //! ```
 
-use crossterm::tty::IsTty;
+pub use vtcode_commons::tty::TtyExt;
+
 use std::io;
-use vtcode_commons::color_policy::no_color_env_active;
-
-/// Extension trait for TTY detection on standard I/O streams.
-///
-/// This trait extends crossterm's `IsTty` to provide convenient methods
-/// for checking TTY capabilities with better error handling.
-pub trait TtyExt {
-    /// Returns `true` if this stream is connected to a terminal.
-    ///
-    /// This is a convenience wrapper around crossterm's `IsTty` trait
-    /// that provides consistent behavior across the codebase.
-    fn is_tty_ext(&self) -> bool;
-
-    /// Returns `true` if this stream supports ANSI color codes.
-    ///
-    /// This checks both TTY status and common environment variables
-    /// that might disable color output.
-    fn supports_color(&self) -> bool;
-
-    /// Returns `true` if this stream supports interactive features.
-    ///
-    /// Interactive features include cursor movement, color, and other
-    /// terminal capabilities that require a real terminal.
-    fn is_interactive(&self) -> bool;
-}
-
-impl TtyExt for io::Stdout {
-    fn is_tty_ext(&self) -> bool {
-        self.is_tty()
-    }
-
-    fn supports_color(&self) -> bool {
-        if !self.is_tty() {
-            return false;
-        }
-
-        // Check NO_COLOR with strict non-empty semantics.
-        if no_color_env_active() {
-            return false;
-        }
-
-        // Check for FORCE_COLOR environment variable
-        if std::env::var_os("FORCE_COLOR").is_some() {
-            return true;
-        }
-
-        true
-    }
-
-    fn is_interactive(&self) -> bool {
-        self.is_tty() && self.supports_color()
-    }
-}
-
-impl TtyExt for io::Stderr {
-    fn is_tty_ext(&self) -> bool {
-        self.is_tty()
-    }
-
-    fn supports_color(&self) -> bool {
-        if !self.is_tty() {
-            return false;
-        }
-
-        // Check NO_COLOR with strict non-empty semantics.
-        if no_color_env_active() {
-            return false;
-        }
-
-        // Check for FORCE_COLOR environment variable
-        if std::env::var_os("FORCE_COLOR").is_some() {
-            return true;
-        }
-
-        true
-    }
-
-    fn is_interactive(&self) -> bool {
-        self.is_tty() && self.supports_color()
-    }
-}
-
-impl TtyExt for io::Stdin {
-    fn is_tty_ext(&self) -> bool {
-        self.is_tty()
-    }
-
-    fn supports_color(&self) -> bool {
-        // Stdin doesn't output color, but we check if it's interactive
-        self.is_tty()
-    }
-
-    fn is_interactive(&self) -> bool {
-        self.is_tty()
-    }
-}
+use std::io::IsTerminal;
 
 /// TTY capabilities that can be queried for feature detection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,7 +51,7 @@ impl TtyCapabilities {
     /// Returns `Some(TtyCapabilities)` if stderr is a TTY, otherwise `None`.
     pub(crate) fn detect() -> Option<Self> {
         let stderr = io::stderr();
-        if !stderr.is_tty() {
+        if !stderr.is_terminal() {
             return None;
         }
 
@@ -183,7 +86,7 @@ impl TtyCapabilities {
 /// This is useful for deciding whether to use rich terminal features
 /// or fall back to plain text output.
 fn is_interactive_session() -> bool {
-    io::stderr().is_tty() && io::stdin().is_tty()
+    io::stderr().is_terminal() && io::stdin().is_terminal()
 }
 
 /// Get the current terminal dimensions.
@@ -207,9 +110,9 @@ mod tests {
         let stdin = io::stdin();
 
         // Just verify the methods don't panic
-        let _ = stdout.is_tty();
-        let _ = stderr.is_tty();
-        let _ = stdin.is_tty();
+        let _ = stdout.is_terminal();
+        let _ = stderr.is_terminal();
+        let _ = stdin.is_terminal();
     }
 
     #[test]

@@ -3,6 +3,8 @@ use semver::Version;
 use serde::Deserialize;
 use std::time::Duration;
 use url::Url;
+use vtcode_commons::http::send_with_retry;
+use vtcode_commons::retry::RetryPolicy;
 use vtcode_config::update::ReleaseChannel;
 
 use super::Updater;
@@ -12,6 +14,24 @@ use super::types::{UpdateInfo, VersionInfo};
 const REPO_SLUG: &str = "vinhnx/vtcode";
 const GITHUB_HOST: &str = "github.com";
 const RELEASE_ASSET_PATH_PREFIX: &str = "/vinhnx/vtcode/releases/download/";
+
+/// Retry budget for updater fetches.
+///
+/// GitHub serves every release asset as its own CDN object and answers
+/// transient 502/504s that routinely outlive a few seconds. Measured
+/// 2026-11-09: every asset of release 0.181.7 — plus assets of older
+/// releases — 504'd continuously for ~2.5 minutes. The previous budget
+/// (3 attempts over ~3s) therefore failed an update that a backoff schedule
+/// spanning a few minutes survives, and the failure is expensive: the
+/// archive has already been downloaded. Requests carry their own
+/// `.timeout(...)`, so the extra attempts add only the backoff sleeps
+/// (~3 minutes worst case), never an unbounded wait.
+///
+/// Shared with `download.rs`.
+pub(super) fn updater_retry_policy() -> RetryPolicy {
+    RetryPolicy::from_retries(8, Duration::from_secs(1), Duration::from_secs(45), 2.0)
+        .with_jitter(RetryPolicy::DEFAULT_JITTER)
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub(super) struct ReleaseAsset {
@@ -112,8 +132,20 @@ fn parse_release(value: &serde_json::Value) -> Result<GithubRelease> {
     })
 }
 
-pub(super) fn github_client() -> Result<reqwest::Client> {
+/// Connect-phase bound shared by the updater clients.
+///
+/// Requests carry their own `.timeout(...)` from `update.toml`, but reqwest
+/// leaves the connect phase unbounded unless it is set, so a stalled handshake
+/// could still hang the update check.
+fn connect_timeout() -> Option<Duration> {
+    vtcode_commons::http::http_timeouts().connect
+}
+
+fn github_client() -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder().user_agent("vtcode-updater");
+    if let Some(connect) = connect_timeout() {
+        builder = builder.connect_timeout(connect);
+    }
 
     // Authenticate with GitHub API when a token is available.
     // Unauthenticated requests are limited to 60/hour per IP; authenticated
@@ -130,7 +162,7 @@ pub(super) fn github_client() -> Result<reqwest::Client> {
     builder.build().context("Failed to create HTTP client")
 }
 
-pub(super) fn github_token() -> Option<String> {
+fn github_token() -> Option<String> {
     std::env::var("GITHUB_TOKEN")
         .ok()
         .or_else(|| std::env::var("GH_TOKEN").ok())
@@ -141,29 +173,26 @@ pub(super) fn github_token() -> Option<String> {
 /// fallback requests. Asset URLs come from remote release metadata and must
 /// never receive the GitHub API token.
 pub(super) fn unauthenticated_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .user_agent("vtcode-updater")
-        .build()
-        .context("Failed to create HTTP client")
+    let mut builder = reqwest::Client::builder().user_agent("vtcode-updater");
+    if let Some(connect) = connect_timeout() {
+        builder = builder.connect_timeout(connect);
+    }
+    builder.build().context("Failed to create HTTP client")
 }
 
 /// Fetch JSON from `url` using the configured (possibly authenticated) client.
 /// If the request fails with a 401, retry without authentication -- public
 /// repos work fine unauthenticated.
 async fn try_fetch_json_with_auth_fallback(url: &str, timeout: Duration) -> Result<serde_json::Value> {
-    let response = github_client()?
-        .get(url)
-        .timeout(timeout)
-        .send()
+    let client = github_client()?;
+    let response = send_with_retry(&updater_retry_policy(), || client.get(url).timeout(timeout).send())
         .await
         .context("Failed to fetch from GitHub API");
 
     let response = match response {
         Ok(response) if response.status() == reqwest::StatusCode::UNAUTHORIZED && github_token().is_some() => {
-            unauthenticated_client()?
-                .get(url)
-                .timeout(timeout)
-                .send()
+            let fallback = unauthenticated_client()?;
+            send_with_retry(&updater_retry_policy(), || fallback.get(url).timeout(timeout).send())
                 .await
                 .context("Failed to fetch from GitHub API")?
         }
@@ -308,6 +337,26 @@ mod tests {
             name: name.to_string(),
             download_url: format!("https://example.test/{name}"),
         }
+    }
+
+    /// Total backoff the policy sleeps across all attempts after the first.
+    fn total_backoff(policy: &RetryPolicy) -> Duration {
+        (0..policy.max_attempts.saturating_sub(1))
+            .map(|attempt| policy.delay_for_attempt(attempt))
+            .sum()
+    }
+
+    /// GitHub's release-asset CDN 504'd continuously for ~2.5 minutes on
+    /// 2026-11-09. The updater budget must span minutes, not seconds, or a
+    /// transient CDN outage fails an update whose archive was already
+    /// downloaded. Each attempt still carries its own request timeout, so the
+    /// budget bounds only the sleeps.
+    #[test]
+    fn updater_retry_budget_survives_a_multi_minute_cdn_outage() {
+        let policy = updater_retry_policy();
+
+        assert!(policy.max_attempts >= 5, "attempts: {}", policy.max_attempts);
+        assert!(total_backoff(&policy) >= Duration::from_secs(120), "backoff: {:?}", total_backoff(&policy));
     }
 
     #[test]

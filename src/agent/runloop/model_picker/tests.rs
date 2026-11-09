@@ -344,7 +344,7 @@ fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
 #[test]
 fn current_model_line_shows_effective_anthropic_context_window() {
     let line = rendering::current_model_line("anthropic", "claude-sonnet-5");
-    assert_eq!(line, "Current: anthropic / claude-sonnet-5 • 1M context");
+    assert_eq!(line, "Current: Anthropic / claude-sonnet-5 • 1M context");
 }
 
 #[test]
@@ -768,6 +768,39 @@ fn picker_provider_order_with_whitelist_empty_returns_all() {
 }
 
 #[test]
+fn picker_provider_order_pins_frontier_then_open_source() {
+    use crate::agent::runloop::model_picker::options::picker_provider_order;
+
+    let order = picker_provider_order();
+    let head: Vec<Provider> = order.iter().copied().take(7).collect();
+    assert_eq!(
+        head,
+        [
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::HuggingFace,
+            Provider::Ollama,
+            Provider::OllamaCloud,
+            Provider::LmStudio,
+            Provider::LlamaCpp,
+        ]
+    );
+}
+
+#[test]
+fn picker_provider_order_is_permutation_of_all_providers() {
+    use crate::agent::runloop::model_picker::options::picker_provider_order;
+
+    let order = picker_provider_order();
+    let all = Provider::all_providers();
+    assert_eq!(order.len(), all.len(), "picker order must cover every provider exactly once");
+    assert!(
+        all.iter().all(|provider| order.contains(provider)),
+        "every known provider must appear in picker order"
+    );
+}
+
+#[test]
 fn filter_options_by_whitelist_keeps_only_allowed_providers() {
     use crate::agent::runloop::model_picker::options::filter_options_by_whitelist;
 
@@ -782,6 +815,15 @@ fn filter_options_by_whitelist_empty_returns_all() {
 
     let filtered = filter_options_by_whitelist(Cow::Borrowed(MODEL_OPTIONS.as_slice()), &[]);
     assert_eq!(filtered.len(), MODEL_OPTIONS.len());
+}
+
+#[test]
+fn current_model_line_shows_provider_label_not_code() {
+    let line = rendering::current_model_line("huggingface", "some-model");
+    assert!(line.starts_with("Current: Hugging Face / "), "unexpected current line: {line}");
+
+    let custom = rendering::current_model_line("mycorp", "gpt-5-mini");
+    assert!(custom.starts_with("Current: mycorp / "), "custom provider codes pass through unchanged: {custom}");
 }
 
 #[test]

@@ -4,6 +4,9 @@ use crate::tui::core_tui::app::types::InlineCommand;
 use crate::tui::core_tui::session::config::AppearanceConfig;
 use crate::tui::core_tui::types::{InlineSegment, InlineTextStyle, InlineTheme};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use crate::tui::core_tui::runner::TuiSessionDriver;
 
 fn test_session() -> AppSession {
     AppSession::new(InlineTheme::default(), None, 24)
@@ -169,6 +172,88 @@ fn search_uses_cached_lowercase_lines() {
 
     assert!(lowered.contains("alpha"));
     assert_eq!(viewer.search.matches, vec![0, 1]);
+}
+
+fn flash_search_fixture() -> ToolOutputViewerState {
+    let mut viewer = ToolOutputViewerState {
+        messages: vec![CachedToolOutputBlock {
+            lines: vec!["alpha one".into(), "plain filler".into(), "alpha two".into()],
+            rich_lines: vec![
+                Line::raw("alpha one"),
+                Line::raw("plain filler"),
+                Line::raw("alpha two"),
+            ],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    viewer.update_row_offsets();
+    viewer
+}
+
+#[test]
+fn search_jump_flashes_landing_row_and_next_match_moves_it() {
+    let mut viewer = flash_search_fixture();
+    viewer.start_search();
+    viewer.insert_search_text("alpha");
+    viewer.commit_search(3);
+    assert_eq!(viewer.search.matches, vec![0, 2]);
+    assert!(viewer.row_flashed(0));
+    assert!(!viewer.row_flashed(1));
+    assert!(!viewer.row_flashed(2));
+    let lines = viewer.visible_lines(3);
+    for (row, line) in lines.iter().enumerate().take(3) {
+        let modifiers = line.style.add_modifier;
+        if row == 0 {
+            assert!(modifiers.contains(Modifier::REVERSED), "landing row keeps the match mark");
+            assert!(modifiers.contains(Modifier::BOLD), "landing row flashes bold");
+        } else {
+            assert!(!modifiers.contains(Modifier::REVERSED), "row {row} is not the current match");
+            assert!(!modifiers.contains(Modifier::BOLD), "row {row} does not flash");
+        }
+    }
+    // Cycling re-arms: the flash moves with the current match.
+    viewer.jump_next_match(3);
+    assert_eq!(viewer.current_match_line(), Some(2));
+    assert!(!viewer.row_flashed(0));
+    assert!(viewer.row_flashed(2));
+    let lines = viewer.visible_lines(3);
+    assert!(!lines[0].style.add_modifier.contains(Modifier::BOLD));
+    assert!(lines[2].style.add_modifier.contains(Modifier::REVERSED));
+    assert!(lines[2].style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn flash_expires_on_deadline_and_keeps_the_persistent_match_mark() {
+    let mut viewer = flash_search_fixture();
+    viewer.start_search();
+    viewer.insert_search_text("alpha");
+    viewer.commit_search(3);
+    assert!(viewer.row_flashed(0));
+    viewer.flash.as_mut().expect("jump arms a flash").expires_at = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .expect("test clock backdates 1s");
+    viewer.expire_flash();
+    assert!(viewer.flash.is_none());
+    assert!(!viewer.row_flashed(0));
+    let lines = viewer.visible_lines(3);
+    assert!(lines[0].style.add_modifier.contains(Modifier::REVERSED), "expired flash keeps the match mark");
+    assert!(!lines[0].style.add_modifier.contains(Modifier::BOLD), "expired flash drops bold");
+}
+
+#[test]
+fn zero_match_commit_clears_a_live_flash() {
+    let mut viewer = flash_search_fixture();
+    viewer.start_search();
+    viewer.insert_search_text("alpha");
+    viewer.commit_search(3);
+    assert!(viewer.flash.is_some());
+    viewer.start_search();
+    // Pending seeds from the committed query, so this commits "alphazz": zero matches.
+    viewer.insert_search_text("zzz");
+    viewer.commit_search(3);
+    assert!(viewer.search.matches.is_empty());
+    assert!(viewer.flash.is_none(), "a 0-match state tints nothing");
 }
 
 #[test]
@@ -373,8 +458,7 @@ fn active_transcript_updates_refresh_without_reopening() {
     assert!(export.contains("streamed continuation"));
 }
 
-#[test]
-fn focused_review_jumps_to_the_requested_capture_in_a_group() {
+fn two_capture_group_session() -> AppSession {
     let mut session = test_session();
     session.handle_command(InlineCommand::RecordToolOutput {
         id: 11,
@@ -406,6 +490,47 @@ fn focused_review_jumps_to_the_requested_capture_in_a_group() {
             review_anchors: vec![11, 12],
         },
     ));
+    session
+}
+
+#[test]
+fn focused_open_flashes_logical_row_when_viewport_clamps_scroll() {
+    let session = two_capture_group_session();
+    // Tall viewport: everything fits, so scroll clamps to 0 while the
+    // requested capture still starts at its logical row.
+    let viewer = ToolOutputViewerState::open_focused(&session, 80, 20, Some(12));
+    assert_eq!(viewer.scroll_top, 0);
+    assert!(viewer.row_flashed(2), "tint lands on the capture, not the clamped top");
+    assert!(!viewer.row_flashed(0));
+}
+
+#[test]
+fn viewer_flash_requests_animation_ticks_until_cleared() {
+    let mut session = two_capture_group_session();
+    assert!(!session.needs_animation_tick(), "idle session rests");
+    session.open_tool_output_viewer(80, 20, Some(12));
+    assert!(
+        session.tool_output_viewer_state.as_ref().expect("viewer open").flash_live(),
+        "focused open arms a tint"
+    );
+    assert!(session.needs_animation_tick(), "armed tint needs ticks");
+    {
+        let viewer = session.tool_output_viewer_state.as_mut().expect("viewer open");
+        viewer.flash.as_mut().expect("tint armed").expires_at = Instant::now()
+            .checked_sub(Duration::from_secs(1))
+            .expect("test clock backdates 1s");
+    }
+    {
+        // What the tick-driven render runs before painting.
+        let viewer = session.tool_output_viewer_state.as_mut().expect("viewer open");
+        viewer.expire_flash();
+    }
+    assert!(!session.needs_animation_tick(), "cleared tint rests");
+}
+
+#[test]
+fn focused_review_jumps_to_the_requested_capture_in_a_group() {
+    let session = two_capture_group_session();
 
     let viewer = ToolOutputViewerState::open_focused(&session, 80, 2, Some(12));
 
@@ -415,6 +540,16 @@ fn focused_review_jumps_to_the_requested_capture_in_a_group() {
     );
     assert_eq!(viewer.scroll_top, 2);
     assert_eq!(viewer.focus_target, None);
+    assert!(viewer.row_flashed(2), "deeplink landing tints");
+    assert!(!viewer.row_flashed(0), "other rows stay untinted");
+    // Baseline-relative: rich rows may already be bold from shell styling; the
+    // tint must add REVERSED without adding match-bold.
+    let base_bold = viewer
+        .line_for_mode_at(2)
+        .is_some_and(|line| line.style.add_modifier.contains(Modifier::BOLD));
+    let lines = viewer.visible_lines(2);
+    assert!(lines[0].style.add_modifier.contains(Modifier::REVERSED), "tint reads without a search match");
+    assert_eq!(lines[0].style.add_modifier.contains(Modifier::BOLD), base_bold, "tint without a match adds no bold");
 }
 
 #[test]

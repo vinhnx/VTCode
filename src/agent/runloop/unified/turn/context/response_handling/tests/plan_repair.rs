@@ -1,6 +1,83 @@
 use super::*;
 
 #[tokio::test]
+async fn refused_response_does_not_checkpoint_a_plan_draft() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let mut ctx = backing.turn_processing_context();
+    ctx.record_planning_response(&uni::LLMResponse {
+        content: Some(RECOVERY_INVALID_VERIFICATION_PLAN.to_string()),
+        finish_reason: uni::FinishReason::Refusal,
+        ..Default::default()
+    })
+    .await
+    .expect("discard refused response");
+    assert!(ctx.plan_session.recovery.best_draft.is_none());
+}
+
+#[tokio::test]
+async fn draft_before_clarification_survives_later_recovery() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let events_path = backing.enable_harness_emitter();
+    let mut ctx = backing.turn_processing_context();
+    ctx.record_planning_response(&uni::LLMResponse {
+        content: Some(RECOVERY_INVALID_VERIFICATION_PLAN.to_string()),
+        ..Default::default()
+    })
+    .await
+    .expect("retain public draft during research");
+    assert!(!ctx.plan_session.recovery.research_closed);
+    assert!(
+        ctx.plan_session
+            .recovery
+            .best_draft
+            .as_deref()
+            .is_some_and(|draft| draft.contains("Update the preview guard"))
+    );
+    ctx.working_history
+        .push(uni::Message::user("clarify the validation requirement".to_owned()));
+    crate::agent::runloop::unified::planning_workflow::recovery_state::close_research(
+        &mut ctx.plan_session.recovery,
+        ctx.working_history,
+        "test-provider",
+        "test-model",
+    );
+    assert!(
+        ctx.plan_session
+            .recovery
+            .best_draft
+            .as_deref()
+            .is_some_and(|draft| draft.contains("Update the preview guard"))
+    );
+    let events = tokio::fs::read_to_string(events_path).await.expect("draft checkpoint");
+    assert!(events.contains("Update the preview guard"));
+}
+
+#[tokio::test]
+async fn unchanged_draft_after_clarification_checkpoints_its_new_score() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let events_path = backing.enable_harness_emitter();
+    let mut ctx = backing.turn_processing_context();
+    let response = uni::LLMResponse {
+        content: Some(RECOVERY_INVALID_VERIFICATION_PLAN.to_string()),
+        ..Default::default()
+    };
+    ctx.record_planning_response(&response).await.expect("record original draft");
+    crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
+        &mut ctx.plan_session.recovery,
+        "Keep the same plan",
+        false,
+    );
+    assert!(ctx.plan_session.recovery.best_draft_defects.is_none());
+    ctx.record_planning_response(&response).await.expect("record revised draft");
+    assert!(ctx.plan_session.recovery.best_draft_defects.is_some());
+    let events = tokio::fs::read_to_string(events_path).await.expect("draft checkpoints");
+    assert_eq!(events.matches("planning-recovery").count(), 2);
+}
+
+#[tokio::test]
 async fn tool_free_recovery_tolerates_intro_prose_around_valid_plan() {
     let mut backing = TestTurnProcessingBacking::new(8).await;
     backing.activate_planning_for_test();
@@ -181,7 +258,6 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
         .tool_registry
         .planning_workflow_state()
         .get_plan_file()
-        .await
         .expect("the corrected plan should publish a plan file");
     let persisted_plan = std::fs::read_to_string(plan_file).expect("read the corrected plan");
     assert!(

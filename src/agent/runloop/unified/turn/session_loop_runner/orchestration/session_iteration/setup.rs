@@ -158,6 +158,7 @@ pub(super) struct Setup<'a> {
     pub exec_completion_notify: Option<Arc<Notify>>,
     pub pending_background_completions: PendingBackgroundCompletions,
     pub pending_matrix_note: Option<String>,
+    pub pending_monitor_note: Option<String>,
     pub displayed_matrix_revision: Option<(String, u64)>,
     pub webmcp_prompt_sender: mpsc::Sender<String>,
     pub webmcp_prompt_receiver: Option<mpsc::Receiver<String>>,
@@ -426,8 +427,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     // Runs in the background so the TUI starts immediately.
     {
         let handle = handle.clone();
+        let workspace = config.workspace.clone();
         tokio::spawn(async move {
-            load_archived_prompts_for_history(&handle).await;
+            load_archived_prompts_for_history(&handle, &workspace).await;
         });
     }
 
@@ -608,6 +610,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let input_status_state = InputStatusState::default();
     let dismissed_memory_cleanup_fingerprint: Option<(usize, usize)> = None;
     let prefer_latest_queued_input_once = false;
+    if resume_ref.is_some() && tool_registry.is_planning_active() {
+        plan_session.mark_explicit_plan_request();
+    }
     if resume_ref.is_some()
         && tool_registry.is_planning_active()
         && let Some(emitter) = harness_emitter.as_ref()
@@ -691,6 +696,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let exec_completion_notify = Some(exec_session_manager.completion_notify());
     let pending_background_completions = PendingBackgroundCompletions::default();
     let pending_matrix_note: Option<String> = None;
+    let pending_monitor_note: Option<String> = None;
     let displayed_matrix_revision: Option<(String, u64)> = None;
     let (webmcp_prompt_sender, webmcp_prompt_receiver) = crate::agent::runloop::unified::webmcp::prompt_channel();
     let webmcp_prompt_receiver = Some(webmcp_prompt_receiver);
@@ -699,11 +705,6 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let ctrl_c_notice_displayed = false;
     let inline_prompt_cost_notice_shown = false;
     let mcp_catalog_initialized = tool_registry.mcp_client().is_some();
-    if mcp_catalog_initialized {
-        // The catalogue is already wired before the interaction loop starts, so
-        // the readiness line would be stale; suppress it without rendering.
-        session_stats.mark_mcp_ready_notice_shown();
-    }
     let last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
     let pending_mcp_refresh = false;
     let last_mcp_refresh = Instant::now();
@@ -730,12 +731,19 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         session_end_reason = SessionEndReason::Completed;
     }
 
-    // Show release notes on first launch after update
-    if !startup_update_requested_restart
+    // Show release notes on the first launch after an update. Only a real
+    // terminal renders the transcript banner: a host session (desktop app)
+    // discards terminal output and shows its own inline release-notes banner,
+    // so printing here would mark the release seen without anyone seeing it.
+    if terminal_enabled
+        && !startup_update_requested_restart
         && let Some((ref version, ref highlights)) = session_bootstrap.release_highlights
     {
         crate::updater::display_release_notes(&handle, version, highlights);
         crate::updater::record_current_version_seen();
+    }
+    if let Some(slot) = stop_slot.as_ref() {
+        crate::agent::runloop::unified::stop_requests::mark_host_turns_ready(slot);
     }
     Ok(SetupFlow::Proceed(Box::new(Setup {
         config,
@@ -822,6 +830,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         exec_completion_notify,
         pending_background_completions,
         pending_matrix_note,
+        pending_monitor_note,
         displayed_matrix_revision,
         webmcp_prompt_sender,
         webmcp_prompt_receiver,

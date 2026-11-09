@@ -39,7 +39,7 @@ When `allow_tool_ansi = false`, the following ANSI sequences are removed:
 ### OSC (Operating System Command)
 
 - Format: `ESC ] ... ST` (where ST = ESC \ or BEL)
-- Examples: Hyperlinks, terminal title changes
+- Examples: Hyperlinks, terminal title changes, nested program-status reports (OSC 7501)
 
 ### Character Set Designations
 
@@ -85,7 +85,7 @@ ANSI stripping applies to:
 
 ### Strip Function
 
-Location: `src/agent/runloop/tool_output/streams.rs:516`
+Location: `crates/common/vtcode-commons/src/ansi.rs` (`strip_ansi_codes`), wrapped for tool output at `src/agent/runloop/tool_output/streams_helpers.rs`
 
 The `strip_ansi_codes()` function:
 
@@ -184,7 +184,7 @@ The ANSI stripping function is comprehensively tested with 16 test cases coverin
 Run tests:
 
 ```bash
-cargo test --bin vtcode tool_output::streams::ansi_stripping_tests
+cargo nextest run --locked -p vtcode-commons -E 'test(ansi::tests)'
 ```
 
 All tests consistently pass, validating the robustness of the implementation.

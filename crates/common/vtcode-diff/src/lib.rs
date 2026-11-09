@@ -18,6 +18,7 @@ mod format;
 mod intraline;
 mod layout;
 mod parse;
+mod reverse;
 mod types;
 
 pub use compute::compute_diff;
@@ -28,6 +29,7 @@ pub use format::{
 };
 pub use intraline::{annotate_word_level_diffs, compute_diff_chunks, word_level_changed_ranges};
 pub use layout::{bounded_display_lines, layout_display_lines};
+pub use reverse::{MAX_REVERSE_FILE_BYTES, ReverseApplyError, UnifiedFile, reverse_apply_hunks, split_unified_files};
 pub use types::*;
 
 #[cfg(feature = "ratatui")]

@@ -119,6 +119,10 @@ a cleared gate or replenishing reminder/cross-turn recovery budgets. Unchanged
 tracker updates, repeated summaries, and replay do not restore those budgets.
 Exhaustion produces a blocked handoff with the failing command, observed terminal
 exit status, and bounded failure tail even below the consecutive-failure limit.
+When the failure output shows a missing executable (toolchain not on `PATH`)
+rather than a failing assertion, both the in-turn coaching and the handoff say
+so explicitly — re-running the same command cannot fix the environment — and
+point at installing the toolchain or correcting the tracker's `verify` metadata.
 
 If no verifier is available or recovery budgets are exhausted, changes remain in
 place and the run returns the existing blocked/failure outcome with unverified

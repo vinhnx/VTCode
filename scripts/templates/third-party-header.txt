@@ -32,10 +32,19 @@ Kepano (MIT-licensed network allowlist)
 
 Zed GPUI macOS backend
   Source: https://github.com/zed-industries/zed
-  Snapshot: gpui-pre-macos 0.3.9, zed@93d745668805029476e6d7fbb19652116fed51de
+  Snapshot: gpui-pre-macos 0.3.11, zed@f816e1f9263e3a8ef63c4baaa02e1441ce1c6038
   License: Apache License, Version 2.0
   Vendored path: patches/gpui-pre-macos
   VT Code modifications: immediate native cursor refresh, state-lock release
   before AppKit callbacks, content-boundary guard and regression coverage.
   See patches/gpui-pre-macos/PATCH.md and LICENSE-APACHE.
+
+Pele diagram renderer
+  Source: https://github.com/obsidianmd/pele
+  Snapshot: pele 1.13.0 (npm registry tarball, 2026-11-08)
+  License: MIT
+  Vendored path: resources/pele/pele.global.js
+  VT Code modifications: none; the bundle is inlined verbatim into the
+  desktop diagram-preview page so previews work offline.
+  See resources/pele/PROVENANCE.md and LICENSE.
 

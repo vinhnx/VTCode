@@ -534,6 +534,8 @@ else
 fi
 
 # Neither auth has push -> nonzero, fast failure.
+# Invoked indirectly: exported below and called by ensure_release_push_access.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "api" ]]; then
         printf 'false'
@@ -604,6 +606,76 @@ for item in "x86_64-apple-darwin:tar.gz" "aarch64-apple-darwin:tar.gz" \
 done
 if [[ "$collision" -eq 0 ]]; then
     pass "desktop asset matches no updater selector for any CLI target"
+fi
+
+echo "Testing append_desktop_release_notes..."
+
+gh() {
+    if [[ "$1" == "release" && "$2" == "view" ]]; then
+        if [[ "${TEST_GH_VIEW_FAILS:-0}" == "1" ]]; then
+            return 1
+        fi
+        printf '%s' "${TEST_RELEASE_BODY:-## Old notes}"
+        return 0
+    fi
+    if [[ "$1" == "release" && "$2" == "edit" ]]; then
+        printf '%s\n' "$*" >>"$tmp/gh-edit-args"
+        return "${TEST_GH_EDIT_FAILS:-0}"
+    fi
+    return 0
+}
+export -f gh
+
+: >"$tmp/gh-edit-args"
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "unsigned" >/dev/null 2>&1 \
+    && grep -Fq -- "### Desktop app (macOS)" "$tmp/gh-edit-args" \
+    && grep -Fq -- "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "$tmp/gh-edit-args" \
+    && grep -Fq -- "Apple Silicon" "$tmp/gh-edit-args" \
+    && grep -Fq -- "ad hoc signed" "$tmp/gh-edit-args" \
+    && grep -Fq -- "## Old notes" "$tmp/gh-edit-args"; then
+    pass "unsigned notes append the desktop section and keep existing notes"
+else
+    fail_test "unsigned notes should append the desktop section"
+fi
+
+: >"$tmp/gh-edit-args"
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-x86_64-apple-darwin.zip" "notarized" >/dev/null 2>&1 \
+    && grep -Fq -- "Intel" "$tmp/gh-edit-args" \
+    && grep -Fq -- "notarized, so it opens normally" "$tmp/gh-edit-args" \
+    && ! grep -Fq -- "ad hoc signed" "$tmp/gh-edit-args"; then
+    pass "notarized notes name Intel and skip the Gatekeeper guidance"
+else
+    fail_test "notarized notes should name Intel without ad hoc guidance"
+fi
+
+: >"$tmp/gh-edit-args"
+TEST_RELEASE_BODY="## Old notes vtcode-desktop-0.181.0-aarch64-apple-darwin.zip"
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "unsigned" >/dev/null 2>&1 \
+    && [[ ! -s "$tmp/gh-edit-args" ]]; then
+    pass "notes edit is skipped when the desktop archive is already referenced"
+else
+    fail_test "notes edit should be idempotent"
+fi
+unset TEST_RELEASE_BODY
+
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-x86_64-pc-windows-msvc.zip" "unsigned" >/dev/null 2>&1; then
+    fail_test "unexpected desktop archive name should be rejected"
+else
+    pass "unexpected desktop archive name rejected"
+fi
+
+TEST_GH_VIEW_FAILS=1
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "unsigned" >/dev/null 2>&1; then
+    fail_test "unreadable release notes should fail"
+else
+    pass "unreadable release notes fail"
+fi
+unset TEST_GH_VIEW_FAILS
+
+if append_desktop_release_notes "0.181.0" >/dev/null 2>&1; then
+    fail_test "notes helper missing args should fail"
+else
+    pass "notes helper missing args rejected"
 fi
 
 if [[ "$fail" -ne 0 ]]; then

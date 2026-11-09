@@ -44,11 +44,10 @@ fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAp
             (assistant_body.top() - assistant_column.top()).abs() <= px(1.),
             "agent prose should start directly in its row without a speaker header"
         );
-        // Later user turns open with a divider; the bubble still starts
-        // directly after it with no speaker header.
-        let divider = window.find("turn-divider-user-center").bounds();
+        // User bubbles start directly in their row without a divider or header.
+        assert!(window.try_find("turn-divider-user-center").is_none());
         assert!(
-            user_body.top() - divider.bottom() <= px(16.),
+            user_body.top() - user_column.top() <= px(16.),
             "the user bubble should not reserve space for a speaker header"
         );
         assert!(user_body.left() > assistant_body.left(), "user bubbles align to the trailing edge");
@@ -60,10 +59,10 @@ fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAp
         window.render_frame(cx);
         assert!(window.try_find("copy-message-user-center").is_none());
         assert!(window.try_find("copy-message-assistant-center").is_some());
-        assert!(
-            (assistant_body.origin.x - assistant_column.origin.x).abs() <= px(1.),
-            "assistant text should begin at the centered transcript column inset: body={assistant_body:?}, column={assistant_column:?}"
-        );
+        // Assistant text insets to the header title spine; the column
+        // itself stays centered (pinned above).
+        let tool_title = window.find("tool-title-tool-center").bounds();
+        assert_eq!(assistant_body.origin.x, tool_title.origin.x, "assistant text begins on the header spine");
     })
     .unwrap();
 
@@ -369,7 +368,7 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1000.))), cx);
+        scroll_settings_by(window, px(-1000.), cx);
         window.render_frame(cx);
         assert_eq!(window.find_all("file-open-destination-select").len(), 1);
         assert_eq!(window.find("file-open-destination-select").value(), Some("File viewer"));
@@ -411,7 +410,7 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
     })
     .unwrap();
 
-    // A repeat confirmation is a no-op that keeps the saved choice.
+    // A repeat confirmation re-saves the same choice.
     cx.update_window(window, |_, _, cx| {
         let select = view.read(cx).file_destination_select.clone();
         select.update(cx, |_, cx| cx.emit(SelectEvent::Confirm(Some(FileOpenDestination::Xcode))));
@@ -475,7 +474,7 @@ fn destination_dropdown_offers_detected_saved_and_system_choices(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
-fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(cx: &mut TestAppContext) {
+fn session_transitions_clear_runtime_projections_and_model_switch_preserves_the_thread(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let session = json!({
         "sessionId": "next-session", "title": "Next", "workspace": "/workspace",
@@ -514,6 +513,7 @@ fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(
                         changes: vec![vtcode_exec_events::FileUpdateChange {
                             path: "old.rs".into(),
                             kind: vtcode_exec_events::PatchChangeKind::Update,
+                            terminators_normalized: None,
                         }],
                         status: vtcode_exec_events::PatchApplyStatus::Completed,
                         unified_diff: Some("--- a/old.rs\n+++ b/old.rs\n@@ -1 +1 @@\n-before\n+after\n".into()),
@@ -556,16 +556,38 @@ fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(
         }
         cx.update_window(window, |_, _, cx| {
             let view = view.read(cx);
+            if method == vtcode_desktop_protocol::method::CONFIG_SELECT {
+                // A model switch restarts the runtime under the same session
+                // id: every thread projection stays intact.
+                let usage = view.last_usage.as_ref().expect("usage survives a model switch");
+                assert_eq!(usage.input_tokens, 100);
+                assert_eq!(usage.output_tokens, 20);
+                assert_eq!(view.changes.entries().len(), 1);
+                assert_eq!(view.selected_change.as_deref(), Some("old.rs"));
+                assert!(view.change_viewer.is_some());
+                assert_eq!(view.attachments.len(), 1);
+                assert_eq!(view.attachments[0].path, "old.rs");
+                assert_eq!(view.interaction_choice_ids, vec![Some("old-choice".to_string())]);
+                assert_eq!(view.interaction_answer_texts, vec![Some("old answer".to_string())]);
+                assert_eq!(view.interaction_step_index, 2);
+                assert!(view.attachments_picker_open);
+                // The loop shares one view: the LOAD leg's restored row plus
+                // this leg's seeded rows (answer + diff card mirror) all
+                // survive the model switch.
+                assert_eq!(view.transcript.get(0).unwrap().text, "Restored answer");
+                assert_eq!(view.transcript.get(1).unwrap().text, "Old answer");
+                assert_eq!(
+                    view.transcript.get(2).unwrap().text,
+                    "--- a/old.rs\n+++ b/old.rs\n@@ -1 +1 @@\n-before\n+after\n"
+                );
+                assert!(view.transcript.get(3).is_none());
+                return;
+            }
             assert!(view.last_usage.is_none(), "{method}");
             assert!(view.changes.entries().is_empty(), "{method}");
             assert!(view.selected_change.is_none(), "{method}");
             assert!(view.change_viewer.is_none(), "{method}");
-            if method == vtcode_desktop_protocol::method::CONFIG_SELECT {
-                assert_eq!(view.attachments.len(), 1);
-                assert_eq!(view.attachments[0].path, "old.rs");
-            } else {
-                assert!(view.attachments.is_empty(), "{method}");
-            }
+            assert!(view.attachments.is_empty(), "{method}");
             assert!(view.interaction_choice_ids.is_empty(), "{method}");
             assert!(view.interaction_answer_texts.is_empty(), "{method}");
             assert_eq!(view.interaction_step_index, 0, "{method}");

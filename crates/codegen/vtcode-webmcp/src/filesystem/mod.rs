@@ -665,11 +665,15 @@ fn reject_hard_links(metadata: &std::fs::Metadata, path: &str) -> Result<()> {
 }
 
 fn digest_text(content: &str) -> String {
+    use std::fmt::Write as _;
+
     let digest = Sha256::digest(content.as_bytes());
     let mut encoded = String::with_capacity(7 + digest.len() * 2);
     encoded.push_str("sha256:");
+    // `write!` appends into the pre-sized buffer: the previous per-byte
+    // `format!` allocated a fresh `String` 32 times per digest.
     for byte in digest {
-        encoded.push_str(&format!("{byte:02x}"));
+        let _ignored = write!(encoded, "{byte:02x}");
     }
     encoded
 }

@@ -215,6 +215,18 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // Vercel AI Gateway presets
     presets.extend(presets::vercel_presets());
 
+    // Remaining providers in `Provider::all_providers` relative order. Every
+    // provider needs presets here: the global manager seeds from this list,
+    // and anything missing warns as unknown in `create_provider_for_model`.
+    // The `builtin_presets_cover_every_provider_except_poolside` test guards against drift.
+    presets.extend(presets::mimo_presets());
+    presets.extend(presets::mistral_presets());
+    presets.extend(presets::huggingface_presets());
+    presets.extend(presets::openrouter_presets());
+    presets.extend(presets::ollama_presets());
+    presets.extend(presets::moonshot_presets());
+    presets.extend(presets::qwen_presets());
+
     presets
 }
 
@@ -268,6 +280,25 @@ mod tests {
             let default_count = presets.iter().filter(|p| p.provider == provider && p.is_default).count();
             assert!(default_count <= 1, "Provider {provider:?} has {default_count} defaults, expected 0 or 1");
         }
+    }
+
+    /// Totality guard: the global manager (`ModelsManager::new`) seeds from
+    /// `builtin_model_presets`, so every provider needs at least one preset
+    /// here or its models warn as unknown in `create_provider_for_model`.
+    /// Add new providers next to their `presets_for_provider` arm.
+    #[test]
+    fn builtin_presets_cover_every_provider_except_poolside() {
+        let presets = builtin_model_presets();
+        let mut uncovered = Vec::new();
+        for provider in Provider::all_providers() {
+            if !presets.iter().any(|preset| preset.provider == provider) {
+                uncovered.push(provider);
+            }
+        }
+        // Poolside's catalog was removed (Laguna deprecated): the enum variant
+        // stays for config compat but there are no models to preset. If the
+        // variant is ever removed, delete it from this expectation.
+        assert_eq!(uncovered, [Provider::Poolside]);
     }
 
     #[test]

@@ -28,6 +28,9 @@ pub async fn handle_revert_command(
             }
             if scope.includes_code() {
                 println!("Applied code changes from checkpoint turn {turn}.");
+                if let Some(skipped) = restored.metadata.skipped_paths.as_ref().filter(|s| !s.is_empty()) {
+                    println!("Warning: this checkpoint skipped {} — the restore may be incomplete.", skipped.summary());
+                }
             } else {
                 println!("Loaded checkpoint turn {turn} without applying code changes.");
             }

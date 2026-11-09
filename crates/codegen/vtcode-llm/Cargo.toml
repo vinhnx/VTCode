@@ -24,7 +24,7 @@ futures = { workspace = true }
 hashbrown = { workspace = true }
 openai-harmony = "0.0.8"
 once_cell = { workspace = true }
-parking_lot = "0.12"
+parking_lot = "0.13"
 reqwest = { workspace = true, features = ["http2"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rig = { workspace = true }
@@ -32,6 +32,7 @@ rustc-hash = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
 tokio-stream = { workspace = true, optional = true }

@@ -1,5 +1,46 @@
 use super::*;
 
+#[test]
+fn restored_activity_reconstructs_interleaved_interrupted_output_chunks() {
+    use vtcode_core::core::agent::events::{tool_output_delta_event, tool_output_started_event};
+    use vtcode_core::exec::events::ThreadItemDetails;
+    let dir = tempfile::tempdir().unwrap();
+    let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+    let log = vtcode_memory::open(&workspace, "interrupted-output", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+    for event in [
+        tool_output_started_event("a".into(), None),
+        tool_output_delta_event("a".into(), None, "first "),
+        tool_output_delta_event("orphan".into(), None, "tail"),
+        tool_output_delta_event("a".into(), None, "second"),
+        tool_output_started_event("controls".into(), None),
+        tool_output_delta_event("controls".into(), None, "\0".repeat(12_000)),
+    ] {
+        log.append(&event).unwrap();
+    }
+    log.flush().unwrap();
+    let history = restored_inspector_history(&workspace, "interrupted-output").unwrap();
+    let output = |id: &str| {
+        history
+            .activity_items
+            .iter()
+            .find_map(|item| {
+                if item.id == id
+                    && let ThreadItemDetails::ToolOutput(output) = &item.details
+                {
+                    Some(output.output.as_str())
+                } else {
+                    None
+                }
+            })
+            .unwrap()
+    };
+    assert_eq!(output("a:output"), "first second");
+    assert_eq!(output("orphan:output"), format!("tail{RESTORED_OUTPUT_TRUNCATION_SUFFIX}"));
+    assert!(output("controls:output").ends_with(RESTORED_OUTPUT_TRUNCATION_SUFFIX));
+    assert!(output("controls:output").starts_with('\0'));
+    assert!(history.activity_incomplete);
+}
+
 #[cfg(unix)]
 #[test]
 fn restored_activity_recovers_bounded_spooled_tool_output() {
@@ -248,16 +289,16 @@ fn review_scope_is_bounded_to_existing_workspace_directories() {
     std::fs::create_dir(root.join("src")).unwrap();
     std::fs::create_dir(root.join(" spaced ")).unwrap();
     std::fs::write(root.join("file"), "not a directory").unwrap();
-    assert_eq!(resolve_review_scope(&root, None).unwrap(), root);
-    assert_eq!(resolve_review_scope(&root, Some("src")).unwrap(), root.join("src"));
-    assert_eq!(resolve_review_scope(&root, Some(" spaced ")).unwrap(), root.join(" spaced "));
-    assert!(resolve_review_scope(&root, Some("file")).is_err());
-    assert!(resolve_review_scope(&root, Some(outside.path().to_str().unwrap())).is_err());
-    assert!(resolve_review_scope(&root, Some(&"x".repeat(4097))).is_err());
+    assert_eq!(dispatch::resolve_review_scope(&root, None).unwrap(), root);
+    assert_eq!(dispatch::resolve_review_scope(&root, Some("src")).unwrap(), root.join("src"));
+    assert_eq!(dispatch::resolve_review_scope(&root, Some(" spaced ")).unwrap(), root.join(" spaced "));
+    assert!(dispatch::resolve_review_scope(&root, Some("file")).is_err());
+    assert!(dispatch::resolve_review_scope(&root, Some(outside.path().to_str().unwrap())).is_err());
+    assert!(dispatch::resolve_review_scope(&root, Some(&"x".repeat(4097))).is_err());
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
-        assert!(resolve_review_scope(&root, Some("escape")).is_err());
+        assert!(dispatch::resolve_review_scope(&root, Some("escape")).is_err());
     }
 }
 #[test]

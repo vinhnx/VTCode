@@ -11,8 +11,13 @@ use crate::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 use anyhow::{Result, anyhow};
 use std::process::Command;
 
-use self::platform::install_with_smart_detection;
+use self::platform::{install_with_smart_detection, manual_install_guide};
 use self::state::{InstallLockGuard, InstallationCache};
+
+/// Manual install steps for CLI fallback messages (issue #802).
+pub fn ripgrep_manual_install_guide() -> &'static str {
+    manual_install_guide()
+}
 
 /// Result of ripgrep availability check
 #[derive(Debug, Clone, PartialEq)]
@@ -97,7 +102,13 @@ impl RipgrepStatus {
         {
             let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
             debug_log(&format!("Cache shows previous failure: {reason}"));
-            return Err(anyhow!("Previous installation attempt failed ({reason}). Not retrying for 24 hours."));
+            if reason.contains("manually") {
+                return Err(anyhow!("Previous installation attempt failed ({reason}). Not retrying for 24 hours."));
+            }
+            return Err(anyhow!(
+                "Previous installation attempt failed ({reason}). Not retrying for 24 hours.\n{}",
+                manual_install_guide()
+            ));
         }
 
         let result = install_with_smart_detection();
@@ -153,5 +164,17 @@ mod tests {
     fn test_ripgrep_status_check() {
         let status = RipgrepStatus::check();
         tracing::debug!(?status, "Ripgrep status");
+    }
+
+    #[test]
+    fn manual_guide_covers_all_platforms() {
+        let guide = ripgrep_manual_install_guide();
+        // "manually" is the marker the install-cache dedup checks for.
+        assert!(guide.contains("manually"), "{guide}");
+        assert!(guide.contains("apt install -y ripgrep"), "{guide}");
+        assert!(guide.contains("brew install ripgrep"), "{guide}");
+        assert!(guide.contains("cargo install ripgrep"), "{guide}");
+        assert!(guide.contains("BurntSushi/ripgrep/releases"), "{guide}");
+        assert!(guide.contains("vtcode dependencies status ripgrep"), "{guide}");
     }
 }

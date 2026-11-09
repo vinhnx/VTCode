@@ -20,6 +20,9 @@ fn transcript_copy_is_localized_for_every_language() {
             "app.transcript.choose_workspace",
             "app.transcript.welcome_label",
             "app.transcript.jump_latest",
+            "app.transcript.scroll_first",
+            "app.transcript.filter_next",
+            "app.transcript.filter_clear",
             "app.transcript.conversation_label",
             "app.transcript.zen_start_label",
             "app.transcript.navigating_back",
@@ -57,6 +60,9 @@ fn transcript_copy_is_localized_for_every_language() {
             "app.transcript.expand",
             "app.transcript.copy_output_for",
             "app.transcript.you",
+            "app.transcript.turn_undo",
+            "app.transcript.turn_undo_action",
+            "app.transcript.turn_undone",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -103,5 +109,9 @@ fn transcript_copy_is_localized_for_every_language() {
         assert!(failed.contains('9'), "{locale}: {failed}");
         let copy = rust_i18n::t!("app.transcript.copy_output_for", locale = locale, title = "demo-title").to_string();
         assert!(copy.contains("demo-title"), "{locale}: {copy}");
+        let next = rust_i18n::t!("app.transcript.filter_next", locale = locale, position = 2, total = 7).to_string();
+        for marker in ["2", "7"] {
+            assert!(next.contains(marker), "{locale}: {next}");
+        }
     }
 }

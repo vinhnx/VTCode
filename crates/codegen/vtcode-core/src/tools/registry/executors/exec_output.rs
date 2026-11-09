@@ -20,6 +20,7 @@ use regex::Regex;
 use serde_json::{Value, json};
 use std::{fmt::Write, sync::Mutex};
 use vtcode_commons::preview::{condense_text_bytes, excerpt_text_lines};
+use vtcode_commons::tokens::CHARS_PER_TOKEN;
 
 const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
 
@@ -30,7 +31,7 @@ pub(super) fn build_exec_output_preview(raw_output: &str, max_tokens: usize) -> 
         return (String::new(), true);
     }
 
-    let max_output_len = max_tokens.saturating_mul(4);
+    let max_output_len = max_tokens.saturating_mul(CHARS_PER_TOKEN);
     if raw_output.len() <= max_output_len {
         return (String::new(), false);
     }

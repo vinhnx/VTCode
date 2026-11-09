@@ -96,6 +96,48 @@ fn local_cancellation_and_exit_precede_provider_errors() {
     assert!(matches!(provider_stop_outcome(&state, &error), Some(TurnLoopResult::Exit)));
 }
 
+#[tokio::test]
+async fn cancelled_successful_response_is_not_retained_as_a_plan() {
+    struct CancelledPlanProvider {
+        stop: Arc<crate::agent::runloop::unified::state::CtrlCState>,
+    }
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for CancelledPlanProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+        async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+            self.stop.request_local_cancel();
+            Ok(uni::LLMResponse {
+                content: Some(STREAMED_VALID_PLAN.to_owned()),
+                model: request.model,
+                ..Default::default()
+            })
+        }
+        fn supported_models(&self) -> Vec<String> {
+            vec!["noop-model".to_owned()]
+        }
+        fn validate_request(&self, _: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
+    }
+
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let stop = backing.turn_loop_context().ctrl_c_state.clone();
+    backing.set_provider(Box::new(CancelledPlanProvider { stop }));
+    let mut history = vec![uni::Message::user("investigate the handoff".to_owned())];
+    let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
+        .await
+        .expect("cancelled turn");
+    assert!(matches!(outcome.result, TurnLoopResult::Cancelled));
+    assert!(backing.turn_loop_context().plan_session.recovery.best_draft.is_none());
+}
+
 #[test]
 fn current_turn_preserve_index_keeps_user_request_before_transient_notes() {
     let history = vec![
@@ -190,10 +232,66 @@ fn planning_recovery_prompt_constants_keep_inspection_verify_examples() {
 }
 
 #[tokio::test]
+async fn recovery_clarification_does_not_approve_an_older_plan() {
+    recovery_input_does_not_approve_an_older_plan(true).await;
+    recovery_input_does_not_approve_an_older_plan(false).await;
+}
+
+async fn recovery_input_does_not_approve_an_older_plan(prepared_user_input: bool) {
+    use vtcode_core::exec::events::planning::PlanningOutcome;
+
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    backing.persist_plan_for_test(STREAMED_VALID_PLAN).await;
+    let calls = Arc::new(AtomicUsize::new(0));
+    backing.set_provider(Box::new(StreamedPlanProvider {
+        script: StreamedPlanScript::InvalidThenProse,
+        calls: calls.clone(),
+    }));
+    {
+        let ctx = backing.turn_loop_context();
+        ctx.plan_session.recovery.outcome = PlanningOutcome::AwaitingInput;
+        if prepared_user_input {
+            ctx.plan_session.begin_explicit_recovery_cycle_for_user_input();
+        }
+    }
+
+    let mut history = vec![uni::Message::user("yes".to_string())];
+    let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
+        .await
+        .expect("recovery input should continue planning");
+
+    assert!(!outcome.plan_approved_execution_pending);
+    assert!(calls.load(Ordering::SeqCst) > 0, "recovery input must reach the provider");
+}
+
+#[tokio::test]
+async fn recovery_input_allows_explicit_cancel() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    {
+        let ctx = backing.turn_loop_context();
+        ctx.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+        ctx.plan_session.begin_explicit_recovery_cycle_for_user_input();
+    }
+    let mut history = vec![uni::Message::user("cancel plan".to_string())];
+    let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
+        .await
+        .expect("cancel planning");
+    assert!(!outcome.plan_approved_execution_pending);
+    assert!(!backing.turn_loop_context().is_planning_active());
+}
+
+#[tokio::test]
 async fn approved_plan_handoff_without_assistant_response_stays_completed() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
     backing.persist_plan_for_test(STREAMED_VALID_PLAN).await;
+    {
+        let ctx = backing.turn_loop_context();
+        ctx.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval;
+        ctx.plan_session.begin_explicit_recovery_cycle_for_user_input();
+    }
     let harness_path = backing.enable_harness_emitter();
 
     let mut history = vec![uni::Message::user("yes".to_string())];

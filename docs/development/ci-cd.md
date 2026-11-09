@@ -54,6 +54,12 @@ without assuming an old CI filename. Explicit nightly checks remain separate.
   correct. It must stay inline: a local `uses: ./.github/actions/...` cannot run before
   `actions/checkout`, because the action file is not in the workspace yet.
 
+**Cross-target cache keys:** `Swatinem/rust-cache` keys off the target triple only when `CARGO_BUILD_TARGET`
+is set or you pass `key:`. Builds that pass `--target` via the CLI (e.g. `cross build --target`) share ONE cache
+key across matrix jobs on the same runner OS, causing colliding/failing saves and every target restoring a
+mismatched cache. Always namespace the cache per target (`with: { key: ${{ matrix.target }} }`) in cross-target
+matrix jobs.
+
 **Compiler-cache pilot:** the dispatch/reusable-workflow input `compiler_cache_pilot` defaults to
 `false`. Set it to `true` to install sccache for native GNU Linux and Windows, with incremental
 compilation disabled and cache statistics recorded. Cross-container builds are deliberately excluded.
@@ -153,6 +159,13 @@ binaries and print a warning. Gatekeeper may warn, block, or ask users to approv
 hide or dismiss those macOS security dialogs. This keeps macOS releases available without a paid developer account, with
 the tradeoff that first-run security friction remains.
 
+That friction is a documented install step, not a footnote: every desktop install surface (the CLI's
+`desktop --install` notice, `scripts/install.sh`, `FIRST-LAUNCH.txt`, the Homebrew cask caveats, release notes, and the
+install docs) tells users to open the app once, then click **Open Anyway** in System Settings › Privacy & Security.
+macOS only offers that button for about an hour after a blocked launch, and macOS 15+ dropped the right-click › Open
+bypass entirely, so the guidance must name the Settings route. `src/cli/desktop.rs` and
+`scripts/tests/test_install_desktop.sh` pin the wording.
+
 To enable signing and notarization, the Mac running the release needs a Developer ID Application certificate in its
 keychain and a `notarytool` keychain profile. Create the profile with `xcrun notarytool store-credentials`, then set the
 profile name and full signing identity before releasing:
@@ -192,13 +205,17 @@ baseline/candidate comparisons.
 catch sub-1s regressions before shipping. All build commands use `--locked` to ensure the Cargo.lock matches Cargo.toml
 so the size-optimized profiles are actually applied.
 
-Homebrew formula transformations are shared by the three release scripts through `scripts/homebrew-formula.sh`.
+Homebrew formula transformations are shared by the three release scripts through `scripts/homebrew-formula.sh`;
+`scripts/homebrew-tap.sh` owns checksum lookup, local commits, and tap publication for the active `release.sh` path.
 All four digests (Intel/ARM macOS and Intel/ARM GNU Linux) must be present and valid before the formula version changes.
-The helper also rejects missing or duplicate formula entries before writing. Callers retain ownership of checksum
-retrieval, commits, and tap publication. Run the fixture checks without publishing:
+The helper also rejects missing or duplicate formula entries before writing. The same helper updates the Apple Silicon
+desktop cask from `vtcode-desktop-<version>-aarch64-apple-darwin.zip.sha256`; the cask is published to
+`vinhnx/homebrew-tap/Casks/vtcode-desktop.rb` and skipped when a release has no desktop archive. Run the fixture
+checks without publishing:
 
 ```bash
 python3 scripts/tests/test_homebrew_formula.py
+python3 scripts/tests/test_homebrew_cask.py
 ```
 
 ### 3. Release (driven by `scripts/release.sh`, no dedicated workflow)
@@ -346,6 +363,20 @@ Use the provided development check script to run the same checks locally:
 ./scripts/check.sh deny     # cargo-deny policy (RustSec advisories, licenses, bans, sources)
 ./scripts/check.sh contracts # Release-artifact contract tests
 ```
+
+### Repository Governance Gates (local only)
+
+No GitHub Actions workflow runs these checks; they run only through the local gate scripts, so run
+`./scripts/check-dev.sh` before every commit and `./scripts/check.sh` before a release. Both scripts
+call the shared functions in `scripts/common.sh`, so the fast gate and the release gate cannot drift:
+
+| Function | Checks | Runs in |
+| --- | --- | --- |
+| `run_repo_governance_gates` | file length, docs/AGENTS.md links, top-level docs placement, tracked file sizes | `check-dev.sh`, `check.sh` |
+| `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Node: `npm install`) | `check-dev.sh --lints`, `check.sh` |
+
+Do not describe these checks as CI-enforced. If a CI job is added later, it should call the same
+`scripts/common.sh` functions rather than re-implementing the checks in workflow YAML.
 
 ### Manual Setup
 

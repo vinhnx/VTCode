@@ -3,13 +3,14 @@
 use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
+use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::primary_agent_allows_tool;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use super::error_handling::tool_denial_diagnostic;
-use super::helpers::check_is_argument_error;
+use super::helpers::{check_is_argument_error, find_tool_response_after_last_assistant, is_tool_call_recorded};
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::run_loop_context::full_auto_loop_grants_enabled;
 use crate::agent::runloop::unified::run_loop_context::{
@@ -464,6 +465,57 @@ pub(crate) fn push_blocked_tool_recovery_response(
     ctx.push_rejected_tool_response(tool_call.call_id(), Some(tool_name), tool_call.args(), payload.to_string());
 }
 
+/// Backstop: answer every recorded call that still has no response.
+///
+/// Early exits drain their remainders explicitly, but guard outcomes and `?`
+/// unwinds (renderer I/O, pipeline failures) can abandon recorded calls.
+/// Providers require one tool response per assistant call, so close any gap
+/// here rather than relying on request-time repair alone. The answered check
+/// shares its scan with the response upsert, so the backstop can only append:
+/// it never overwrites a legitimate response. Unrecorded ids are skipped, so
+/// the backstop can never create an orphan result either.
+pub(crate) fn reconcile_missing_tool_responses(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_calls: &[PreparedAssistantToolCall],
+) {
+    let missing: Vec<&PreparedAssistantToolCall> = tool_calls
+        .iter()
+        .filter(|tool_call| {
+            is_tool_call_recorded(ctx.working_history, tool_call.call_id())
+                && find_tool_response_after_last_assistant(ctx.working_history, tool_call.call_id()).is_none()
+        })
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+    let interrupted = crate::agent::runloop::unified::stop_requests::stop_outcome(ctx.ctrl_c_state).is_some();
+    for tool_call in missing {
+        if interrupted {
+            ctx.push_rejected_tool_response(
+                tool_call.call_id(),
+                Some(tool_call.tool_name()),
+                tool_call.args(),
+                serde_json::json!({"error":"Tool call cancelled before execution", "not_executed":true, "interrupted":true})
+                    .to_string(),
+            );
+            continue;
+        }
+        let payload = serde_json::json!({
+            "error": format!("Tool call '{}' was not executed: dispatch ended before it produced a result.", tool_call.tool_name()),
+            "failure_kind": "dispatch_incomplete",
+            "tool_name": tool_call.tool_name(),
+            "next_action": "Do not retry this call blindly; re-emit it only as part of a fresh plan.",
+            "retryable": false,
+        });
+        ctx.push_rejected_tool_response(
+            tool_call.call_id(),
+            Some(tool_call.tool_name()),
+            tool_call.args(),
+            payload.to_string(),
+        );
+    }
+}
+
 /// Push the one-time budget-exhaustion synthesis directive (wall-clock or
 /// tool-call budget) if a rejection armed it during validation. Called after
 /// the tool batch (single or grouped) completes so the system message lands
@@ -754,7 +806,14 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     tool_name: &'tool str,
     args_val: serde_json::Value,
 ) -> Result<Option<TurnHandlerOutcome>> {
-    let outcome = handle_tool_call_inner(t_ctx, tool_call_id, tool_name, &args_val).await?;
+    let outcome = handle_tool_call_inner(t_ctx, tool_call_id, tool_name, &args_val).await;
+    let prepared = PreparedAssistantToolCall::new(uni::ToolCall::function(
+        tool_call_id.to_string(),
+        tool_name.to_string(),
+        serde_json::to_string(&args_val).unwrap_or_default(),
+    ));
+    reconcile_missing_tool_responses(t_ctx.ctx, std::slice::from_ref(&prepared));
+    let outcome = outcome?;
     flush_budget_synthesis_directives(t_ctx.ctx);
     flush_session_limit_grant_directive(t_ctx.ctx);
     flush_blocked_tool_recovery(t_ctx.ctx);

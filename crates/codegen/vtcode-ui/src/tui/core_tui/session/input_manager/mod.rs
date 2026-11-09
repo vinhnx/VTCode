@@ -864,6 +864,13 @@ impl InputManager {
         &self.history
     }
 
+    /// Live session entries, excluding the prepended archived prefix. The
+    /// history picker filters archived prompts from its own scoped list, so
+    /// feeding it the merged history would bypass scope filtering.
+    pub fn live_history(&self) -> &[InputHistoryEntry] {
+        self.history.get(self.archived_count.min(self.history.len())..).unwrap_or(&[])
+    }
+
     pub fn history_texts(&self) -> Vec<String> {
         self.history.iter().map(|entry| entry.content.clone()).collect()
     }

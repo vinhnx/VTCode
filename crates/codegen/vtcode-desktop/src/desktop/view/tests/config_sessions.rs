@@ -15,6 +15,7 @@ fn session_load_defers_startup_interaction_until_history_is_ready(cx: &mut TestA
                 session_id: "restored".into(), turn_id: "session-start".into(), interaction_id: "startup".into(),
                 kind: InteractionKind::Question, wizard: false, title: "Question".into(), details: Vec::new(),
                 choices: Vec::new(), steps: Vec::new(), selected_choice_id: None, selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             })).unwrap();
             assert!(!view.drain_events(window, cx));
             assert!(view.session_load_task.is_some());
@@ -146,7 +147,7 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         window.click("open-settings", cx);
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.render_frame(cx);
         assert_eq!(window.find("provider-details").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("provider-details").label(), Some("Provider and model configuration"));
@@ -161,7 +162,7 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         assert_eq!(window.find("local-service-settings-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("local-service-details").label(), Some("Local service connection details"));
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.render_frame(cx);
         window.click("copy-credential-command", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login ollama"));
@@ -176,7 +177,7 @@ fn escape_closes_cli_config_editor_before_the_settings_page(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -194,7 +195,7 @@ fn escape_closes_cli_config_editor_before_the_settings_page(cx: &mut TestAppCont
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("agent.default_model".into(), window, cx);
         });
@@ -243,7 +244,7 @@ fn settings_surface_close_clears_the_editor_first_and_never_during_a_write(cx: &
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -261,7 +262,7 @@ fn settings_surface_close_clears_the_editor_first_and_never_during_a_write(cx: &
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("agent.default_model".into(), window, cx);
         });
@@ -311,7 +312,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "provider.openai.service_tier".into(),
                     value: json!("auto"),
@@ -329,7 +330,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
         });
@@ -382,6 +383,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
         view.update(cx, |view, cx| {
             view.workspace = Some(directory.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session-live".to_string());
             view.theme_id = "ciapre-blue".into();
             view.configuration = serde_json::from_value(json!({
                 "provider": "ollama",
@@ -415,7 +417,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.click("sync-cli-theme", cx);
         let BackendCommand::Request { method, params } = requests.try_recv().expect("theme request") else {
             panic!("expected a theme request");
@@ -438,8 +440,8 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             assert_eq!(view.theme_id, "ciapre-blue");
             assert_eq!(view.preferences.follow_cli_theme, Some(true));
             assert_eq!(view.composer.read(cx).value().as_str(), "Keep this draft");
-            assert!(view.selected_session_id.is_none());
-            assert_eq!(view.status, "CLI theme saved. The next message starts a new session.");
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-live"), "theme sync preserves the thread");
+            assert_eq!(view.status, "CLI theme saved.");
         });
     })
     .unwrap();
@@ -593,7 +595,7 @@ fn command_and_add_context_palettes_follow_the_selected_language(cx: &mut TestAp
         // The attach button opens the tabbed card picker.
         window.click("attach-files", cx);
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some(), "attach opens the picker");
+        assert!(window.try_find("attachment-picker-tabs").is_some(), "attach opens the picker");
         view.update(cx, |view, cx| view.close_attachment_picker(window, cx));
         window.render_frame(cx);
         // The AddContext palette remains reachable through its action (@ / ⌘⇧A).
@@ -724,4 +726,126 @@ fn deferred_submission_rechecks_credentials_before_sending(cx: &mut TestAppConte
     })
     .unwrap();
     assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn model_switch_response_preserves_the_thread_and_applies_the_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-live".to_string());
+            view.open_tabs = vec!["session-live".to_string()];
+            view.transcript.push(TranscriptItem::new(
+                "kept-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Conversation remains visible.".into(),
+            ));
+            let mut configuration = runtime_options_config();
+            configuration.provider = "ollama".into();
+            configuration.model = "gpt-oss:20b".into();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_SELECT.into(),
+                    result: Some(json!(configuration)),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-live"), "model switch preserves the thread");
+            assert_eq!(view.open_tabs, vec!["session-live".to_string()], "tabs survive the change");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Conversation remains visible.");
+            assert!(view.transcript.get(1).is_none(), "no transcript row is added or dropped");
+            let applied = view.configuration.as_ref().unwrap();
+            assert_eq!(applied.provider, "ollama");
+            assert_eq!(applied.model, "gpt-oss:20b");
+            assert_eq!(view.status, "Switched to gpt-oss:20b.");
+            assert!(view.error.is_none());
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn model_switch_invalid_snapshot_keeps_configuration_and_reports_error(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-live".to_string());
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_SELECT.into(),
+                    result: Some(json!({"bogus": true})),
+                    error: None,
+                },
+                cx,
+            );
+            // A malformed snapshot must never silently clear the running
+            // configuration: keep the old snapshot, keep the thread, and say
+            // what went wrong (CONFIG_OPTIONS parity).
+            assert_eq!(view.configuration.as_ref().unwrap().model, "gpt-5.6-sol");
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-live"));
+            assert!(view.error.is_some());
+            assert!(view.backend.is_none(), "protocol desync disconnects like the options arm");
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn cli_config_enum_editor_contains_tab_focus(cx: &mut TestAppContext) {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![vtcode_desktop_protocol::ConfigSetting {
+                    path: "provider.openai.service_tier".into(),
+                    value: json!("auto"),
+                    origin: Some("user".into()),
+                    label: Some("Service tier".into()),
+                    type_name: Some("string".into()),
+                    default_value: None,
+                    description: Some("Choose the request service tier.".into()),
+                    options: vec!["auto".into(), "fast".into()],
+                    group: Some("Model & Provider".into()),
+                    group_description: None,
+                    editable: true,
+                }],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            }));
+            view.open_settings(window, cx);
+            view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(window.simulate_next_frame(cx) > 0);
+        assert!(window.try_find("cli-config-option-select").is_some(), "the enum editor opens");
+        // The closed Kit Select carries an id-less interior stop (the wrap
+        // cycle visits it between save and the select), so pin containment
+        // like the palette test instead of exact endpoints — and prove the
+        // cycle still reaches both the select and the save action.
+        let mut visited_select = false;
+        let mut visited_save = false;
+        for key in ["tab", "tab", "tab", "tab", "shift-tab", "shift-tab"] {
+            window.press(key, cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).config_editor_focus.contains_focused(window, cx), "{key} stays inside the editor");
+            visited_select |= window.find("cli-config-option-select").focused() == Some(true);
+            visited_save |= window.find("save-cli-config-edit").focused() == Some(true);
+        }
+        assert!(visited_select && visited_save, "tab cycles the editor stops");
+    })
+    .unwrap();
 }

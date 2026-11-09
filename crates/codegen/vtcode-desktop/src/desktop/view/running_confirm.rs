@@ -48,6 +48,8 @@ impl DesktopView {
             return;
         }
         self.disarm_double_escape();
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         self.running_confirm = Some(RunningSwitch { intent, workspace: self.workspace.clone() });
         self.running_confirm_focus.focus(window, cx);
         cx.notify();
@@ -163,6 +165,7 @@ impl DesktopView {
     /// prompts, which the warning line calls out while the queue is non-empty.
     pub(super) fn render_running_confirm(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        let weak = cx.entity().downgrade();
         let Some(switch) = self.running_confirm.as_ref() else {
             return div().into_any_element();
         };
@@ -189,6 +192,14 @@ impl DesktopView {
                     .id("running-confirm-dialog")
                     .test_support()
                     .track_focus(&self.running_confirm_focus)
+                    .focus_trap("running-confirm-dialog", &self.running_confirm_focus)
+                    // Click-away cancellation, mirroring the palette panel: a
+                    // press on the scrim cancels through the Cancel path.
+                    .on_mouse_down_out(move |_, window, cx| {
+                        let _updated = weak.update(cx, |view, cx| {
+                            view.cancel_running_confirm(window, cx);
+                        });
+                    })
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("running-confirm-dialog")
                     .aria_label(rust_i18n::t!("app.session.running_switch_title").to_string())
@@ -204,20 +215,7 @@ impl DesktopView {
                     .border_color(colors.border)
                     .shadow_md()
                     .p_5()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
-                            .child(
-                                div()
-                                    .font_semibold()
-                                    .text_lg()
-                                    .text_color(colors.foreground)
-                                    .child(rust_i18n::t!("app.session.running_switch_title").to_string()),
-                            ),
-                    )
+                    .child(consent_title_row(rust_i18n::t!("app.session.running_switch_title").to_string(), &colors))
                     .child(
                         div()
                             .id("running-confirm-body")
@@ -243,17 +241,15 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("running-confirm-cancel")
+                                desktop_default_button("running-confirm-cancel")
                                     .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.cancel_running_confirm(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("running-confirm-stop")
+                                desktop_danger_button("running-confirm-stop")
                                     .label(rust_i18n::t!("app.session.running_switch_stop").to_string())
-                                    .danger()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.confirm_running_switch(window, cx);
                                     })),

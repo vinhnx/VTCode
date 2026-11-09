@@ -223,7 +223,10 @@ impl FileOpsTool {
                 break;
             }
 
-            let display_path = self.workspace_relative_display(entry.path());
+            // This loop scans up to `MAX_PATH_SUGGESTION_SCAN` entries, so it
+            // must not pay a `realpath` per entry. The shared walker does not
+            // follow links, so rendering from its own file type is exact.
+            let display_path = self.relative_path_json_for_entry(entry.path(), entry.file_type());
             let normalized_candidate = normalize_path_for_suggestion(&display_path);
             if normalized_candidate.is_empty() || normalized_candidate == requested_path {
                 continue;

@@ -98,6 +98,7 @@ impl ResponseBuilder {
                 output_index,
                 content_index: 0,
                 prev_text: String::new(),
+                tool_output_prefix: None,
             },
         );
         self.normalized.message_item_id = Some(item_id.clone());
@@ -132,6 +133,7 @@ impl ResponseBuilder {
                 output_index,
                 content_index: 0,
                 prev_text: String::new(),
+                tool_output_prefix: None,
             },
         );
         self.normalized.reasoning_item_id = Some(item_id.clone());
@@ -175,6 +177,7 @@ impl ResponseBuilder {
                 output_index,
                 content_index: 0,
                 prev_text: String::new(),
+                tool_output_prefix: None,
             },
         );
         self.normalized.tool_calls.insert(

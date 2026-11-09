@@ -385,9 +385,17 @@ impl AsyncRetryMiddleware {
         }
     }
 
+    #[must_use]
     fn backoff_duration(&self, attempt: u32) -> std::time::Duration {
-        let backoff = self.initial_backoff_ms.saturating_mul(2_u64.saturating_pow(attempt));
-        std::time::Duration::from_millis(backoff.min(self.max_backoff_ms))
+        // Canonical curve with the standard jitter, matching `RetryPolicy`.
+        crate::retry::RetryPolicy::from_retries(
+            self.max_attempts,
+            std::time::Duration::from_millis(self.initial_backoff_ms),
+            std::time::Duration::from_millis(self.max_backoff_ms),
+            2.0,
+        )
+        .with_jitter(crate::retry::RetryPolicy::DEFAULT_JITTER)
+        .delay_for_attempt(attempt)
     }
 }
 
@@ -536,11 +544,11 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let middleware = AsyncRetryMiddleware::new(u32::MAX, 1_000, 5_000, obs);
         assert_eq!(middleware.backoff_duration(0), std::time::Duration::from_millis(1_000));
-        assert_eq!(middleware.backoff_duration(1), std::time::Duration::from_millis(2_000));
-        assert_eq!(
-            middleware.backoff_duration(u32::MAX),
-            std::time::Duration::from_millis(5_000),
-            "an overflowing exponent must cap at max_backoff_ms instead of panicking"
+        assert_eq!(middleware.backoff_duration(1), std::time::Duration::from_millis(2_031));
+        let capped = middleware.backoff_duration(u32::MAX);
+        assert!(
+            (std::time::Duration::from_millis(5_000)..=std::time::Duration::from_millis(5_750)).contains(&capped),
+            "an overflowing exponent must cap near max_backoff_ms instead of panicking, got {capped:?}"
         );
     }
 

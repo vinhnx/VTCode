@@ -40,16 +40,20 @@ pub async fn read_instruction_bundle(
     // expand_instruction_contents performs blocking filesystem I/O (read_to_string,
     // canonicalize) for each instruction file and its recursive imports. Offload
     // the entire expansion loop to the blocking thread pool.
-    let (segments, truncated, bytes_read) = tokio::task::spawn_blocking(move || {
+    let (segments, truncated, bytes_read, omitted) = tokio::task::spawn_blocking(move || {
         let mut remaining = max_bytes;
         let mut segments = Vec::with_capacity(sources.len());
         let mut truncated = false;
         let mut bytes_read = 0usize;
+        let mut omitted = Vec::new();
         let mut seen_imports = HashSet::new();
 
-        for source in sources {
+        let mut sources = sources.into_iter();
+        while let Some(source) = sources.next() {
             if remaining == 0 {
                 truncated = true;
+                omitted.push(source.path);
+                omitted.extend(sources.map(|source| source.path));
                 break;
             }
 
@@ -78,10 +82,12 @@ pub async fn read_instruction_bundle(
 
             if contents.len() > remaining {
                 truncated = true;
+                omitted.push(source.path.clone());
             }
 
-            let slice_len = contents.len().min(remaining);
-            let visible = String::from_utf8_lossy(&contents.as_bytes()[..slice_len]).to_string();
+            // Cut on a char boundary so truncation never injects U+FFFD into the prompt.
+            let slice_len = contents.floor_char_boundary(contents.len().min(remaining));
+            let visible = contents.get(..slice_len).unwrap_or_default().to_string();
             if visible.trim().is_empty() {
                 remaining = remaining.saturating_sub(slice_len);
                 continue;
@@ -92,15 +98,24 @@ pub async fn read_instruction_bundle(
             segments.push(InstructionSegment { source, contents: visible });
         }
 
-        Ok::<_, anyhow::Error>((segments, truncated, bytes_read))
+        Ok::<_, anyhow::Error>((segments, truncated, bytes_read, omitted))
     })
     .await
     .context("Instruction expansion task panicked")??;
 
+    if !omitted.is_empty() {
+        let paths: Vec<_> = omitted.iter().map(|path| path.display().to_string()).collect();
+        warn!(
+            max_bytes,
+            omitted = ?paths,
+            "instruction files exceeded the shared instruction budget (agent.instruction_max_bytes) and were cut or skipped"
+        );
+    }
+
     if segments.is_empty() {
         Ok(None)
     } else {
-        Ok(Some(InstructionBundle { segments, truncated, bytes_read }))
+        Ok(Some(InstructionBundle { segments, truncated, bytes_read, omitted }))
     }
 }
 

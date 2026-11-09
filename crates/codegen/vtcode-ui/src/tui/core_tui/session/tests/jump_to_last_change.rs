@@ -4,6 +4,7 @@
 )]
 use super::super::*;
 use super::helpers::*;
+use std::time::{Duration, Instant};
 
 fn push_agent_lines(session: &mut Session, count: usize) {
     for index in 0..count {
@@ -142,7 +143,7 @@ fn jump_dispatch_falls_back_to_bottom_when_scrolled_without_target() {
     // Simulate fresh tracking (e.g. after clear + rescroll with no changes).
     session.last_change_line_idx = None;
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
+    let event = action::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
     assert!(matches!(event, Some(InlineEvent::JumpToLastChange)));
     assert_eq!(session.scroll_offset(), 0);
 }
@@ -154,7 +155,7 @@ fn jump_dispatch_falls_back_to_cursor_end_when_at_bottom_without_target() {
     session.set_cursor(0);
     session.last_change_line_idx = None;
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
+    let event = action::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
     assert!(event.is_none());
     assert_eq!(session.input_manager.cursor(), 5, "cursor must move to buffer end");
 }
@@ -170,7 +171,7 @@ fn jump_dispatch_at_bottom_with_tracked_change_preserves_cursor_end() {
     assert!(session.last_change_line_idx.is_some());
     assert!(!session.should_show_jump_to_last_change());
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
+    let event = action::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
     assert!(event.is_none());
     assert_eq!(session.input_manager.cursor(), 5, "cursor must move to buffer end");
 }
@@ -188,6 +189,83 @@ fn wheel_scroll_via_coalesced_path_shows_jump_hint() {
     session.apply_coalesced_scroll(3, 0);
     assert_eq!(session.scroll_offset(), 0);
     assert!(!session.should_show_jump_to_last_change());
+}
+
+#[test]
+fn append_while_scrolled_counts_pending_and_preserves_position() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    let offset_before = session.scroll_offset();
+    assert!(offset_before > 0);
+    assert_eq!(session.pending_new_messages, 0, "scrolling over old content counts nothing");
+
+    for index in 0..3 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![make_segment(&format!("fresh {index}"))],
+        });
+    }
+    assert_eq!(session.pending_new_messages, 3, "one unseen row per appended line");
+    assert_eq!(session.scroll_offset(), offset_before + 3, "viewport must not drift toward new content");
+
+    let status = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
+    let text = status.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
+    assert!(text.contains("↓ 3 new"), "pending arrivals surface in the footer, got: {text}");
+}
+
+#[test]
+fn append_while_following_pins_bottom_without_pending() {
+    let mut session = prepare_sized_session(10);
+    for index in 0..3 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![make_segment(&format!("fresh {index}"))],
+        });
+    }
+    assert_eq!(session.scroll_offset(), 0, "following pins to the live bottom");
+    assert_eq!(session.pending_new_messages, 0, "visible arrivals count nothing");
+    assert!(session.build_scroll_indicator().is_none(), "no indicator at the bottom edge");
+}
+
+#[test]
+fn moving_toward_bottom_shrinks_pending_until_it_clears() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    for index in 0..4 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![make_segment(&format!("fresh {index}"))],
+        });
+    }
+    assert_eq!(session.pending_new_messages, 4);
+    // Rows reveal oldest-first, so the count only shrinks once the new rows
+    // themselves start entering the viewport.
+    while session.scroll_offset() > 2 {
+        session.scroll_line_down();
+    }
+    assert_eq!(session.pending_new_messages, 2);
+    session.scroll_to_bottom();
+    assert_eq!(session.pending_new_messages, 0);
+    assert!(session.build_scroll_indicator().is_none());
+}
+
+#[test]
+fn pasted_message_while_scrolled_preserves_position() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    let offset_before = session.scroll_offset();
+    let max_before = session.current_max_scroll_offset();
+    session.handle_command(InlineCommand::AppendPastedMessage {
+        kind: InlineMessageKind::User,
+        text: "pasted body".to_string(),
+        line_count: 1,
+    });
+    // User rows carry chrome, so assert the layout-independent invariant:
+    // the viewport shifts by exactly the row growth, all of it unseen.
+    let grown = session.current_max_scroll_offset().saturating_sub(max_before);
+    assert!(grown > 0, "paste must add rows");
+    assert_eq!(session.scroll_offset(), offset_before + grown, "paste must not drag a scrolled view");
+    assert_eq!(session.pending_new_messages, grown);
 }
 
 #[test]
@@ -209,4 +287,57 @@ fn footer_hint_appends_jump_label_while_scrolled() {
         after_text.contains("Jump to last change [Ctrl+End]"),
         "scrolled view must show the jump hint, got: {after_text}"
     );
+}
+
+#[test]
+fn jump_arms_flash_and_resolves_its_live_row_range() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    let flash = session.transcript_flash.as_ref().expect("jump arms a flash");
+    assert_eq!(flash.line_idx, 9);
+    assert!(flash.expires_at > Instant::now());
+    let (start, end) = session
+        .transcript_flash_rows(VIEW_WIDTH)
+        .expect("live flash resolves a row range");
+    assert!(start < end, "landed message spans at least one row");
+    // Asymmetric: an earlier change flashes its own message, not the tail.
+    session.record_transcript_change(1);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    assert_eq!(session.transcript_flash.as_ref().expect("re-jump re-arms").line_idx, 1);
+    let (early_start, early_end) = session.transcript_flash_rows(VIEW_WIDTH).expect("re-armed flash resolves");
+    assert!(early_start < start, "earlier message lands on earlier rows");
+    assert!(early_start < early_end);
+}
+
+#[test]
+fn flash_expires_on_tick_and_rests_idle_afterwards() {
+    let mut idle = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!idle.needs_animation_tick());
+    idle.arm_transcript_flash(0);
+    assert!(idle.needs_animation_tick(), "live flash needs ticks");
+    idle.transcript_flash.as_mut().expect("arm stores a flash").expires_at = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .expect("test clock backdates 1s");
+    idle.handle_tick();
+    assert!(idle.transcript_flash.is_none());
+    assert!(!idle.needs_animation_tick(), "expired flash must rest");
+}
+
+#[test]
+fn eviction_and_clear_screen_drop_the_flash() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    assert!(session.transcript_flash.is_some());
+    session.shift_tracked_change_after_eviction(5);
+    assert!(session.transcript_flash.is_none(), "eviction drops the index-keyed tint");
+    // Re-arm, then clear the whole transcript.
+    session.record_transcript_change(4);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    assert!(session.transcript_flash.is_some());
+    session.clear_screen();
+    assert!(session.transcript_flash.is_none(), "clear drops the tint");
 }

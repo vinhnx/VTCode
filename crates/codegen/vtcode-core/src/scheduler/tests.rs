@@ -18,6 +18,23 @@ fn cron5_supports_vixie_or_semantics() {
 }
 
 #[test]
+fn cron5_requires_exactly_five_fields() {
+    // The five-field shape is checked by the destructuring pattern itself, so
+    // pin both sides of the boundary: four and six fields must report the same
+    // diagnostic, and only the five-field form parses.
+    for expression in ["* * * *", "* * * * * *", "", "   "] {
+        let error = Cron5::parse(expression).expect_err("wrong field count must be rejected");
+        assert!(
+            error.to_string().contains("exactly 5 fields"),
+            "{expression:?} produced an unexpected error: {error}"
+        );
+    }
+
+    assert!(Cron5::parse("0 9 * * *").is_ok());
+    assert!(Cron5::parse("  0   9  *  *   *  ").is_ok(), "extra separators must still count as 5 fields");
+}
+
+#[test]
 fn cron5_rejects_extended_syntax() {
     Cron5::parse("0 9 ? * *").unwrap_err();
     Cron5::parse("0 9 * JAN *").unwrap_err();

@@ -249,9 +249,18 @@ fn scope_review_shape_error(
             })
     });
     if !has_exclusive_scope
-        || (!["differs", "differ", "changed", "changes", "modified", "unchanged"]
-            .iter()
-            .any(|word| has(word))
+        || (![
+            "differs",
+            "differ",
+            "changed",
+            "changes",
+            "modified",
+            "unchanged",
+            "edit",
+            "edits",
+        ]
+        .iter()
+        .any(|word| has(word))
             && !(has("no") && has("unrelated") && has("hunks")))
         || !names_all_targets
     {

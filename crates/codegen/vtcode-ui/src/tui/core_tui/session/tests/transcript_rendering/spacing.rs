@@ -129,6 +129,28 @@ fn spacing_two_does_not_stack_beyond_config() {
     assert_eq!(tool_gap.len(), 2, "tool top follows config without doubling, got {texts:?}");
 }
 #[test]
+fn consecutive_agent_lines_keep_single_interior_blank_row() {
+    // Markdown separators arrive as empty Agent message lines (the sink maps
+    // blank MarkdownLines to empty segment vecs); reflow must render each as
+    // exactly one blank row with no divider and no collapsing.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(InlineMessageKind::Agent, vec![make_segment("• Alpha")]);
+    session.push_line(InlineMessageKind::Agent, Vec::new());
+    session.push_line(InlineMessageKind::Agent, vec![make_segment("• Beta")]);
+
+    let rendered = session.reflow_transcript_lines(80);
+    let texts: Vec<String> = rendered.iter().map(line_text).collect();
+    let alpha = texts.iter().position(|text| text.contains("Alpha")).expect("first item");
+    let beta = texts.iter().position(|text| text.contains("Beta")).expect("second item");
+    assert_eq!(beta, alpha + 2, "expected exactly one blank row between items, got {texts:?}");
+    assert!(texts[alpha + 1].trim().is_empty(), "gap row should be blank, got {texts:?}");
+    assert!(
+        texts.iter().all(|text| text.is_empty() || !text.chars().all(|ch| ch == '─')),
+        "consecutive agent lines must not gain a divider, got {texts:?}"
+    );
+}
+
+#[test]
 fn pty_wrapped_lines_keep_hanging_left_padding() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     push_pty_line(&mut session, "  └ this PTY output line wraps on narrow widths");

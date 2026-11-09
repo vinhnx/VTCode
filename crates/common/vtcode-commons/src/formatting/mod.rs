@@ -659,11 +659,7 @@ pub fn format_float_display(value: f64) -> String {
 /// ```
 #[inline]
 pub fn truncate_utf8_prefix(text: &str, max_bytes: usize) -> &str {
-    let mut end = max_bytes.min(text.len());
-    while end > 0 && !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    &text[..end]
+    &text[..text.floor_char_boundary(max_bytes)]
 }
 
 /// Truncate a string so that the retained prefix is at most `max_bytes` bytes,

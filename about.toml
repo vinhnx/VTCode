@@ -1,8 +1,9 @@
 # cargo-about configuration for VT Code.
 #
 # Regenerate THIRD-PARTY-NOTICES with:
-#   cargo about generate scripts/templates/third-party-notices.hbs > /tmp/tpn-body.txt
 #   scripts/generate-notices.sh
+# (equivalent: cargo about generate --workspace --locked
+#   scripts/templates/third-party-notices.hbs)
 #
 # See https://embarkstudios.github.io/cargo-about/ for full documentation.
 

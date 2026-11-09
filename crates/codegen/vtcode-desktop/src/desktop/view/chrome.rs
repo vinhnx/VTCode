@@ -52,7 +52,15 @@ impl DesktopView {
             ResizeEdge::Sidebar => &self.sidebar_resize_focus,
             ResizeEdge::Inspector => &self.inspector_resize_focus,
         };
-        resize_handle::<ResizeEdge, ResizeDragPreview>(id, Axis::Horizontal)
+        let handle = resize_handle::<ResizeEdge, ResizeDragPreview>(id, Axis::Horizontal);
+        // The inspector is a separated card, not a docked pane: its edge
+        // paints no resting hairline (see inspector_resize_appearance).
+        let handle = if edge == ResizeEdge::Inspector {
+            handle.with_appearance(inspector_resize_appearance())
+        } else {
+            handle
+        };
+        handle
             .inside(placement)
             .on_drag(edge, |_, _, _, cx| cx.new(|_| ResizeDragPreview))
             .on_drag_move(cx.listener(|this, event: &DragMoveEvent<ResizeEdge>, _, cx| {
@@ -314,125 +322,161 @@ impl DesktopView {
         let session_row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
         let session_sizes = self.session_row_sizes.get(self.sessions.len(), session_row_height);
         let session_primary = theme.colors.primary;
-        sidebar = sidebar.child(
-            div()
-                .id("session-list")
-                .test_support()
-                .role(gpui_kit::Role::List)
-                .aria_label(rust_i18n::t!("app.workspace.recent_threads").to_string())
-                .relative()
-                .flex_1()
-                .min_h_0()
-                .w_full()
-                .overflow_hidden()
-                .child(
-                    v_virtual_list(
-                        cx.entity(),
-                        "session-virtual-list",
-                        session_sizes,
-                        move |view, visible_range, _, cx| {
-                            visible_range
-                                .filter_map(|index| {
-                                    let session = view.sessions.get(index)?;
-                                    let session_id = session.session_id.clone();
-                                    let menu_id = session_id.clone();
-                                    let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
-                                    let selected = view.selected_session_id.as_deref() == Some(&session_id);
-                                    let label = session_display_title(&session_id, session.title.as_deref());
-                                    let running = view.is_session_running(&session_id);
-                                    let enabled = view.load_session_available(&session_id);
-                                    Some(
-                                        div()
-                                            .id(format!("session-row-{session_id}"))
-                                            .test_support()
-                                            .role(gpui_kit::Role::ListItem)
-                                            .aria_label(label.clone())
-                                            .aria_position_in_set(index + 1)
-                                            .aria_size_of_set(view.sessions.len())
-                                            .aria_selected(selected)
-                                            .h(px(session_row_height))
-                                            .w_full()
-                                            .child(
-                                                desktop_button(format!("session-{session_id}"))
-                                                    .accessibility_label(if running {
-                                                        rust_i18n::t!(
-                                                            i18n::SESSION_RUNNING_THREAD_LABEL,
-                                                            thread = label.as_str()
-                                                        )
-                                                        .to_string()
-                                                    } else if selected {
-                                                        rust_i18n::t!(
-                                                            "app.navigation.current_thread_label",
-                                                            thread = label
-                                                        )
-                                                        .to_string()
-                                                    } else {
-                                                        label.clone()
-                                                    })
-                                                    .child(navigation_label(
-                                                        label,
-                                                        IconName::MessageSquare,
-                                                        selected,
-                                                        session_primary,
-                                                    ))
-                                                    .when(running, |button| {
-                                                        button.child(running_indicator(
-                                                            format!("session-running-{session_id}"),
-                                                            &cx.theme().colors,
+        sidebar = sidebar
+            .child(
+                div()
+                    .id("session-list")
+                    .test_support()
+                    .track_focus(&self.session_focus)
+                    .when(self.sessions.is_empty(), |el| el.tab_stop(false))
+                    .key_context(key_context::SESSIONS)
+                    .on_action(cx.listener(|view, _: &SessionPrevious, _, cx| view.move_session_focus(false, cx)))
+                    .on_action(cx.listener(|view, _: &SessionNext, _, cx| view.move_session_focus(true, cx)))
+                    .on_action(cx.listener(|view, _: &SessionFirst, _, cx| view.move_session_focus_edge(true, cx)))
+                    .on_action(cx.listener(|view, _: &SessionLast, _, cx| view.move_session_focus_edge(false, cx)))
+                    .on_action(cx.listener(|view, _: &OpenSelectedSession, window, cx| {
+                        view.activate_focused_session(window, cx)
+                    }))
+                    .on_action(cx.listener(|view, _: &DeleteHighlightedSession, window, cx| {
+                        view.delete_highlighted_session(window, cx)
+                    }))
+                    .role(gpui_kit::Role::List)
+                    .aria_label(rust_i18n::t!("app.workspace.recent_threads").to_string())
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .overflow_hidden()
+                    .child(
+                        v_virtual_list(
+                            cx.entity(),
+                            "session-virtual-list",
+                            session_sizes,
+                            move |view, visible_range, _, cx| {
+                                visible_range
+                                    .filter_map(|index| {
+                                        let session = view.sessions.get(index)?;
+                                        let session_id = session.session_id.clone();
+                                        let menu_id = session_id.clone();
+                                        let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
+                                        let selected = view.selected_session_id.as_deref() == Some(&session_id);
+                                        let label = session_display_title(&session_id, session.title.as_deref());
+                                        let running = view.is_session_running(&session_id);
+                                        let enabled = view.load_session_available(&session_id);
+                                        let keyboard_focused =
+                                            view.keyboard_focused_session.as_deref() == Some(session_id.as_str());
+                                        Some(
+                                            div()
+                                                .id(format!("session-row-{session_id}"))
+                                                .test_support()
+                                                .role(gpui_kit::Role::ListItem)
+                                                .when(keyboard_focused, |row| row.aria_active_descendant())
+                                                .aria_label(label.clone())
+                                                .aria_position_in_set(index + 1)
+                                                .aria_size_of_set(view.sessions.len())
+                                                .aria_selected(selected)
+                                                .h(px(session_row_height))
+                                                .w_full()
+                                                // Absolutely positioned so the highlight never reflows the
+                                                // row; mirrors the transcript focus rail.
+                                                .when(keyboard_focused, |row| {
+                                                    row.child(
+                                                        div()
+                                                            .id(format!("session-focus-rail-{session_id}"))
+                                                            .test_support()
+                                                            .absolute()
+                                                            .left_0()
+                                                            .top_0()
+                                                            .bottom_0()
+                                                            .w(px(2.))
+                                                            .bg(cx.theme().colors.accent),
+                                                    )
+                                                })
+                                                .child(
+                                                    desktop_button(format!("session-{session_id}"))
+                                                        .accessibility_label(if running {
+                                                            rust_i18n::t!(
+                                                                i18n::SESSION_RUNNING_THREAD_LABEL,
+                                                                thread = label.as_str()
+                                                            )
+                                                            .to_string()
+                                                        } else if selected {
+                                                            rust_i18n::t!(
+                                                                "app.navigation.current_thread_label",
+                                                                thread = label
+                                                            )
+                                                            .to_string()
+                                                        } else {
+                                                            label.clone()
+                                                        })
+                                                        .child(navigation_label(
+                                                            label,
+                                                            IconName::MessageSquare,
+                                                            selected,
+                                                            session_primary,
                                                         ))
-                                                    })
-                                                    .ghost()
-                                                    .toggled(selected)
-                                                    .desktop_disabled(!enabled)
-                                                    .w_full()
-                                                    .justify_start()
-                                                    .when(selected, |button| {
-                                                        button
-                                                            .bg(cx.theme().colors.secondary)
-                                                            .text_color(cx.theme().colors.foreground)
-                                                    })
-                                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                                        if this.load_session_from_ui(session_id.clone(), window, cx) {
-                                                            this.close_active_route(window, cx);
-                                                        }
-                                                    })),
-                                            )
-                                            .context_menu(move |menu, _, _| {
-                                                tabs::session_row_menu(menu, &menu_id, tabbed)
-                                            })
-                                            .into_any_element(),
-                                    )
-                                })
-                                .collect()
-                        },
+                                                        .when(running, |button| {
+                                                            button.child(running_indicator(
+                                                                format!("session-running-{session_id}"),
+                                                                &cx.theme().colors,
+                                                            ))
+                                                        })
+                                                        .ghost()
+                                                        .toggled(selected)
+                                                        // Single-tab-stop list: arrows drive the shared
+                                                        // highlight, so rows stay out of Tab order.
+                                                        .tab_stop(false)
+                                                        .desktop_disabled(!enabled)
+                                                        .w_full()
+                                                        .justify_start()
+                                                        .when(selected, |button| {
+                                                            button
+                                                                .bg(cx.theme().colors.secondary)
+                                                                .text_color(cx.theme().colors.foreground)
+                                                        })
+                                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                                            // Clicking anchors the keyboard highlight as
+                                                            // position memory, like transcript rows.
+                                                            this.keyboard_focused_session = Some(session_id.clone());
+                                                            if this.load_session_from_ui(session_id.clone(), window, cx)
+                                                            {
+                                                                this.request_panel_dismiss(window, cx);
+                                                            }
+                                                        })),
+                                                )
+                                                .context_menu(move |menu, _, _| {
+                                                    tabs::session_row_menu(menu, &menu_id, tabbed)
+                                                })
+                                                .into_any_element(),
+                                        )
+                                    })
+                                    .collect()
+                            },
+                        )
+                        .track_scroll(&self.session_scroll),
                     )
-                    .track_scroll(&self.session_scroll),
-                )
-                .child(Scrollbar::vertical(&self.session_scroll)),
-        );
+                    .child(Scrollbar::vertical(&self.session_scroll)),
+            )
+            .when(self.session_list_has_older, |bar| bar.child(self.render_session_list_more("session-list-more", cx)));
 
         let status = if self.ui_progress_active && !self.running && self.interaction.is_none() {
             rust_i18n::t!("app.service.running").to_string()
         } else {
             self.status.clone()
         };
+        let status_tone = theme.colors.muted_foreground;
         sidebar.child(
-            div()
-                .mt_auto()
-                .pt_3()
-                .text_xs()
-                .text_color(theme.colors.muted_foreground)
-                .child(
-                    div()
-                        .id("sidebar-status")
-                        .test_support()
-                        .role(gpui_kit::Role::Status)
-                        .aria_label(status.clone())
-                        .when(self.global_loading_active(), |row| {
-                            row.child(shimmer_label("sidebar-status-loading", status.clone()))
-                        })
-                        .when(!self.global_loading_active(), |row| row.child(status.clone())),
-                ),
+            div().mt_auto().pt_3().text_xs().text_color(status_tone).child(
+                div()
+                    .id("sidebar-status")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(status.clone())
+                    .when(self.global_loading_active(), |row| {
+                        row.child(shimmer_label("sidebar-status-loading", status.clone(), status_tone, cx))
+                    })
+                    .when(!self.global_loading_active(), |row| row.child(status.clone())),
+            ),
         )
     }
 
@@ -453,8 +497,10 @@ impl DesktopView {
             .as_deref()
             .is_some_and(|session_id| self.is_session_running(session_id));
         // Centered on the conversation spine: the title shares the transcript
-        // and composer column instead of hugging the workspace edge.
-        div().w_full().flex().justify_center().child(
+        // and composer column instead of hugging the workspace edge. The
+        // edge inset lives on the outer wrapper (mirroring the scroller's
+        // row wrapper), so the title starts on the spine.
+        div().w_full().flex().justify_center().px_3().child(
             div()
                 .id("thread-header")
                 .test_support()
@@ -465,13 +511,24 @@ impl DesktopView {
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .px_4()
                 .py_1()
                 .when(running, |header| {
                     header
                         .role(gpui_kit::Role::Group)
                         .aria_label(rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = title).to_string())
                         .child(running_indicator("thread-header-running", &theme.colors))
+                        // The background action left the composer run
+                        // cluster; the thread header is its pointer home —
+                        // beside the marker naming the running state.
+                        .child(
+                            desktop_button("background-exec")
+                                .icon(IconName::ChevronsDown)
+                                .ghost()
+                                .small()
+                                .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
+                                .tooltip(rust_i18n::t!("app.composer.background_operation_tooltip").to_string())
+                                .dispatches_desktop_action(BackgroundOperation, self.focus_handle.clone()),
+                        )
                 })
                 .child(
                     div()
@@ -497,6 +554,16 @@ impl DesktopView {
                         )
                         .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
+                )
+                .child(
+                    desktop_button("thread-header-cli")
+                        .icon(IconName::Terminal)
+                        .ghost()
+                        .small()
+                        .accessibility_label(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
+                        .tooltip(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
+                        .desktop_disabled(self.selected_session_id.is_none())
+                        .dispatches_desktop_action(OpenCliHandoff, self.focus_handle.clone()),
                 )
                 .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta)),
         )
@@ -528,12 +595,34 @@ impl DesktopView {
         let pending_direction = self.pending_navigation_direction();
         let pending_back = pending_direction == Some(NavigationDirection::Back);
         let pending_forward = pending_direction == Some(NavigationDirection::Forward);
+        // Scroll-gesture cue: lights the arrow a sustained horizontal scroll
+        // is about to fire. Gated render-side so a stale gesture can never
+        // advertise a blocked navigation (overlay opened mid-swipe, pending
+        // transition). Popover, not secondary: the toolbar sits on the rail
+        // surface, where secondary would be pixel-identical to the background.
+        let swipe_cue = self
+            .swipe_scroll
+            .armed()
+            .filter(|direction| self.swipe_navigation_allowed() && self.swipe_direction_available(*direction));
         let workspace = self
             .workspace
             .as_ref()
             .and_then(|path| path.file_name())
             .and_then(|name| name.to_str())
             .map_or_else(|| rust_i18n::t!("app.navigation.workspace_fallback").to_string(), str::to_string);
+        // Title-bar budgets follow the main column, not the viewport: the bar
+        // lives beside the navigation, so a wide sidebar starves it first.
+        // Mirrors the root layout's expanded predicate exactly.
+        let expanded = navigation_visible && (self.sidebar_open || self.navigation_peek) && !compact_viewport(window);
+        let sidebar_footprint = if !navigation_visible {
+            0.
+        } else if expanded {
+            self.sidebar_width + NAVIGATION_RAIL_WIDTH + SIDEBAR_RESIZE_SLOP
+        } else {
+            NAVIGATION_RAIL_WIDTH
+        };
+        let main_width = window.viewport_size().width - px(sidebar_footprint);
+        let show_details = main_width >= px(MAIN_COLUMN_DETAILS_BREAKPOINT);
         // The leading cluster shares the trailing toolbar's compact size, so the
         // whole title bar is one band: same frame, same center line.
         leading_inset(
@@ -561,8 +650,11 @@ impl DesktopView {
                                 .ghost()
                                 .small()
                                 .loading(pending_back)
+                                .when(swipe_cue == Some(NavigationDirection::Back), |button| {
+                                    button.bg(theme.colors.popover).text_color(theme.colors.foreground)
+                                })
                                 .tooltip_with_action(
-                                    rust_i18n::t!("app.navigation.back").to_string(),
+                                    format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.back")),
                                     &NavigateBack,
                                     Some(key_context::DESKTOP),
                                 )
@@ -582,8 +674,11 @@ impl DesktopView {
                                 .ghost()
                                 .small()
                                 .loading(pending_forward)
+                                .when(swipe_cue == Some(NavigationDirection::Forward), |button| {
+                                    button.bg(theme.colors.popover).text_color(theme.colors.foreground)
+                                })
                                 .tooltip_with_action(
-                                    rust_i18n::t!("app.navigation.forward").to_string(),
+                                    format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.forward")),
                                     &NavigateForward,
                                     Some(key_context::DESKTOP),
                                 )
@@ -605,16 +700,21 @@ impl DesktopView {
                                 .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                         )
                         .child(div().text_sm().font_semibold().child(app::NAME))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .truncate()
-                                .text_sm()
-                                .text_color(theme.colors.foreground)
-                                .child(format!("/ {workspace}")),
-                        ),
+                        .when(show_details, |row| {
+                            row.child(
+                                div()
+                                    .id("title-bar-workspace")
+                                    .test_support()
+                                    .min_w_0()
+                                    .max_w(px(WORKSPACE_LABEL_MAX_WIDTH))
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(theme.colors.foreground)
+                                    .child(format!("/ {workspace}")),
+                            )
+                        }),
                 )
-                .child(self.render_header_actions(cx)),
+                .child(self.render_header_actions(show_details, cx)),
         )
         .with_animation("title-bar-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
         .into_any_element()
@@ -698,7 +798,7 @@ impl DesktopView {
     /// always last, so it keeps one trailing slot. The toolbar forces the
     /// compact size on `.child()` controls, while `.content()` items carry
     /// their own size.
-    fn render_header_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_header_actions(&self, show_details: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut group = ToolbarGroup::new("header-actions-group")
             .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
@@ -774,12 +874,16 @@ impl DesktopView {
                     .ghost()
                     .on_click(cx.listener(|view, _, window, cx| view.toggle_settings(window, cx))),
             );
-        if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
-            group = group.content(
-                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                    .small()
-                    .child(speed.clone()),
-            );
+        // Redundant with the composer model pill: first to go when the main
+        // column narrows, together with the workspace suffix.
+        if show_details {
+            if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
+                group = group.content(
+                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                        .small()
+                        .child(speed.clone()),
+                );
+            }
         }
         group = group.content(
             self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),

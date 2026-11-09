@@ -226,7 +226,8 @@ pub(crate) struct HarnessTurnState {
     /// This is kept separate from the final-response flag because a streamed
     /// commentary preamble can precede tool calls and is not itself a final
     /// answer.
-    streamed_response_event_emitted: bool,
+    streamed_response_item_id: Option<String>,
+    final_response_item_id: Option<String>,
     /// Whether the final response was produced by deterministic recovery
     /// fallback rather than by a successful model synthesis.
     final_response_was_fallback: bool,

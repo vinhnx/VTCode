@@ -143,9 +143,17 @@ fn cached_projections_preserve_schema_and_deferral_across_documentation_modes() 
             .iter()
             .filter(|entry| entry.is_visible(&config))
             .collect::<Vec<_>>();
+        // Rounds up like the canonical byte-length heuristic (see
+        // `vtcode_commons::tokens::heuristic_tokens_from_byte_len`) but keeps
+        // the division literal so this oracle stays independent of it.
         let estimated_schema_tokens = expected_schema
             .iter()
-            .map(|entry| serde_json::to_string(entry).expect("serialize expected schema").len() / 4)
+            .map(|entry| {
+                serde_json::to_string(entry)
+                    .expect("serialize expected schema")
+                    .len()
+                    .div_ceil(4)
+            })
             .sum();
         let deferable_tool_count = visible_entries
             .iter()

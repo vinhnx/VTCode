@@ -15,14 +15,14 @@ use ratatui::layout::{Position, Rect};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    ActivityState, InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry, LocalAgentKind,
-    ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
+    ActivePlanEntry, ActivityState, InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry,
+    LocalAgentKind, ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
 };
 use super::mouse_selection::MouseSelectionState;
 use super::reflow::is_info_box_line;
 use super::status_requires_shimmer;
 use super::{
-    ActiveOverlay, InlinePromptSuggestionState, MouseDragTarget, Session, SuggestedPromptState,
+    ActiveOverlay, InlinePromptSuggestionState, MouseDragTarget, Session, SuggestedPromptState, TranscriptFlash,
     action::Action,
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
@@ -30,6 +30,8 @@ use crate::tui::config::constants::ui;
 use crate::tui::options::FullscreenInteractionSettings;
 
 const COPY_NOTIFICATION_DURATION: Duration = Duration::from_secs(2);
+/// How long a jump-to-last-change landing bolds its message rows.
+const TRANSCRIPT_FLASH_DURATION: Duration = Duration::from_millis(1500);
 const COPY_FAILURE_NOTIFICATION_TEXT: &str = "Copy failed";
 const ACTION_REQUIRED_STATUS_TEXT: &str = "Action required";
 const APPROVAL_REQUIRED_STATUS_TEXT: &str = "Approval required";
@@ -208,6 +210,13 @@ impl Session {
         }
     }
 
+    pub(crate) fn set_active_plan(&mut self, entry: Option<ActivePlanEntry>) {
+        if self.active_plan != entry {
+            self.active_plan = entry;
+            self.invalidate_sidebar_cache();
+        }
+    }
+
     pub(crate) fn has_local_agents(&self) -> bool {
         self.local_agents
             .iter()
@@ -366,6 +375,14 @@ impl Session {
             self.copy_notification_chars = 0;
             self.render_state.request_redraw();
         }
+        if self
+            .transcript_flash
+            .as_ref()
+            .is_some_and(|flash| Instant::now() >= flash.expires_at)
+        {
+            self.transcript_flash = None;
+            self.render_state.request_redraw();
+        }
         if self.last_shimmer_active && !shimmer_active {
             self.render_state.request_redraw();
         }
@@ -392,8 +409,11 @@ impl Session {
             return true;
         }
         // Pending expiries need a future tick to clear promptly (scroll-steady
-        // 250ms, copy notification 2s).
-        if self.scroll_cursor_steady_until.is_some() || self.copy_notification_until.is_some() {
+        // 250ms, copy notification 2s, jump-landing tint 1.5s).
+        if self.scroll_cursor_steady_until.is_some()
+            || self.copy_notification_until.is_some()
+            || self.transcript_flash.is_some()
+        {
             return true;
         }
         // Shimmer deactivation needs one final tick to repaint without shimmer.
@@ -754,8 +774,20 @@ impl Session {
         self.clamp_tracked_change();
     }
 
+    /// Tint the jumped-to message briefly so the eye finds the landing row.
+    /// Every jump re-arms, superseding any live tint.
+    pub(crate) fn arm_transcript_flash(&mut self, line_idx: usize) {
+        self.transcript_flash = Some(TranscriptFlash {
+            line_idx,
+            expires_at: Instant::now() + TRANSCRIPT_FLASH_DURATION,
+        });
+        self.render_state.request_redraw();
+    }
+
     /// Shift the tracked change index after front-eviction. Drops the target
-    /// when it pointed into the evicted prefix.
+    /// when it pointed into the evicted prefix. The landing tint is dropped
+    /// outright: shifting a 1.5s cosmetic risks tinting the wrong row, while
+    /// the persistent tracked index must keep pointing somewhere sane.
     pub(crate) fn shift_tracked_change_after_eviction(&mut self, remove_count: usize) {
         if remove_count == 0 {
             return;
@@ -763,6 +795,7 @@ impl Session {
         if let Some(idx) = self.last_change_line_idx {
             self.last_change_line_idx = idx.checked_sub(remove_count);
         }
+        self.transcript_flash = None;
         self.clamp_tracked_change();
     }
 
@@ -775,6 +808,9 @@ impl Session {
             Some(idx) if idx >= len => Some(len - 1),
             other => other,
         };
+        if self.transcript_flash.as_ref().is_some_and(|flash| flash.line_idx >= len) {
+            self.transcript_flash = None;
+        }
     }
 
     fn reflow_dirty_index(&mut self, index: usize) -> usize {
@@ -819,7 +855,9 @@ impl Session {
         self.collapsed_pastes.clear();
         self.thinking_runs.clear();
         self.user_scrolled = false;
+        self.pending_new_messages = 0;
         self.last_change_line_idx = None;
+        self.transcript_flash = None;
         self.scroll_manager.set_offset(0);
         self.invalidate_transcript_cache();
         self.invalidate_scroll_metrics();

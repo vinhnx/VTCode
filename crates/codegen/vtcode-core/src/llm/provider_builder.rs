@@ -28,7 +28,7 @@ impl<T> Default for ProviderBuilder<T> {
 
 impl<T> ProviderBuilder<T>
 where
-    T: ProviderConfig,
+    T: ProviderSpec,
 {
     /// Create a new builder with all fields unset.
     pub fn new() -> Self {
@@ -83,8 +83,11 @@ where
     }
 }
 
-/// Trait for provider-specific configuration and creation
-pub trait ProviderConfig {
+/// Static provider specification: registry metadata plus construction.
+///
+/// Each provider config type implements this once so [`ProviderBuilder`] can
+/// construct it through the canonical factory without per-provider glue.
+pub trait ProviderSpec {
     /// Registry key used to look up this provider in the factory.
     const PROVIDER_KEY: &'static str;
     /// Human-readable display name for this provider.
@@ -121,7 +124,7 @@ pub trait ProviderConfig {
         ) {
             Ok(provider) => provider,
             Err(error) => {
-                panic!("provider config invariant violated for `{}`: {}", Self::PROVIDER_KEY, error)
+                panic!("provider spec invariant violated for `{}`: {}", Self::PROVIDER_KEY, error)
             }
         }
     }
@@ -129,6 +132,10 @@ pub trait ProviderConfig {
     /// Provider-specific prompt cache configuration type.
     type PromptCacheSettings: Clone + Default + Send + Sync + 'static;
 }
+
+/// Deprecated alias for [`ProviderSpec`].
+#[deprecated(note = "renamed to `ProviderSpec`")]
+pub use self::ProviderSpec as ProviderConfig;
 
 /// HTTP client pool to avoid creating new clients for each provider
 mod http_client_pool {
@@ -142,44 +149,18 @@ mod http_client_pool {
     type HttpClientPool = Arc<RwLock<HashMap<String, Arc<HttpClient>>>>;
 
     static CLIENT_POOL: Lazy<HttpClientPool> = Lazy::new(|| {
+        // Pooled clients share the installed `[timeouts]` budgets: every entry
+        // carries both a total and a connect timeout, so no pooled caller can
+        // hang on a stalled server or handshake. The helpers log and fall back
+        // internally if a build ever fails.
+        let default = vtcode_commons::http::create_default_client();
+        let timeout_30s = vtcode_commons::http::create_client_with_timeout(Duration::from_secs(30));
+        let timeout_120s = vtcode_commons::http::create_client_with_timeout(Duration::from_secs(120));
+
         let mut pool = HashMap::new();
-
-        // Default client
-        pool.insert("default".to_string(), Arc::new(HttpClient::new()));
-
-        // Timeout-configured clients
-        pool.insert(
-            "timeout_30s".to_string(),
-            Arc::new(
-                HttpClient::builder()
-                    .timeout(Duration::from_secs(30))
-                    .build()
-                    .unwrap_or_else(|error| {
-                        tracing::warn!(
-                            error = %error,
-                            "Failed to build 30s timeout HTTP client; falling back to default client"
-                        );
-                        HttpClient::new()
-                    }),
-            ),
-        );
-
-        pool.insert(
-            "timeout_120s".to_string(),
-            Arc::new(
-                HttpClient::builder()
-                    .timeout(Duration::from_secs(120))
-                    .build()
-                    .unwrap_or_else(|error| {
-                        tracing::warn!(
-                            error = %error,
-                            "Failed to build 120s timeout HTTP client; falling back to default client"
-                        );
-                        HttpClient::new()
-                    }),
-            ),
-        );
-
+        pool.insert("default".to_string(), Arc::new(default));
+        pool.insert("timeout_30s".to_string(), Arc::new(timeout_30s));
+        pool.insert("timeout_120s".to_string(), Arc::new(timeout_120s));
         Arc::new(RwLock::new(pool))
     });
 
@@ -203,7 +184,7 @@ mod http_client_pool {
         }
 
         tracing::warn!("HTTP client pool missing default client; constructing transient client");
-        Arc::new(HttpClient::new())
+        Arc::new(vtcode_commons::http::create_default_client())
     }
 
     /// Select an appropriate pooled HTTP client based on the timeout ceiling.

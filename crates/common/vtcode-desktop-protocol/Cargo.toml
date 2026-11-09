@@ -20,5 +20,7 @@ workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }
+url = { workspace = true }
+vtcode-commons = { workspace = true }
 vtcode-exec-events = { workspace = true }
 

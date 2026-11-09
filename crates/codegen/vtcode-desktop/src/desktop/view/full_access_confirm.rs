@@ -25,6 +25,8 @@ impl DesktopView {
         cx: &mut Context<Self>,
     ) {
         self.disarm_double_escape();
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         self.full_access_confirm = Some(FullAccessConfirmState {
             options,
             workspace: self.workspace.clone(),
@@ -61,6 +63,7 @@ impl DesktopView {
     /// disabled until the risk checkbox is checked.
     pub(super) fn render_full_access_confirm(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        let weak = cx.entity().downgrade();
         let Some(state) = self.full_access_confirm.as_ref() else {
             return div().into_any_element();
         };
@@ -97,6 +100,14 @@ impl DesktopView {
                     .id("full-access-confirm-dialog")
                     .test_support()
                     .track_focus(&self.full_access_focus)
+                    .focus_trap("full-access-confirm-dialog", &self.full_access_focus)
+                    // Click-away cancellation, mirroring the palette panel: a
+                    // press on the scrim cancels through the Cancel path.
+                    .on_mouse_down_out(move |_, window, cx| {
+                        let _updated = weak.update(cx, |view, cx| {
+                            view.cancel_full_access_confirm(window, cx);
+                        });
+                    })
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("full-access-confirm-dialog")
                     .aria_label(rust_i18n::t!("app.permissions.confirm_full_title").to_string())
@@ -112,20 +123,7 @@ impl DesktopView {
                     .border_color(colors.border)
                     .shadow_md()
                     .p_5()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
-                            .child(
-                                div()
-                                    .font_semibold()
-                                    .text_lg()
-                                    .text_color(colors.foreground)
-                                    .child(rust_i18n::t!("app.permissions.confirm_full_title").to_string()),
-                            ),
-                    )
+                    .child(consent_title_row(rust_i18n::t!("app.permissions.confirm_full_title").to_string(), &colors))
                     .child(
                         div()
                             .text_sm()
@@ -184,20 +182,16 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("full-access-cancel")
+                                desktop_default_button("full-access-cancel")
                                     .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.cancel_full_access_confirm(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("full-access-confirm")
+                                desktop_danger_button("full-access-confirm")
                                     .label(rust_i18n::t!("app.permissions.enable_full").to_string())
-                                    .danger()
-                                    .disabled(!acknowledged)
-                                    .when(!acknowledged, |button| button.cursor_default())
-                                    .when(acknowledged, |button| button.cursor_pointer())
+                                    .desktop_disabled(!acknowledged)
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.confirm_full_access(window, cx);
                                     })),

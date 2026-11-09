@@ -407,8 +407,11 @@ pub(crate) fn render_list_dir_output(renderer: &mut AnsiRenderer, val: &Value, _
     // Show summary as a tree detail so list/read/edit summaries share one
     // `  └ …` hierarchy under the tool header.
     if count > 0 || total > 0 {
-        let start_idx = (page - 1) * per_page + 1;
-        let _end_idx = start_idx + count - 1;
+        // `page`/`per_page` come from the tool payload, so treat them as
+        // untrusted: release keeps `overflow-checks = true`, which turns a plain
+        // multiply/add here into a process abort for an extreme page.
+        let start_idx = page.saturating_sub(1).saturating_mul(per_page).saturating_add(1);
+        let _end_idx = start_idx.saturating_add(count).saturating_sub(1);
 
         // Simplified summary without pagination details that confuse the agent
         let summary = if total > count {

@@ -1,5 +1,8 @@
 //! App startup: menus, keybindings, window reopen, construction, and preference persistence.
+use super::super::{SharedUrlInbox, UrlInbox};
 use super::*;
+use gpui_kit::WindowBounds;
+use std::{cell::RefCell, rc::Rc};
 
 /// Documentation and issue tracker opened by the Help menu and About dialog.
 pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
@@ -11,6 +14,10 @@ pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
 /// Bare fixed chords need no entry — the modifier rule rejects them already.
 /// Keep in sync with the table below.
 pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
+    // Function keys pass the configurable table's modifier rule, so the
+    // tree-scoped rename chord needs an explicit entry (bare delete and
+    // backspace are rejected by that rule already).
+    "f2",
     "ctrl-w",
     "alt-d",
     "ctrl-u",
@@ -22,18 +29,13 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
     "ctrl-m",
     "ctrl-p",
     "ctrl-n",
+    "ctrl-s",
+    "ctrl-g",
+    "cmd-s",
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
-    match shortcuts::bindings(&preferences.shortcuts) {
-        Ok(bindings) => cx.bind_keys(bindings),
-        Err(error) => {
-            eprintln!("Desktop shortcuts: {error}; using defaults");
-            if let Ok(bindings) = shortcuts::bindings(&Default::default()) {
-                cx.bind_keys(bindings);
-            }
-        }
-    }
+    bind_configurable_shortcuts(cx, &preferences.shortcuts);
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-m", MinimizeWindow, Some(key_context::DESKTOP)),
@@ -53,6 +55,9 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("home", FirstSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("end", LastSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new("f2", RenameSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new("delete", DeleteSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new("backspace", DeleteSelectedFile, Some(gpui_kit::base::tree_key_context())),
         // No fixed `cmd-[`: the configurable NavigateBack default owns that
         // chord with superset behavior (route-back, then session history),
         // so a fixed twin would be dead weight — the old twin never
@@ -71,116 +76,263 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("ctrl-m", OpenModelPicker, Some(key_context::COMPOSER)),
         KeyBinding::new("ctrl-p", HistoryPrevious, Some(key_context::COMPOSER)),
         KeyBinding::new("ctrl-n", HistoryNext, Some(key_context::COMPOSER)),
+        // CLI scope-cycle twin: opens history when closed, cycles the search
+        // scope while open. Ctrl+R keeps the palette toggle contract.
+        KeyBinding::new("ctrl-s", CycleHistoryScope, Some(key_context::DESKTOP)),
+        // CLI picker parity: Ctrl+G cancels the history search and restores the
+        // draft (Ctrl+C stays Kit's Copy in the input context, so it cannot be
+        // claimed here without also hijacking Cmd+C).
+        KeyBinding::new("ctrl-g", CancelPromptHistory, Some(key_context::DESKTOP)),
+        // Fixed like window chords: the app has exactly one saveable
+        // surface, so Cmd+S always means "save the preview draft" and the
+        // root handler no-ops unless an edit session is armed.
+        KeyBinding::new("cmd-s", SavePreviewSource, Some(key_context::DESKTOP)),
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("home", TranscriptFirst, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("end", TranscriptLast, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("up", SessionPrevious, Some(key_context::SESSIONS)),
+        KeyBinding::new("down", SessionNext, Some(key_context::SESSIONS)),
+        KeyBinding::new("home", SessionFirst, Some(key_context::SESSIONS)),
+        KeyBinding::new("end", SessionLast, Some(key_context::SESSIONS)),
+        KeyBinding::new("enter", OpenSelectedSession, Some(key_context::SESSIONS)),
+        KeyBinding::new("backspace", DeleteHighlightedSession, Some(key_context::SESSIONS)),
+        KeyBinding::new("delete", DeleteHighlightedSession, Some(key_context::SESSIONS)),
+        KeyBinding::new("left", PreviousThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("right", NextThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("home", FirstThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("end", LastThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("enter", OpenSelectedThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("up", ActivityPrevious, Some(key_context::ACTIVITY)),
+        KeyBinding::new("down", ActivityNext, Some(key_context::ACTIVITY)),
+        KeyBinding::new("home", ActivityFirst, Some(key_context::ACTIVITY)),
+        KeyBinding::new("end", ActivityLast, Some(key_context::ACTIVITY)),
     ]);
+    if preferences.vim_navigation {
+        apply_vim_navigation(cx, true);
+    }
 }
 
-pub(super) fn init_native_menus(cx: &mut App) {
-    register_global_actions(cx);
-    set_native_menus(cx, false);
+/// Bind the configurable shortcut table, falling back to defaults when a
+/// hand-edited table fails validation. Startup binds once; shortcut saves
+/// reinstall through [`reinstall_shortcuts`] so retired chords die with them.
+fn bind_configurable_shortcuts(cx: &mut App, shortcuts: &std::collections::BTreeMap<String, String>) {
+    match shortcuts::bindings(shortcuts, cx) {
+        Ok(bindings) => cx.bind_keys(bindings),
+        Err(error) => {
+            eprintln!("Desktop shortcuts: {error}; using defaults");
+            if let Ok(bindings) = shortcuts::bindings(&Default::default(), cx) {
+                cx.bind_keys(bindings);
+            }
+        }
+    }
 }
 
-/// Register the global action handlers backing native menu items. Called once
-/// at startup: `on_action` handlers accumulate, so re-registering on every
-/// menu rebuild would run actions (OpenHelp, ShowMainWindow) N+1 times.
-fn register_global_actions(cx: &mut App) {
-    let _app = cx.on_action(|_: &QuitApplication, cx| cx.quit());
-    let _app = cx.on_action(|_: &HideApplication, cx| cx.hide());
-    let _app = cx.on_action(|_: &HideOtherApplications, cx| cx.hide_other_apps());
-    let _app = cx.on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps());
-    let _app = cx.on_action(|_: &ShowMainWindow, cx| show_main_window(cx));
-    let _app = cx.on_action(|_: &OpenHelp, cx| cx.open_url(HELP_URL));
+/// Live-apply a saved shortcut table: shadow retired chords with `NoAction`,
+/// then bind the fresh table. Same-chord conflicts resolve toward the latest
+/// binding, so shadows must precede the table. The fixed table never changes
+/// and stays bound once from [`init_keybindings`]. Reinstalling appends
+/// identical duplicates for unchanged chords; dispatch stops at the first
+/// hit, so they are harmless, and saves are rare user gestures.
+pub(super) fn reinstall_shortcuts(
+    cx: &mut App,
+    old_shortcuts: &std::collections::BTreeMap<String, String>,
+    new_shortcuts: &std::collections::BTreeMap<String, String>,
+) {
+    cx.bind_keys(shortcuts::stale_shadows(old_shortcuts, new_shortcuts, cx));
+    bind_configurable_shortcuts(cx, new_shortcuts);
 }
 
-/// (Re)install the native menus. Re-invoked when full-screen state changes so
-/// the View item reads Enter or Exit Full Screen as HIG requires.
-pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
-    cx.set_menus([
-        Menu::new(app::NAME).items([
-            MenuItem::action(rust_i18n::t!("app.menus.about").to_string(), AboutApplication),
-            MenuItem::separator(),
-            MenuItem::action(rust_i18n::t!("app.menus.settings_menu").to_string(), OpenSettings),
-            MenuItem::separator(),
-            MenuItem::os_submenu(rust_i18n::t!("app.menus.services").to_string(), SystemMenuType::Services),
-            MenuItem::separator(),
-            MenuItem::action(rust_i18n::t!("app.menus.hide_app").to_string(), HideApplication),
-            MenuItem::action(rust_i18n::t!("app.menus.hide_others").to_string(), HideOtherApplications),
-            MenuItem::action(rust_i18n::t!("app.menus.show_all").to_string(), ShowAllApplications),
-            MenuItem::separator(),
-            MenuItem::action(rust_i18n::t!("app.menus.quit_app").to_string(), QuitApplication),
-        ]),
-        Menu::new(rust_i18n::t!("app.menus.file_menu").to_string()).items([
-            MenuItem::action(rust_i18n::t!("app.menus.new_session").to_string(), NewSession),
-            MenuItem::action(rust_i18n::t!("app.menus.open_workspace").to_string(), ChooseWorkspace),
-            MenuItem::action(rust_i18n::t!("app.menus.close_session").to_string(), CloseSession),
-            MenuItem::action(rust_i18n::t!("app.menus.choose_model").to_string(), OpenModelPicker),
-        ]),
-        Menu::new(rust_i18n::t!("app.menus.edit_menu").to_string()).items([
-            MenuItem::os_action(rust_i18n::t!("app.menus.undo").to_string(), Undo, OsAction::Undo),
-            MenuItem::os_action(rust_i18n::t!("app.menus.redo").to_string(), Redo, OsAction::Redo),
-            MenuItem::separator(),
-            MenuItem::os_action(rust_i18n::t!("app.menus.cut").to_string(), Cut, OsAction::Cut),
-            MenuItem::os_action(rust_i18n::t!("app.menus.copy").to_string(), Copy, OsAction::Copy),
-            MenuItem::os_action(rust_i18n::t!("app.menus.paste").to_string(), Paste, OsAction::Paste),
-            MenuItem::os_action(rust_i18n::t!("app.menus.select_all").to_string(), SelectAll, OsAction::SelectAll),
-        ]),
-        Menu::new(rust_i18n::t!("app.menus.view_menu").to_string()).items([
-            MenuItem::action(rust_i18n::t!("app.menus.command_palette").to_string(), OpenCommandPalette),
-            MenuItem::action(rust_i18n::t!("app.menus.find_conversation").to_string(), OpenConversationSearch),
-            MenuItem::action(rust_i18n::t!("app.menus.focus_composer").to_string(), FocusComposer),
-            MenuItem::action(rust_i18n::t!("app.menus.toggle_inspector").to_string(), ToggleInspector),
-            MenuItem::action(rust_i18n::t!("app.menus.toggle_sidebar").to_string(), ToggleSidebar),
-            MenuItem::action(rust_i18n::t!("app.menus.toggle_zen").to_string(), ToggleZenMode),
-            MenuItem::separator(),
-            MenuItem::action(rust_i18n::t!("app.menus.cancel_run").to_string(), CancelRun),
-            MenuItem::separator(),
-            // macOS convention: the full-screen toggle closes the View menu;
-            // ⌃⌘F is the system-standard shortcut (HIG: full screen offers a
-            // distraction-free context). The label tracks the current state.
-            MenuItem::action(
-                if full_screen {
-                    rust_i18n::t!("app.menus.exit_full_screen").to_string()
-                } else {
-                    rust_i18n::t!("app.menus.enter_full_screen").to_string()
-                },
-                ToggleFullScreen,
-            ),
-        ]),
-        Menu::new(rust_i18n::t!("app.menus.window_menu").to_string()).items([
-            MenuItem::action(rust_i18n::t!("app.menus.show_app").to_string(), ShowMainWindow),
-            MenuItem::action(rust_i18n::t!("app.menus.minimize").to_string(), MinimizeWindow),
-            MenuItem::action(rust_i18n::t!("app.menus.zoom").to_string(), ZoomWindow),
-            MenuItem::action(rust_i18n::t!("app.menus.close_window").to_string(), CloseWindow),
-        ]),
-        Menu::new(rust_i18n::t!("app.menus.help_menu").to_string()).items([MenuItem::action(
-            rust_i18n::t!("app.menus.help_website").to_string(),
-            OpenHelp,
-        )]),
-    ]);
+/// (chord, key context) rows of the experimental vim layer. Vim chords reuse
+/// the plain navigation actions, so toggling is pure keymap surgery: live
+/// bindings while the toggle holds, `NoAction` shadows when it drops (keymaps
+/// only append — see [`reinstall_shortcuts`]). Scoped to the navigation
+/// containers on purpose: a bare letter bound under `DESKTOP` would hijack
+/// typing in every text input, and a fixed-then-gated handler would still
+/// swallow the keystroke when off (bubble listeners stop by default). Bare
+/// chords need no `FIXED_RESERVED_CHORDS` entry — the configurable table's
+/// modifier rule rejects them already.
+pub(super) const VIM_CHORDS: &[(&str, &str)] = &[
+    ("j", key_context::SESSIONS),
+    ("k", key_context::SESSIONS),
+    ("g", key_context::SESSIONS),
+    ("G", key_context::SESSIONS),
+    ("i", key_context::SESSIONS),
+    ("/", key_context::SESSIONS),
+    ("j", key_context::TRANSCRIPT),
+    ("k", key_context::TRANSCRIPT),
+    ("g", key_context::TRANSCRIPT),
+    ("G", key_context::TRANSCRIPT),
+    ("i", key_context::TRANSCRIPT),
+    ("/", key_context::TRANSCRIPT),
+    ("h", key_context::INSPECTOR),
+    ("l", key_context::INSPECTOR),
+    ("i", key_context::INSPECTOR),
+    ("/", key_context::INSPECTOR),
+    ("h", key_context::SETTINGS),
+    ("l", key_context::SETTINGS),
+    ("i", key_context::SETTINGS),
+    ("/", key_context::SETTINGS),
+    ("h", key_context::THREAD_TABS),
+    ("l", key_context::THREAD_TABS),
+    ("i", key_context::THREAD_TABS),
+    ("/", key_context::THREAD_TABS),
+    ("j", key_context::ACTIVITY),
+    ("k", key_context::ACTIVITY),
+    ("g", key_context::ACTIVITY),
+    ("shift-g", key_context::ACTIVITY),
+    ("i", key_context::ACTIVITY),
+    ("/", key_context::ACTIVITY),
+];
+
+/// Live out or retire the vim layer. Same-chord conflicts resolve toward the
+/// latest binding, so enabling re-binds over stale shadows and disabling
+/// shadows over stale live rows; toggles are rare user gestures, so the
+/// appended duplicates are harmless (same tradeoff as [`reinstall_shortcuts`]).
+pub(super) fn apply_vim_navigation(cx: &mut App, enabled: bool) {
+    if enabled {
+        cx.bind_keys([
+            KeyBinding::new("j", SessionNext, Some(key_context::SESSIONS)),
+            KeyBinding::new("k", SessionPrevious, Some(key_context::SESSIONS)),
+            KeyBinding::new("g", SessionFirst, Some(key_context::SESSIONS)),
+            KeyBinding::new("G", SessionLast, Some(key_context::SESSIONS)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::SESSIONS)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::SESSIONS)),
+            KeyBinding::new("j", TranscriptNext, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("k", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("g", TranscriptFirst, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("G", TranscriptLast, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("h", PreviousInspectorTab, Some(key_context::INSPECTOR)),
+            KeyBinding::new("l", NextInspectorTab, Some(key_context::INSPECTOR)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::INSPECTOR)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::INSPECTOR)),
+            KeyBinding::new("h", PreviousSettingsTab, Some(key_context::SETTINGS)),
+            KeyBinding::new("l", NextSettingsTab, Some(key_context::SETTINGS)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::SETTINGS)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::SETTINGS)),
+            KeyBinding::new("h", PreviousThreadTab, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("l", NextThreadTab, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("j", ActivityNext, Some(key_context::ACTIVITY)),
+            KeyBinding::new("k", ActivityPrevious, Some(key_context::ACTIVITY)),
+            KeyBinding::new("g", ActivityFirst, Some(key_context::ACTIVITY)),
+            KeyBinding::new("shift-g", ActivityLast, Some(key_context::ACTIVITY)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::ACTIVITY)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::ACTIVITY)),
+        ]);
+    } else {
+        cx.bind_keys(
+            VIM_CHORDS
+                .iter()
+                .map(|(chord, context)| KeyBinding::new(chord, NoAction {}, Some(*context))),
+        );
+    }
 }
 
-pub(crate) fn run() {
-    let preferences = preferences::Preferences::load();
+pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
+    let prefs_phase = vtcode_commons::startup_trace::phase_started();
+    let mut preferences = preferences::Preferences::load();
     super::super::localization::initialize(preferences.ui_language());
+    vtcode_commons::startup_trace::record_phase("desktop_preferences_and_localization", prefs_phase);
+    let inbox: SharedUrlInbox = Rc::new(RefCell::new(UrlInbox::default()));
+    let inbox_events = inbox.clone();
     let application = gpui_kit::application().with_assets(super::super::assets::DesktopAssets);
-    let _application = application.on_reopen(show_main_window);
+    // `vtcode://` delivery to the running app (CLI `/desktop` fast path).
+    // The callback runs on the main thread without app access, so it only
+    // touches the inbox; dispatch happens through `AsyncApp` once init ran.
+    let _application = application.on_reopen(show_main_window).on_open_urls(move |urls| {
+        let ready = {
+            let mut inbox = inbox_events.borrow_mut();
+            for url in &urls {
+                inbox.push_url(url);
+            }
+            inbox.take_ready()
+        };
+        if let Some((app, links)) = ready {
+            app.update(|cx| dispatch_handoff_links(cx, links));
+        }
+    });
     application.run(move |cx: &mut App| {
+        let kit_phase = vtcode_commons::startup_trace::phase_started();
         gpui_kit::init(cx);
+        vtcode_commons::startup_trace::record_phase("desktop_kit_init", kit_phase);
+        let chrome_phase = vtcode_commons::startup_trace::phase_started();
         super::super::notifications::initialize(cx);
         init_keybindings(cx, &preferences);
-        init_native_menus(cx);
+        menu_bar::init_native_menus(cx);
         if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
         }
-        if let Err(error) = open_or_activate_main_window(cx, Some(preferences)) {
+        login_items::reconcile_launch_preference(&mut preferences, cx);
+        vtcode_commons::startup_trace::record_phase("desktop_chrome", chrome_phase);
+        inbox.borrow_mut().set_app(cx.to_async());
+        let window_phase = vtcode_commons::startup_trace::phase_started();
+        if let Err(error) = open_or_activate_main_window(cx, Some(preferences), startup_link) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
+        } else {
+            // The window (and its global) exists now: drain URLs that
+            // arrived before init finished on a cold launch.
+            let links = inbox.borrow_mut().take_pending();
+            if !links.is_empty() {
+                dispatch_handoff_links(cx, links);
+            }
         }
+        vtcode_commons::startup_trace::record_phase("desktop_window_open", window_phase);
+        // Async milestones print individually; welcome launches may never reach session-ready.
+        vtcode_commons::startup_trace::emit_summary();
     });
 }
 
+/// Main window for `vtcode://` delivery. Weak: a closed window must drop
+/// its view instead of leaking it through the global.
+struct MainWindow {
+    view: gpui_kit::WeakEntity<DesktopView>,
+    window: gpui_kit::AnyWindowHandle,
+}
+
+impl gpui_kit::Global for MainWindow {}
+
+/// Route handoff links to the live main window. Unknown sessions and
+/// workspaces fail through the same notices as the argv path. A handoff
+/// with no live window reopens first: dropping the links silently would
+/// strand CLI `/desktop` invocations against a windowless app, and
+/// reopening also raises a hidden or backgrounded window since the user
+/// invoked the app. Only a failed reopen drops the links: there is no
+/// surface to report on.
+pub(super) fn dispatch_handoff_links(cx: &mut App, links: Vec<protocol::handoff_url::HandoffLink>) {
+    if links.is_empty() {
+        return;
+    }
+    if open_or_activate_main_window(cx, None, None).is_err() {
+        vtcode_commons::diagnostics::stderr(format_args!("handoff delivery missed its window"));
+        return;
+    }
+    let Some(main) = cx.try_global::<MainWindow>() else {
+        return;
+    };
+    let Some(view) = main.view.upgrade() else {
+        return;
+    };
+    let window = main.window;
+    if window
+        .update(cx, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                for link in links {
+                    view.handle_handoff_link(link, window, cx);
+                }
+            });
+        })
+        .is_err()
+    {
+        vtcode_commons::diagnostics::stderr(format_args!("handoff delivery missed its window"));
+    }
+}
+
 pub(super) fn show_main_window(cx: &mut App) {
-    if let Err(error) = open_or_activate_main_window(cx, None) {
+    if let Err(error) = open_or_activate_main_window(cx, None, None) {
         vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
     }
 }
@@ -189,6 +341,7 @@ pub(super) fn show_main_window(cx: &mut App) {
 pub(super) fn open_or_activate_main_window(
     cx: &mut App,
     preferences: Option<preferences::Preferences>,
+    startup_link: Option<protocol::handoff_url::HandoffLink>,
 ) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
     // A dock/Finder reopen should return to the user's focused workspace when
     // multiple windows exist; keep the first-window fallback for the current
@@ -204,10 +357,26 @@ pub(super) fn open_or_activate_main_window(
         .theme
         .clone()
         .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
+    let start_customs = preferences.custom_themes.clone();
     let start_maximized = preferences.window_maximized();
-    let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, move |window, cx| {
+    let mut options = desktop_window_options();
+    // A maximized launch fills the main screen's visible frame explicitly:
+    // AppKit `zoom:` targets the content-derived standard frame (GPUI sets
+    // no standard-frame delegate), which leaves gaps and never satisfies
+    // `is_maximized`, so the bounds observer would persist windowed and
+    // regress the next launch. Zoom stays as the fallback when the probe
+    // fails (nil screen, off-main-thread, degenerate frame).
+    let mut zoom_after_open = false;
+    if start_maximized {
+        if let Some(bounds) = main_screen_visible_bounds() {
+            options.window_bounds = Some(WindowBounds::Windowed(bounds));
+        } else {
+            zoom_after_open = true;
+        }
+    }
+    let (window, view) = gpui_kit::open_window(options, cx, move |window, cx| {
         window.set_window_title(app::NAME);
-        let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
+        let theme_mode = themes::apply_selection(&start_theme, &start_customs, Some(window), cx);
         let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         view
@@ -223,17 +392,42 @@ pub(super) fn open_or_activate_main_window(
             }
         });
     })?;
-    if start_maximized {
-        // macOS ignores WindowBounds::Maximized at creation, so zoom after
-        // opening to reach the native zoomed state the Zoom menu toggles.
-        // The headless test platform leaves zoom unimplemented.
+    cx.set_global(MainWindow { view: view.downgrade(), window });
+    if zoom_after_open {
+        // Fallback when the visible-frame probe failed: macOS ignores
+        // WindowBounds::Maximized at creation, so zoom after opening to
+        // reach the native zoomed state the Zoom menu toggles. The
+        // headless test platform leaves zoom unimplemented.
         #[cfg(not(test))]
         window.update(cx, |_, window, _| window.zoom_window())?;
     }
-    // Reopen the most recent workspace when it still exists.
-    let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
-    if let Some(path) = last_workspace {
-        window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx)))?;
+    // A CLI handoff (`/desktop`) selects its workspace and loads its thread
+    // through pending navigation; otherwise reopen the most recent workspace.
+    // An unreadable handoff workspace stays on welcome with the standard
+    // notice instead of falling back: opening a different directory than the
+    // requested one would silently land the user in the wrong workspace.
+    let mut handoff = None;
+    let mut handoff_invalid = false;
+    if let Some(link) = startup_link {
+        match files::canonicalize_workspace_folder(&link.workspace) {
+            Some(workspace) => handoff = Some((workspace, link.session_id)),
+            None => handoff_invalid = true,
+        }
+    }
+    if let Some((workspace, session_id)) = handoff {
+        window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.arm_session_link(workspace, session_id, cx)))?;
+    } else if handoff_invalid {
+        window.update(cx, |_, _, cx| {
+            view.update(cx, |view, cx| {
+                view.error = Some(rust_i18n::t!("app.workspace.invalid_folder").to_string());
+                cx.notify();
+            })
+        })?;
+    } else {
+        let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
+        if let Some(path) = last_workspace {
+            window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx)))?;
+        }
     }
     view.update(cx, |view, cx| view.start_event_drain(cx));
     cx.activate(true);
@@ -291,6 +485,14 @@ impl DesktopView {
                 cx.notify();
             }
         });
+        let output_filter_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("app.inspector.filter_output_lines").to_string())
+        });
+        let output_filter_subscription = cx.subscribe_in(&output_filter_input, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
@@ -303,6 +505,34 @@ impl DesktopView {
                 }
             }
             cx.notify();
+        });
+        // English literal: new strings stay untranslated until full
+        // native-quality coverage ships for every locale.
+        let file_filter_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(files_panel::FILTER_FILES_LABEL.to_string()));
+        let file_filter_subscription = cx.subscribe_in(&file_filter_input, window, |view, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                view.rebuild_file_tree(cx);
+            }
+        });
+        let picker_tree = cx.new(|cx| TreeState::new(cx));
+        let picker_tree_subscription = cx.subscribe(&picker_tree, |view, _, event, cx| {
+            match event {
+                TreeEvent::Expanded(path) => {
+                    let _inserted = view.expanded_picker_directories.insert(path.to_string());
+                }
+                TreeEvent::Collapsed(path) => {
+                    let _removed = view.expanded_picker_directories.remove(path.as_ref());
+                }
+            }
+            cx.notify();
+        });
+        let picker_filter_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(files_panel::FILTER_FILES_LABEL.to_string()));
+        let picker_filter_subscription = cx.subscribe_in(&picker_filter_input, window, |view, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                view.rebuild_picker_tree(cx);
+            }
         });
         let composer = cx.new(|cx| {
             TextareaState::new(window, cx)
@@ -340,8 +570,10 @@ impl DesktopView {
         });
         let destination = preferences.file_open_destination();
         // Bounded Info.plist scan; fast enough to run inline so the
-        // dropdown is correct on its first render.
-        let offered = preferences::FileOpenDestination::offered(destination, &files::detect_installed_editors());
+        // dropdowns are correct on their first render. One scan feeds both
+        // the file destination and the CLI terminal pickers.
+        let detected = files::detect_installed_editors();
+        let offered = preferences::FileOpenDestination::offered(destination, &detected);
         let file_destination_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
                 preferences::FileDestinationOption::for_destinations(&offered),
@@ -357,6 +589,22 @@ impl DesktopView {
                     view.set_file_open_destination(*destination, cx);
                 }
             });
+        let terminal = preferences.cli_terminal();
+        let offered_terminals = preferences::CliTerminal::offered(terminal, &detected);
+        let cli_terminal_select = cx.new(|cx| {
+            gpui_kit::component::select::SelectState::new(
+                preferences::CliTerminalOption::for_terminals(&offered_terminals),
+                preferences::CliTerminalOption::selected_index(&offered_terminals, terminal),
+                window,
+                cx,
+            )
+            .searchable(false)
+        });
+        let cli_terminal_subscription = cx.subscribe_in(&cli_terminal_select, window, |view, _, event, _, cx| {
+            if let SelectEvent::Confirm(Some(terminal)) = event {
+                view.set_cli_terminal(*terminal, cx);
+            }
+        });
         let turn_completion_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
                 preferences::TurnCompletionModeOption::for_modes(),
@@ -380,6 +628,17 @@ impl DesktopView {
                 cx.notify();
             }
         });
+        // Read before `preferences` moves into the struct below.
+        let zen_mode = preferences.zen_mode();
+        let file_preview_source = cx.new(|cx| EditorState::new(window, cx).language("markdown"));
+        let preview_source_subscription = cx.subscribe_in(&file_preview_source, window, |_, _, event, _, cx| {
+            // Re-render so the Save action tracks the dirty state live.
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        // One native read at construction; render and scroll never touch the OS.
+        let login_item_status = login_items::status(cx);
         Self {
             shortcut_draft,
             shortcut_search_input,
@@ -399,6 +658,8 @@ impl DesktopView {
             pending_workspace: None,
             navigation_history: NavigationHistory::default(),
             pending_navigation: None,
+            swipe_scroll: SwipeScrollAccumulator::default(),
+            swipe_arming: SwipeArming::default(),
             workspace_selection_pending: false,
             workspace_selection_task: None,
             workspace_picker_open: false,
@@ -408,11 +669,18 @@ impl DesktopView {
             event_tx,
             event_drain_task: None,
             sessions: Vec::new(),
+            session_list_limit: SESSION_LIST_PAGE_SIZE,
+            session_list_has_older: false,
+            session_list_received: false,
             selected_session_id: None,
             open_tabs: Vec::new(),
+            tab_strip_focus: cx.focus_handle().tab_stop(true),
+            tab_strip_scroll: ScrollHandle::default(),
             active_primary_agent_display: None,
             transcript: Transcript::default(),
             message_scroller,
+            transcript_layout_settled: false,
+            filter_matches: None,
             restored_activity: Vec::new(),
             restored_activity_revision: 0,
             activity_projection_cache: None,
@@ -422,20 +690,29 @@ impl DesktopView {
             selected_output_id: None,
             restored_review_history_incomplete: false,
             restored_activity_history_incomplete: false,
+            restored_timeline: Arc::new(Vec::new()),
             active_turn_id: None,
             finished_turn_id: None,
+            turn_undos: HashMap::new(),
             cancel_requested: false,
             cancel_request_sent: false,
+            cancel_sent_turn_id: None,
             last_escape_press: None,
             composer_history_index: None,
             composer_history_stash: gpui_kit::SharedString::from(""),
+            history_filter_stash: gpui_kit::SharedString::from(""),
             transcript_focus: cx.focus_handle().tab_stop(true),
+            session_focus: cx.focus_handle().tab_stop(true),
+            keyboard_focused_session: None,
             keyboard_focused_message: None,
+            transcript_flash: None,
+            transcript_flash_generation: 0,
             running: false,
             turn_content_seen: false,
             status: rust_i18n::t!("app.workspace.startup_hint").to_string(),
             ui_progress_active: false,
             background_activity_count: 0,
+            tracker_snapshot: None,
             error: None,
             configuration: None,
             pending_permission_choice: None,
@@ -446,39 +723,67 @@ impl DesktopView {
             armed_running_switch: None,
             about_open: false,
             about_focus: cx.focus_handle(),
+            license_viewer: None,
+            license_viewer_focus: cx.focus_handle().tab_stop(true),
+            license_return_focus: None,
+            license_open_task: None,
+            changelog_open: false,
+            changelog_mode: updates::ChangelogMode::Latest,
+            changelog_focus: cx.focus_handle(),
+            changelog_return_focus: None,
+            changelog_scroll: ScrollHandle::default(),
+            release_notes_banner_visible_now: false,
+            dismissed_release_notes_version: None,
             service_info: None,
             interaction: None,
             interaction_focus: cx.focus_handle(),
             pending_interaction_response: None,
+            interaction_edit_pending: false,
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
+            interaction_immediate_choice_id: None,
+            interaction_plan_expanded: false,
             composer,
             _composer_subscription: composer_subscription,
             ui_language_select,
             _ui_language_subscription: ui_language_subscription,
             file_destination_select,
             _file_destination_subscription: file_destination_subscription,
+            cli_terminal_select,
+            _cli_terminal_subscription: cli_terminal_subscription,
             turn_completion_select,
             _turn_completion_subscription: turn_completion_subscription,
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
+            files_truncated: false,
             file_directory_paths: Arc::new(HashSet::new()),
             file_tree,
+            pending_tree_select: None,
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
+            file_filter_input,
+            _file_filter_subscription: file_filter_subscription,
+            file_search_hit_count: None,
             files_task: None,
             files_scan_cancel: None,
             preview_task: None,
             attachments_task: None,
             external_launch_task: None,
             file_preview: None,
+            file_preview_source,
+            _preview_source_subscription: preview_source_subscription,
             preview_editor_error: None,
             #[cfg(test)]
             test_launch_intercept: None,
+            #[cfg(test)]
+            test_trash_sink: None,
             preview_focus: cx.focus_handle(),
             preview_return_focus: None,
+            file_rename: None,
+            rename_focus: cx.focus_handle(),
+            rename_return_focus: None,
             palette_return_focus: None,
             palette_focus: cx.focus_handle(),
             sidebar_resize_focus: cx.focus_handle().tab_stop(true),
@@ -489,12 +794,14 @@ impl DesktopView {
             inspector_tabs_scroll: ScrollHandle::default(),
             changes: ChangesProjection::default(),
             selected_change: None,
+            change_kind_filter: None,
             change_viewer: None,
             change_viewer_dirty: false,
             route_history: RouteHistory::new(),
             workspace_review: None,
             review_focus: cx.focus_handle().tab_stop(true),
             browser_focus: cx.focus_handle().tab_stop(true),
+            browser_list_focus: cx.focus_handle().tab_stop(true),
             git_branch: None,
             palette: None,
             palette_kind: PaletteKind::Commands,
@@ -509,24 +816,38 @@ impl DesktopView {
             slash_commands: Vec::new(),
             resources_loading: false,
             resources_loaded: false,
+            history_scope: HistoryScope::default(),
+            recent_prompts: Vec::new(),
+            recent_prompts_scope: None,
+            recent_prompts_loading: false,
             palette_groups: Vec::new(),
             config_page_open: false,
             config_page_group: None,
-            theme_scroll: ScrollHandle::default(),
+            theme_scroll_light: ScrollHandle::default(),
+            theme_scroll_dark: ScrollHandle::default(),
+            theme_editor: appearance_themes::CustomThemeState::new(window, cx),
             settings_scroll: ScrollHandle::default(),
             settings_nav_scroll: ScrollHandle::default(),
             config_rail_scroll: ScrollHandle::default(),
             utilities_scroll: ScrollHandle::default(),
             output_scroll: ScrollHandle::default(),
-            output_tail_len: 0,
+            output_filter_input,
+            _output_filter_subscription: output_filter_subscription,
+            output_tail_seen: None,
             output_follow_selection: None,
             review_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
+            activity_filter: None,
+            activity_follow_filter: None,
+            activity_seen_head: None,
+            activity_focus: cx.focus_handle().tab_stop(true),
+            keyboard_focused_activity: None,
             change_list_scroll: VirtualListScrollHandle::new(),
             browser_scroll: VirtualListScrollHandle::new(),
             session_row_sizes: FixedRowSizeCache::default(),
             activity_row_sizes: FixedRowSizeCache::default(),
+            tasks_row_sizes: FixedRowSizeCache::default(),
             change_row_sizes: FixedRowSizeCache::default(),
             browser_row_sizes: FixedRowSizeCache::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
@@ -573,7 +894,12 @@ impl DesktopView {
             attachment_picker: None,
             attachment_picker_focus: cx.focus_handle(),
             menus_show_exit_full_screen: false,
-            picker_thumbnail_task: None,
+            picker_tree,
+            expanded_picker_directories: HashSet::new(),
+            _picker_tree_subscription: picker_tree_subscription,
+            picker_filter_input,
+            _picker_filter_subscription: picker_filter_subscription,
+            picker_search_hit_count: None,
             attachments_picker_open: false,
             pending_submission: None,
             pending_first_submission: false,
@@ -581,6 +907,7 @@ impl DesktopView {
             queued_submissions: Vec::new(),
             queue_depth: 0,
             queue_previews: Vec::new(),
+            queue_ages_secs: Vec::new(),
             queue_dropped_total: 0,
             take_latest_pending: false,
             pending_composer_restore: None,
@@ -606,17 +933,19 @@ impl DesktopView {
             mcp_app_bodies: HashMap::new(),
             mcp_app_errors: HashMap::new(),
             retained_submission: None,
+            cli_handoff: None,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
             preferences,
+            login_item_status,
             system_motion_baseline,
             sidebar_open: false,
             navigation_peek: false,
             hovered_message: None,
-            zen_mode: true,
+            zen_mode,
             zen_drag_armed: false,
             sidebar_width: 270.0,
-            inspector_width: 440.0,
+            inspector_width: preferences::DEFAULT_INSPECTOR_WIDTH,
             resizing: None,
         }
     }
@@ -625,12 +954,7 @@ impl DesktopView {
     pub(super) fn load_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let preferences = self.preferences.clone();
         self.preferences.follow_cli_theme = Some(preferences.follow_cli_theme.unwrap_or(preferences.theme.is_none()));
-        if let Some(theme) = preferences.theme.as_deref() {
-            self.theme_mode = themes::apply_with_contrast(theme, preferences.contrast(), Some(window), cx);
-            self.theme_id = theme.to_string();
-        } else if preferences.contrast() > 0 {
-            self.theme_mode = themes::apply_with_contrast(&self.theme_id, preferences.contrast(), Some(window), cx);
-        }
+        self.restore_saved_theme(window, cx);
         self.apply_typography(cx);
         self.refresh_dock_icon();
         self.sidebar_width = preferences.sidebar_width();
@@ -643,6 +967,7 @@ impl DesktopView {
     pub(super) fn save_preferences(&mut self) {
         self.preferences.theme = Some(self.theme_id.clone());
         self.preferences.inspector_open = Some(self.inspector_open);
+        self.preferences.zen_mode = Some(self.zen_mode);
         self.preferences.set_widths(self.sidebar_width, self.inspector_width);
         self.preferences.save();
     }

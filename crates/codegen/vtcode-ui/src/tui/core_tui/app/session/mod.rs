@@ -581,6 +581,9 @@ impl AppSession {
                     self.local_agents_auto_opened = false;
                 }
             }
+            InlineCommand::SetActivePlan { entry } => {
+                self.core.set_active_plan(entry);
+            }
             InlineCommand::SetArchivedHistory { entries } => {
                 let mut input_entries = Vec::new();
                 let archived = entries
@@ -596,6 +599,7 @@ impl AppSession {
                             content: e.content,
                             created_at: e.created_at,
                             session_label: e.session_label,
+                            in_workspace: e.in_workspace,
                         }
                     })
                     .collect();
@@ -787,9 +791,11 @@ impl TuiSessionDriver for AppSession {
     fn needs_animation_tick(&self) -> bool {
         // Core covers drag, spinner, shimmer, core background, and expiries;
         // AppSession adds its own drawer-local background loading count, which
-        // feeds `has_status_spinner` but lives outside `core`.
+        // feeds `has_status_spinner` but lives outside `core`, plus the
+        // review-viewer landing tint, whose refresh clears it on the tick.
         self.core.needs_animation_tick()
             || (self.core.appearance.should_animate_progress_status() && self.background_activity_active())
+            || self.tool_output_viewer_state.as_ref().is_some_and(|viewer| viewer.flash_live())
     }
 
     fn render(&mut self, frame: &mut Frame<'_>) {

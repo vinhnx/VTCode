@@ -7,7 +7,8 @@ pub(super) fn spawn_session_pump(
     state: std::sync::Arc<Mutex<ServerState>>,
     notifications: mpsc::Sender<protocol::Notification>,
     turn_finished: std::sync::Arc<Notify>,
-) {
+    generation: Option<uuid::Uuid>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut commands_open = true;
         let mut events_open = true;
@@ -37,9 +38,9 @@ pub(super) fn spawn_session_pump(
                             }
                             _ => false,
                         };
-                        if changed && state.lock().await.session_id.as_deref() == Some(session_id.as_str()) {
+                        if changed && runtime_is_current(&*state.lock().await, &session_id, generation) {
                             let phase = progress.phase();
-                            if let Err(error) = send_notification(&notifications, protocol::method::UI_PROGRESS, json!({
+                            if let Err(error) = send_runtime_notification(&notifications, protocol::method::UI_PROGRESS, json!({
                                 "sessionId": session_id,
                                 "active": vtcode_commons::ui_protocol::LoadingActivity {
                                     blocked: activity_blocked,
@@ -50,27 +51,29 @@ pub(super) fn spawn_session_pump(
                                     // window; the pump owns turn/activity/progress/background only.
                                     thinking: false,
                                 }.is_active(),
-                            })).await {
+                            }), generation).await {
                                 tracing::warn!(target: "vtcode.desktop", %error, "failed to publish progress");
                             }
                         }
                         if let InlineCommand::SetPrimaryAgent { name, .. } = &command
-                            && let Err(error) = publish_primary_agent_changed(
+                            && let Err(error) = publish_primary_agent_changed_for_runtime(
                                 &session_id,
                                 name.as_deref(),
                                 &state,
                                 &notifications,
+                                generation,
                             )
                             .await
                         {
                             tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish active primary agent");
                         }
                         if let Some(view) = host_interaction_from_command(&command) {
-                            if let Err(error) = publish_interaction(
+                            if let Err(error) = publish_interaction_for_runtime(
                                 &session_id,
                                 view,
                                 &state,
                                 &notifications,
+                                generation,
                             ).await {
                                 tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish runtime interaction");
                             }
@@ -82,12 +85,13 @@ pub(super) fn spawn_session_pump(
                     report_dropped_events(&events);
                     match event {
                         Some(event) => {
-                            if let Err(error) = publish_thread_event(
+                            if let Err(error) = publish_thread_event_for_runtime(
                                 &session_id,
                                 event,
                                 &state,
                                 &notifications,
                                 &turn_finished,
+                                generation,
                             ).await {
                                 tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish runtime event");
                             }
@@ -100,16 +104,8 @@ pub(super) fn spawn_session_pump(
 
         let completed_turn = {
             let mut state = state.lock().await;
-            if state.session_id.as_deref() == Some(session_id.as_str()) {
-                let turn_id = state.active_turn_id.take();
-                if let Some(turn_id) = turn_id.as_deref() {
-                    state.cancel_requested_turn = None;
-                    state.interaction_registry.finish_turn(&session_id, turn_id);
-                    state.pending_interactions.retain(|_, interaction| {
-                        interaction.session_id != session_id || interaction.turn_id != turn_id
-                    });
-                }
-                turn_id
+            if runtime_is_current(&state, &session_id, generation) {
+                state.take_active_turn(&session_id)
             } else {
                 None
             }
@@ -118,34 +114,56 @@ pub(super) fn spawn_session_pump(
             turn_finished.notify_waiters();
         }
         if (activity_active || background_active || progress.phase().is_some())
-            && state.lock().await.session_id.as_deref() == Some(session_id.as_str())
-            && let Err(error) = send_notification(
+            && runtime_is_current(&*state.lock().await, &session_id, generation)
+            && let Err(error) = send_runtime_notification(
                 &notifications,
                 protocol::method::UI_PROGRESS,
                 json!({"sessionId": session_id, "active": false}),
+                generation,
             )
             .await
         {
             tracing::warn!(target: "vtcode.desktop", %error, "failed to clear progress on runtime shutdown");
         }
         if let Some(turn_id) = completed_turn {
-            let _ = send_notification(
+            let _ = send_runtime_notification(
                 &notifications,
                 protocol::method::TURN_STATUS,
                 json!({ "sessionId": session_id, "turnId": turn_id, "status": "failed" }),
+                generation,
             )
             .await;
         }
-    });
+    })
 }
 
-pub(super) async fn publish_primary_agent_changed(
+fn runtime_is_current(state: &ServerState, session_id: &str, generation: Option<uuid::Uuid>) -> bool {
+    state.session_id.as_deref() == Some(session_id) && state.runtime_generation == generation
+}
+
+pub(super) async fn send_runtime_notification(
+    sender: &mpsc::Sender<protocol::Notification>,
+    method: &str,
+    mut params: Value,
+    generation: Option<uuid::Uuid>,
+) -> Result<()> {
+    if let Some(generation) = generation {
+        let object = params
+            .as_object_mut()
+            .ok_or_else(|| anyhow!("runtime notification parameters must be an object"))?;
+        object.insert(INTERNAL_RUNTIME_GENERATION.to_owned(), json!(generation.to_string()));
+    }
+    send_notification(sender, method, params).await
+}
+
+async fn publish_primary_agent_changed_for_runtime(
     session_id: &str,
     display_name: Option<&str>,
     state: &Mutex<ServerState>,
     notifications: &mpsc::Sender<protocol::Notification>,
+    generation: Option<uuid::Uuid>,
 ) -> Result<()> {
-    if state.lock().await.session_id.as_deref() != Some(session_id) {
+    if !runtime_is_current(&*state.lock().await, session_id, generation) {
         return Ok(());
     }
 
@@ -153,7 +171,13 @@ pub(super) async fn publish_primary_agent_changed(
         session_id: session_id.to_string(),
         display_name: sanitize_primary_agent_display(display_name),
     };
-    send_notification(notifications, protocol::method::PRIMARY_AGENT_CHANGED, serde_json::to_value(notification)?).await
+    send_runtime_notification(
+        notifications,
+        protocol::method::PRIMARY_AGENT_CHANGED,
+        serde_json::to_value(notification)?,
+        generation,
+    )
+    .await
 }
 
 pub(super) fn sanitize_primary_agent_display(display_name: Option<&str>) -> Option<String> {
@@ -182,12 +206,13 @@ fn report_dropped_events(events: &protocol::LiveEventReceiver) {
     }
 }
 
-pub(super) async fn publish_thread_event(
+async fn publish_thread_event_for_runtime(
     session_id: &str,
     event: vtcode_core::exec::events::VersionedThreadEvent,
     state: &Mutex<ServerState>,
     notifications: &mpsc::Sender<protocol::Notification>,
     turn_finished: &Notify,
+    generation: Option<uuid::Uuid>,
 ) -> Result<()> {
     use vtcode_core::exec::events::ThreadEvent;
 
@@ -199,20 +224,14 @@ pub(super) async fn publish_thread_event(
     };
     let (turn_id, webmcp_event_hub, drained) = {
         let mut state = state.lock().await;
-        if state.session_id.as_deref().is_some_and(|selected| selected != session_id) {
+        if !runtime_is_current(&state, session_id, generation) {
             return Ok(());
         }
         let turn_id = state.active_turn_id.clone();
         let mut drained = None;
         if terminal_status.is_some() && turn_id.is_some() && state.session_id.as_deref() == Some(session_id) {
-            if let Some(turn_id) = turn_id.as_deref() {
-                state.interaction_registry.finish_turn(session_id, turn_id);
-                state
-                    .pending_interactions
-                    .retain(|_, interaction| interaction.session_id != session_id || interaction.turn_id != turn_id);
-            }
-            state.active_turn_id = None;
-            state.cancel_requested_turn = None;
+            let taken = state.take_active_turn(session_id);
+            debug_assert!(taken.is_some(), "terminal gate cloned a live turn id under the same lock");
             // Atomically with the release: pop the next queued batch (if any)
             // so a concurrent submit cannot slip an immediate turn ahead of it.
             drained = state.pop_next_queued_turn();
@@ -237,30 +256,47 @@ pub(super) async fn publish_thread_event(
         turn_id: turn_id.clone(),
         event,
     };
-    send_notification(notifications, protocol::method::THREAD_EVENT, serde_json::to_value(notification)?).await?;
+    send_runtime_notification(
+        notifications,
+        protocol::method::THREAD_EVENT,
+        serde_json::to_value(notification)?,
+        generation,
+    )
+    .await?;
     if let (Some(status), Some(turn_id)) = (terminal_status, turn_id) {
-        send_notification(
+        send_runtime_notification(
             notifications,
             protocol::method::TURN_STATUS,
             json!({ "sessionId": session_id, "turnId": turn_id, "status": status }),
+            generation,
         )
         .await?;
     }
     if let Some(drained) = drained {
-        dispatch_drained_turn(state, notifications, session_id, drained.turn_id, drained.batch, drained.input).await?;
+        dispatch_drained_turn(
+            state,
+            notifications,
+            turn_finished,
+            session_id,
+            drained.turn_id,
+            drained.batch,
+            drained.input,
+        )
+        .await?;
     }
     Ok(())
 }
 
-pub(super) async fn publish_interaction(
+async fn publish_interaction_for_runtime(
     session_id: &str,
     view: HostInteraction,
     state: &Mutex<ServerState>,
     notifications: &mpsc::Sender<protocol::Notification>,
+    generation: Option<uuid::Uuid>,
 ) -> Result<()> {
     let interaction_id = uuid::Uuid::new_v4().to_string();
     let mut state = state.lock().await;
-    if state.session_id.as_deref() != Some(session_id) {
+    if !runtime_is_current(&state, session_id, generation) {
         return Ok(());
     }
     let turn_id = state
@@ -303,13 +339,51 @@ pub(super) async fn publish_interaction(
         steps,
         selected_choice_id: view.selected_choice_ids.first().cloned(),
         selected_choice_ids: view.selected_choice_ids.clone(),
+        plan_markdown: view.plan_markdown.clone(),
     };
     state.interaction_registry.insert(&request)?;
     state
         .pending_interactions
         .insert(interaction_id, PendingInteraction { session_id: session_id.to_string(), turn_id, view });
     drop(state);
-    send_notification(notifications, protocol::method::INTERACTION_REQUESTED, serde_json::to_value(request)?).await
+    send_runtime_notification(
+        notifications,
+        protocol::method::INTERACTION_REQUESTED,
+        serde_json::to_value(request)?,
+        generation,
+    )
+    .await
+}
+
+#[cfg(test)]
+pub(super) async fn publish_thread_event(
+    session_id: &str,
+    event: vtcode_core::exec::events::VersionedThreadEvent,
+    state: &Mutex<ServerState>,
+    notifications: &mpsc::Sender<protocol::Notification>,
+    turn_finished: &Notify,
+) -> Result<()> {
+    publish_thread_event_for_runtime(session_id, event, state, notifications, turn_finished, None).await
+}
+
+#[cfg(test)]
+pub(super) async fn publish_primary_agent_changed(
+    session_id: &str,
+    display_name: Option<&str>,
+    state: &Mutex<ServerState>,
+    notifications: &mpsc::Sender<protocol::Notification>,
+) -> Result<()> {
+    publish_primary_agent_changed_for_runtime(session_id, display_name, state, notifications, None).await
+}
+
+#[cfg(test)]
+pub(super) async fn publish_interaction(
+    session_id: &str,
+    view: HostInteraction,
+    state: &Mutex<ServerState>,
+    notifications: &mpsc::Sender<protocol::Notification>,
+) -> Result<()> {
+    publish_interaction_for_runtime(session_id, view, state, notifications, None).await
 }
 
 pub(super) async fn respond_to_interaction(
@@ -335,7 +409,10 @@ pub(super) async fn respond_to_interaction(
         bail!("interaction response is stale");
     }
     let input = runtime.input.clone();
-    dispatch_interaction_response(&mut state, &response, &choice_ids, &answer_texts, &input)
+    dispatch_interaction_response(&mut state, &response, &choice_ids, &answer_texts, &input)?;
+    drop(state);
+    context.turn_finished.notify_waiters();
+    Ok(())
 }
 
 /// Split a service choice label into display text plus the recommended flag.

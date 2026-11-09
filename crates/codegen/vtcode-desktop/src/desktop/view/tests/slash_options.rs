@@ -4,6 +4,7 @@ use super::*;
 fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowledgement(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 450., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -74,6 +75,7 @@ fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowl
 fn fast_mode_toggle_sends_cli_option_and_is_exposed_as_a_toggle(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -525,6 +527,7 @@ fn slash_history_opens_recent_thread_prompts_without_submitting(cx: &mut TestApp
     cx.update_window(window, |_, _, cx| {
         assert_eq!(view.read(cx).composer.read(cx).value(), previous_prompt);
         assert!(view.read(cx).palette.is_none());
+        expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
         assert!(requests.try_recv().is_err(), "choosing history only restores a draft");
     })
     .unwrap();
@@ -555,14 +558,12 @@ fn ctrl_r_opens_prefiltered_prompt_history_with_toggle_and_restore(cx: &mut Test
         window.render_frame(cx);
         assert!(matches!(view.read(cx).palette_kind, super::super::PaletteKind::PromptHistory));
         assert!(view.read(cx).palette.is_some());
-        // Second press toggles closed; the draft is untouched.
+        // Second press keeps the palette open (CLI parity: Ctrl+R cycles); the
+        // seed matches one row, so the highlight stays on it.
         window.press("ctrl-r", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).palette.is_none());
-        assert_eq!(view.read(cx).composer.read(cx).value(), "stale");
-        // Reopen and accept: the draft-prefiltered match wins over recency order.
-        window.press("ctrl-r", cx);
-        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "ctrl-r must not dismiss the palette");
+        assert_eq!(view.read(cx).composer.read(cx).value(), "stale", "draft stays untouched");
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
         window.press("enter", cx);
@@ -574,6 +575,7 @@ fn ctrl_r_opens_prefiltered_prompt_history_with_toggle_and_restore(cx: &mut Test
     cx.update_window(window, |_, _, cx| {
         assert_eq!(view.read(cx).composer.read(cx).value(), "Review stale diffs");
         assert!(view.read(cx).palette.is_none());
+        expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
         assert!(requests.try_recv().is_err(), "choosing history only restores a draft");
     })
     .unwrap();
@@ -903,6 +905,51 @@ fn composer_policy_button_tracks_permission_mode_and_availability(cx: &mut TestA
         window.render_frame(cx);
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Auto-approve commands"));
         assert_ne!(window.find("composer-policy").disabled(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn runtime_option_change_preserves_the_thread_and_applies_the_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-live".to_string());
+            view.open_tabs = vec!["session-live".to_string()];
+            view.transcript.push(TranscriptItem::new(
+                "kept-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Conversation remains visible.".into(),
+            ));
+            let mut configuration = runtime_options_config();
+            let options = configuration.session_options.as_mut().unwrap();
+            options.mode = "plan".into();
+            options.reasoning_effort = "high".into();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                    result: Some(json!(configuration)),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(
+                view.selected_session_id.as_deref(),
+                Some("session-live"),
+                "runtime option change preserves the thread"
+            );
+            assert_eq!(view.open_tabs, vec!["session-live".to_string()], "tabs survive the change");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Conversation remains visible.");
+            assert!(view.transcript.get(1).is_none(), "no transcript row is added or dropped");
+            let applied = view.configuration.as_ref().unwrap().session_options.as_ref().unwrap();
+            assert_eq!(applied.mode, "plan");
+            assert_eq!(applied.reasoning_effort, "high");
+            assert_eq!(view.status, "Runtime options updated.");
+        });
     })
     .unwrap();
 }

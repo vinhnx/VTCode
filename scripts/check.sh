@@ -167,9 +167,18 @@ run_docs() {
     print_status "Checking documentation..."
     if cargo doc --workspace --no-deps; then
         print_success "Documentation generated successfully!"
-        return 0
     else
         print_error "Documentation generation failed."
+        return 1
+    fi
+    # nextest never runs doctests and `cargo doc` never compiles them, so
+    # doc-example rot (e.g. references to private APIs) is otherwise invisible.
+    print_status "Running doctests..."
+    if cargo test --workspace --locked --doc; then
+        print_success "All doctests passed!"
+        return 0
+    else
+        print_error "Doctests failed."
         return 1
     fi
 }
@@ -212,6 +221,18 @@ run_release_contract_tests() {
         print_success "Companion packaging contract tests passed."
     else
         print_error "Companion packaging contract tests failed."
+        failed=1
+    fi
+    if python3 scripts/tests/test_homebrew_formula.py; then
+        print_success "Homebrew formula contract tests passed."
+    else
+        print_error "Homebrew formula contract tests failed."
+        failed=1
+    fi
+    if python3 scripts/tests/test_homebrew_cask.py; then
+        print_success "Homebrew cask contract tests passed."
+    else
+        print_error "Homebrew cask contract tests failed."
         failed=1
     fi
     if [ "$failed" -eq 0 ]; then
@@ -271,18 +292,6 @@ run_zen_governance() {
     fi
 }
 
-# Hard ceiling complementing the Zen soft signal: no tracked text file may
-# exceed 1000 lines except for capped entries in file_length_allowlist.txt.
-run_file_length_gate() {
-    print_status "Running file length gate (enforce, max 1000 lines)..."
-    if python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
-        print_success "File lengths within budget."
-        return 0
-    else
-        print_error "File length gate failed (see findings above)."
-        return 1
-    fi
-}
 
 # Catch platform-gated `unsafe` drift that host-only clippy cannot see: every
 # `unsafe` needs a `SAFETY:` marker and an `unsafe_code` allowance, even in code
@@ -406,7 +415,8 @@ main() {
     run_release_contract_tests || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
-    run_file_length_gate || ((failed_checks++))
+    run_repo_governance_gates || ((failed_checks++))
+    run_markdown_lint_gate || ((failed_checks++))
     run_unsafe_docs_gate || ((failed_checks++))
     run_cargo_deny || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))
@@ -474,7 +484,7 @@ case "${1:-}" in
         echo "  test    - Run tests"
         echo "  harness - Run focused PTY/TUI harness regression tests"
         echo "  build   - Build the project"
-        echo "  docs    - Generate documentation"
+        echo "  docs    - Generate documentation and run doctests"
         echo "  legibility - Run agent legibility hotspot checks"
         echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
         echo "  contracts - Run release-artifact contract tests"

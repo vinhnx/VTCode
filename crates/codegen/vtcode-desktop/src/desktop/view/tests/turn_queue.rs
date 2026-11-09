@@ -1,4 +1,4 @@
-use super::super::{QueuePanelState, QueuedSubmission, SubmissionDraft};
+use super::super::{QueuePanelState, QueuedSubmission, SubmissionDraft, queue_wait_time_label};
 use super::*;
 
 fn queued_draft(prompt: &str) -> SubmissionDraft {
@@ -132,6 +132,7 @@ fn immediate_ack_promotes_a_queued_entry_when_idle_first(cx: &mut TestAppContext
         view.selected_session_id = Some("session".to_string());
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-promoted".to_string(),
+            entry_id: None,
             prompt: "promoted".to_string(),
             acknowledged: false,
         });
@@ -159,6 +160,7 @@ fn delayed_immediate_ack_leaves_newer_queue_entries_unconfirmed(cx: &mut TestApp
         view.running = true;
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-newer".to_string(),
+            entry_id: None,
             prompt: "newer".to_string(),
             acknowledged: false,
         });
@@ -473,6 +475,86 @@ fn take_latest_skips_empty_queue_without_a_request(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn remove_button_sends_remove_request_and_drops_the_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".to_string());
+            view.running = true;
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: "echo-older".into(),
+                entry_id: None,
+                prompt: "older".into(),
+                acknowledged: true,
+            });
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: "echo-newer".into(),
+                entry_id: Some("qe-2".into()),
+                prompt: "newer".into(),
+                acknowledged: true,
+            });
+            view.push_submission_echo(&SubmissionDraft {
+                prompt: "older".into(),
+                attachments: Vec::new(),
+                echo_id: "echo-older".into(),
+                delivery_uncertain: false,
+            });
+        });
+        window.render_frame(cx);
+        let view = view.read(cx);
+        assert!(view.newest_entry_id_is_bound(), "the snapshot-bound entry addresses itself");
+    })
+    .unwrap();
+    // The bound entry carries a service id, so its removal path exists and is
+    // callable; the unbound optimistic one is skipped.
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.remove_queued_submission("echo-newer", cx);
+            assert!(view.queued_submissions.iter().all(|entry| entry.echo_id != "echo-newer"), "optimistic row hides");
+        });
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("remove request") else {
+        panic!("expected remove request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_QUEUE_REMOVE);
+    assert_eq!(params, serde_json::json!({ "sessionId": "session", "entryId": "qe-2" }));
+}
+
+#[gpui_kit::test]
+fn remove_without_a_bound_entry_id_is_suppressed(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".to_string());
+        view.running = true;
+        view.queued_submissions.push(QueuedSubmission {
+            echo_id: "echo-optimistic".into(),
+            entry_id: None,
+            prompt: "optimistic".into(),
+            acknowledged: false,
+        });
+        view.remove_queued_submission("echo-optimistic", cx);
+        assert_eq!(view.queued_submissions.len(), 1, "unaddressed entry cannot be optimistically removed");
+    });
+    assert!(requests.try_recv().is_err(), "no remove request without a service id");
+}
+
+#[test]
+fn queue_wait_label_formats_human_units() {
+    let format = |secs: u64| {
+        // Indirect through the view helpers' formatter for parity.
+        queue_wait_time_label(secs)
+    };
+    assert!(format(5).contains('5'), "{:?}", format(5));
+    assert!(format(90).contains('1'), "{:?}", format(90));
+    assert!(format(3900).contains('1'), "{:?}", format(3900));
+}
+
+#[gpui_kit::test]
 fn queue_panel_state_tracks_entries_and_depth(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
@@ -488,6 +570,7 @@ fn queue_panel_state_tracks_entries_and_depth(cx: &mut TestAppContext) {
         view.retained_submission = None;
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-1".to_string(),
+            entry_id: None,
             prompt: "queued".to_string(),
             acknowledged: false,
         });
@@ -670,6 +753,7 @@ fn queue_state_clears_on_session_reset_and_service_exit(cx: &mut TestAppContext)
         view.selected_session_id = Some("session".to_string());
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-1".to_string(),
+            entry_id: None,
             prompt: "queued".to_string(),
             acknowledged: true,
         });
@@ -688,6 +772,7 @@ fn queue_state_clears_on_session_reset_and_service_exit(cx: &mut TestAppContext)
 
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-2".to_string(),
+            entry_id: None,
             prompt: "queued".to_string(),
             acknowledged: false,
         });

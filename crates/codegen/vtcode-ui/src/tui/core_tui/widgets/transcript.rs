@@ -1,7 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Clear, Paragraph, Widget},
 };
@@ -97,12 +97,14 @@ impl<'a> Widget for TranscriptWidget<'a> {
         // space, so padding the line list only forced a per-frame clone.
         let needs_mutation = !self.session.queued_inputs.is_empty();
 
-        // Fast path: no queue overlay, no live indicator shimmer, and no
-        // explicit links — paint cached rows in place without cloning Lines
-        // into Paragraph (hotpath: that clone was ~15KB/frame).
+        // Fast path: no queue overlay, no live indicator shimmer, no
+        // explicit links, and no landing tint — paint cached rows in place
+        // without cloning Lines into Paragraph (hotpath: that clone was
+        // ~15KB/frame). The tint forces the slow path only while it lives.
         let has_links = cached_lines.iter().any(|line| !line.explicit_links.is_empty());
         let spinner_active = active_indicator_shimmer_phase(self.session).is_some();
-        if !needs_mutation && !has_links && !spinner_active {
+        let flash_rows = self.session.transcript_flash_rows(content_width);
+        if !needs_mutation && !has_links && !spinner_active && flash_rows.is_none() {
             self.session.clear_transcript_file_link_targets();
             if self.session.transcript_clear_required {
                 Clear.render(scroll_area, buf);
@@ -132,6 +134,9 @@ impl<'a> Widget for TranscriptWidget<'a> {
                 .decorate_borrowed_cached_transcript_links(cached_lines.as_slice(), scroll_area)
         };
         apply_active_file_operation_spinner(self.session, &mut visible_lines);
+        if let Some(range) = flash_rows {
+            apply_transcript_flash(&mut visible_lines, visible_start, range);
+        }
 
         // Only clear if content actually changed, not on viewport-only scroll
         // This is a significant optimization: avoids expensive Clear operation on most scrolls
@@ -259,6 +264,21 @@ const FILE_OPERATION_INDICATORS: &[&str] = &[
     "❋ Persisting plan",
     "❋ Preparing approval",
 ];
+
+/// Bold the spans of every visible line inside the jump-landing row range.
+/// Operates on the owned slow-path lines only; the cached rows are never
+/// mutated, so the tint vanishes without a trace once it expires.
+fn apply_transcript_flash(lines: &mut [Line<'static>], visible_start: usize, range: (usize, usize)) {
+    for (offset, line) in lines.iter_mut().enumerate() {
+        let row = visible_start.saturating_add(offset);
+        if row < range.0 || row >= range.1 {
+            continue;
+        }
+        for span in line.spans.iter_mut() {
+            span.style = span.style.add_modifier(Modifier::BOLD);
+        }
+    }
+}
 
 fn apply_active_file_operation_spinner(session: &Session, lines: &mut [Line<'static>]) {
     let Some(phase) = active_indicator_shimmer_phase(session) else {
@@ -403,6 +423,40 @@ mod tests {
             text: text.to_string(),
             style: Arc::new(InlineTextStyle::default()),
         }
+    }
+
+    #[test]
+    fn transcript_flash_bolds_only_landed_rows_at_both_boundaries() {
+        use ratatui::style::Modifier as RatModifier;
+        use ratatui::text::Line as RatLine;
+
+        let mut lines = vec![
+            RatLine::raw("r0"),
+            RatLine::raw("r1"),
+            RatLine::raw("r2"),
+            RatLine::raw("r3"),
+        ];
+        // Viewport starts at global row 1; the landed message spans rows 1..3.
+        apply_transcript_flash(&mut lines, 1, (1, 3));
+        let bolded: Vec<bool> = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.style.add_modifier.contains(RatModifier::BOLD))
+            })
+            .collect();
+        assert_eq!(bolded, vec![true, true, false, false], "only rows 1..3 bold");
+        // A range outside the window paints nothing.
+        let mut lines = vec![RatLine::raw("r0"), RatLine::raw("r1")];
+        apply_transcript_flash(&mut lines, 10, (0, 2));
+        assert!(
+            lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .all(|span| !span.style.add_modifier.contains(RatModifier::BOLD)),
+            "off-window range paints nothing"
+        );
     }
 
     #[test]

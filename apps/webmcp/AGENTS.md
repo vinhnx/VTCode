@@ -11,6 +11,8 @@
 - `settings-controller.ts` reads live backend connection facts through a getter; it owns setup presentation
   and setup-value persistence, never pairing or write authority.
 - Keep backend operations in `backend.ts`, protocol validation in `protocol.ts`, and storage codecs in `persistence.ts`.
+- `diagrams.ts` owns Mermaid detection, Pele theme mapping, and dialog mounting;
+  render options stay fixed (`links`/`images` off) and errors display as text.
 - `companion/index.html` is a static information page built beside the editor; keep its navigation relative
   and give it no pairing or execution authority.
 

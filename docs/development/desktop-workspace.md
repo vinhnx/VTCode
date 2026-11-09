@@ -5,23 +5,44 @@ GUI sends typed JSON-RPC commands; the existing unified runloop remains responsi
 verification, cancellation, and durable session events. The desktop service does not initialize a terminal or emit
 terminal presentation output to its protocol stream.
 
-The [GPUI Kit guide review](desktop-gpui-kit-review.md) records coverage of all 41 main guide topics,
-the applicable ownership/lifecycle improvements, and verification boundaries.
+The [GPUI Kit guide review](desktop-gpui-kit-review.md) records coverage of all 41 main guide topics, the applicable ownership/lifecycle improvements, and verification boundaries.
 
-![VT Code Desktop welcome view](../../resources/screenshots/vtcode-desktop.png)
+<!-- markdownlint-disable MD033 -->
+
+<!-- NB: plain linked image, not <video>: GitHub's README renderer strips video embeds. -->
+<p>
+  <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">
+    <img src="../../resources/screenshots/vtcode-desktop-light.png" width="100%"
+      alt="VT Code Desktop app — click to watch the demo video" />
+  </a><br />
+  <sub>Desktop app demo —
+  <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">watch the video</a>.</sub>
+</p>
+
+<!-- markdownlint-enable MD033 -->
+
+<p>
+  <img src="../../resources/screenshots/vtcode-desktop-light.png" width="49%"
+    alt="VT Code Desktop in light appearance" />
+  <img src="../../resources/screenshots/vtcode-desktop-dark.png" width="49%"
+    alt="VT Code Desktop in dark appearance" />
+</p>
+<p align="center"><sub>Light and dark appearances</sub></p>
 
 ## System requirements
 
 To run the app:
 
 - macOS 15 or newer, on Apple Silicon or Intel.
-- One-time Gatekeeper approval on first launch: local builds are signed ad hoc (no Developer ID, no notarization),
-  so right-click the app and choose Open, or allow it once in Settings > Privacy & Security.
+- **One-time macOS security approval on first launch** (details in the
+  [install callout](#download-a-release-build)): builds are ad hoc signed, so Gatekeeper blocks the first launch until
+  you click **Open Anyway** in System Settings › Privacy & Security. Notarized releases skip it.
 - Provider credentials configured for the CLI (see below); the desktop service reuses the CLI's configuration,
   credentials, workspace trust, and sandbox policy.
 
-To build and install from source (`scripts/install.sh` does this by default on macOS; `--without-desktop` skips
-it; or run `scripts/package-desktop-macos.sh` directly):
+To build and install from source (only needed when a release ships no prebuilt desktop asset for the host:
+`scripts/install.sh` falls back to this automatically, `--without-desktop` skips it entirely, or run
+`scripts/package-desktop-macos.sh` directly):
 
 - A macOS 15+ build host (enforced by the packaging script).
 - Git, when installing through `install.sh` (it clones the release tag); not needed when packaging from a checkout.
@@ -29,6 +50,42 @@ it; or run `scripts/package-desktop-macos.sh` directly):
 - Xcode command line tools (`xcode-select --install`) for the linker and macOS SDK; the packaging script also
   requires `codesign`, `ditto`, `sips`, `iconutil`, and `plutil`.
 - Build time: the release build compiles the GUI and its matching CLI helper from source and takes several minutes.
+
+## Download a release build
+
+Every release ships a prebuilt Apple Silicon app on
+[GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**). On macOS 15+ Apple Silicon,
+install it with Homebrew:
+
+```sh
+brew trust vinhnx/tap
+brew install --cask vinhnx/tap/vtcode-desktop
+```
+
+Homebrew keeps the bundle updated (`brew upgrade --cask vinhnx/tap/vtcode-desktop`) without touching the standalone
+CLI executable. Without Homebrew, `vtcode desktop --install` downloads the same prebuilt asset automatically
+(`scripts/install.sh` and `vtcode update` offer it too, asking between `~/Applications` and `/Applications` for fresh
+installs, while `--install`/`--with-desktop` use `~/Applications` without asking). To install by hand, download
+`vtcode-desktop-<version>-aarch64-apple-darwin.zip`, unzip, and drag **VT Code.app** to `~/Applications`,
+verifying with the matching `.sha256` sidecar or `checksums.txt`. Only hosts without a published asset fall back
+to a from-source build, or package from a checkout as below.
+
+> [!WARNING]
+> **One-time macOS security step required.** Release builds are ad hoc signed, not notarized, so macOS blocks the
+> first launch (Homebrew cask installs included, because Homebrew quarantines the download). Allow it once, then open
+> the app again:
+>
+> 1. Open the app from Applications so macOS records the block
+> 2. Open **System Settings › Privacy & Security**
+> 3. Click **Open Anyway** next to the VT Code message
+> 4. Open the app again — from Finder, or run `vtcode desktop`
+>
+> **Open Anyway only appears for about an hour after a blocked launch**; if it is gone, open the app again to re-trigger
+> the block. You only do this once, macOS 15+ removed the old right-click › Open shortcut for unnotarized apps, and
+> notarized releases skip the step entirely.
+
+Launching the CLI without the app installed shows a reminder at most once per day; mute it permanently with
+`[desktop] suggest-install = false` in vtcode.toml.
 
 ## Build and launch
 
@@ -39,9 +96,10 @@ cargo build --locked -p vtcode
 cargo run --locked -p vtcode-desktop
 ```
 
-The workspace dev profile optimizes GPUI rendering, layout, and text dependencies
-for a responsive desktop preview while keeping application code debuggable. The
-first build of those optimized dependencies can take longer.
+The workspace dev profile compiles dependencies (including GPUI rendering, layout,
+and text crates) with light optimization for a responsive desktop preview while
+keeping application code debuggable. The first build of those dependencies can
+take longer.
 
 Choose a workspace folder in the app. The desktop client starts `vtcode desktop-server` with an absolute workspace path
 and uses the existing VT Code configuration, provider credentials, workspace trust, and sandbox policy. If startup
@@ -58,10 +116,13 @@ scripts/package-desktop-macos.sh
 
 The optional first argument selects the output `.app` path. The script builds the release GUI and matching service,
 places the service in `Contents/Helpers`, signs both executables before signing the app, and verifies the bundle. The
-default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
-development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
-Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`): right-click the app and
-choose Open, or allow it once in Settings > Privacy & Security.
+default output is `dist/VT Code.app`; the script refuses to overwrite an existing bundle unless `--force` (or
+`VTCODE_PACKAGE_FORCE=1`) is given, in which case the old bundle is replaced only after the new one is signed and
+verified. `--skip-build` reuses the binaries already in the release directory, and `--no-assets` skips the Liquid Glass
+`Assets.car` catalog (the icns fallback still ships). Ad hoc signatures support local development only. They do not
+establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
+Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`) and prints a highlighted
+`ACTION REQUIRED` banner: allow the app once in System Settings › Privacy & Security (Open Anyway), then open it again.
 The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or
 reinstall instead of starting an unrelated workspace binary. Development runs prefer an adjacent `vtcode` binary, then
 check the workspace `target/release` and `target/debug` outputs.
@@ -70,8 +131,28 @@ Launch a packaged build by its exact path with `scripts/open-desktop-macos.sh "d
 macOS to open a new instance of that bundle; this avoids selecting a different local copy when several development apps
 share the same display name or bundle identifier. From any terminal, `vtcode desktop [APP_PATH]` opens the GUI the same
 way on macOS: it checks the explicit path, then `VTCODE_DESKTOP_APP`, then `~/Applications` and `/Applications`.
+`vtcode desktop --install` downloads and installs the app from the prebuilt release asset instead (updates install in
+place; fresh installs go to `~/Applications`) and prints the resulting `VT Code.app` path, both on a fresh install and
+when the app is already current.
 
-The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.0 setup](https://gpui-kit.com/docs/installation/).
+The GUI accepts a startup link, `--session <id> --workspace <path>` (either order; `--flag=value` also works),
+sent by CLI `/desktop` via `open --args`. It selects the workspace and loads the thread through the same
+pending-navigation path as back/forward history, so an unknown session reports the standard thread-unavailable
+notice and an unreadable workspace stays on welcome with the invalid-folder notice. Unknown
+arguments (including the `-psn_*` tokens Finder injects) are ignored.
+
+The fast path is a `vtcode://session/<id>?workspace=<path>` URL (scheme claimed in the bundle plist,
+contract in `vtcode-desktop-protocol::handoff_url`), delivered to the running app through `on_open_urls` —
+no new process, no backend reboot, no handshake replay. Measured on the backend half with the debug binary
+(spawn + initialize + full discovery + load-answer vs a single load round trip on a warm backend, warm page
+cache, 3 runs each): 53 ms median cold vs 0.076 ms median warm, ~690x. Full GUI cold boot adds further
+cold-side-only cost (process launch, UI init, first render); end-to-end GUI timing needs a scheme-registered
+bundle installed. Events arriving before init finish queue in a small
+inbox and drain after the window opens. Same-workspace links load directly through the UI entry (running-turn
+confirm included); other workspaces navigate through the pending path. Either way the CLI falls back to the
+argv launch when no bundle claims the scheme.
+
+The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.9.0 setup](https://gpui-kit.com/docs/installation/).
 
 ## Runtime and session behavior
 
@@ -125,69 +206,73 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Launch maximized | The main window opens zoomed (full-size) by default; unzooming persists, so the next launch restores the saved zoomed or windowed state. |
 | Connect to a workspace | Initialization validates the negotiated protocol before configuration and session discovery. Session commands and Send wait for this handshake; incompatible helpers disconnect with the initialization error preserved. |
 | Recover a disconnected service | Startup failures and unexpected local-service exits announce an accessible error and direct you to Settings → VT Code → Reload CLI settings. Pending interactions are dismissed when the service exits, so they cannot block recovery or carry answers into a later question. Repair provider credentials in Terminal when requested. If delivery was uncertain, restore or dismiss the retained message first; it is never resent automatically. |
-| Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. The application menu adds About VT Code — a themed in-app dialog with the app icon, version chip, an Acknowledgments shortcut into Settings → VT Code, and a repository link — and Settings; the View menu adds Toggle Sidebar and Enter Full Screen (⌃⌘F) — the item reads Exit Full Screen while
-full screen is active; the Help menu opens the project repository. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
+| Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. The application menu adds About VT Code — the native macOS About panel, showing the marketing version with its build commit (CFBundleVersion) plus credits that link to the GitHub repository and third-party acknowledgments; off the main thread it falls back to a themed in-app card with the monochrome V mark, the same version line, and License, Acknowledgments, and Website actions — and Settings; the View menu adds Toggle Sidebar and Enter Full Screen (⌃⌘F) — the item reads Exit Full Screen while full screen is active; the Help menu opens the project repository. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
 | Use touch on a Mac | Touch-display Macs and Sidecar iPads work through the system's touch-to-mouse emulation, so no setup is needed: tap clicks, touch-and-drag drags panes, one-finger pan scrolls, and touch-and-hold opens the right-click menu. Pinch and rotate are not delivered to the app today. Pane resize handles have arrow-key equivalents (arrows move ±10, Shift+arrows ±50), so every touch path keeps a keyboard fallback. |
-| Navigate back or forward | Header arrows, ⌘[ / ⌘], trackpad swipe, and mouse back/forward buttons move through recent workspace/thread history. Trackpad swipes use macOS “Swipe between pages” gestures. While a navigation is in flight, the active arrow shows a loading spinner and a “Navigating back/forward…” status appears above the conversation. Cross-workspace navigation waits for the local service to reconnect before restoring the destination thread. If a saved thread is no longer available, Desktop keeps the destination workspace open without selecting a thread. |
+| Navigate back or forward | Header arrows, ⌘[ / ⌘], trackpad swipe, and mouse back/forward buttons move through recent workspace/thread history. A sustained two-finger horizontal scroll navigates with or without the macOS “Swipe between pages” gesture; the matching arrow lights up mid-swipe, and swipe direction follows the system Scroll Direction setting. While a navigation is in flight, the active arrow shows a loading spinner and a “Navigating back/forward…” status appears above the conversation. Cross-workspace navigation waits for the local service to reconnect before restoring the destination thread. If a saved thread is no longer available, Desktop keeps the destination workspace open without selecting a thread. |
 | Open Utilities | The Utilities inspector tab summarizes session changes, recent tool activity, and draft source attachments, with actions into Changes, Activity, Files, and previews. Press ⌘⇧U or use the navigation rail button to open it. |
-| Inspect tool activity | Expand a consecutive tool-action summary, then open an action for its bounded output excerpt. Copy full output from that action when you need its complete captured text. Running and failed counts remain visible while collapsed. |
-| Receive a background notice | Run completion/failure/blocking, permission prompts, questions needing input, an unexpected service exit, or a newly available app update posts a system notification. Settings → Notifications controls delivery: turn-completion timing (always, only when unfocused, never) plus permission, question, and update toggles behind a master switch. A focused window shows update announcements as an in-app toast instead. Each release version announces once; intentional service restarts never banner. App state remains available if OS notification delivery is suppressed. |
+| Inspect tool activity | Expand a consecutive tool-action summary, then open an action for its recent output excerpt (up to eight lines and 4 KiB). The visible, keyboard-reachable Output action opens that exact capture in the inspector, where more output and restored-page controls are available. Copy uses the captured output; a bounded live preview is marked when earlier output is unavailable. Running and failed counts remain visible while collapsed. A small Activity button beside the summary opens the inspector on that tab, with the other tabs one switch away. In Zen mode opening Output exits Zen so the side panel becomes visible. |
+| Receive a background notice | Run completion/failure/blocking, permission prompts, questions needing input, an unexpected service exit, or a newly available app update posts a system notification. Settings → Notifications controls delivery: turn-completion timing (always, only when unfocused, never) plus permission, question, and update toggles behind a master switch. A focused window shows update announcements as an in-app toast instead. Clicking an update announcement opens the changelog viewer for that release (cached Highlights plus a full-release-notes link, re-openable from Settings → About → Release notes); a click that lands after a newer refresh falls back to Settings → About. After an update, the running version's notes appear once in a dismissible inline banner above the conversation (welcome and workspace alike), with View opening the same viewer on demand; the banner never takes focus or covers the app, and the shared seen marker means a release `vtcode update` or the TUI already announced is not repeated. Each release version announces once; intentional service restarts never banner. App state remains available if OS notification delivery is suppressed. |
 | Read streamed output | GPUI measures variable-height rows and follows the bottom of the newest message, including a message taller than the viewport. |
 | Read the conversation | User messages use trailing, filled neutral bubbles; agent prose has no visible speaker label or avatar. Speaker identity remains available to assistive technology. Compact tool summaries stay between the agent messages that surround them; expanded tools keep their title and disclosure together, with status text reserved for active, failed, or archived activity. Restored conversations omit model-only context while retaining ordinary system notices. |
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
 | Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. Send creates a session automatically when none is selected, then submits the exact captured prompt and attachments. A newer draft typed while creation is pending stays in the composer. |
 | Use CLI composer completions | Typing `@` at a token boundary opens filtered workspace-file mentions; selecting one inserts `@path` into the draft and leaves file loading to the shared runtime. A leading `/` opens commands from the CLI's visible slash-command catalog. Up/Down changes the highlighted command, Tab completes without submitting, and Enter completes the selected command and sends it through the normal desktop turn path. Email addresses and package-manager scopes such as `npm install @types/node` do not open file mentions. |
-| Run CLI slash commands | Desktop uses VT Code's shared slash-command dispatcher for runtime, workspace, safety, integration, history, and auth commands. Exact native equivalents route `/new`, `/exit`, `/stop`, `/files [filter]`, `/history`, `/model`, `/fast`, `/mode`, `/theme`, `/config`, `/splash`, and `/help` into desktop session controls, palettes, or settings. Matching mirrors the CLI dispatcher: the command token is case-insensitive (`/NEW`), and the argument-less commands (`/new`, `/exit`, `/stop`, `/model`) route natively even with trailing text. `/config` opens the dedicated configuration page, and `/config <group or path>` deep-links into it while anything else becomes a search query. The runtime-owned `/config` sections (`reset`, `clear`, `checkup`, `doctor`, `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the CLI runtime, as do `/settings` arguments outside the known Settings tabs. `/splash` opens Connections and refreshes WebMCP status; CLI `/splash` reports its own workspace, session, tool registry, and listener without exposing pairing codes. `/files` opens the filtered `@` file picker, and `/history` restores a recent user prompt from the selected thread without submitting it. Terminal-only commands (`/terminal-setup`, `/statusline`, `/title`, `/vim`) are omitted from Desktop suggestions. Commands without a native equivalent continue through the shared CLI runtime and its bridged choice dialogs. `/go <destination>` opens any route, palette, shortcut command, or addressable action (`settings/shortcuts`, `palette/models`, `command/zen_mode`, `action/preview-file/<path>`); bare `/go` and the command palette's Go to entry open the searchable destination palette instead. |
+| Run CLI slash commands | Desktop uses VT Code's shared slash-command dispatcher for runtime, workspace, safety, integration, history, and auth commands. Exact native equivalents route `/new`, `/exit`, `/stop`, `/files [filter]`, `/history`, `/model`, `/fast`, `/mode`, `/theme`, `/config`, `/splash`, and `/help` into desktop session controls, palettes, or settings. Matching mirrors the CLI dispatcher: the command token is case-insensitive (`/NEW`), and the argument-less commands (`/new`, `/exit`, `/stop`, `/model`) route natively even with trailing text. `/config` opens the dedicated configuration page, and `/config <group or path>` deep-links into it while anything else becomes a search query. The runtime-owned `/config` sections (`reset`, `clear`, `checkup`, `doctor`, `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the CLI runtime, as do `/settings` arguments outside the known Settings tabs. `/splash` opens Connections and refreshes WebMCP status; CLI `/splash` reports its own workspace, session, tool registry, and listener without exposing pairing codes. `/files` opens the filtered `@` file picker, and `/history` restores a recent user prompt from the selected thread without submitting it. Terminal-only commands (`/terminal-setup`, `/statusline`, `/title`, `/vim`) are omitted from Desktop suggestions. Commands without a native equivalent continue through the shared CLI runtime and its bridged choice dialogs. `/go <destination>` opens any route, palette, shortcut command, or addressable action (`changelog`, `settings/shortcuts`, `palette/models`, `command/zen_mode`, `action/preview-file/<path>`); bare `/go` and the command palette's Go to entry open the searchable destination palette instead. |
 | Recover a submission | The app retains the submitted prompt and attachments until acknowledgement. A rejected request offers Restore draft, Copy prompt, and Dismiss; restoration requires an empty composer so newer work is preserved. A disconnect before acknowledgement warns that delivery is uncertain. Recovery never resends automatically. |
 | Attach files | "+ Attach" opens a native multi-select picker limited to workspace UTF-8 text files (at most 5 per prompt, 64 KiB each). Oversized files are rejected rather than silently truncated. Send waits for attachment loading. Chips above the composer remove items; the transcript echoes attached paths. |
-| Switch models | The composer's Model button opens a searchable kit Command picker, grouped by provider. Search names, providers, or exact IDs; rows show context token counts and preselect the current model, including configured models outside the built-in catalog. Arrow keys and Enter choose a model through `config/select`. Choosing the current model preserves the session. Escape clears a nonempty query, then dismisses without changes. |
+| Switch models | The composer's Model button opens a searchable kit Command picker, grouped by provider. Search names, providers, or exact IDs; rows show context token counts and preselect the current model, including configured models outside the built-in catalog. Arrow keys and Enter choose a model through `config/select`; the switch restarts the runtime under the same session id and the thread keeps its history. The selection persists to the workspace config and the inherited effort maps onto the new route's nearest supported level (CLI parity). Escape clears a nonempty query, then dismisses without changes. |
 | Track the active agent | The composer mode control follows primary-agent changes from live slash commands. Its picker lists the CLI-discovered primary agents and saves the workspace default for the next session. |
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
-| Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. |
-| Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts when complete. Runtime file paths remain listed when a diff preview is missing or incomplete; the app marks unavailable previews and omits untrustworthy line counts instead of reusing an older patch. Selectable previews open in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. F7/Shift+F7 navigates changes; Option+F7/Option+Shift+F7 navigates files. These bindings are configurable. |
-| Browse files | ⌘⇧E opens the inspector's Files tab and focuses its read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). The first scan shows a reduced-motion-aware loading skeleton; empty results explain whether a workspace is missing or contains no browseable files. Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens the file in the configured destination (Settings → Appearance → Files): the read-only UTF-8 preview (64 KiB cap) by default, or directly in the chosen external editor. From the preview, Open in editor uses the macOS default text editor, and VS Code opens the file using its registered application; a missing editor or file is reported in the preview. External opening rechecks workspace containment and passes the path without a shell. Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
+| Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. A Changes button in the card header opens the inspector's Changes tab on that change-set's first previewable file. |
+| Follow a turn's work | Each completed turn reads as one unit: your message, a single collapsible work log with assistant/tool counts (starts collapsed, expands inline with full keyboard and screen-reader support), and the final response with its completion time beneath it. No dividers separate the messages; failed, blocked, cancelled, and interrupted turns keep their work visible with its status instead of grouping it as a success. |
+| Review a turn's files | A turn that changed files shows a file summary on its final response: the first three files with kind and +/− counts, a partial marker when the evidence is incomplete, and a Changes button that opens the inspector on that turn's first previewable file. |
+| Undo a turn's files | The file summary carries an Undo button that reverts exactly the changes that turn recorded. The button disables while the request is in flight; a confirmed undo flips the card to an Undone status and toasts once. Refusals (later edits, incomplete evidence, unverifiable deletes) toast the reason; the service rejects undos while a turn is running, and a flush that aborts midway keeps its already-reverted files. |
+| Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts when complete. Runtime file paths remain listed when a diff preview is missing or incomplete; the app marks unavailable previews and omits untrustworthy line counts instead of reusing an older patch. Selectable previews open in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. Kind filter toggles (Added, Modified, Deleted) narrow the list when kinds differ, and file navigation follows the visible list. F7/Shift+F7 navigates changes; Option+F7/Option+Shift+F7 navigates files. These bindings are configurable. |
+| Browse files | ⌘⇧E opens the inspector's Files tab and focuses its collapsed tree (one gitignore-aware snapshot of at most 5,000 entries through depth 12, dependency/VCS/hidden directories skipped, with a fuzzy filter field and a shown/total count; a notice names it when the snapshot truncates). The first scan shows a reduced-motion-aware loading skeleton; empty results explain whether a workspace is missing or contains no browseable files. Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. F2 renames the selected entry (validated same-directory rename dialog) and Delete/Backspace moves it to the Trash behind a native warning prompt. Enter or a click opens the file in the configured destination (Settings → Appearance → Files): the read-only UTF-8 preview (64 KiB cap) by default, or directly in the chosen external editor. From the preview, Open in editor uses the macOS default text editor, and VS Code opens the file using its registered application; a missing editor or file is reported in the preview. External opening rechecks workspace containment and passes the path without a shell. Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | ⌘⇧G or Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh or ⌘R updates the capture. |
-| Follow activity | The inspector's Activity tab shows an accessible, theme-colored status summary (one legend line per nonzero status) and a virtualized tool/command list, retaining the newest 300 rows in chronological order. When older actions are omitted, a status notice offers Search conversation, which uses the existing bounded history search. Rows with captured output have a keyboard-accessible action that opens that exact capture in Output. The summary's spoken label includes counts for running, completed, failed, interrupted, and unclassified activity. |
-| Watch command output | The inspector's Output tab shows the newest capture by default or the activity row selected from history. Choose Follow latest output to resume the live tail. Expanded activity rows show the same mono tail, capped at 1,000 lines and 128 KiB. Copy includes all output loaded so far. Restored spools load an initial 32 KiB at session restore; choose Load more captured output to fetch another bounded page. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
-| Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
+| Follow activity | The inspector's Activity tab shows an accessible, theme-colored status summary and a virtualized tool/command list, newest first, retaining the newest 300 rows. A Tasks tab joins the rail while tracker activity exists, showing the resolved checklist title, N/M progress, and the status-styled item tree; `task_tracker` transcript rows replay the newest snapshot inline (header plus current task collapsed, bounded tree expanded). Legend lines double as status filters (the active filter stays visible even at zero); new entries pin to the top while the reader stays there, and scrolled readers keep their offset with a Jump to latest activity control. When older actions are omitted, a status notice offers Search conversation, which uses the existing bounded history search. Rows with captured output have a keyboard-accessible action that opens that exact capture in Output. Rows that resolve in the live transcript add a jump-to-message action; restored-only history offers output without a jump. With the list focused, Up/Down move a highlight across visible rows (Home/End jump to the ends); row actions stay on Tab-reachable buttons. The summary's spoken label includes counts for running, completed, failed, interrupted, and unclassified activity. |
+| Watch command output | The inspector's Output tab shows the newest capture by default or the activity row selected from history. Choose Follow latest output to resume the live tail. A line filter narrows the loaded tail to matching lines with a match count. Expanded activity rows show the same mono tail, capped at 1,000 lines and 128 KiB. Copy includes all output loaded so far. Restored spools load an initial 32 KiB at session restore; choose Load more captured output to fetch another bounded page. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
+| Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command, and a close button trails the inspector tab rail. The panel edge drags to resize (persisted per width), with arrow-key equivalents on its splitter. In Zen mode the toggle reveals the current tab (exiting Zen) instead of flipping hidden state. |
 | Navigate inspector tabs | The kit segmented TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Utilities. |
 | Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
-| Open the command palette | ⌘K searches session commands, view toggles, all loaded sessions (up to 200), and workspace files from the bounded workspace scan (up to 400 entries), opened in the configured file destination. Rows for bound commands show their saved shortcut badge, and a Settings entry deep-links to Shortcuts settings (searchable as keyboard, shortcut, or keybinding). Use Refresh recent threads to sync sessions created by the CLI; the desktop updates the active session from runtime events instead of rescanning archives after every turn. Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
+| Open the command palette | ⌘K searches session commands, view toggles, all loaded sessions (up to 200), and workspace files (first 200 of the bounded scan) opened in the configured file destination. Rows for bound commands show their saved shortcut badge, and a Settings entry deep-links to Shortcuts settings (searchable as keyboard, shortcut, or keybinding). Use Refresh recent threads to sync sessions created by the CLI; the desktop updates the active session from runtime events instead of rescanning archives after every turn. Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
 | Find conversation content | ⌘⇧F or Command Palette → Find in conversation searches loaded user, VT Code, tool-activity text, and the bounded output preview shown in the inspector. Select a message or activity result to reveal it in the virtualized transcript; select an output result to open that capture in the Output inspector. Choose Load earlier messages at the bottom of the search panel to fetch the next bounded archive page and keep searching; search reuses the existing session-history pager and never reads the archive separately. |
 | Expand navigation | Appearance → Layout places navigation on the left or right (right by default), or hides it while keeping New Thread and Utilities in the header. The toolbar toggle or ⌘B shows/hides the rail; hover its project icon for a transient list, and leave navigation or press Escape to dismiss the peek. |
-| Browse threads | The rail's expand button or Command Palette → Browse threads opens the browser panel in the content slot beneath the persistent toolbar, over cached sessions grouped by workspace (current first) and sorted newest-first. Rows carry a compact recency and size lane; selecting a row loads the thread and returns to the workspace; the header also offers New thread and Close thread. The toolbar Back button, ⌘[, or Escape pops the panel (Forward reopens it); the header Close button dismisses it outright. Either way focus lands in the composer. |
-| Switch open threads | With more than one thread open, a tab strip above the conversation lists them in first-open order with per-tab close buttons and a New thread action. Selecting a tab loads that thread; closing the selected tab loads the nearest neighbor (next first, else previous), and a refused load keeps the tab so the selection stays reachable. Right-click a tab for Close tab, Close other tabs, or Copy thread title. With zero or one thread open, a compact header shows the thread title with a New thread action instead, for threads with content or a selection (the empty welcome state keeps no header), so a lone tab never repeats the window title. |
-| Use right-click menus | Sidebar session rows, thread-browser rows, thread tabs, config rows, and file-tree rows offer right-click menus with the relevant actions: copy thread titles, config paths/values, or file paths; close tabs; open file previews; delete threads (confirm-gated — dispatching alone sends nothing). File-tree rows also drag out: dropping one into Finder or an editor opens or copies the workspace file (directories included), with a file chip following the cursor while the drag is inside the window. |
-| Focus the conversation | Zen mode starts active. Use the title-bar leaf toggle, the window-actions overflow menu, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode. Zen hides the side panels, thread heading, full welcome view, status bar, and auxiliary composer controls while preserving the transcript, message input, model/mode/policy controls, and send/cancel action; the conversation surface spans the window edge to edge beneath the title bar (no chrome inset, square corners). Empty threads show a minimal centered brand mark with one greeting line instead of the full welcome view. One leaf toggle at the title-bar trailing edge enters and exits Zen: it keeps the same slot in both modes and only repaints, fading while Zen is active. The Zen composer is a narrower borderless prompt with roomier padding, and a quiet model, mode, and policy control cluster opposite a small send action, all on the same centered spine as the transcript. Toggles and returning chrome fade on a short theme transition that renders statically under reduced motion; the native title bar remains available for window controls. |
-| Navigate settings | Settings opens as a panel in the content slot beneath the persistent toolbar, with left navigation over Appearance, Accessibility, Shortcuts, VT Code, Connections, Notifications, Storage, and CLI Configuration. The arrow keys move between pages; Home and End select the first and last. Each page scrolls independently so the title and navigation stay fixed; below 900px viewport width the sidebar collapses to its rail and the settings navigation stacks above the content. Back (toolbar button, ⌘[, or Escape) walks interior layers first — typed editor, shortcut capture, palette, config page to its tab — then pops the panel, and Forward reopens it; the header Close button dismisses the panel outright. Either way focus lands in the composer. |
+| Browse threads | The rail's expand button or Command Palette → Browse threads opens the browser panel in the content slot beneath the persistent toolbar, over cached sessions grouped by workspace (current first) and sorted newest-first. Rows carry a compact recency and size lane; selecting a row loads the thread and returns to the workspace; the header also offers New thread and Close thread. The toolbar Back button, ⌘[, or Escape pops the panel (Forward reopens it); the header Close button dismisses it outright. Up/Down move a highlight across threads in row order (Home/End jump to the ends) and Enter loads the highlighted thread; the highlight is shared with the sidebar list. Delete removes the highlighted thread with confirmation in either list. Either way focus lands in the composer. |
+| Switch open threads | With more than one thread open, a tab strip above the conversation lists them in first-open order with per-tab close buttons and a New thread action. Selecting a tab loads that thread; closing the selected tab loads the nearest neighbor (next first, else previous), and a refused load keeps the tab so the selection stays reachable. Right-click a tab for Close tab, Close other tabs, or Copy thread title. With zero or one thread open, a compact header shows the thread title with a New thread action instead, for threads with content or a selection (the empty welcome state keeps no header), so a lone tab never repeats the window title. With the tab strip focused, Left/Right move across tabs in first-open order (Home/End jump to the ends) and Enter switches to the highlighted tab. |
+| Use right-click menus | Sidebar session rows, thread-browser rows, thread tabs, config rows, and file-tree rows offer right-click menus with the relevant actions: copy thread titles, config paths/values, or file paths; close tabs; delete threads (confirm-gated — dispatching alone sends nothing). File-tree rows offer Open (files), Reveal in Finder, Copy path, Rename… (dialog), and Delete… (native prompt, moves to the Trash). File-tree rows also drag out: dropping one into Finder or an editor opens or copies the workspace file (directories included), with a file chip following the cursor while the drag is inside the window. |
+| Focus the conversation | Zen mode starts active. Use the title-bar leaf toggle, the window-actions overflow menu, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode. Zen hides the side panels, thread heading, full welcome view, status bar, and auxiliary composer controls while preserving the transcript, message input, attach, model/mode/policy controls, and send/cancel action; the conversation surface spans the window edge to edge beneath the title bar (no chrome inset, square corners). Empty threads show a minimal centered brand mark with one greeting line instead of the full welcome view. One leaf toggle at the title-bar trailing edge enters and exits Zen: it keeps the same slot in both modes and only repaints, fading while Zen is active. The Zen composer is a narrower borderless prompt with roomier padding, and a quiet attach, model, mode, and policy control cluster opposite the full-size send action, all on the same centered spine as the transcript; the processing tier renders as muted text rather than the filled badge. Toggles and returning chrome fade on a short theme transition that renders statically under reduced motion; the native title bar remains available for window controls. |
+| Navigate settings | Settings opens as a panel in the content slot beneath the persistent toolbar, with left navigation over VT Code, Appearance, Accessibility, Shortcuts, Connections, Notifications, Storage, About, and CLI Configuration. The arrow keys move between pages; Home and End select the first and last. Each page scrolls independently so the title and navigation stay fixed; below 900px viewport width the sidebar collapses to its rail and the settings navigation stacks above the content. Back (toolbar button, ⌘[, or Escape) walks interior layers first — typed editor, shortcut capture, palette, config page to its tab — then pops the panel, and Forward reopens it; the header Close button dismisses the panel outright. Either way focus lands in the composer. |
 | Search settings and CLI config | ⌘F or the Settings search control filters settings categories and the loaded, bounded CLI config catalog. Selecting a category opens that page; selecting a config path opens its existing editor. Escape returns to Settings. |
 | Configure shortcuts | Settings → Shortcuts lists thirty main desktop commands with descriptions and GPUI Kit `Kbd` badges, filterable by an inline search. Each row captures a new chord by pressing keys or unbinds to Unassigned; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Function keys are available for review navigation. Save/Cancel persists or discards staged edits and Reset all to defaults stages the defaults (Cancel recovers), applying on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
 | Use keyboard commands | ⌘N creates a session, ⌘⇧W closes the selected session, ⌘O chooses a workspace, ⌘L focuses the composer, ⌘⇧I toggles the inspector, ⌘⇧U opens Utilities, ⌘⇧E opens Workspace Files, ⌘⇧G reviews the working tree, ⌘R refreshes the active workspace view, and ⌘. cancels the active run. The same active-turn and cleanup guards apply as for buttons. |
-| Dismiss an overlay | Escape closes the topmost layer and restores prior keyboard focus: full-access confirm, then panel-interior layers (CLI config editor, armed shortcut capture, palette, config page back to its tab), then the panel itself via the route history, then navigation peek, workspace palette, and file preview. ⌘L dismisses supported overlays and focuses the composer. Escape alone does not cancel agent work. |
+| Dismiss an overlay | Escape closes the topmost layer and restores prior keyboard focus: full-access confirm, then panel-interior layers (CLI config editor, armed shortcut capture, palette, config page back to its tab), then the panel itself via the route history, then navigation peek, workspace palette, and file preview. ⌘L dismisses supported overlays and focuses the composer. Escape alone does not cancel agent work. Pressing outside a Settings, thread-browser, or review panel dismisses it too, confirming through a native prompt first when staged shortcut or theme edits, config values, or rename text would be lost; a write in flight pins the panel. |
 | Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the sandbox policy label, Context % (last turn's usage against the model's context window, hidden while unknown), the configured provider · model, and the agent running/idle state. When enabled, a Kit Marker announces agent state and shows a compact loading spinner while work is running; its text remains visible. |
 | Notice a context boundary | Automatic or manual compaction and fresh-context resets post a transcript notice with message counts or prior pressure, and Context % hides until the next completed turn reports post-boundary usage. |
 | Reduce motion | Settings → Accessibility offers System, On, and Off. System uses the current macOS accessibility setting at launch or when selected; explicit choices persist with Desktop preferences and apply to GPUI Kit animations. |
 | Switch workspaces | The sidebar's Workspaces section lists recent projects (at most 8) for one-click switching; the most recent workspace reopens on launch when it still exists. |
 | Resize panes | Drag the GPUI Kit splitters or Tab to one and use Left/Right; hold Shift for 50px steps. Sidebar and inspector widths clamp to 180–560px and persist. |
 | Read with assistive technology | Conversation messages expose readable text without Markdown markers, tool activity groups expose their expanded state, expanded output has named accessibility nodes, composer errors are announced as alerts, and visible navigation status changes are announced. Tool actions identify their tool; active workspaces/threads and current typography values are included in accessible labels. |
-| Copy a message or code block | Message copy retains the original Markdown; code copy contains only the code. Markdown formatting, links, lists, and tables render through GPUI Kit. |
+| Copy a message or code block | Message copy retains the original Markdown; code copy contains only the code. Markdown formatting, links, lists, and tables render through GPUI Kit. Mermaid fences add View diagram next to Copy code: a themed, zoomable preview in the system browser (works offline). Closed fences also render an inline image below the code, filled in the background. |
 | Follow a link | Explicit activation opens valid, credential-free HTTP(S) URLs in the system browser. Other schemes, malformed links, and URLs with embedded credentials are blocked; images are not fetched and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
 | Add context | ⌘⇧A opens the composer-anchored file/skill/plugin/command search. Selection adds context or invokes an existing native action; it never submits. |
-| Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The compact model popup shows the selected model and supported reasoning effort; Search all models opens the full catalog. Active work blocks changes. These controls stay available in the Zen composer. |
+| Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The compact model popup shows the selected model and supported reasoning effort; Search all models opens the full catalog. Active work blocks changes. These controls stay available in the Zen composer, where the processing tier renders as quiet text. |
 | Toggle status bar | Hidden by default. Settings → Accessibility, the header menu, and ⌘⇧S share one saved visibility preference. |
 | Sync theme to CLI | Settings → VT Code → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
-| View open source licenses | Settings → VT Code → Open source licenses opens the bundled third-party notices in the system's default text editor. An error is shown if the notices cannot be opened. |
-| Keep the app in the menu bar | Settings → VT Code → Show in menu bar adds a macOS status item with the monochrome V template icon (auto-adapts to light/dark, never follows the app-icon preference). Closing the last window hides the app and preserves its session and draft; the grouped status menu offers Show, New Session / Open Workspace, Settings / Help / About, and Quit — window-bound commands reopen the window first, and items validate through the same rendered-tree check as the main menu so unavailable commands disable. |
+| View license and third-party notices | Settings → About shows the monochrome V mark, app name, version, and copyright with Release notes, License, Acknowledgments, and Website rows, and Settings → VT Code → License & open source keeps the same entry point; both open the in-app viewer with the MIT and Apache-2.0 texts plus third-party notices, dependency inventory, and license texts. Copy, or open the document in the system editor as a secondary action; the in-app About fallback links to the same viewer, while the native About panel's credits link to the public acknowledgments document. |
+| Read the changelog | Settings → About → Release notes opens the changelog viewer for the newest release in the cached update check, whether or not an update is still offered, falling back to the running version's own notes. The row names that version and disables itself with an explanation when nothing is cached; the viewer shows the release's Highlights with a full-release-notes link, and its upgrade subtitle appears only for a real available update. Also reachable from the update notification, the post-update banner's View, and `/go changelog`. |
+| Keep the app in the menu bar | Settings → VT Code → Show in menu bar adds a macOS status item with the monochrome V template icon (auto-adapts to light/dark, never follows the app-icon preference). Closing the last window hides the app and preserves its session and draft; the grouped status menu offers Show, New Session / Open Workspace, Settings / Help / About, and Quit — window-bound commands reopen the window first, and items validate through the same rendered-tree check as the main menu so unavailable commands disable. Settings → VT Code → Launch at login registers the main-app login item instead, reconciling the saved intent with the OS status on every launch and offering an Open Login Items shortcut while macOS holds approval. |
 | Edit CLI settings | `/config` opens the dedicated configuration page on the Configuration overview: sandboxing, approval policy, sandbox settings, network access, web search, output detail, reasoning display, and the Model features effort picker, with Open vtcode.toml for the selected write target and the current service version in the footer. Search the catalog, browse the groups rail, and edit rows in place. Booleans toggle with a switch; strings/numbers use typed editors and arrays/maps use JSON. Choose the User, Workspace, or Project write target; VT Code validates and version-checks the write, then reloads the service and reports higher-precedence overrides on the page. Credential-bearing fields stay excluded and schema templates without concrete values show as read-only references; layer resets stay in the terminal (`vtcode config reset`). Settings → VT Code → CLI configuration keeps the same summary with a Browse entry point into the catalog. |
-| Open settings | The toolbar button, application menu, or ⌘, opens the same full-screen Settings page. Appearance contains live theme previews for every built-in CLI theme, typography, and the file open destination; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing, local service status, and a terminal handoff row that copies `vtcode --resume <id> --all` for the selected session; Notifications contains the turn-completion dropdown, category toggles, and the cached app-update status with a manual refresh; Storage contains the disk-usage breakdown plus session and worktree cleanup; Configuration edits the CLI catalog with the same typed editors and write targets. |
+| Open settings | The toolbar button, application menu, or ⌘, opens the same full-screen Settings page. Appearance contains live theme previews for every built-in CLI theme, typography, and the file open destination; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing, local service status, and terminal handoff rows that copy `vtcode --fork-session <id>` for the selected session plus a terminal picker (Terminal auto-runs the fork, others open for paste); Notifications contains the turn-completion dropdown and category toggles; Storage contains the disk-usage breakdown plus session and worktree cleanup; About shows the app identity, version, copyright, the cached app-update status with a manual check, and Release notes/License/Acknowledgments/Website rows; Configuration edits the CLI catalog with the same typed editors and write targets. |
 | Choose where files open | Settings → Appearance → Files lists the built-in viewer, the system default, Finder, Terminal, and detected editors; a saved choice stays listed even when its app is missing. Selection opens there directly. |
 | Review storage usage | Settings → Storage shows total disk usage with a per-category breakdown (sessions, worktrees, session memory, other) and a manual refresh. Review lists archived sessions oldest-first with per-session sizes for deletion (the active session is protected); Manage lists worktrees with dirty-state badges for removal. Errors stay scoped to the tab with retry. |
 | Make the sidebar translucent | Settings → Appearance → Layout enables a blurred macOS backdrop behind the sidebar. The tint remains opaque when a theme needs it for readable contrast; Reset appearance turns the option off. |
 | Increase text contrast | Settings → Appearance → Contrast adjusts desktop text toward the high-contrast end of the selected theme. The default is zero; the setting persists across theme changes and Reset appearance restores the default. |
 | Change interface language | Settings → Appearance offers 20 languages, including Hindi, Ukrainian, and Swedish. Use the searchable language picker by native name or locale code; the selection updates supported labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark controls switch between saved profiles. The selected profile remains visible in the theme swatches. |
+| Create a custom theme | Appearance → Custom themes is a collapsed section: its header expands to the saved-theme list, the New theme action, and the editor; folding it closes the editor, so an editor is never left running out of sight. Saving a theme keeps a personal palette with a name, a Light or Dark base, and the seven seed colors (background, text, accent, secondary, success, danger, warning) picked with the Kit color picker. Each row applies, renames, or deletes; renames keep the theme's stable id so profile assignments survive. Save rejects empty/duplicate names and a text/background pair below 4.5:1; the editor's live preview reports the measured ratio. Derived tokens, hover fills, and focus rings come from the same contrast derivation as built-in themes, so accent and semantic seeds self-correct when a hand-edited value is unreadable. Deleting the active theme falls back to that mode's default, and custom themes stay on this device — they never sync to the CLI, whose registry owns only its own palettes. |
 
 ### Utilities pane
 
@@ -203,8 +288,9 @@ keyboard-selectable inspector tabs and accessible named controls as the other vi
 ### Compact composer
 
 The composer is centered with a 720-pixel width cap and a one-to-six-line growing text field. The input is
-borderless like the CLI: a `>` prompt marker and placeholder carry the affordance, with attachment, execution-policy,
-agent-mode, model selection, and send/cancel controls in one quiet row beneath at typical widths. Workspace selection
+borderless like the CLI: placeholder and caret carry the affordance, with the draft sharing the leading spine of the
+attachment, execution-policy, agent-mode, model selection, and send/cancel controls in one quiet row beneath at typical
+widths. Workspace selection
 lives in the sidebar (the toolbar shows its name); switch via the sidebar, the palette, or ⌘O. WebMCP connections live
 in Settings → Connections, so the composer keeps a single control row; only the Zen no-workspace state keeps a picker
 row above the input, where it is the sole visible path to choose one.
@@ -214,10 +300,11 @@ draft recovery retain their existing ownership and safeguards.
 
 ### Composer context and runtime controls
 
-**Add files** (the composer + button) opens a tabbed card picker anchored above the composer: the **VT Code**
-tab lays workspace files out as cards — image files show loaded thumbnails (bounded background batch) — and
-clicking a card attaches it, showing an attached state with a remove affordance; the **This computer** tab hands
-off to the native file picker. Escape closes the picker and restores composer focus. **Add files and more @**
+**Add files** (the composer + button) opens a tabbed tree picker anchored above the composer: the **VT Code**
+tab shows the workspace hierarchy with a fuzzy filter field (file-only ranked hits with a shown/total count),
+and clicking a file row toggles its attachment, showing an attached check; the **This computer** tab hands
+off to the native file picker. Enter attaches the keyboard-selected row; Escape closes the picker and restores
+composer focus. **Add files and more @**
 (⌘⇧A) opens a filtered Kit Command popup above the composer. It includes the bounded
 workspace file list, the existing native file picker, CLI skills, installed Agent Plugins, and native commands.
 Skills insert their explicit `$skill-name` mention. Plugins insert a plain-language request to use the installed
@@ -235,7 +322,8 @@ View (in-app preview overlay, images included), Open (the configured external ed
 Remove action drops the cached thumbnail with the chip. Dropping files from Finder anywhere onto the window attaches
 them through the same limits and notices — reads run on the background executor, duplicates are skipped, batches
 stop at the five-file limit, and files outside the workspace surface the boundary notice. Files copied to the
-clipboard (Finder or any app) paste as attachments inside the composer; pasting text still inserts text. While files hover the
+clipboard (Finder or any app) paste as attachments inside the composer;
+pasting text still inserts text. While files hover the
 window, a full-window drop overlay lifts (light scrim, accent ring, and a localized "Drop files to attach them"
 pill) and unmounts entirely when no workspace is open; the Add popup remains the keyboard-reachable equivalent.
 Discovery uses shared CLI loaders on a blocking worker while
@@ -291,7 +379,7 @@ notes](../../patches/gpui-pre-macos/PATCH.md).
 
 The composer renders borderless on the page background. Muted text is tested at WCAG AA 4.5:1 on the page, composer,
 popover, and chrome surfaces for every built-in palette, rather than only against the page background. Conversation
-and thread-heading nodes have stable accessible IDs and labels. Knob step buttons retain Kit focus, keyboard
+and thread-heading nodes have stable accessible IDs and labels. Effort option rows retain Kit focus, keyboard
 activation, disabled boundaries, and accessible labels.
 
 ### Native window chrome
@@ -300,22 +388,21 @@ The header uses Kit’s `TitleBar` over a transparent macOS title bar, with the 
 reserved at the left. Kit owns window dragging and delegates double clicks to the system title-bar behavior.
 The header and navigation rail share a subtle theme-derived surface. Matching overflow buttons expose
 existing thread, navigation, inspector, search, and Settings actions; unavailable session actions remain disabled.
-Menus preserve the draft and retain Kit keyboard navigation and dismissal.
-Toolbar, sidebar, and status bar persist while the settings, browser, or review panel owns the content
-slot. The panel Back/Forward history sits in front of session history: toolbar Back pops panel layers
-before walking threads, Forward reopens a backed-out panel, and each panel header carries an explicit
-Close control that dismisses without a Forward trail.
+Menus preserve the draft and retain Kit keyboard navigation and dismissal. Toolbar, sidebar, and status bar persist
+while the settings, browser, or review panel owns the content slot. The panel Back/Forward history sits in front of
+session history: toolbar Back pops panel layers before walking threads, Forward reopens a backed-out panel, and each
+panel header carries an explicit Close control that dismisses without a Forward trail.
 
 ### Startup and desktop shortcuts
 
 Ciapre remains the CLI and desktop default. New desktop profiles follow the CLI-resolved theme delivered
 by `config/discover`. Existing explicit desktop theme choices are preserved during preference migration.
 Choosing a swatch creates a desktop override; **CLI preferences → Use CLI theme** restores inheritance.
-**Sync current theme to CLI** persists a built-in swatch to the active CLI config layer using the shared
-`ConfigManager` writer, then starts the next session with that theme. System appearance swatches cannot
-be written as CLI themes. A failed write leaves Desktop's current appearance unchanged.
-Font families and sizes remain independent of theme inheritance, and theme updates preserve the draft.
-Unsupported CLI themes produce an explicit error rather than silently substituting a palette.
+**Sync current theme to CLI** persists a built-in swatch to the active CLI config layer via the shared `ConfigManager`
+writer, then starts the next session with that theme. System appearance swatches and custom themes cannot be written
+as CLI themes; a failed write leaves Desktop's current appearance unchanged.
+Font families and sizes remain independent of theme inheritance, and theme updates preserve the draft; unsupported
+CLI themes produce an explicit error rather than silently substituting a palette.
 
 **CLI configuration** reads a bounded, searchable projection of the typed CLI configuration from the shared
 `ConfigService`, fills in CLI defaults, and reuses the same curated group and field metadata as the CLI `/config`
@@ -388,7 +475,8 @@ resize handles retain their own cursors.
 ### Model picker
 
 The composer opens a compact 352 px model/effort panel above the input; the full catalog search is 392 px wide.
-The compact panel shows the selected model name, its current reasoning-effort value, and a supported effort knob.
+The compact panel shows the selected model name, its current reasoning-effort value, and one radio row per
+supported reasoning-effort level.
 The composer model button also shows the acknowledged effort and effective Fast or Ultrafast tier. Ultrafast
 uses a filled theme-accent badge and active toggle; Fast uses a quieter surface. Both labels are capitalized.
 Both refresh from the CLI configuration response after a selection is accepted. Long model names truncate in
@@ -396,9 +484,9 @@ the composer button while the accessible name retains the complete model, effort
 Model choices stay in the full search opened by **Search all models…**. Long model names wrap within the compact
 panel. Catalog rows expose supported reasoning, vision, tool use,
 structured output, pro tier, audio/video/PDF input, and a compact context-window size when the CLI provides them.
-The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
-the same change through keyboard and assistive activation. The slider's accessible name includes the current CLI
-level (for example, “Reasoning effort: medium”). Changes commit on release, and restart the idle
+Effort rows appear only for advertised provider/model capabilities. One click commits a level; arrow keys
+step through levels and Home/End jump to the ends. The group's accessible name includes the current CLI
+level (for example, “Reasoning effort: medium”). Changes commit immediately, and restart the idle
 session so the runtime receives the new effort. Compatible native OpenAI and Anthropic routes expose a
 toggle for the CLI's Ultrafast or Fast tier. Eligibility uses the same CLI rules as `/fast`; a change is validated,
 saved through the CLI config writer, and applied when the next session starts. The control is a labeled accessible
@@ -413,8 +501,10 @@ recommended/default model group.
 ### Conversation activity
 
 Consecutive tool calls appear as one expandable activity summary between assistant messages.
-The summary includes action counts and running/failed counts; assistant commentary always breaks a group.
-Expand the summary to see compact action rows, then activate a row to show its output. Long action titles
+The summary names what happened as a verb phrase ("Read 2 files · Ran 1 command") with running/failed
+counts, falling back to the count label when no verb applies; assistant commentary always breaks a group.
+Expand the summary to see compact action rows titled by outcome ("Read Cargo.toml", "cargo check"),
+then activate a row to show its output. Long action titles
 truncate visually and remain available in tooltips and accessible names. Command/tool output uses the
 configured code font, with structured event details as a fallback when plain output is unavailable.
 Streaming updates retain group and detail expansion. Collapsing activity pauses automatic tail following,
@@ -423,7 +513,10 @@ unchanged; this is a presentation grouping over the measured transcript rows.
 The virtualized transcript uses Kit MessageScroller to preserve the reader anchor during streaming, history
 eviction, and loading earlier archived messages. Restored conversations page backward in bounded batches with a
 labelled “Load earlier messages” action; the local transcript remains capped at 2,000 rows. A labelled jump-to-latest
-control appears after scrolling away from new activity.
+control appears after scrolling away from new activity, and a scroll-to-first control appears after scrolling away
+from the top. Clicking a message anchors the keyboard highlight as position memory without moving the viewport;
+palette search, activity rows, and deep links share one jump-to-message path that reveals collapsed tool rows first.
+Search jumps also seed a match-cycling pill that steps through every hit in transcript order with a dismiss control.
 Transcript Markdown remains a document renderer: images are blocked, and only valid HTTP(S) links without embedded
 credentials open in the system browser. WebMCP remains a separately paired browser app rather than an embedded WebView.
 Runtime errors, compaction/reset notices, and run status render as compact severity rows (danger/warning/subdued,
@@ -448,7 +541,7 @@ role, content, and duplicate occurrence so bounded-history shifts do not transfe
 ## Themes
 
 The desktop builds its theme catalog from the full shared VT Code theme registry (`available_themes()` in
-`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), the Ciapre variants, Solarized, Gruvbox,
+`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), Noir, the Ciapre variants, Solarized, Gruvbox,
 Catppuccin, Nord, Vitesse, Tomorrow, and the rest of the registry — is selectable on desktop, alongside the kit's
 System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/COLOR_GUIDELINES.md)
 for the registry list and the desktop↔CLI sync rules. A theme sets background,
@@ -529,25 +622,26 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `desktop/initialize` | Negotiate protocol compatibility and confirm the selected workspace. |
 | `config/discover` | Read active provider, model, sandbox label, and context window. |
 | `config/settings/read`, `config/settings/write` | Browse bounded, credential-filtered effective settings and save type-checked edits through the CLI config service. |
-| `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
+| `config/models`, `config/select` | List the model catalog, or switch provider/model for the selected session while preserving the thread (requires no active turn). The selection persists to the workspace config; inherited effort maps onto the new route. |
 | `config/secret/store` | Store a provider API key from the Settings form in secure storage (requires no active turn); returns the refreshed configuration plus whether the session runtime was reset. The secret travels the local channel only and is never echoed back. |
 | `config/options`, `config/theme` | Read typed idle-session selections (mode, effort, compaction, thinking) for the composer controls, or apply a built-in CLI theme ID. |
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
-| `session/list`, `session/create`, `session/load`, `session/history`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, restore durable messages, canonical change reviews, activity, and captured output, and page backward through archived conversation messages. |
+| `session/list`, `session/create`, `session/load`, `session/history`, `session/close` | List up to 200 recent archives for the active workspace (optional `limit` pages newest-first; omitted keeps the full list), create sessions, restore durable messages, canonical change reviews, activity, and captured output, and page backward through archived conversation messages. |
 | `session/output/read` | Page one bounded spooled tool-output blob by cursor without re-running the tool. |
 | `storage/summary` | Measure on-disk usage with bounded walks: session archives, managed worktrees, per-workspace memory stores, and the rest of the state directory; session archives and worktrees also report entry counts. |
 | `session/delete` | Delete one archived session by ID after validating the archive path; the selected (active) session is protected and the request fails. |
 | `worktree/list`, `worktree/remove` | List managed `.vtcode/worktrees/` checkouts with their HEAD and dirty flag, or remove one by name. |
-| `turn/submit`, `turn/cancel` | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity. |
+| `turn/submit`, `turn/cancel` | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity. A turn still active 5s after cancel is force-stopped and its session rebuilt from durable history (see escalation below). |
 | `turn/queue/take-latest` | Pop the newest queued message back for editing; returns its text (empty queue returns null). |
-| `turn/queue-status` | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, cumulative `droppedTotal`). |
+| `turn/queue/remove` | Remove one queued message by its `entryId` (a `qe-…` token from the latest snapshot). A stale or unknown id answers `removed: false` without an error; a foreign session id fails. |
+| `turn/queue-status` | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, matching `entryIds` and `queuedForSecs`, cumulative `droppedTotal`). |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `composer/resources` | List bounded CLI-safe resource tokens for composer file and mention autocomplete. |
 | `mcp/app/read` | Read one bounded MCP app resource body for static previews. |
 | `session/primaryAgentChanged` | Publish ephemeral active-agent display state for a live session; it does not change next-session options. |
 | `session/ui_progress` | Publish transient loading state (`active`) for the selected session; the client folds it into the shared `LoadingActivity` model with its own turn/thinking signals. |
 | `webmcp/status`, `webmcp/pair`, `webmcp/stop` | Report the authenticated browser bridge, pair a browser origin with a short-lived code, or revoke pairings and stop the listener. |
-| `update/status` | Read the cached updater snapshot (current/latest version, release URL, channel, check-due flag) without network I/O. |
+| `update/status`, `update/acknowledge` | Read the cached updater snapshot (current/latest version, release URL, latest and current Highlights, whether the running version's notes were already announced, channel, check-due flag) without network I/O; acknowledge marks the running version's notes seen in the shared update cache and returns the refreshed snapshot, so a release announced by `vtcode update` or the TUI is not repeated by the desktop banner (and vice versa). |
 | `desktop/shutdown` | Cancel and clean up owned work before exit. |
 
 The service consumes an interaction response only after the active runtime accepts its typed event. Failed delivery leaves
@@ -560,9 +654,11 @@ batch dispatches, so `turnId` is empty). Batches drain FIFO on terminal events t
 attachment-carrying submits dispatch alone; cancellation preserves the queue. The soft cap keeps 256 prompts, drops the
 oldest first, and reports every gap (`dropped` per acceptance, cumulative `droppedTotal` per snapshot) so a discard is
 never silent. `turn/queue/take-latest` restores the newest queued text into the composer (text-only, like the CLI
-queue edit); the client reconciles its optimistic entries against each `turn/queue-status` snapshot and falls back to
-the service previews when local entries are missing. Ephemeral queue state dies with the session. WebMCP turns keep the
-old contract and are rejected while busy because the browser tracks them by runtime turn id.
+queue edit); `turn/queue/remove` removes one addressed message (stale ids answer `removed: false`). Every prompt
+carries a service-minted `entryId` and enqueue instant; the snapshot publishes ids plus elapsed seconds
+oldest-first so the desktop panel binds rows and offers per-entry wait times and removal. Optimistic entries
+stay unaddressed until the next snapshot; the client reconciles against snapshots, drops queue state with the
+session, and WebMCP keeps its old busy rejection.
 
 Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests,
 turn status, and session-scoped primary-agent display changes. A client must reject stale or duplicate interaction
@@ -583,6 +679,13 @@ submission awaits acknowledgement. Session-start questions remain valid for thei
 of late events across adjacent accepted submissions remains limited because canonical terminal events do not carry
 an input-submission identity.
 
+Cancellation escalates when cooperation fails. If the exact cancelled turn is still active five seconds after
+`turn/cancel`, the service force-stops foreground execution, awaits bounded runtime shutdown, and rebuilds the
+session from durable history under the same session id. The stopped turn emits one terminal `turn/status` `failed`
+outcome carrying a `restarted` flag; queued prompts are preserved and dispatch once the replacement runtime is ready.
+Submissions stay blocked while the escalation runs, and if termination cannot be confirmed the session stays blocked
+until the service restarts instead of reporting a stop that never happened.
+
 The separation between client commands, streamed events, and interaction responses follows the public shape of the
 [pinned Codex app-server protocol](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/app-server-protocol/src/protocol/common.rs).
 This reference informs the protocol boundary only; the desktop UI and runtime integration are VT Code-specific.
@@ -598,7 +701,8 @@ VT Code Desktop does not currently check for or install updates. Every release s
 `vtcode-desktop-<version>-<macos-target>.zip` (+ `.sha256`) on GitHub Releases, built by `release.sh` Step 4 from
 `scripts/package-desktop-macos.sh`: ad hoc signed with `FIRST-LAUNCH.txt` Gatekeeper guidance by default, or Developer ID
 signed, notarized, and stapled when `VTCODE_MACOS_SIGNING_IDENTITY`/`VTCODE_MACOS_NOTARY_PROFILE` are configured (set
-`RELEASE_REQUIRE_DESKTOP=false` to ship a CLI-only release). The asset name matches no CLI updater selector, so it rides
+`RELEASE_REQUIRE_DESKTOP=false` to ship a CLI-only release). Homebrew cask users upgrade the whole bundle explicitly
+with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. The asset name matches no CLI updater selector, so it rides
 the normal upload queue without affecting `vtcode update`, which still updates a standalone CLI executable rather than the
 desktop bundle and its bundled helper as one unit. The main-branch macOS workflow additionally uploads a seven-day CI
 artifact for development builds.
@@ -615,10 +719,10 @@ conversation, and contextual inspector. Navigation selections use quiet surfaces
 the accent emphasizes primary actions. The gpui-kit textarea and model/attachment
 actions share one composer surface. Existing VT Code theme tokens drive all colors.
 
-| Action | Control |
-| --- | --- |
+| Action                         | Control                              |
+| ------------------------------ | ------------------------------------ |
 | Collapse or restore navigation | Toolbar navigation button or `Cmd+B` |
-| Search commands | Toolbar search button or `Cmd+K` |
+| Search commands                | Toolbar search button or `Cmd+K`     |
 
 Collapsing navigation retains the active session, draft, and pane width for the
 current window. The toolbar remains available when navigation is collapsed.
@@ -655,14 +759,14 @@ Enable **Separate light and dark modes** to save a theme and typography profile
 for each appearance. Settings has Light and Dark controls for editing either profile.
 Turning the option off keeps the active profile's typography as the shared setting.
 
-| Setting | Behavior |
-| --- | --- |
-| UI font | Native system font by default (SF Pro on macOS); searchable installed-font selector |
-| Code font | SF Mono when installed, otherwise the platform's resolved monospace default; independent selector |
-| UI font size | Base size for controls and conversation text |
-| Code font size | Monospace code surfaces; independent saved preference |
-| Separate light and dark modes | Stores independent themes and typography for each appearance |
-| Reset appearance to defaults | Restores the default theme, font families, and sizes; preserves workspaces, sessions, and pane widths |
+| Setting                       | Behavior                                                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| UI font                       | Native system font by default (SF Pro on macOS); searchable installed-font selector                   |
+| Code font                     | SF Mono when installed, otherwise the platform's resolved monospace default; independent selector     |
+| UI font size                  | Base size for controls and conversation text                                                          |
+| Code font size                | Monospace code surfaces; independent saved preference                                                 |
+| Separate light and dark modes | Stores independent themes and typography for each appearance                                          |
+| Reset appearance to defaults  | Restores the default theme, font families, and sizes; preserves workspaces, sessions, and pane widths |
 
 When no UI size is set, VT Code follows the macOS accessibility text setting
 (System Settings → Accessibility → Display → Text): the base scales with the
@@ -680,7 +784,8 @@ to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
 
 Type scale (all `rem`-based, so UI size changes preserve hierarchy): the welcome
-display stays at 1.75rem regular (1.5rem in the quieter Zen empty state); group headings are semibold `text_sm` at
+display stays at 1.75rem regular in both modes (the Zen empty state differs in
+copy and chrome, not type size); group headings are semibold `text_sm` at
 primary foreground; micro labels are semibold `text_xs` at label-grade contrast;
 settings rows pair a medium `text_sm` title with a regular `text_sm` description
 separated by 1px hairlines. Secondary copy uses a brighter muted ramp targeting
@@ -692,12 +797,12 @@ The Settings dialog keeps its title and category tabs visible while the active p
 its width and content are constrained to the available screen. The category TabBar uses Kit's accessible tab semantics
 and scoped Left/Right/Home/End navigation. Shortcuts render with Kit `Kbd` badges in the default read-only view;
 edit fields appear only after choosing Edit shortcuts.
-Visual themes form one horizontal Kit scrolling strip with fixed-width previews, a scrollbar,
-trackpad/mouse-wheel support, and Previous/Next buttons for keyboard or pointer paging.
-Its scrolling does not move the settings below it.
+Visual themes form two grouped horizontal Kit scrolling rows — Light, then Dark —
+each with fixed-width previews, a scrollbar, and trackpad/mouse-wheel support;
+one shared Previous/Next pair pages both rows for keyboard or pointer paging.
+Their scrolling does not move the settings below them.
 Separate theme profiles retain independent themes, font families, and sizes for
-light and dark modes. Custom colors, sidebar translucency, alternate Dock icons,
-and native font-smoothing overrides
+light and dark modes. Custom colors and native font-smoothing overrides
 are not implemented in this increment.
 
 ### Component composition and visual hierarchy
@@ -709,13 +814,13 @@ Appearance uses dialog heading parts and `GroupBox`; theme previews are keyboard
 Neutral kit hover colors are
 distinct from VT Code's brand primary. Component surfaces preserve readable text.
 
-| Interaction | Behavior |
-| --- | --- |
-| Thread overflow | New/close actions reuse existing guarded session commands |
-| Settings | Centered tabbed overlay with trapped focus, scoped category navigation, and explicit close |
-| Escape from Settings | Returns to previous focus without altering the composer draft |
-| Welcome | Quiet brand mark and one prompt; workspace and model controls remain in the composer |
-| Zen empty state | Centered brand mark with one greeting line; the workspace name renders as plain text and the picker action appears only when no workspace is set |
+| Interaction          | Behavior                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Thread overflow      | New/close actions reuse existing guarded session commands                                                                                        |
+| Settings             | Centered tabbed overlay with trapped focus, scoped category navigation, and explicit close                                                       |
+| Escape from Settings | Returns to previous focus without altering the composer draft                                                                                    |
+| Welcome              | Quiet brand mark and one prompt; workspace and model controls remain in the composer                                                             |
+| Zen empty state      | Centered brand mark with one greeting line; the workspace name renders as plain text and the picker action appears only when no workspace is set |
 
 Navigation retains real kit buttons with left-aligned icon/title content and
 keyboard/disabled behavior. Transcript virtualization and raw-copy behavior retain
@@ -736,17 +841,17 @@ Only one visible diff component renders that state at a time.
 The Kit Diff owns its virtualized viewport and both scroll axes; surrounding
 review containers clip overflow instead of introducing a competing scroll area.
 
-| Control | Behavior |
-| --- | --- |
-| Unified / Split | Changes the retained viewer layout |
-| Next change / `F7` | Navigates to the next changed group in the selected file |
-| Previous change / `Shift+F7` | Navigates to the previous changed group |
-| Next file / `Option+F7` | In working-tree review, selects the next captured file |
-| Previous file / `Option+Shift+F7` | In working-tree review, selects the previous captured file |
-| Choose changed file | Opens a searchable file list; type a path, then use Up/Down and Enter |
-| Copy patch | Copies the exact change-set owning the parsed file preview |
-| Open file | Leaves review and opens the bounded read-only workspace preview |
-| Close / `Escape` | Returns to the inspector and restores previous focus |
+| Control                           | Behavior                                                              |
+| --------------------------------- | --------------------------------------------------------------------- |
+| Unified / Split                   | Changes the retained viewer layout                                    |
+| Next change / `F7`                | Navigates to the next changed group in the selected file              |
+| Previous change / `Shift+F7`      | Navigates to the previous changed group                               |
+| Next file / `Option+F7`           | In working-tree review, selects the next captured file                |
+| Previous file / `Option+Shift+F7` | In working-tree review, selects the previous captured file            |
+| Choose changed file               | Opens a searchable file list; type a path, then use Up/Down and Enter |
+| Copy patch                        | Copies the exact change-set owning the parsed file preview            |
+| Open file                         | Leaves review and opens the bounded read-only workspace preview       |
+| Close / `Escape`                  | Returns to the inspector and restores previous focus                  |
 
 Runtime updates refresh an already-open diff when its accepted patch changes;
 unrelated file updates preserve its line selection. New text invalidates an old
@@ -802,6 +907,19 @@ reopens an approval, or marks a turn running. Unstructured archive tool text rem
 in its collapsed transcript card but is not classified as structured activity. The Output tab shows
 the selected or newest retained command/tool output and copies all recovered text; remaining spool
 content is loaded only through the explicit bounded page action.
+
+### Turn-level transcript
+
+Each completed turn renders as one unit — user message, one collapsible work
+log over that turn's assistant/tool rows (counts in the header, collapsed by
+default, keyboard and screen-reader accessible), and the final response with
+its completion time — with no dividers between messages. Grouping keys on
+canonical turn identity, so it survives restore, and search reveals collapsed
+groups before navigating. Failed, blocked, cancelled, and interrupted turns
+keep their work visible with its status instead of grouping it as a success.
+Turns that changed files add a file summary to the final response (first
+three files, kind and +/− counts, partial marker, Changes-button deeplink);
+only completed, parseable, same-turn change-sets count.
 
 ### Git working-tree review
 
@@ -864,7 +982,7 @@ Reviewed Zed commit `347f171a3fd00a3b672382d78348b37bd969d17c`:
 [ownership/data flow](https://github.com/zed-industries/zed/blob/347f171a3fd00a3b672382d78348b37bd969d17c/crates/gpui/src/_ownership_and_data_flow.rs),
 and [examples](https://github.com/zed-industries/zed/tree/347f171a3fd00a3b672382d78348b37bd969d17c/crates/gpui/examples),
 particularly `a11y.rs` and `popover.rs`. Applied stable roles/labels, retained entity/subscription ownership,
-and anchored/deferred popovers using the APIs actually available through pinned GPUI Kit 0.8.0.
+and anchored/deferred popovers using the APIs actually available through pinned GPUI Kit 0.9.0.
 These are original VT Code integrations; no main-branch APIs or example implementation were copied.
 
 Desktop `/config` opens a dedicated configuration page grouped by the shared CLI catalog. Choose a category to inspect
@@ -876,8 +994,7 @@ The 2026-10-28 revision keeps that catalog but rebuilds the page as a
 master-detail surface: an inline search field filters every group, the
 groups rail carries match counts, rows lead with the live value,
 booleans toggle with a switch, and writer/omission/reset notes trail
-the list. `/config <group or path>` deep-links into the page;
-the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`,
+the list. `/config <group or path>` deep-links into the page; the
+runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`,
 `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the
-CLI runtime. On wide viewports the groups rail sits beside the rows as
-a side rail; on narrow viewports it stacks above them.
+CLI runtime. On wide viewports the groups rail sits beside the rows; on narrow viewports it stacks above them.

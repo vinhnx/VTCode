@@ -27,9 +27,38 @@ fn bpe() -> Option<&'static CoreBpe> {
     *BPE.get_or_init(|| tiktoken::get_encoding("cl100k_base"))
 }
 
-/// Approximate token count from character length (~4 chars per token).
+/// Approximate bytes per token used by the byte-length heuristic.
+///
+/// Single source of truth for the `~4 chars/token` convention shared by
+/// preview budgets, schema estimates, and message metadata. BPE-backed
+/// [`estimate_tokens`] stays the default; the heuristic exists for hot paths
+/// and serialized payloads where running the tokenizer costs more than the
+/// accuracy is worth.
+pub const CHARS_PER_TOKEN: usize = 4;
+
+/// Approximate token count from a byte length without running the tokenizer.
+///
+/// Rounds UP (`div_ceil`): budget gates must never undercount, so any
+/// non-empty payload costs at least one token. Prefer [`estimate_tokens`]
+/// when accuracy matters more than speed.
+#[must_use]
+pub fn heuristic_tokens_from_byte_len(byte_len: usize) -> usize {
+    byte_len.div_ceil(CHARS_PER_TOKEN)
+}
+
+/// `u64` twin of [`heuristic_tokens_from_byte_len`] for lifetime byte
+/// counters that never narrow to `usize`.
+#[must_use]
+pub fn heuristic_tokens_from_byte_len_u64(byte_len: u64) -> u64 {
+    byte_len.div_ceil(CHARS_PER_TOKEN as u64)
+}
+
+/// Approximate token count from text length without running the tokenizer.
+///
+/// `text.len()` counts bytes, so multibyte text overestimates slightly; that
+/// is the safe direction for a budget fallback.
 fn heuristic_token_count(text: &str) -> usize {
-    text.len().div_ceil(4)
+    heuristic_tokens_from_byte_len(text.len())
 }
 
 /// Count the number of tokens in `text` using tiktoken BPE.
@@ -86,11 +115,7 @@ pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
     }
     // Byte-level fallback used when BPE is unavailable or decode fails.
     let byte_truncate = || {
-        let end = (max_tokens * 4).min(text.len());
-        let mut end = end;
-        while end > 0 && !text.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = text.floor_char_boundary(max_tokens.saturating_mul(CHARS_PER_TOKEN));
         let mut result = text[..end].to_string();
         result.push_str("...");
         result
@@ -119,6 +144,37 @@ mod tests {
     fn count_is_reasonable() {
         let count = estimate_tokens("Hello, how are you today?");
         assert!((4..=12).contains(&count), "count={count}");
+    }
+
+    #[test]
+    fn heuristic_byte_len_rounds_up_at_boundaries() {
+        assert_eq!(heuristic_tokens_from_byte_len(0), 0);
+        assert_eq!(heuristic_tokens_from_byte_len(1), 1);
+        assert_eq!(heuristic_tokens_from_byte_len(3), 1);
+        assert_eq!(heuristic_tokens_from_byte_len(4), 1);
+        assert_eq!(heuristic_tokens_from_byte_len(5), 2);
+        assert_eq!(heuristic_tokens_from_byte_len(8), 2);
+        assert_eq!(heuristic_tokens_from_byte_len(9), 3);
+    }
+
+    #[test]
+    fn heuristic_u64_twin_matches_usize_flavor() {
+        for len in [0usize, 1, 3, 4, 5, 1_000, 1_000_003] {
+            assert_eq!(
+                heuristic_tokens_from_byte_len_u64(len as u64),
+                heuristic_tokens_from_byte_len(len) as u64,
+                "len={len}"
+            );
+        }
+        // `div_ceil` cannot overflow: even the largest input converts exactly.
+        assert_eq!(heuristic_tokens_from_byte_len_u64(u64::MAX), u64::MAX.div_ceil(4));
+    }
+
+    #[test]
+    fn bpe_fallback_heuristic_delegates_to_byte_len_helper() {
+        for text in ["", "a", "abcd", "abcde", "Hello, world!", "\u{1f44b}\u{1f30d}"] {
+            assert_eq!(heuristic_token_count(text), heuristic_tokens_from_byte_len(text.len()), "text={text:?}");
+        }
     }
 
     #[test]

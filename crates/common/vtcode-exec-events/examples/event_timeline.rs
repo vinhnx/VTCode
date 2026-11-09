@@ -80,6 +80,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
             },
         }),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage {
                 input_tokens: 128,

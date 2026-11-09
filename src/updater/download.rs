@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncWriteExt, BufWriter};
+use vtcode_commons::http::send_with_retry;
 
 use super::github::{self, ReleaseAsset};
 
@@ -79,42 +80,80 @@ pub(super) async fn download_checksum(asset: &ReleaseAsset, timeout: Duration) -
         .with_context(|| format!("failed to read checksum metadata {}", asset.name))
 }
 
+/// Every checksum source the release publishes for `archive_name`, in
+/// preference order: the per-archive sidecar (modern `archive.sha256`, then
+/// the legacy extension-stripped name the release pipeline publishes today),
+/// then the aggregate `checksums.txt` / `sha256sums.txt`.
+///
+/// Releases publish several of these at once and GitHub serves each asset as
+/// its own CDN object, so a 504 for one says nothing about the others:
+/// callers walk the whole list before giving up.
+pub(super) fn checksum_assets<'a>(assets: &'a [ReleaseAsset], archive_name: &str) -> Vec<&'a ReleaseAsset> {
+    let archive_name = archive_name.to_ascii_lowercase();
+    let mut names = vec![format!("{archive_name}.sha256")];
+    if let Some(legacy) = legacy_checksum_name(&archive_name) {
+        names.push(legacy);
+    }
+    names.push("checksums.txt".to_string());
+    names.push("sha256sums.txt".to_string());
+
+    names
+        .iter()
+        .filter_map(|name| assets.iter().find(|asset| asset.name.eq_ignore_ascii_case(name)))
+        .collect()
+}
+
+/// Resolve the expected SHA-256 for `archive_name` from the release metadata.
+///
+/// Each published checksum source is tried in [`checksum_assets`] order, so a
+/// CDN failure on the per-archive sidecar still falls back to the aggregate
+/// `checksums.txt`. Verification stays fail-closed: a release that publishes
+/// no checksum, or whose files never list this archive, is an error rather
+/// than a silently unverified install.
+pub(super) async fn download_expected_checksum(
+    assets: &[ReleaseAsset],
+    archive_name: &str,
+    timeout: Duration,
+) -> Result<String> {
+    let candidates = checksum_assets(assets, archive_name);
+    let mut download_failure: Option<anyhow::Error> = None;
+
+    for asset in &candidates {
+        match download_checksum(asset, timeout).await {
+            Ok(metadata) => {
+                if let Some(expected) = parse_checksum_metadata(&metadata, archive_name) {
+                    return Ok(expected);
+                }
+            }
+            // Keep the last failure as the error source so the reported chain
+            // still carries the HTTP status and asset URL.
+            Err(err) => download_failure = Some(err),
+        }
+    }
+
+    match download_failure {
+        Some(err) => Err(err).context(format!(
+            "no usable checksum metadata for update archive {archive_name} (tried {} published checksum file(s))",
+            candidates.len()
+        )),
+        None if candidates.is_empty() => bail!("no checksum metadata was published for update archive {archive_name}"),
+        None => bail!("no published checksum metadata listed update archive {archive_name}"),
+    }
+}
+
 async fn response_for_url(url: &str, timeout: Duration) -> Result<reqwest::Response> {
     github::validate_asset_download_url(url)?;
 
-    github::unauthenticated_client()?
-        .get(url)
-        .timeout(timeout)
-        .header(reqwest::header::ACCEPT, "application/octet-stream")
-        .send()
-        .await
-        .with_context(|| format!("failed to download update asset from {url}"))
-}
-
-pub(super) fn checksum_asset<'a>(assets: &'a [ReleaseAsset], archive_name: &str) -> Option<&'a ReleaseAsset> {
-    let archive_name = archive_name.to_ascii_lowercase();
-    // Modern sidecar: `archive.tar.gz.sha256` / `archive.zip.sha256`.
-    let modern_sidecar = format!("{archive_name}.sha256");
-    // Legacy extension-stripped sidecar: `vtcode-<v>-<target>.sha256`
-    // (the `.tar.gz`/`.zip` suffix removed). This is the convention the
-    // release pipeline publishes today, so prefer it over the aggregate file.
-    let legacy_sidecar = legacy_checksum_name(&archive_name);
-
-    assets
-        .iter()
-        .find(|asset| asset.name.to_ascii_lowercase() == modern_sidecar)
-        .or_else(|| {
-            let legacy = legacy_sidecar.as_deref();
-            assets
-                .iter()
-                .find(|asset| legacy.is_some_and(|name| asset.name.to_ascii_lowercase() == name))
-        })
-        .or_else(|| {
-            assets.iter().find(|asset| {
-                let name = asset.name.to_ascii_lowercase();
-                name == "checksums.txt" || name == "sha256sums.txt"
-            })
-        })
+    let client = github::unauthenticated_client()?;
+    send_with_retry(&github::updater_retry_policy(), || {
+        client
+            .get(url)
+            .timeout(timeout)
+            .header(reqwest::header::ACCEPT, "application/octet-stream")
+            .send()
+    })
+    .await
+    .with_context(|| format!("failed to download update asset from {url}"))
 }
 
 /// Derive the legacy extension-stripped checksum sidecar name for an archive.
@@ -145,7 +184,7 @@ pub(super) fn parse_checksum_metadata(metadata: &str, archive_name: &str) -> Opt
     })
 }
 
-pub(super) fn verify_checksum(contents: &[u8], expected: &str) -> Result<()> {
+fn verify_checksum(contents: &[u8], expected: &str) -> Result<()> {
     if !is_sha256(expected) {
         bail!("invalid SHA-256 checksum metadata");
     }
@@ -268,6 +307,33 @@ b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e  vtcode-0.141.7
         assert!(parse_checksum_metadata("signature only", "vtcode.tar.gz").is_none());
     }
 
+    /// Real `checksums.txt` body from release 0.181.7 (digests included so the
+    /// fixture is the published format, not a paraphrase). The aggregate lists
+    /// both the CLI archives and the desktop bundle, which is what makes it a
+    /// usable fallback when a per-archive sidecar is unavailable.
+    #[test]
+    fn parses_real_aggregate_checksums_for_cli_and_desktop_archives() {
+        let aggregate = "\
+2643377532a0e1667998ecbf66ba9e027c2dc2e54123aa89c7d48a6f0f45be73  vtcode-0.181.7-aarch64-apple-darwin.tar.gz
+4d4b679b35a190eca6c03c3a5514116909be489f85bfec73c65e35452c1d3498  vtcode-0.181.7-aarch64-unknown-linux-gnu.tar.gz
+2fb7050e4c9635fa6e2c8756201e843ef4937bc4a825be7b09a80e34a81236d4  vtcode-0.181.7-x86_64-apple-darwin.tar.gz
+bfb93bcb69083cfb9f2f7f216f650281e2a3acb13321a4896d320f090e997f55  vtcode-0.181.7-x86_64-unknown-linux-gnu.tar.gz
+0af917ab9fc69f5ec7649b91af14a2d2c561e986be882eb2028fa5fd621cfcba  vtcode-0.181.7-x86_64-unknown-linux-musl.tar.gz
+e070e9e47c8a50bd5984926d2799a05352281c131716df09c52468ce0eabdcd7  vtcode-0.181.7-x86_64-pc-windows-msvc.zip
+41cbc573cbe7d803f76adc8f894bf42af5510c45a6309d9ba6c9dbc47ef6e0a5  vtcode-desktop-0.181.7-aarch64-apple-darwin.zip
+";
+
+        assert_eq!(
+            parse_checksum_metadata(aggregate, "vtcode-0.181.7-aarch64-apple-darwin.tar.gz").as_deref(),
+            Some("2643377532a0e1667998ecbf66ba9e027c2dc2e54123aa89c7d48a6f0f45be73")
+        );
+        assert_eq!(
+            parse_checksum_metadata(aggregate, "vtcode-desktop-0.181.7-aarch64-apple-darwin.zip").as_deref(),
+            Some("41cbc573cbe7d803f76adc8f894bf42af5510c45a6309d9ba6c9dbc47ef6e0a5")
+        );
+        assert!(parse_checksum_metadata(aggregate, "vtcode-0.181.7-riscv64-unknown-linux-gnu.tar.gz").is_none());
+    }
+
     #[test]
     fn ignores_unrelated_architecture_checksum_sidecars() {
         let assets = vec![
@@ -281,7 +347,7 @@ b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e  vtcode-0.141.7
             },
         ];
 
-        assert!(checksum_asset(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz").is_none());
+        assert!(checksum_assets(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz").is_empty());
     }
 
     #[test]
@@ -299,9 +365,10 @@ b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e  vtcode-0.141.7
             },
         ];
 
-        let selected = checksum_asset(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz").expect("sidecar");
+        let selected = checksum_assets(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz");
 
-        assert_eq!(selected.name, "vtcode-1.0.0-aarch64-apple-darwin.sha256");
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "vtcode-1.0.0-aarch64-apple-darwin.sha256");
     }
 
     #[test]
@@ -317,9 +384,10 @@ b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e  vtcode-0.141.7
             },
         ];
 
-        let selected = checksum_asset(&assets, "vtcode-1.0.0-x86_64-pc-windows-msvc.zip").expect("sidecar");
+        let selected = checksum_assets(&assets, "vtcode-1.0.0-x86_64-pc-windows-msvc.zip");
 
-        assert_eq!(selected.name, "vtcode-1.0.0-x86_64-pc-windows-msvc.sha256");
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "vtcode-1.0.0-x86_64-pc-windows-msvc.sha256");
     }
 
     #[test]
@@ -335,9 +403,53 @@ b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e  vtcode-0.141.7
             },
         ];
 
-        let selected = checksum_asset(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz").expect("sidecar");
+        let selected = checksum_assets(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz");
 
-        assert_eq!(selected.name, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz.sha256");
+        assert_eq!(selected.len(), 2, "every published source is a fallback candidate");
+        assert_eq!(selected[0].name, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz.sha256");
+        assert_eq!(selected[1].name, "vtcode-1.0.0-aarch64-apple-darwin.sha256");
+    }
+
+    /// The aggregate `checksums.txt` is a real release asset (0.181.7 ships
+    /// one), so a per-archive sidecar outage must not end the update: the
+    /// aggregate is the last candidate.
+    #[test]
+    fn aggregate_checksums_file_is_the_last_fallback() {
+        let assets = vec![
+            ReleaseAsset {
+                name: "vtcode-1.0.0-aarch64-apple-darwin.tar.gz".to_string(),
+                download_url: "https://example.test/archive".to_string(),
+            },
+            ReleaseAsset {
+                name: "checksums.txt".to_string(),
+                download_url: "https://example.test/aggregate".to_string(),
+            },
+            ReleaseAsset {
+                name: "vtcode-1.0.0-x86_64-apple-darwin.sha256".to_string(),
+                download_url: "https://example.test/other-target".to_string(),
+            },
+        ];
+
+        let selected = checksum_assets(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz");
+
+        assert_eq!(selected.len(), 1, "only the aggregate lists this archive");
+        assert_eq!(selected[0].name, "checksums.txt");
+    }
+
+    /// Case-insensitive matching: the release API returns asset names verbatim
+    /// and GitHub URLs are case-insensitive, so a differently-cased sidecar is
+    /// still the same source.
+    #[test]
+    fn checksum_source_matching_is_case_insensitive() {
+        let assets = vec![ReleaseAsset {
+            name: "VTCODE-1.0.0-AARCH64-APPLE-DARWIN.SHA256".to_string(),
+            download_url: "https://example.test/checksum".to_string(),
+        }];
+
+        let selected = checksum_assets(&assets, "vtcode-1.0.0-aarch64-apple-darwin.tar.gz");
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "VTCODE-1.0.0-AARCH64-APPLE-DARWIN.SHA256");
     }
 
     #[tokio::test]

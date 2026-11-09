@@ -188,6 +188,8 @@ mod tests_appearance;
 #[cfg(test)]
 mod tests_browser;
 #[cfg(test)]
+mod tests_changelog;
+#[cfg(test)]
 mod tests_composer;
 #[cfg(test)]
 mod tests_configuration;
@@ -207,6 +209,8 @@ mod tests_session;
 mod tests_shortcuts;
 #[cfg(test)]
 mod tests_transcript;
+#[cfg(test)]
+mod tests_untranslated;
 #[cfg(test)]
 mod tests_webmcp;
 #[cfg(test)]

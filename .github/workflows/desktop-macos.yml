@@ -73,7 +73,7 @@ jobs:
           toolchain: 1.99.1
 
       - name: Cache Cargo
-        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
         with:
           key: desktop-macos
 
@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload the app bundle
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: vtcode-desktop-macos-${{ github.sha }}
           path: ${{ runner.temp }}/VT Code.app

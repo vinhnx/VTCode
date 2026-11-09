@@ -41,6 +41,11 @@ pub enum PatchError {
     SegmentNotFound { path: String, snippet: String },
 
     #[error(
+        "patch context in '{path}' matches redacted source; repeated reads show the same redaction. Split the edit around the hidden line when possible. Editing the hidden line requires user assistance."
+    )]
+    RedactedContext { path: String },
+
+    #[error(
         "semantic patch anchor '{anchor}' for '{path}' could not be resolved safely: {reason}\n\nFix: Use a more specific @@ anchor such as a function/class name, or copy exact context lines from read_file."
     )]
     SemanticResolutionFailed {
@@ -88,6 +93,15 @@ pub enum PatchError {
 }
 
 impl PatchError {
+    /// A redaction mismatch never contains the underlying source text.
+    pub fn redacted_context_path(&self) -> Option<&str> {
+        match self {
+            Self::RedactedContext { path } => Some(path),
+            Self::RolledBack { original } => original.redacted_context_path(),
+            _ => None,
+        }
+    }
+
     /// Only exact text/context failures qualify for a fresh recovery read.
     pub fn context_mismatch(&self) -> Option<(&str, &str)> {
         match self {

@@ -311,28 +311,29 @@ impl<'a> TurnProcessingContext<'a> {
             &mut self.plan_session.recovery,
             plan_text,
         );
-        self.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
-        // The exhausted incident must not auto-present on session resume: the
-        // setup resume gate skips its synthetic continue only when the prompt
-        // was shown, and a synthetic turn cannot rearm (internal follow-ups
-        // never reset the budget), so it would burn a crippled turn.
-        self.plan_session.recovery.input_prompt_shown = true;
-        self.persist_planning_recovery().await?;
         self.renderer.line(
             MessageStyle::Warning,
             crate::agent::runloop::unified::planning_workflow_state::PLANNING_WORKFLOW_NO_APPROVAL_READY_PLAN_HINT,
         )?;
-        self.handle_assistant_response(
-            terminal_plan_rejection_message(PLANNING_PLAN_REJECTION_NOTICE, &error),
-            Vec::new(),
-            None,
-            false,
-            Some(uni::AssistantPhase::FinalAnswer),
-        )?;
         append_rejected_plan_draft_to_last_assistant(self.working_history, plan_text);
-        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-            reason: Some(TERMINAL_PLAN_REJECTION_REASON.to_string()),
-        }))
+        let retained_draft_index = self.working_history.len().checked_sub(1);
+        let detail = format!("the draft failed validation: {error}");
+        let fallback = terminal_plan_rejection_message(PLANNING_PLAN_REJECTION_NOTICE, &error);
+        let outcome = self
+            .await_planning_recovery_input_with_fallback(&detail, Some((&fallback, TERMINAL_PLAN_REJECTION_REASON)))
+            .await?;
+        if matches!(outcome, TurnHandlerOutcome::Continue) {
+            self.push_system_message(plan_repair_directive_for_error(&error));
+        } else if !retained_draft_index
+            .and_then(|index| self.working_history.get(index))
+            .zip(bounded_rejected_plan_draft(plan_text))
+            .is_some_and(|(message, draft)| {
+                message.role == uni::MessageRole::Assistant && message.content.as_text().contains(&draft)
+            })
+        {
+            append_rejected_plan_draft_to_last_assistant(self.working_history, plan_text);
+        }
+        Ok(outcome)
     }
 
     /// Schedule the one bounded plan-only retry allowed after a permanent
@@ -451,10 +452,10 @@ impl<'a> TurnProcessingContext<'a> {
             msg_with_reasoning = msg_with_reasoning.with_reasoning_details(Some(payload));
         }
 
-        if !msg_with_reasoning.content.as_text().is_empty()
+        let retained_message = !msg_with_reasoning.content.as_text().is_empty()
             || msg_with_reasoning.reasoning.is_some()
-            || msg_with_reasoning.reasoning_details.is_some()
-        {
+            || msg_with_reasoning.reasoning_details.is_some();
+        if retained_message {
             push_assistant_message(self.working_history, msg_with_reasoning);
         }
 
@@ -466,9 +467,26 @@ impl<'a> TurnProcessingContext<'a> {
                 && let Some(emitter) = self.harness_emitter
             {
                 match emitter.emit_assistant_message(&self.harness_state.turn_id.0, &final_response_text) {
-                    Ok(()) => self.harness_state.mark_final_response_event_emitted(),
+                    Ok(id) => self.harness_state.mark_final_response_item_emitted(id),
                     Err(err) => tracing::warn!(error = %err, "final assistant message harness emission failed"),
                 }
+            }
+            if retained_message
+                && let Some(item_id) = self.harness_state.final_response_item_id()
+                && let Some(message) = self
+                    .working_history
+                    .last_mut()
+                    .filter(|message| message.role == uni::MessageRole::Assistant)
+            {
+                let tokens = message.estimate_tokens();
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_secs())
+                    .unwrap_or(0);
+                let metadata = message.metadata.get_or_insert_with(|| {
+                    vtcode_commons::message_metadata::MessageMetadata::llm_response(now, tokens)
+                });
+                metadata.set_event_item_id(item_id.to_owned());
             }
         }
 

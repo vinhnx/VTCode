@@ -21,16 +21,23 @@ running to open the in-app shortcut overlay (mirrors this guide).
 
 ## Composer submit and queue
 
-| Shortcut                                             | Idle                                                       | Active turn / busy                                                                                                                    |
-| :--------------------------------------------------- | :--------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `Enter`                                              | Submit draft.                                              | Queue draft for the next turn (`QueueSubmit`); each Enter stays its own non-batchable turn, slash keeps queue routing.                |
-| `Ctrl+Enter` or `Tab`                                | Submit draft; empty draft processes newest queued message. | Queue draft (`QueueSubmit`); plain text is batchable, slash stays one-per-turn. App handles `/stop`, `/pause`, `/resume` immediately. |
-| `Tab` (first)                                        | Accept visible ghost suggestion.                           | Same accept-first priority.                                                                                                           |
-| `Shift+Enter` / `Alt+Enter` / `\`+`Enter` / `Ctrl+J` | Insert newline.                                            | Same.                                                                                                                                 |
-| `Enter` on empty draft with active jobs              | Submit `/config jobs`.                                     | Same.                                                                                                                                 |
+| Shortcut                                             | Idle                                                       | Active turn / busy                                                                                                                                |
+| :--------------------------------------------------- | :--------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Enter`                                              | Submit draft.                                              | Queue draft for the next turn (`QueueSubmit`); each Enter stays its own non-batchable turn, slash keeps queue routing (but see steer mode below). |
+| `Ctrl+Enter` or `Tab`                                | Submit draft; empty draft processes newest queued message. | Queue draft (`QueueSubmit`); plain text is batchable, slash stays one-per-turn. App handles `/stop`, `/pause`, `/resume` immediately.             |
+| `Tab` (first)                                        | Accept visible ghost suggestion.                           | Same accept-first priority.                                                                                                                       |
+| `Shift+Enter` / `Alt+Enter` / `\`+`Enter` / `Ctrl+J` | Insert newline.                                            | Same.                                                                                                                                             |
+| `Enter` on empty draft with active jobs              | Submit `/config jobs`.                                     | Same.                                                                                                                                             |
 
 Palettes consume `Tab`/`Enter`/`Esc` first: agent/file palettes select best match on `Tab`, slash navigation
 autocompletes on `Tab`, history picker consumes navigation keys.
+
+With `ui.busy_enter_behavior = "steer"`, busy plain-text `Enter` steers the live turn (`Steer`) instead of
+queueing; slash commands and attachments still queue, and `Ctrl+Enter`/`Tab` keep their queue role.
+
+Scrolled up with a non-empty draft, the first plain `Enter` jumps to the latest message and keeps the draft;
+the next `Enter` submits (idle) or queues/steers (busy). `Ctrl+Enter`/`Cmd+Enter` bypass the jump, and the
+desktop Send button always submits immediately. The desktop app shares this behavior.
 
 ## Composer line editing
 
@@ -76,14 +83,14 @@ be retained per VT Code runtime. A modal that owns input before action dispatch 
 
 ## Overlays, palettes, and lists
 
-| Context                            | Keys                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| :--------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Agent/file palette                 | `Up`/`Down` move, `Tab` select best match, `Enter` open/apply, `Esc` close. In the `@` file picker, `PageUp`/`PageDown` jump a page, `←` ascends a directory, and `Alt+Enter` references the highlighted folder (`@dir/`) instead of opening it.                                                                                                                                                                          |
-| Slash palette                      | `Tab` autocomplete, navigation via slash keys.                                                                                                                                                                                                                                                                                                                                                                            |
-| History picker (`Ctrl+R`/`Ctrl+S`) | Pre-filtered by the composer draft when non-empty; type to refine, `Enter` accepts into the composer, `Tab`/`Shift+Tab`/`Ctrl+R` cycle, `Esc`/`Ctrl+C`/`Ctrl+G` cancel and restore the draft; `Backspace` deletes query text. Ctrl-modified characters are always shortcuts, never search text.                                                                                                                           |
-| Modal list                         | `Tab`/`BackTab` move per modal, `Esc`/`Enter` cancel/submit per overlay. Modals and multi-step wizards without a search box number their options when nine or fewer are visible: `1`–`9` jumps to an option (`Enter` still confirms, except wizards confirm immediately). In numbered modals, out-of-range digits are swallowed, never typed into the composer.                                                           |
-| Local agents inline view           | `Down` opens on empty composer; `Alt+S` focuses. Compact by default, `Ctrl+E` or header click expands to ~75% (`Ctrl+E` again collapses). The open shortcut (`Ctrl+B` by default) toggle-closes the panel when no foreground command is running. `Enter` inspects; `Ctrl+K` stops; `Ctrl+X` force-terminates or closes. For `exec-session` rows, `Ctrl+R` toggles stdin focus and `Ctrl+P` previews the bounded snapshot. |
-| Queued-input edit                  | `Alt+Up` (or `Shift+Left` in tmux) pops newest queued message into composer.                                                                                                                                                                                                                                                                                                                                              |
+| Context | Keys |
+| :--- | :--- |
+| Agent/file palette | `Up`/`Down` move, `Tab` select best match, `Enter` open/apply, `Esc` close. In the `@` file picker, `PageUp`/`PageDown` jump a page, `←` ascends a directory, and `Alt+Enter` references the highlighted folder (`@dir/`) instead of opening it. |
+| Slash palette | `Tab` autocomplete, navigation via slash keys. |
+| History picker (`Ctrl+R`/`Ctrl+S`) | Pre-filtered by the composer draft when non-empty; type to refine, `Enter` accepts into the composer, `Tab`/`Shift+Tab`/`Ctrl+R` cycle, `Esc`/`Ctrl+C`/`Ctrl+G` cancel and restore the draft; `Backspace` deletes query text. Matching is fuzzy and multi-token, so `impl chg` finds `Implement current changes`; results rank by match score, deduplicate by prompt text, and cap at 200, listing newest first for an empty query. Ctrl-modified characters are always shortcuts, never search text. `Ctrl+S` opens the picker, and cycles the search scope (Everywhere → Project → Session) while open; the header shows the active scope. The desktop app shares this picker logic. |
+| Modal list | `Tab`/`BackTab` move per modal, `Esc`/`Enter` cancel/submit per overlay. Modals and multi-step wizards without a search box number their options when nine or fewer are visible: `1`–`9` jumps to an option (`Enter` still confirms, except wizards confirm immediately). In numbered modals, out-of-range digits are swallowed, never typed into the composer. |
+| Local agents inline view | `Down` opens on empty composer; `Alt+S` focuses. Compact by default, `Ctrl+E` or header click expands to ~75% (`Ctrl+E` again collapses). The open shortcut (`Ctrl+B` by default) toggle-closes the panel when no foreground command is running. `Enter` inspects; `Ctrl+K` stops; `Ctrl+X` force-terminates or closes. For `exec-session` rows, `Ctrl+R` toggles stdin focus and `Ctrl+P` previews the bounded snapshot. |
+| Queued-input edit | `Alt+Up` (or `Shift+Left` in tmux) pops newest queued message into composer. |
 
 With the composer focused, Shift/Alt+Enter inserts a newline before command dispatch, including `/stop`, `/plan`, and
 `/help` while a turn runs. Modified Enter preserves a trailing backslash; plain backslash+Enter consumes it.
@@ -95,7 +102,7 @@ Overlay bindings still take precedence.
 | :---------------------------------------------------------------------- | :------------------------------------------------ |
 | `Ctrl+T` (default) / `Alt+O`                                            | Open/close Transcript Review.                     |
 | `r`                                                                     | Toggle rich/raw.                                  |
-| `/`, `Enter`, `Esc`, `n`/`N`                                            | Search start/commit/cancel, next/previous match.  |
+| `/`, `Enter`, `Esc`, `n`/`N`                                            | Search start/commit/cancel, next/previous match; commits jump to and briefly highlight the match. |
 | `j`/`k`, `Up`/`Down`, `Ctrl+U`/`D`, `Ctrl+B`/`F`, `g`/`G`, `Home`/`End` | Scroll line, half-page, full-page, top/bottom.    |
 | `v`, `[`, `q`                                                           | Open in editor, hand to native scrollback, close. |
 | `PgUp`/`PgDn`, wheel, `Ctrl+Home`/`End`                                 | Fullscreen transcript scroll.                     |

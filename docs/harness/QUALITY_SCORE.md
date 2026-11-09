@@ -229,8 +229,8 @@ syntax. **Verify**: `cargo nextest run -p vtcode-core --test shell_parser_tests`
 
 | Dimension        | Grade | Evidence / Notes                                                                                                                                                    |
 | ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Test Coverage    | B     | Entry-point docs now have automated link-integrity checks via `scripts/check_docs_links.py` in CI.                                                                  |
-| API Stability    | B     | Top-level docs boundary is now CI-enforced via `scripts/check_markdown_location.py` and `scripts/docs_top_level_allowlist.txt`, reducing uncontrolled sprawl drift. |
+| Test Coverage    | B     | Entry-point docs now have automated link-integrity checks via `scripts/check_docs_links.py` in both gates.                                                          |
+| API Stability    | B     | Top-level docs boundary is gate-enforced via `scripts/check_markdown_location.py` and `scripts/docs_top_level_allowlist.txt`, reducing uncontrolled sprawl drift.   |
 | Agent Legibility | B     | `docs/INDEX.md` and harness entrypoints expose active domains and archive routes; overall doc breadth still raises search cost outside curated entrypoints.         |
 | Error Handling   | B     | Docs governance checks now emit remediation-oriented failures for broken links and placement violations (`check_docs_links.py`, `check_markdown_location.py`).      |
 | Documentation    | B     | Core entrypoint docs (`AGENTS.md`, `docs/INDEX.md`, harness index) are aligned; consolidation remains active but now bounded by CI guardrails.                      |

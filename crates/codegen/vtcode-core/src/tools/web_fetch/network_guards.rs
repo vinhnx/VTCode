@@ -136,3 +136,22 @@ pub(super) fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
 
     normalized_domain == normalized_allowed || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
 }
+
+/// Returns `true` when `host` sits under a special-use suffix that remote-content
+/// tools must never fetch: mDNS (`.local`), private split-DNS (`.internal`),
+/// loopback (`.localhost`), testing (`.test`, `.invalid`, RFC 6761), and home
+/// networking (`.home.arpa`, RFC 7788).
+///
+/// Shared by `web_fetch::validate_url` and the `@<url>` image fetcher so the two
+/// surfaces cannot drift: a suffix blocked for page fetches is blocked for
+/// image fetches too. A trailing FQDN dot is stripped first so `host.local.`
+/// cannot bypass the suffix match.
+pub(crate) fn is_blocked_special_use_tld(host: &str) -> bool {
+    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
+    normalized.ends_with(".local")
+        || normalized.ends_with(".internal")
+        || normalized.ends_with(".localhost")
+        || normalized.ends_with(".test")
+        || normalized.ends_with(".invalid")
+        || normalized.ends_with(".home.arpa")
+}

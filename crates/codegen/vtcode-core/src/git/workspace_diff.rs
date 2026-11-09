@@ -127,11 +127,7 @@ async fn read_diff(workspace: &Path, max_bytes: usize, include_untracked: bool) 
     output.truncated |= output.text.len() > max_bytes;
     let mut text = vtcode_commons::sanitizer::redact_secrets(output.text);
     output.truncated |= text.len() > max_bytes;
-    let mut end = text.len().min(max_bytes);
-    while !text.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
-    text.truncate(end);
+    text.truncate(text.floor_char_boundary(max_bytes));
     output.text = text.chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').collect();
     Ok(output)
 }

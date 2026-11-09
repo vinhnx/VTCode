@@ -552,7 +552,7 @@ pub fn parse_bash_lc_commands(command: &[String]) -> Option<Vec<Vec<String>>> {
 
 // === Injection detection (moved from tools::validation::commands) ===
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 
 /// Delimiter token of a quoted heredoc starting just after `<<` / `<<-`.
 ///
@@ -637,6 +637,33 @@ enum QuoteState {
     Double,
 }
 
+/// Command substitution construct that tripped an injection scan.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SubstitutionKind {
+    Backtick,
+    DollarParen,
+}
+
+impl SubstitutionKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Backtick => "backtick",
+            Self::DollarParen => "'$('",
+        }
+    }
+}
+
+/// Actionable injection error: names the construct and its byte offset so the
+/// caller can locate the rejected span in its own command. Keeps the legacy
+/// "Command injection pattern detected" prefix so downstream policy matchers
+/// (`preflight_policy_correction`) keep routing to the security-policy branch.
+pub(crate) fn substitution_error(kind: SubstitutionKind, byte_idx: usize) -> anyhow::Error {
+    anyhow!(
+        "Command injection pattern detected: {} command substitution at byte {byte_idx}; rewrite without dynamic expansion",
+        kind.label()
+    )
+}
+
 /// Split a shell command into segments on unquoted `|` and `&` boundaries,
 /// while detecting injection patterns (`;`, backticks, `$()`, newlines).
 pub(crate) fn split_shell_segments(command: &str) -> Result<Vec<String>> {
@@ -666,9 +693,9 @@ pub(crate) fn split_shell_segments(command: &str) -> Result<Vec<String>> {
                 match ch {
                     '\\' => escaped = true,
                     '"' => state = QuoteState::None,
-                    '`' => bail!("Command injection pattern detected"),
+                    '`' => return Err(substitution_error(SubstitutionKind::Backtick, idx)),
                     '$' if matches!(chars.peek(), Some((_, '('))) => {
-                        bail!("Command injection pattern detected");
+                        return Err(substitution_error(SubstitutionKind::DollarParen, idx));
                     }
                     _ => {}
                 }
@@ -696,9 +723,9 @@ pub(crate) fn split_shell_segments(command: &str) -> Result<Vec<String>> {
                             pending_heredoc = Some(delim);
                         }
                     }
-                    '`' => bail!("Command injection pattern detected"),
+                    '`' => return Err(substitution_error(SubstitutionKind::Backtick, idx)),
                     '$' if matches!(chars.peek(), Some((_, '('))) => {
-                        bail!("Command injection pattern detected");
+                        return Err(substitution_error(SubstitutionKind::DollarParen, idx));
                     }
                     ';' => bail!("Unquoted command chaining detected"),
                     '\n' => {

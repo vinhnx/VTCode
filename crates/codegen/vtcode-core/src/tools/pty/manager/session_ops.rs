@@ -124,7 +124,9 @@ impl PtyManager {
 
     pub fn force_terminate_session(&self, session_id: &str) -> Result<()> {
         let handle = self.session_handle(session_id)?;
-        handle.force_terminate();
+        if !handle.force_terminate() {
+            return Err(anyhow!("PTY session '{session_id}' child exit was not confirmed"));
+        }
         Ok(())
     }
 
@@ -265,7 +267,9 @@ impl PtyManager {
         // waiting for a grace window.
         match mode {
             PtyCloseMode::Graceful => handle.graceful_terminate(),
-            PtyCloseMode::Immediate => handle.force_terminate(),
+            PtyCloseMode::Immediate => {
+                let _ = handle.force_terminate();
+            }
         }
 
         // 3. Join reader thread with the same bounded helper Drop uses.

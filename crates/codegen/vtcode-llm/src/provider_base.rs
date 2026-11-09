@@ -16,6 +16,8 @@ use vtcode_config::TimeoutsConfig;
 /// Default timeout configurations
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const DEFAULT_STREAM_TIMEOUT: Duration = Duration::from_secs(300);
+/// Fallback connect budget when `[timeouts] http_connect_seconds` is `0`.
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Base configuration shared by all providers
 #[derive(Debug, Clone)]
@@ -48,8 +50,14 @@ impl BaseProviderConfig {
         let http_timeout = timeout_config
             .ceiling_duration(timeout_config.streaming_ceiling_seconds)
             .unwrap_or(DEFAULT_REQUEST_TIMEOUT);
+        // reqwest leaves the connect phase unbounded unless it is set
+        // explicitly, so a request timeout alone never caps a stalled handshake.
+        let connect_timeout = timeout_config
+            .ceiling_duration(timeout_config.http_connect_seconds)
+            .unwrap_or(DEFAULT_CONNECT_TIMEOUT);
         let http_client = HttpClient::builder()
             .timeout(http_timeout)
+            .connect_timeout(connect_timeout)
             .build()
             .context("Failed to build HTTP client")?;
 

@@ -52,6 +52,7 @@ static CATPPUCCIN_FLAVORS: &[CatppuccinFlavorKind] = &[
     CatppuccinFlavorKind::Mocha,
 ];
 
+mod curated;
 mod suites;
 
 pub(crate) use suites::{all_theme_definitions, theme_definition};
@@ -59,51 +60,7 @@ pub use suites::{available_theme_suites, available_themes, theme_label, theme_su
 
 static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
     let mut map = HashMap::new();
-    map.insert(
-        "ciapre-dark",
-        ThemeDefinition {
-            id: "ciapre-dark",
-            label: "Ciapre Dark",
-            palette: ThemePalette {
-                primary_accent: RgbColor(0xBF, 0xB3, 0x8F),
-                background: RgbColor(0x26, 0x26, 0x26),
-                foreground: RgbColor(0xBF, 0xB3, 0x8F),
-                secondary_accent: RgbColor(0xD9, 0x9A, 0x4E),
-                alert: RgbColor(0xFF, 0x8A, 0x8A),
-                logo_accent: RgbColor(0xD9, 0x9A, 0x4E),
-            },
-        },
-    );
-    map.insert(
-        "ciapre-blue",
-        ThemeDefinition {
-            id: "ciapre-blue",
-            label: "Ciapre Blue",
-            palette: ThemePalette {
-                primary_accent: RgbColor(0xBF, 0xB3, 0x8F),
-                background: RgbColor(0x17, 0x1C, 0x26),
-                foreground: RgbColor(0xBF, 0xB3, 0x8F),
-                secondary_accent: RgbColor(0xBF, 0xB3, 0x8F),
-                alert: RgbColor(0xFF, 0x8A, 0x8A),
-                logo_accent: RgbColor(0xD9, 0x9A, 0x4E),
-            },
-        },
-    );
-    map.insert(
-        "ciapre",
-        ThemeDefinition {
-            id: "ciapre",
-            label: "Ciapre",
-            palette: ThemePalette {
-                primary_accent: RgbColor(0xAE, 0xA4, 0x7F),
-                background: RgbColor(0x18, 0x18, 0x18),
-                foreground: RgbColor(0xAE, 0xA4, 0x7F),
-                secondary_accent: RgbColor(0xCC, 0x8A, 0x3E),
-                alert: RgbColor(0xC1, 0x6A, 0x68),
-                logo_accent: RgbColor(0xCC, 0x8A, 0x3E),
-            },
-        },
-    );
+    curated::insert_curated_themes(&mut map);
     map.insert(
         "solarized-dark",
         ThemeDefinition {

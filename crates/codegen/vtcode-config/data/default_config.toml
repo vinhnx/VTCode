@@ -243,47 +243,18 @@ session_max_requests = 12
 
 # Command security - Define safe and dangerous command patterns
 [commands]
-# Commands that are always allowed without confirmation
-allow_list = [
-    "ls",           # List directory contents
-    "pwd",          # Print working directory
-    "git status",   # Show git status
-    "git diff",     # Show git differences
-    "cargo check",  # Check Rust code
-    "echo",         # Print text
-]
-
-# Commands that are never allowed
-deny_list = [
-    "rm -rf /",        # Delete root directory (dangerous)
-    "rm -rf ~",        # Delete home directory (dangerous)
-    "shutdown",        # Shut down system (dangerous)
-    "reboot",          # Reboot system (dangerous)
-    "sudo *",          # Any sudo command (dangerous)
-    ":(){ :|:& };:",   # Fork bomb (dangerous)
-]
-
-# Command patterns that are allowed (supports glob patterns)
-allow_glob = [
-    "git *",        # All git commands
-    "cargo *",      # All cargo commands
-    "python -m *",  # Python module commands
-]
-
-# Command patterns that are denied (supports glob patterns)
-deny_glob = [
-    "rm *",         # All rm commands
-    "sudo *",       # All sudo commands
-    "chmod *",      # All chmod commands
-    "chown *",      # All chown commands
-    "kubectl *",    # All kubectl commands (admin access)
-]
-
-# Regular expression patterns for allowed commands (if needed)
-allow_regex = []
-
-# Regular expression patterns for denied commands (if needed)
-deny_regex = []
+# These lists are intentionally omitted so the built-in defaults apply: a
+# curated allow list plus 57 deny rules covering destructive deletion, privilege
+# escalation, disk operations, and sensitive-file reads. Writing a shorter list
+# here would *replace* those rules and leave you less protected than shipping no
+# config at all. Uncomment and edit only to narrow the defaults deliberately.
+#
+# allow_list = ["ls", "pwd", "git status", "cargo check"]
+# deny_list = ["rm -rf /", "rm -rf ~", ":(){ :|:& };:"]
+# allow_glob = ["git *", "cargo *"]
+# deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
+# allow_regex = []
+# deny_regex = []
 
 # Security configuration - Safety settings for automated operations
 [security]
@@ -335,6 +306,9 @@ inline_viewport_rows = 16
 # Show elapsed time divider after each completed turn
 show_turn_timer = false
 
+# Show one wall-clock footer after the final agent message of each turn
+show_message_timestamps = true
+
 # Show warning/error/fatal diagnostic lines directly in transcript
 # Effective in debug/development builds only
 show_diagnostics_in_transcript = false
@@ -342,9 +316,9 @@ show_diagnostics_in_transcript = false
 # Show timeline navigation panel
 show_timeline_pane = false
 
-# Optional terminal activity reporting (interactive TUI only).
-[ui.program_status]
-enabled = false
+# Terminal activity reporting (OSC 7501) is on by default; uncomment to opt out.
+# [ui.program_status]
+# enabled = false
 
 # Runtime notification preferences
 [ui.notifications]
@@ -388,8 +362,8 @@ max_identical_in_window = 1
 # Status line mode ("auto", "command", "hidden")
 mode = "auto"
 
-# Show current system time (HH:MM:SS) on the status line
-show_clock = true
+# Show current system time (HH:MM:SS) on the status line (opt-in; per-turn timestamps replace it)
+show_clock = false
 
 # How often to refresh status line (milliseconds)
 refresh_interval_ms = 2000
@@ -419,7 +393,8 @@ default_cols = 80
 # Maximum number of concurrent PTY sessions
 max_sessions = 10
 
-# Command timeout in seconds (prevents hanging commands)
+# Deprecated: kept for compatibility. The enforced PTY deadline is
+# [timeouts] pty_ceiling_seconds.
 command_timeout_seconds = 300
 
 # Number of recent lines to show in PTY output
@@ -501,7 +476,7 @@ enabled_languages = [
 ]
 
 # Timeout for syntax highlighting operations (milliseconds)
-highlight_timeout_ms = 1000
+highlight_timeout_ms = 5000
 
 # Automation features - Full-auto permission review settings
 [automation.full_auto]

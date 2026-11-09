@@ -121,8 +121,12 @@ fn markdownlint_verification_preserves_command_boundaries() {
         "npx -y markdownlint-cli2 README.md && cargo check --locked",
         "python3 scripts/check_markdown.py",
         "python ./scripts/check_markdown.py",
+        "python3 scripts/check_markdown.py README.md",
+        "python3 scripts/check_markdown.py docs/guide.md README.md",
+        "python3 scripts/check_markdown.py ./README.md",
         "python3 scripts/check_docs_links.py",
         "python ./scripts/check_docs_links.py",
+        "python3 scripts/check_docs_links.py README.md",
     ] {
         assert!(shell_command_is_admitted_verification_attempt(&exec_command(command)), "{command}");
         assert_eq!(
@@ -145,6 +149,7 @@ fn markdownlint_verification_preserves_command_boundaries() {
         "python3 scripts/check_markdown.py --fix",
         "python3 scripts/check_markdown.py --list",
         "python3 scripts/check_markdown.py --help",
+        "python3 scripts/check_markdown.py README.md --fix",
         "python3 other/check_markdown.py",
         "python3 scripts/check_docs_links.py --help",
         "python3 other/check_docs_links.py",
@@ -775,6 +780,7 @@ fn path_glob_inspections_preserve_debt_without_weakening_admission() {
         "fgrep x --exclude=*.md src",
         "cat ./docs/*.md",
         "ls docs/*.md",
+        "ls -1 .markdownlint* .mdl* 2>/dev/null",
     ] {
         assert!(!exec_mutation_should_incur_debt(command, &clean), "{command}");
         assert_eq!(classify_shell_activity(tools::EXEC_COMMAND, &exec_command(command)), ShellActivity::Mutation);
@@ -801,6 +807,10 @@ fn path_glob_inspections_preserve_debt_without_weakening_admission() {
         "rg x docs/*.md; touch marker",
         "rg x docs/*.md; if",
         "rg x docs*/*.md",
+        "ls *",
+        "ls .$directory*",
+        "ls .$(touch marker)*",
+        "ls .md* > marker",
     ] {
         assert!(exec_mutation_should_incur_debt(command, &clean), "{command}");
     }
@@ -904,4 +914,25 @@ fn dynamic_readonly_inspections_do_not_incur_mutation_debt() {
     assert!(exec_mutation_should_incur_debt("git checkout $x", &clean_output));
     // Dynamic chains of inspections with exit-echo tails stay debt-free.
     assert!(!exec_mutation_should_incur_debt("grep -n 'x' README.md; echo \"exit:$?\"", &clean_output,));
+}
+
+#[test]
+fn quoted_file_tests_preserve_evidence_without_admitting_effects() {
+    let command = "for f in docs/a.md docs/b.md; do [ -f \"$f\" ] || echo \"MISSING: $f\"; done";
+    assert!(!exec_mutation_should_incur_debt(command, &json!({"exit_code":0})));
+    assert_eq!(classify_shell_activity(tools::EXEC_COMMAND, &exec_command(command)), ShellActivity::Mutation);
+    for command in [
+        "[ -f \"$(touch marker)\" ]",
+        "[ -f \"${f:=value}\" ]",
+        "[ -f \"$f\" ] && touch marker",
+        "[ -f \"$f\" ] > marker",
+        "[ -f $f ]",
+        "[ -f \"$f\" -o -f \"$g\" ]",
+    ] {
+        assert!(exec_mutation_should_incur_debt(command, &json!({"exit_code":0})), "{command}");
+    }
+    assert!(exec_mutation_should_incur_debt(
+        "[ -f \"$f\" ]",
+        &json!({"exit_code":0,"modified_files":["README.md"]})
+    ));
 }

@@ -8,7 +8,7 @@ use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 
 use super::layout_mode::LayoutMode;
 use super::panel::{PanelStyles, new_panel};
-use crate::tui::core_tui::types::LocalAgentEntry;
+use crate::tui::core_tui::types::{ActivePlanEntry, LocalAgentEntry};
 use crate::tui::ui::tui::session::styling::SessionStyles;
 
 /// Ellipsis character used to indicate truncated text.
@@ -44,6 +44,7 @@ fn render_static_list(lines: Vec<Line<'static>>, area: Rect, buf: &mut Buffer) {
 /// Sidebar section types for organizing content
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarSection {
+    Plan,
     LocalAgents,
     Queue,
     Context,
@@ -71,6 +72,7 @@ pub struct SidebarWidget<'a> {
     styles: &'a SessionStyles,
     queue_items: Vec<String>,
     local_agents: Vec<LocalAgentEntry>,
+    active_plan: Option<ActivePlanEntry>,
     context_info: Option<&'a str>,
     recent_tools: Vec<String>,
     active_section: Option<SidebarSection>,
@@ -84,6 +86,7 @@ impl<'a> SidebarWidget<'a> {
             styles,
             queue_items: Vec::new(),
             local_agents: Vec::new(),
+            active_plan: None,
             context_info: None,
             recent_tools: Vec::new(),
             active_section: None,
@@ -101,6 +104,12 @@ impl<'a> SidebarWidget<'a> {
     #[must_use]
     pub(crate) fn local_agents(mut self, entries: Vec<LocalAgentEntry>) -> Self {
         self.local_agents = entries;
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn plan(mut self, entry: Option<ActivePlanEntry>) -> Self {
+        self.active_plan = entry;
         self
     }
 
@@ -130,6 +139,52 @@ impl<'a> SidebarWidget<'a> {
     pub(crate) fn mode(mut self, mode: LayoutMode) -> Self {
         self.mode = mode;
         self
+    }
+
+    fn render_plan_section(&self, area: Rect, buf: &mut Buffer) {
+        let is_active = self.active_section == Some(SidebarSection::Plan);
+        let inner = new_panel(self.styles)
+            .title("Plan")
+            .active(is_active)
+            .mode(self.mode)
+            .render_and_get_inner(area, buf);
+
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        let Some(plan) = self.active_plan.as_ref() else {
+            let empty_text = Paragraph::new("No active plan").style(self.styles.muted_style());
+            empty_text.render(inner, buf);
+            return;
+        };
+
+        let max_width = inner.width.saturating_sub(2) as usize;
+        let mut lines = vec![
+            Line::from(Span::styled(truncate_string(&plan.status, max_width), self.styles.accent_style())),
+            Line::from(Span::styled(truncate_string(&plan.file_path, max_width), self.styles.muted_style())),
+            Line::from(Span::styled(
+                if plan.total_steps == 1 {
+                    "1 step".to_string()
+                } else {
+                    format!("{} steps", plan.total_steps)
+                },
+                self.styles.default_style(),
+            )),
+        ];
+        for (index, title) in plan.step_titles.iter().enumerate() {
+            let prefix = format!("{}. ", index + 1);
+            lines.push(Line::from(vec![
+                Span::styled(prefix, self.styles.accent_style()),
+                Span::styled(truncate_string(title, max_width.saturating_sub(3)), self.styles.default_style()),
+            ]));
+        }
+        let remaining = plan.remaining_step_count();
+        if remaining > 0 {
+            lines.push(Line::from(Span::styled(format!("+{remaining} more"), self.styles.muted_style())));
+        }
+
+        render_static_list(lines, inner, buf);
     }
 
     fn render_queue_section(&self, area: Rect, buf: &mut Buffer) {
@@ -280,6 +335,9 @@ impl Widget for SidebarWidget<'_> {
         let has_tools = !self.recent_tools.is_empty();
 
         let mut sections = Vec::<(SidebarSection, u32)>::new();
+        if self.active_plan.is_some() {
+            sections.push((SidebarSection::Plan, 4));
+        }
         if has_local_agents {
             sections.push((SidebarSection::LocalAgents, 7));
         }
@@ -300,6 +358,7 @@ impl Widget for SidebarWidget<'_> {
 
         for ((section, _), chunk) in sections.into_iter().zip(chunks.iter()) {
             match section {
+                SidebarSection::Plan => self.render_plan_section(*chunk, buf),
                 SidebarSection::LocalAgents => self.render_local_agents_section(*chunk, buf),
                 SidebarSection::Queue => self.render_queue_section(*chunk, buf),
                 SidebarSection::Context => self.render_context_section(*chunk, buf),
@@ -319,10 +378,28 @@ fn truncate_string(s: &str, max_width: usize) -> String {
 mod tests {
     use super::SidebarWidget;
     use crate::tui::core_tui::session::styling::SessionStyles;
+    use crate::tui::core_tui::types::ActivePlanEntry;
+    use crate::tui::core_tui::widgets::LayoutMode;
     use crate::tui::ui::tui::types::InlineTheme;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use ratatui::widgets::Widget;
+
+    fn sample_plan(step_titles: &[&str], total_steps: usize) -> ActivePlanEntry {
+        ActivePlanEntry {
+            file_path: ".vtcode/plans/task.md".to_string(),
+            status: "approved -> build".to_string(),
+            step_titles: step_titles.iter().map(|title| title.to_string()).collect(),
+            total_steps,
+        }
+    }
+
+    fn rendered_sidebar_text(buf: &Buffer, area: Rect) -> String {
+        (0..area.height)
+            .map(|row| (0..area.width).map(|col| buf[(col, row)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 
     #[test]
     fn sidebar_renders_local_agent_entries() {
@@ -340,7 +417,7 @@ mod tests {
                     agent_name: "rust-engineer".to_string(),
                     color: Some("cyan".to_string()),
                     kind: crate::tui::core_tui::types::LocalAgentKind::Delegated,
-                    status: "running".to_string(),
+                    status: crate::tui::core_tui::types::LocalAgentStatus::Running,
                     summary: None,
                     preview: "assistant: reviewing the workspace".to_string(),
                     transcript_path: None,
@@ -353,7 +430,7 @@ mod tests {
                     agent_name: "reviewer".to_string(),
                     color: None,
                     kind: crate::tui::core_tui::types::LocalAgentKind::Background,
-                    status: "starting".to_string(),
+                    status: crate::tui::core_tui::types::LocalAgentStatus::Starting,
                     summary: None,
                     preview: "waiting for output".to_string(),
                     transcript_path: None,
@@ -387,7 +464,7 @@ mod tests {
                 agent_name: "rust-engineer".to_string(),
                 color: Some("cyan".to_string()),
                 kind: crate::tui::core_tui::types::LocalAgentKind::Delegated,
-                status: "running".to_string(),
+                status: crate::tui::core_tui::types::LocalAgentStatus::Running,
                 summary: None,
                 preview: "thinking: Inspecting the diff carefully".to_string(),
                 transcript_path: None,
@@ -403,5 +480,87 @@ mod tests {
         assert!(rendered.contains("Local Agents"));
         assert!(rendered.contains("rust-engineer"));
         assert!(rendered.contains("Inspecting the diff carefully"));
+    }
+
+    #[test]
+    fn sidebar_renders_active_plan_section() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 20);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles)
+            .plan(Some(sample_plan(&["Add sidebar panel", "Wire approval handoff"], 2)))
+            .context_info("Ready")
+            .render(area, &mut buf);
+
+        let rendered = rendered_sidebar_text(&buf, area);
+        assert!(rendered.contains("Plan"), "missing Plan panel title: {rendered}");
+        assert!(rendered.contains("approved -> build"), "missing status badge: {rendered}");
+        assert!(rendered.contains(".vtcode/plans/task.md"), "missing plan path: {rendered}");
+        assert!(rendered.contains("2 steps"), "missing step total: {rendered}");
+        assert!(rendered.contains("Add sidebar panel"), "missing step 1: {rendered}");
+        assert!(rendered.contains("Wire approval handoff"), "missing step 2: {rendered}");
+        assert!(!rendered.contains("more"), "nothing truncated, no +N row expected: {rendered}");
+    }
+
+    #[test]
+    fn sidebar_shows_more_row_when_plan_steps_truncated() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 20);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles)
+            .plan(Some(sample_plan(&["Add sidebar panel", "Wire approval handoff"], 5)))
+            .context_info("Ready")
+            .render(area, &mut buf);
+
+        let rendered = rendered_sidebar_text(&buf, area);
+        assert!(rendered.contains("5 steps"), "missing step total: {rendered}");
+        assert!(rendered.contains("+3 more"), "missing truncation row: {rendered}");
+    }
+
+    #[test]
+    fn sidebar_plan_step_count_uses_singular_for_one_step() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 20);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles)
+            .plan(Some(sample_plan(&["Only step"], 1)))
+            .context_info("Ready")
+            .render(area, &mut buf);
+
+        let rendered = rendered_sidebar_text(&buf, area);
+        assert!(rendered.contains("1 step"), "missing singular count: {rendered}");
+        assert!(!rendered.contains("1 steps"), "must not pluralize one step: {rendered}");
+    }
+
+    #[test]
+    fn sidebar_omits_plan_section_without_active_plan() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 20);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles).context_info("Ready").render(area, &mut buf);
+
+        let rendered = rendered_sidebar_text(&buf, area);
+        assert!(!rendered.contains("Plan"), "no plan section expected: {rendered}");
+        assert!(rendered.contains("Context"), "other sections must still render: {rendered}");
+    }
+
+    #[test]
+    fn sidebar_plan_hidden_outside_wide_mode() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 20);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles)
+            .plan(Some(sample_plan(&["Add sidebar panel"], 1)))
+            .context_info("Ready")
+            .mode(LayoutMode::Standard)
+            .render(area, &mut buf);
+
+        let rendered = rendered_sidebar_text(&buf, area);
+        assert!(rendered.trim().is_empty(), "sidebar must not render outside Wide: {rendered}");
     }
 }

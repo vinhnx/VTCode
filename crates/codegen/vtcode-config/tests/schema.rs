@@ -30,6 +30,10 @@ fn schema_helpers_produce_consistent_output() {
 
     assert!(as_string.contains("\"vim_mode\""), "pretty schema output should include ui.vim_mode");
     assert!(
+        as_string.contains("\"busy_enter_behavior\""),
+        "pretty schema output should include ui.busy_enter_behavior"
+    );
+    assert!(
         as_string.contains("\"notification\""),
         "pretty schema output should include hooks.lifecycle.notification"
     );

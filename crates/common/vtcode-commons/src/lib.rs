@@ -38,6 +38,7 @@ pub mod exclusions;
 pub mod file_input;
 pub mod formatting;
 pub mod fs;
+pub mod history_scope;
 pub mod http;
 pub mod image;
 pub mod interjection;
@@ -48,6 +49,7 @@ pub mod llm;
 pub mod lr_map;
 pub mod memory;
 pub mod message_metadata;
+pub mod message_timestamp;
 pub mod misconfiguration;
 pub mod modal_hints;
 pub mod model_family;
@@ -55,6 +57,7 @@ pub mod paths;
 pub mod preview;
 pub mod program_status;
 pub mod project;
+pub mod prompt_history;
 pub mod provider;
 pub mod reasoning;
 pub mod reference;
@@ -76,8 +79,11 @@ pub mod thread_safety;
 pub mod tokens;
 pub mod tool_types;
 pub mod trace_flush;
+pub mod tracker_title;
+pub mod tty;
 pub mod ui_protocol;
 pub mod unicode;
+pub mod utf8_stream;
 pub mod utils;
 pub mod validation;
 pub mod vtcode_paths;
@@ -107,9 +113,10 @@ pub use modal_hints::{
     APPROVAL_NAVIGATE_CANCEL, APPROVAL_NAVIGATE_DENY, APPROVAL_NAVIGATE_STOP, choose_handling_line, truncate_modal_text,
 };
 pub use paths::{
-    PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, canonicalize, canonicalize_async,
-    file_name_from_path, is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
+    PathExt, PathResolver, PathScope, StrPathExt, WorkspacePathDisplay, WorkspacePaths, canonicalize,
+    canonicalize_async, file_name_from_path, is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
     safe_archive_relative_path, validate_no_escaping_symlink_ancestors, workspace_relative_display,
+    workspace_relative_slash,
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};
@@ -117,8 +124,12 @@ pub use stop_hints::{STOP_HINT_COMPACT, STOP_HINT_INLINE, with_stop_hint};
 pub use styling::{ColorPalette, DiffColorPalette, render_styled};
 pub use task_guard::TaskGuard;
 pub use telemetry::{NoopTelemetry, TelemetrySink};
-pub use tokens::{estimate_tokens, format_token_count, truncate_to_tokens};
+pub use tokens::{
+    CHARS_PER_TOKEN, estimate_tokens, format_token_count, heuristic_tokens_from_byte_len,
+    heuristic_tokens_from_byte_len_u64, truncate_to_tokens,
+};
 pub use unicode::{UNICODE_MONITOR, UnicodeMonitor, UnicodeValidationContext};
+pub use utf8_stream::Utf8StreamDecoder;
 pub use validation::{EmptyCollectionError, NonEmptySlice, NonEmptyString, NonEmptyVec};
 pub use vtcode_paths::{
     MigrationEntry, MigrationFailure, MigrationReport, MigrationSkip, MigrationSkipReason, VtCodePaths,

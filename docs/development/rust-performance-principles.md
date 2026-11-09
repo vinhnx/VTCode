@@ -18,6 +18,8 @@ optimizer, the standard library, and day-to-day coding decisions.
 - [When Rust Can Be Slower Than C/C++](#when-rust-can-be-slower-than-cc)
 - [Breaking Inter-Iteration Dependencies (Value Speculation)](#breaking-inter-iteration-dependencies-value-speculation)
 - [Branchless Programming: Removing Unpredictable Branches](#branchless-programming-removing-unpredictable-branches)
+- [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows)
+- [Memory Latency & Cache-First Aggregation](#memory-latency--cache-first-aggregation)
 - [Checklist for VT Code Hot Paths](#checklist-for-vt-code-hot-paths)
 
 ---
@@ -207,7 +209,7 @@ type — a nested hierarchy can dominate a binary's code size (`uv` reclaimed ~1
 When a type's `Debug` is large or formatted on a fan-out path:
 
 - Annotate its `Debug::fmt` with `#[inline(never)]` — either by hand-writing the `impl`
-  (as [`LLMError`/`LLMErrorMetadata`](../../crates/common/vtcode-commons/src/llm.rs) already
+  (as [`LLMError`/`LLMErrorMetadata`](../../crates/common/vtcode-commons/src/llm/mod.rs) already
   do) or with the `DebugNoInline` derive from `vtcode-macros`.
 - Leave small, hot, leaf `Debug` impls derived. `#[inline(never)]` on a tiny struct whose
   `Debug` is called in a tight loop can make things slower.
@@ -619,6 +621,93 @@ survivor sets, byte totals, empty/no-match/all-match boundaries, and value relea
 references. These deterministic checks establish eliminated key clones, not an end-to-end latency
 improvement. Tool-result invalidation regressions cover callers that discard stale filesystem data.
 
+## Hoist What the Loop Already Knows
+
+The largest directory-listing win measured here was not codegen, allocation, or a tighter algorithm. It was
+deleting syscalls the loop did not need, because the iterator had already answered the question.
+
+Two shapes recur, and both are invisible in a single-call code review:
+
+1. **A helper re-resolves the root on every call.** `workspace_relative_display(root, path)` canonicalizes
+   `root` _and_ `path` per invocation. That is correct but redundant for callers rendering one path, and
+   quadratic-ish for callers rendering a directory: the root's answer cannot change mid-loop.
+
+   ```rust
+   // before: two realpath calls per entry
+   for entry in entries {
+       let display = workspace_relative_display(&root, entry.path());
+   }
+
+   // after: the root is resolved once; only the unknown leaf is resolved
+   let display = WorkspacePathDisplay::new(&root);
+   for entry in entries {
+       let display = display.render_entry(entry.path(), entry.file_type());
+   }
+   ```
+
+   Measured on 102 entries: 2.50 ms → 1.27 ms hoisting the root, → 0.10 ms once the walker's own
+   `FileType` removed the leaf `realpath` too. Same output for every entry, asserted in
+   `path_display_matches_one_shot_render_for_many_entries`.
+
+2. **A predicate stats for data the iterator already returned.** `read_dir` yields each entry's type;
+   `Path::is_dir()` then asks the kernel again. Anything shaped like
+   `matcher.matched(path, path.is_dir())` inside a `read_dir`/walker loop is paying one syscall per entry
+   for a fact in hand — measured at ~2 µs/entry versus ~14 ns for the dirent type. Use
+   `vtcode_commons::walk::{entry_is_dir, entry_is_file}` rather than re-deriving it, and pass a known
+   type to `VTCodeGitignore::should_exclude_with_file_type` so the matcher does not stat either.
+   Both helpers and the matcher still resolve symlinks, because a link's own type says nothing about
+   its target.
+
+The safety rule that makes this non-negotiable: **only skip a resolution when you can prove it cannot
+change the answer.** A walker with `follow_links(false)` cannot produce symlinked ancestors, so the
+lexical strip equals the resolved strip. A symlink's _own_ type proves nothing about its target, so
+symlinks and unknown types must keep the resolving path — `WorkspacePathDisplay::render_entry` and
+`VTCodeGitignore::should_exclude_with_file_type` both fall back for exactly that case, and
+`path_display_entry_fast_path_defers_for_symlinks` pins it.
+
+A related trap: resolving once is not the same as stripping lexically. `render` normalizes `.`/`..`
+while `strip_prefix` does not, so a fast path must reject paths containing those components rather than
+emit a differently-shaped path (`path_display_entry_fast_path_rejects_dot_components`).
+
+Not every such redundancy is worth removing. Measure first. In this codebase a `read_dir` of the
+workspace root plus a `to_lowercase()` per entry cost 0.05 ms, and one `ensure_path_within_workspace_resolved`
+cost 0.44 ms — real numbers, but paid once per tool call and dwarfed by the I/O they guard. Leaving them
+alone is the correct KISS outcome; the syscall removes worth doing are the ones multiplied by entry count.
+
+## Memory Latency & Cache-First Aggregation
+
+A CPU reporting 100% utilization may be doing little useful work: it can be stalled waiting on memory. A modern core
+executes ~4-8 instructions/ns, while a DRAM access costs ~50-100ns — roughly 400-800 instructions per round-trip. The
+cache hierarchy exists to hide this gap:
+
+| Level | Latency  | Size                  | Instructions per access |
+| ----- | -------- | --------------------- | ----------------------- |
+| L1    | ~1 ns    | ~64 KB                | ~4-8                    |
+| L2    | ~3-4 ns  | ~1 MB                 | ~15-30                  |
+| L3    | ~10-15 ns| up to a few hundred MB| ~50-100                 |
+| DRAM  | ~50-100ns| GBs                   | ~400-800                |
+
+The GROUP BY lesson from Pivot (see References): a single ever-growing `HashTable` over millions of distinct keys turns
+nearly every probe into a cold DRAM hit. Partitioning the input by hash prefix into N small buckets, then aggregating
+each bucket with a small cache-fitting `HashMap` (reusing the stored hash), executes _more_ total instructions but far
+_fewer_ DRAM accesses — and wins decisively (50% to 23% memory-stall slots, 4.5 GB to 1.5 GB DRAM traffic).
+
+### VT Code guidelines
+
+- **Diagnose stalls before rewriting grouping code.** Cache-miss and instruction counters (see
+  `scripts/perf/memstat.sh`) tell a compute-bound loop from a memory-stalled one; wall time alone cannot. A "100% CPU"
+  loop with a high miss rate and few instructions retired per cycle is memory-bound.
+- **Keep aggregation working sets cache-sized.** Prefer partition-then-aggregate (hash-prefix buckets, per-worker heaps,
+  chunked rayon scoring) over one giant map. `vtcode-indexer` `file_search::query` already scores in parallel rayon
+  chunks with per-worker top-K heaps merged afterward — follow that shape for new large-N aggregations.
+- **Reuse hashes across phases.** Hash once and carry `(hash, key)` into the per-partition map instead of rehashing per
+  phase.
+- **Trading more CPU for less DRAM is nearly always a win — once a profile proves the loop is memory-bound.** For VT
+  Code's small-N, I/O-paced sites (tool catalog, session facts, `max_results`-bounded candidates), the simple
+  single-pass shape stays; do not radix-partition without a measured hotspot.
+- **No portable prefetch on stable.** Cache-prefetch intrinsics are nightly-only, so prefer chunked/partitioned
+  iteration, which achieves the same locality with stable code.
+
 ## Checklist for VT Code Hot Paths
 
 When reviewing or writing a hot path in vtcode:
@@ -660,6 +749,23 @@ When reviewing or writing a hot path in vtcode:
 - [ ] Is a runtime-derived pattern (config glob, deny list) recompiled per call instead of memoized
       behind a signature-keyed cache?
 - [ ] Does any per-unit path acquire a global lock or re-read shared state per element?
+- [ ] Does a per-entry loop call a helper that re-derives a fact the iterator already handed over —
+      an entry's `FileType`, or the workspace root's canonical form? See
+      [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows).
+- [ ] For grouping/aggregation over a large key space, is the working set cache-sized — partition-then-aggregate
+      with hash reuse — instead of one ever-growing map? Small-N sites keep the simple shape. See
+      [Memory Latency](#memory-latency--cache-first-aggregation).
+- [ ] Was a suspected memory-bound loop diagnosed with cache-miss/instruction counters (`scripts/perf/memstat.sh`),
+      not wall time alone?
+- [ ] Does a per-entry/per-byte loop allocate where a pre-sized buffer plus `write!` would do —
+      `format!` inside the loop, or a `String` tag for a two-state fact? Render labels at
+      emission from a `bool`/enum instead (sysinfo read-and-apply pass, 2026-11-08).
+- [ ] Does a traversal read content before exhausting the cheap metadata the iterator already
+      provides (dirent `FileType`, file name, size)? Stat/open/read only survivors (sysinfo
+      `readlink`-before-`fdinfo` lesson).
+- [ ] Does per-item work recompute a fact shared with a parent/sibling pass? Copy or hoist it
+      instead of re-deriving (sysinfo fd-table lesson; see
+      [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows)).
 - [ ] Has the performance been measured against baseline before/after?
 
 ---
@@ -683,6 +789,13 @@ When reviewing or writing a hot path in vtcode:
 - [Replacing a Rust Enum with a 64-bit Word](https://pointersgonewild.com/2026-08-25-replacing-a-rust-enum-with-a-64-bit-word/)
   — 2026 (source of the Enum Footprint section: discriminant/alignment padding, boxing sparse payloads, and the measured
   17% speedup / 37% peak-RSS reduction from shrinking a bulk-stored value type).
+<!-- markdownlint-disable-next-line MD013 -->
+- [sysinfo: retrieving process GPU usage information](https://blog.guillaume-gomez.fr/articles/2026-10-28+sysinfo%3A+retrieving+process+GPU+usage+information) —
+  Guillaume Gomez, 2026 (per-OS retrieval: PDH queries, `/proc` fdinfo drm keys, IORegistry walk).
+<!-- markdownlint-disable-next-line MD013 -->
+- [sysinfo: fixing performance to retrieve process GPU usage](https://blog.guillaume-gomez.fr/articles/2026-10-30+sysinfo%3A+fixing+performance+to+retrieve+process+GPU+usage) —
+  Guillaume Gomez, 2026 (source of the traversal checklist items above: cheap-metadata-first
+  filtering, batched syscalls, buffer reuse, and the fd-table copy-don't-recompute win).
 - [TIL: Rust's derive often implies inline](https://yossarian.net/til/post/rust-s-derive-often-implies-inline/) —
   yossarian.net (source of the Derived trait impls subsection: derive emits `#[inline]`; nested error `Debug` impls
   inline transitively; `uv` reclaimed ~160 KB with an `#[inline(never)]` Debug derive).
@@ -693,6 +806,9 @@ When reviewing or writing a hot path in vtcode:
   blyxyas, 2026 (source of the Per-Unit Cost of Expensive Work section: per-expression global-lock and
   interner acquisition behind an innocuous helper, the pre-expansion rewrite, and the maintainer duty to
   make the bad shape hard to write — enforced here by the `no-per-call-regex-literal` ast-grep rule).
+- [It's the memory latency, stupid](https://pivotlake.io/blog/its-the-memory-latency-stupid) —
+  Pivot/Epsio Labs, 2026 (source of the Memory Latency section: cache table, GROUP BY radix partitioning,
+  and the more-CPU-for-less-DRAM trade).
 - VT Code internal: `docs/development/performance.md`
 - VT Code internal: `docs/development/performance-hasher-policy.md`
 - VT Code internal: `docs/development/async-performance-audit.md`

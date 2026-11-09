@@ -20,7 +20,58 @@ impl FixedRowSizeCache {
     }
 }
 
+/// Stable per-kind slug for change-filter element ids.
+fn change_kind_slug(kind: DiffFileKind) -> &'static str {
+    match kind {
+        DiffFileKind::Add => "added",
+        DiffFileKind::Delete => "deleted",
+        DiffFileKind::Update => "modified",
+    }
+}
+
+/// Localized name for a change kind, shared by rows and the kind filter.
+fn change_kind_name(kind: DiffFileKind) -> String {
+    match kind {
+        DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
+        DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
+        DiffFileKind::Update => rust_i18n::t!("app.inspector.kind_modified").to_string(),
+    }
+}
+
+/// One-letter badge and tone for a change kind, shared by rows and the filter.
+fn change_kind_badge(
+    kind: DiffFileKind,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> (&'static str, gpui_kit::Hsla) {
+    match kind {
+        DiffFileKind::Add => ("A", colors.success),
+        DiffFileKind::Delete => ("D", colors.danger),
+        DiffFileKind::Update => ("M", colors.muted_foreground),
+    }
+}
+
 impl DesktopView {
+    /// Entry indexes matching the active kind filter, newest first.
+    pub(super) fn visible_change_indexes(&self) -> Vec<usize> {
+        let filter = self.change_kind_filter;
+        self.changes
+            .entries()
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| filter.is_none_or(|kind| kind == entry.kind))
+            .map(|(index, _)| index)
+            .collect()
+    }
+
+    /// Toggle the Changes list kind filter; selecting the active kind clears it.
+    pub(super) fn toggle_change_kind_filter(&mut self, kind: DiffFileKind) {
+        self.change_kind_filter = if self.change_kind_filter == Some(kind) {
+            None
+        } else {
+            Some(kind)
+        };
+    }
+
     fn select_inspector_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.update_inspector_tab(index, false, Some(window), cx);
     }
@@ -29,14 +80,59 @@ impl DesktopView {
         self.update_inspector_tab(index, true, Some(window), cx);
     }
 
+    /// Tabs on the inspector rail. Plan joins only while a plan approval
+    /// carries viewable markdown and Tasks joins only with tracker activity,
+    /// so the five persistent tabs keep their no-scroll fit at default width.
+    pub(super) fn visible_inspector_tabs(&self) -> Vec<InspectorTab> {
+        InspectorTab::ALL
+            .into_iter()
+            .filter(|tab| *tab != InspectorTab::Plan || self.has_pending_plan_proposal())
+            .filter(|tab| *tab != InspectorTab::Tasks || self.tracker_snapshot.is_some())
+            .collect()
+    }
+
+    /// Whether a plan approval with viewable markdown currently waits. The
+    /// Plan tab's rail membership and selection fallback both key off this.
+    fn has_pending_plan_proposal(&self) -> bool {
+        has_viewable_plan_markdown(
+            self.interaction
+                .as_ref()
+                .and_then(|interaction| interaction.plan_markdown.as_deref()),
+        )
+    }
+
+    /// Drop a stranded conditional-tab selection when its content leaves.
+    /// Call after every interaction replacement or clear (Plan) and every
+    /// tracker snapshot clear (Tasks).
+    pub(super) fn reset_hidden_inspector_tab_if_stranded(&mut self) {
+        if self.inspector_tab == InspectorTab::Plan && !self.has_pending_plan_proposal() {
+            self.inspector_tab = InspectorTab::Changes;
+        }
+        if self.inspector_tab == InspectorTab::Tasks && self.tracker_snapshot.is_none() {
+            self.inspector_tab = InspectorTab::Changes;
+        }
+    }
+
     pub(super) fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
-        if let Some(index) = InspectorTab::ALL.iter().position(|candidate| *candidate == tab) {
+        if let Some(index) = self.visible_inspector_tabs().iter().position(|candidate| *candidate == tab) {
             self.update_inspector_tab(index, true, None, cx);
         }
     }
 
+    /// Reveal the inspector on one tab without moving focus, for transcript
+    /// CTAs that navigate beside the reading position. An explicit reveal
+    /// request also exits Zen mode: the inspector never renders while Zen
+    /// holds, so keeping Zen would flip invisible state. Postcondition:
+    /// `inspector_open` holds, `inspector_tab == tab`, and `zen_mode` is off.
+    pub(super) fn open_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
+        self.zen_mode = false;
+        self.inspector_open = true;
+        self.set_inspector_tab(tab, cx);
+    }
+
     fn update_inspector_tab(&mut self, index: usize, reveal: bool, focus: Option<&mut Window>, cx: &mut Context<Self>) {
-        if let Some(tab) = InspectorTab::ALL.get(index) {
+        let visible = self.visible_inspector_tabs();
+        if let Some(tab) = visible.get(index) {
             self.inspector_tab = *tab;
             if reveal {
                 self.inspector_tabs_scroll.scroll_to_item(index);
@@ -49,11 +145,9 @@ impl DesktopView {
     }
 
     fn cycle_inspector_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let count = InspectorTab::ALL.len();
-        let current = InspectorTab::ALL
-            .iter()
-            .position(|tab| *tab == self.inspector_tab)
-            .unwrap_or_default();
+        let visible = self.visible_inspector_tabs();
+        let count = visible.len();
+        let current = visible.iter().position(|tab| *tab == self.inspector_tab).unwrap_or_default();
         let index = if forward {
             (current + 1) % count
         } else {
@@ -63,8 +157,9 @@ impl DesktopView {
     }
 
     /// Right-hand context inspector: derived Changes, Files, Activity,
-    /// Output, and Utilities views over the same transcript the conversation
-    /// renders. The panel is a separated card beside the workspace surface,
+    /// Output, Utilities, and Plan views over the same transcript the
+    /// conversation renders. The panel is a separated card beside the
+    /// workspace surface,
     /// so it carries the main-container canvas fill at the side-panel radius
     /// tier while every tab body shares [`inspector_tab_body`].
     pub(super) fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -86,8 +181,10 @@ impl DesktopView {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
             InspectorTab::Files => self.render_inspector_files_tab(cx),
             InspectorTab::Activity => self.render_activity_tab(&colors, cx),
+            InspectorTab::Tasks => self.render_tasks_tab(&colors, cx),
             InspectorTab::Output => self.render_output_tab(cx),
             InspectorTab::Utilities => self.render_utilities(cx),
+            InspectorTab::Plan => self.render_plan_tab(cx),
         };
         panel
             .child(content)
@@ -101,12 +198,83 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// Tab rail header: the segmented control keeps the compact size (five
-    /// tabs share the rail) with tracked reveal for keyboard and
-    /// programmatic selection. The rail shares the `px_3` content spine,
-    /// and the tighter bottom keeps the tabs attached to their panel.
+    /// Plan-approval proposal: the shared viewer over the pending
+    /// interaction's markdown. The tab only joins the rail while a plan
+    /// waits; the empty branch below is unreachable-by-construction
+    /// insurance so a stranded selection degrades gracefully, never blank.
+    fn render_plan_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let pane = inspector_tab_body().id("inspector-plan-tab").test_support();
+        let markdown = self
+            .interaction
+            .as_ref()
+            .and_then(|interaction| interaction.plan_markdown.as_deref())
+            .unwrap_or_default();
+        if !has_viewable_plan_markdown(Some(markdown)) {
+            return pane
+                .child(
+                    div()
+                        .id("inspector-plan-empty")
+                        .test_support()
+                        .w_full()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(empty_state(
+                            rust_i18n::t!("app.inspector.empty_plan_title").to_string(),
+                            rust_i18n::t!("app.inspector.empty_plan_description").to_string(),
+                            IconName::ListChecks,
+                        )),
+                )
+                .into_any_element();
+        }
+        pane.child(render_markdown_view(
+            "inspector-plan-proposal".to_string(),
+            markdown.into(),
+            MarkdownViewHeight::Fill,
+            cx,
+        ))
+        .into_any_element()
+    }
+
+    /// Tab rail header: folder tabs at the shared medium size with tracked
+    /// reveal for keyboard and programmatic selection, an overflow menu for
+    /// narrowed rails, and the close control in the bar suffix. The rail
+    /// shares the `px_3` content spine with no bottom gap, so the selected
+    /// tab joins the panel below it.
     fn render_inspector_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let inspector_view = cx.entity().downgrade();
+        let selected_tab = self.inspector_tab;
+        let visible_tabs = self.visible_inspector_tabs();
+        let overflow_label = rust_i18n::t!("app.inspector.inspector_tabs").to_string();
+        let overflow = desktop_button("inspector-tabs-menu")
+            .ghost()
+            .xsmall()
+            .dropdown_caret(true)
+            .accessibility_label(overflow_label.clone())
+            .tooltip(overflow_label)
+            .dropdown_menu(move |mut menu, _, _| {
+                for (index, tab) in visible_tabs.iter().enumerate() {
+                    let view = inspector_view.clone();
+                    menu = menu.item(
+                        gpui_kit::component::menu::PopupMenuItem::new(tab.label())
+                            .checked(*tab == selected_tab)
+                            .on_click(move |_, window, cx| {
+                                if let Some(view) = view.upgrade() {
+                                    view.update(cx, |view, cx| {
+                                        view.select_inspector_tab_from_keyboard(index, window, cx)
+                                    });
+                                }
+                            }),
+                    );
+                }
+                menu
+            })
+            // Right-edge trigger: keep the TopRight anchor Kit's menu button
+            // used so the popup opens leftward instead of past the panel.
+            .anchor(Anchor::TopRight);
         div()
             .id("inspector-navigation")
             .test_support()
@@ -119,7 +287,6 @@ impl DesktopView {
             .focus_visible(|style| style.border_color(colors.ring))
             .px_3()
             .pt_3()
-            .pb_2()
             .on_action(cx.listener(|view, _: &NextInspectorTab, window, cx| view.cycle_inspector_tab(true, window, cx)))
             .on_action(
                 cx.listener(|view, _: &PreviousInspectorTab, window, cx| view.cycle_inspector_tab(false, window, cx)),
@@ -128,7 +295,8 @@ impl DesktopView {
                 view.select_inspector_tab_from_keyboard(0, window, cx)
             }))
             .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
-                view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
+                let last = view.visible_inspector_tabs().len().saturating_sub(1);
+                view.select_inspector_tab_from_keyboard(last, window, cx)
             }))
             .child(
                 div()
@@ -136,13 +304,25 @@ impl DesktopView {
                     .test_support()
                     .track_focus(&self.inspector_focus)
                     .child(
-                        desktop_tab_bar("inspector-tabs")
-                            // Five tabs share a narrow rail, so the inspector keeps the
-                            // compact size; settings uses the medium default.
-                            .small()
+                        desktop_folder_tab_bar("inspector-tabs")
                             .track_scroll(&self.inspector_tabs_scroll)
+                            .suffix(
+                                div().flex().items_center().child(overflow).child(
+                                    desktop_button("close-inspector")
+                                        .icon(IconName::X)
+                                        .ghost()
+                                        .small()
+                                        .accessibility_label(rust_i18n::t!("app.navigation.hide_panel").to_string())
+                                        .tooltip_with_action(
+                                            rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
+                                            &ToggleInspector,
+                                            Some(key_context::DESKTOP),
+                                        )
+                                        .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
+                                ),
+                            )
                             .selected_index(
-                                InspectorTab::ALL
+                                self.visible_inspector_tabs()
                                     .iter()
                                     .position(|tab| *tab == self.inspector_tab)
                                     .unwrap_or_default(),
@@ -150,7 +330,11 @@ impl DesktopView {
                             .on_click(cx.listener(|view, index: &usize, window, cx| {
                                 view.select_inspector_tab(*index, window, cx)
                             }))
-                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            .children(
+                                self.visible_inspector_tabs()
+                                    .into_iter()
+                                    .map(|tab| Tab::new().label(tab.label())),
+                            ),
                     ),
             )
     }
@@ -225,6 +409,23 @@ impl DesktopView {
             .into_any_element();
         }
 
+        let filter = self.change_kind_filter;
+        let visible: Rc<Vec<usize>> = Rc::new(self.visible_change_indexes());
+        let mut kinds_present = Vec::with_capacity(3);
+        for kind in [DiffFileKind::Add, DiffFileKind::Delete, DiffFileKind::Update] {
+            // The active filter stays rendered even at zero so it never
+            // strands: the toggle that set it is always the toggle that clears it.
+            if filter == Some(kind) || self.changes.entries().iter().any(|entry| entry.kind == kind) {
+                kinds_present.push(kind);
+            }
+        }
+        let files_count = if filter.is_some() {
+            rust_i18n::t!("app.inspector.filtered_count", shown = visible.len(), total = self.changes.entries().len())
+                .to_string()
+        } else {
+            rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string()
+        };
+        let filtered_preview_count = self.changes.filtered_preview_count(filter);
         let totals = self.changes.totals();
         let files_header = panel_header(
             div()
@@ -234,7 +435,14 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .text_xs()
-                .child(rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string())
+                .child(
+                    div()
+                        .id("change-files-count")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(files_count.clone())
+                        .child(files_count),
+                )
                 .when_some(totals, |summary, (additions, deletions)| {
                     summary
                         .child(div().text_color(colors.success).child(format!("+{additions}")))
@@ -265,7 +473,7 @@ impl DesktopView {
                         )
                         .ghost()
                         .small()
-                        .desktop_disabled(self.changes.preview_count() < 2)
+                        .desktop_disabled(filtered_preview_count < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
                 )
                 .child(
@@ -279,17 +487,17 @@ impl DesktopView {
                         )
                         .ghost()
                         .small()
-                        .desktop_disabled(self.changes.preview_count() < 2)
+                        .desktop_disabled(filtered_preview_count < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
                 ),
         );
 
         let change_row_height = scale_row_height_for_ui_font(CHANGE_ROW_HEIGHT, cx.theme().font_size);
-        let change_sizes = self.change_row_sizes.get(self.changes.entries().len(), change_row_height);
+        let change_sizes = self.change_row_sizes.get(visible.len(), change_row_height);
         let max_height = if expanded { 220. } else { 112. };
         let mut visible_rows = 0;
         let mut list_height = 0.;
-        while visible_rows < self.changes.entries().len() && list_height + change_row_height <= max_height {
+        while visible_rows < visible.len() && list_height + change_row_height <= max_height {
             visible_rows += 1;
             list_height += change_row_height;
         }
@@ -312,7 +520,8 @@ impl DesktopView {
                 v_virtual_list(cx.entity(), "change-virtual-list", change_sizes, move |view, visible_range, _, cx| {
                     visible_range
                         .filter_map(|index| {
-                            let entry = view.changes.entries().get(index)?;
+                            let entry_index = visible.get(index)?;
+                            let entry = view.changes.entries().get(*entry_index)?;
                             let path = entry.path.clone();
                             let selected = view.selected_change.as_deref() == Some(entry.path.as_str());
                             let preview_available = view.changes.has_preview(&path);
@@ -323,16 +532,8 @@ impl DesktopView {
                                 }
                                 _ => rust_i18n::t!("app.inspector.preview_unavailable").to_string(),
                             };
-                            let kind_label = match entry.kind {
-                                DiffFileKind::Add => ("A", change_row_colors.success),
-                                DiffFileKind::Delete => ("D", change_row_colors.danger),
-                                DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
-                            };
-                            let kind_name = match entry.kind {
-                                DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
-                                DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
-                                DiffFileKind::Update => rust_i18n::t!("app.inspector.kind_modified").to_string(),
-                            };
+                            let kind_label = change_kind_badge(entry.kind, &change_row_colors);
+                            let kind_name = change_kind_name(entry.kind);
                             let row_accessibility_label = format!("{kind_name} {path}, {file_summary}");
                             Some(
                                 div()
@@ -341,7 +542,7 @@ impl DesktopView {
                                     .role(gpui_kit::Role::ListItem)
                                     .aria_label(row_accessibility_label)
                                     .aria_position_in_set(index + 1)
-                                    .aria_size_of_set(view.changes.entries().len())
+                                    .aria_size_of_set(visible.len())
                                     .aria_selected(selected)
                                     .h(px(change_row_height))
                                     .w_full()
@@ -416,8 +617,54 @@ impl DesktopView {
                 .track_scroll(&self.change_list_scroll),
             )
             .child(Scrollbar::vertical(&self.change_list_scroll));
-        body = body
-            .child(diff_pane_group(div().w_full().flex().flex_col().child(files_header).child(change_list), colors));
+        let mut file_column = div().w_full().flex().flex_col().child(files_header);
+        // The filter only earns its row when kinds actually differ, but the row
+        // always stays while a filter is active so the toggle can clear it.
+        // Each button stays fully labeled so the row needs no group chrome.
+        if kinds_present.len() > 1 || filter.is_some() {
+            file_column = file_column.child(
+                div()
+                    .id("change-kind-filter")
+                    .test_support()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_3()
+                    .py_1()
+                    .children(kinds_present.iter().map(|kind| {
+                        let kind = *kind;
+                        let active = filter == Some(kind);
+                        let name = change_kind_name(kind);
+                        let (letter, tone) = change_kind_badge(kind, colors);
+                        let tooltip = if active {
+                            rust_i18n::t!("app.inspector.show_all_files").to_string()
+                        } else {
+                            rust_i18n::t!("app.inspector.filter_by_status", status = name.as_str()).to_string()
+                        };
+                        desktop_button(format!("change-filter-{}", change_kind_slug(kind)))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(div().text_xs().font_semibold().text_color(tone).child(letter))
+                                    .child(div().text_sm().child(name.clone())),
+                            )
+                            .accessibility_label(name)
+                            .tooltip(tooltip)
+                            .toggled(active)
+                            .selected(active)
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.toggle_change_kind_filter(kind);
+                                cx.notify();
+                            }))
+                    })),
+            );
+        }
+        body = body.child(diff_pane_group(file_column.child(change_list), colors));
 
         // Full syntax-highlighted diff of the selected file.
         if let (Some(path), Some(viewer)) = (self.selected_change.clone(), self.change_viewer.clone()) {
@@ -438,7 +685,6 @@ impl DesktopView {
                     ("review-unified", rust_i18n::t!(i18n::WORKSPACE_REVIEW_UNIFIED).to_string(), DiffMode::Unified),
                     ("review-split", rust_i18n::t!(i18n::WORKSPACE_REVIEW_SPLIT).to_string(), DiffMode::Split),
                 ] {
-                    let state = viewer.clone();
                     let selected_suffix = if mode == target {
                         rust_i18n::t!("app.inspector.selected_suffix").to_string()
                     } else {
@@ -457,7 +703,7 @@ impl DesktopView {
                             .ghost()
                             .small()
                             .when(mode == target, |button| button.bg(colors.secondary))
-                            .on_click(move |_, _, cx| state.update(cx, |state, cx| state.set_mode(target, cx))),
+                            .on_click(cx.listener(move |view, _, _, cx| view.set_inspector_diff_mode(target, cx))),
                     );
                 }
                 header = header
@@ -531,10 +777,12 @@ impl DesktopView {
                     .min_h_0()
                     .overflow_hidden()
                     .child(
-                        Diff::new(&viewer)
-                            .line_number(true)
-                            .soft_wrap(expanded)
-                            .text_color(diff_foreground),
+                        diff_preferences::apply_diff_appearance(
+                            Diff::new(&viewer),
+                            &self.preferences.diff,
+                            expanded || self.preferences.diff.soft_wrap(),
+                        )
+                        .text_color(diff_foreground),
                     ),
             );
             body = body
@@ -562,7 +810,7 @@ impl DesktopView {
         } else {
             rust_i18n::t!("app.workspace_review.session_description").to_string()
         };
-        route_page(
+        dismissable_route_page(
             div()
                 .id("diff-review-panel")
                 .test_support()
@@ -575,6 +823,9 @@ impl DesktopView {
                 .flex_col()
                 .rounded_xl()
                 .bg(colors.secondary)
+                // Inner presses stop here so the gutter only sees true
+                // background presses.
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_action(cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)))
                 .on_action(cx.listener(|view, _: &PreviousReviewChange, _, cx| view.navigate_review_change(false, cx)))
                 .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_workspace_review_file(true, cx)))
@@ -597,15 +848,17 @@ impl DesktopView {
                                 .child(div().text_xs().text_color(colors.muted_foreground).child(description)),
                         )
                         .child(
-                            desktop_button("close-diff-review")
-                                .icon(IconName::X)
-                                .accessibility_label(rust_i18n::t!("app.workspace_review.close_review").to_string())
-                                .tooltip(rust_i18n::t!("app.workspace_review.close_review").to_string())
-                                .ghost()
-                                .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
+                            desktop_dismiss_button(
+                                "close-diff-review",
+                                rust_i18n::t!("app.workspace_review.close_review").to_string(),
+                            )
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.request_panel_dismiss(window, cx);
+                            })),
                         ),
                 )
                 .child(content),
+            cx,
         )
         .into_any_element()
     }

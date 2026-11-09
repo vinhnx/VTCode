@@ -224,6 +224,7 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
                 search: None,
                 hotkeys: Vec::new(),
                 status: None,
+                plan_markdown: None,
             }),
             ctrl_c_state,
             ctrl_c_notify,

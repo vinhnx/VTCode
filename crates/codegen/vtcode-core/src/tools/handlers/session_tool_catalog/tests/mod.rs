@@ -22,9 +22,12 @@ fn contains_json_key(value: &Value, key: &str) -> bool {
 /// Serialize the on-wire tool schemas (the definitions the model actually
 /// receives) and estimate their token cost at ~4 chars/token, matching the
 /// convention in `estimate_schema_tokens` and the first-request budget test
-/// in `tools/registry/builtins.rs`. Deferred tools (`defer_loading ==
-/// Some(true)`) are omitted under the client-local policy, so they never
-/// reach the wire payload and are excluded here.
+/// in `tools/registry/builtins.rs`. Rounds up like the canonical
+/// `vtcode_commons::tokens::heuristic_tokens_from_byte_len` but spells the
+/// division literally so this oracle stays independent of the helper.
+/// Deferred tools (`defer_loading == Some(true)`) are omitted under the
+/// client-local policy, so they never reach the wire payload and are
+/// excluded here.
 fn on_wire_schema_tokens(catalog: &SessionToolCatalog, config: SessionToolsConfig) -> usize {
     #[derive(Serialize)]
     struct Estimate<'a> {
@@ -48,7 +51,7 @@ fn on_wire_schema_tokens(catalog: &SessionToolCatalog, config: SessionToolsConfi
                 description: &entry.description,
                 parameters: &entry.parameters,
             })
-            .map(|s| s.len() / 4)
+            .map(|s| s.len().div_ceil(4))
             .unwrap_or(0)
         })
         .sum()

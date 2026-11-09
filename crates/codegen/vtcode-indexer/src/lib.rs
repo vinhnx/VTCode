@@ -26,7 +26,7 @@ mod storage;
 pub use storage::{IndexStorage, MarkdownIndexStorage};
 
 use anyhow::Result;
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use ignore::{DirEntry, Walk};
 use rayon::prelude::*;
 use regex::Regex;
@@ -398,8 +398,8 @@ impl SimpleIndexer {
             }
         };
 
-        let cache_key = file_path.to_string_lossy().into_owned();
-        if let Some(cached) = self.index_cache.get(cache_key.as_str())
+        let cache_key = file_path.to_string_lossy();
+        if let Some(cached) = self.index_cache.get(cache_key.as_ref())
             && self.should_process_file_path_with_metadata(file_path, &metadata)
             && let Ok(modified) = metadata.modified()
             && let Ok(elapsed) = modified.duration_since(SystemTime::UNIX_EPOCH)
@@ -417,14 +417,33 @@ impl SimpleIndexer {
     /// Whether the walked entries differ from the cached entries under
     /// `dir_path`. Deletions show up here; additions and content changes set
     /// `rebuilt_any` in [`Self::cached_or_built_index`] instead.
+    ///
+    /// Compares by count plus membership instead of materializing two `HashSet`s.
+    /// Requires: `entries` holds at most one entry per path, as produced by the
+    /// [`Self::index_directory`] walker loop — equal counts plus every walked path
+    /// present in the cache then means the sets match.
+    /// Uniqueness precondition shared by [`Self::cached_subdirectory_differs`].
+    #[cfg(debug_assertions)]
+    fn walked_paths_are_unique(entries: &[FileIndex]) -> bool {
+        let mut seen = std::collections::HashSet::new();
+        entries.iter().all(|entry| seen.insert(entry.path.as_str()))
+    }
+
+    #[must_use]
     fn cached_subdirectory_differs(&self, dir_path: &Path, entries: &[FileIndex]) -> bool {
-        let walked = entries.iter().map(|entry| entry.path.as_str()).collect::<HashSet<_>>();
-        self.index_cache
+        debug_assert!(
+            Self::walked_paths_are_unique(entries),
+            "cached_subdirectory_differs requires at most one entry per path"
+        );
+        let cached_count = self
+            .index_cache
             .keys()
             .filter(|path| Path::new(path).starts_with(dir_path))
-            .map(String::as_str)
-            .collect::<HashSet<_>>()
-            != walked
+            .count();
+        if cached_count != entries.len() {
+            return true;
+        }
+        entries.iter().any(|entry| !self.index_cache.contains_key(entry.path.as_str()))
     }
 
     /// Discover all files in directory recursively without indexing them.

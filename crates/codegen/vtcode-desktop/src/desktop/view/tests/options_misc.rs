@@ -166,7 +166,7 @@ fn cli_settings_reload_button_and_action_share_the_transition_guard(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.click("reload-cli-settings", cx);
         assert!(matches!(requests.try_recv(), Ok(BackendCommand::Stop)));
         assert!(view.read(cx).pending_workspace.is_some());
@@ -594,6 +594,8 @@ fn trackpad_swipe_over_open_browser_does_not_navigate(cx: &mut TestAppContext) {
         );
     })
     .unwrap();
+    assert!(requests.try_recv().is_err(), "the swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
         panic!("closing the browser must re-arm background swipe navigation");
     };
@@ -728,7 +730,7 @@ fn failed_working_tree_refresh_keeps_the_last_successful_snapshot(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) {
+fn effort_option_click_commits_the_supported_level(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -739,7 +741,7 @@ fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) 
         });
         window.render_frame(cx);
         window.render_frame(cx);
-        window.click(("effort-stop", 2usize), cx);
+        window.click(("effort-label", 2usize), cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -755,6 +757,7 @@ fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) 
 fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -958,17 +961,17 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn borderless_composer_keeps_prompt_marker_and_layout(cx: &mut TestAppContext) {
+fn borderless_composer_keeps_input_and_layout(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.activate_composer(window, cx));
         window.render_frame(cx);
-        // CLI-minimal contract: the card chrome is gone, so the prompt marker
-        // is the input affordance and the frame must still lay out with height.
+        // CLI-minimal contract: the card chrome and the prompt marker are
+        // gone, so the placeholder and caret carry the input affordance and
+        // the frame must still lay out with height.
+        assert!(window.try_find("composer-prompt-marker").is_none());
         let frame = window.find("message-composer-frame").bounds();
-        let marker = window.find("composer-prompt-marker").bounds();
         assert!(frame.size.height > px(0.));
-        assert!(frame.contains(&marker.center()), "prompt marker must sit inside the composer frame");
         assert!(
             view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
             "activating the composer focuses its input"

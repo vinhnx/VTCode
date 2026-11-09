@@ -491,7 +491,6 @@ impl PlanningTaskTrackerTool {
         }
         self.state
             .get_plan_file()
-            .await
             .context("No active plan file. Call start_planning first.")
     }
 
@@ -560,7 +559,7 @@ impl PlanningTaskTrackerTool {
             artifacts
                 .push(TrackerArtifact::new(task_file, Self::global_task_markdown(document), "task checklist").await?);
         }
-        if let Some(plan_file) = self.state.get_plan_file().await
+        if let Some(plan_file) = self.state.get_plan_file()
             && let Some(artifact) = TrackerArtifact::embedded_plan(plan_file, &markdown).await?
         {
             artifacts.push(artifact);

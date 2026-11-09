@@ -100,6 +100,7 @@ use crate::utils::gatekeeper;
 use crate::utils::path::ensure_path_within_workspace;
 use crate::utils::unicode_monitor::UNICODE_MONITOR;
 use vtcode_commons::canonicalize;
+use vtcode_commons::tokens::CHARS_PER_TOKEN;
 
 mod session_ops;
 
@@ -145,6 +146,10 @@ impl PtyManager {
     pub fn apply_commands_config(&self, commands_config: &CommandsConfig) {
         let new_paths = path_env::compute_extra_search_paths(&commands_config.extra_path_entries, &self.workspace_root);
         *self.extra_paths.write() = Arc::new(new_paths);
+    }
+
+    pub(crate) fn merge_command_path(&self, current: Option<&std::ffi::OsStr>) -> Option<std::ffi::OsString> {
+        path_env::merge_path_env(current, &self.extra_paths.read())
     }
 
     pub fn describe_working_dir(&self, path: &Path) -> String {
@@ -420,8 +425,9 @@ impl PtyManager {
             if let Some(max_tokens) = max_tokens {
                 if max_tokens > 0 {
                     // Simple byte-based truncation
-                    if output.len() > max_tokens * 4 {
-                        let truncate_point = (max_tokens * 4).min(output.len());
+                    let max_bytes = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+                    if output.len() > max_bytes {
+                        let truncate_point = max_bytes.min(output.len());
                         output.truncate(truncate_point);
                         output.push_str("\n[... truncated by max_tokens ...]");
                     }
@@ -634,12 +640,14 @@ impl PtyManager {
             let mut spool_hasher = Sha256::new();
             let mut spool_byte_count = 0_u64;
             let mut spool_lines = SpoolLineCounter::default();
+            // Reads can split a multibyte character; decode across chunk boundaries.
+            let mut utf8_decoder = vtcode_commons::Utf8StreamDecoder::new();
 
             while let Some(chunk) = output_spool_rx.recv().await {
                 let Some(file) = spool_file.as_mut() else {
                     continue;
                 };
-                let text = String::from_utf8_lossy(&chunk);
+                let text = utf8_decoder.push_cow(&chunk);
                 let sanitized = spool_redactor.push(&text);
                 if !sanitized.is_empty() {
                     if file.write_all(sanitized.as_bytes()).await.is_err() {
@@ -654,7 +662,9 @@ impl PtyManager {
             }
 
             if let Some(file) = spool_file.as_mut() {
-                let sanitized = spool_redactor.finish();
+                // A truncated final character becomes one U+FFFD rather than vanishing.
+                let mut sanitized = spool_redactor.push(&utf8_decoder.finish());
+                sanitized.push_str(&spool_redactor.finish());
                 let write_failed = !sanitized.is_empty() && file.write_all(sanitized.as_bytes()).await.is_err();
                 if !write_failed && !sanitized.is_empty() {
                     spool_hasher.update(sanitized.as_bytes());
@@ -831,12 +841,9 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
         Ok(metadata)
     }
 
+    /// Delegates to the shared contract so PTY and pipe sessions cannot drift.
     fn format_working_dir(&self, path: &Path) -> String {
-        match path.strip_prefix(&self.workspace_root) {
-            Ok(relative) if relative.as_os_str().is_empty() => ".".into(),
-            Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
-            Err(_) => path.to_string_lossy().into_owned(),
-        }
+        vtcode_commons::workspace_relative_slash(&self.workspace_root, path)
     }
 
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {

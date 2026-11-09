@@ -11,6 +11,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
+use crate::agent::runloop::unified::state::missing_executable_hint;
 use crate::agent::runloop::unified::stop_requests::{await_with_stop, stop_outcome};
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
@@ -379,10 +380,15 @@ pub(crate) async fn execute_harness_auto_verification(
                     .ctx
                     .session_stats
                     .record_verification_auto_failure(command.clone(), &response_text);
-                t_ctx_inner.ctx.working_history.push(uni::Message::system(format!(
+                let mut coaching = format!(
                     "Harness auto-verification `{command}` did not clear the gate (consecutive failure {failures} this episode). \
                     Repair the reported failure before attempting completion again."
-                )));
+                );
+                if let Some(hint) = missing_executable_hint(&response_text) {
+                    coaching.push(' ');
+                    coaching.push_str(&hint);
+                }
+                t_ctx_inner.ctx.working_history.push(uni::Message::system(coaching));
             }
         } else if t_ctx_inner.ctx.tool_registry.completion_verification_pending() {
             // A required check remains, or this verifier predates a later edit.

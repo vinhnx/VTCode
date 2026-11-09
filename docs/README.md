@@ -28,6 +28,19 @@ brew install vinhnx/tap/vtcode
 
 [Homebrew Formula](https://formulae.brew.sh/formula/vtcode)
 
+#### Homebrew Cask (macOS desktop app, Apple Silicon)
+
+```bash
+brew trust vinhnx/tap
+brew install --cask vinhnx/tap/vtcode-desktop
+```
+
+> [!WARNING]
+> The first launch needs a one-time macOS security approval: release builds are not notarized. Open the app once so
+> macOS records the block, then click **Open Anyway** in **System Settings › Privacy & Security** and open it again.
+> The button only shows for about an hour after a blocked launch. See the
+> [installation guide](./installation/README.md#desktop-app-macos-15).
+
 #### Pre-built Binaries
 
 Download from [GitHub Releases](https://github.com/vinhnx/vtcode/releases) for Linux, macOS, or Windows.
@@ -54,11 +67,11 @@ VT Code represents a modern approach to AI-powered software development, featuri
 
 ### Provider index
 
-| Category        | Providers                                                                                                                                                              |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloud LLMs      | Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, Z.AI, Moonshot, MiniMax, Mistral, Qwen, StepFun                                                                     |
-| Gateways        | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute |
-| Local inference | Ollama, LM Studio, llama.cpp                                                                                                                                           |
+| Category        | Providers                                                                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud LLMs      | Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, Z.AI, Moonshot, MiniMax, Mistral, Qwen, StepFun                                                                                                            |
+| Gateways        | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute, **[OpenLLM](./providers/openllm.md)** |
+| Local inference | Ollama, LM Studio, llama.cpp                                                                                                                                                                                  |
 
 See the complete [Provider Guides](./providers/PROVIDER_GUIDES.md) index for authentication, endpoints, model catalogs,
 and setup details.
@@ -95,8 +108,8 @@ VT Code has undergone significant improvements:
   canonical `ThreadEvent` history remains authoritative. See
   [context architecture](./ARCHITECTURE.md#request-projection-and-context-budgets) and the
   [Compaction Engine](./development/compaction.md).
-- **`/config checkup` Command** - Configuration diagnostics that surface reversible, confirm-before-apply optimizations
-  (e.g. tool-result clearing, client tool search, token-efficiency warnings).
+- **`/doctor` Command** - Setup diagnostics that surface reversible, confirm-before-apply optimizations, plus
+  `/doctor prompt-audit` for read-only instruction, skill, and MCP context-cost auditing.
 - **GPT-5.6 Models** - Added support for OpenAI's GPT-5.6 family across configurations.
 
 - **GLM-5.3 Model Support** - Z.ai's flagship coding model with frontier long-horizon agentic performance and 1M-token

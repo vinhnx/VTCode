@@ -147,32 +147,33 @@ light/dark scheme). The tables below cover the hand-curated entries; the authori
 (Dracula, GitHub, Atom One, Tomorrow, Nord, Material, Spacegray, and more). The gpui-kit sets are shared with the GPUI
 desktop client, so the same theme id renders the same palette in the terminal and in the desktop app.
 
-| Theme                        | Mode  | Description                       |
-| ---------------------------- | ----- | --------------------------------- |
-| ciapre                       | Dark  | Default warm amber theme          |
-| ciapre-dark                  | Dark  | Alternative warm amber theme      |
-| ciapre-blue                  | Dark  | Blue variant of Ciapre            |
-| ansi-classic                 | Dark  | Classic ANSI palette              |
-| mono                         | Dark  | Monochrome                        |
-| vitesse-black                | Dark  | Pure black background             |
-| vitesse-dark                 | Dark  | Dark gray background              |
-| vitesse-dark-soft            | Dark  | Softer dark background            |
-| vitesse-light                | Light | White background                  |
-| vitesse-light-soft           | Light | Cream background                  |
-| catppuccin-latte             | Light | Pastel light theme                |
-| catppuccin-frappe            | Dark  | Muted dark theme                  |
-| catppuccin-macchiato         | Dark  | Rich dark theme                   |
-| catppuccin-mocha             | Dark  | Deep dark theme                   |
-| solarized-dark               | Dark  | Solarized, expanded background    |
-| solarized-dark-hc            | Dark  | Solarized with higher contrast    |
-| solarized-light              | Light | Solarized light                   |
-| gruvbox-dark                 | Dark  | Gruvbox dark                      |
-| gruvbox-dark-hard            | Dark  | Gruvbox dark, hard background     |
-| gruvbox-light                | Light | Gruvbox light                     |
-| gruvbox-light-hard           | Light | Gruvbox light, hard background    |
-| gruvbox-material             | Dark  | Gruvbox Material                  |
-| gruvbox-material-dark        | Dark  | Gruvbox Material dark             |
-| gruvbox-material-light       | Light | Gruvbox Material light            |
+| Theme | Mode | Description |
+| --- | --- | --- |
+| noir | Dark | Near-black canvas, neutral white text, Ciapre accents |
+| ciapre | Dark | Default warm amber theme |
+| ciapre-dark | Dark | Alternative warm amber theme |
+| ciapre-blue | Dark | Blue variant of Ciapre |
+| ansi-classic | Dark | Classic ANSI palette |
+| mono | Dark | Monochrome |
+| vitesse-black | Dark | Pure black background |
+| vitesse-dark | Dark | Dark gray background |
+| vitesse-dark-soft | Dark | Softer dark background |
+| vitesse-light | Light | White background |
+| vitesse-light-soft | Light | Cream background |
+| catppuccin-latte | Light | Pastel light theme |
+| catppuccin-frappe | Dark | Muted dark theme |
+| catppuccin-macchiato | Dark | Rich dark theme |
+| catppuccin-mocha | Dark | Deep dark theme |
+| solarized-dark | Dark | Solarized, expanded background |
+| solarized-dark-hc | Dark | Solarized with higher contrast |
+| solarized-light | Light | Solarized light |
+| gruvbox-dark | Dark | Gruvbox dark |
+| gruvbox-dark-hard | Dark | Gruvbox dark, hard background |
+| gruvbox-light | Light | Gruvbox light |
+| gruvbox-light-hard | Light | Gruvbox light, hard background |
+| gruvbox-material | Dark | Gruvbox Material |
+| gruvbox-material-dark | Dark | Gruvbox Material dark |
+| gruvbox-material-light | Light | Gruvbox Material light |
 
 ### gpui-kit theme sets
 

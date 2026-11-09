@@ -1,4 +1,90 @@
 use super::*;
+use crate::desktop::inspector as output_inspector;
+
+#[test]
+fn output_tail_strips_terminal_controls_without_changing_capture() {
+    let raw: gpui_kit::SharedString =
+        "start \u{1b}[31mred\u{1b}[0m\n\u{1b}]8;;https://example.com\u{7}link\u{1b}]8;;\u{7}\u{7} end".into();
+    assert_eq!(output_inspector::display_output_tail(&raw), "start red\nlink end");
+    assert!(raw.contains("\u{1b}[31m"));
+    let incomplete: gpui_kit::SharedString = "before\u{1b}[31".into();
+    assert_eq!(output_inspector::display_output_tail(&incomplete), "before");
+    assert_eq!(output_inspector::display_output_tail(&"plain\u{7}text".into()), "plaintext");
+    assert_eq!(output_inspector::output_tail(&raw), raw);
+}
+
+#[gpui_kit::test]
+fn output_surfaces_show_clean_terminal_text_and_copy_the_capture(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let raw = "first \u{1b}[31merror\u{1b}[0m\nsecond\u{7}";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item =
+                TranscriptItem::new("ansi-output".into(), "tool".into(), "Command".into(), "completed".into());
+            item.output = Some(raw.into());
+            item.expanded = true;
+            view.transcript.push(item);
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("output-body").label(), Some("first error\nsecond"));
+        assert_eq!(window.find("tool-output-ansi-output").label(), Some("first error\nsecond"));
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(raw));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn empty_tool_capture_does_not_fall_back_to_metadata(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item = TranscriptItem::new(
+                "empty-output".into(),
+                "tool".into(),
+                "Command".into(),
+                "running\n\n{\"type\":\"tool_output\"}".into(),
+            );
+            item.output = Some("".into());
+            item.expanded = true;
+            view.transcript.push(item);
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("tool-output-empty-output").label().unwrap_or_default(), "");
+        assert_eq!(window.find("output-body").label().unwrap_or_default(), "");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn transcript_output_is_compact_and_inspector_retains_full_capture(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item = TranscriptItem::new("compact".into(), "tool".into(), "Command".into(), "running".into());
+            item.output = Some(numbered_output_lines(20).into());
+            item.expanded = true;
+            view.transcript.push(item);
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        let preview_element = window.find("tool-output-compact");
+        let preview = preview_element.label().unwrap();
+        assert!(preview.contains("output line 19"));
+        assert!(!preview.contains("output line 0\n"));
+        assert!(window.find("tool-open-output-compact").visible());
+        focus_element_by_tab(window, "tool-open-output-compact", cx);
+        window.press("enter", cx);
+        window.render_frame(cx);
+        let full_element = window.find("output-body");
+        let full = full_element.label().unwrap();
+        assert!(full.contains("output line 0\n"));
+        assert!(full.contains("output line 19"));
+    })
+    .unwrap();
+}
 
 #[gpui_kit::test]
 fn output_surfaces_highlight_structured_json_while_keeping_full_text_accessible(cx: &mut TestAppContext) {
@@ -117,6 +203,27 @@ fn output_tab_follows_growing_output_while_pinned_to_bottom(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn output_tab_follows_changed_tail_with_unchanged_byte_length(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let first = format!("{}{}", numbered_output_lines(300), " ".repeat(200));
+        let next = format!("{}{}", numbered_output_lines(300), "\n".repeat(200));
+        assert_eq!(first.len(), next.len());
+        view.update(cx, |view, _| {
+            let mut item = TranscriptItem::new("same-length".into(), "tool".into(), "Command".into(), "running".into());
+            item.output = Some(first.into());
+            view.transcript.push(item);
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, _| view.transcript.set_output("same-length", Some(next.into())));
+        window.render_frame(cx);
+        assert!(output_remaining_to_bottom(&view.read(cx).output_scroll) <= px(1.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn output_tab_pauses_follow_when_scrolled_up_until_jump_to_latest(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -165,6 +272,55 @@ fn output_tab_pauses_follow_when_scrolled_up_until_jump_to_latest(cx: &mut TestA
         let state = view.read(cx);
         assert!(output_remaining_to_bottom(&state.output_scroll) <= px(1.), "jump resumes the live edge");
         assert!(window.try_find("output-jump-latest").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn output_tab_filters_lines_by_query_with_counts_and_empty_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item = TranscriptItem::new(
+                "filtered-output".into(),
+                "tool".into(),
+                "Filtered command".into(),
+                "completed".into(),
+            );
+            item.output = Some("alpha one\nbeta two\nALPHA three\n".into());
+            view.transcript.push(item);
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        });
+        window.render_frame(cx);
+
+        assert!(window.try_find("output-filter-count").is_none(), "no count without a query");
+        assert_eq!(window.find("output-body").label(), Some("alpha one\nbeta two\nALPHA three\n"));
+
+        view.update(cx, |view, cx| {
+            view.output_filter_input
+                .update(cx, |input, cx| input.set_value("alpha", window, cx));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("output-body").label(), Some("alpha one\nALPHA three"));
+        assert_eq!(window.find("output-filter-count").label(), Some("2 of 3 shown"));
+
+        view.update(cx, |view, cx| {
+            view.output_filter_input
+                .update(cx, |input, cx| input.set_value("zzz", window, cx));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("output-filter-empty").label(), Some("No lines match this filter"));
+        assert_eq!(window.find("output-filter-count").label(), Some("0 of 3 shown"));
+
+        view.update(cx, |view, cx| {
+            view.output_filter_input.update(cx, |input, cx| input.set_value("", window, cx));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("output-body").label(), Some("alpha one\nbeta two\nALPHA three\n"));
+        assert!(window.try_find("output-filter-count").is_none(), "clearing restores the full tail");
     })
     .unwrap();
 }

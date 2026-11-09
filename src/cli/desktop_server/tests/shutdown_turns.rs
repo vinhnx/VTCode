@@ -2,6 +2,101 @@ use super::*;
 use crate::agent::runloop::unified::state::CtrlCState;
 
 #[tokio::test]
+async fn protocol_writer_drops_a_buffered_old_runtime_notification() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (context, _) = test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    let old = uuid::Uuid::new_v4();
+    let current = uuid::Uuid::new_v4();
+    {
+        let mut state = context.state.lock().await;
+        state.session_id = Some("session".into());
+        state.runtime_generation = Some(old);
+    }
+    let (sender, mut receiver) = mpsc::channel(1);
+    sender
+        .send(protocol::Notification {
+            jsonrpc: "2.0".into(),
+            method: "occupied".into(),
+            params: json!({}),
+        })
+        .await
+        .unwrap();
+    let old_sender = sender.clone();
+    let blocked = tokio::spawn(async move {
+        send_runtime_notification(
+            &old_sender,
+            protocol::method::UI_PROGRESS,
+            json!({ "sessionId": "session", "active": true }),
+            Some(old),
+        )
+        .await
+    });
+    tokio::task::yield_now().await;
+    assert!(!blocked.is_finished(), "old runtime waits on the full queue");
+    context.state.lock().await.runtime_generation = Some(current);
+    assert_eq!(receiver.recv().await.unwrap().method, "occupied");
+    blocked.await.unwrap().unwrap();
+    let stale = receiver.recv().await.unwrap();
+    let mut output = Vec::new();
+    write_runtime_checked_notification(&context, &mut output, stale).await.unwrap();
+    assert!(output.is_empty(), "a buffered notification from the replaced runtime is not written");
+
+    send_runtime_notification(
+        &sender,
+        protocol::method::UI_PROGRESS,
+        json!({ "sessionId": "session", "active": false }),
+        Some(current),
+    )
+    .await
+    .unwrap();
+    write_runtime_checked_notification(&context, &mut output, receiver.recv().await.unwrap())
+        .await
+        .unwrap();
+    let frame: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(frame["params"]["active"], false);
+    assert!(frame["params"].get(INTERNAL_RUNTIME_GENERATION).is_none(), "the internal tag is never on the wire");
+}
+
+#[tokio::test]
+async fn shutdown_completes_when_the_command_bridge_thread_is_wedged() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (context, _) = test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    let (input, mut input_receiver) = mpsc::unbounded_channel();
+    let (exit_sender, exit) = oneshot::channel();
+    let runtime_task = tokio::spawn(std::future::pending::<()>());
+    // The bridge thread blocks forever: without a join bound, shutdown hangs.
+    let (gate_sender, gate_receiver) = std::sync::mpsc::channel::<()>();
+    let command_forwarder = std::thread::spawn(move || {
+        let _ = gate_receiver.recv();
+    });
+    {
+        let mut state = context.state.lock().await;
+        state.session_id = Some("session".into());
+        state.runtime = Some(RuntimeSession {
+            session_id: "session".into(),
+            input,
+            stop: stop_requests::new_stop_handle_slot(),
+            exit,
+            abort: runtime_task.abort_handle(),
+            command_forwarder,
+        });
+    }
+    let driver = tokio::spawn(async move {
+        assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Exit)));
+        exit_sender.send(Ok(())).expect("complete exit");
+    });
+    timeout(Duration::from_secs(15), shutdown_current_session(&context, true))
+        .await
+        .expect("a wedged bridge degrades to a warning, not a hang")
+        .expect("shutdown succeeds");
+    driver.await.unwrap();
+    assert!(context.state.lock().await.session_id.is_none(), "teardown still runs to completion");
+    // Release the wedged thread so the test leaves nothing behind.
+    gate_sender.send(()).unwrap();
+    runtime_task.abort();
+}
+
+#[tokio::test]
 async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
     let workspace = tempfile::tempdir().expect("workspace");
     let startup = test_startup_context(workspace.path());
@@ -20,6 +115,7 @@ async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
     let ctrl_c = std::sync::Arc::new(CtrlCState::new());
     let stop = stop_requests::new_stop_handle_slot();
     stop_requests::publish_stop_handles(&stop, &ctrl_c, &std::sync::Arc::new(Notify::new()));
+    stop_requests::mark_host_turns_ready(&stop);
     let state = std::sync::Arc::clone(&context.state);
     let finished = std::sync::Arc::clone(&context.turn_finished);
     let runtime_task = tokio::spawn(async move {

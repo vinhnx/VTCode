@@ -64,6 +64,7 @@ fn file_change_item_optional_diff_fields_round_trip() -> Result<(), Box<dyn Erro
 #[test]
 fn thread_event_round_trip() -> Result<(), Box<dyn Error>> {
     let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: Some(Box::new("turn-42-final".to_string())),
         completed_at: None,
         usage: Usage {
             input_tokens: 1,
@@ -183,6 +184,7 @@ fn turn_completed_in_progress_sessions_default_empty_and_omitted() -> Result<(),
 fn turn_completed_in_progress_sessions_round_trip_and_bound() -> Result<(), Box<dyn Error>> {
     assert_eq!(MAX_IN_PROGRESS_EXEC_SESSIONS, 4);
     let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: vec!["run-1".to_string(), "run-2".to_string()],
@@ -505,6 +507,7 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
             context: None,
             id: "tool_1:output".to_string(),
             details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "tool_1".to_string(),
                 tool_call_id: Some("tool_call_0".to_string()),
                 spool_path: None,
@@ -526,6 +529,7 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
 #[test]
 fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<dyn Error>> {
     let item = ToolOutputItem {
+        is_delta: None,
         call_id: "tool_1".to_string(),
         tool_call_id: None,
         spool_path: None,
@@ -554,6 +558,7 @@ fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<d
     assert_eq!(restored, item);
 
     let bare = ToolOutputItem {
+        is_delta: None,
         call_id: "tool_1".to_string(),
         tool_call_id: None,
         spool_path: None,
@@ -573,6 +578,12 @@ fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<d
     });
     let restored: ToolOutputItem = serde_json::from_value(legacy)?;
     assert!(restored.app_previews.is_empty());
+    assert_eq!(restored.is_delta, None);
+    let mut delta = restored;
+    delta.is_delta = Some(true);
+    let encoded = serde_json::to_value(&delta)?;
+    assert_eq!(encoded["is_delta"], true);
+    assert_eq!(serde_json::from_value::<ToolOutputItem>(encoded)?.is_delta, Some(true));
     Ok(())
 }
 
@@ -755,5 +766,37 @@ fn compact_boundary_deserializes_legacy_payload_without_segment_metadata() -> Re
     assert_eq!(event.new_prefix_hash, None);
     assert_eq!(event.previous_catalog_hash, None);
     assert_eq!(event.new_catalog_hash, None);
+    Ok(())
+}
+
+#[test]
+fn tracker_updated_round_trip_preserves_snapshot() -> Result<(), Box<dyn Error>> {
+    let snapshot = tracker::TrackerSnapshot {
+        title: "Release".to_string(),
+        completed: 1,
+        total: 2,
+        items: vec![
+            tracker::TrackerItemState {
+                index_path: "1".to_string(),
+                description: "Write code".to_string(),
+                status: tracker::TrackerItemStatus::Completed,
+            },
+            tracker::TrackerItemState {
+                index_path: "2".to_string(),
+                description: "Ship it".to_string(),
+                status: tracker::TrackerItemStatus::Pending,
+            },
+        ],
+    };
+    let event = ThreadEvent::TrackerUpdated(Box::new(snapshot));
+    let json = serde_json::to_string(&event)?;
+    assert!(json.contains("\"tracker.updated\""), "tagged variant name: {json}");
+    let restored: ThreadEvent = serde_json::from_str(&json)?;
+    assert_eq!(restored, event);
+
+    // Unknown item statuses from newer producers decode to the catch-all.
+    let status: tracker::TrackerItemStatus = serde_json::from_str("\"archived\"")?;
+    assert_eq!(status, tracker::TrackerItemStatus::Unknown);
+    assert_eq!(tracker::TrackerItemStatus::InProgress.as_str(), "in_progress");
     Ok(())
 }

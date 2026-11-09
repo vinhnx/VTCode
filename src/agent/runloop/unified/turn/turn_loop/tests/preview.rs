@@ -218,7 +218,7 @@ Synthesize the approval-ready plan from evidence gathered before preview exhaust
         ));
     }
     let mut history = vec![
-        uni::Message::user("make a plan from the repository evidence and wait for approval".to_string()),
+        uni::Message::user("investigate the repository evidence".to_string()),
         uni::Message::tool_response("prior-preview".to_string(), prior_marker),
     ];
     let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
@@ -397,6 +397,25 @@ async fn exhausted_previews_pending_verification_completes_after_standalone_veri
             .count(),
         1,
         "successful standalone verifier must publish turn.completed: {harness}"
+    );
+    let final_id = events
+        .iter()
+        .find_map(|event| match event {
+            ThreadEvent::TurnCompleted(completed) => completed.final_response_item_id.as_deref(),
+            _ => None,
+        })
+        .expect("completed turn must identify its final message");
+    assert!(events.iter().any(|event| matches!(event,
+        ThreadEvent::ItemCompleted(item)
+            if item.item.id == **final_id
+            && matches!(&item.item.details, ThreadItemDetails::AgentMessage(message) if message.text.contains("Done"))
+    )), "final identity must point to the final message: {harness}");
+    assert!(
+        history.iter().any(|message| {
+            message.role == uni::MessageRole::Assistant
+                && message.metadata.as_ref().and_then(|metadata| metadata.event_item_id()) == Some(final_id.as_str())
+        }),
+        "archived final message must retain the emitted item identity"
     );
     assert!(
         !events.iter().any(|event| matches!(event, ThreadEvent::TurnFailed(_))),

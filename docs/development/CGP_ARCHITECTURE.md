@@ -299,7 +299,7 @@ Each context is wired once in `crates/codegen/vtcode-core/src/llm/cgp.rs`, then 
 
 - `register_builtin_cgp_providers(...)` and `LLMFactory::register_cgp_provider::<Ctx>()` for built-in and custom
   registration
-- `ProviderBuilder<T>` and the legacy core `ProviderConfig` trait as metadata shims over `CanDescribeProvider`
+- `ProviderBuilder<T>` and the core `ProviderSpec` trait as metadata shims over `CanDescribeProvider`
 - `create_provider_unified(...)` as a compatibility shim over the canonical factory path
 
 This keeps public entrypoints stable while removing the old `BuiltinProvider`/`impl_builtin_provider!` registration

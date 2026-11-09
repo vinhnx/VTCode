@@ -508,6 +508,17 @@ fn ctrl_b_dispatches_background_operation() {
 }
 
 #[test]
+fn ctrl_x_dispatches_force_cancel() {
+    let mut session = session_with_input("hello", 3);
+
+    let event = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL);
+    let result = session.process_key(event);
+
+    assert!(matches!(result, Some(InlineEvent::ForceCancelPtySession)));
+    assert_eq!(session.input_manager.cursor(), 3);
+}
+
+#[test]
 fn ctrl_p_navigates_to_previous_history() {
     let mut session = session_with_input("", 0);
 

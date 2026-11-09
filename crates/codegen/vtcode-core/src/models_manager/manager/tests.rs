@@ -58,6 +58,16 @@ async fn test_model_exists() {
     assert!(!manager.model_exists("nonexistent-model").await);
 }
 
+#[test]
+fn model_exists_sync_covers_local_and_gateway_providers() {
+    // `create_provider_for_model` warns for anything this misses; a local
+    // route and a gateway route pin both sides of the builtin preset set.
+    let manager = ModelsManager::new();
+    assert!(manager.model_exists_sync("gpt-oss:20b"));
+    assert!(manager.model_exists_sync("meta/muse-glimmer-30b"));
+    assert!(!manager.model_exists_sync("nonexistent-model"));
+}
+
 #[tokio::test]
 async fn test_set_provider() {
     let manager = ModelsManager::new();

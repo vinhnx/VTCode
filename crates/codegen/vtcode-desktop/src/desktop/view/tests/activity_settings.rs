@@ -60,15 +60,13 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
 #[test]
 fn activity_status_colors_follow_semantic_theme_tokens() {
     for palette in super::super::themes::all_themes() {
-        let colors = gpui_kit::component::theme::ThemeColor {
-            primary: palette.accent,
-            success: palette.success,
-            danger: palette.danger,
-            warning: palette.warning,
-            foreground: palette.foreground,
-            popover: palette.background,
-            ..Default::default()
-        };
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.primary = palette.accent;
+        colors.success = palette.success;
+        colors.danger = palette.danger;
+        colors.warning = palette.warning;
+        colors.foreground = palette.foreground;
+        colors.popover = palette.background;
 
         for (state, expected) in [
             (ActivityState::Running, colors.primary),
@@ -210,7 +208,7 @@ fn sidebar_changed_file_navigation_wraps_and_copies_the_selected_patch(cx: &mut 
             });
             view.transcript.push(unavailable);
             view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
-            assert_eq!(view.changes.preview_count(), 2);
+            assert_eq!(view.changes.filtered_preview_count(None), 2);
             view.select_change("first.rs".into(), cx);
         });
         window.render_frame(cx);
@@ -447,7 +445,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_capture.is_some(), "pencil click arms capture");
@@ -535,14 +533,14 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         assert!(window.try_find("cli-config-page").is_some());
         assert_eq!(window.find("settings-nav-configuration").checked(), Some(true));
         assert_eq!(window.find("settings-nav-appearance").checked(), Some(false));
-        assert_eq!(view.read(cx).settings_page_index(), 7);
+        assert_eq!(view.read(cx).settings_page_index(), 8);
         window.press("left", cx);
         window.render_frame(cx);
-        assert!(window.try_find("storage-settings").is_some());
-        assert_eq!(window.find("settings-nav-storage").checked(), Some(true));
+        assert!(window.try_find("about-settings").is_some());
+        assert_eq!(window.find("settings-nav-about").checked(), Some(true));
         assert!(window.try_find("cli-config-page").is_none());
 
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         assert!(window.try_find("keyboard-settings").is_some());
         assert_eq!(window.find("keyboard-shortcuts-group").role(), Some(gpui_kit::Role::Group));
         let expected_shortcut_label = format!(
@@ -632,7 +630,7 @@ fn settings_page_and_categories_fit_a_narrow_window(cx: &mut TestAppContext) {
             "settings page exceeds viewport height: panel={panel:?}, viewport={viewport:?}"
         );
 
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.render_frame(cx);
         let navigation = window.find("settings-navigation").bounds();
         let content = window.find("settings-content").bounds();
@@ -648,15 +646,23 @@ fn settings_page_and_categories_fit_a_narrow_window(cx: &mut TestAppContext) {
     })
     .unwrap();
 
+    // Wide viewports host the Kit container: its sidebar rows sit beside
+    // the hosted pane content inside the panel.
     cx.simulate_window_resize(window, size(px(1280.), px(900.)));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let panel = window.find("settings-panel").bounds();
-        let navigation = window.find("settings-navigation").bounds();
-        let content = window.find("settings-content").bounds();
+        for ix in 0..9 {
+            assert!(
+                window.try_find(format!("0-{ix}")).is_some(),
+                "Kit sidebar row 0-{ix} missing after resize to wide"
+            );
+        }
+        let sidebar_row = window.find("0-3").bounds();
+        let content = window.find("shortcut-search").bounds();
         assert!(
-            navigation.origin.x + navigation.size.width <= content.origin.x,
-            "wide windows sit navigation beside content: navigation={navigation:?}, content={content:?}"
+            sidebar_row.origin.x + sidebar_row.size.width <= content.origin.x,
+            "wide windows sit the Kit sidebar beside content: row={sidebar_row:?}, content={content:?}"
         );
         assert!(
             content.origin.x + content.size.width <= panel.origin.x + panel.size.width,
@@ -678,7 +684,7 @@ fn settings_navigation_stays_fixed_while_settings_content_scrolls(cx: &mut TestA
         });
         window.render_frame(cx);
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.render_frame(cx);
 
         let panel = window.find("settings-panel").bounds();
@@ -822,10 +828,11 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
 fn composer_accepts_keyboard_input_with_accent_focus_ring_disabled(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        // Click the prompt marker inside the input area: the input group's
-        // vertical center falls in the wrapped button row at this width, so a
-        // group center click would land on a footer control instead.
-        window.click("composer-prompt-marker", cx);
+        // Focus the input directly: the input group's vertical center falls
+        // in the wrapped button row at this width, so a group center click
+        // would land on a footer control instead. Click-to-focus through the
+        // group is covered by the zen composer keyboard-input test.
+        view.update(cx, |view, cx| view.activate_composer(window, cx));
         window.input("Focused draft", cx);
         window.render_frame(cx);
 
@@ -873,10 +880,10 @@ fn narrow_composer_wraps_actions_and_bounds_long_model_names(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
+fn connections_terminal_row_copies_the_fork_command(cx: &mut TestAppContext) {
     // Pure builder oracles: a selected session yields a directory-independent
-    // resume command, no selection yields a plain terminal session.
-    assert_eq!(DesktopView::terminal_command_for_session(Some("sess-1")), "vtcode --resume sess-1 --all");
+    // fork command, no selection yields a plain terminal session.
+    assert_eq!(DesktopView::terminal_command_for_session(Some("sess-1")), "vtcode --fork-session sess-1");
     assert_eq!(DesktopView::terminal_command_for_session(None), "vtcode");
 
     let (window, view) = open_desktop(cx);
@@ -890,7 +897,7 @@ fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.try_find("copy-terminal-command").is_some());
         window.click("copy-terminal-command", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode --resume sess-1 --all"));
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode --fork-session sess-1"));
     })
     .unwrap();
 }
@@ -902,59 +909,69 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        for id in [
-            "settings-nav-appearance",
-            "settings-nav-accessibility",
-            "settings-nav-shortcuts",
-            "settings-nav-vtcode",
-            "settings-nav-connections",
-            "settings-nav-notifications",
-            "settings-nav-storage",
-            "settings-nav-configuration",
-        ] {
-            assert!(window.try_find(id).is_some(), "{id} missing from settings navigation");
+        // Wide viewports host the Kit container: one sidebar row per page.
+        for ix in 0..9 {
+            assert!(
+                window.try_find(format!("0-{ix}")).is_some(),
+                "Kit sidebar row 0-{ix} missing from settings navigation"
+            );
         }
-        assert_eq!(window.find("settings-nav-configuration").label(), Some("Configuration"));
+        // Kit sidebar rows carry no accessible label in 0.9.0 (upstream
+        // sidebar-a11y ask, re-verified 2026-11-09), so the config row pins by position for now.
+        assert!(window.try_find("0-8").is_some());
 
-        window.click("settings-nav-configuration", cx);
+        // Pin the cycle start: Home selects the first tab (VT Code).
+        window.press("home", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings);
-        assert!(view.read(cx).config_page_open);
-        assert!(window.try_find("cli-config-page").is_some());
-        assert!(window.try_find("appearance-settings").is_none());
-
-        // Forward wrap: configuration (last) -> appearance (first).
-        window.press("right", cx);
-        window.render_frame(cx);
         assert!(!view.read(cx).config_page_open);
-        assert!(window.try_find("appearance-settings").is_some());
-        assert_eq!(window.find("settings-nav-appearance").checked(), Some(true));
+        assert!(window.try_find("vtcode-settings").is_some());
 
-        // Backward wrap: appearance (first) -> configuration (last).
+        // Backward wrap: VT Code (first) -> configuration (last).
         window.press("left", cx);
         window.render_frame(cx);
         assert!(view.read(cx).config_page_open);
         assert!(window.try_find("cli-config-page").is_some());
+        assert!(window.try_find("vtcode-settings").is_none());
 
-        // Clicking a tab leaves the configuration page.
-        window.click("settings-nav-storage", cx);
+        // Forward wrap: configuration (last) -> VT Code (first).
+        window.press("right", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).config_page_open);
-        assert!(window.try_find("storage-settings").is_some());
-        assert_eq!(window.find("settings-nav-storage").checked(), Some(true));
-        assert_eq!(window.find("settings-nav-configuration").checked(), Some(false));
+        assert!(window.try_find("vtcode-settings").is_some());
 
-        // Up and Down alias the vertical movement and wrap at both ends.
-        window.press("down", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).config_page_open);
-        window.press("down", cx);
-        window.render_frame(cx);
-        assert!(window.try_find("appearance-settings").is_some());
+        // Up and Down alias the movement and wrap at both ends.
         window.press("up", cx);
         window.render_frame(cx);
         assert!(view.read(cx).config_page_open);
-        assert_eq!(window.find("settings-nav-configuration").checked(), Some(true));
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("vtcode-settings").is_some());
+
+        // Cycling to storage renders its pane.
+        for _ in 0..6 {
+            window.press("down", cx);
+            window.render_frame(cx);
+        }
+        assert!(!view.read(cx).config_page_open);
+        assert!(window.try_find("storage-settings").is_some());
+
+        // Kit-internal clicks navigate the hosted container without view
+        // sync (pinned gap until upstream on-select lands): the config
+        // page renders while the view still selects storage, and the next
+        // view-driven push remounts Kit and wins.
+        window.click("0-8", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("cli-config-page").is_some());
+        assert!(!view.read(cx).config_page_open);
+        // The next view-driven push remounts Kit and wins: storage → About → config.
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("about-settings").is_some());
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open);
+        assert!(window.try_find("cli-config-page").is_some());
     })
     .unwrap();
 }

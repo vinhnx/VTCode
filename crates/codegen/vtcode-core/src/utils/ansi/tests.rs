@@ -266,6 +266,8 @@ fn render_normal_markdown_fixture(source: &str, terminal_width: usize) -> Vec<Ve
     let handle = InlineHandle::new_for_tests(sender);
     handle.set_message_labels(Some("Agent".to_owned()), None);
     let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+    // Table snapshots assert exact text; wall-clock footers would make them nondeterministic.
+    renderer.set_show_message_timestamps(false);
     renderer.set_table_max_width(Some(terminal_width));
     renderer
         .render_markdown_output(MessageStyle::Response, source)
@@ -442,6 +444,9 @@ fn line_function_no_trailing_empty_line() {
         reasoning_visible: true,
         screen_reader_mode: false,
         show_diagnostics_in_transcript: false,
+        show_message_timestamps: true,
+        pending_response_footer: false,
+        defer_turn_footer: false,
         tool_display_mode: ToolDisplayMode::default(),
         diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
         compact_command_group: None,
@@ -764,3 +769,28 @@ fn repeated_legacy_failures_keep_fresh_transcript_incidents() {
     assert_eq!(incidents.len(), 2);
     assert_ne!(incidents[0], incidents[1]);
 }
+
+/// Collect kinded append lines as (kind, joined text) pairs.
+pub(super) fn collect_kinded_append_lines(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<crate::ui::InlineCommand>,
+) -> Vec<(InlineMessageKind, String)> {
+    let mut lines = Vec::new();
+    while let Ok(command) = receiver.try_recv() {
+        if let crate::ui::InlineCommand::AppendLine { kind, segments } = command {
+            let text = segments.iter().map(|segment| segment.text.as_str()).collect::<String>();
+            lines.push((kind, text));
+        }
+    }
+    lines
+}
+
+/// Structural footer oracle: Response indent + middot + clock time + meridiem.
+///
+/// Deliberately independent of the formatting helper (which has its own unit
+/// tests) and of the wall clock, so minute rollovers cannot flake the suite.
+pub(super) fn is_timestamp_footer(text: &str) -> bool {
+    text.strip_prefix("  · ")
+        .is_some_and(|time| time.contains(':') && (time.ends_with("AM") || time.ends_with("PM")))
+}
+
+mod turn_footer;

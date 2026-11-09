@@ -22,7 +22,7 @@ const BROWSER_USER_AGENT: &str =
 /// redirects that stay on the known DuckDuckGo HTML host; a compromised or
 /// misconfigured upstream must not turn search into an SSRF relay.
 fn build_client(timeout_secs: u64) -> Result<reqwest::Client> {
-    reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(effective_timeout_secs(timeout_secs)))
         .retry(reqwest::retry::never())
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -34,7 +34,8 @@ fn build_client(timeout_secs: u64) -> Result<reqwest::Client> {
             } else {
                 attempt.stop()
             }
-        }))
+        }));
+    vtcode_commons::http::apply_connect_timeout(builder)
         .build()
         .context("failed to build HTTP client for web_search")
 }

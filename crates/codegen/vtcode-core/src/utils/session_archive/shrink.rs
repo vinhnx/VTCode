@@ -266,8 +266,29 @@ fn shrink_string(value: &mut String) -> bool {
     }
 
     let keep_len = (value.len() / 2).max(MIN_RETAINED_CHARS);
-    let prefix_len = keep_len.saturating_sub(TRUNCATION_MARKER.len());
+    // Cut on a char boundary: `String::truncate` panics mid-character (non-ASCII text).
+    let prefix_len = value.floor_char_boundary(keep_len.saturating_sub(TRUNCATION_MARKER.len()));
     value.truncate(prefix_len);
     value.push_str(TRUNCATION_MARKER);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shrink_string;
+
+    #[test]
+    fn shrink_string_cuts_multibyte_text_on_a_char_boundary() {
+        // 400 two-byte chars: the naive cut at 800 / 2 - 3 = 397 bytes lands mid-char.
+        let mut value = "é".repeat(400);
+        assert!(shrink_string(&mut value));
+        assert_eq!(value, format!("{}...", "é".repeat(198)));
+    }
+
+    #[test]
+    fn shrink_string_leaves_short_values_untouched() {
+        let mut value = "xin chào".to_string();
+        assert!(!shrink_string(&mut value));
+        assert_eq!(value, "xin chào");
+    }
 }

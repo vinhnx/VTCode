@@ -21,3 +21,5 @@ pub(super) use orchestration::run_single_agent_loop_unified_impl;
 /// the producer-owned prompt openings instead of duplicated literals.
 pub(crate) use blocked_handoff::VERIFICATION_AUTO_RECOVERY_PREFIX;
 pub(crate) use orchestration::BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX;
+pub(crate) use orchestration::MONITOR_CONTINUATION_PROMPT_PREFIX;
+pub(crate) use orchestration::clean_archived_prompts;

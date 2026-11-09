@@ -65,10 +65,7 @@ impl AgentRunner {
                 // Retain bounded evidence across yielded polls.
                 output.push_str(&chunk);
                 if output.len() > 16_384 {
-                    let mut boundary = output.len() - 16_384;
-                    while !output.is_char_boundary(boundary) {
-                        boundary += 1;
-                    }
+                    let boundary = output.ceil_char_boundary(output.len() - 16_384);
                     output.drain(..boundary);
                 }
                 let session = crate::tools::command_args::session_id_text(&result)

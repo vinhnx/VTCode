@@ -86,10 +86,11 @@ clocks. Compare rebuilt release binaries in three paired runs and report provide
 
 ## Checkpoint preparation
 
-The prompt worker acquires the existing exclusive rewind lock, captures content, serializes JSON, and durably
+The prompt worker acquires this session's exclusive rewind lock, captures content, serializes JSON, and durably
 publishes the checkpoint and navigation record on the blocking pool. Its lease remains held until the turn settles.
 Independent dirty-worktree inspection starts before checkpoint preparation and is awaited before request dispatch.
-If checkpointing fails, drain that worker and retain the existing prompt restoration path. Cancellation interrupts
+If checkpointing fails for contention or a pending rewind, drain that worker and retain the existing prompt
+restoration path; other failures warn and proceed without a checkpoint for that turn. Cancellation interrupts
 preparation waits before tools are admitted. The worker retains ownership through safe checkpoint publication and
 lease release even when the caller stops waiting; cancelled preparation never grants a tool execution lease.
 

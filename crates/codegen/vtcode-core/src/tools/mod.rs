@@ -221,7 +221,7 @@ pub mod unified_error;
 pub mod untrusted_data;
 
 // Re-export main types and traits for backward compatibility
-pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus};
+pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus, ast_grep_manual_install_guide};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use command_cache::PermissionCache;
@@ -254,7 +254,7 @@ pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as SplitToolResult};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry};
-pub use ripgrep_installer::RipgrepStatus;
+pub use ripgrep_installer::{RipgrepStatus, ripgrep_manual_install_guide};
 pub use safety_gateway::{
     SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
     SafetyTrustLevel,

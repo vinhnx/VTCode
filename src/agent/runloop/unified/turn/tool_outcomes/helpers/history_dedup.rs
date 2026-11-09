@@ -380,9 +380,15 @@ pub(super) fn navigation_evidence(
     let ToolExecutionStatus::Success { output, command_success: true, .. } = &outcome.status else {
         return None;
     };
-    if ["truncated", "output_truncated"]
-        .iter()
-        .any(|key| output.get(key).and_then(serde_json::Value::as_bool) == Some(true))
+    // Spool output may be a head/tail preview, and the model-facing response
+    // can replace it with a reference. Neither establishes positioned rows.
+    if output
+        .get("spool_path")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|path| !path.trim().is_empty())
+        || ["truncated", "output_truncated", "is_truncated", "result_ref_only"]
+            .iter()
+            .any(|key| output.get(key).and_then(serde_json::Value::as_bool) == Some(true))
         || output_has_error_signal(output)
     {
         return None;
@@ -417,6 +423,13 @@ pub(super) fn navigation_evidence(
         // never be fingerprinted as positioned evidence. Loop guards still
         // count such reads via path/slice; only evidence needs verbatim.
         if !target.verbatim {
+            return None;
+        }
+        // This tracker runs before model-facing reduction. Reject the entire
+        // result when that reducer would truncate it, rather than crediting
+        // rows that the provider never receives.
+        let reduced = vtcode_core::core::agent::result_reducers::reduce_tool_result(canonical_name, output.clone());
+        if reduced.get("is_truncated").and_then(serde_json::Value::as_bool) == Some(true) {
             return None;
         }
         output.get("output")?.as_str()?.lines().enumerate().map(|(offset, text)| {
@@ -519,23 +532,18 @@ pub(crate) enum ToolResponseHistoryUpdate {
     Replaced { previous_text_len: usize },
 }
 
-pub(crate) fn push_tool_response<S>(
-    history: &mut Vec<uni::Message>,
-    tool_call_id: S,
-    tool_name: Option<&str>,
-    content: String,
-) -> ToolResponseHistoryUpdate
-where
-    S: AsRef<str> + Into<String>,
-{
-    let tool_call_id_ref = tool_call_id.as_ref();
-    let mut overwrite_index = None;
+/// Find a same-id Tool response after the nearest Assistant boundary.
+///
+/// Shared by the upsert below and the dispatch backstop so the "answered"
+/// check and the overwrite scan can never drift apart: a response the
+/// backstop treats as an answer is exactly one the upsert would overwrite
+/// in place, and anything the backstop adds can only append.
+pub(crate) fn find_tool_response_after_last_assistant(history: &[uni::Message], tool_call_id: &str) -> Option<usize> {
     for (index, message) in history.iter().enumerate().rev() {
         match message.role {
             uni::MessageRole::Tool => {
-                if message.tool_call_id.as_deref() == Some(tool_call_id_ref) {
-                    overwrite_index = Some(index);
-                    break;
+                if message.tool_call_id.as_deref() == Some(tool_call_id) {
+                    return Some(index);
                 }
             }
             // Stop at ANY Assistant message — it marks a turn boundary.
@@ -546,6 +554,35 @@ where
             _ => {}
         }
     }
+    None
+}
+
+/// Check whether an assistant message recorded a tool call with this id.
+///
+/// The dispatch backstop only answers recorded calls: pushing a response
+/// for an id with no recorded call would create an orphan result instead
+/// of closing a pairing gap.
+pub(crate) fn is_tool_call_recorded(history: &[uni::Message], tool_call_id: &str) -> bool {
+    history.iter().any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message
+                .tool_calls
+                .as_ref()
+                .is_some_and(|calls| calls.iter().any(|call| call.id == tool_call_id))
+    })
+}
+
+pub(crate) fn push_tool_response<S>(
+    history: &mut Vec<uni::Message>,
+    tool_call_id: S,
+    tool_name: Option<&str>,
+    content: String,
+) -> ToolResponseHistoryUpdate
+where
+    S: AsRef<str> + Into<String>,
+{
+    let tool_call_id_ref = tool_call_id.as_ref();
+    let overwrite_index = find_tool_response_after_last_assistant(history, tool_call_id_ref);
 
     if let Some(index) = overwrite_index {
         let previous_text_len = history[index].content.as_text().len();

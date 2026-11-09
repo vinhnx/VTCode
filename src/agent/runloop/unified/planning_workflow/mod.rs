@@ -11,6 +11,7 @@
 //! widening the public surface means editing the re-exports here, which makes
 //! accidental cross-module coupling visible at review time.
 
+pub(crate) mod active_plan;
 pub(crate) mod confirmation;
 pub(crate) mod events;
 pub(crate) mod execution;
@@ -215,7 +216,7 @@ use vtcode_core::tools::handlers::planning_workflow::{
 };
 
 pub(crate) async fn persisted_plan_is_ready(state: &PlanningWorkflowState) -> bool {
-    let Some(plan_file) = state.get_plan_file().await else {
+    let Some(plan_file) = state.get_plan_file() else {
         return false;
     };
     let Ok(plan_text) = tokio::fs::read_to_string(&plan_file).await else {
@@ -275,13 +276,17 @@ const EXECUTION_MODE_RECOVERY_RESET_DIRECTIVE: &str = "Execution mode is active.
 /// already been closed. Return the number removed so callers can include a
 /// useful diagnostic without rendering extra user-facing noise.
 pub(crate) fn clear_stale_recovery_directives_for_execution(history: &mut Vec<uni::Message>) -> usize {
-    let history_len_before = history.len();
-    history.retain(|message| !is_stale_recovery_directive(message));
-    let removed = history_len_before.saturating_sub(history.len());
+    let removed = clear_stale_planning_recovery_directives(history);
     if removed > 0 {
         history.push(uni::Message::system(EXECUTION_MODE_RECOVERY_RESET_DIRECTIVE.to_string()));
     }
     removed
+}
+
+pub(crate) fn clear_stale_planning_recovery_directives(history: &mut Vec<uni::Message>) -> usize {
+    let history_len_before = history.len();
+    history.retain(|message| !is_stale_recovery_directive(message));
+    history_len_before.saturating_sub(history.len())
 }
 
 fn is_stale_recovery_directive(message: &uni::Message) -> bool {
@@ -418,6 +423,9 @@ pub(crate) async fn complete_approved_plan_handoff(
     let tracker = finish_planning_workflow(tool_registry, plan_session, handle, PlanningFinishReason::Approved)
         .await?
         .context("approved-plan handoff completed without a task tracker")?;
+    let plan_state = tool_registry.planning_workflow_state();
+    let sidebar_plan = active_plan::active_plan_entry(&plan, &plan_state, target);
+    handle.set_active_plan(Some(sidebar_plan));
     handle.set_skip_confirmations(target.skip_confirmations);
     let handoff = ApprovedPlanHandoff { plan, tracker, target };
     tracing::info!(

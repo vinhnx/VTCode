@@ -5,6 +5,7 @@ use anyhow::Result;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
+use vtcode_core::core::agent::events::tool_output_delta_event;
 use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::exec::events::planning::PlanningOutcome;
 use vtcode_core::hooks::SessionEndReason;
@@ -27,6 +28,7 @@ use crate::agent::runloop::unified::settings_interactive::{reload_state_from_dis
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
 use crate::agent::runloop::unified::turn::background_completion::{
     background_completion_thread_event, drain_background_completions, drain_exec_session_completions,
+    monitor_wake_summary_line, render_monitor_wake_note,
 };
 use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, memory_prompt, slash_command_handler, tool_dispatch,
@@ -242,6 +244,7 @@ pub(super) async fn run_interaction_loop_impl(
                     apply_live_theme_and_appearance(ctx.handle, cfg, ctx.session_bootstrap);
                     ctx.renderer
                         .set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
+                    ctx.renderer.set_show_message_timestamps(cfg.ui.show_message_timestamps);
                     ctx.renderer.set_tool_display_mode(cfg.ui.tool_display_mode);
                     vtcode_ui::tui::panic_hook::set_show_diagnostics(cfg.ui.show_diagnostics_in_transcript);
                     ctx.config.reasoning_effort = cfg.agent.reasoning_effort;
@@ -298,7 +301,6 @@ pub(super) async fn run_interaction_loop_impl(
                         .map(|cfg| cfg.agent.tool_documentation_mode)
                         .unwrap_or_default(),
                     ctx.renderer,
-                    ctx.session_stats,
                     state.mcp_catalog_initialized,
                     state.last_mcp_refresh,
                     state.last_known_mcp_tools,
@@ -416,10 +418,34 @@ pub(super) async fn run_interaction_loop_impl(
                     let _ = emitter.emit(background_completion_thread_event(event));
                 }
             }
+            // Monitor windows drain only while no wake note is pending: a
+            // pending note owns its windows until a turn consumes it, so
+            // fresh matches stay buffered instead of being lost to a merge.
+            let mut monitor_added = 0;
+            if ctx.pending_monitor_note.is_none() {
+                let wake_notes = ctx.tool_registry.exec_session_manager().drain_ready_monitor_digests().await;
+                if !wake_notes.is_empty() {
+                    for note in &wake_notes {
+                        ctx.renderer.line(MessageStyle::Info, &monitor_wake_summary_line(note))?;
+                        if let Some(emitter) = ctx.harness_emitter {
+                            let _ = emitter.emit(tool_output_delta_event(
+                                format!("monitor:{}", note.session_id),
+                                None,
+                                note.text.clone(),
+                            ));
+                        }
+                    }
+                    *ctx.pending_monitor_note = render_monitor_wake_note(&wake_notes);
+                    monitor_added = wake_notes.len();
+                }
+            }
             let controller = ctx.tool_registry.subagent_controller();
             if let Some(outcome) = idle_completion_outcome(
                 &inline_action,
-                completion_drain.added.saturating_add(exec_completion_drain.added),
+                completion_drain
+                    .added
+                    .saturating_add(exec_completion_drain.added)
+                    .saturating_add(monitor_added),
                 controller.as_ref().is_some_and(|controller| controller.has_matrix_completion()),
             ) {
                 if let Err(error) =
@@ -546,10 +572,9 @@ pub(super) async fn run_interaction_loop_impl(
             .begin_progress(vtcode_commons::ui_protocol::ProgressPhase::PreparingContext);
         tracing::debug!(target: "vtcode.response_latency", operation_id = submission_progress.operation().id(), "submission accepted");
 
-        // A fresh submitted input starts a new turn. Clear any stale local cancel
-        // latch left behind by a prior interrupted turn so permission modals and
-        // the provider stream don't inherit a spurious "interrupted" state.
-        ctx.ctrl_c_state.reset();
+        // Clear only an already-handled stop. An unhandled stop may have
+        // arrived after this submission was accepted and belongs to this turn.
+        ctx.ctrl_c_state.reset_handled_cancel();
 
         if let Err(err) = crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
             &ctx.config.workspace,

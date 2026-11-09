@@ -3,7 +3,204 @@
 
 use super::*;
 
+/// Retain a bounded, UTF-8-safe tail of live deltas. Completion replaces this
+/// preview with the runtime's final snapshot, which can include a spool path.
+pub(super) const LIVE_OUTPUT_LIMIT: usize = 64 * 1024;
+
+pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
+    let chunk_start = chunk.ceil_char_boundary(chunk.len().saturating_sub(LIVE_OUTPUT_LIMIT));
+    let chunk = chunk.get(chunk_start..).unwrap_or_default();
+    let previous_start = previous.ceil_char_boundary(previous.len().saturating_sub(LIVE_OUTPUT_LIMIT - chunk.len()));
+    let mut output = String::with_capacity(previous.len() - previous_start + chunk.len());
+    output.push_str(previous.get(previous_start..).unwrap_or_default());
+    output.push_str(chunk);
+    output
+}
+
+#[cfg(test)]
+mod live_output_tests {
+    use super::{bounded_output_chunk, describe_activity};
+    use vtcode_exec_events::{
+        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
+    };
+
+    #[test]
+    fn live_output_chunks_keep_order_and_bound_utf8() {
+        let first = bounded_output_chunk("", "first\n");
+        assert_eq!(bounded_output_chunk(&first, "second"), "first\nsecond");
+        assert_eq!(bounded_output_chunk("other", ""), "other");
+        let large = format!("prefix{}end", "界".repeat(30_000));
+        let tail = bounded_output_chunk("old", &large);
+        assert!(tail.len() <= 64 * 1024);
+        assert!(tail.ends_with("界end"));
+        assert!(!tail.contains("prefix"));
+    }
+
+    #[test]
+    fn failed_tool_output_and_command_report_exit_code_consistently() {
+        let output = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: "call".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: String::new(),
+            is_delta: None,
+            exit_code: Some(17),
+            status: ToolCallStatus::Failed,
+            app_previews: Vec::new(),
+        }));
+        let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "false".into(),
+            arguments: None,
+            aggregated_output: String::new(),
+            exit_code: Some(17),
+            status: CommandExecutionStatus::Failed,
+        }));
+        assert_eq!(describe_activity(&output).1, "failed (exit 17)");
+        assert_eq!(describe_activity(&command).1, "failed (exit 17)");
+        let ThreadItemDetails::ToolOutput(mut output) = output else {
+            panic!("expected tool output")
+        };
+        output.status = ToolCallStatus::Completed;
+        output.exit_code = Some(0);
+        assert_eq!(describe_activity(&ThreadItemDetails::ToolOutput(output)).1, "completed");
+    }
+}
+
 impl DesktopView {
+    /// Resolve a live shell output to its invocation only when identities are unambiguous.
+    pub(super) fn runtime_output_row_id<'a>(&self, item: &'a vtcode_exec_events::ThreadItem) -> &'a str {
+        let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &item.details else {
+            return &item.id;
+        };
+        if self.transcript.position_by_id(&item.id).is_some() {
+            return &item.id;
+        }
+        let Some(row) = self
+            .transcript
+            .position_by_id(&output.call_id)
+            .and_then(|index| self.transcript.get(index))
+        else {
+            return &item.id;
+        };
+        if row.activity_category == Some(ToolCategory::Run)
+            && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
+        {
+            &output.call_id
+        } else {
+            &item.id
+        }
+    }
+
+    pub(super) fn restore_review_summaries(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
+        let mut completions: HashMap<&str, usize> = HashMap::new();
+        let mut item_turns: HashMap<&str, Option<&str>> = HashMap::new();
+        for event in events {
+            match event.event() {
+                vtcode_exec_events::ThreadEvent::TurnCompleted(completed) => {
+                    if let Some(id) = completed.final_response_item_id.as_deref() {
+                        *completions.entry(id.as_str()).or_default() += 1;
+                    }
+                }
+                vtcode_exec_events::ThreadEvent::ItemCompleted(completed)
+                    if matches!(completed.item.details, vtcode_exec_events::ThreadItemDetails::AgentMessage(_)) =>
+                {
+                    use std::collections::hash_map::Entry;
+                    let turn = completed
+                        .item
+                        .context
+                        .as_deref()
+                        .map(|context| context.turn_id.as_str())
+                        .filter(|id| !id.is_empty());
+                    match item_turns.entry(&completed.item.id) {
+                        Entry::Vacant(entry) => {
+                            let _stored = entry.insert(turn);
+                        }
+                        Entry::Occupied(mut entry) => {
+                            let _previous = entry.insert(None);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut occurrences: HashMap<&str, usize> = HashMap::new();
+        for item in self.transcript.items() {
+            if let Some(id) = item.canonical_item_id.as_deref() {
+                *occurrences.entry(id).or_default() += 1;
+            }
+        }
+        let matches: Vec<_> = self
+            .transcript
+            .items()
+            .filter_map(|item| {
+                let id = item.canonical_item_id.as_deref()?;
+                let turn = (*item_turns.get(id)?)?;
+                (occurrences.get(id) == Some(&1) && completions.get(id) == Some(&1))
+                    .then(|| (item.id.clone(), id.to_owned(), turn.to_owned()))
+            })
+            .collect();
+        for (row_id, item_id, turn_id) in matches {
+            self.transcript.restore_archived_turn_files(
+                &row_id,
+                &item_id,
+                &turn_id,
+                self.restored_review_history_incomplete,
+            );
+        }
+    }
+
+    pub(super) fn restore_completion_times(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
+        let mut times: HashMap<&str, Option<String>> = HashMap::new();
+        for event in events {
+            if let vtcode_exec_events::ThreadEvent::TurnCompleted(completed) = event.event()
+                && let Some(id) = &completed.final_response_item_id
+            {
+                use std::collections::hash_map::Entry;
+                match times.entry(id.as_str()) {
+                    Entry::Vacant(entry) => {
+                        let time = completed
+                            .completed_at
+                            .as_deref()
+                            .and_then(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).ok())
+                            .map(|timestamp| timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string());
+                        let _stored = entry.insert(time);
+                    }
+                    Entry::Occupied(mut entry) => {
+                        let _previous = entry.insert(None);
+                    }
+                }
+            }
+        }
+        let mut occurrences: HashMap<&str, usize> = HashMap::new();
+        for item in self.transcript.items() {
+            if let Some(id) = item.canonical_item_id.as_deref() {
+                *occurrences.entry(id).or_default() += 1;
+            }
+        }
+        let matches: Vec<_> = self
+            .transcript
+            .items()
+            .filter_map(|item| {
+                let id = item.canonical_item_id.as_deref()?;
+                let time = times.get(id)?.as_ref()?;
+                (occurrences.get(id) == Some(&1)).then(|| (item.id.clone(), id.to_owned(), time.clone()))
+            })
+            .collect();
+        for (row_id, item_id, time) in matches {
+            self.transcript.set_archived_completion_time(&row_id, &item_id, time.into());
+        }
+    }
+
+    /// Seed the Tasks viewer from the newest `tracker.updated` checkpoint in
+    /// the restored timeline. Later live updates replace it; sessions without
+    /// tracker activity keep the empty state.
+    pub(super) fn restore_tracker_snapshot(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
+        self.tracker_snapshot = events.iter().rev().find_map(|event| match event.event() {
+            vtcode_exec_events::ThreadEvent::TrackerUpdated(snapshot) => Some(snapshot.as_ref().clone()),
+            _ => None,
+        });
+    }
+
     pub(super) fn finish_unverified_turn(&mut self, message: &str) {
         self.pending_submission = None;
         self.pending_first_submission = false;
@@ -38,17 +235,54 @@ impl DesktopView {
         self.project_runtime_item(item, false);
     }
 
+    pub(super) fn update_runtime_item_for_turn(
+        &mut self,
+        item: &vtcode_exec_events::ThreadItem,
+        turn_id: Option<&str>,
+    ) {
+        let context_turn = item
+            .context
+            .as_deref()
+            .map(|context| context.turn_id.as_str())
+            .filter(|id| !id.is_empty());
+        let row_id = self.runtime_output_row_id(item).to_owned();
+        if !self.transcript.accepts_item_turn(&item.id, turn_id) || !self.transcript.accepts_item_turn(&row_id, turn_id)
+        {
+            // Conflicting turn identity: the stale item is dropped.
+            return;
+        }
+        self.update_runtime_item(item);
+        if let Some(turn_id) = turn_id {
+            self.transcript.set_item_turn(&row_id, turn_id);
+        }
+        if let Some(context_turn) = context_turn {
+            self.transcript.set_item_canonical_turn(&row_id, context_turn);
+        }
+    }
+
     /// Drop restored projections superseded by a newer item with the same
     /// identity: its historical activity row, output cursors/pages, and any
     /// pending output page. Shared by live updates and session-load batches.
     fn drop_superseded_restored_item(&mut self, item_id: &str) {
-        self.retain_restored_activity(|restored| restored.id.as_str() != item_id);
+        let capture_ids: Vec<String> = self
+            .restored_activity
+            .iter()
+            .filter(|row| row.id == item_id || row.output_item_id.as_deref() == Some(item_id))
+            .filter_map(|row| row.output_item_id.clone())
+            .collect();
+        self.retain_restored_activity(|restored| {
+            restored.id.as_str() != item_id && restored.output_item_id.as_deref() != Some(item_id)
+        });
         let _cursor = self.restored_output_cursors.remove(item_id);
         let _pages = self.restored_output_pages.remove(item_id);
+        for capture_id in &capture_ids {
+            let _cursor = self.restored_output_cursors.remove(capture_id);
+            let _pages = self.restored_output_pages.remove(capture_id);
+        }
         if self
             .output_page_pending
             .as_ref()
-            .is_some_and(|pending| pending.item_id == item_id)
+            .is_some_and(|pending| pending.item_id == item_id || capture_ids.contains(&pending.item_id))
         {
             self.output_page_pending = None;
             self.output_page_task = None;
@@ -58,6 +292,56 @@ impl DesktopView {
 
     pub(super) fn project_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem, historical: bool) {
         use vtcode_exec_events::ThreadItemDetails;
+        if historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
+            let incoming_turn = item
+                .context
+                .as_deref()
+                .map(|context| context.turn_id.as_str())
+                .filter(|id| !id.is_empty());
+            let index = self.restored_activity.iter().position(|row| {
+                row.id == output.call_id
+                    && row.activity_category == Some(ToolCategory::Run)
+                    && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
+                    && !matches!((row.canonical_turn_id.as_deref(), incoming_turn), (Some(a), Some(b)) if a != b)
+            });
+            if let Some(index) = index {
+                let (_, mut status) = describe_activity(&item.details);
+                if ActivityState::from_status(&status) == ActivityState::Running {
+                    status = tool_status::INTERRUPTED.to_string();
+                }
+                let Some(row) = self.restored_activity.get_mut(index) else {
+                    return;
+                };
+                let payload = activity_payload(&row.text);
+                row.text = activity_text(&status, payload).into();
+                row.output = Some(output.output.as_str().into());
+                row.output_item_id = Some(item.id.clone());
+                row.app_previews.clone_from(&output.app_previews);
+                self.bump_restored_activity_revision();
+                return;
+            }
+        }
+        if !historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
+            let row_id = self.runtime_output_row_id(item).to_owned();
+            if row_id != item.id
+                && let Some(row) = self
+                    .transcript
+                    .position_by_id(&row_id)
+                    .and_then(|index| self.transcript.get(index))
+            {
+                let title = row.title.to_string();
+                let payload = activity_payload(&row.text);
+                let status = describe_activity(&item.details).1;
+                let text = activity_text(&status, payload);
+                self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
+                self.transcript.set_output(&row_id, Some(output.output.as_str().into()));
+                self.transcript.set_output_identity(&row_id, &item.id);
+                if !output.app_previews.is_empty() {
+                    self.transcript.set_app_previews(&row_id, output.app_previews.clone());
+                }
+                return;
+            }
+        }
         let id = item.id.clone();
         match &item.details {
             ThreadItemDetails::AgentMessage(message) => {
@@ -68,8 +352,22 @@ impl DesktopView {
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &plan.text, false);
             }
             ThreadItemDetails::Reasoning(reasoning) => {
-                let title = rust_i18n::t!("app.transcript.planning_update").to_string();
-                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &reasoning.text, false);
+                if let Some(diagnostic) = reasoning.diagnostic.as_deref() {
+                    let severity = match diagnostic.severity {
+                        vtcode_exec_events::DiagnosticSeverity::Error => NoticeSeverity::Error,
+                        vtcode_exec_events::DiagnosticSeverity::Warning => NoticeSeverity::Warning,
+                        vtcode_exec_events::DiagnosticSeverity::Info => NoticeSeverity::Info,
+                    };
+                    self.transcript.upsert(TranscriptItem::diagnostic_notice(
+                        id,
+                        diagnostic.summary.as_str().into(),
+                        diagnostic.agent_details.clone(),
+                        severity,
+                    ));
+                } else {
+                    let title = rust_i18n::t!("app.transcript.planning_update").to_string();
+                    self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &reasoning.text, false);
+                }
             }
             ThreadItemDetails::Decision(decision) => {
                 let title = rust_i18n::t!("app.transcript.decision_title").to_string();
@@ -81,24 +379,24 @@ impl DesktopView {
                 if historical && ActivityState::from_status(&status) == ActivityState::Running {
                     status = tool_status::INTERRUPTED.to_string();
                 }
-                let payload = activity_details_payload(details);
-                let text = format!("{status}\n\n{payload}");
+                let payload = activity_details_summary(details, self.workspace.as_deref());
+                let text = activity_text(&status, &payload);
                 // Keep the raw aggregated output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
-                let output = match details {
-                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.as_str().into()),
-                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.as_str().into()),
-                    _ => None,
-                };
+                let output = activity_output_text(details).map(gpui_kit::SharedString::from);
                 let app_previews = match details {
                     ThreadItemDetails::ToolOutput(tool_output) => tool_output.app_previews.clone(),
                     _ => Vec::new(),
                 };
                 if historical {
+                    let turn_id = item.context.as_deref().map(|context| context.turn_id.clone().into());
                     let mut item =
                         TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
+                    item.canonical_turn_id.clone_from(&turn_id);
+                    item.turn_id = turn_id;
                     item.output = output;
                     item.app_previews = app_previews;
+                    item.activity_category = ToolCategory::from_details(details);
                     self.push_restored_activity(item);
                 } else {
                     self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
@@ -107,6 +405,9 @@ impl DesktopView {
                     }
                     if !app_previews.is_empty() {
                         self.transcript.set_app_previews(&id, app_previews);
+                    }
+                    if let Some(category) = ToolCategory::from_details(details) {
+                        self.transcript.set_activity_category(&id, category);
                     }
                 }
             }
@@ -131,6 +432,10 @@ impl DesktopView {
             };
             self.drop_superseded_restored_item(&item.id);
             self.replace_diff_card_row(item.id.clone(), change);
+            if let Some(context) = item.context.as_deref() {
+                self.transcript.set_item_turn(&item.id, &context.turn_id);
+                self.transcript.set_item_canonical_turn(&item.id, &context.turn_id);
+            }
             projected = true;
         }
         if projected {
@@ -168,9 +473,9 @@ impl DesktopView {
             card.patch.clone(),
         );
         item.diff = Some(card);
-        // The inline diff reads open by default; `upsert` preserves the
-        // user's toggle on later updates to the same card.
-        item.expanded = true;
+        // New cards arrive collapsed: the header (files, +/− counts, apply
+        // status) summarizes the change, and the patch expands on demand.
+        // `upsert` preserves the user's toggle on later updates to the card.
         self.transcript.upsert(item);
     }
 
@@ -215,25 +520,50 @@ impl DesktopView {
         let Some(file) = self.changes.select(&path) else {
             return;
         };
-        if let Some(index) = self.changes.entries().iter().position(|entry| entry.path == path) {
-            self.change_list_scroll.scroll_to_item(index, gpui_kit::ScrollStrategy::Top);
+        let filter = self.change_kind_filter;
+        let position = self
+            .changes
+            .entries()
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| filter.is_none_or(|kind| kind == entry.kind))
+            .position(|(_, entry)| entry.path == path);
+        if let Some(position) = position {
+            self.change_list_scroll.scroll_to_item(position, gpui_kit::ScrollStrategy::Top);
         }
         let mode = self
             .change_viewer
             .as_ref()
             .map(|viewer| viewer.read(cx).mode())
-            .unwrap_or(DiffMode::Unified);
+            .unwrap_or_else(|| self.preferences.diff_mode());
         self.selected_change = Some(path);
         self.change_viewer_dirty = false;
-        self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
-        self.inspector_open = true;
-        self.set_inspector_tab(InspectorTab::Changes, cx);
+        self.change_viewer =
+            Some(cx.new(|cx| diff_preferences::new_diff_state(vec![file], mode, &self.preferences.diff, cx)));
+        self.open_inspector_tab(InspectorTab::Changes, cx);
+    }
+
+    /// Inspector diff layout toggle: updates the live viewer and records the
+    /// shared viewer default so relaunches keep the user's choice.
+    pub(super) fn set_inspector_diff_mode(&mut self, mode: DiffMode, cx: &mut Context<Self>) {
+        if let Some(viewer) = self.change_viewer.as_ref() {
+            viewer.update(cx, |viewer, cx| viewer.set_mode(mode, cx));
+        }
+        self.preferences.set_diff_mode(mode);
+        self.preferences.save();
+        cx.notify();
     }
 
     pub(super) fn select_activity_output(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
-        self.selected_output_id = Some(id);
-        self.inspector_open = true;
-        self.set_inspector_tab(InspectorTab::Output, cx);
+        let capture_id = self
+            .restored_activity
+            .iter()
+            .chain(self.transcript.items())
+            .find(|row| row.id == id)
+            .and_then(|row| row.output_item_id.clone())
+            .unwrap_or(id);
+        self.selected_output_id = Some(capture_id);
+        self.open_inspector_tab(InspectorTab::Output, cx);
         self.inspector_focus.focus(window, cx);
     }
 
@@ -242,6 +572,7 @@ impl DesktopView {
             .changes
             .entries()
             .iter()
+            .filter(|entry| self.change_kind_filter.is_none_or(|kind| kind == entry.kind))
             .filter(|entry| self.changes.has_preview(&entry.path))
             .collect::<Vec<_>>();
         if available.len() < 2 {
@@ -267,17 +598,13 @@ impl DesktopView {
 fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String, String) {
     use vtcode_exec_events::ThreadItemDetails;
     match details {
-        ThreadItemDetails::ToolInvocation(tool) => (tool.tool_name.clone(), tool_status_label(&tool.status)),
+        ThreadItemDetails::ToolInvocation(tool) => (tool_row_gist(tool), tool_status_label(&tool.status)),
         ThreadItemDetails::ToolOutput(output) => {
-            (rust_i18n::t!("app.transcript.tool_output_title").to_string(), tool_status_label(&output.status))
+            let label = status_with_exit_code(tool_status_label(&output.status), output.exit_code);
+            (rust_i18n::t!("app.transcript.tool_output_title").to_string(), label)
         }
         ThreadItemDetails::CommandExecution(command) => {
-            let mut label = command_status_label(&command.status);
-            if let Some(code) = command.exit_code
-                && matches!(command.status, vtcode_exec_events::CommandExecutionStatus::Failed)
-            {
-                label = format!("{}{code})", tool_status::FAILED_EXIT_PREFIX);
-            }
+            let label = status_with_exit_code(command_status_label(&command.status), command.exit_code);
             (command.command.clone(), label)
         }
         ThreadItemDetails::McpToolCall(call) => {
@@ -317,52 +644,14 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
     }
 }
 
-#[derive(serde::Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum ActivityDetailsMetadata<'a> {
-    CommandExecution {
-        command: &'a str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        arguments: Option<&'a Value>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        exit_code: Option<&'a i32>,
-        status: &'a vtcode_exec_events::CommandExecutionStatus,
-    },
-    ToolOutput {
-        call_id: &'a str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        tool_call_id: Option<&'a str>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        spool_path: Option<&'a str>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        exit_code: Option<&'a i32>,
-        status: &'a vtcode_exec_events::ToolCallStatus,
-    },
-}
-
-/// Keep large tool output out of the metadata serialization path.
-pub(super) fn activity_details_payload(details: &vtcode_exec_events::ThreadItemDetails) -> String {
-    use vtcode_exec_events::ThreadItemDetails;
-
-    let serialized = match details {
-        ThreadItemDetails::CommandExecution(command) => {
-            serde_json::to_string_pretty(&ActivityDetailsMetadata::CommandExecution {
-                command: &command.command,
-                arguments: command.arguments.as_ref(),
-                exit_code: command.exit_code.as_ref(),
-                status: &command.status,
-            })
-        }
-        ThreadItemDetails::ToolOutput(output) => serde_json::to_string_pretty(&ActivityDetailsMetadata::ToolOutput {
-            call_id: &output.call_id,
-            tool_call_id: output.tool_call_id.as_deref(),
-            spool_path: output.spool_path.as_deref(),
-            exit_code: output.exit_code.as_ref(),
-            status: &output.status,
-        }),
-        _ => serde_json::to_string_pretty(details),
-    };
-    serialized.unwrap_or_else(|_| "{}".to_string())
+fn status_with_exit_code(status: String, exit_code: Option<i32>) -> String {
+    if status == tool_status::FAILED
+        && let Some(code) = exit_code
+    {
+        format!("{}{code})", tool_status::FAILED_EXIT_PREFIX)
+    } else {
+        status
+    }
 }
 
 fn tool_status_label(status: &vtcode_exec_events::ToolCallStatus) -> String {
@@ -391,6 +680,9 @@ pub(super) struct DiffLine<'a> {
 
 pub(super) const MAX_DIFF_LINES: usize = 2_000;
 
+/// Transcript-visible lines of a unified diff: git framing (`diff --git`,
+/// `---`/`+++`) is skipped because the card's file rows already name each
+/// path, and only yielded lines count toward [`MAX_DIFF_LINES`].
 pub(super) struct ClassifiedDiffLines<'a> {
     lines: std::str::Lines<'a>,
     remaining: usize,
@@ -413,21 +705,29 @@ impl<'a> Iterator for ClassifiedDiffLines<'a> {
     type Item = DiffLine<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            if !self.checked_limit {
-                self.truncated = self.lines.next().is_some();
-                self.checked_limit = true;
+        loop {
+            if self.remaining == 0 {
+                if !self.checked_limit {
+                    // Framing past the budget must not mark a fully-rendered
+                    // patch truncated: only visible lines count.
+                    self.truncated = self.lines.clone().any(|text| classify_diff_line(text) != DiffLineKind::Header);
+                    self.checked_limit = true;
+                }
+                return None;
             }
-            return None;
-        }
 
-        let Some(text) = self.lines.next() else {
-            self.remaining = 0;
-            self.checked_limit = true;
-            return None;
-        };
-        self.remaining -= 1;
-        Some(DiffLine { kind: classify_diff_line(text), text })
+            let Some(text) = self.lines.next() else {
+                self.remaining = 0;
+                self.checked_limit = true;
+                return None;
+            };
+            let kind = classify_diff_line(text);
+            if kind == DiffLineKind::Header {
+                continue;
+            }
+            self.remaining -= 1;
+            return Some(DiffLine { kind, text });
+        }
     }
 }
 

@@ -55,6 +55,7 @@ impl StopHarness {
 
     fn publish(&self) {
         stop_requests::publish_stop_handles(&self.stop, &self.ctrl_c, &self.notify);
+        stop_requests::mark_host_turns_ready(&self.stop);
     }
 
     fn cancel_request(&self, session_id: &str, turn_id: &str) -> Request {
@@ -88,6 +89,91 @@ impl StopHarness {
     }
 }
 
+async fn wait_for_cancel(ctrl_c: &Arc<CtrlCState>) {
+    timeout(Duration::from_secs(5), async {
+        while !ctrl_c.is_cancel_requested() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("stop signal observed");
+}
+
+#[test]
+#[serial_test::serial]
+fn host_runloop_cancels_startup_turn_and_accepts_the_next_turn() {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_stack_size(16 * 1024 * 1024)
+                .build()
+                .expect("test runtime")
+                .block_on(async {
+                    let _store = IsolatedSessionStore::new();
+                    let workspace = hermetic_workspace();
+                    let (context, mut notifications) =
+                        test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+                    context.state.lock().await.initialized = true;
+                    start_session(&context, "host-cancel-test".into(), None)
+                        .await
+                        .expect("start real host runloop");
+                    for prompt in ["first startup prompt", "second prompt"] {
+                        let accepted = enqueue_turn(
+                            &context.state,
+                            &context.notifications,
+                            "host-cancel-test",
+                            prompt.into(),
+                            Vec::new(),
+                            EnqueueMode::Queueable { batchable: false },
+                        )
+                        .await
+                        .expect("turn accepted");
+                        let request = Request {
+                            jsonrpc: "2.0".into(),
+                            id: RequestId::Number(1),
+                            method: protocol::method::TURN_CANCEL.into(),
+                            params: json!({ "sessionId": "host-cancel-test", "turnId": accepted.turn_id }),
+                        };
+                        handle_request(&context, &request).await.expect("stop accepted");
+                        timeout(Duration::from_secs(30), async {
+                            let mut saw_terminal_event = false;
+                            loop {
+                                let notification = notifications.recv().await.expect("service remains connected");
+                                if notification.method == protocol::method::THREAD_EVENT {
+                                    let event: ThreadEventNotification =
+                                        serde_json::from_value(notification.params.clone()).expect("thread event");
+                                    if event.turn_id.as_deref() == Some(accepted.turn_id.as_str())
+                                        && matches!(
+                                            event.event.event(),
+                                            vtcode_core::exec::events::ThreadEvent::TurnFailed(_)
+                                        )
+                                    {
+                                        saw_terminal_event = true;
+                                    }
+                                }
+                                if notification.method == protocol::method::TURN_STATUS
+                                    && notification.params["turnId"] == accepted.turn_id
+                                    && notification.params["status"] == "failed"
+                                {
+                                    assert!(saw_terminal_event, "the runloop emitted the terminal ThreadEvent");
+                                    break;
+                                }
+                            }
+                        })
+                        .await
+                        .expect("cancelled turn emits a terminal outcome");
+                        assert!(context.state.lock().await.active_turn_id.is_none());
+                    }
+                    shutdown_current_session(&context, false).await.expect("shutdown");
+                });
+        })
+        .expect("spawn test thread")
+        .join()
+        .expect("host runloop test");
+}
+
 #[tokio::test]
 async fn turn_cancel_fires_stop_signal_and_queues_cancel_event() {
     let mut harness = StopHarness::new().await;
@@ -116,15 +202,51 @@ async fn turn_cancel_waits_for_late_stop_handles() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(50)).await;
         stop_requests::publish_stop_handles(&stop, &ctrl_c, &notify);
+        stop_requests::mark_host_turns_ready(&stop);
     });
     let request = harness.cancel_request("session", "turn-1");
+    // The ack no longer blocks on the publish wait; the signal follows
+    // from the detached waiter once the runloop publishes.
+    let started = Instant::now();
     let (result, _) = timeout(Duration::from_secs(10), handle_request(&harness.context, &request))
         .await
         .expect("cancel must not hang")
         .expect("cancel accepted");
+    assert!(started.elapsed() < Duration::from_secs(1), "the ack stays fast while handles publish late");
     assert_eq!(result["cancelRequested"], true);
+    wait_for_cancel(&harness.ctrl_c).await;
     assert!(harness.ctrl_c.is_cancel_requested(), "a cancel during runloop startup must still stop the turn");
     assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+}
+
+#[tokio::test]
+async fn startup_cancel_waits_past_old_deadline_until_turns_are_ready() {
+    let mut harness = StopHarness::new().await;
+    stop_requests::publish_stop_handles(&harness.stop, &harness.ctrl_c, &harness.notify);
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    tokio::time::sleep(Duration::from_millis(2100)).await;
+    assert!(!harness.ctrl_c.is_cancel_requested(), "startup must not enter the pause state");
+    stop_requests::mark_host_turns_ready(&harness.stop);
+    wait_for_cancel(&harness.ctrl_c).await;
+    assert!(harness.ctrl_c.is_cancel_requested(), "the accepted stop survives slow startup");
+}
+
+#[tokio::test]
+async fn late_stop_handles_do_not_cancel_a_replacement_turn() {
+    let mut harness = StopHarness::new().await;
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = Some("turn-2".into());
+        state.cancel_requested_turn = None;
+    }
+    harness.publish();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(!harness.ctrl_c.is_cancel_requested(), "the old stop must not reach the replacement turn");
 }
 
 #[tokio::test]
@@ -138,7 +260,7 @@ async fn turn_cancel_without_handles_still_queues_cancel_event() {
         .await
         .expect("cancel must stay bounded without handles")
         .expect("cancel accepted");
-    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(started.elapsed() < Duration::from_secs(1), "the ack never waits out the publish bound");
     assert_eq!(result["cancelRequested"], true);
     assert!(!harness.ctrl_c.is_cancel_requested());
     assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
@@ -179,6 +301,85 @@ async fn duplicate_turn_cancel_sends_nothing_more() {
         .expect("duplicate cancel accepted");
     assert_eq!(result["cancelRequested"], true);
     assert!(harness.input.try_recv().is_err(), "a duplicate cancel must not re-queue");
+}
+
+#[tokio::test]
+async fn duplicate_turn_cancel_refires_stop_signal() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("first cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // The runloop observed the first stop but the turn is still active; a
+    // repeated press must re-assert the signal instead of wedging silently.
+    harness.ctrl_c.mark_cancel_handled();
+    assert!(!harness.ctrl_c.is_cancel_requested());
+    let (result, _) = handle_request(&harness.context, &request)
+        .await
+        .expect("duplicate cancel accepted");
+    assert_eq!(result["cancelRequested"], true);
+    assert!(harness.input.try_recv().is_err(), "a duplicate cancel must not re-queue");
+    assert!(
+        harness.ctrl_c.is_cancel_requested(),
+        "a repeated stop must re-assert the stop signal while the turn is active"
+    );
+}
+
+#[tokio::test]
+async fn turn_cancel_refires_stop_signal_after_latch_reset() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(harness.ctrl_c.is_cancel_requested(), "first signal fires synchronously");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // Simulate the runloop resetting its latch while processing the Submit:
+    // the first signal is lost, and the delayed re-fire must re-assert it
+    // while the same turn is still active.
+    harness.ctrl_c.reset();
+    assert!(!harness.ctrl_c.is_cancel_requested());
+    wait_for_cancel(&harness.ctrl_c).await;
+    assert!(harness.input.try_recv().is_err(), "the re-fire sends no duplicate event");
+}
+
+#[tokio::test]
+async fn cancel_refire_skips_released_turn() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // The turn ends before the re-fire delay elapses: terminal cleanup
+    // releases the slot, so the late task must stay quiet.
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = None;
+        state.cancel_requested_turn = None;
+    }
+    harness.ctrl_c.reset();
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    assert!(!harness.ctrl_c.is_cancel_requested(), "no re-fire after the turn is released");
+    assert!(harness.input.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn cancel_refire_skips_replaced_turn() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // A drained batch takes the slot before the re-fire lands: the late
+    // task targets turn-1 and must not stop turn-2.
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = Some("turn-2".into());
+        state.cancel_requested_turn = None;
+    }
+    harness.ctrl_c.reset();
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    assert!(!harness.ctrl_c.is_cancel_requested(), "no re-fire into a newer turn");
+    assert!(harness.input.try_recv().is_err());
 }
 
 #[tokio::test]
@@ -278,7 +479,7 @@ async fn immediate_submit_clears_handled_cancellation() {
 }
 
 #[tokio::test]
-async fn queued_submit_clears_handled_cancellation_without_dispatching() {
+async fn queued_submit_preserves_active_turn_cancellation_without_dispatching() {
     let mut harness = StopHarness::new().await;
     harness.publish();
     harness.ctrl_c.request_local_cancel();
@@ -295,7 +496,7 @@ async fn queued_submit_clears_handled_cancellation_without_dispatching() {
     .expect("queued submit accepted");
     assert!(accepted.queued);
     assert_eq!(accepted.queue_depth, 1);
-    assert!(!harness.ctrl_c.is_cancel_handled(), "a queued submission also resumes a stop-paused initialization");
+    assert!(harness.ctrl_c.is_cancel_handled(), "a queued submission must not reset the active turn");
     assert!(harness.input.try_recv().is_err(), "a queued prompt dispatches only after the active turn");
 }
 

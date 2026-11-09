@@ -1,6 +1,90 @@
 use super::*;
 
 #[tokio::test]
+async fn retained_evidence_coaching_reaches_next_request_with_tools() {
+    use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{LoopTracker, update_repetition_tracker};
+    use vtcode_core::config::constants::tools;
+
+    let mut tracker = LoopTracker::new();
+    let args = json!({"cmd":"sed -n '2,3p' README.md"});
+    let result = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+        output: json!({"output":"second\nthird\n", "exit_code":0}),
+        stdout: None,
+        modified_files: vec![],
+        command_success: true,
+    });
+    for _ in 0..2 {
+        update_repetition_tracker(&mut tracker, &result, tools::EXEC_COMMAND, &args);
+    }
+    let notice = tracker.take_redundant_navigation_guidance().expect("redundancy notice");
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.add_tool_definition(named_tool("apply_patch")).await;
+    let mut ctx = backing.turn_processing_context();
+    ctx.working_history.push(uni::Message::user("update README".to_string()));
+    exec_round(&mut ctx, "read-1");
+    ctx.push_system_message(notice.clone());
+    let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+    let built = build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+        .await
+        .expect("request should build");
+    assert!(
+        built
+            .request
+            .messages
+            .iter()
+            .any(|message| message.content.as_text().contains(&notice))
+    );
+    assert!(request_tool_names(&built.request).contains(&"apply_patch".to_string()));
+}
+
+#[tokio::test]
+async fn parallel_tool_replies_retain_interleaved_coaching() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.add_tool_definition(named_tool("apply_patch")).await;
+    let mut ctx = backing.turn_processing_context();
+    ctx.working_history.push(uni::Message::user("update README".to_string()));
+    let calls = ["read-1", "read-2"]
+        .into_iter()
+        .map(|id| uni::ToolCall::function(id.to_string(), "exec_command".to_string(), "{}".to_string()))
+        .collect();
+    ctx.working_history
+        .push(uni::Message::assistant_with_tools(String::new(), calls));
+    ctx.working_history
+        .push(uni::Message::tool_response("read-1".to_string(), "first result".to_string()));
+    let notice = "This inspection returned only text evidence already gathered this turn.";
+    ctx.push_system_message(notice);
+    ctx.working_history
+        .push(uni::Message::tool_response("read-2".to_string(), "second result".to_string()));
+    let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+    let built = build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+        .await
+        .expect("request should build");
+    assert!(
+        built
+            .request
+            .messages
+            .iter()
+            .any(|message| message.content.as_text().contains(notice))
+    );
+    assert!(
+        built
+            .request
+            .messages
+            .iter()
+            .any(|message| message.tool_call_id.as_deref() == Some("read-2"))
+    );
+    assert!(
+        built
+            .request
+            .messages
+            .iter()
+            .any(|message| message.tool_call_id.as_deref() == Some("read-1"))
+    );
+    assert!(request_tool_names(&built.request).contains(&"apply_patch".to_string()));
+}
+
+#[tokio::test]
 async fn openai_responses_replays_full_structured_history_without_suffixing() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     let prior_messages = vec![

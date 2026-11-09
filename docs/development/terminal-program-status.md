@@ -16,7 +16,10 @@ enabled = false
 
 Valid live configuration reloads apply this setting. Disabling clears only the current session's owned subtree.
 Reports go to the interactive TUI's stderr terminal stream, only when stdin, stdout, and stderr are terminals.
-Headless, ACP, JSON, and redirected output remain silent, as do terminals whose `VTE_VERSION` predates the parser
+Headless exec runs emit a single-shot owned record on the same stream — `working` at start, then `done`, `error`,
+or `idle` on cancellation — gated on stderr alone being a terminal, since exec only appends there. The switch is
+read once from the invoking workspace's config at startup, so a resume that re-resolves into another workspace keeps
+the startup value. ACP, JSON, quiet, and redirected-stderr runs stay silent, as do terminals whose `VTE_VERSION` predates the parser
 that safely ignores unknown OSC sequences (pre-0.54, mirroring Codex). No terminal feature query or additional
 input reader is used.
 
@@ -71,12 +74,52 @@ When requesting the mapping upstream, point at this section plus the icon files 
 with no public tracker; the channel is the private Rex Beta Discord). No CLI-side escape sequence can set
 profile artwork; do not fork the adapter to spoof another program's id.
 
+Copy-paste request body (verified against the spec 2026-11-02; emission is conformant, only the tile is missing):
+
+```text
+Please add a program-registry icon tile for VT Code (https://github.com/vinhnx/vtcode).
+
+- OSC 7501 `app` id: `vtcode` (sent on every report; root title "VT Code")
+- Foreground process name: `vtcode`
+- Artwork (monochrome V mark, white on transparent for dark tab chrome):
+  resources/icons/vtcode-mono.svg (vector source)
+  resources/icons/vtcode-mono-32.png (32x32 handoff)
+  resources/icons/vtcode-mono-120.png (120x120 handoff)
+- Spec conformance: complete-replacement reports, opaque slash-scoped ids,
+  kind/progress gated to blocked/working, base64 single-line title/msg with
+  no controls, 4KB/64-record caps, no feature query (emit unconditionally,
+  as the spec permits).
+
+Today Rex tabs running VT Code show the generic terminal glyph; mapping
+`vtcode` lights up the tile with no CLI-side change needed.
+```
+
 ## iTerm2 session status (OSC 21337)
 
 Direct iTerm2 sessions (no tmux/screen) additionally receive the proprietary session-status pill alongside the
 7501 records, mirroring Codex: the parent state maps to `Idle` (green), `Working` (orange), or `Waiting` (blue)
 with the same generic detail label, finished states read as idle, and restoration clears the pill. Children,
 progress percents, and kinds stay 7501-only; the pill is one session-level status, deduplicated like the records.
+
+## Tab progress (OSC 9;4)
+
+Sessions on terminals documented to render ConEmu progress additionally receive `OSC 9;4` tab-progress reports
+on the same stream, under the same `enabled` switch: a native tab ring/bar with no per-terminal install. The
+parent state maps onto the ConEmu states ([Windows Terminal docs](https://learn.microsoft.com/en-us/windows/terminal/tutorials/progress-bar-sequences)):
+
+| Runtime evidence | Tab progress |
+| --- | --- |
+| Working with typed task percent | `1` + value (`0-100`, clamped) |
+| Working, indeterminate | `3` (indeterminate) |
+| Actual approval, question, or authentication wait | `4` (paused — a wait, not a failure) |
+| Terminal turn failure | `2` (error) |
+| Idle, successful turn, disable, or shutdown | `0` (remove) |
+
+Emission is allowlist-only, because everywhere else `OSC 9` may mean notifications: Windows Terminal
+(`WT_SESSION`/`WT_PROFILE_ID`), ConEmu (`ConEmuPID`), or exactly `TERM_PROGRAM=ghostty` with
+`TERM_PROGRAM_VERSION >= 1.2.0` (older Ghostty parses `OSC 9` as a notification, so unversioned or
+unparsable versions fail closed). Unknown terminals never receive the sequence. Like the 7501 records,
+only changed states are written and restoration removes the indicator.
 
 ## Lifecycle
 
@@ -111,7 +154,9 @@ and idempotent. An unfinished parent with finished children is retired to idle s
 ## Ownership and privacy
 
 `vtcode-commons::program_status` owns the bounded encoder and typed projection commands. `vtcode-ui` owns records,
-deduplication, terminal writes, and restoration cleanup. Runtime turn outcomes and registry snapshots supply status;
+deduplication, terminal writes, and restoration cleanup. Headless exec reporting is a single-shot projection in
+`src/cli/exec/status.rs` reusing the same encoder: one owned record, no children, no progress, and never `blocked`
+(exec always runs `full_auto`, so there is no approval wait to report). Runtime turn outcomes and registry snapshots supply status;
 `ActivityState` and `ThreadEvent` retain their existing authority. The adapter does not enable input or execution.
 
 Reports contain `app=vtcode` and generic phase/task labels. They exclude prompts, commands, paths, summaries,
@@ -125,6 +170,11 @@ While disabled, the adapter keeps only parent lifecycle and wait ownership up to
 existing Local Agents snapshot on enable, without sorting or hashing child records while off. Once owned clears
 succeed, disabled reporting skips terminal locking and restoration bookkeeping; failed clears remain retryable.
 
+Nested OSC 7501 bytes emitted by child or command output never reach the terminal on the default path: tool output
+rendering strips all OSC sequences (`vtcode_commons::ansi::strip_ansi_codes`) unless `ui.allow_tool_ansi` is
+explicitly enabled, in which case raw escapes pass through by user choice. VT Code re-projects children with
+generic labels instead of forwarding their messages.
+
 Only changed complete replacement reports are written. There are no heartbeat, spinner, or elapsed-time reports.
 Writes use the existing terminal-operation lock, failures log context and remain retryable, and writes stop once
 terminal restoration is claimed. Terminal titles, progress rendering, desktop notifications, reduced motion,
@@ -135,7 +185,7 @@ and screen-reader settings remain independent.
 Run focused regressions with:
 
 ```sh
-cargo nextest run --locked --config-file .config/nextest.toml -p vtcode-commons -p vtcode-ui -p vtcode-config -p vtcode -p vtcode-core -E 'test(program_status) | test(background_completion) | test(local_agents)'
+cargo nextest run --locked --config-file .config/nextest.toml -p vtcode-commons -p vtcode-ui -p vtcode-config -p vtcode -p vtcode-core -E 'test(program_status) | test(background_completion) | test(local_agents) | test(cli::exec::status) | test(osc_program_status)'
 ```
 
 PTY captures validate explicit-disable silence, live enabling/disabling, cancellation, failure, wire ordering,
@@ -149,6 +199,7 @@ Manual acceptance should cover:
 | Host path | Check |
 | --- | --- |
 | Rex | Unfocused tab and session picker reflect working, blocked, done, and error; cancellation becomes idle |
+| Exec run on TTY stderr | Single working record, then done/error (idle on Ctrl-C); JSON, quiet, and piped-stderr runs emit nothing |
 | Terminal without protocol support | Input, navigation, and restoration remain usable; no visible status escape text |
 | Multiplexer and SSH | Check report forwarding and behavior at each boundary; do not infer support from `TERM` |
 | Recorder | Inspect captured OSC bytes and verify playback behavior; generic labels remain the only report text |

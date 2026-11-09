@@ -32,12 +32,21 @@ Kepano (MIT-licensed network allowlist)
 
 Zed GPUI macOS backend
   Source: https://github.com/zed-industries/zed
-  Snapshot: gpui-pre-macos 0.3.9, zed@93d745668805029476e6d7fbb19652116fed51de
+  Snapshot: gpui-pre-macos 0.3.11, zed@f816e1f9263e3a8ef63c4baaa02e1441ce1c6038
   License: Apache License, Version 2.0
   Vendored path: patches/gpui-pre-macos
   VT Code modifications: immediate native cursor refresh, state-lock release
   before AppKit callbacks, content-boundary guard and regression coverage.
   See patches/gpui-pre-macos/PATCH.md and LICENSE-APACHE.
+
+Pele diagram renderer
+  Source: https://github.com/obsidianmd/pele
+  Snapshot: pele 1.13.0 (npm registry tarball, 2026-11-08)
+  License: MIT
+  Vendored path: resources/pele/pele.global.js
+  VT Code modifications: none; the bundle is inlined verbatim into the
+  desktop diagram-preview page so previews work offline.
+  See resources/pele/PROVENANCE.md and LICENSE.
 
 ================================================================================
 PART I — CRATES.IO / GIT DEPENDENCIES
@@ -49,23 +58,33 @@ Do not edit by hand — regenerate after dependency changes.
 --------------------------------------------------------------------------------
 License Overview
 --------------------------------------------------------------------------------
-  Apache License 2.0 (572 crates) — SPDX: Apache-2.0
-  MIT License (228 crates) — SPDX: MIT
-  Unicode License v3 (19 crates) — SPDX: Unicode-3.0
-  BSD 3-Clause "New" or "Revised" License (8 crates) — SPDX: BSD-3-Clause
-  ISC License (8 crates) — SPDX: ISC
-  BSD 2-Clause "Simplified" License (3 crates) — SPDX: BSD-2-Clause
+  Apache License 2.0 (789 crates) — SPDX: Apache-2.0
+  MIT License (304 crates) — SPDX: MIT
+  Unicode License v3 (23 crates) — SPDX: Unicode-3.0
+  BSD 3-Clause "New" or "Revised" License (12 crates) — SPDX: BSD-3-Clause
+  ISC License (9 crates) — SPDX: ISC
+  BSD 2-Clause "Simplified" License (4 crates) — SPDX: BSD-2-Clause
+  Mozilla Public License 2.0 (4 crates) — SPDX: MPL-2.0
+  zlib License (4 crates) — SPDX: Zlib
   Community Data License Agreement Permissive 2.0 (3 crates) — SPDX: CDLA-Permissive-2.0
-  zlib License (3 crates) — SPDX: Zlib
+  BSD Zero Clause License (2 crates) — SPDX: 0BSD
   Boost Software License 1.0 (2 crates) — SPDX: BSL-1.0
-  Mozilla Public License 2.0 (2 crates) — SPDX: MPL-2.0
-  Creative Commons Zero v1.0 Universal (1 crates) — SPDX: CC0-1.0
+  Creative Commons Zero v1.0 Universal (2 crates) — SPDX: CC0-1.0
   MIT No Attribution (1 crates) — SPDX: MIT-0
   University of Illinois/NCSA Open Source License (1 crates) — SPDX: NCSA
 
 --------------------------------------------------------------------------------
 Detailed Dependency Listing
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+BSD Zero Clause License — SPDX: 0BSD
+--------------------------------------------------------------------------------
+  enum-iterator-derive 1.5.0
+    Source: https://github.com/stephaneyfx/enum-iterator.git
+    License: 0BSD
+  enum-iterator 2.3.0
+    Source: https://github.com/stephaneyfx/enum-iterator.git
+    License: 0BSD
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
@@ -78,6 +97,12 @@ Apache License 2.0 — SPDX: Apache-2.0
   num_threads 0.1.7
     Source: https://github.com/jhpratt/num_threads
     License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  xkeysym 0.2.1
+    Source: https://github.com/notgull/xkeysym
+    License: MIT OR Apache-2.0 OR Zlib
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
@@ -108,15 +133,30 @@ Apache License 2.0 — SPDX: Apache-2.0
   as-any 0.3.2
     Source: https://codeberg.org/fogti/as-any
     License: MIT OR Apache-2.0
+  as-raw-xcb-connection 1.0.1
+    Source: https://github.com/psychon/as-raw-xcb-connection
+    License: MIT OR Apache-2.0
   encode_unicode 1.0.0
     Source: https://github.com/tormol/encode_unicode
     License: Apache-2.0 OR MIT
   encoding_rs 0.8.35
     Source: https://github.com/hsivonen/encoding_rs
     License: (Apache-2.0 OR MIT) AND BSD-3-Clause
+  kurbo 0.11.3
+    Source: https://github.com/linebender/kurbo
+    License: Apache-2.0 OR MIT
+  kurbo 0.13.1
+    Source: https://github.com/linebender/kurbo
+    License: Apache-2.0 OR MIT
   nohash-hasher 0.2.0
     Source: https://github.com/paritytech/nohash-hasher
     License: Apache-2.0 OR MIT
+  polycool 0.4.0
+    Source: https://github.com/linebender/kurbo
+    License: MIT OR Apache-2.0
+  raw-window-metal 1.1.0
+    Source: https://github.com/rust-windowing/raw-window-metal
+    License: MIT OR Apache-2.0
   seccompiler 0.5.0
     Source: https://github.com/rust-vmm/seccompiler
     License: Apache-2.0 OR BSD-3-Clause
@@ -147,6 +187,12 @@ Apache License 2.0 — SPDX: Apache-2.0
   zeroize_derive 1.5.0
     Source: https://github.com/RustCrypto/utils
     License: Apache-2.0 OR MIT
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  rangemap 1.8.0
+    Source: https://github.com/jeffparsons/rangemap
+    License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
@@ -186,6 +232,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows-registry 0.4.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows-registry 0.6.1
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows-result 0.2.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
@@ -207,16 +256,19 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows-sys 0.42.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows-sys 0.48.0
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows-sys 0.52.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-sys 0.59.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
-  windows-sys 0.60.2
+  windows-sys 0.61.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
-  windows-sys 0.61.2
+  windows-targets 0.48.5
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-targets 0.52.6
@@ -231,10 +283,16 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows-version 0.1.7
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows 0.58.0
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows 0.62.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_aarch64_gnullvm 0.42.2
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows_aarch64_gnullvm 0.48.5
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_aarch64_gnullvm 0.52.6
@@ -246,6 +304,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows_aarch64_msvc 0.42.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows_aarch64_msvc 0.48.5
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows_aarch64_msvc 0.52.6
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
@@ -253,6 +314,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_i686_gnu 0.42.2
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows_i686_gnu 0.48.5
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_i686_gnu 0.52.6
@@ -270,6 +334,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows_i686_msvc 0.42.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows_i686_msvc 0.48.5
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows_i686_msvc 0.52.6
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
@@ -277,6 +344,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_x86_64_gnu 0.42.2
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows_x86_64_gnu 0.48.5
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_x86_64_gnu 0.52.6
@@ -288,6 +358,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows_x86_64_gnullvm 0.42.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows_x86_64_gnullvm 0.48.5
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows_x86_64_gnullvm 0.52.6
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
@@ -295,6 +368,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_x86_64_msvc 0.42.2
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows_x86_64_msvc 0.48.5
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows_x86_64_msvc 0.52.6
@@ -357,11 +433,20 @@ Apache License 2.0 — SPDX: Apache-2.0
   ciborium 0.2.2
     Source: https://github.com/enarx/ciborium
     License: Apache-2.0
+  codespan-reporting 0.13.1
+    Source: https://github.com/brendanzab/codespan
+    License: Apache-2.0
   imgref 1.12.2
     Source: https://github.com/kornelski/imgref
     License: CC0-1.0 OR Apache-2.0
   rustls-platform-verifier 0.7.0
     Source: https://github.com/rustls/rustls-platform-verifier
+    License: MIT OR Apache-2.0
+  self_cell 1.3.0
+    Source: https://github.com/Voultapher/self_cell
+    License: Apache-2.0 OR GPL-2.0-only
+  sys-locale 0.3.2
+    Source: https://github.com/1Password/sys-locale
     License: MIT OR Apache-2.0
   unarray 0.1.4
     Source: https://github.com/cameron1024/unarray
@@ -378,7 +463,7 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  astral-html 0.0.3
+  astral-html 0.0.4
     Source: https://github.com/astral-sh/astral-html
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
@@ -411,12 +496,18 @@ Apache License 2.0 — SPDX: Apache-2.0
   clap_builder 4.6.7
     Source: https://github.com/clap-rs/clap
     License: MIT OR Apache-2.0
+  clap_complete 4.6.11
+    Source: https://github.com/clap-rs/clap
+    License: MIT OR Apache-2.0
   clap_derive 4.6.7
     Source: https://github.com/clap-rs/clap
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  cosmic-text 0.19.0
+    Source: https://github.com/pop-os/cosmic-text
+    License: MIT OR Apache-2.0
   kasuari 0.4.12
     Source: https://github.com/ratatui/kasuari
     License: MIT OR Apache-2.0
@@ -435,7 +526,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   normalize-line-endings 0.3.0
     Source: https://github.com/derekdreery/normalize-line-endings
     License: Apache-2.0
-  notify-rust 4.18.1
+  notify-rust 4.18.2
     Source: https://github.com/hoodie/notify-rust
     License: MIT OR Apache-2.0
   unicode-general-category 1.1.0
@@ -443,6 +534,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: Apache-2.0
   winapi 0.3.9
     Source: https://github.com/retep998/winapi-rs
+    License: MIT OR Apache-2.0
+  wio 0.2.2
+    Source: https://github.com/retep998/wio-rs
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
@@ -492,6 +586,18 @@ Apache License 2.0 — SPDX: Apache-2.0
   crc32fast 1.5.0
     Source: https://github.com/srijs/rust-crc32fast
     License: MIT OR Apache-2.0
+  float-ord 0.3.2
+    Source: https://github.com/notriddle/rust-float-ord
+    License: MIT  OR  Apache-2.0
+  foreign-types-macros 0.2.4
+    Source: https://github.com/sfackler/foreign-types
+    License: MIT OR Apache-2.0
+  foreign-types-shared 0.3.1
+    Source: https://github.com/sfackler/foreign-types
+    License: MIT OR Apache-2.0
+  foreign-types 0.5.0
+    Source: https://github.com/sfackler/foreign-types
+    License: MIT OR Apache-2.0
   hex 0.4.3
     Source: https://github.com/KokaKiwi/rust-hex
     License: MIT OR Apache-2.0
@@ -503,6 +609,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: MIT OR Apache-2.0
   is_terminal_polyfill 1.70.2
     Source: https://github.com/polyfill-rs/is_terminal_polyfill
+    License: MIT OR Apache-2.0
+  jni-sys 0.3.1
+    Source: https://github.com/jni-rs/jni-sys
     License: MIT OR Apache-2.0
   jni-sys 0.4.1
     Source: https://github.com/jni-rs/jni-sys
@@ -534,6 +643,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   roff 1.1.1
     Source: https://github.com/rust-cli/roff-rs
     License: MIT OR Apache-2.0
+  serde_spanned 0.6.9
+    Source: https://github.com/toml-rs/toml
+    License: MIT OR Apache-2.0
   serde_spanned 1.1.1
     Source: https://github.com/toml-rs/toml
     License: MIT OR Apache-2.0
@@ -543,16 +655,28 @@ Apache License 2.0 — SPDX: Apache-2.0
   terminal_size 0.4.4
     Source: https://github.com/eminence/terminal-size
     License: MIT OR Apache-2.0
+  toml 0.8.23
+    Source: https://github.com/toml-rs/toml
+    License: MIT OR Apache-2.0
   toml 1.1.6+spec-1.1.0
     Source: https://github.com/toml-rs/toml
     License: MIT OR Apache-2.0
+  toml_datetime 0.6.11
+    Source: https://github.com/toml-rs/toml
+    License: MIT OR Apache-2.0
   toml_datetime 1.1.1+spec-1.1.0
+    Source: https://github.com/toml-rs/toml
+    License: MIT OR Apache-2.0
+  toml_edit 0.22.27
     Source: https://github.com/toml-rs/toml
     License: MIT OR Apache-2.0
   toml_edit 0.25.15+spec-1.1.0
     Source: https://github.com/toml-rs/toml
     License: MIT OR Apache-2.0
   toml_parser 1.1.3+spec-1.1.0
+    Source: https://github.com/toml-rs/toml
+    License: MIT OR Apache-2.0
+  toml_write 0.1.2
     Source: https://github.com/toml-rs/toml
     License: MIT OR Apache-2.0
   toml_writer 1.1.2+spec-1.1.0
@@ -573,6 +697,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   filesnap 0.5.1
     Source: https://github.com/extracurricular-ai/filesnap
     License: Apache-2.0
+  tui-shimmer 0.1.7
+    Source: https://github.com/vinhnx/tui-shimmer
+    License: MIT AND Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
@@ -624,6 +751,9 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  gpui-pre-reqwest 0.12.15
+    Source: https://github.com/seanmonstar/reqwest
+    License: MIT OR Apache-2.0
   reqwest 0.12.28
     Source: https://github.com/seanmonstar/reqwest
     License: MIT OR Apache-2.0
@@ -666,6 +796,12 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  gpu-allocator 0.28.0
+    Source: https://github.com/Traverse-Research/gpu-allocator
+    License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
   rustls-pki-types 1.15.1
     Source: https://github.com/rustls/pki-types
     License: MIT OR Apache-2.0
@@ -690,7 +826,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   dbus-secret-service-keyring-store 1.0.1
     Source: https://github.com/open-source-cooperative/dbus-secret-service-keyring-store.git
     License: MIT OR Apache-2.0
-  keyring-core 1.0.0
+  keyring-core 1.0.1
     Source: https://github.com/open-source-cooperative/keyring-core.git
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
@@ -698,6 +834,12 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
   async-recursion 1.1.1
     Source: https://github.com/dcchut/async-recursion
+    License: MIT OR Apache-2.0
+  core_detect 1.0.0
+    Source: https://github.com/thomcc/core_detect
+    License: MIT OR Apache-2.0
+  gif 0.13.3
+    Source: https://github.com/image-rs/image-gif
     License: MIT OR Apache-2.0
   gif 0.14.2
     Source: https://github.com/image-rs/image-gif
@@ -723,7 +865,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   arbitrary 1.4.2
     Source: https://github.com/rust-fuzz/arbitrary/
     License: MIT OR Apache-2.0
-  arc-swap 1.9.2
+  arc-swap 1.9.3
     Source: https://github.com/vorner/arc-swap
     License: MIT OR Apache-2.0
   arrayvec 0.7.8
@@ -735,14 +877,20 @@ Apache License 2.0 — SPDX: Apache-2.0
   async-channel 2.5.0
     Source: https://github.com/smol-rs/async-channel
     License: Apache-2.0 OR MIT
-  async-executor 1.14.0
+  async-executor 1.14.1
     Source: https://github.com/smol-rs/async-executor
+    License: Apache-2.0 OR MIT
+  async-fs 2.2.0
+    Source: https://github.com/smol-rs/async-fs
     License: Apache-2.0 OR MIT
   async-io 2.6.0
     Source: https://github.com/smol-rs/async-io
     License: Apache-2.0 OR MIT
   async-lock 3.4.2
     Source: https://github.com/smol-rs/async-lock
+    License: Apache-2.0 OR MIT
+  async-net 2.0.0
+    Source: https://github.com/smol-rs/async-net
     License: Apache-2.0 OR MIT
   async-process 2.5.0
     Source: https://github.com/smol-rs/async-process
@@ -755,6 +903,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: Apache-2.0 OR MIT
   atomic-waker 1.1.2
     Source: https://github.com/smol-rs/atomic-waker
+    License: Apache-2.0 OR MIT
+  atomic 0.5.3
+    Source: https://github.com/Amanieu/atomic-rs
     License: Apache-2.0 OR MIT
   autocfg 1.5.1
     Source: https://github.com/cuviper/autocfg
@@ -807,6 +958,12 @@ Apache License 2.0 — SPDX: Apache-2.0
   concurrent-queue 2.5.0
     Source: https://github.com/smol-rs/concurrent-queue
     License: Apache-2.0 OR MIT
+  const-random-macro 0.1.16
+    Source: https://github.com/tkaitchuck/constrandom
+    License: MIT OR Apache-2.0
+  const-random 0.1.18
+    Source: https://github.com/tkaitchuck/constrandom
+    License: MIT OR Apache-2.0
   core-foundation-sys 0.8.7
     Source: https://github.com/servo/core-foundation-rs
     License: MIT OR Apache-2.0
@@ -814,6 +971,15 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/servo/core-foundation-rs
     License: MIT OR Apache-2.0
   core-foundation 0.9.4
+    Source: https://github.com/servo/core-foundation-rs
+    License: MIT OR Apache-2.0
+  core-graphics-types 0.2.0
+    Source: https://github.com/servo/core-foundation-rs
+    License: MIT OR Apache-2.0
+  core-graphics 0.24.0
+    Source: https://github.com/servo/core-foundation-rs
+    License: MIT OR Apache-2.0
+  core-text 21.0.0
     Source: https://github.com/servo/core-foundation-rs
     License: MIT OR Apache-2.0
   criterion-plot 0.8.2
@@ -831,8 +997,14 @@ Apache License 2.0 — SPDX: Apache-2.0
   crossbeam-epoch 0.9.20
     Source: https://github.com/crossbeam-rs/crossbeam
     License: MIT OR Apache-2.0
+  crossbeam-queue 0.3.14
+    Source: https://github.com/crossbeam-rs/crossbeam
+    License: MIT OR Apache-2.0
   crossbeam-utils 0.8.22
     Source: https://github.com/crossbeam-rs/crossbeam
+    License: MIT OR Apache-2.0
+  data-url 0.3.2
+    Source: https://github.com/servo/rust-url
     License: MIT OR Apache-2.0
   dbus-secret-service 4.1.0
     Source: https://github.com/brotskydotcom/dbus-secret-service.git
@@ -851,6 +1023,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: Apache-2.0 OR MIT
   errno 0.3.14
     Source: https://github.com/lambda-fairy/rust-errno
+    License: MIT OR Apache-2.0
+  euclid 0.22.14
+    Source: https://github.com/servo/euclid
     License: MIT OR Apache-2.0
   event-listener-strategy 0.5.4
     Source: https://github.com/smol-rs/event-listener-strategy
@@ -888,6 +1063,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   fs2 0.4.3
     Source: https://github.com/danburkert/fs2-rs
     License: MIT OR Apache-2.0
+  futf 0.1.5
+    Source: https://github.com/servo/futf
+    License: MIT  OR  Apache-2.0
   futures-lite 2.6.1
     Source: https://github.com/smol-rs/futures-lite
     License: Apache-2.0 OR MIT
@@ -897,6 +1075,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   gethostname 1.1.0
     Source: https://codeberg.org/swsnr/gethostname.rs.git
     License: Apache-2.0
+  getopts 0.2.24
+    Source: https://github.com/rust-lang/getopts
+    License: MIT OR Apache-2.0
   gimli 0.32.3
     Source: https://github.com/gimli-rs/gimli
     License: MIT OR Apache-2.0
@@ -905,6 +1086,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: MIT OR Apache-2.0
   hash32 0.3.1
     Source: https://github.com/japaric/hash32
+    License: MIT OR Apache-2.0
+  hashbrown 0.14.5
+    Source: https://github.com/rust-lang/hashbrown
     License: MIT OR Apache-2.0
   hashbrown 0.15.5
     Source: https://github.com/rust-lang/hashbrown
@@ -918,11 +1102,20 @@ Apache License 2.0 — SPDX: Apache-2.0
   heapless 0.8.0
     Source: https://github.com/rust-embedded/heapless
     License: MIT OR Apache-2.0
+  heapless 0.9.3
+    Source: https://github.com/rust-embedded/heapless
+    License: MIT OR Apache-2.0
+  heck 0.4.1
+    Source: https://github.com/withoutboats/heck
+    License: MIT OR Apache-2.0
   heck 0.5.0
     Source: https://github.com/withoutboats/heck
     License: MIT OR Apache-2.0
   hermit-abi 0.5.2
     Source: https://github.com/hermit-os/hermit-rs
+    License: MIT OR Apache-2.0
+  html5ever 0.27.0
+    Source: https://github.com/servo/html5ever
     License: MIT OR Apache-2.0
   httparse 1.10.1
     Source: https://github.com/seanmonstar/httparse
@@ -939,9 +1132,12 @@ Apache License 2.0 — SPDX: Apache-2.0
   indexmap 2.14.2
     Source: https://github.com/indexmap-rs/indexmap
     License: Apache-2.0 OR MIT
-  insta 1.48.0
+  insta 1.49.0
     Source: https://github.com/mitsuhiko/insta
     License: Apache-2.0
+  itertools 0.11.0
+    Source: https://github.com/rust-itertools/itertools
+    License: MIT OR Apache-2.0
   itertools 0.13.0
     Source: https://github.com/rust-itertools/itertools
     License: MIT OR Apache-2.0
@@ -956,6 +1152,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: MIT OR Apache-2.0
   js-sys 0.3.106
     Source: https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys
+    License: MIT OR Apache-2.0
+  khronos-egl 6.0.0
+    Source: https://github.com/timothee-haudebourg/khronos-egl
     License: MIT OR Apache-2.0
   lazy_static 1.5.0
     Source: https://github.com/rust-lang-nursery/lazy-static.rs
@@ -972,14 +1171,26 @@ Apache License 2.0 — SPDX: Apache-2.0
   lock_api 0.4.14
     Source: https://github.com/Amanieu/parking_lot
     License: MIT OR Apache-2.0
+  lock_api 0.5.0
+    Source: https://github.com/Amanieu/parking_lot
+    License: MIT OR Apache-2.0
   log 0.4.34
     Source: https://github.com/rust-lang/log
+    License: MIT OR Apache-2.0
+  markup5ever 0.12.1
+    Source: https://github.com/servo/html5ever
+    License: MIT OR Apache-2.0
+  markup5ever_rcdom 0.3.0
+    Source: https://github.com/servo/html5ever
     License: MIT OR Apache-2.0
   mime 0.3.17
     Source: https://github.com/hyperium/mime
     License: MIT OR Apache-2.0
   miow 0.5.0
     Source: https://github.com/yoshuawuyts/miow
+    License: MIT OR Apache-2.0
+  num-bigint-dig 0.9.1
+    Source: https://github.com/dignifiedquire/num-bigint
     License: MIT OR Apache-2.0
   num-bigint 0.4.8
     Source: https://github.com/rust-num/num-bigint
@@ -1026,6 +1237,12 @@ Apache License 2.0 — SPDX: Apache-2.0
   parking_lot 0.12.5
     Source: https://github.com/Amanieu/parking_lot
     License: MIT OR Apache-2.0
+  parking_lot 0.13.0
+    Source: https://github.com/Amanieu/parking_lot
+    License: MIT OR Apache-2.0
+  parking_lot_core 0.10.0
+    Source: https://github.com/Amanieu/parking_lot
+    License: MIT OR Apache-2.0
   parking_lot_core 0.9.12
     Source: https://github.com/Amanieu/parking_lot
     License: MIT OR Apache-2.0
@@ -1041,13 +1258,25 @@ Apache License 2.0 — SPDX: Apache-2.0
   pkg-config 0.3.33
     Source: https://github.com/rust-lang/pkg-config-rs
     License: MIT OR Apache-2.0
+  png 0.17.16
+    Source: https://github.com/image-rs/image-png
+    License: MIT OR Apache-2.0
   png 0.18.1
     Source: https://github.com/image-rs/image-png
     License: MIT OR Apache-2.0
   polling 3.11.0
     Source: https://github.com/smol-rs/polling
     License: Apache-2.0 OR MIT
-  proptest 1.11.0
+  pollster 0.2.5
+    Source: https://github.com/zesterer/pollster
+    License: Apache-2.0 OR MIT
+  pollster 0.4.0
+    Source: https://github.com/zesterer/pollster
+    License: Apache-2.0 OR MIT
+  proptest-macro 0.6.0
+    Source: https://github.com/proptest-rs/proptest
+    License: MIT OR Apache-2.0
+  proptest 1.12.0
     Source: https://github.com/proptest-rs/proptest
     License: MIT OR Apache-2.0
   rayon-core 1.13.0
@@ -1065,9 +1294,18 @@ Apache License 2.0 — SPDX: Apache-2.0
   regex 1.13.1
     Source: https://github.com/rust-lang/regex
     License: MIT OR Apache-2.0
+  renderdoc-sys 1.1.0
+    Source: https://github.com/ebkalderon/renderdoc-rs
+    License: MIT OR Apache-2.0
   ring 0.17.14
     Source: https://github.com/briansmith/ring
     License: Apache-2.0 AND ISC
+  roxmltree 0.20.0
+    Source: https://github.com/RazrFalcon/roxmltree
+    License: MIT OR Apache-2.0
+  roxmltree 0.21.1
+    Source: https://github.com/RazrFalcon/roxmltree
+    License: MIT OR Apache-2.0
   rustc-demangle 0.1.28
     Source: https://github.com/rust-lang/rustc-demangle
     License: MIT OR Apache-2.0
@@ -1077,13 +1315,16 @@ Apache License 2.0 — SPDX: Apache-2.0
   rustc_version 0.4.1
     Source: https://github.com/djc/rustc-version-rs
     License: MIT OR Apache-2.0
-  rustix 1.1.4
+  rustix 1.1.6
     Source: https://github.com/bytecodealliance/rustix
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
   rustls-native-certs 0.8.4
     Source: https://github.com/rustls/rustls-native-certs
     License: Apache-2.0 OR ISC OR MIT
-  rustls 0.23.45
+  rustls-pemfile 2.2.0
+    Source: https://github.com/rustls/pemfile
+    License: Apache-2.0 OR ISC OR MIT
+  rustls 0.23.46
     Source: https://github.com/rustls/rustls
     License: Apache-2.0 OR ISC OR MIT
   rusty-fork 0.3.1
@@ -1101,7 +1342,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   security-framework 3.7.0
     Source: https://github.com/kornelski/rust-security-framework
     License: MIT OR Apache-2.0
-  self-replace 1.5.0
+  self-replace 1.5.1
     Source: https://github.com/mitsuhiko/self-replace
     License: Apache-2.0
   send_wrapper 0.6.0
@@ -1116,6 +1357,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   shell-escape 0.1.5
     Source: https://github.com/sfackler/shell-escape
     License: MIT OR Apache-2.0
+  shellexpand 3.1.2
+    Source: https://gitlab.com/ijackson/rust-shellexpand
+    License: MIT OR Apache-2.0
   signal-hook-mio 0.2.5
     Source: https://github.com/vorner/signal-hook
     License: MIT OR Apache-2.0
@@ -1125,7 +1369,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   signal-hook 0.3.18
     Source: https://github.com/vorner/signal-hook
     License: Apache-2.0 OR MIT
-  signal-hook 0.4.4
+  signal-hook 0.4.5
     Source: https://github.com/vorner/signal-hook
     License: MIT OR Apache-2.0
   simd_cesu8 1.2.0
@@ -1134,11 +1378,20 @@ Apache License 2.0 — SPDX: Apache-2.0
   similar 2.7.0
     Source: https://github.com/mitsuhiko/similar
     License: Apache-2.0
-  similar 3.2.0
+  similar 3.2.1
     Source: https://github.com/mitsuhiko/similar
     License: Apache-2.0
-  smallvec 1.16.2
+  simplecss 0.2.2
+    Source: https://github.com/linebender/simplecss
+    License: Apache-2.0 OR MIT
+  smallvec 1.16.4
     Source: https://github.com/servo/rust-smallvec
+    License: MIT OR Apache-2.0
+  smol 2.0.2
+    Source: https://github.com/smol-rs/smol
+    License: Apache-2.0 OR MIT
+  smol_str 0.3.7
+    Source: https://github.com/rust-lang/rust-analyzer/tree/master/lib/smol_str
     License: MIT OR Apache-2.0
   socket2 0.6.5
     Source: https://github.com/rust-lang/socket2
@@ -1146,7 +1399,25 @@ Apache License 2.0 — SPDX: Apache-2.0
   stable_deref_trait 1.2.1
     Source: https://github.com/storyyeller/stable_deref_trait
     License: MIT OR Apache-2.0
+  string_cache 0.8.9
+    Source: https://github.com/servo/string-cache
+    License: MIT OR Apache-2.0
+  string_cache_codegen 0.5.4
+    Source: https://github.com/servo/string-cache
+    License: MIT OR Apache-2.0
+  svgtypes 0.15.3
+    Source: https://github.com/linebender/svgtypes
+    License: Apache-2.0 OR MIT
+  svgtypes 0.16.1
+    Source: https://github.com/linebender/svgtypes
+    License: Apache-2.0 OR MIT
+  swash 0.2.10
+    Source: https://github.com/dfrg/swash
+    License: Apache-2.0 OR MIT
   system-configuration-sys 0.6.0
+    Source: https://github.com/mullvad/system-configuration-rs
+    License: MIT OR Apache-2.0
+  system-configuration 0.6.1
     Source: https://github.com/mullvad/system-configuration-rs
     License: MIT OR Apache-2.0
   system-configuration 0.7.0
@@ -1158,17 +1429,26 @@ Apache License 2.0 — SPDX: Apache-2.0
   tempfile 3.27.0
     Source: https://github.com/Stebalien/tempfile
     License: MIT OR Apache-2.0
+  tendril 0.4.3
+    Source: https://github.com/servo/tendril
+    License: MIT OR Apache-2.0
   thread_local 1.1.10
     Source: https://github.com/Amanieu/thread_local-rs
     License: MIT OR Apache-2.0
   tinytemplate 1.2.1
     Source: https://github.com/bheisler/TinyTemplate
     License: Apache-2.0 OR MIT
+  ttf-parser 0.25.1
+    Source: https://github.com/harfbuzz/ttf-parser
+    License: MIT OR Apache-2.0
   tungstenite 0.29.0
     Source: https://github.com/snapview/tungstenite-rs
     License: MIT OR Apache-2.0
   tungstenite 0.30.0
     Source: https://github.com/snapview/tungstenite-rs
+    License: MIT OR Apache-2.0
+  two-face 0.4.5
+    Source: https://github.com/CosmicHorrorDev/two-face
     License: MIT OR Apache-2.0
   ucd-trie 0.1.7
     Source: https://github.com/BurntSushi/ucd-generate
@@ -1176,8 +1456,23 @@ Apache License 2.0 — SPDX: Apache-2.0
   unicase 2.9.0
     Source: https://github.com/seanmonstar/unicase
     License: MIT OR Apache-2.0
+  unicode-bidi-mirroring 0.4.0
+    Source: https://github.com/RazrFalcon/unicode-bidi-mirroring
+    License: MIT OR Apache-2.0
+  unicode-bidi 0.3.18
+    Source: https://github.com/servo/unicode-bidi
+    License: MIT OR Apache-2.0
+  unicode-ccc 0.4.0
+    Source: https://github.com/RazrFalcon/unicode-ccc
+    License: MIT OR Apache-2.0
+  unicode-id 0.3.7
+    Source: https://github.com/Boshen/unicode-id
+    License: MIT OR Apache-2.0
   unicode-normalization 0.1.25
     Source: https://github.com/unicode-rs/unicode-normalization
+    License: MIT OR Apache-2.0
+  unicode-properties 0.1.3
+    Source: https://github.com/unicode-rs/unicode-properties
     License: MIT OR Apache-2.0
   unicode-segmentation 1.13.3
     Source: https://github.com/unicode-rs/unicode-segmentation
@@ -1185,7 +1480,10 @@ Apache License 2.0 — SPDX: Apache-2.0
   unicode-truncate 2.0.1
     Source: https://github.com/Aetf/unicode-truncate
     License: MIT OR Apache-2.0
-  unicode-width 0.2.2
+  unicode-vo 0.1.0
+    Source: https://github.com/RazrFalcon/unicode-vo
+    License: MIT OR Apache-2.0
+  unicode-width 0.2.3
     Source: https://github.com/unicode-rs/unicode-width
     License: MIT OR Apache-2.0
   unicode-xid 0.2.6
@@ -1194,7 +1492,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   url 2.5.8
     Source: https://github.com/servo/rust-url
     License: MIT OR Apache-2.0
-  uuid 1.26.1
+  uuid 1.29.0
     Source: https://github.com/uuid-rs/uuid
     License: Apache-2.0 OR MIT
   version_check 0.9.5
@@ -1203,6 +1501,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   wait-timeout 0.2.1
     Source: https://github.com/alexcrichton/wait-timeout
     License: MIT OR Apache-2.0
+  waker-fn 1.2.0
+    Source: https://github.com/smol-rs/waker-fn
+    License: Apache-2.0 OR MIT
   wasi 0.11.1+wasi-snapshot-preview1
     Source: https://github.com/bytecodealliance/wasi
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
@@ -1224,6 +1525,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   wasm-bindgen 0.2.129
     Source: https://github.com/wasm-bindgen/wasm-bindgen
     License: MIT OR Apache-2.0
+  wasm_thread 0.3.3
+    Source: https://github.com/chemicstry/wasm_thread
+    License: Apache-2.0 OR MIT
   web-sys 0.3.106
     Source: https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys
     License: MIT OR Apache-2.0
@@ -1236,11 +1540,17 @@ Apache License 2.0 — SPDX: Apache-2.0
   wl-clipboard-rs 0.9.3
     Source: https://github.com/YaLTeR/wl-clipboard-rs
     License: MIT OR Apache-2.0
-  xattr 1.6.1
+  xattr 1.7.0
     Source: https://github.com/Stebalien/xattr
+    License: MIT OR Apache-2.0
+  xml5ever 0.18.1
+    Source: https://github.com/servo/html5ever
     License: MIT OR Apache-2.0
   yaml-rust 0.4.5
     Source: https://github.com/chyh1990/yaml-rust
+    License: MIT OR Apache-2.0
+  zed-font-kit 0.14.1-zed
+    Source: https://github.com/servo/font-kit
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
@@ -1251,16 +1561,28 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  bit-set 0.10.0
+    Source: https://github.com/contain-rs/bit-set
+    License: Apache-2.0 OR MIT
+  bit-set 0.11.1
+    Source: https://github.com/contain-rs/bit-vec
+    License: Apache-2.0 OR MIT
   bit-set 0.5.3
     Source: https://github.com/contain-rs/bit-set
     License: MIT OR Apache-2.0
   bit-set 0.8.0
     Source: https://github.com/contain-rs/bit-set
     License: Apache-2.0 OR MIT
+  bit-vec 0.10.1
+    Source: https://github.com/contain-rs/bit-vec
+    License: Apache-2.0 OR MIT
   bit-vec 0.6.3
     Source: https://github.com/contain-rs/bit-vec
     License: MIT OR Apache-2.0
   bit-vec 0.8.0
+    Source: https://github.com/contain-rs/bit-vec
+    License: Apache-2.0 OR MIT
+  bit-vec 0.9.1
     Source: https://github.com/contain-rs/bit-vec
     License: Apache-2.0 OR MIT
   downcast-rs 1.2.1
@@ -1271,6 +1593,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: MIT OR Apache-2.0
   minimal-lexical 0.2.1
     Source: https://github.com/Alexhuszagh/minimal-lexical
+    License: MIT OR Apache-2.0
+  presser 0.3.1
+    Source: https://github.com/EmbarkStudios/presser
     License: MIT OR Apache-2.0
   qoi 0.4.1
     Source: https://github.com/aldanor/qoi-rust
@@ -1335,6 +1660,12 @@ Apache License 2.0 — SPDX: Apache-2.0
   inout 0.1.4
     Source: https://github.com/RustCrypto/utils
     License: MIT OR Apache-2.0
+  md-5 0.10.6
+    Source: https://github.com/RustCrypto/hashes
+    License: MIT OR Apache-2.0
+  pbkdf2 0.12.2
+    Source: https://github.com/RustCrypto/password-hashes/tree/master/pbkdf2
+    License: MIT OR Apache-2.0
   sha1-checked 0.10.0
     Source: https://github.com/RustCrypto/hashes
     License: MIT OR Apache-2.0
@@ -1347,13 +1678,25 @@ Apache License 2.0 — SPDX: Apache-2.0
   sha2 0.10.9
     Source: https://github.com/RustCrypto/hashes
     License: MIT OR Apache-2.0
-  sha2 0.11.0
+  sha2 0.11.1
     Source: https://github.com/RustCrypto/hashes
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  webbrowser 1.2.4
+  console_error_panic_hook 0.1.7
+    Source: https://github.com/rustwasm/console_error_panic_hook
+    License: Apache-2.0 OR MIT
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  triomphe 0.1.17
+    Source: https://github.com/Manishearth/triomphe
+    License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  webbrowser 1.2.6
     Source: https://github.com/amodm/webbrowser-rs
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
@@ -1361,6 +1704,9 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
   rand_core 0.10.1
     Source: https://github.com/rust-random/rand_core
+    License: MIT OR Apache-2.0
+  rand_core 0.6.4
+    Source: https://github.com/rust-random/rand
     License: MIT OR Apache-2.0
   rand_core 0.9.5
     Source: https://github.com/rust-random/rand
@@ -1380,11 +1726,26 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  ropey 2.0.0-beta.1
+    Source: https://github.com/cessen/ropey
+    License: MIT OR Apache-2.0
+  str_indices 0.4.4
+    Source: https://github.com/cessen/str_indices
+    License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
   adler2 2.0.1
     Source: https://github.com/oyvindln/adler2
     License: 0BSD OR MIT OR Apache-2.0
   proc-macro-crate 3.5.0
     Source: https://github.com/bkchr/proc-macro-crate
+    License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  unicode-script 0.5.8
+    Source: https://github.com/unicode-rs/unicode-script
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
@@ -1395,8 +1756,38 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  glow 0.17.0
+    Source: https://github.com/grovesNL/glow
+    License: MIT OR Apache-2.0 OR Zlib
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
   miow 0.6.1
     Source: https://github.com/yoshuawuyts/miow
+    License: MIT OR Apache-2.0
+  yazi 0.2.1
+    Source: https://github.com/dfrg/yazi
+    License: Apache-2.0 OR MIT
+  zeno 0.3.3
+    Source: https://github.com/dfrg/zeno
+    License: Apache-2.0 OR MIT
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  flume 0.12.0
+    Source: https://github.com/zesterer/flume
+    License: Apache-2.0 OR MIT
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  font-types 0.12.7
+    Source: https://github.com/googlefonts/fontations
+    License: MIT OR Apache-2.0
+  read-fonts 0.41.0
+    Source: https://github.com/googlefonts/fontations
+    License: MIT OR Apache-2.0
+  skrifa 0.44.0
+    Source: https://github.com/googlefonts/fontations
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
@@ -1413,11 +1804,59 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  ash 0.38.0+1.3.281
+    Source: https://github.com/ash-rs/ash
+    License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  font-types 0.11.3
+    Source: https://github.com/googlefonts/fontations
+    License: MIT OR Apache-2.0
+  read-fonts 0.37.0
+    Source: https://github.com/googlefonts/fontations
+    License: MIT OR Apache-2.0
+  skrifa 0.40.0
+    Source: https://github.com/googlefonts/fontations
+    License: MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  atspi-common 0.13.0
+    Source: https://github.com/odilia-app/atspi
+    License: Apache-2.0 OR MIT
+  atspi-proxies 0.13.0
+    Source: https://github.com/odilia-app/atspi
+    License: Apache-2.0 OR MIT
+  atspi 0.29.0
+    Source: https://github.com/odilia-app/atspi
+    License: Apache-2.0 OR MIT
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
   dbus 0.9.12
     Source: https://github.com/diwic/dbus-rs
     License: Apache-2.0 OR MIT
   libdbus-sys 0.2.7
     Source: https://github.com/diwic/dbus-rs
+    License: Apache-2.0 OR MIT
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  glutin_wgl_sys 0.6.1
+    Source: https://github.com/rust-windowing/glutin
+    License: Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  ctor 1.0.13
+    Source: https://github.com/mmastrac/linktime
+    License: Apache-2.0 OR MIT
+  link-section 0.19.3
+    Source: https://github.com/mmastrac/linktime
+    License: Apache-2.0 OR MIT
+  linktime-proc-macro 0.2.3
+    Source: https://github.com/mmastrac/linktime
     License: Apache-2.0 OR MIT
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
@@ -1431,6 +1870,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   bytemuck 1.25.2
     Source: https://github.com/Lokathor/bytemuck
     License: Zlib OR Apache-2.0 OR MIT
+  bytemuck_derive 1.12.1
+    Source: https://github.com/Lokathor/bytemuck
+    License: Zlib OR Apache-2.0 OR MIT
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
@@ -1440,73 +1882,94 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode-a2a 0.180.6
+  vtcode-a2a 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-acp 0.180.6
+  vtcode-acp 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-auth 0.180.6
+  vtcode-auth 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-bash-runner 0.180.6
+  vtcode-bash-runner 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-config 0.180.6
+  vtcode-config 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-core 0.180.6
+  vtcode-core 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-eval 0.180.6
+  vtcode-desktop 0.181.6
+    License: MIT OR Apache-2.0
+  vtcode-eval 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-indexer 0.180.6
+  vtcode-indexer 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-llm 0.180.6
+  vtcode-llm 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-mcp 0.180.6
+  vtcode-mcp 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-memory 0.180.6
+  vtcode-memory 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-safety 0.180.6
+  vtcode-safety 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-skills 0.180.6
+  vtcode-skills 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-ui 0.180.6
+  vtcode-ui 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-webmcp 0.180.6
+  vtcode-webmcp 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-agent-plugins 0.180.6
+  vtcode-agent-plugins 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-commons 0.180.6
+  vtcode-commons 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop-protocol 0.180.6
-    License: MIT OR Apache-2.0
-  vtcode-diff 0.180.6
+  vtcode-desktop-protocol 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-exec-events 0.180.6
+  vtcode-diff 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-macros 0.180.6
+  vtcode-exec-events 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-utility-tool-specs 0.180.6
+  vtcode-macros 0.181.6
+    Source: https://github.com/vinhnx/vtcode
+    License: MIT OR Apache-2.0
+  vtcode-utility-tool-specs 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
   mac-notification-sys 0.6.15
     Source: https://github.com/h4llow3En/mac-notification-sys
+    License: MIT OR Apache-2.0
+  accesskit 0.24.1
+    Source: https://github.com/AccessKit/accesskit
+    License: MIT OR Apache-2.0
+  accesskit_atspi_common 0.19.1
+    Source: https://github.com/AccessKit/accesskit
+    License: MIT OR Apache-2.0
+  accesskit_consumer 0.38.0
+    Source: https://github.com/AccessKit/accesskit
+    License: MIT OR Apache-2.0
+  accesskit_macos 0.26.3
+    Source: https://github.com/AccessKit/accesskit
+    License: MIT OR Apache-2.0
+  accesskit_unix 0.22.1
+    Source: https://github.com/AccessKit/accesskit
+    License: MIT OR Apache-2.0
+  accesskit_windows 0.34.0
+    Source: https://github.com/AccessKit/accesskit
     License: MIT OR Apache-2.0
   agent-client-protocol-derive 2.0.0
     Source: https://github.com/agentclientprotocol/rust-sdk
@@ -1529,7 +1992,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   anyhow 1.0.104
     Source: https://github.com/dtolnay/anyhow
     License: MIT OR Apache-2.0
-  arboard 3.6.1
+  arboard 3.7.0
     Source: https://github.com/1Password/arboard
     License: MIT OR Apache-2.0
   arraydeque 0.5.1
@@ -1541,8 +2004,14 @@ Apache License 2.0 — SPDX: Apache-2.0
   aws-lc-sys 0.46.0
     Source: https://github.com/aws/aws-lc-rs
     License: ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)
+  dirs-sys 0.4.1
+    Source: https://github.com/dirs-dev/dirs-sys-rs
+    License: MIT OR Apache-2.0
   dirs-sys 0.5.0
     Source: https://github.com/dirs-dev/dirs-sys-rs
+    License: MIT OR Apache-2.0
+  dirs 5.0.1
+    Source: https://github.com/soc/dirs-rs
     License: MIT OR Apache-2.0
   dirs 6.0.0
     Source: https://github.com/soc/dirs-rs
@@ -1550,6 +2019,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   dirs 7.0.0
     Source: https://codeberg.org/dirs/dirs-rs
     License: MIT OR Apache-2.0
+  dispatch2 0.3.1
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
   document-features 0.2.12
     Source: https://github.com/slint-ui/document-features
     License: MIT OR Apache-2.0
@@ -1558,6 +2030,12 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: CC0-1.0 OR MIT-0 OR Apache-2.0
   dyn-clone 1.0.20
     Source: https://github.com/dtolnay/dyn-clone
+    License: MIT OR Apache-2.0
+  enumn 0.1.14
+    Source: https://github.com/dtolnay/enumn
+    License: MIT OR Apache-2.0
+  etagere 0.2.15
+    Source: https://github.com/nical/etagere
     License: MIT OR Apache-2.0
   eventsource-stream 0.2.3
     Source: https://github.com/jpopesculian/eventsource-stream
@@ -1688,10 +2166,22 @@ Apache License 2.0 — SPDX: Apache-2.0
   gix 0.87.1
     Source: https://github.com/GitoxideLabs/gitoxide
     License: MIT OR Apache-2.0
+  gl_generator 0.14.0
+    Source: https://github.com/brendanzab/gl-rs/
+    License: Apache-2.0
   gloo-timers 0.4.0
     Source: https://github.com/rustwasm/gloo/tree/master/crates/timers
     License: MIT OR Apache-2.0
+  gpui-kit-assets 0.9.0
+    Source: https://github.com/longbridge/gpui-kit
+    License: Apache-2.0
+  gpui-kit 0.9.0
+    Source: https://github.com/longbridge/gpui-kit
+    License: Apache-2.0
   granit-parser 1.3.0
+    Source: https://github.com/bourumir-wyngs/granit-parser
+    License: MIT OR Apache-2.0
+  granit-parser 2.0.0
     Source: https://github.com/bourumir-wyngs/granit-parser
     License: MIT OR Apache-2.0
   half 2.7.1
@@ -1712,6 +2202,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   indoc 2.0.7
     Source: https://github.com/dtolnay/indoc
     License: MIT OR Apache-2.0
+  inventory 0.3.25
+    Source: https://github.com/dtolnay/inventory
+    License: MIT OR Apache-2.0
   itoa 1.0.18
     Source: https://github.com/dtolnay/itoa
     License: MIT OR Apache-2.0
@@ -1724,9 +2217,15 @@ Apache License 2.0 — SPDX: Apache-2.0
   jni 0.22.4
     Source: https://github.com/jni-rs/jni-rs
     License: MIT OR Apache-2.0
-  libc 0.2.189
+  khronos_api 3.1.0
+    Source: https://github.com/brendanzab/gl-rs/
+    License: Apache-2.0
+  libc 0.2.191
     Source: https://github.com/rust-lang/libc
     License: MIT OR Apache-2.0
+  linebender_resource_handle 0.1.1
+    Source: https://github.com/linebender/raw_resource_handle
+    License: Apache-2.0 OR MIT
   linkme-impl 0.3.37
     Source: https://github.com/dtolnay/linkme
     License: MIT OR Apache-2.0
@@ -1736,14 +2235,47 @@ Apache License 2.0 — SPDX: Apache-2.0
   litrs 1.0.0
     Source: https://github.com/LukasKalbertodt/litrs
     License: MIT OR Apache-2.0
+  lyon 1.0.19
+    Source: https://github.com/nical/lyon
+    License: MIT OR Apache-2.0
+  lyon_algorithms 1.0.22
+    Source: https://github.com/nical/lyon
+    License: MIT OR Apache-2.0
+  lyon_geom 1.0.20
+    Source: https://github.com/nical/lyon
+    License: MIT OR Apache-2.0
+  lyon_path 1.0.19
+    Source: https://github.com/nical/lyon
+    License: MIT OR Apache-2.0
+  lyon_tessellation 1.0.23
+    Source: https://github.com/nical/lyon
+    License: MIT OR Apache-2.0
+  mac 0.1.1
+    Source: https://github.com/reem/rust-mac.git
+    License: MIT OR Apache-2.0
+  mach2 0.6.0
+    Source: https://github.com/JohnTitor/mach2
+    License: BSD-2-Clause OR MIT OR Apache-2.0
   miniz_oxide 0.8.9
     Source: https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
     License: MIT OR Zlib OR Apache-2.0
   miniz_oxide 0.9.1
     Source: https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
     License: MIT OR Zlib OR Apache-2.0
+  naga-types 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  naga 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
   ndk-context 0.1.1
     Source: https://github.com/rust-windowing/android-ndk-rs
+    License: MIT OR Apache-2.0
+  ndk-sys 0.6.0+11769913
+    Source: https://github.com/rust-mobile/ndk
+    License: MIT OR Apache-2.0
+  normpath 1.5.2
+    Source: https://github.com/dylni/normpath
     License: MIT OR Apache-2.0
   num-cmp 0.1.0
     Source: https://github.com/lifthrasiir/num-cmp
@@ -1754,13 +2286,52 @@ Apache License 2.0 — SPDX: Apache-2.0
   objc2-app-kit 0.3.2
     Source: https://github.com/madsmtm/objc2
     License: Zlib OR Apache-2.0 OR MIT
+  objc2-cloud-kit 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-core-data 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
   objc2-core-foundation 0.3.2
     Source: https://github.com/madsmtm/objc2
     License: Zlib OR Apache-2.0 OR MIT
   objc2-core-graphics 0.3.2
     Source: https://github.com/madsmtm/objc2
     License: Zlib OR Apache-2.0 OR MIT
+  objc2-core-image 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-core-services 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-core-text 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-core-video 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
   objc2-io-kit 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-metal 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-quartz-core 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-security 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-service-management 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-ui-kit 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-uniform-type-identifiers 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-user-notifications 0.3.2
     Source: https://github.com/madsmtm/objc2
     License: Zlib OR Apache-2.0 OR MIT
   paste 1.0.15
@@ -1774,6 +2345,12 @@ Apache License 2.0 — SPDX: Apache-2.0
     License: MIT OR Apache-2.0
   path-clean 1.0.1
     Source: https://github.com/danreeves/path-clean
+    License: MIT OR Apache-2.0
+  pathfinder_geometry 0.5.1
+    Source: https://github.com/servo/pathfinder
+    License: MIT OR Apache-2.0
+  pathfinder_simd 0.5.6
+    Source: https://github.com/servo/pathfinder
     License: MIT OR Apache-2.0
   pin-project-internal 1.1.13
     Source: https://github.com/taiki-e/pin-project
@@ -1817,28 +2394,43 @@ Apache License 2.0 — SPDX: Apache-2.0
   rand 0.10.3
     Source: https://github.com/rust-random/rand
     License: MIT OR Apache-2.0
+  rand 0.8.7
+    Source: https://github.com/rust-random/rand
+    License: MIT OR Apache-2.0
   rand 0.9.5
     Source: https://github.com/rust-random/rand
     License: MIT OR Apache-2.0
   rand_chacha 0.9.0
     Source: https://github.com/rust-random/rand
     License: MIT OR Apache-2.0
-  rand_xorshift 0.4.0
+  rand_xorshift 0.5.0
     Source: https://github.com/rust-random/rngs
     License: MIT OR Apache-2.0
+  range-alloc 0.1.5
+    Source: https://github.com/gfx-rs/range-alloc
+    License: MIT OR Apache-2.0
+  raw-window-handle 0.6.2
+    Source: https://github.com/rust-windowing/raw-window-handle
+    License: MIT OR Apache-2.0 OR Zlib
   ref-cast-impl 1.0.26
     Source: https://github.com/dtolnay/ref-cast
     License: MIT OR Apache-2.0
   ref-cast 1.0.26
     Source: https://github.com/dtolnay/ref-cast
     License: MIT OR Apache-2.0
-  rio-unicode 0.5.28
+  resvg 0.45.1
+    Source: https://github.com/linebender/resvg
+    License: Apache-2.0 OR MIT
+  resvg 0.46.0
+    Source: https://github.com/linebender/resvg
+    License: Apache-2.0 OR MIT
+  rio-unicode 0.5.29
     Source: https://github.com/raphamorim/rio
     License: MIT OR Apache-2.0
-  rmcp-macros 3.5.0
+  rmcp-macros 3.8.0
     Source: https://github.com/modelcontextprotocol/rust-sdk/
     License: Apache-2.0
-  rmcp 3.5.0
+  rmcp 3.8.0
     Source: https://github.com/modelcontextprotocol/rust-sdk/
     License: Apache-2.0
   rustc-hash 2.1.3
@@ -1859,8 +2451,14 @@ Apache License 2.0 — SPDX: Apache-2.0
   serde-saphyr 1.3.0
     Source: https://github.com/bourumir-wyngs/serde-saphyr
     License: MIT OR Apache-2.0
+  serde-saphyr 2.0.0
+    Source: https://github.com/bourumir-wyngs/serde-saphyr
+    License: MIT OR Apache-2.0
   serde 1.0.229
     Source: https://github.com/serde-rs/serde
+    License: MIT OR Apache-2.0
+  serde_bytes 0.11.19
+    Source: https://github.com/serde-rs/bytes
     License: MIT OR Apache-2.0
   serde_core 1.0.229
     Source: https://github.com/serde-rs/serde
@@ -1871,7 +2469,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   serde_derive_internals 0.30.0
     Source: https://github.com/serde-rs/serde
     License: MIT OR Apache-2.0
-  serde_json 1.0.151
+  serde_json 1.0.154
     Source: https://github.com/serde-rs/json
     License: MIT OR Apache-2.0
   serde_path_to_error 0.1.20
@@ -1895,10 +2493,16 @@ Apache License 2.0 — SPDX: Apache-2.0
   siphasher 1.0.3
     Source: https://github.com/jedisct1/rust-siphash
     License: MIT OR Apache-2.0
+  spirv 0.4.0+sdk-1.4.341.0
+    Source: https://github.com/gfx-rs/rspirv
+    License: Apache-2.0
+  svg_fmt 0.4.5
+    Source: https://github.com/nical/rust_debug
+    License: MIT OR Apache-2.0
   syn 2.0.119
     Source: https://github.com/dtolnay/syn
     License: MIT OR Apache-2.0
-  syn 3.0.6
+  syn 3.0.9
     Source: https://github.com/dtolnay/syn
     License: MIT OR Apache-2.0
   sync_wrapper 1.0.2
@@ -1925,12 +2529,21 @@ Apache License 2.0 — SPDX: Apache-2.0
   time 0.3.54
     Source: https://github.com/time-rs/time
     License: MIT OR Apache-2.0
-  typed-path 0.12.3
+  typed-path 0.13.0
     Source: https://github.com/chipsenkbeil/typed-path
     License: MIT OR Apache-2.0
   unicode-ident 1.0.24
     Source: https://github.com/dtolnay/unicode-ident
     License: (MIT OR Apache-2.0) AND Unicode-3.0
+  usvg 0.45.1
+    Source: https://github.com/linebender/resvg
+    License: Apache-2.0 OR MIT
+  usvg 0.46.0
+    Source: https://github.com/linebender/resvg
+    License: Apache-2.0 OR MIT
+  utf-8 0.7.6
+    Source: https://github.com/SimonSapin/rust-utf8
+    License: MIT OR Apache-2.0
   utf8parse 0.2.2
     Source: https://github.com/alacritty/vte
     License: Apache-2.0 OR MIT
@@ -1940,18 +2553,124 @@ Apache License 2.0 — SPDX: Apache-2.0
   wasm-streams 0.5.0
     Source: https://github.com/MattiasBuelens/wasm-streams/
     License: MIT OR Apache-2.0
+  wgpu-core-deps-apple 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-core-deps-emscripten 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-core-deps-wasm 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-core-deps-windows-linux-android 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-core 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-hal 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-naga-bridge 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu-types 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
+  wgpu 30.0.1
+    Source: https://github.com/gfx-rs/wgpu
+    License: MIT OR Apache-2.0
   winapi-i686-pc-windows-gnu 0.4.0
     Source: https://github.com/retep998/winapi-rs
     License: MIT OR Apache-2.0
   winapi-x86_64-pc-windows-gnu 0.4.0
     Source: https://github.com/retep998/winapi-rs
     License: MIT OR Apache-2.0
+  zune-core 0.4.12
+    License: MIT OR Apache-2.0 OR Zlib
   zune-inflate 0.2.54
+    License: MIT OR Apache-2.0 OR Zlib
+  zune-jpeg 0.4.21
+    Source: https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg
     License: MIT OR Apache-2.0 OR Zlib
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode 0.180.6
+  gpui-pre-macos 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-apple 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-collections 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-derive-refineable 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-http-client 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-ios 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-linux 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-macros 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-platform 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-refineable 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-scheduler 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-shared-string 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-sum-tree 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-util 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-web 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-wgpu 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-windows 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-ztracing-macro 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre-ztracing 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+  gpui-pre 0.3.11
+    Source: https://github.com/zed-industries/zed
+    License: Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  gpui-base 0.9.0
+    Source: https://github.com/longbridge/gpui-kit
+    License: Apache-2.0
+  gpui-component-macros 0.9.0
+    License: Apache-2.0
+  gpui-component 0.9.0
+    Source: https://github.com/longbridge/gpui-kit
+    License: Apache-2.0
+--------------------------------------------------------------------------------
+Apache License 2.0 — SPDX: Apache-2.0
+--------------------------------------------------------------------------------
+  vtcode 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
@@ -1979,6 +2698,12 @@ BSD 2-Clause "Simplified" License — SPDX: BSD-2-Clause
     Source: https://github.com/rust-av/av1-grain
     License: BSD-2-Clause
 --------------------------------------------------------------------------------
+BSD 2-Clause "Simplified" License — SPDX: BSD-2-Clause
+--------------------------------------------------------------------------------
+  arrayref 0.3.9
+    Source: https://github.com/droundy/arrayref
+    License: BSD-2-Clause
+--------------------------------------------------------------------------------
 BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
 --------------------------------------------------------------------------------
   matchit 0.8.4
@@ -1999,8 +2724,23 @@ BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
 --------------------------------------------------------------------------------
 BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
 --------------------------------------------------------------------------------
+  tiny-skia-path 0.11.4
+    Source: https://github.com/RazrFalcon/tiny-skia/tree/master/path
+    License: BSD-3-Clause
+  tiny-skia 0.11.4
+    Source: https://github.com/RazrFalcon/tiny-skia
+    License: BSD-3-Clause
+--------------------------------------------------------------------------------
+BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
+--------------------------------------------------------------------------------
   subtle 2.6.1
     Source: https://github.com/dalek-cryptography/subtle
+    License: BSD-3-Clause
+--------------------------------------------------------------------------------
+BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
+--------------------------------------------------------------------------------
+  instant 0.1.13
+    Source: https://github.com/sebcrozet/instant
     License: BSD-3-Clause
 --------------------------------------------------------------------------------
 BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
@@ -2017,6 +2757,9 @@ BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
   exr 1.74.2
     Source: https://github.com/johannesvollmer/exrs
     License: BSD-3-Clause
+  sha1_smol 1.0.1
+    Source: https://github.com/mitsuhiko/sha1-smol
+    License: BSD-3-Clause
 --------------------------------------------------------------------------------
 BSD 3-Clause "New" or "Revised" License — SPDX: BSD-3-Clause
 --------------------------------------------------------------------------------
@@ -2032,25 +2775,30 @@ Boost Software License 1.0 — SPDX: BSL-1.0
 --------------------------------------------------------------------------------
 Boost Software License 1.0 — SPDX: BSL-1.0
 --------------------------------------------------------------------------------
-  clipboard-win 5.4.1
+  clipboard-win 5.4.3
     Source: https://github.com/DoumanAsh/clipboard-win
     License: BSL-1.0
 --------------------------------------------------------------------------------
 Creative Commons Zero v1.0 Universal — SPDX: CC0-1.0
 --------------------------------------------------------------------------------
-  notify 8.2.0
+  notify 8.2.1
     Source: https://github.com/notify-rs/notify.git
+    License: CC0-1.0
+--------------------------------------------------------------------------------
+Creative Commons Zero v1.0 Universal — SPDX: CC0-1.0
+--------------------------------------------------------------------------------
+  tiny-keccak 2.0.2
     License: CC0-1.0
 --------------------------------------------------------------------------------
 Community Data License Agreement Permissive 2.0 — SPDX: CDLA-Permissive-2.0
 --------------------------------------------------------------------------------
-  webpki-root-certs 1.0.9
+  webpki-root-certs 1.0.11
     Source: https://github.com/rustls/webpki-roots
     License: CDLA-Permissive-2.0
   webpki-roots 0.26.11
     Source: https://github.com/rustls/webpki-roots
     License: CDLA-Permissive-2.0
-  webpki-roots 1.0.9
+  webpki-roots 1.0.11
     Source: https://github.com/rustls/webpki-roots
     License: CDLA-Permissive-2.0
 --------------------------------------------------------------------------------
@@ -2080,13 +2828,16 @@ ISC License — SPDX: ISC
 --------------------------------------------------------------------------------
 ISC License — SPDX: ISC
 --------------------------------------------------------------------------------
+  libloading 0.8.9
+    Source: https://github.com/nagisa/rust_libloading/
+    License: ISC
   libloading 0.9.0
     Source: https://github.com/nagisa/rust_libloading/
     License: ISC
 --------------------------------------------------------------------------------
 ISC License — SPDX: ISC
 --------------------------------------------------------------------------------
-  rustls-webpki 0.103.15
+  rustls-webpki 0.103.16
     Source: https://github.com/rustls/webpki
     License: ISC
 --------------------------------------------------------------------------------
@@ -2098,6 +2849,12 @@ ISC License — SPDX: ISC
   aws-lc-sys 0.46.0
     Source: https://github.com/aws/aws-lc-rs
     License: ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  rustybuzz 0.20.1
+    Source: https://github.com/harfbuzz/rustybuzz
+    License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
@@ -2115,6 +2872,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   dotenvy 0.15.7
     Source: https://github.com/allan2/dotenvy
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  markdown 1.0.0
+    Source: https://github.com/wooorm/markdown-rs
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2137,6 +2900,9 @@ MIT License — SPDX: MIT
   float-cmp 0.10.0
     Source: https://github.com/mikedilger/float-cmp
     License: MIT
+  float-cmp 0.9.0
+    Source: https://github.com/mikedilger/float-cmp
+    License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
@@ -2146,7 +2912,7 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  plist 1.10.0
+  plist 1.10.3
     Source: https://github.com/ebarnard/rust-plist/
     License: MIT
 --------------------------------------------------------------------------------
@@ -2156,6 +2922,12 @@ MIT License — SPDX: MIT
     Source: https://github.com/smithay/wayland-rs
     License: MIT
   wayland-client 0.31.15
+    Source: https://github.com/smithay/wayland-rs
+    License: MIT
+  wayland-cursor 0.31.14
+    Source: https://github.com/smithay/wayland-rs
+    License: MIT
+  wayland-protocols-plasma 0.3.12
     Source: https://github.com/smithay/wayland-rs
     License: MIT
   wayland-protocols-wlr 0.3.12
@@ -2173,7 +2945,16 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  base62 2.2.6
+    Source: https://github.com/fbernier/base62
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   winreg 0.10.1
+    Source: https://github.com/gentoo90/winreg-rs
+    License: MIT
+  winreg 0.56.0
     Source: https://github.com/gentoo90/winreg-rs
     License: MIT
 --------------------------------------------------------------------------------
@@ -2188,6 +2969,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  dlib 0.5.3
+    Source: https://github.com/elinorbgr/dlib
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   which 8.0.6
     Source: https://github.com/harryfei/which-rs.git
     License: MIT
@@ -2196,6 +2983,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   schannel 0.1.29
     Source: https://github.com/steffengy/schannel-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  xkbcommon 0.8.0
+    Source: https://github.com/rust-x-bindings/xkbcommon-rs
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2218,6 +3011,9 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  globwalk 0.8.1
+    Source: https://github.com/gilnaa/globwalk
+    License: MIT
   globwalk 0.9.1
     Source: https://github.com/gilnaa/globwalk
     License: MIT
@@ -2230,10 +3026,13 @@ MIT License — SPDX: MIT
   redox_syscall 0.5.18
     Source: https://gitlab.redox-os.org/redox-os/syscall
     License: MIT
+  redox_syscall 0.9.5
+    Source: https://gitlab.redox-os.org/redox-os/kernel
+    License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  h2 0.4.15
+  h2 0.4.20
     Source: https://github.com/hyperium/h2
     License: MIT
 --------------------------------------------------------------------------------
@@ -2250,6 +3049,12 @@ MIT License — SPDX: MIT
     License: MIT
   serial_test_derive 4.0.1
     Source: https://github.com/palfrey/serial_test/
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  calloop 0.14.5
+    Source: https://github.com/Smithay/calloop
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2335,6 +3140,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  pico-args 0.5.0
+    Source: https://github.com/RazrFalcon/pico-args
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   axum 0.8.9
     Source: https://github.com/tokio-rs/axum
     License: MIT
@@ -2358,6 +3169,18 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   clru 0.6.3
     Source: https://github.com/marmeladema/clru-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  strict-num 0.1.1
+    Source: https://github.com/RazrFalcon/strict-num
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  calloop-wayland-source 0.4.1
+    Source: https://github.com/smithay/calloop-wayland-source
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2386,13 +3209,16 @@ MIT License — SPDX: MIT
   zbus_macros 5.18.0
     Source: https://github.com/z-galaxy/zbus/
     License: MIT
-  zbus_names 4.3.4
+  zbus_names 4.3.5
     Source: https://github.com/z-galaxy/zbus/
     License: MIT
-  zvariant 5.13.1
+  zbus_xml 5.2.1
     Source: https://github.com/z-galaxy/zbus/
     License: MIT
-  zvariant_derive 5.13.1
+  zvariant 5.15.1
+    Source: https://github.com/z-galaxy/zbus/
+    License: MIT
+  zvariant_derive 5.15.1
     Source: https://github.com/z-galaxy/zbus/
     License: MIT
 --------------------------------------------------------------------------------
@@ -2404,6 +3230,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  zcheapstr 1.2.0
+    Source: https://github.com/z-galaxy/zcheapstr/
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   termtree 0.5.1
     Source: https://github.com/rust-cli/termtree
     License: MIT
@@ -2411,6 +3243,9 @@ MIT License — SPDX: MIT
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   synstructure 0.13.2
+    Source: https://github.com/mystor/synstructure
+    License: MIT
+  synstructure 0.14.0
     Source: https://github.com/mystor/synstructure
     License: MIT
 --------------------------------------------------------------------------------
@@ -2429,6 +3264,9 @@ MIT License — SPDX: MIT
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   lru 0.18.5
+    Source: https://github.com/jeromefroe/lru-rs.git
+    License: MIT
+  lru 0.19.0
     Source: https://github.com/jeromefroe/lru-rs.git
     License: MIT
 --------------------------------------------------------------------------------
@@ -2454,6 +3292,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   fs_extra 1.3.0
     Source: https://github.com/webdesus/fs_extra
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  precomputed-hash 0.1.1
+    Source: https://github.com/emilio/precomputed-hash
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2506,7 +3350,7 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  faster-hex 0.10.0
+  faster-hex 0.10.1
     Source: https://github.com/NervosFoundation/faster-hex
     License: MIT
 --------------------------------------------------------------------------------
@@ -2527,6 +3371,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  tokio-socks 0.5.3
+    Source: https://github.com/sticnarf/tokio-socks
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   libmimalloc-sys 0.1.49
     Source: https://github.com/purpleprotocol/mimalloc_rust/tree/master/libmimalloc-sys
     License: MIT
@@ -2539,10 +3389,10 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  schemars 1.2.2
+  schemars 1.2.3
     Source: https://github.com/GREsau/schemars
     License: MIT
-  schemars_derive 1.2.2
+  schemars_derive 1.2.3
     Source: https://github.com/GREsau/schemars
     License: MIT
 --------------------------------------------------------------------------------
@@ -2560,7 +3410,7 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  ruzstd 0.9.0
+  ruzstd 0.9.1
     Source: https://github.com/KillingSpark/zstd-rs
     License: MIT
 --------------------------------------------------------------------------------
@@ -2605,6 +3455,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  ashpd 0.13.13
+    Source: https://github.com/bilelmoussaoui/ashpd
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   cfg_aliases 0.1.1
     Source: https://github.com/katharostech/cfg_aliases
     License: MIT
@@ -2614,10 +3470,34 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  jsonschema 0.58.1
+  rquickjs 0.14.0
+    Source: https://github.com/DelSkayn/rquickjs.git
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  zed-xim 0.4.0-zed
+    Source: https://github.com/Riey/xim-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  xcursor 0.3.11
+    Source: https://github.com/esposm03/xcursor-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  float_next_after 1.0.0
+    Source: https://gitlab.com/bronsonbdevost/next_afterf
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  jsonschema 0.60.2
     Source: https://github.com/Stranger6667/jsonschema
     License: MIT
-  referencing 0.58.3
+  referencing 0.60.2
     Source: https://github.com/Stranger6667/jsonschema
     License: MIT
 --------------------------------------------------------------------------------
@@ -2631,6 +3511,12 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   maybe-rayon 0.1.1
     Source: https://github.com/shssoichiro/maybe-rayon
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  rust-i18n 4.2.4
+    Source: https://github.com/longbridge/rust-i18n
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2668,6 +3554,18 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  postage 0.5.0
+    Source: https://github.com/austinjones/postage-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  oo7 0.6.0
+    Source: https://github.com/linux-credentials/oo7
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   catppuccin 2.8.0
     Source: https://github.com/catppuccin/rust
     License: MIT
@@ -2698,7 +3596,7 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  teletypewriter 0.5.28
+  teletypewriter 0.5.29
     Source: https://github.com/raphamorim/rio
     License: MIT
 --------------------------------------------------------------------------------
@@ -2706,6 +3604,15 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   libredox 0.1.18
     Source: https://gitlab.redox-os.org/redox-os/libredox.git
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  is-docker 0.2.0
+    Source: https://github.com/TheLarkInn/is-docker
+    License: MIT
+  is-wsl 0.4.0
+    Source: https://github.com/TheLarkInn/is-wsl
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2725,25 +3632,34 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  core_maths 0.1.1
+    Source: https://github.com/robertbastian/core_maths
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   fluent-uri 0.4.1
     Source: https://github.com/yescallop/fluent-uri-rs
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  json5 1.3.1
+  json5 1.3.6
     Source: https://github.com/callum-oakley/json5-rs
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  tui-shimmer 0.1.3
+  tui-shimmer 0.1.7
     Source: https://github.com/vinhnx/tui-shimmer
-    License: MIT
+    License: MIT AND Apache-2.0
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   convert_case 0.10.0
+    Source: https://github.com/rutrum/convert-case
+    License: MIT
+  convert_case 0.11.0
     Source: https://github.com/rutrum/convert-case
     License: MIT
 --------------------------------------------------------------------------------
@@ -2758,11 +3674,14 @@ MIT License — SPDX: MIT
   block2 0.6.2
     Source: https://github.com/madsmtm/objc2
     License: MIT
-  corcovado 0.5.28
+  corcovado 0.5.29
     Source: https://github.com/raphamorim/rio
     License: MIT
   difflib 0.4.0
     Source: https://github.com/DimaKudosh/difflib
+    License: MIT
+  harfrust 0.5.2
+    Source: https://github.com/harfbuzz/harfrust
     License: MIT
   include_dir 0.7.4
     Source: https://github.com/Michael-F-Bryan/include_dir
@@ -2770,22 +3689,34 @@ MIT License — SPDX: MIT
   include_dir_macros 0.7.4
     Source: https://github.com/Michael-F-Bryan/include_dir
     License: MIT
-  jsonschema-regex 0.58.3
+  jsonschema-regex 0.60.2
     Source: https://github.com/Stranger6667/jsonschema
     License: MIT
-  jsonschema-value 0.58.3
+  jsonschema-value 0.60.2
     Source: https://github.com/Stranger6667/jsonschema
     License: MIT
   libm 0.2.16
     Source: https://github.com/rust-lang/compiler-builtins
     License: MIT
+  objc-sys 0.3.5
+    Source: https://github.com/madsmtm/objc2
+    License: MIT
+  objc2-app-kit 0.2.2
+    Source: https://github.com/madsmtm/objc2
+    License: MIT
   objc2-encode 4.1.0
+    Source: https://github.com/madsmtm/objc2
+    License: MIT
+  objc2-foundation 0.2.2
     Source: https://github.com/madsmtm/objc2
     License: MIT
   objc2-foundation 0.3.2
     Source: https://github.com/madsmtm/objc2
     License: MIT
-  objc2 0.6.4
+  objc2 0.5.3
+    Source: https://github.com/madsmtm/objc2
+    License: MIT
+  objc2 0.6.5
     Source: https://github.com/madsmtm/objc2
     License: MIT
   plotters-backend 0.3.7
@@ -2803,14 +3734,29 @@ MIT License — SPDX: MIT
   ratatui-cheese 0.7.0
     Source: https://github.com/shashanktomar/ratatui-cheese
     License: MIT
-  rio-graphics 0.5.28
+  rio-graphics 0.5.29
     Source: https://github.com/raphamorim/rio
     License: MIT
-  rio-vt 0.5.28
+  rio-vt 0.5.29
     Source: https://github.com/raphamorim/rio
+    License: MIT
+  rquickjs-core 0.14.0
+    Source: https://github.com/DelSkayn/rquickjs.git
+    License: MIT
+  rust-i18n-macro 4.2.4
+    Source: https://github.com/longbridge/rust-i18n
+    License: MIT
+  rust-i18n-support 4.2.4
+    Source: https://github.com/longbridge/rust-i18n
+    License: MIT
+  seahash 4.1.0
+    Source: https://gitlab.redox-os.org/redox-os/seahash
     License: MIT
   simd_helpers 0.1.0
     Source: https://github.com/lu-zero/simd_helpers
+    License: MIT
+  taffy 0.15.0
+    Source: https://github.com/DioxusLabs/taffy
     License: MIT
   tree-sitter-cpp 0.23.4
     Source: https://github.com/tree-sitter/tree-sitter-cpp
@@ -2827,16 +3773,22 @@ MIT License — SPDX: MIT
   vsimd 0.8.0
     Source: https://github.com/Nugine/simd
     License: MIT
+  xim-ctext 0.3.0
+    Source: https://github.com/Riey/xim-rs
+    License: MIT
+  xim-parser 0.2.2
+    Source: https://github.com/Riey/xim-rs
+    License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   tokio-stream 0.1.19
     Source: https://github.com/tokio-rs/tokio
     License: MIT
-  tokio-util 0.7.19
+  tokio-util 0.7.20
     Source: https://github.com/tokio-rs/tokio
     License: MIT
-  tokio 1.53.1
+  tokio 1.54.1
     Source: https://github.com/tokio-rs/tokio
     License: MIT
 --------------------------------------------------------------------------------
@@ -2848,8 +3800,17 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  rio-grapheme-width 0.5.28
+  rio-grapheme-width 0.5.29
     Source: https://github.com/raphamorim/rio
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  imagesize 0.13.0
+    Source: https://github.com/Roughsketch/imagesize
+    License: MIT
+  imagesize 0.14.0
+    Source: https://github.com/Roughsketch/imagesize
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -2863,8 +3824,26 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  fontconfig-parser 0.5.8
+    Source: https://github.com/Riey/fontconfig-parser
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  fluent-uri 0.1.4
+    Source: https://github.com/yescallop/fluent-uri-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   endi 1.1.1
     Source: https://github.com/zeenix/endi
+    License: MIT
+  zbus-lockstep-macros 0.5.2
+    Source: https://github.com/luukvanderduim/zbus-lockstep
+    License: MIT
+  zbus-lockstep 0.5.2
+    Source: https://github.com/luukvanderduim/zbus-lockstep
     License: MIT
   zmij 1.0.23
     Source: https://github.com/dtolnay/zmij
@@ -2872,9 +3851,15 @@ MIT License — SPDX: MIT
   zvariant_utils 3.5.0
     Source: https://github.com/z-galaxy/zbus/
     License: MIT
+  zvariant_utils 4.2.0
+    Source: https://github.com/z-galaxy/zbus/
+    License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  winnow 0.7.15
+    Source: https://github.com/winnow-rs/winnow
+    License: MIT
   winnow 1.0.4
     Source: https://github.com/winnow-rs/winnow
     License: MIT
@@ -2884,7 +3869,7 @@ MIT License — SPDX: MIT
   pulldown-cmark-escape 0.11.0
     Source: https://github.com/raphlinus/pulldown-cmark
     License: MIT
-  pulldown-cmark 0.13.4
+  pulldown-cmark 0.13.6
     Source: https://github.com/raphlinus/pulldown-cmark
     License: MIT
 --------------------------------------------------------------------------------
@@ -2902,7 +3887,16 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  zip 8.6.0
+  spin 0.10.1
+    Source: https://github.com/mvdnes/spin-rs.git
+    License: MIT
+  spin 0.9.9
+    Source: https://github.com/mvdnes/spin-rs.git
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  zip 9.1.3
     Source: https://github.com/zip-rs/zip2
     License: MIT
 --------------------------------------------------------------------------------
@@ -2920,7 +3914,37 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  freetype-sys 0.20.1
+    Source: https://github.com/PistonDevelopers/freetype-sys.git
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  xml-rs 0.8.29
+    Source: https://github.com/kornelski/xml-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  phf 0.11.3
+    Source: https://github.com/rust-phf/rust-phf
+    License: MIT
   phf 0.13.1
+    Source: https://github.com/rust-phf/rust-phf
+    License: MIT
+  phf_codegen 0.11.3
+    Source: https://github.com/rust-phf/rust-phf
+    License: MIT
+  phf_generator 0.11.3
+    Source: https://github.com/rust-phf/rust-phf
+    License: MIT
+  phf_generator 0.13.1
+    Source: https://github.com/rust-phf/rust-phf
+    License: MIT
+  phf_macros 0.13.1
+    Source: https://github.com/rust-phf/rust-phf
+    License: MIT
+  phf_shared 0.11.3
     Source: https://github.com/rust-phf/rust-phf
     License: MIT
   phf_shared 0.13.1
@@ -2941,7 +3965,7 @@ MIT License — SPDX: MIT
   globset 0.4.19
     Source: https://github.com/BurntSushi/ripgrep/tree/master/crates/globset
     License: Unlicense OR MIT
-  ignore 0.4.33
+  ignore 0.4.34
     Source: https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore
     License: Unlicense OR MIT
   jiff-core 0.1.0
@@ -3004,12 +4028,6 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  fsevent-sys 4.1.0
-    Source: https://github.com/octplane/fsevent-rust/tree/master/fsevent-sys
-    License: MIT
---------------------------------------------------------------------------------
-MIT License — SPDX: MIT
---------------------------------------------------------------------------------
   y4m 0.8.0
     Source: https://github.com/image-rs/y4m.git
     License: MIT
@@ -3033,6 +4051,18 @@ MIT License — SPDX: MIT
     License: MIT
   derive_more 2.1.1
     Source: https://github.com/JelteF/derive_more
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  quick-xml 0.42.0
+    Source: https://github.com/tafia/quick-xml
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  lsp-types 0.97.0
+    Source: https://github.com/gluon-lang/lsp-types
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -3085,6 +4115,9 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  redox_users 0.4.6
+    Source: https://gitlab.redox-os.org/redox-os/users
+    License: MIT
   redox_users 0.5.2
     Source: https://gitlab.redox-os.org/redox-os/users
     License: MIT
@@ -3103,11 +4136,35 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  tree-sitter-language 0.1.8
+  embed-resource 3.0.12
+    Source: https://github.com/nabijaczleweli/rust-embed-resource
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  tree-sitter-language 0.1.9
     Source: https://github.com/tree-sitter/tree-sitter
     License: MIT
-  tree-sitter 0.27.0
+  tree-sitter 0.27.1
     Source: https://github.com/tree-sitter/tree-sitter
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  rust-embed-impl 8.13.0
+    Source: https://pyrossh.dev/repos/rust-embed
+    License: MIT
+  rust-embed-utils 8.13.0
+    Source: https://pyrossh.dev/repos/rust-embed
+    License: MIT
+  rust-embed 8.13.0
+    Source: https://pyrossh.dev/repos/rust-embed
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  xmlwriter 0.1.0
+    Source: https://github.com/RazrFalcon/xmlwriter
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -3118,14 +4175,47 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  vswhom-sys 0.1.3
+    Source: https://github.com/nabijaczleweli/vswhom-sys.rs
+    License: MIT
+  vswhom 0.1.0
+    Source: https://github.com/nabijaczleweli/vswhom.rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  fontdb 0.23.0
+    Source: https://github.com/RazrFalcon/fontdb
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   crunchy 0.2.4
     Source: https://github.com/eira-fransham/crunchy
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
+  yeslogic-fontconfig-sys 6.0.1
+    Source: https://github.com/yeslogic/fontconfig-rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
   os_pipe 1.2.3
     Source: https://github.com/oconnor663/os_pipe.rs
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  rquickjs-sys 0.14.0
+    Source: https://github.com/DelSkayn/rquickjs.git
+    License: MIT
+--------------------------------------------------------------------------------
+MIT License — SPDX: MIT
+--------------------------------------------------------------------------------
+  open 5.4.5
+    Source: https://github.com/Byron/open-rs
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -3166,7 +4256,7 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  ratatui-textarea 0.9.2
+  ratatui-textarea 0.9.3
     Source: https://github.com/ratatui/ratatui-textarea
     License: MIT
 --------------------------------------------------------------------------------
@@ -3190,12 +4280,18 @@ MIT No Attribution — SPDX: MIT-0
 --------------------------------------------------------------------------------
 Mozilla Public License 2.0 — SPDX: MPL-2.0
 --------------------------------------------------------------------------------
+  cbindgen 0.28.0
+    Source: https://github.com/mozilla/cbindgen
+    License: MPL-2.0
   nucleo-matcher 0.3.1
     Source: https://github.com/helix-editor/nucleo
     License: MPL-2.0
 --------------------------------------------------------------------------------
 Mozilla Public License 2.0 — SPDX: MPL-2.0
 --------------------------------------------------------------------------------
+  dwrote 0.11.5
+    Source: https://github.com/servo/dwrote-rs
+    License: MPL-2.0
   option-ext 0.2.0
     Source: https://github.com/soc/option-ext.git
     License: MPL-2.0
@@ -3214,25 +4310,37 @@ Unicode License v3 — SPDX: Unicode-3.0
 --------------------------------------------------------------------------------
 Unicode License v3 — SPDX: Unicode-3.0
 --------------------------------------------------------------------------------
-  icu_collections 2.2.0
+  icu_collections 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_locale_core 2.2.0
+  icu_locale_core 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_normalizer 2.2.0
+  icu_locale_fallback 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_normalizer_data 2.2.0
+  icu_locale_fallback_data 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_properties 2.2.0
+  icu_normalizer 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_properties_data 2.2.0
+  icu_normalizer_data 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_provider 2.2.0
+  icu_properties 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_properties_data 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_provider 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_segmenter 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_segmenter_data 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
   litemap 0.8.2
@@ -3241,16 +4349,16 @@ Unicode License v3 — SPDX: Unicode-3.0
   potential_utf 0.1.5
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  tinystr 0.8.3
+  tinystr 0.8.5
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  writeable 0.6.3
+  writeable 0.6.4
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  yoke-derive 0.8.2
+  yoke-derive 0.8.4
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  yoke 0.8.3
+  yoke 0.8.4
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
   zerofrom-derive 0.1.7
@@ -3259,13 +4367,13 @@ Unicode License v3 — SPDX: Unicode-3.0
   zerofrom 0.1.8
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  zerotrie 0.2.4
+  zerotrie 0.2.5
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  zerovec-derive 0.11.3
+  zerovec-derive 0.11.7
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  zerovec 0.11.6
+  zerovec 0.11.9
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
 --------------------------------------------------------------------------------
@@ -3273,6 +4381,12 @@ zlib License — SPDX: Zlib
 --------------------------------------------------------------------------------
   zlib-rs 0.6.6
     Source: https://github.com/trifectatechfoundation/zlib-rs
+    License: Zlib
+--------------------------------------------------------------------------------
+zlib License — SPDX: Zlib
+--------------------------------------------------------------------------------
+  slotmap 1.1.1
+    Source: https://github.com/orlp/slotmap
     License: Zlib
 --------------------------------------------------------------------------------
 zlib License — SPDX: Zlib

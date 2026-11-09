@@ -254,6 +254,31 @@ Run `/splash` to inspect the current CLI workspace, session, tool registry, and 
 credentials. In VT Code Desktop the same command opens Settings → Connections, refreshes bridge status, and shows the
 Desktop-to-CLI protocol handshake; a standalone CLI process cannot observe another process's Desktop connection.
 
+## Desktop and CLI handoff
+
+Each surface can hand its current thread to the other. A loaded session holds an exclusive lock for its whole
+lifetime (idle included), so the two directions differ: Desktop → CLI forks (both sides stay open), while CLI →
+Desktop loads the same thread (exit the CLI session first).
+
+- **CLI → Desktop (`/desktop`, macOS only)** — Opens VT Code Desktop with the current thread selected. Delivery
+  goes through a `vtcode://session/<id>?workspace=<path>` URL handled by the running app, so handoff to an open
+  Desktop is instant (no new process, no reboot); a cold app launches and picks the link up on startup. When no
+  bundle claims the scheme (dev builds, outdated installs), it falls back to resolving the app exactly like
+  `vtcode desktop` (explicit path, `VTCODE_DESKTOP_APP`, then the standard install locations) with `--session` /
+  `--workspace` argv. Linking needs a saved checkpoint: threads checkpoint after every turn, so a fresh thread with
+  no turns yet opens unlinked with a notice — run a turn and retry. With history persistence disabled the thread
+  cannot be linked. The CLI holds the thread open until it exits, so the desktop load fails fast with a
+  close-and-reload error until then — exit this session and reload the thread there.
+- **Desktop → CLI** — The thread-header Terminal button, `/cli`, and the ⌘K "Continue in terminal" entry all open
+  the same handoff card showing `vtcode --fork-session <id>` for the selected thread (the same command as Settings →
+  Connections → Terminal). Fork, not resume: the desktop keeps the thread open, so the CLI continues an independent
+  copy while the desktop thread stays live. **Copy** copies it; **Continue in terminal** copies it and runs it in
+  the chosen terminal (Terminal.app runs it automatically via a generated script; iTerm2/Ghostty open at the
+  workspace for pasting until their script handling is verified); **Dismiss** closes the card. The terminal is
+  chosen in Settings → Connections. With no thread selected the button is disabled and the other entries explain
+  why. While a turn runs, the card notes the copy includes only completed turns.
+- Typing `/desktop` inside Desktop reports that you are already there instead of opening a second instance.
+
 ## Configuration quick reference
 
 | Action                         | Command                         | Result                                                                       |
@@ -305,14 +330,23 @@ into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `mem
   After confirmation the header shows Plan immediately. When the plan agent needs a material clarification, the inline
   interview wizard presents selectable answers and resumes planning with the chosen answer. Use `/plan off` to cancel an
   active planning workflow without implementing its draft and restore the previous execution agent (`build`/`auto`).
-- `/config checkup` runs configuration diagnostics and suggests reversible optimizations. Use
-  `/config checkup [--quick|--full]` (defaults to a full pass); optimizations are confirmed via the selection modal
-  before any config is mutated. The old `/checkup` name still works as a hidden alias.
+- `/doctor` runs the setup checkup: installation, configuration, provider credentials, dependencies, MCP status,
+  workspace links, loaded skills, and reversible optimizations. Reports findings first and confirms before mutating
+  anything. Use `/doctor [--quick|--full]` (defaults to the interactive picker in the TUI, or a full pass elsewhere);
+  `/config checkup`, `/config doctor`, and `/checkup` remain compatibility aliases.
+- `/doctor prompt-audit` audits always-loaded guidance instead of the installation. It reports instruction-file sizes
+  and budget usage, full-content duplicates and shared long lines across `AGENTS.md`/`CLAUDE.md` files, fenced
+  example content that is usually derivable from the codebase, skill description cost, and configured MCP providers.
+  The audit is read-only; apply fixes yourself.
 - `/model` works while a turn is running, including reasoning-effort selection in the model picker. The selection is
   shown immediately as pending the next request; the in-flight request keeps its original settings and the next model
   request uses the new provider, model, context budget, and reasoning effort (the same turn when it makes another
   request, otherwise the next turn). Header, session metadata, and persisted defaults reflect the effective selection
   once applied.
+- The model picker groups models under human-readable provider names in a stable order: frontier labs first
+  (OpenAI, Anthropic), then the open-source/local family (Hugging Face, Ollama, Ollama Cloud, LM Studio, llama.cpp),
+  then the remaining providers, with custom providers last. The CLI `/model` picker and the desktop model palette use
+  the same order; the active provider group is highlighted where it sits rather than moved to the top.
 - `/feedback` opens the VT Code GitHub issue form in your browser to report a bug or request a feature.
 - `/donate` opens a picker with the project's support links (Buy Me a Coffee and GitHub Sponsors) and opens the
   chosen one in your browser.

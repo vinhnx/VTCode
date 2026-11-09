@@ -12,6 +12,16 @@ use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
 use gpui_kit::{App, Hsla, Window, rgb};
 use vtcode_ui::theme::{self, UiThemeColors};
 
+mod custom;
+pub(super) use custom::{
+    CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
+    validate as validate_custom_theme,
+};
+mod glass;
+pub(super) use glass::{
+    glass_disabled_wash, glass_primary_rest, glass_primary_rest_on_popover, glass_primary_rest_on_secondary,
+};
+
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
 
@@ -71,6 +81,54 @@ pub(super) struct DesktopTheme {
     pub warning: Hsla,
 }
 
+/// The seed palette every theme resolves through [`apply_palette`]: seven
+/// colors plus the mode. Built-in rows and custom themes share this shape so
+/// the derived-token pipeline (and its WCAG floors) stays single-sourced.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PaletteSeeds {
+    pub mode: ThemeMode,
+    pub background: Hsla,
+    pub foreground: Hsla,
+    pub accent: Hsla,
+    pub secondary: Hsla,
+    pub success: Hsla,
+    pub danger: Hsla,
+    pub warning: Hsla,
+}
+
+impl DesktopTheme {
+    pub(super) fn seeds(&self) -> PaletteSeeds {
+        PaletteSeeds {
+            mode: self.mode,
+            background: self.background,
+            foreground: self.foreground,
+            accent: self.accent,
+            secondary: self.secondary,
+            success: self.success,
+            danger: self.danger,
+            warning: self.warning,
+        }
+    }
+}
+
+impl CustomTheme {
+    /// Resolve a saved custom theme through the same derivation as built-ins.
+    /// Accent and semantic colors are re-seated at apply time, so a saved
+    /// value that later turns out unreadable still renders legibly.
+    pub(super) fn seeds(&self) -> PaletteSeeds {
+        PaletteSeeds {
+            mode: self.mode,
+            background: self.background,
+            foreground: self.foreground,
+            accent: readable_indicator_color(self.background, self.foreground, self.accent),
+            secondary: self.secondary,
+            success: readable_semantic_color(self.background, self.foreground, self.success),
+            danger: readable_semantic_color(self.background, self.foreground, self.danger),
+            warning: readable_semantic_color(self.background, self.foreground, self.warning),
+        }
+    }
+}
+
 /// Build one desktop palette row. The kit's color constructors are not
 /// `const`, so rows are assembled at first use.
 fn theme(
@@ -128,6 +186,37 @@ pub(super) fn find(id: &str) -> Option<&'static DesktopTheme> {
     all_themes().iter().find(|theme| theme.id == id)
 }
 
+/// Resolve a saved custom theme by id.
+pub(super) fn find_custom<'a>(id: &str, customs: &'a [CustomTheme]) -> Option<&'a CustomTheme> {
+    customs.iter().find(|theme| theme.id == id)
+}
+
+/// Mode of a selection: system sentinels, built-in palette rows, or a saved
+/// custom theme. `None` means the id is unknown.
+pub(super) fn mode_for_selection(id: &str, customs: &[CustomTheme]) -> Option<ThemeMode> {
+    find_custom(id, customs).map(|theme| theme.mode).or_else(|| mode_for_id(id))
+}
+
+/// Seeds for a selection, used to seed the custom-theme editor from the
+/// currently applied theme.
+pub(super) fn selection_seeds(id: &str, customs: &[CustomTheme]) -> Option<PaletteSeeds> {
+    find_custom(id, customs)
+        .map(CustomTheme::seeds)
+        .or_else(|| find(id).map(DesktopTheme::seeds))
+}
+
+/// Canonicalize a selection against the mode actually applied. An id that does
+/// not resolve (a deleted custom theme, a stale preference) or that belongs to
+/// the other mode is replaced by that mode's default, so the stored selection
+/// never dangles. `apply_theme_state` and startup restore both route here.
+pub(super) fn canonical_selection(id: &str, mode: ThemeMode, customs: &[CustomTheme]) -> String {
+    if mode_for_selection(id, customs) == Some(mode) {
+        id.to_string()
+    } else {
+        default_id(mode).to_string()
+    }
+}
+
 /// The full CLI palette table, built once because the kit's color constructors
 /// are not `const`.
 pub(super) fn all_themes() -> &'static [DesktopTheme] {
@@ -182,6 +271,13 @@ impl SwatchEntry {
             Self::Palette(theme) => Some(theme.accent),
         }
     }
+
+    pub(super) fn mode(self) -> ThemeMode {
+        match self {
+            Self::System(mode) => mode,
+            Self::Palette(theme) => theme.mode,
+        }
+    }
 }
 
 /// The two system entries shown first in the picker.
@@ -192,23 +288,31 @@ pub(super) const SYSTEM_SWATCHES: [SwatchEntry; 2] = [
 
 const FEATURED_THEME_IDS: [&str; 3] = [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue"];
 
-/// Picker order leads with the VT Code themes, then system bases and the
-/// remaining shared palette catalog in its existing order.
-pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
+/// Picker order within one mode group leads with the VT Code themes of
+/// that mode, then the matching system base and the remaining shared
+/// palette catalog in its existing order.
+pub(super) fn picker_swatches_for(mode: ThemeMode) -> impl Iterator<Item = SwatchEntry> {
     let themes = all_themes();
     FEATURED_THEME_IDS
         .iter()
         .filter_map(|id| themes.iter().find(|theme| theme.id == *id))
         .copied()
+        .filter(move |theme| theme.mode == mode)
         .map(SwatchEntry::Palette)
-        .chain(SYSTEM_SWATCHES)
+        .chain(SYSTEM_SWATCHES.into_iter().filter(move |entry| entry.mode() == mode))
         .chain(
             themes
                 .iter()
                 .copied()
-                .filter(|theme| !FEATURED_THEME_IDS.contains(&theme.id))
+                .filter(move |theme| theme.mode == mode && !FEATURED_THEME_IDS.contains(&theme.id))
                 .map(SwatchEntry::Palette),
         )
+}
+
+/// Picker order grouped by mode: every light swatch first, then every dark
+/// swatch. The settings picker renders the two groups as separate rows.
+pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
+    picker_swatches_for(ThemeMode::Light).chain(picker_swatches_for(ThemeMode::Dark))
 }
 
 /// Apply a theme by id: install the kit base for its mode, then override the
@@ -231,14 +335,40 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
             let Some(theme) = find(id) else {
                 return apply_by_id(DEFAULT_THEME_ID, window, cx);
             };
-            apply_palette(theme, window, cx)
+            apply_palette(theme.seeds(), window, cx)
         }
     }
 }
 
+/// Apply any selection: a kit base sentinel, a built-in palette row, or a saved
+/// custom theme. Unknown ids keep the existing default fallback.
+pub(super) fn apply_selection(
+    id: &str,
+    customs: &[CustomTheme],
+    window: Option<&mut Window>,
+    cx: &mut App,
+) -> ThemeMode {
+    match find_custom(id, customs) {
+        Some(custom) => apply_palette(custom.seeds(), window, cx),
+        None => apply_by_id(id, window, cx),
+    }
+}
+
 /// Apply an additional foreground contrast while rebuilding its dependent surfaces.
+#[cfg(test)]
 pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
-    let mode = apply_by_id(id, window, cx);
+    apply_selection_with_contrast(id, contrast, &[], window, cx)
+}
+
+/// Custom-aware variant of [`apply_with_contrast`].
+pub(super) fn apply_selection_with_contrast(
+    id: &str,
+    contrast: u8,
+    customs: &[CustomTheme],
+    window: Option<&mut Window>,
+    cx: &mut App,
+) -> ThemeMode {
+    let mode = apply_selection(id, customs, window, cx);
     if contrast == 0 {
         return mode;
     }
@@ -260,40 +390,45 @@ pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Wi
     mode
 }
 
-fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
-    Theme::change(theme.mode, window, cx);
+fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
+    Theme::change(seeds.mode, window, cx);
     Theme::update(cx, |kit_theme| {
         let colors = &mut kit_theme.colors;
-        colors.background = theme.background;
-        colors.foreground = theme.foreground;
+        colors.background = seeds.background;
+        colors.foreground = seeds.foreground;
         apply_filled_surfaces(colors);
         apply_surface_borders(colors);
-        colors.chart_2 = theme.secondary;
-        colors.sidebar_primary = theme.accent;
-        colors.sidebar_primary_foreground = filled_button_foreground(theme.accent);
-        colors.list = theme.background;
-        colors.list_active_border = theme.accent;
-        colors.success = theme.success;
-        colors.success_foreground = filled_button_foreground(theme.success);
-        colors.danger = theme.danger;
-        colors.danger_foreground = filled_button_foreground(theme.danger);
-        colors.warning = theme.warning;
-        colors.primary = theme.accent;
-        colors.primary_foreground = filled_button_foreground(theme.accent);
+        colors.chart_2 = distinct_chart_secondary(
+            colors.background,
+            colors.foreground,
+            [colors.chart_1, colors.chart_3, colors.chart_4],
+            seeds.secondary,
+        );
+        colors.sidebar_primary = seeds.accent;
+        colors.sidebar_primary_foreground = filled_button_foreground(seeds.accent);
+        colors.list = seeds.background;
+        colors.list_active_border = seeds.accent;
+        colors.success = seeds.success;
+        colors.success_foreground = filled_button_foreground(seeds.success);
+        colors.danger = seeds.danger;
+        colors.danger_foreground = filled_button_foreground(seeds.danger);
+        colors.warning = seeds.warning;
+        colors.primary = seeds.accent;
+        colors.primary_foreground = filled_button_foreground(seeds.accent);
         let contrast_end = filled_button_foreground(colors.primary_foreground);
-        colors.primary_hover = mix(theme.accent, contrast_end, 0.08);
-        colors.primary_active = mix(theme.accent, contrast_end, 0.16);
+        colors.primary_hover = mix(seeds.accent, contrast_end, 0.08);
+        colors.primary_active = mix(seeds.accent, contrast_end, 0.16);
         colors.button_primary = colors.primary;
         colors.button_primary_foreground = colors.primary_foreground;
         colors.button_primary_hover = colors.primary_hover;
         colors.button_primary_active = colors.primary_active;
-        apply_unified_hover_surface(colors, hover_surface(theme.background, theme.foreground));
-        colors.ring = accessible_focus_color(theme.accent, colors);
+        apply_unified_hover_surface(colors, hover_surface(seeds.background, seeds.foreground));
+        colors.ring = accessible_focus_color(seeds.accent, colors);
         // The text caret shares the focus-visibility rule: brand accent when
         // it holds 3:1 on interactive surfaces, else the foreground.
-        colors.caret = accessible_focus_color(theme.accent, colors);
+        colors.caret = accessible_focus_color(seeds.accent, colors);
     });
-    theme.mode
+    seeds.mode
 }
 
 /// Keep keyboard focus and the text caret visible while retaining brand color
@@ -357,11 +492,24 @@ fn subtle_border(secondary: Hsla, popover: Hsla, foreground: Hsla) -> Hsla {
     border
 }
 
+/// Hard ceilings (percent of the background-to-foreground span) for the fill
+/// search. Fills take the *weakest* step that still separates from the canvas,
+/// so dark themes read as layered black; the ceiling only binds on themes
+/// whose contrast curve needs larger steps (notably near-white canvases, where
+/// equal ratios need bigger lightness moves). Hover keeps its own stronger cap:
+/// a state change must stay visible, so it takes the strongest readable step.
+/// Press goes one band deeper so the resting -> hover -> press ramp never runs
+/// backwards; it also degrades to the hover step on palettes without headroom.
+const RESTING_FILL_MAX_STEP: u8 = 10;
+const RAISED_FILL_MAX_STEP: u8 = 24;
+const HOVER_FILL_MAX_STEP: u8 = 10;
+const ACTIVE_FILL_MAX_STEP: u8 = 16;
+
 /// Give panels and controls a visible neutral fill while keeping their text at
 /// WCAG AA. Popovers and input fields use a stronger layer than resting panels.
 fn apply_filled_surfaces(colors: &mut ThemeColor) {
-    let surface = filled_surface(colors.background, colors.foreground, 10);
-    let raised_surface = filled_surface(colors.background, colors.foreground, 24);
+    let surface = filled_surface(colors.background, colors.foreground, RESTING_FILL_MAX_STEP, None);
+    let raised_surface = filled_surface(colors.background, colors.foreground, RAISED_FILL_MAX_STEP, Some(surface));
 
     colors.secondary = surface;
     colors.secondary_foreground = colors.foreground;
@@ -374,10 +522,14 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.list_active = surface;
     colors.button = surface;
     colors.button_foreground = colors.foreground;
-    colors.button_active = surface;
+    // Press states sit deeper than resting so Default, Secondary, and Ghost
+    // buttons all show a visible press; Kit keeps border and text identical
+    // across states, so the fill carries the whole signal.
+    let press = active_surface(colors.background, colors.foreground);
+    colors.button_active = press;
     colors.button_secondary = surface;
     colors.button_secondary_foreground = colors.foreground;
-    colors.button_secondary_active = surface;
+    colors.button_secondary_active = press;
     colors.secondary_active = surface;
     colors.popover = raised_surface;
     colors.popover_foreground = colors.foreground;
@@ -391,15 +543,21 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.tab_bar_segmented = track;
     colors.tab_foreground = inactive_tab_foreground(colors.foreground, track, &[track, colors.background, surface]);
     colors.tab_active_foreground = colors.foreground;
+    // Folder TabBars paint their band from `tab_bar` and the selected tab
+    // from `tab_active`: a transparent band so the bar never stripes a
+    // non-canvas surface (the attachment picker sits on a popover), and a
+    // canvas tab so the selection joins the content below it. Both reconcile
+    // into the legacy `tokens` Kit reads at render time.
+    colors.tab_bar = gpui_kit::transparent_black();
+    colors.tab_active = colors.background;
 }
 
-/// Resting tab labels sit on the segmented track; the token is also shared
-/// with variants that paint on the canvas or panels, so those seats stay
-/// covered too. (No shipped bar paints labels directly on a popover: the
-/// track always sits between the text and the sheet.) Dim the palette
-/// foreground toward the track as far as every seat stays at WCAG AA. The
-/// linear scan (not a binary search) stays valid because per-seat contrast
-/// is not monotonic along the blend.
+/// Resting tab labels sit on canvas (thread strip, inspector) and directly on
+/// popover (attachment picker folder bar); the segmented track survives only
+/// as the dimming anchor. Dim the palette foreground toward the track as far
+/// as every scan seat stays at WCAG AA (the folder test pins the popover seat
+/// separately). The linear scan (not a binary search) stays valid because
+/// per-seat contrast is not monotonic along the blend.
 fn inactive_tab_foreground(foreground: Hsla, track: Hsla, seats: &[Hsla]) -> Hsla {
     const AA_RATIO: f32 = 4.5;
     let mut best = foreground;
@@ -439,18 +597,42 @@ fn strongest_track_step(background: Hsla, foreground: Hsla, minimum_text: f32) -
         })
 }
 
-fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8) -> Hsla {
-    for step in (4_u8..=maximum_step).rev() {
+/// Weakest fill that still separates from the canvas while keeping text at
+/// WCAG AA. Raised layers additionally pass their lower seat so the stack
+/// keeps a visible order instead of collapsing onto one fill.
+fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8, distinct_from: Option<Hsla>) -> Hsla {
+    const SEPARATION_FLOOR: f32 = 1.04;
+    const LAYER_GAP: f32 = 1.02;
+    for step in 4_u8..=maximum_step {
         let candidate = mix(background, foreground, f32::from(step) / 100.0);
-        if contrast_ratio(foreground, candidate) >= 4.5 && contrast_ratio(background, candidate) >= 1.04 {
+        let layered = distinct_from.is_none_or(|seat| contrast_ratio(seat, candidate) >= LAYER_GAP);
+        if contrast_ratio(foreground, candidate) >= 4.5
+            && contrast_ratio(background, candidate) >= SEPARATION_FLOOR
+            && layered
+        {
             return candidate;
         }
     }
     background
 }
 
+/// Strongest readable hover step: unlike resting fills, a state change must
+/// stay visible, so hover maximizes within its cap instead of minimizing.
 fn hover_surface(background: Hsla, foreground: Hsla) -> Hsla {
-    for step in (4_u8..=18).rev() {
+    for step in (4_u8..=HOVER_FILL_MAX_STEP).rev() {
+        let candidate = mix(background, foreground, f32::from(step) / 100.0);
+        if contrast_ratio(foreground, candidate) >= 4.5 {
+            return candidate;
+        }
+    }
+    background
+}
+
+/// Strongest readable press step: one band deeper than hover so a press reads
+/// as a deeper state, never a repeat of resting. Shares hover's step range, so
+/// on palettes without headroom it degrades to exactly the hover fill.
+fn active_surface(background: Hsla, foreground: Hsla) -> Hsla {
+    for step in (4_u8..=ACTIVE_FILL_MAX_STEP).rev() {
         let candidate = mix(background, foreground, f32::from(step) / 100.0);
         if contrast_ratio(foreground, candidate) >= 4.5 {
             return candidate;
@@ -483,6 +665,24 @@ pub(super) fn readable_indicator_color(background: Hsla, foreground: Hsla, color
     const AA_RATIO: f32 = 4.5;
     adjust_color_until_readable(background, foreground, color, |candidate| {
         contrast_ratio(candidate, background) >= AA_RATIO
+    })
+}
+
+/// Minimum contrast between chart data colors (and against the canvas).
+/// Data colors carry redundant labels, so they hold the vanish floor rather
+/// than the text floor. Shared by [`distinct_chart_secondary`] and its test
+/// so the derivation and the guarantee cannot drift apart.
+pub(super) const CHART_DISTINGUISH_FLOOR: f32 = 1.04;
+
+/// Nudge the secondary seed until the chart's second series stands clear of
+/// the canvas and its kit-default siblings, the same self-correction the
+/// semantic seeds get. Pass the sibling slots it must clear.
+pub(super) fn distinct_chart_secondary(canvas: Hsla, foreground: Hsla, siblings: [Hsla; 3], seed: Hsla) -> Hsla {
+    adjust_color_until_readable(canvas, foreground, seed, |candidate| {
+        contrast_ratio(candidate, canvas) >= CHART_DISTINGUISH_FLOOR
+            && siblings
+                .iter()
+                .all(|sibling| contrast_ratio(candidate, *sibling) >= CHART_DISTINGUISH_FLOOR)
     })
 }
 
@@ -601,26 +801,55 @@ pub(super) fn label_foreground(colors: &ThemeColor) -> Hsla {
     colors.foreground
 }
 
-/// The softest text color that still meets WCAG AA against `background`:
-/// the palette foreground blended toward the background just until the
-/// 4.5:1 threshold holds. Returns the foreground untouched when even it
-/// cannot reach AA (the contrast test then flags the theme).
+/// The softest text color that stays crisp against `background`: the palette
+/// foreground blended toward the background just until a 5.0:1 floor holds
+/// (one half-point above WCAG AA — small text at the 4.5 floor reads washed).
+/// Returns the foreground untouched when even it cannot reach the floor (the
+/// contrast test then flags the theme).
 pub(super) fn aa_muted(background: Hsla, foreground: Hsla) -> Hsla {
-    const AA_RATIO: f32 = 4.5;
-    text_at_contrast(background, foreground, AA_RATIO)
+    const MUTED_RATIO: f32 = 5.0;
+    text_at_contrast(background, foreground, MUTED_RATIO)
 }
+
+/// The 3:1 floor for non-text marks and for text that is deliberately quiet
+/// (WCAG 2.1 SC 1.4.11). Shared so quiet chrome and shimmer resting text cannot
+/// drift apart.
+const NON_TEXT_RATIO: f32 = 3.0;
 
 /// Faintest chrome-icon tone on `background` that still meets the 3:1
 /// non-text contrast floor (WCAG 2.1 SC 1.4.11) for meaningful icons.
 /// Quiet controls (the Zen exit) tint their icon with this instead of using
 /// element opacity, so the keyboard focus ring keeps full strength.
 pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
-    const NON_TEXT_RATIO: f32 = 3.0;
     text_at_contrast(background, foreground, NON_TEXT_RATIO)
 }
 
+/// Resting tone for animated shimmer labels: `tone` blended toward the seat
+/// until it just holds the quiet-text floor, so the moving sweep carries the
+/// emphasis instead of the static glyphs. Returns `tone` untouched when it is
+/// already at or below the floor, and for the static reduced-motion path
+/// callers pass `tone` directly rather than this.
+///
+/// Anchored to [`ThemeColor::popover`], like [`muted_text`], because raised
+/// surfaces move toward the text color in both polarities, so the popover is
+/// the hardest seat: holding the floor there holds it on the canvas, panel, and
+/// group box too. Anchoring to the canvas instead (the obvious-looking choice)
+/// lands at ~2.7:1 on the seats these labels actually use, below the floor.
+///
+/// The sweep's bright end is the palette foreground, not a pole picked here: it
+/// is the maximum-contrast text token by construction (themes are AA-gated on
+/// every surface while this is capped at the quiet floor), so the band provably
+/// outshines the text it crosses. Pinning it also avoids two Kit behaviours: it
+/// mixes the text toward a pole and flips when the text is within 0.1 lightness
+/// of it (on Ciapre, muted and foreground are 0.097 apart, so the band came out
+/// darker than the text), and on low-headroom palettes the "far pole" is the
+/// background itself, a background-coloured sweep.
+pub(super) fn shimmer_resting(colors: &ThemeColor, tone: Hsla) -> Hsla {
+    text_at_contrast(colors.popover, tone, NON_TEXT_RATIO)
+}
+
 /// Secondary copy (row descriptions, hints) one step brighter than
-/// [`aa_muted`]: small muted text at the 4.5 floor reads washed, so this
+/// [`aa_muted`]: small muted text at the muted floor reads washed, so this
 /// targets 7:1 on the hardest surface (the raised popover fill, which is
 /// lighter than canvas, panel, and sidebar fills, so the ratio only grows
 /// there). Falls back toward the palette foreground on low-headroom themes
@@ -705,12 +934,12 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
         }
     };
     let rail = if contrast_ratio(background, surfaces.rail) < 1.02 {
-        filled_surface(background, foreground, 10)
+        filled_surface(background, foreground, RESTING_FILL_MAX_STEP, None)
     } else {
         surfaces.rail
     };
     let panel = if contrast_ratio(rail, surfaces.panel) < 1.02 || contrast_ratio(background, surfaces.panel) < 1.02 {
-        filled_surface(background, foreground, 24)
+        filled_surface(background, foreground, RAISED_FILL_MAX_STEP, Some(rail))
     } else {
         surfaces.panel
     };
@@ -720,16 +949,11 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
 /// Choose a translucent sidebar fill that remains readable over light and dark backdrops.
 pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
     let surface = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
-    let rgba = gpui_kit::Rgba::from(surface);
     for step in 0..=20 {
         let alpha = 0.80 + step as f32 * 0.01;
         let readable = [0.0, 1.0].into_iter().all(|backdrop| {
-            let composite = Hsla::from(gpui_kit::Rgba {
-                r: rgba.r * alpha + backdrop * (1.0 - alpha),
-                g: rgba.g * alpha + backdrop * (1.0 - alpha),
-                b: rgba.b * alpha + backdrop * (1.0 - alpha),
-                a: 1.0,
-            });
+            let backdrop = Hsla { h: 0.0, s: 0.0, l: backdrop, a: 1.0 };
+            let composite = composite_status_surface(backdrop, surface, alpha);
             contrast_ratio(colors.foreground, composite) >= 4.5
                 && contrast_ratio(colors.muted_foreground, composite) >= 4.5
                 && contrast_ratio(label_foreground(colors), composite) >= 4.5
@@ -762,5 +986,7 @@ fn relative_luminance(color: Hsla) -> f32 {
     0.2126 * channel(rgba.r) + 0.7152 * channel(rgba.g) + 0.0722 * channel(rgba.b)
 }
 
+#[cfg(test)]
+mod contrast_tests;
 #[cfg(test)]
 mod tests;

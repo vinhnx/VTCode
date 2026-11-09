@@ -65,6 +65,7 @@ fn rejected_first_prompt_waits_for_startup_answer_and_retries_once(cx: &mut Test
                 session_id: "new".into(), turn_id: "session-start".into(), interaction_id: "question".into(),
                 kind: InteractionKind::Question, wizard: false, title: "Question".into(), details: Vec::new(),
                 choices: Vec::new(), steps: Vec::new(), selected_choice_id: None, selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             }), cx);
             view.submit_interaction(Vec::new(), true, window, cx);
         });
@@ -151,6 +152,7 @@ fn pending_startup_send_can_be_kept_as_a_draft(cx: &mut TestAppContext) {
                 steps: Vec::new(),
                 selected_choice_id: None,
                 selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             });
         });
         window.render_frame(cx);
@@ -608,6 +610,7 @@ fn interaction_notifications_preserve_startup_questions_and_reject_stale_turns(c
                     steps: Vec::new(),
                     selected_choice_id: None,
                     selected_choice_ids: Vec::new(),
+                    plan_markdown: None,
                 })
             };
             view.handle_backend_event(request("other-session", "active-turn", "wrong-session"), cx);
@@ -669,6 +672,7 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
             steps,
             selected_choice_id: None,
             selected_choice_ids: Vec::new(),
+            plan_markdown: None,
         });
         view.interaction_step_index = 0;
         view.interaction_choice_ids = vec![None; 3];
@@ -782,6 +786,7 @@ fn startup_interaction_refreshes_webmcp_availability_on_question_and_answer(cx: 
                 steps: Vec::new(),
                 selected_choice_id: None,
                 selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             }),
             cx,
         );

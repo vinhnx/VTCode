@@ -1,10 +1,15 @@
-use super::{ExecutionSummaryStatus, RefusedTurnRollback, checkpoint_unavailable_notice, classify_execution_summary};
+use super::{
+    ExecutionSummaryStatus, RefusedTurnRollback, checkpoint_unavailable_notice, classify_execution_summary,
+    degraded_checkpoint_warning, skipped_paths_turn_warning,
+};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use serde_json::json;
+use vtcode_core::core::agent::snapshots::{SnapshotSkippedPath, SnapshotSkippedPaths};
 
 #[test]
 fn checkpoint_unavailable_notice_names_safety_lock_and_options_for_busy_session() {
-    let notice = checkpoint_unavailable_notice("Another turn is using this session: operation would block");
+    let err = anyhow::anyhow!("Another turn is using this session: operation would block");
+    let notice = checkpoint_unavailable_notice(&err);
     assert!(notice.starts_with("Prompt kept"), "notice must confirm the prompt is kept: {notice}");
     assert!(notice.contains("safety lock"), "notice must name the safety reason: {notice}");
     assert!(notice.contains("wait then retry"), "notice must offer wait+retry: {notice}");
@@ -13,14 +18,56 @@ fn checkpoint_unavailable_notice_names_safety_lock_and_options_for_busy_session(
 
 #[test]
 fn checkpoint_unavailable_notice_routes_interrupted_rewind_to_recover() {
-    let notice = checkpoint_unavailable_notice("Interrupted rewind; run again before continuing");
+    let err = anyhow::anyhow!("Interrupted rewind; run again before continuing");
+    let notice = checkpoint_unavailable_notice(&err);
     assert_eq!(notice, "Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry.");
 }
 
 #[test]
-fn checkpoint_unavailable_notice_falls_back_to_concise_retry() {
-    let notice = checkpoint_unavailable_notice("Checkpoint skipped paths; cannot safely start turn");
-    assert_eq!(notice, "Prompt kept — checkpoint unavailable. Wait a moment and retry.");
+fn checkpoint_unavailable_notice_falls_back_to_retry_with_bounded_cause() {
+    let err = anyhow::anyhow!("checkpoint preparation worker failed");
+    let notice = checkpoint_unavailable_notice(&err);
+    assert!(
+        notice.starts_with("Prompt kept — checkpoint unavailable ("),
+        "fallback must keep the prompt-kept prefix: {notice}"
+    );
+    assert!(notice.contains("checkpoint preparation worker failed"), "fallback must name the cause: {notice}");
+    assert!(notice.ends_with("Wait a moment and retry."), "fallback must offer retry: {notice}");
+}
+
+#[test]
+fn checkpoint_unavailable_notice_bounds_multiline_cause_to_one_line() {
+    let err = anyhow::anyhow!(format!("line one\nline two\n{}", "x".repeat(500)));
+    let notice = checkpoint_unavailable_notice(&err);
+    assert!(!notice.contains('\n'), "notice must stay one line: {notice}");
+    assert!(notice.contains("line one line two"), "whitespace must collapse, not vanish: {notice}");
+    assert!(notice.len() < 300, "detail must stay bounded: {} bytes", notice.len());
+}
+
+#[test]
+fn degraded_checkpoint_warning_names_cause_and_missing_rewind() {
+    let err = anyhow::anyhow!("storage unreachable");
+    let warning = degraded_checkpoint_warning(&err);
+    assert!(warning.contains("storage unreachable"), "warning must name the cause: {warning}");
+    assert!(
+        warning.contains("proceeding without rewind for this turn"),
+        "warning must stay honest about rewind: {warning}"
+    );
+}
+
+#[test]
+fn skipped_paths_turn_warning_names_exclusions_and_remedy() {
+    let skipped = SnapshotSkippedPaths {
+        total: 1,
+        sample: vec![SnapshotSkippedPath {
+            path: "resources/gif/demo-desktop.mp4".to_string(),
+            reason: "larger than the 16 MiB snapshot size limit".to_string(),
+        }],
+    };
+    let warning = skipped_paths_turn_warning(&skipped);
+    assert!(warning.contains("demo-desktop.mp4"), "warning must name the skipped path: {warning}");
+    assert!(warning.contains(".filesnapignore"), "warning must name the remedy: {warning}");
+    assert!(warning.contains("may be incomplete"), "warning must stay honest about rewind: {warning}");
 }
 
 #[tokio::test]

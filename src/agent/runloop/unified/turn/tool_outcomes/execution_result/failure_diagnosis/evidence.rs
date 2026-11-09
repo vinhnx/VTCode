@@ -232,9 +232,6 @@ fn bound_text(value: &str, max_bytes: usize) -> String {
 
     let suffix_len = DIAGNOSIS_TRUNCATION_MARKER.len();
     let content_limit = max_bytes.saturating_sub(suffix_len);
-    let mut end = content_limit.min(value.len());
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = value.floor_char_boundary(content_limit);
     format!("{}{}", &value[..end], DIAGNOSIS_TRUNCATION_MARKER)
 }

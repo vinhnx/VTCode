@@ -9,7 +9,6 @@ mod tag_sanitizer;
 mod tool_call_indexes;
 mod tool_output;
 mod usage;
-mod utf8;
 
 pub use crate::providers::ReasoningBuffer;
 pub(crate) use prompt_cache::{session_lineage_from_prompt_cache_key, split_dynamic_prompt_suffix};
@@ -38,4 +37,4 @@ pub(crate) use tool_output::{
 pub(crate) use usage::{
     parse_cache_write_tokens_from_usage, parse_cached_prompt_tokens_from_usage, usage_u32_from_keys,
 };
-pub use utf8::Utf8StreamDecoder;
+pub use vtcode_commons::Utf8StreamDecoder;

@@ -51,29 +51,56 @@ pub(crate) fn request_local_cancel(ctrl_c_state: &Arc<CtrlCState>, ctrl_c_notify
 /// the host fires [`request_local_cancel`] directly.
 pub(crate) type StopHandles = (Arc<CtrlCState>, Arc<Notify>);
 
-/// Single-publish slot carrying [`StopHandles`] from the runloop to its host.
-/// First publish wins; a desktop runloop never starts a second iteration.
-pub(crate) type StopHandleSlot = Arc<std::sync::OnceLock<StopHandles>>;
+/// Host stop handles and the point at which a submitted turn can consume a
+/// cancellation. Exit may use the handles during initialization; turn stops
+/// wait until initialization has finished.
+#[derive(Default)]
+pub(crate) struct HostStopHandles {
+    handles: std::sync::OnceLock<StopHandles>,
+    ready: std::sync::atomic::AtomicBool,
+    ready_notify: Notify,
+}
+
+pub(crate) type StopHandleSlot = Arc<HostStopHandles>;
 
 /// Create an empty stop-handle slot for one host-owned runloop.
 #[must_use]
 pub(crate) fn new_stop_handle_slot() -> StopHandleSlot {
-    Arc::new(std::sync::OnceLock::new())
+    Arc::new(HostStopHandles::default())
 }
 
 /// Publish the runloop's stop handles. Called once after shell setup; a
 /// repeated publish keeps the first handles.
 pub(crate) fn publish_stop_handles(slot: &StopHandleSlot, state: &Arc<CtrlCState>, notify: &Arc<Notify>) {
-    let _kept_first = slot.set((Arc::clone(state), Arc::clone(notify)));
+    let _kept_first = slot.handles.set((Arc::clone(state), Arc::clone(notify)));
+}
+
+pub(crate) fn mark_host_turns_ready(slot: &StopHandleSlot) {
+    slot.ready.store(true, std::sync::atomic::Ordering::Release);
+    slot.ready_notify.notify_waiters();
+}
+
+pub(crate) async fn wait_for_host_turns_ready(slot: &StopHandleSlot) {
+    loop {
+        let notified = slot.ready_notify.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        if slot.ready.load(std::sync::atomic::Ordering::Acquire) {
+            return;
+        }
+        notified.await;
+    }
 }
 
 /// Fire a local cancel through published handles.
 ///
-/// Returns `false` when the runloop has not published yet (still in setup);
-/// the caller decides whether to wait briefly or fall back to the queued
-/// `InlineEvent::Cancel`, which only dismisses overlay waits.
+/// Returns `false` until initialization has finished. The host can await
+/// readiness while retaining the turn identity; `InlineEvent::Cancel` only
+/// dismisses overlay waits.
 pub(crate) fn fire_stop_signal(slot: &StopHandleSlot) -> bool {
-    if let Some((state, notify)) = slot.get() {
+    if slot.ready.load(std::sync::atomic::Ordering::Acquire)
+        && let Some((state, notify)) = slot.handles.get()
+    {
         request_local_cancel(state, notify);
         true
     } else {
@@ -88,7 +115,7 @@ pub(crate) fn fire_stop_signal(slot: &StopHandleSlot) -> bool {
 /// runloop paused in [`await_initialization`] needs this signal to end
 /// gracefully instead of waiting for the host's abort timeout.
 pub(crate) fn fire_exit_signal(slot: &StopHandleSlot) -> bool {
-    if let Some((state, notify)) = slot.get() {
+    if let Some((state, notify)) = slot.handles.get() {
         request_local_exit(state, notify);
         true
     } else {
@@ -104,9 +131,8 @@ pub(crate) fn fire_exit_signal(slot: &StopHandleSlot) -> bool {
 /// deliver the reset. Returns `false` when the handles are unpublished or no
 /// handled cancellation exists.
 pub(crate) fn reset_handled_stop(slot: &StopHandleSlot) -> bool {
-    if let Some((state, notify)) = slot.get() {
-        if state.is_cancel_handled() {
-            state.reset();
+    if let Some((state, notify)) = slot.handles.get() {
+        if state.reset_handled_cancel() {
             notify.notify_one();
             return true;
         }
@@ -355,6 +381,8 @@ mod tests {
         let first = Arc::new(CtrlCState::new());
         let first_notify = Arc::new(Notify::new());
         publish_stop_handles(&slot, &first, &first_notify);
+        assert!(!fire_stop_signal(&slot), "initialization is not a running turn");
+        mark_host_turns_ready(&slot);
         assert!(fire_stop_signal(&slot));
         assert!(first.is_cancel_requested());
         let second = Arc::new(CtrlCState::new());
@@ -369,6 +397,7 @@ mod tests {
         let state = Arc::new(CtrlCState::new());
         let notify = Arc::new(Notify::new());
         publish_stop_handles(&slot, &state, &notify);
+        mark_host_turns_ready(&slot);
         assert!(!reset_handled_stop(&slot), "nothing handled, nothing cleared");
         state.request_local_cancel();
         assert!(!reset_handled_stop(&slot), "an unhandled request is not a fresh submission");

@@ -60,13 +60,17 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
     // otherwise expose the cheap crate version. Both branches are `'static`
     // without per-launch `Box::leak` churn on the hot path.
     let version_leak: &'static str = if argv_requests_version() {
-        Box::leak(vtcode_core::cli::args::long_version().into_boxed_str())
+        // Read the root build script's stamp here: this crate sees its own
+        // `cargo:rustc-env`, while `vtcode-core` (where `long_version` lives)
+        // never would.
+        let git_info = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
+        Box::leak(vtcode_core::cli::args::long_version(git_info).into_boxed_str())
     } else {
         env!("CARGO_PKG_VERSION")
     };
     cmd = cmd.long_version(version_leak);
 
-    let after_help = "\nSlash commands (type / in chat):\n  /init     - Guided AGENTS.md + workspace setup\n  /config   - Browse settings sections and workspace panels (memory, model, checkup, tasks, jobs, log, ...)\n  /status   - Show current configuration\n  /model    - Switch model and reasoning effort\n  /update   - Check for VT Code updates, or run `vtcode update` from the CLI (use --list, --pin, --channel)\n  /plan     - Start or finish the Planning workflow\n  /theme    - Switch UI theme\n  /title    - Configure terminal title items\n  /history  - Open command history picker\n  /help     - Show all slash commands\n\nTips:\n  Mistyped commands show suggestions (e.g., vtcode ch -> chat).\n  Use --continue to resume the most recent session.\n  Use --resume to pick a session interactively.\n  Prefer a GUI? Run `vtcode desktop` to open VT Code Desktop (macOS).";
+    let after_help = "\nSlash commands (type / in chat):\n  /init     - Guided AGENTS.md + workspace setup\n  /config   - Browse settings sections and workspace panels (memory, model, checkup, tasks, jobs, log, ...)\n  /doctor   - Run the setup checkup or audit instruction files (`/doctor prompt-audit`)\n  /status   - Show current configuration\n  /model    - Switch model and reasoning effort\n  /update   - Check for VT Code updates, or run `vtcode update` from the CLI (use --list, --pin, --channel)\n  /plan     - Start or finish the Planning workflow\n  /theme    - Switch UI theme\n  /title    - Configure terminal title items\n  /history  - Open command history picker\n  /help     - Show all slash commands\n\nTips:\n  Mistyped commands show suggestions (e.g., vtcode ch -> chat).\n  Use --continue to resume the most recent session.\n  Use --resume to pick a session interactively.\n  Prefer a GUI? Run `vtcode desktop` to open VT Code Desktop (macOS).";
     cmd.after_help(after_help)
 }
 

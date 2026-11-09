@@ -23,7 +23,7 @@ pub struct AgentSmallModelConfig {
     #[serde(default)]
     pub model: String,
 
-    /// Temperature for small model responses
+    /// Temperature for small model responses (0.0-1.0).
     #[serde(default = "default_small_model_temperature")]
     pub temperature: f32,
 

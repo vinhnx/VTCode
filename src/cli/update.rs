@@ -1,10 +1,28 @@
-use crate::updater::{InstallOutcome, UpdateExecutionStrategy, UpdateInfo, Updater, parse_highlights};
+use crate::cli::desktop::print_desktop_install_outcome;
+use crate::updater::{
+    InstallOutcome, UpdateExecutionStrategy, UpdateInfo, Updater, default_install_dir, desktop_macos_major,
+    desktop_supported, existing_install_dir, install_desktop_app, installed_desktop_version, parse_highlights,
+};
 use anyhow::{Context, Result, anyhow};
 use crossterm::style::Stylize;
+use semver::Version;
 use std::env;
+use std::io::IsTerminal;
 use std::process::Command;
 use vtcode_config::update::{ReleaseChannel, UpdateConfig};
 use vtcode_core::ui::user_confirmation::UserConfirmation;
+
+/// How the update command handles the macOS desktop app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DesktopChoice {
+    /// Ask when interactive; print a hint and skip otherwise.
+    #[default]
+    Prompt,
+    /// Install or update without prompting.
+    Install,
+    /// Skip without prompting.
+    Skip,
+}
 
 /// Options for the update command
 #[derive(Debug, Clone)]
@@ -25,11 +43,29 @@ pub struct UpdateCommandOptions {
     pub channel: Option<String>,
     /// Show update configuration
     pub show_config: bool,
+    /// How to handle the macOS desktop app
+    pub desktop: DesktopChoice,
+}
+
+/// Whether `--with-desktop` was passed with a mode that never installs (the flag
+/// would otherwise be silently ignored).
+fn desktop_install_flag_unused(options: &UpdateCommandOptions) -> bool {
+    options.desktop == DesktopChoice::Install
+        && (options.check_only
+            || options.list
+            || options.pin.is_some()
+            || options.unpin
+            || options.channel.is_some()
+            || options.show_config)
 }
 
 /// Handle the update command
 pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> {
     let current_version = env!("CARGO_PKG_VERSION");
+
+    if desktop_install_flag_unused(&options) {
+        println!("{} --with-desktop only applies when installing; it has no effect with this mode.", "!".yellow());
+    }
 
     // Handle configuration operations first (don't need updater)
     if options.show_config {
@@ -69,7 +105,9 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
 
             if options.force {
                 println!("{} Force mode enabled, attempting reinstall...", "→".cyan());
-                install_update(&updater, None, true).await?;
+                install_update(&updater, None, true, options.desktop).await?;
+            } else if !options.check_only {
+                maybe_offer_desktop_install(&updater, Some(updater.current_version().clone()), options.desktop).await?;
             }
 
             Ok(())
@@ -213,8 +251,7 @@ async fn handle_list_versions(limit: usize) -> Result<()> {
 
 /// Pin to a specific version
 fn handle_pin_version(version_str: String) -> Result<()> {
-    let version =
-        semver::Version::parse(&version_str).with_context(|| format!("Invalid version format: {version_str}"))?;
+    let version = Version::parse(&version_str).with_context(|| format!("Invalid version format: {version_str}"))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
     let mut updater = Updater::new(current_version)?;
@@ -254,7 +291,7 @@ async fn handle_update_available(updater: &Updater, update: &UpdateInfo, options
         return Ok(());
     }
 
-    install_update(updater, Some(update), options.force).await
+    install_update(updater, Some(update), options.force, options.desktop).await
 }
 
 fn run_update_command(command: &str, strategy: UpdateExecutionStrategy) -> Result<std::process::ExitStatus> {
@@ -287,7 +324,7 @@ fn run_update_command(command: &str, strategy: UpdateExecutionStrategy) -> Resul
     cmd.status().with_context(|| format!("failed to run update command: {command}"))
 }
 
-async fn print_installed_release_notes(version: &semver::Version, release_notes: &str) {
+async fn print_installed_release_notes(version: &Version, release_notes: &str) {
     let parsed = parse_highlights(version, release_notes);
     println!("\n{}", format!("What's new in v{version}:").bold());
     if parsed.items.is_empty() {
@@ -298,9 +335,17 @@ async fn print_installed_release_notes(version: &semver::Version, release_notes:
         }
     }
     println!("{} {}", "→".cyan(), Updater::release_url(version).cyan());
+    // `vtcode update` just announced this release in full. Mark it seen so the
+    // next launch (TUI transcript or desktop banner) does not repeat it.
+    crate::updater::record_version_notes_seen(version);
 }
 
-async fn install_update(updater: &Updater, update_info: Option<&UpdateInfo>, force: bool) -> Result<()> {
+async fn install_update(
+    updater: &Updater,
+    update_info: Option<&UpdateInfo>,
+    force: bool,
+    desktop: DesktopChoice,
+) -> Result<()> {
     let guidance = updater.update_guidance();
     if guidance.source.is_managed() {
         println!("{} Managed install detected ({}).", "!".yellow(), guidance.source.label());
@@ -329,6 +374,7 @@ async fn install_update(updater: &Updater, update_info: Option<&UpdateInfo>, for
             println!("\n{} Restart VT Code to use the new version", "→".cyan());
             println!("{} vtcode init   # scaffold project if needed", "→".cyan());
             println!("{} vtcode        # launch TUI", "→".cyan());
+            maybe_offer_desktop_install(updater, update_info.map(|info| info.version.clone()), desktop).await?;
         } else {
             let code = status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".to_string());
             println!("{} Update command exited with status: {}", "!".yellow(), code);
@@ -340,8 +386,9 @@ async fn install_update(updater: &Updater, update_info: Option<&UpdateInfo>, for
 
     println!("\n{} Installing update...", "→".cyan());
 
-    match updater.install_update(force).await? {
+    let desktop_target = match updater.install_update(force).await? {
         InstallOutcome::Updated(version) => {
+            let target = Version::parse(&version).ok();
             println!("{} {} installed successfully!", "✓".green(), version.bold());
             // `install_update_reported` already seeded the cache with the fresh
             // release metadata so the TUI shows notes on its first launch.
@@ -353,11 +400,181 @@ async fn install_update(updater: &Updater, update_info: Option<&UpdateInfo>, for
             println!("\n{} Restart VT Code to use the new version", "→".cyan());
             println!("{} vtcode init   # scaffold project if needed", "→".cyan());
             println!("{} vtcode        # launch TUI", "→".cyan());
+            target
         }
         InstallOutcome::UpToDate(version) => {
+            let target = Version::parse(&version).ok();
             println!("{} Already up to date ({})", "✓".green(), version.bold());
+            target
+        }
+    };
+    maybe_offer_desktop_install(updater, desktop_target, desktop).await?;
+
+    Ok(())
+}
+
+/// Offer the macOS desktop app install/update after the CLI step.
+///
+/// `target` is the CLI version just installed (or already current); the offer
+/// is skipped silently when the installed desktop app already matches it, so
+/// up-to-date users are never nagged. A `None` target skips the pre-check and
+/// installs the latest release's asset.
+async fn maybe_offer_desktop_install(updater: &Updater, target: Option<Version>, desktop: DesktopChoice) -> Result<()> {
+    if !desktop_supported() {
+        if desktop == DesktopChoice::Install {
+            anyhow::bail!("--with-desktop requires macOS; the desktop app is not available on this platform.");
+        }
+        return Ok(());
+    }
+    if desktop == DesktopChoice::Skip {
+        return Ok(());
+    }
+    // A pinned CLI means "leave my versions alone": skip the prompt, while an
+    // explicit --with-desktop still expresses intent and proceeds.
+    if updater.is_pinned() && desktop == DesktopChoice::Prompt {
+        return Ok(());
+    }
+    // The bundle cannot launch below macOS 15: fail an explicit request,
+    // warn-and-skip a prompted one (mirrors the installer's best-effort).
+    let macos_major = tokio::task::spawn_blocking(desktop_macos_major)
+        .await
+        .context("desktop OS check panicked")?;
+    if !macos_major.is_some_and(|major| major >= 15) {
+        if desktop == DesktopChoice::Install {
+            anyhow::bail!("VT Code Desktop requires macOS 15 or newer.");
+        }
+        println!("{} Desktop app requires macOS 15 or newer; skipping.", "!".yellow());
+        return Ok(());
+    }
+
+    if let Some(target) = target.as_ref() {
+        let installed = installed_desktop_version().await;
+        if let Some(current) = installed.as_ref().filter(|version| **version >= *target) {
+            println!("{} Desktop app is already up to date (v{current})", "✓".green());
+            return Ok(());
         }
     }
 
+    let install = match desktop {
+        DesktopChoice::Install => true,
+        DesktopChoice::Skip => return Ok(()),
+        DesktopChoice::Prompt => {
+            if !std::io::stdin().is_terminal() {
+                println!("{} Run `vtcode update --with-desktop` to also install the macOS desktop app.", "→".cyan());
+                return Ok(());
+            }
+            let message = match target.as_ref() {
+                Some(version) => format!("Install the VT Code desktop app (v{version})?"),
+                None => "Install the VT Code desktop app?".to_string(),
+            };
+            UserConfirmation::confirm_action(&message, true).context("Failed to read confirmation input")?
+        }
+    };
+    if !install {
+        println!("{} Desktop install skipped.", "→".cyan());
+        return Ok(());
+    }
+
+    // Updates reuse the existing install's directory; fresh installs ask
+    // unless --with-desktop already declined prompting.
+    let install_dir = match existing_install_dir() {
+        Some(dir) => dir,
+        None if desktop == DesktopChoice::Prompt => {
+            let all_users =
+                UserConfirmation::confirm_action("Install for all users (/Applications, may need sudo)?", false)
+                    .context("Failed to read confirmation input")?;
+            if all_users {
+                std::path::PathBuf::from("/Applications")
+            } else {
+                default_install_dir()?
+            }
+        }
+        None => default_install_dir()?,
+    };
+
+    // Prompt mode is best-effort (like the installer default): the CLI update
+    // already succeeded, so a desktop failure warns instead of failing the
+    // command. Explicit --with-desktop fails hard.
+    let outcome = match install_desktop_app(updater, &install_dir).await {
+        Ok(outcome) => outcome,
+        Err(err) if desktop == DesktopChoice::Prompt => {
+            println!("{} Desktop install failed: {err:#}", "!".yellow());
+            println!("{} Re-run with --with-desktop to retry, or --without-desktop to skip.", "→".cyan());
+            return Ok(());
+        }
+        Err(err) => return Err(err),
+    };
+    print_desktop_install_outcome(outcome);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options(desktop: DesktopChoice) -> UpdateCommandOptions {
+        UpdateCommandOptions {
+            check_only: false,
+            force: false,
+            list: false,
+            limit: 10,
+            pin: None,
+            unpin: false,
+            channel: None,
+            show_config: false,
+            desktop,
+        }
+    }
+
+    #[test]
+    fn unused_flag_warning_covers_every_non_install_mode() {
+        // --with-desktop with a real update: no warning.
+        assert!(!desktop_install_flag_unused(&options(DesktopChoice::Install)));
+        // Every mode that never installs warns.
+        let mut check = options(DesktopChoice::Install);
+        check.check_only = true;
+        assert!(desktop_install_flag_unused(&check));
+        let mut list = options(DesktopChoice::Install);
+        list.list = true;
+        assert!(desktop_install_flag_unused(&list));
+        let mut pin = options(DesktopChoice::Install);
+        pin.pin = Some("0.1.0".to_string());
+        assert!(desktop_install_flag_unused(&pin));
+        let mut unpin = options(DesktopChoice::Install);
+        unpin.unpin = true;
+        assert!(desktop_install_flag_unused(&unpin));
+        let mut channel = options(DesktopChoice::Install);
+        channel.channel = Some("beta".to_string());
+        assert!(desktop_install_flag_unused(&channel));
+        let mut show = options(DesktopChoice::Install);
+        show.show_config = true;
+        assert!(desktop_install_flag_unused(&show));
+        // Prompt/Skip never warn: the hint only concerns an explicit request.
+        let mut prompt_check = options(DesktopChoice::Prompt);
+        prompt_check.check_only = true;
+        assert!(!desktop_install_flag_unused(&prompt_check));
+        let mut skip_check = options(DesktopChoice::Skip);
+        skip_check.check_only = true;
+        assert!(!desktop_install_flag_unused(&skip_check));
+    }
+
+    #[tokio::test]
+    async fn skip_choice_short_circuits_before_any_prompt_or_gate() {
+        let updater = Updater::new("0.0.0-test").expect("updater");
+        maybe_offer_desktop_install(&updater, None, DesktopChoice::Skip)
+            .await
+            .expect("skip is a silent no-op");
+    }
+
+    /// Explicit `--with-desktop` fails hard off macOS instead of silently
+    /// skipping (the contract that makes the flag trustworthy in scripts).
+    #[cfg(not(target_os = "macos"))]
+    #[tokio::test]
+    async fn explicit_install_bails_off_macos() {
+        let updater = Updater::new("0.0.0-test").expect("updater");
+        let error = maybe_offer_desktop_install(&updater, None, DesktopChoice::Install)
+            .await
+            .expect_err("must fail, not skip");
+        assert!(error.to_string().contains("--with-desktop requires macOS"), "{error:#}");
+    }
 }

@@ -5,6 +5,449 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.8 - 2026-11-09
+
+### Highlights
+
+#### Bug Fixes
+
+- Survive GitHub release-asset CDN outages (c077d630) (@vinhnx)
+
+### Other Changes
+
+## 0.181.7 - 2026-11-09
+
+### Highlights
+
+#### Features
+
+- Report OSC 7501 status for headless exec runs (4339b3c2)
+- Collapse custom themes section by default (26f3661e)
+- Read the changelog from Settings → About (fe341dce)
+- Move the update check to Settings → About (d57410f0)
+- Retry with backoff for background fetches, guard image URLs (128fb488)
+- Upgrade pinned gpui-kit from 0.8.1 to 0.9.0 (cba3d44b)
+
+### Other Changes
+
+#### Other
+
+- Cleanup docs (f3f56de7)
+
+#### Refactors
+
+- Split session-option flows into view/session_options (d7017094)
+
+#### Tests
+
+- Pin transcript readability contract (efc58bd8)
+
+## 0.181.6 - 2026-11-08
+
+### Highlights
+
+#### Bug Fixes
+
+- Keep trash tests out of the real ~/.Trash (84115cbb)
+- Unify nav glyph size and localize custom themes (a40ffb70)
+- Answer recorded tool calls abandoned by dispatch (d47a588d)
+- Resolve dangling symlinks instead of treating them as missing (d0c61b4c)
+- Fail closed on unresolvable additional-permission roots (afc4afdb)
+- Validate custom theme ids and contrast on load (a69fabe1)
+- Harden event log sync, rollback, and separator handling (34e324e8)
+- Make the quick-profile gate pass again (d93f8262)
+- Harden diagram previews from review (CSP, UTF-16 gate, sweep) (2f01c6e2)
+- Generate license notices for the whole workspace (0c0c3387)
+- Full-size maximized launch, redeliver windowless handoffs (0e120d22)
+- Bound outbound clients, jitter all retry backoffs (d76edf16)
+- Announce release notes once per release, inline on desktop (0b6e65b0)
+- Stop per-frame native calls and clones in settings (4ea6955e)
+- Validate nested agent temperature ranges (aa308ba3)
+
+#### Documentation
+
+- Tighten overview install usage and docs index flow (23fd1555)
+- Component review, maintainer notes, module guide (30f41297)
+- Preview editing review notes and module guide (73dc680b)
+- Fix markdown lint in Pele provenance and webmcp notes (d096b319)
+- Re-confirm dropdown verdict, fix stale run-cluster prose (d71c72b2)
+- Regenerate field reference for 0.181.5 (145946e0)
+- Tighten overview, usage, desktop, and documentation prose (75ff45c6)
+
+#### Features
+
+- Open latest changelog from update notification (e2f76d6c)
+- Post-update what's-new moment and changelog deeplink verb (b6819a6b)
+- Keep approved plan visible in sidebar for the plan session (ff186b6c)
+- Add inline TODO tracker viewers synced via typed tracker.updated events (6a61db6d)
+- Guarded outside-click dismiss, launch-at-login, zen attach (281bdc84)
+- Empty actions, modal focus traps, title-bar responsive collapse (d938ceed)
+- Main-relative title-bar collapse with sidebar rail yield (d3ef93df)
+- Markdown preview toggle, highlighted source, header toolbar (b814db54)
+- Editable markdown preview with Cmd+S save (32ba1cd0)
+- Host settings surface on Kit Settings for wide viewports (d56380d6)
+- Preview Mermaid diagrams in the browser via Pele (b774d09a)
+- Reorder settings rail and add About page (76e6f314)
+- Render mermaid diagrams in preview dialog via Pele (ad7bf761)
+- Render mermaid diagrams inline via vendored Pele (c0bae575)
+- Glass button tier and inline reverse search (bde97db4)
+- Roll glass primaries out to popover and secondary seats (8dd244f1)
+- Debounced swipe navigation, off by default (34d85666)
+- Extend swipe navigation gating and reset coverage (1f76514e)
+
+### Other Changes
+
+#### Performance
+
+- Apply memory-latency lessons to indexer and memory query (32fa921a)
+- Apply sysinfo read-and-apply lessons to tree, digests, walker docs (3d5568ad)
+
+#### Refactors
+
+- Drop shimmer from composer run button (314f929a)
+- Share license-viewer row builder across settings pages (5001cf89)
+- Secret-store accessor, theme hoist, policy-match flatten (8b516bf2)
+- Hoist repeated theme lookups in transcript render (6b0c47aa)
+- Narrow module-local visibilities to private (b56f9f55)
+- Split handle_backend_event into backend_events/handle.rs (9cc6b00e)
+- Drop redundant Fuse; document async completion-state rules (10fea64a)
+- Centralize byte-length heuristic in vtcode-commons (b0bab3c6)
+- Deduplicate timeout resolution, harden converters (46942c74)
+- Canonicalize duplicated TTY and LLM contracts (ba99d974)
+
+#### Tests
+
+- Trap and escape pins for every modal (f33b3ef9)
+
+## 0.181.5 - 2026-11-07
+
+### Highlights
+
+#### Bug Fixes
+
+- Generate lint-clean, machine-independent skills index (6533d638)
+- Publish vtcode-commons before vtcode-desktop-protocol (217eda9d)
+- Resolve clippy findings in desktop and a2a (6362a604)
+- Truncate instruction files on a char boundary (b69cb9a5)
+- Use one instruction budget for welcome highlights (b25de828)
+- Decode streamed skill output across read boundaries (01d19cc7)
+- Decode command output across pipe and PTY read boundaries (a88cea82)
+- Cut byte-capped text on char boundaries (569ea6dd)
+- Silence MCP catalog ready notice (db97e9ce)
+- State the real macOS first-launch approval steps (f3291095)
+- Diagnose redacted source mismatches (2c91e6ff)
+- Unify transcript header alignment and simplify tool-group chrome (bea6e2a6)
+- Separate markdown list items with a blank row (0f26d474)
+- Bake Clear glass tile and use display-sized in-app art (359b6da4)
+- Dim resting shimmer text and pin the sweep bright (d40e34c1)
+- Anchor shimmer resting tone to the popover seat (0ea93d61)
+- Share CLI fuzzy ranking for Ctrl+R prompt history (55589129)
+- Cap merged history rows and stop faking an empty history (90e74a36)
+- Gate inline copy to final turn response; align transcript spine (f3fcd378)
+- Restore convergence on repeated inspection (b8dd0e50)
+- Retry pending handoff across transient gate contention (d421f67a)
+- Ungate queue wait-time formatter used by production code (06f1ae9b)
+- Resolve clippy gate failures in queue helpers and tests (25d46f63)
+
+#### Documentation
+
+- Fix markdownlint findings in first-party docs (6daca0b6)
+- Condense module AGENTS.md files into maintainer notes (bf74c4f5)
+- Fix rust-skills counts and links in the vendored skill (afa267e0)
+- Treat AGENTS.md as the canonical instruction file (0b51b8ae)
+- Fit root AGENTS.md inside VT Code's instruction budget (6caf02bd)
+- Regenerate a portable, current config field reference (5db4209b)
+- Document Utf8StreamDecoder as the single chunked UTF-8 decoder (2e84792c)
+- Ground rust-skills in VT Code conventions (9c616191)
+- Document the cask install path and tighten install docs (bfaabf45)
+- Fix README heading level and INDEX duplicates (a0d4cb0f)
+- Audit module guides for scoped history search (0d30f7b5)
+- List instruction_audit module in binary module map (03346204)
+
+#### Features
+
+- Show build version and credits in About (13a46a9d)
+- Scoped prompt-history search for CLI and desktop (cf6042d7)
+- Report instruction files cut or skipped by the budget (2d34f688)
+- Publish the desktop app as a Homebrew cask (5df2e397)
+- Unify run-cluster geometry, add tertiary tier (c3302a86)
+- Persist zen layout preference across launches (54ec86de)
+- Page the thread list with show-more footers (4e51f1c4)
+- Widen reading columns for comfortable read (87a0e7d0)
+- Deeplink notification clicks to related surfaces (f935023e)
+- Safe per-turn file-change undo service (d70e416a)
+- Turn grouping cards, archive restore, and per-turn undo (78957b4f)
+- Merge shell invocation/output rows with explicit delta contract (2798f715)
+- Restyle HITL panel, add dismiss helper and pill contrast gate (d05ce84d)
+- Unify icon size tiers, add command palette icons, refresh run cluster (5b419e67)
+- Show concise CLI-parity tool summaries in transcript (fa03dbe4)
+- Expandable plan proposal with inspector side view (a07f4e17)
+- Plan-edit parity with service-owned external editor (98a1e4a4)
+- Preview markdown files through the shared viewer (db8c59f0)
+- Use non-red icons for composer running trio (ffd56353)
+- Trace startup timeline via startup_trace (7b03a1eb)
+- Per-row queue panel with entry ids, wait times, and removal (3dc66b95)
+- Customizable diff view settings (ecdac7ca)
+- Add shimmer effect to composer run button (6fcf3115)
+- Render rich attachment cards in user echo bubbles (92cfc4b7)
+- Deeplink notification toasts to their targets (83bf8b87)
+- Add user-authored custom themes to Appearance (874d26c4)
+- Add pipe line-monitor subscriptions with idle-wake digests (0558d268)
+- Advertise monitor_filter in exec tool schema (4945013f)
+- Promote setup checkup to first-class /doctor with prompt-audit (97a291fd)
+- Move background action to thread header, slim run cluster (2374dd4c)
+- Harden storage chart empty state, coverage, and series contrast (4ec6a54c)
+- Add busy_enter_behavior queue/steer setting (80ade673)
+- Flash search landing rows and jump to latest on Enter (b5842913)
+
+### Other Changes
+
+#### Build
+
+- Share governance gates across check-dev.sh and check.sh (ccc76be4)
+- Check links in all maintained Markdown, skipping code (5eb137f2)
+- Fail on stale structured-logging and large-file allowlist rules (f5825c3e)
+
+#### Other
+
+- Apply rustfmt to the MCP lifecycle handler (67721fe8)
+
+#### Performance
+
+- Hold UI animations under 300ms with ease-out curves (1fda31bb)
+
+#### Refactors
+
+- Use floor_char_boundary for byte-capped text cuts (d48485ff)
+- Back truncate_utf8_prefix with floor_char_boundary (b4efaeaa)
+- Replace hand-rolled char-boundary loops with std floor/ceil (ae8b89c9)
+
+#### Tests
+
+- Derive check-dev fixture gate stubs from common.sh (789feedd)
+- Isolate slow headless planning probe in quick profile (54c3e840)
+- Centralize system-prompt budgets and compose goldens from guidance const (2c7c8057)
+- Shorten verification ceiling fixture to fit the quick profile (0a09f21f)
+
+## 0.181.4 - 2026-11-05
+
+### Highlights
+
+#### Bug Fixes
+
+- Unify Zen and normal-mode control sizing (421d271e)
+- Reveal inspector exits Zen instead of flipping hidden state (d5f5304a)
+- Cut tool-call failures on simple single-file tasks (431b6ba3)
+- Stamp one wall-clock footer per turn (08d33a1d)
+- Stamp --version with the build commit SHA (b5b27ab9)
+- Align composer and pending row to transcript spine (aa776492)
+- Bound previously unbounded HTTP clients (81eb6dd6)
+- Keep built-in defaults when a config section is partial (f12ff131)
+- Stop the ignore matcher aborting on paths outside its root (ebea25b3)
+- Saturate list pagination math so an extreme page cannot abort (1823e930)
+- Keep the file-palette breadcrumb relative under a workspace alias (1eb1cbd9)
+- Give ThreadItem handles one process-wide authority (b4f78a61)
+- Dismiss panels on click-away and prevent popover overlap (39b8f2b1)
+- Clear pre-existing doctest failures and harden config tests (fc554903)
+- Recover dotted tool hallucinations and suggest similar names (bfdd20b0)
+- Clarify selected control states (9bc93faf)
+- Preserve turn cancellation during startup (70059320)
+- Confirm subagent and session termination instead of assuming it (829abba8)
+- Fence runtime events by generation and resume queues after restart (c58f0de4)
+
+#### Documentation
+
+- Record the hoist-the-loop-invariant rule with its measured numbers (6f792b1a)
+- Record the item-handle invariant and close the TD-026 follow-up (837ac741)
+- Document cancel escalation and localize the recovery status (dcd58b1a)
+
+#### Features
+
+- Use person-standing icon for accessibility settings tab (8778242b)
+- Verb-phrase tool group summaries, diffs collapsed by default (89f5d67d)
+- Recede transcript inspector CTAs until hover or focus (5014fce2)
+- Per-row outcome gists from tool arguments (05b2dcdd)
+- Adopt Kit Marker rows for severity, loading, and history boundary (74543d75)
+- Make outbound HTTP timeouts overridable (7928a88d)
+- Rebuild file browser on shared snapshot with fuzzy search (b5a28ef5)
+- Unify tab layouts on Kit Folder TabBar (8a77fb51)
+- Highlight HITL tool calls and clamp wide content (a1da3512)
+- Replace effort rail with accent radio rows (7cb50a14)
+- Use named overflow dropdown on folder tab bars (df15096f)
+- Escalate stalled turn cancellation with watchdog restart (6b60467f)
+
+### Other Changes
+
+#### Build
+
+- Deny unstable_features to enforce the stable-only pin (17e279af)
+
+#### Performance
+
+- Render entries without per-entry realpath, and fix aliased-root results (f2197040)
+- Read entry types from readdir instead of paying a stat per entry (837201c3)
+- Bound the delivered-completion identity memo (863ba42d)
+
+#### Refactors
+
+- Quiet transcript rows, cards, and notices (e11e040a)
+- Adopt stable substitutes for nightly conveniences (e1308642)
+- Share Agent Skills spec limits across both validators (785b0fe4)
+- Share one working-dir format and stop the shell session's stray crash (1b69fe5b)
+- Reuse the subagent identity cap instead of a parallel memo (b4c2ce96)
+
+#### Tests
+
+- Assert tab reveal by painted position (298811d1)
+
+## 0.181.3 - 2026-11-03
+
+### Highlights
+
+#### Bug Fixes
+
+- Cycle tab focus instead of fixed counts in review/settings tests (ee7579c2) (@vinhnx)
+- Drop composer prompt marker, align draft with action row (b80c78b7)
+- Send stable x-opencode-session on every request (d1db0098)
+- Relax settings spacing and pin rows to the title frame (dba5c997)
+- Add Confirm button to HITL choice panels (edbff6cd)
+- Use unwrap_or for clippy unnecessary_lazy_evaluations (49524483)
+- Persist file viewer settings across launches (3b6a09af)
+- Apply saved shortcuts live and quarantine corrupt preferences (0f963afa)
+- Builtin presets cover every provider; implement qwen presets (5d7e2c1d)
+- Resolve model routes through canonical provider identity (019408ce)
+- Show only the editing profile's theme grid (0e45c4cb)
+- Align turn-timer fallback with config default (5b7e3210)
+- Export config schema with --locked (4e2750ac)
+- Pin expanded diagnostic details while streaming (691275b3)
+- Use camo-safe shields.io badge for DeepWiki (454e0820)
+- Fork-based desktop/CLI handoff with auto-run terminal (983ccd95)
+
+#### Documentation
+
+- Fix totality test name in builtin presets comment (1c2691f6)
+
+#### Features
+
+- Add icons to settings navigation with shared rail entry builder (8b79c84f)
+- Add scrolling content page title to settings tabs (d9934752)
+- Filterable newest-first activity, changes, and output panes (140c6728)
+- Transcript CTAs that open the inspector (711447ab)
+- Transcript navigation and TUI follow-state (00f42199)
+- Guide GitHub queries to gh CLI fallback (67984abc)
+- Refine HITL confirmation hierarchy, hover, and rhythm (a2fc55d5)
+- Weakest-sufficient fills, crisper muted text, Noir option (25863bfa)
+- Threads keyboard nav, vim layer, unified reset (e401d2c4)
+- Human-readable provider names with frontier-first order (27f5f00c)
+- Composer alignment pass with extended icon bundle (c1697338)
+- Group settings theme picker by light/dark modes (e2282391)
+- Keyboard navigation for thread surfaces and activity (1c9a52b5)
+- Vertical effort rail with labeled stops in model options (8077bf67)
+- Quiet processing-tier readout in Zen composer (9b598de4)
+- File-tree context menu with open, reveal, rename, delete (7143dff5)
+- Stamp each agent response with a wall-clock footer (35a8d85b)
+- Restyle HITL panel to Questionnaire visual language (2ce88225)
+
+### Other Changes
+
+#### Refactors
+
+- Converge settings screens on Kit Settings rhythm and split panes per module (665488f4)
+- Converge remaining settings sections and items on shared builders (6f190ecc)
+- Split oversized inspector and review test modules (b6a6f564)
+- Single-lock PlanningWorkflowState with atomic transitions (ba054fc1)
+- Typed LocalAgentStatus replacing string matching (387cbb01)
+- Share consent title row across confirm modals (b3bcaec1)
+
+#### Tests
+
+- Pin inspector MIN clamp through divider drag (96539c6c)
+- Pin profile caption contrast under contrast boost (0156ef10)
+- Align model-switch test with frontier-first order (968ad2a0)
+
+## 0.181.2 - 2026-11-03
+
+### Highlights
+
+#### Bug Fixes
+
+- Bump async-executor past yanked 1.14.0 (da20eaa8) (@vinhnx)
+
+#### Documentation
+
+- Remux desktop demo to mp4 for README playback (d7cfedd2) (@vinhnx)
+- Link desktop demo video instead of embedding (d2b78d1f) (@vinhnx)
+
+### Other Changes
+
+## 0.181.1 - 2026-11-02
+
+### Highlights
+
+#### Bug Fixes
+
+- Publish vtcode-desktop-protocol to crates.io (59edae70) (@vinhnx)
+- Pin desktop workflow nextest to repo-required version (723c7175) (@vinhnx)
+- Skip Liquid Glass catalog on SDKs older than macOS 26 (827f8929) (@vinhnx)
+- Allow iTerm2 icon install from any macOS terminal; refresh stale VS Code icon docs (505af907)
+- Accept edit/edits in scope-review expectations (3cad2153)
+- Adapt desktop to gpui-pre 0.3.10 and re-vendor macos cursor patch (0a1b4026)
+- Preserve thread across config changes (7c88841c)
+- Keep thread on config responses (93ffa224)
+- Interview the user when plan validation exhausts (2c4c6c3e)
+- Diagnose missing-toolchain verification failures and scope markdown checks (eeee8f24)
+- Preserve installer errors and guide manual install (b59b4e44)
+- Bump rio-vt to 0.5.29 for RUSTSEC-2026-0430 (033d608d)
+- Correct display width and shimmer test probe (70b27de1)
+- Let a latched stop win over queued overlay input (5d88c1a4)
+- Persist model selection and map effort on config/select (b09755b5)
+- Proceed degraded on deterministic failures instead of wedging turns (837735cf)
+- Give settings panels and sections horizontal air (c94cb8f9)
+- Make cancel reliably stop the active run (5fc386d4)
+
+#### Documentation
+
+- Link desktop app download, fix admonitions for crates.io (1e477501) (@vinhnx)
+- Add copy-paste Rex program-registry icon request (01df8728)
+- Polish README wording and add desktop demo video (716ed219)
+- Thread-preserving model switch (c0abb618)
+- Docs: update README and desktop workspace with demo video and appearance images (cdcb3cca)
+- Update README for clarity and consistency, improve demo video description (3343a325)
+- Reflow workspace guide tables and fix lint errors (c6700608)
+- Correct stale gpui-kit 0.8.0 references to pinned 0.8.1 (c87525e3)
+
+#### Features
+
+- Build and upload macOS desktop app with release.sh (30a3f0b9) (@vinhnx)
+- Link the desktop app from release notes automatically (26c67eae) (@vinhnx)
+- Emit ConEmu OSC 9;4 tab progress on allowlisted terminals (d78ef6e1)
+- Offer prebuilt macOS app install in installer and updater (94ab8f09)
+- Install command, startup nudge, Gatekeeper notes, install docs (1b8995fb)
+- Proceed with recorded exclusions instead of blocking turns (9a625d29)
+- Share default search paths between pipe and PTY commands (b89bf22a)
+- Add in-app license and open-source viewer (23c5c2d2)
+- Sync inspector visuals and add rail close control (65a9c636)
+- Add force-cancel and background exec controls (e0e3d693)
+- Add bidirectional CLI thread handoff (/desktop, /cli) (69bc1744)
+- Navigate history with horizontal trackpad scroll (7ff3634d)
+
+### Other Changes
+
+#### Performance
+
+- Collapse consecutive transcript remeasures (9ef69a9f)
+
+#### Refactors
+
+- Split over-budget session event modules (267abea4)
+- Move desktop request router into dispatch module (78fd7b81)
+- Route settings rows and nav selection through shared builders (c31d008b)
+
+#### Tests
+
+- Pin chat font-size scaling with geometry regressions (d2648bf1)
+- Cover stepper e2e and production-frame font sync (1a1d1421)
+
 ## 0.181.0 - 2026-11-01
 
 ### Highlights

@@ -78,3 +78,83 @@ fn full_access_modal_requires_acknowledge_before_confirm(cx: &mut TestAppContext
     cx.run_until_parked();
     assert!(requests.try_recv().is_err(), "cancel must not send");
 }
+
+#[gpui_kit::test]
+fn clicking_outside_cancels_full_access(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.run_palette_action(
+                super::super::PaletteAction::SelectSessionOptions(full_access_options()),
+                window,
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).full_access_confirm.is_some());
+        assert!(window.try_find("full-access-confirm-dialog").is_some());
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).full_access_confirm.is_none(), "clicking away cancels");
+        assert!(window.try_find("full-access-confirm-dialog").is_none());
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "clicking away must not send");
+}
+
+#[gpui_kit::test]
+fn escape_cancels_full_access_without_sending(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.run_palette_action(
+                super::super::PaletteAction::SelectSessionOptions(full_access_options()),
+                window,
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("full-access-confirm-dialog").is_some());
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).full_access_confirm.is_none(), "Escape cancels the modal");
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "cancellation restores composer focus"
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "cancellation must not send");
+}
+
+#[gpui_kit::test]
+fn full_access_modal_traps_tab_across_acknowledge_and_actions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.run_palette_action(
+                super::super::PaletteAction::SelectSessionOptions(full_access_options()),
+                window,
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        // Acknowledging enables confirm, so all three stops participate.
+        window.click("full-access-acknowledge", cx);
+        window.render_frame(cx);
+        assert_tab_trapped_within_dialog(window, "full-access-acknowledge", "full-access-confirm", cx);
+    })
+    .unwrap();
+}

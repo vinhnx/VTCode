@@ -23,6 +23,9 @@ pub(crate) async fn handle_toggle_planning_workflow(
     };
 
     if new_state == current {
+        if current && enable == Some(true) {
+            ctx.plan_session.mark_explicit_plan_request();
+        }
         sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
         ctx.renderer.line(
             MessageStyle::Info,

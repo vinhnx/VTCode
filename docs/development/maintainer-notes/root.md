@@ -1,0 +1,42 @@
+<!-- markdownlint-disable MD013 -->
+
+# Root AGENTS.md maintainer notes
+
+Full text of root [AGENTS.md](../../../AGENTS.md) rules that were shortened there to fit VT Code's 16 KiB instruction budget, moved verbatim. The short form in AGENTS.md is binding; this page holds the detail.
+
+## Purpose
+
+Keep this file concise and under 150 lines. Root guidance belongs here; detailed explanations belong in `docs/`, skills, `.vtcode/memory/`, or crate-local `AGENTS.md` files. Universal model-facing behavior is compiled in `crates/codegen/vtcode-core/src/prompts/runtime_guidance.rs`. Keep this file and module `AGENTS.md` files focused on project and maintainer guidance; dynamically loaded instruction files are user-controlled context, not a security boundary. This workflow is repo-only: do not copy it to other projects or into shipped prompts.
+
+## Core Workflow
+
+- Research complex/hard problems: consult DeepWiki MCP (`deepwiki` in `.mcp.json` / `vtcode.toml [mcp.providers]`) for `vinhnx/vtcode` (the local baseline) and `openai/codex` (upstream comparison) only when a problem is complex or hard; routine work uses local source and tests. Reuse prior research, attribute sources, and verify local claims against the current checkout and upstream claims against source/tests pinned to a commit; indexes are discovery aids. Apply findings only within the original authorization. If research is unavailable, use local evidence and state the gap. See the [reference workflow](../../development/codex-reference-workflow.md) for pinned-source fallbacks and the full decision loop.
+- Read and apply: use relevant skills, especially `read-and-apply` for upstream resources, `rust-skills`/`agentic-testing` for implementation/regressions, and `verification-discipline` for contracts, invariants, overflow and `unsafe` hardening. Compare upstream patterns with existing VT Code code and tests, identify confirmed gaps, and implement the smallest complete DRY/KISS improvement. Reuse existing patterns; preserve `ThreadEvent`, the harness config split, sandbox/approval boundaries, conflict checks, rollback, durable history, and unrelated work. Cite the upstream source path + commit when adapting a pattern (`codex-rs/...`, Apache-2.0 © 2025 OpenAI, <https://github.com/openai/codex>); preserve notices and document substantive changes per Apache-2.0 §4, extending `scripts/templates/third-party-header.txt` and regenerating notices for substantive copies.
+- Orient: start with repository instructions, relevant local source/tests, and `.vtcode/memory/` (`gotchas.md`, `issues.md`, `library.md`, `decisions.md`). Search for task-relevant entries and read matching sections; avoid concatenating the full memory corpus. Routine or self-contained tasks need only this local grounding. For self-bugs inspect relevant events in `.vtcode/logs/trajectory.jsonl`, `.vtcode/checkpoints`, and `.vtcode/sessions`.
+
+## Rules
+
+- **Shape-suffix naming**: encode the dimensional structure of data in variable/type names. For feature vectors, document a **dimension key** (table of index → name → meaning). For bare tuples holding structured data, promote to named structs so the shape is explicit in the type system (inspired by Noam Shazeer's shape-suffix convention).
+- Keep changes surgical: identify the production, test, and documentation files owned by the current increment before editing. Preserve existing APIs and unrelated work; inspect generated/hook-added changes, stage explicit reviewed paths rather than the whole worktree, and check the staged diff and final status for each scoped commit.
+- **Every new major feature must update docs**: user-facing behavior → `docs/development/` guide + a table row/section in the relevant quick-reference; agent-facing tool surface → prompt guidance (`crates/codegen/vtcode-core/src/prompts/guidelines/`) + schema (`crates/common/vtcode-utility-tool-specs`); runtime contract → `vtcode-exec-events::ThreadEvent`. No feature is "done" until the docs it changes are updated and the AGENTS.md detailed-guides links still resolve.
+
+## Build & Verification
+
+- CI parallelism: overlap independent setup/I/O steps with `parallel` after toolchain setup; use `cache-bin: false` when cache restoration overlaps tool installers. Keep Cargo commands sharing `target/` sequential (`webmcp.yml` runs its typecheck and test steps in parallel). Verify barriers, failure propagation, and hosted timings; see [ci-cd](../../development/ci-cd.md). CI build caching: always namespace `Swatinem/rust-cache` per target (`with: { key: ${{ matrix.target }} }`) in cross-target matrix jobs; see "Cross-target cache keys" in [ci-cd](../../development/ci-cd.md).
+- Release builds keep `debug-assertions = true` and `overflow-checks = true` in `[profile.release]`. `debug_assert!` and overflow checks are NOT disabled in prod: a violated invariant must crash loud, not let the program run under wrong assumptions (see kristoff.it/blog/fix-your-asserts). Use `assert!`/`debug_assert!` for invariants that always hold; gate expensive diagnostics behind `#[cfg(debug_assertions)]` since that branch still compiles out of release when the flag is off elsewhere.
+
+## Testing
+
+- Test layout: keep small unit suites in-module; move substantial suites to a private `#[cfg(test)] mod tests;` declared after all production items (avoids `clippy::items-after-test-module`). Inspect the actual module tree before choosing paths: both `foo.rs` and `foo/mod.rs` load `mod tests;` from `foo/tests.rs`. Integration tests use the crate's existing `tests/`; shell/script tests use `scripts/tests/`.
+- Test visibility: keep helpers and fixtures within their owning test module; use private child-module access or the narrowest required `pub(super)` for production siblings. Do not widen public APIs, add dependencies, or alter production behavior solely to make tests convenient. During extraction, retain public-entrypoint regressions and verify the moved logic and remaining facade preserve the original contract.
+- Test evidence: assert independently derived outcomes with asymmetric inputs and both sides of boundaries; cover ordering, cleanup, cancellation, and rejected-call recovery when relevant. For Tokio task-ID behavior, explicitly `tokio::spawn` the tested future; the `#[tokio::test]` main future does not itself establish a spawned-task ID. Keep thread-fallback coverage separate, and never clear shared global state while other tests may own entries.
+- Verification scope: start with focused locked nextest filters, confirm a nonzero matched test count, then broaden to the affected module/crate in proportion to risk. Run final checks after edits stabilize; report passed, failed, and excluded tests plus untested host/platform behavior. Documentation-only edits need Markdown and diff checks rather than an unrelated Rust rebuild.
+
+## Skills & Special Workflows
+
+- Structural code work: prefer `ast-grep` over text grep for code shape, calls, impls, and codemods. Use `rg` for prose, logs, and config strings. Always invoke `ast-grep`, not the `sg` alias. In VT Code, use `exec_command` or the ast-grep skill for arbitrary structural patterns; its advanced `code_search` accepts one literal query and bounded filters. Rust pattern catalog: <https://ast-grep.github.io/catalog/rust/>. GitHub refs: prefer `gh` CLI over `webfetch` (`gh` authenticates as the exported-token account — on 403/admin-rights failures, run `unset GITHUB_TOKEN && gh auth switch -u vinhnx` before retrying); for internal improvements, follow the Codex research workflow in Core Workflow.
+- Cap large command output: `COMMAND 2>&1 | head -c 4000` — but never pipe verifier commands (`cargo check --locked`, `cargo fmt --all -- --check`, `cargo nextest run`); in VT Code pass `max_output_tokens` instead, since a pipe masks the verifier's exit status and never clears the verification gate.
+
+## Per-Module Guidance
+
+After significant changes (new modules, convention shifts, discovered gotchas, public API changes), use the `audit-module-agents` skill to check if the affected crate's AGENTS.md needs updating. Keep each local AGENTS.md to about 30 short lines (none over 600 characters, enforced by `scripts/check_docs_links.py`) holding the module map, rules, and gotchas a session cannot derive from the code; put longer contracts and incident detail in `docs/development/maintainer-notes/<crate>.md` and link it.

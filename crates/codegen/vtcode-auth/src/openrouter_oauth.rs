@@ -131,7 +131,8 @@ pub fn get_auth_url(challenge: &PkceChallenge, callback_port: u16) -> String {
 /// # Returns
 /// The obtained API key on success.
 pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> Result<String> {
-    let client = reqwest::Client::new();
+    let client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openrouter token client")?;
 
     let payload = serde_json::json!({
         "code": code,
@@ -139,13 +140,15 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
         "code_challenge_method": challenge.code_challenge_method
     });
 
-    let response = client
-        .post(OPENROUTER_KEYS_URL)
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await
-        .context("Failed to send token exchange request")?;
+    let response = vtcode_commons::http::send_with_retry_transport_only(&crate::oauth_token_retry_policy(), || {
+        client
+            .post(OPENROUTER_KEYS_URL)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+    })
+    .await
+    .context("Failed to send token exchange request")?;
 
     let status = response.status();
     if !status.is_success() {

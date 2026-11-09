@@ -85,7 +85,7 @@ fn storage_keyboard_navigation_requests_summary_once(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        for _ in 0..6 {
+        for _ in 0..5 {
             window.dispatch_action(Box::new(super::super::NextSettingsTab), cx);
             window.render_frame(cx);
         }
@@ -131,6 +131,24 @@ fn drain_summary_request(requests: &mut tokio::sync::mpsc::Receiver<BackendComma
     drain_request(requests, vtcode_desktop_protocol::method::STORAGE_SUMMARY);
 }
 
+fn apply_summary(
+    view: &Entity<DesktopView>,
+    cx: &mut TestAppContext,
+    summary: vtcode_desktop_protocol::StorageSummary,
+) {
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
+                result: Some(serde_json::to_value(summary).unwrap()),
+                error: None,
+            },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+}
+
 #[gpui_kit::test]
 fn storage_tab_requests_summary_and_renders_usage(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
@@ -141,17 +159,7 @@ fn storage_tab_requests_summary_and_renders_usage(cx: &mut TestAppContext) {
         assert!(view.storage.summary.is_none());
     });
 
-    view.update(cx, |view, cx| {
-        view.handle_backend_event(
-            BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
-                result: Some(serde_json::to_value(storage_summary_fixture()).unwrap()),
-                error: None,
-            },
-            cx,
-        );
-    });
-    cx.run_until_parked();
+    apply_summary(&view, cx, storage_summary_fixture());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("storage-refresh").label(), Some("Refresh"));
@@ -171,17 +179,7 @@ fn storage_tab_requests_summary_and_renders_usage(cx: &mut TestAppContext) {
 fn storage_refresh_resends_the_summary_request(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
-    view.update(cx, |view, cx| {
-        view.handle_backend_event(
-            BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
-                result: Some(serde_json::to_value(storage_summary_fixture()).unwrap()),
-                error: None,
-            },
-            cx,
-        );
-    });
-    cx.run_until_parked();
+    apply_summary(&view, cx, storage_summary_fixture());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("storage-refresh").label(), Some("Refresh"));
@@ -191,6 +189,63 @@ fn storage_refresh_resends_the_summary_request(cx: &mut TestAppContext) {
     .unwrap();
     drain_summary_request(&mut requests);
     cx.update(|cx| assert!(view.read(cx).storage.loading));
+}
+
+#[gpui_kit::test]
+fn kit_sidebar_click_fetches_the_storage_summary(cx: &mut TestAppContext) {
+    // Kit owns sidebar selection with no callback, so the Storage item
+    // fetches on display; without it a Kit click shows the empty state.
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop_sized(cx, 1280., 900.);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_err(), "no fetch before Storage displays");
+        window.click("0-6", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    drain_summary_request(&mut requests);
+    assert!(requests.try_recv().is_err(), "summary requested once while loading");
+    cx.update(|cx| assert!(view.read(cx).storage.loading));
+}
+
+#[gpui_kit::test]
+fn failed_summary_send_leaves_no_stuck_loading(cx: &mut TestAppContext) {
+    // No backend: both the Kit fetch-on-display and the view-driven
+    // selection must leave the page idle, never on a stuck skeleton.
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop_sized(cx, 1280., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.click("0-6", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.storage.loading, "failed Kit-click fetch must not stick loading");
+        assert!(view.storage.summary.is_none());
+    });
+    cx.update_window(window, |_, window, cx| {
+        // The view still selects Appearance (Kit clicks do not sync back),
+        // so six tab cycles land on Storage through the view-driven path.
+        for _ in 0..6 {
+            window.dispatch_action(Box::new(super::super::NextSettingsTab), cx);
+            window.render_frame(cx);
+        }
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.storage.loading, "failed view-driven fetch must not stick loading");
+        assert!(view.storage.summary.is_none());
+    });
 }
 
 #[gpui_kit::test]
@@ -274,7 +329,7 @@ fn storage_worktrees_list_and_remove_entries(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
     cx.update_window(window, |_, window, cx| {
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         window.click("storage-manage-worktrees", cx);
         window.render_frame(cx);
@@ -360,20 +415,106 @@ fn storage_error_shows_retry_and_recovers_on_demand(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn storage_zero_usage_renders_an_empty_state(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_storage_tab(cx);
+    drain_summary_request(&mut requests);
+    apply_summary(
+        &view,
+        cx,
+        vtcode_desktop_protocol::StorageSummary {
+            sessions_bytes: 0,
+            sessions_count: 0,
+            worktrees_bytes: 0,
+            worktrees_count: 0,
+            memory_bytes: 0,
+            other_bytes: 0,
+            total_bytes: 0,
+            ..storage_summary_fixture()
+        },
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let empty = window.find("storage-usage-empty").bounds();
+        assert!(empty.size.height > px(0.), "zero usage explains itself instead of collapsing: {empty:?}");
+        let bar_snapshot = window.find("storage-usage-bar");
+        let bar = bar_snapshot.label().expect("usage bar label");
+        assert!(bar.contains("Sessions 0 bytes"), "{bar}");
+        assert!(bar.contains("Other 0 bytes"), "{bar}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn storage_skewed_usage_lists_every_category_with_scaled_units(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_storage_tab(cx);
+    drain_summary_request(&mut requests);
+    // Dominant-first, zeros interleaved, mixed units: exercises bar scaling,
+    // zero-length bars, and each byte-format branch. Expected strings are
+    // hardcoded, not derived from format_bytes, so the oracle stays independent.
+    let sessions_bytes = 3 * 1024 * 1024 * 1024;
+    apply_summary(
+        &view,
+        cx,
+        vtcode_desktop_protocol::StorageSummary {
+            sessions_bytes,
+            worktrees_bytes: 0,
+            memory_bytes: 5,
+            other_bytes: 1536,
+            total_bytes: sessions_bytes + 5 + 1536,
+            ..storage_summary_fixture()
+        },
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            window.try_find("storage-usage-empty").is_none(),
+            "nonzero usage renders the chart, not the empty state"
+        );
+        let bar_snapshot = window.find("storage-usage-bar");
+        let bar = bar_snapshot.label().expect("usage bar label");
+        assert!(bar.contains("Sessions 3 GB"), "{bar}");
+        assert!(bar.contains("Worktrees 0 bytes"), "{bar}");
+        assert!(bar.contains("Session memory 5 bytes"), "{bar}");
+        assert!(bar.contains("Other 1.5 KB"), "{bar}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn storage_usage_bar_stays_on_screen_at_wide_and_narrow_widths(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_storage_tab(cx);
+    drain_summary_request(&mut requests);
+    apply_summary(&view, cx, storage_summary_fixture());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let bar = window.find("storage-usage-bar").bounds();
+        assert!(
+            bar.origin.x + bar.size.width <= viewport.width,
+            "wide viewport keeps the usage chart on-screen: {bar:?} in {viewport:?}"
+        );
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(600.), px(700.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let bar = window.find("storage-usage-bar").bounds();
+        assert!(
+            bar.origin.x + bar.size.width <= viewport.width,
+            "narrow viewport keeps the usage chart on-screen: {bar:?} in {viewport:?}"
+        );
+        assert!(bar.size.height > px(0.), "chart keeps its frame when narrow: {bar:?}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn storage_back_returns_to_the_summary(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
-    view.update(cx, |view, cx| {
-        view.handle_backend_event(
-            BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
-                result: Some(serde_json::to_value(storage_summary_fixture()).unwrap()),
-                error: None,
-            },
-            cx,
-        );
-    });
-    cx.run_until_parked();
+    apply_summary(&view, cx, storage_summary_fixture());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("storage-usage-bar").is_some());
@@ -392,4 +533,24 @@ fn storage_back_returns_to_the_summary(cx: &mut TestAppContext) {
         assert!(window.try_find("storage-usage-bar").is_some());
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn storage_capture_only_clones_sessions_for_the_review_view(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.sessions = vec![review_session_fixture("old", 30, Some(100))];
+    });
+    // Summary view (the default): no session clone.
+    view.update(cx, |view, _| {
+        assert_eq!(view.storage.view, super::super::storage::StorageView::Summary);
+        let captured = super::super::storage::StorageSettingsProps::capture(view);
+        assert!(captured.sessions.is_empty(), "summary capture skips the session clone");
+    });
+    // Review view: the list is captured.
+    view.update(cx, |view, _| {
+        view.storage.view = super::super::storage::StorageView::ReviewSessions;
+        let captured = super::super::storage::StorageSettingsProps::capture(view);
+        assert_eq!(captured.sessions.len(), 1, "review capture carries the session list");
+    });
 }

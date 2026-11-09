@@ -699,7 +699,7 @@ async fn plan_mode_recovery_persists_salvaged_proposed_plan_to_session_file() {
     let temp_dir = TempDir::new().unwrap();
     let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
     let plan_file = state.plans_dir().join("recovered-plan.md");
-    state.set_plan_file(Some(plan_file.clone())).await;
+    state.set_plan_file(Some(plan_file.clone()));
 
     let mut working_history: Vec<uni::Message> = Vec::new();
     let mut plan_session = PlanningWorkflowSessionState::default();
@@ -754,7 +754,7 @@ async fn interview_denied_with_persisted_draft_offers_approval_prompt() {
     let temp_dir = TempDir::new().unwrap();
     let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
     let plan_file = state.plans_dir().join("denied-interview-plan.md");
-    state.set_plan_file(Some(plan_file.clone())).await;
+    state.set_plan_file(Some(plan_file.clone()));
     // Pre-persist a valid plan so `persisted_plan_is_ready` returns true,
     // simulating a draft carried over from a previous turn.
     let valid_plan = r#"<proposed_plan>
@@ -849,7 +849,7 @@ async fn recovery_exhausted_with_persisted_draft_offers_preserved_plan_notice() 
     let temp_dir = TempDir::new().unwrap();
     let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
     let plan_file = state.plans_dir().join("recovery-exhausted-plan.md");
-    state.set_plan_file(Some(plan_file.clone())).await;
+    state.set_plan_file(Some(plan_file.clone()));
     let valid_plan = r#"<proposed_plan>
 # Recovery-exhausted approval
 

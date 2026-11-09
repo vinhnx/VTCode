@@ -13,6 +13,8 @@ fn legacy_session_load_defaults_review_history() {
     assert!(loaded.activity_items.is_empty());
     assert!(loaded.activity_output_cursors.is_empty());
     assert!(!loaded.activity_history_incomplete);
+    assert!(loaded.timeline_events.is_empty());
+    assert!(!loaded.timeline_incomplete);
     assert_eq!(loaded.history_start_index, 0);
     assert!(!loaded.history_has_earlier);
     assert_eq!(loaded.messages[0].archive_index, None);
@@ -36,6 +38,8 @@ fn session_history_page_round_trips_archive_cursor_and_request_identity() {
         request_id: params.request_id.clone(),
         start_index: 80,
         messages: vec![SessionHistoryMessage {
+            event_item_id: None,
+            phase: None,
             hidden: false,
             archive_index: Some(80),
             role: "assistant".into(),
@@ -73,6 +77,8 @@ fn session_output_page_round_trips_bounded_cursor_and_request_identity() {
         has_more: true,
     };
     let loaded = SessionLoadResult {
+        timeline_events: Vec::new(),
+        timeline_incomplete: false,
         session: SessionSummary {
             session_id: params.session_id.clone(),
             title: None,
@@ -212,6 +218,7 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
         steps: Vec::new(),
         selected_choice_id: None,
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     };
     registry.insert(&interaction).expect("register request");
     let stale = InteractionResponse {
@@ -223,6 +230,7 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
+        hotkey: None,
     };
     assert_eq!(registry.validate(&stale), Err(ProtocolError::StaleInteraction));
     assert_eq!(registry.resolve(&stale), Err(ProtocolError::StaleInteraction));
@@ -232,6 +240,38 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
     assert_eq!(registry.resolve(&valid), Ok(()));
     assert_eq!(registry.validate(&valid), Err(ProtocolError::UnknownInteraction));
     assert_eq!(registry.resolve(&valid), Err(ProtocolError::UnknownInteraction));
+}
+
+#[test]
+fn interaction_plan_markdown_round_trips_and_defaults_to_none_for_legacy_payloads() {
+    let with_plan: InteractionRequest = serde_json::from_value(serde_json::json!({
+        "sessionId": "session-a",
+        "turnId": "turn-9",
+        "interactionId": "interaction-x",
+        "kind": "plan_approval",
+        "title": "Ready to code?",
+        "details": ["Summary: do the thing"],
+        "choices": [],
+        "selectedChoiceId": null,
+        "planMarkdown": "# Plan\n\nDo the thing."
+    }))
+    .expect("plan payload");
+    assert_eq!(with_plan.plan_markdown.as_deref(), Some("# Plan\n\nDo the thing."));
+    let round_trip: InteractionRequest = serde_json::from_value(serde_json::to_value(&with_plan).unwrap()).unwrap();
+    assert_eq!(round_trip, with_plan);
+
+    let legacy: InteractionRequest = serde_json::from_value(serde_json::json!({
+        "sessionId": "session-a",
+        "turnId": "turn-9",
+        "interactionId": "interaction-x",
+        "kind": "plan_approval",
+        "title": "Ready to code?",
+        "details": ["Summary: do the thing"],
+        "choices": [],
+        "selectedChoiceId": null
+    }))
+    .expect("legacy payload");
+    assert_eq!(legacy.plan_markdown, None);
 }
 
 #[tokio::test]
@@ -264,6 +304,7 @@ fn protocol_methods_and_wire_structs_use_camel_case() -> Result<(), Box<dyn Erro
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
+        hotkey: None,
     };
     let theme = ThemePreferenceSelectParams { theme: "ciapre-blue".into() };
     let theme_json = serde_json::to_value(theme)?;
@@ -416,6 +457,7 @@ fn plan_delta(item_id: &str, delta: &str) -> VersionedThreadEvent {
 fn turn_completed() -> VersionedThreadEvent {
     use vtcode_exec_events::{TurnCompletedEvent, Usage};
     VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage {
             input_tokens: 0,
@@ -432,6 +474,42 @@ fn thread_started(id: &str) -> VersionedThreadEvent {
     VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::ThreadStarted(ThreadStartedEvent {
         thread_id: id.to_string(),
     }))
+}
+
+fn tool_output_update(
+    id: &str,
+    output: &str,
+    is_delta: Option<bool>,
+    status: vtcode_exec_events::ToolCallStatus,
+    exit_code: Option<i32>,
+) -> VersionedThreadEvent {
+    use vtcode_exec_events::{ItemUpdatedEvent, ThreadItem, ThreadItemDetails, ToolOutputItem};
+    VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+        item: ThreadItem {
+            context: None,
+            id: id.to_string(),
+            details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                call_id: format!("{id}-call"),
+                tool_call_id: None,
+                spool_path: None,
+                output: output.to_string(),
+                is_delta,
+                exit_code,
+                status,
+                app_previews: Vec::new(),
+            })),
+        },
+    }))
+}
+
+fn tool_output_details(event: &VersionedThreadEvent) -> vtcode_exec_events::ToolOutputItem {
+    match event.event() {
+        vtcode_exec_events::ThreadEvent::ItemUpdated(update) => match &update.item.details {
+            vtcode_exec_events::ThreadItemDetails::ToolOutput(output) => output.as_ref().clone(),
+            other => panic!("expected tool output, got {other:?}"),
+        },
+        other => panic!("expected item update, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -504,40 +582,102 @@ async fn publish_fails_only_after_the_consumer_half_drops() {
     );
 }
 
-#[test]
-fn update_status_snapshot_round_trips_and_older_payloads_decode() {
-    let snapshot = UpdateStatusSnapshot {
-        current_version: "0.180.5".into(),
-        latest_version: Some("0.181.0".into()),
-        update_available: true,
-        release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.181.0".into()),
-        channel: Some("stable".into()),
-        check_due: false,
-    };
-    let decoded: UpdateStatusSnapshot = serde_json::from_value(serde_json::to_value(&snapshot).unwrap()).unwrap();
-    assert_eq!(decoded, snapshot);
+#[tokio::test]
+async fn tool_output_deltas_for_one_item_merge_without_losing_bytes() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    // Asymmetric chunks: differing lengths, unicode split across chunks, and a
+    // status transition with an exit code on the final chunk.
+    sender
+        .publish(tool_output_update("capture", "alpha\n", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "βeta\n", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "gamma", Some(true), ToolCallStatus::Failed, Some(3)))
+        .expect("publish");
+    drop(sender);
 
-    // Asymmetric fixtures: an up-to-date service omits every optional field,
-    // and a legacy payload carries only the running version.
-    let quiet = UpdateStatusSnapshot {
-        current_version: "0.181.0".into(),
-        latest_version: None,
-        update_available: false,
-        release_url: None,
-        channel: None,
-        check_due: true,
-    };
-    let decoded_quiet: UpdateStatusSnapshot = serde_json::from_value(serde_json::to_value(&quiet).unwrap()).unwrap();
-    assert_eq!(decoded_quiet, quiet);
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 1, "pending deltas for one item merge into one event");
+    let merged = tool_output_details(&drained[0]);
+    assert_eq!(merged.output, "alpha\nβeta\ngamma");
+    assert_eq!(merged.is_delta, Some(true));
+    assert_eq!(merged.status, ToolCallStatus::Failed, "newest status wins");
+    assert_eq!(merged.exit_code, Some(3), "newest exit code wins");
+    assert_eq!(merged.call_id, "capture-call");
+}
 
-    let legacy: UpdateStatusSnapshot =
-        serde_json::from_value(serde_json::json!({ "currentVersion": "0.179.0" })).unwrap();
-    assert_eq!(legacy.current_version, "0.179.0");
-    assert!(legacy.latest_version.is_none());
-    assert!(!legacy.update_available);
-    assert!(legacy.release_url.is_none());
-    assert!(legacy.channel.is_none());
-    assert!(!legacy.check_due);
+#[tokio::test]
+async fn tool_output_snapshots_still_replace_pending_updates() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    // Both spellings of "snapshot": absent flag and explicit false.
+    sender
+        .publish(tool_output_update("capture", "first", None, ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "second", Some(false), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 1, "snapshots keep latest-wins replacement");
+    let latest = tool_output_details(&drained[0]);
+    assert_eq!(latest.output, "second");
+    assert_eq!(latest.is_delta, Some(false));
+}
+
+#[tokio::test]
+async fn tool_output_delta_and_snapshot_for_one_item_do_not_coalesce() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    sender
+        .publish(tool_output_update("capture", "chunk-", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "snapshot", Some(false), ToolCallStatus::Completed, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 2, "delta and snapshot slots coexist without merging");
+    assert_eq!(tool_output_details(&drained[0]).output, "chunk-");
+    assert_eq!(tool_output_details(&drained[1]).output, "snapshot");
+}
+
+#[tokio::test]
+async fn interleaved_tool_output_deltas_merge_per_item_in_queue_order() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    sender
+        .publish(tool_output_update("capture-a", "a1-", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture-b", "b1", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture-a", "a2", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 2, "each stream merges independently");
+    assert_eq!(tool_output_details(&drained[0]).output, "a1-a2");
+    assert_eq!(tool_output_details(&drained[1]).output, "b1");
 }
 
 #[test]
@@ -610,6 +750,9 @@ fn storage_dtos_round_trip_with_camel_case_keys() {
     assert_eq!(method::SESSION_DELETE, "session/delete");
     assert_eq!(method::WORKTREE_LIST, "worktree/list");
     assert_eq!(method::WORKTREE_REMOVE, "worktree/remove");
+    // The release-notes acknowledgement rides beside the cached status read.
+    assert_eq!(method::UPDATE_STATUS, "update/status");
+    assert_eq!(method::UPDATE_ACKNOWLEDGE, "update/acknowledge");
 }
 
 #[tokio::test]
@@ -628,6 +771,7 @@ async fn cloned_senders_keep_the_stream_alive_until_the_last_one_drops() {
 fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(), Box<dyn Error>> {
     assert_eq!(method::TURN_QUEUE_TAKE_LATEST, "turn/queue/take-latest");
     assert_eq!(method::TURN_QUEUE_STATUS, "turn/queue-status");
+    assert_eq!(method::TURN_QUEUE_REMOVE, "turn/queue/remove");
 
     let legacy_accepted: TurnAccepted = serde_json::from_value(serde_json::json!({
         "sessionId": "s",
@@ -658,25 +802,61 @@ fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(
     let value = serde_json::to_value(&empty_take)?;
     assert_eq!(value["text"], Value::Null);
     assert_eq!(serde_json::from_value::<TurnQueueTakeLatestResult>(value)?, empty_take);
-
     let legacy_status: TurnQueueStatus = serde_json::from_value(serde_json::json!({
-        "sessionId": "s",
-        "queueDepth": 3,
+        "sessionId": "s", "queueDepth": 3,
     }))?;
-    assert!(legacy_status.previews.is_empty());
-    assert_eq!(legacy_status.dropped_total, 0);
+    assert!(
+        legacy_status.previews.is_empty()
+            && legacy_status.entry_ids.is_empty()
+            && legacy_status.queued_for_secs.is_empty()
+            && legacy_status.dropped_total == 0,
+        "optional queue fields default for legacy services"
+    );
 
     let status = TurnQueueStatus {
         session_id: "s".to_string(),
         queue_depth: 3,
         previews: vec!["first".to_string(), "second".to_string()],
+        entry_ids: vec!["qe-1".to_string(), "qe-2".to_string()],
+        queued_for_secs: vec![5, 90],
         dropped_total: 4,
     };
     let value = serde_json::to_value(&status)?;
     assert_eq!(value["queueDepth"], 3);
     assert_eq!(value["previews"], serde_json::json!(["first", "second"]));
+    assert_eq!(value["entryIds"], serde_json::json!(["qe-1", "qe-2"]));
+    assert_eq!(value["queuedForSecs"], serde_json::json!([5, 90]));
     assert_eq!(value["droppedTotal"], 4);
     assert_eq!(serde_json::from_value::<TurnQueueStatus>(value)?, status);
+    let remove_json = serde_json::json!({ "sessionId": "s", "removed": true, "queueDepth": 2 });
+    let remove = serde_json::from_value::<TurnQueueRemoveResult>(remove_json)?;
+    assert_eq!((remove.session_id.as_str(), remove.removed, remove.queue_depth), ("s", true, 2));
+    let undone = TurnUndoResult {
+        session_id: "s".to_string(),
+        turn_id: "t".to_string(),
+        undone: true,
+        files: vec![TurnUndoFile {
+            path: "src/main.rs".to_string(),
+            kind: vtcode_exec_events::PatchChangeKind::Update,
+            additions: 2,
+            deletions: 1,
+        }],
+        reason: String::new(),
+    };
+    let value = serde_json::to_value(&undone)?;
+    assert_eq!(value["sessionId"], "s");
+    assert_eq!(value["undone"], true);
+    assert_eq!(value["files"][0]["kind"], "update");
+    assert_eq!(value["files"][0]["path"], "src/main.rs");
+    assert_eq!(serde_json::from_value::<TurnUndoResult>(value)?, undone);
+
+    let legacy_refusal: TurnUndoResult = serde_json::from_value(serde_json::json!({
+        "sessionId": "s",
+        "turnId": "t",
+        "undone": false,
+        "reason": "no recorded changes",
+    }))?;
+    assert!(legacy_refusal.files.is_empty());
     Ok(())
 }
 
@@ -703,4 +883,84 @@ fn queue_preview_label_truncates_at_char_boundaries() {
     assert!(preview.is_char_boundary(preview.len() - '…'.len_utf8()));
 
     assert_eq!(queue_preview_label("line one\nline two"), "line one\nline two", "short multiline text is preserved");
+}
+
+#[test]
+fn recent_prompts_params_default_to_project_scope_and_round_trip() {
+    let defaulted: RecentPromptsParams = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(defaulted.scope, vtcode_commons::history_scope::HistoryScope::Project);
+
+    let params = RecentPromptsParams {
+        scope: vtcode_commons::history_scope::HistoryScope::Everywhere,
+    };
+    let encoded = serde_json::to_value(&params).unwrap();
+    assert_eq!(encoded, serde_json::json!({ "scope": "everywhere" }));
+    let decoded: RecentPromptsParams = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded, params);
+
+    assert!(serde_json::from_value::<RecentPromptsParams>(serde_json::json!({ "scope": "galaxy" })).is_err());
+    assert!(
+        serde_json::from_value::<RecentPromptsParams>(serde_json::json!({ "scope": "project", "other": 1 })).is_err()
+    );
+
+    let prompt = RecentPrompt {
+        content: "Fix the login bug".into(),
+        session_id: "session-1".into(),
+    };
+    let decoded: RecentPrompt = serde_json::from_value(serde_json::to_value(&prompt).unwrap()).unwrap();
+    assert_eq!(decoded, prompt);
+}
+
+#[test]
+fn session_list_params_default_to_max_and_clamp() {
+    let defaulted: SessionListParams = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(defaulted.limit, None);
+    assert_eq!(defaulted.effective_limit(), MAX_SESSION_LIST_LIMIT);
+
+    for (limit, expected) in [
+        (Some(0), 1),
+        (Some(1), 1),
+        (Some(50), 50),
+        (Some(10_000), MAX_SESSION_LIST_LIMIT),
+    ] {
+        let params = SessionListParams { limit };
+        assert_eq!(params.effective_limit(), expected, "limit {limit:?}");
+        let decoded: SessionListParams = serde_json::from_value(serde_json::to_value(&params).unwrap()).unwrap();
+        assert_eq!(decoded, params);
+    }
+
+    // Lenient shape: old clients send `{}`, future fields must not break old servers.
+    assert!(serde_json::from_value::<SessionListParams>(serde_json::json!({ "limit": 50, "other": 1 })).is_ok());
+}
+
+#[test]
+fn interaction_hotkey_signal_round_trips_and_defaults_to_none() -> Result<(), Box<dyn Error>> {
+    let with_hotkey = InteractionResponse {
+        session_id: "s".to_string(),
+        turn_id: "t".to_string(),
+        interaction_id: "i".to_string(),
+        choice_id: None,
+        choice_ids: Vec::new(),
+        text: None,
+        answer_texts: Vec::new(),
+        cancelled: false,
+        hotkey: Some(InteractionHotkey::LaunchEditor),
+    };
+    let value = serde_json::to_value(&with_hotkey)?;
+    assert_eq!(value["hotkey"], "launch_editor");
+    assert_eq!(serde_json::from_value::<InteractionResponse>(value)?, with_hotkey);
+
+    // Legacy shape: old clients omit the field entirely.
+    let legacy: InteractionResponse = serde_json::from_value(serde_json::json!({
+        "sessionId": "s",
+        "turnId": "t",
+        "interactionId": "i",
+        "choiceId": "choice-opaque",
+        "choiceIds": [],
+        "text": null,
+        "answerTexts": [],
+        "cancelled": false,
+    }))?;
+    assert_eq!(legacy.hotkey, None);
+    Ok(())
 }

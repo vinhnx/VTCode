@@ -9,6 +9,15 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
     tool_calls: &[PreparedAssistantToolCall],
 ) -> Result<Option<TurnHandlerOutcome>> {
+    let result = handle_tool_calls_inner(t_ctx, tool_calls).await;
+    super::handlers::reconcile_missing_tool_responses(t_ctx.ctx, tool_calls);
+    result
+}
+
+async fn handle_tool_calls_inner<'a, 'b>(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
+    tool_calls: &[PreparedAssistantToolCall],
+) -> Result<Option<TurnHandlerOutcome>> {
     if tool_calls.is_empty() {
         return Ok(None);
     }

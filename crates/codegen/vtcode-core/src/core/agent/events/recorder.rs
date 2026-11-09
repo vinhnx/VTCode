@@ -95,6 +95,9 @@ impl ExecEventRecorder {
         if let Some(event) = self.context.session_message_event(call_item_id, tool_name, output) {
             self.record(event);
         }
+        if let Some(event) = self.context.tracker_status_event(tool_name, output) {
+            self.record(event);
+        }
     }
 
     pub fn record_thread_event(&mut self, event: ThreadEvent) {
@@ -161,6 +164,7 @@ impl ExecEventRecorder {
 
     pub fn turn_completed(&mut self, usage: Usage) {
         self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage,
             in_progress_exec_sessions: Vec::new(),

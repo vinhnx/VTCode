@@ -84,6 +84,17 @@ impl McpClient {
         self.config.ui.apps
     }
 
+    /// Resolve `(connection timeout, tool timeout)` in seconds.
+    ///
+    /// `connection_timeout_seconds` bounds the connect-and-handshake phase and
+    /// `request_timeout_seconds` the per-tool call budget. They are distinct on
+    /// purpose: a provider that never finishes connecting must fail on the short
+    /// connection key, not consume the tool budget. Both clamp to at least one
+    /// second so a `0` cannot produce an instantly-failing deadline.
+    fn pool_timeouts(&self) -> (u64, u64) {
+        (self.config.connection_timeout_seconds.max(1), self.config.request_timeout_seconds.max(1))
+    }
+
     /// Establish connections to all configured providers and complete the
     /// MCP handshake.
     pub async fn initialize(&mut self) -> Result<()> {
@@ -96,8 +107,9 @@ impl McpClient {
         info!("Initializing MCP client with {} configured providers", self.config.providers.len());
 
         let max_connections = self.config.max_concurrent_connections.max(1);
-        let pool = McpConnectionPool::new(max_connections, self.config.request_timeout_seconds);
-        let tool_timeout = Some(Duration::from_secs(self.config.request_timeout_seconds));
+        let (connection_timeout_seconds, tool_timeout_seconds) = self.pool_timeouts();
+        let pool = McpConnectionPool::new(max_connections, connection_timeout_seconds);
+        let tool_timeout = Some(Duration::from_secs(tool_timeout_seconds));
         let allowlist_snapshot = self.state.read().allowlist.clone();
 
         let provider_configs: Vec<McpProviderConfig> =
@@ -724,12 +736,19 @@ impl McpClient {
         self.config.retry_attempts.try_into().unwrap_or(usize::MAX).saturating_add(1)
     }
 
+    #[must_use]
     fn provider_retry_delay(attempt_idx: usize) -> Duration {
-        let base_ms = 250u64;
-        let max_ms = 5000u64;
-        let exp = base_ms.saturating_mul(2u64.saturating_pow(u32::try_from(attempt_idx).unwrap_or(u32::MAX)));
-        let delay = exp.min(max_ms);
-        Duration::from_millis(delay)
+        // Canonical 250ms-to-5s curve with the standard jitter: concurrent
+        // provider reconnects must not retry in lockstep.
+        let attempt = u32::try_from(attempt_idx).unwrap_or(u32::MAX);
+        vtcode_commons::retry::RetryPolicy::from_retries(
+            u32::MAX,
+            Duration::from_millis(250),
+            Duration::from_secs(5),
+            2.0,
+        )
+        .with_jitter(vtcode_commons::retry::RetryPolicy::DEFAULT_JITTER)
+        .delay_for_attempt(attempt)
     }
 
     pub(super) fn tool_timeout(&self) -> Option<Duration> {

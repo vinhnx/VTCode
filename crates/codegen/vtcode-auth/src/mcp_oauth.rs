@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use reqwest::{Client, Url};
+use reqwest::Url;
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -449,16 +449,19 @@ async fn refresh_token(config: &McpOAuthConfig, current: &McpOAuthToken) -> Resu
 }
 
 async fn send_token_request(token_url: &str, form: &[(String, String)]) -> Result<McpOAuthToken> {
-    let response = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .context("failed to create MCP OAuth client")?
-        .post(token_url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(form)
-        .send()
-        .await
-        .map_err(|error| anyhow!("failed to send MCP OAuth request: {}", error.without_url()))?;
+    // Bounded by the installed HTTP defaults: a token endpoint that accepts the
+    // connection and then stalls must not block session startup forever.
+    let token_client =
+        vtcode_commons::http::create_default_client_without_redirects().context("failed to create MCP OAuth client")?;
+    let response = vtcode_commons::http::send_with_retry_transport_only(&crate::oauth_token_retry_policy(), || {
+        token_client
+            .post(token_url)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .form(form)
+            .send()
+    })
+    .await
+    .map_err(|error| anyhow!("failed to send MCP OAuth request: {}", error.without_url()))?;
     let status = response.status();
     let body = response.text().await.context("failed to read MCP OAuth response body")?;
 

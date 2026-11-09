@@ -392,3 +392,46 @@ fn highlight_fallback_uses_non_bullet_content() {
     let highlights = extract_instruction_highlights(&segments, 1);
     assert_eq!(highlights, vec!["Root summary".to_owned()]);
 }
+
+#[tokio::test]
+async fn truncation_never_splits_a_utf8_character() -> Result<()> {
+    let workspace = tempdir()?;
+    let project_root = workspace.path();
+    // `—` is three bytes at offsets 2..5.
+    write_doc(project_root, "ab—cd\n")?;
+    let options = default_options(project_root, project_root, None, &[]);
+
+    let mid_char = read_instruction_bundle(&options, 3).await?.expect("instruction bundle");
+    assert_eq!(mid_char.combined_text(), "ab");
+    assert!(mid_char.truncated);
+    assert!(mid_char.bytes_read <= 3);
+
+    let on_boundary = read_instruction_bundle(&options, 5).await?.expect("instruction bundle");
+    assert_eq!(on_boundary.combined_text(), "ab—");
+    assert_eq!(on_boundary.bytes_read, 5);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn bundle_reports_instruction_files_cut_by_the_budget() -> Result<()> {
+    let workspace = tempdir()?;
+    let project_root = workspace.path();
+    let crate_dir = project_root.join("crates/a");
+    let module_dir = crate_dir.join("src");
+    write_doc(project_root, "root\n")?;
+    let crate_doc = write_doc(&crate_dir, "crate rules\n")?;
+    let module_doc = write_doc(&module_dir, "module rules\n")?;
+    let options = default_options(&module_dir, project_root, None, &[]);
+
+    let full = read_instruction_bundle(&options, 16 * 1024).await?.expect("instruction bundle");
+    assert!(full.omitted.is_empty());
+
+    // Root (5 bytes) fits, the crate file is cut partway, the module file never loads.
+    let cut = read_instruction_bundle(&options, 8).await?.expect("instruction bundle");
+    assert!(cut.truncated);
+    let omitted: Vec<_> = cut.omitted.iter().map(canonicalize).collect::<std::result::Result<_, _>>()?;
+    assert_eq!(omitted, vec![canonicalize(&crate_doc)?, canonicalize(&module_doc)?]);
+
+    Ok(())
+}

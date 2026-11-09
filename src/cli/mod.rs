@@ -17,7 +17,7 @@ mod companion;
 mod companion_config;
 mod config;
 mod create_project;
-mod desktop;
+pub(crate) mod desktop;
 mod desktop_server;
 mod dispatch;
 mod full_auto_primary_agent;
@@ -280,5 +280,9 @@ mod tests {
 
         let err = result.expect_err("expected missing session error");
         assert!(err.to_string().contains("No session with identifier"), "unexpected error: {err:#}");
+        assert!(
+            err.to_string().contains("run a turn first so there is a checkpoint to fork"),
+            "missing handoff remedy: {err:#}"
+        );
     }
 }

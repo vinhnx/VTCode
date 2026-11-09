@@ -40,6 +40,17 @@ pub struct AnsiRenderer {
     reasoning_visible: bool,
     screen_reader_mode: bool,
     show_diagnostics_in_transcript: bool,
+    show_message_timestamps: bool,
+    /// A completed agent response rendered this turn. The single wall-clock
+    /// footer is emitted at turn end so intermediate responses stay unstamped.
+    pending_response_footer: bool,
+    /// Defer the wall-clock footer to the turn boundary.
+    ///
+    /// Armed by [`AnsiRenderer::begin_turn_message_timestamp`] for the duration
+    /// of a turn. Outside a turn (session-exit reprint, pre-turn prompt replies)
+    /// responses stamp immediately, so out-of-turn callers never owe the
+    /// renderer a flush to keep their clock.
+    defer_turn_footer: bool,
     tool_display_mode: ToolDisplayMode,
     diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode,
     compact_command_group: Option<CompactActivityMetadata>,

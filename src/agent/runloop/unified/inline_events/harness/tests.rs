@@ -60,11 +60,13 @@ fn assistant_message_fallback_is_written_as_completed_item() {
     let path = tmp.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(path.clone()).expect("emitter");
 
-    emitter
+    let item_id = emitter
         .emit_assistant_message("turn-1", "The turn was blocked; retry the request.")
-        .expect("emit assistant message");
+        .expect("emit assistant message")
+        .expect("nonempty message has an identity");
 
     let content = fs::read_to_string(path).expect("read harness log");
+    assert!(content.contains(&item_id));
     assert!(content.contains("item.completed"));
     assert!(content.contains("agent_message"));
     assert!(content.contains("The turn was blocked; retry the request."));
@@ -251,6 +253,7 @@ async fn canonical_lifecycle_status_changes_only_at_thread_completion() {
 
 #[test]
 fn turn_completed_event_preserves_usage_payload() {
+    let before = chrono::Utc::now();
     let event = turn_completed_event(Usage {
         input_tokens: 42,
         cached_input_tokens: 7,
@@ -258,9 +261,12 @@ fn turn_completed_event_preserves_usage_payload() {
         output_tokens: 9,
     });
 
-    let ThreadEvent::TurnCompleted(TurnCompletedEvent { completed_at: None, usage, .. }) = event else {
+    let ThreadEvent::TurnCompleted(TurnCompletedEvent { completed_at: Some(completed_at), usage, .. }) = event else {
         panic!("expected turn.completed");
     };
+
+    let completed_at = chrono::DateTime::parse_from_rfc3339(&completed_at).expect("valid completion timestamp");
+    assert!(completed_at >= before && completed_at <= chrono::Utc::now());
 
     assert_eq!(usage.input_tokens, 42);
     assert_eq!(usage.cached_input_tokens, 7);

@@ -1,6 +1,7 @@
 //! Session lifecycle, history paging, and idle-session option DTOs.
 
 use serde::{Deserialize, Serialize};
+use vtcode_commons::history_scope::HistoryScope;
 
 /// Session execution and command confirmation policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,6 +116,12 @@ pub struct SessionHistoryMessage {
     pub archive_index: Option<usize>,
     /// Message role such as `user`, `assistant`, or `tool`.
     pub role: String,
+    /// Recorded assistant phase, absent for older archives or non-assistant messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    /// Canonical event item identity, when retained in the archive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_item_id: Option<String>,
     /// Text projection of the persisted message content.
     pub text: String,
 }
@@ -148,6 +155,12 @@ pub struct SessionLoadResult {
     /// Whether bounded history projection omitted activity or output evidence.
     #[serde(default)]
     pub activity_history_incomplete: bool,
+    /// Ordered canonical event suffix for reconstructing transcript turns.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub timeline_events: Vec<vtcode_exec_events::VersionedThreadEvent>,
+    /// Whether the event suffix omits earlier events.
+    #[serde(default)]
+    pub timeline_incomplete: bool,
 }
 
 /// Request an earlier bounded page of the selected archived conversation.
@@ -178,6 +191,20 @@ pub struct SessionHistoryPage {
     pub messages: Vec<SessionHistoryMessage>,
     /// Whether the archive contains messages before this page.
     pub has_earlier: bool,
+}
+
+/// One genuine user-typed prompt from a workspace session archive.
+///
+/// Mirrors the CLI history picker's archived entries: harness-generated
+/// follow-ups and enrichment wrappers are stripped server-side, so the client
+/// can merge these with the live thread without re-cleaning.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentPrompt {
+    /// Cleaned user-typed prompt text.
+    pub content: String,
+    /// Durable session identifier that owns the prompt.
+    pub session_id: String,
 }
 
 /// Cursor for reading more of a restored tool-output capture.
@@ -244,8 +271,56 @@ pub struct SessionIdParams {
     pub session_id: String,
 }
 
+/// Parameters for listing recent sessions. The limit is a soft page size:
+/// omitted values keep the historical full-list behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionListParams {
+    /// Maximum sessions returned, newest first.
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+impl SessionListParams {
+    /// Clamp the requested limit into `1..=MAX_SESSION_LIST_LIMIT`.
+    #[must_use]
+    pub fn effective_limit(&self) -> usize {
+        self.limit.unwrap_or(MAX_SESSION_LIST_LIMIT).clamp(1, MAX_SESSION_LIST_LIMIT)
+    }
+}
+
+/// Maximum sessions returned by one `session/list` request.
+pub const MAX_SESSION_LIST_LIMIT: usize = 200;
+
+/// Parameters for listing recent cross-session prompts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecentPromptsParams {
+    /// Which sessions contribute; omitted scopes to the current project.
+    #[serde(default = "default_recent_prompts_scope")]
+    pub scope: HistoryScope,
+}
+
+fn default_recent_prompts_scope() -> HistoryScope {
+    HistoryScope::Project
+}
+
 /// Maximum message count accepted by one desktop archive-history page request.
 pub const MAX_SESSION_HISTORY_PAGE_MESSAGES: usize = 160;
+
+/// Recent-prompts result. Echoes the requested scope so the client can
+/// match out-of-order responses when the scope changes mid-fetch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecentPromptsResult {
+    /// Echo of the requested scope.
+    pub scope: HistoryScope,
+    /// Cleaned prompts, newest first, bounded by [`MAX_RECENT_PROMPTS`].
+    pub prompts: Vec<RecentPrompt>,
+}
+
+/// Maximum prompts returned by one recent-prompts request.
+pub const MAX_RECENT_PROMPTS: usize = 100;
 
 /// Maximum captured output returned by one on-demand desktop page.
 pub const MAX_SESSION_OUTPUT_PAGE_BYTES: usize = 32 * 1024;

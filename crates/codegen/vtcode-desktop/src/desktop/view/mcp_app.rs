@@ -217,17 +217,13 @@ impl DesktopView {
                 .values()
                 .any(|pending| pending.item_id == item.id && pending.uri == preview.uri)
             {
-                card = card.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(Spinner::new().small().color(caption))
-                        .child(div().text_sm().text_color(themes::muted_text(&colors)).child(shimmer_label(
-                            format!("mcp-app-loading-label-{}-{index}", item.id),
-                            rust_i18n::t!("app.preview.loading").to_string(),
-                        ))),
-                );
+                card = card.child(loading_marker_row_with_spinner(
+                    format!("mcp-app-loading-label-{}-{index}", item.id),
+                    rust_i18n::t!("app.preview.loading").to_string(),
+                    Spinner::new().small().color(caption),
+                    themes::muted_text(&colors),
+                    cx,
+                ));
             } else {
                 card = card.child(
                     div()

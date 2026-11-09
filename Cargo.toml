@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.181.0"
+version = "0.181.8"
 edition = "2024"
 rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -80,7 +80,7 @@ anstyle-git = "1.1"
 tokio-util = "0.7"
 tracing-subscriber = "0.3"
 criterion = "0.8"
-serde-saphyr = "1.1.0"
+serde-saphyr = "2.0.0"
 serial_test = "4.0"
 dotenvy = "0.15"
 strsim = "0.11"
@@ -93,7 +93,7 @@ dunce = "1.0"
 itertools = "0.15.0"
 memchr = "2.8"
 url = "2.5"
-hotpath = "0.29.2"
+hotpath = "0.30.1"
 agent-client-protocol = { version = "=2.0.0", features = ["unstable_auth_methods"] }
 uuid = "1.23.2"
 ignore = "0.4"
@@ -116,31 +116,31 @@ rmcp = "3.4.0"
 
 
 # Internal workspace crates
-vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.181.0" }
-vtcode-diff = { path = "crates/common/vtcode-diff", version = "0.181.0" }
-vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.181.0" }
-vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.181.0" }
-vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.181.0" }
-vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.181.0" }
-vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.181.0" }
-vtcode-indexer = { path = "crates/codegen/vtcode-indexer", version = "0.181.0" }
-vtcode-bash-runner = { path = "crates/codegen/vtcode-bash-runner", version = "0.181.0" }
-vtcode-exec-events = { path = "crates/common/vtcode-exec-events", version = "0.181.0" }
-vtcode-desktop-protocol = { path = "crates/common/vtcode-desktop-protocol", version = "0.181.0" }
-vtcode-safety = { path = "crates/codegen/vtcode-safety", version = "0.181.0" }
-vtcode-a2a = { path = "crates/codegen/vtcode-a2a", version = "0.181.0" }
-vtcode-mcp = { path = "crates/codegen/vtcode-mcp", version = "0.181.0" }
-vtcode-llm = { path = "crates/codegen/vtcode-llm", version = "0.181.0" }
-vtcode-skills = { path = "crates/codegen/vtcode-skills", version = "0.181.0" }
-vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.181.0" }
-vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.181.0" }
-vtcode-webmcp = { path = "crates/codegen/vtcode-webmcp", version = "0.181.0" }
-vtcode-macros = { path = "crates/common/vtcode-macros", version = "0.181.0" }
-vtcode-utility-tool-specs = { path = "crates/common/vtcode-utility-tool-specs", version = "0.181.0" }
-vtcode-agent-plugins = { path = "crates/common/vtcode-agent-plugins", version = "0.181.0" }
+vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.181.8" }
+vtcode-diff = { path = "crates/common/vtcode-diff", version = "0.181.8" }
+vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.181.8" }
+vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.181.8" }
+vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.181.8" }
+vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.181.8" }
+vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.181.8" }
+vtcode-indexer = { path = "crates/codegen/vtcode-indexer", version = "0.181.8" }
+vtcode-bash-runner = { path = "crates/codegen/vtcode-bash-runner", version = "0.181.8" }
+vtcode-exec-events = { path = "crates/common/vtcode-exec-events", version = "0.181.8" }
+vtcode-desktop-protocol = { path = "crates/common/vtcode-desktop-protocol", version = "0.181.8" }
+vtcode-safety = { path = "crates/codegen/vtcode-safety", version = "0.181.8" }
+vtcode-a2a = { path = "crates/codegen/vtcode-a2a", version = "0.181.8" }
+vtcode-mcp = { path = "crates/codegen/vtcode-mcp", version = "0.181.8" }
+vtcode-llm = { path = "crates/codegen/vtcode-llm", version = "0.181.8" }
+vtcode-skills = { path = "crates/codegen/vtcode-skills", version = "0.181.8" }
+vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.181.8" }
+vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.181.8" }
+vtcode-webmcp = { path = "crates/codegen/vtcode-webmcp", version = "0.181.8" }
+vtcode-macros = { path = "crates/common/vtcode-macros", version = "0.181.8" }
+vtcode-utility-tool-specs = { path = "crates/common/vtcode-utility-tool-specs", version = "0.181.8" }
+vtcode-agent-plugins = { path = "crates/common/vtcode-agent-plugins", version = "0.181.8" }
 
 [workspace.package]
-version = "0.181.0"
+version = "0.181.8"
 edition = "2024"
 rust-version = "1.99.1"
 license = "MIT OR Apache-2.0"
@@ -227,7 +227,15 @@ rust.unused_qualifications = "warn"
 rust.unused_results = "warn"
 rust.trivial_numeric_casts = "warn"
 rust.unsafe_code = "warn"
-rust.unstable_features = "warn"
+# The workspace ships on one exact stable release (`rust-toolchain.toml`), so an
+# `#![feature(...)]` gate can never be exercised by users and would silently
+# require a nightly toolchain to rebuild. Deny rather than warn: a bare
+# `cargo build` has no `-D warnings`. Deny rather than forbid so a vetted
+# exception stays possible as an explicit, reviewable
+# `#[allow(unstable_features, reason = "...")]` instead of an invisible default.
+# No `reason` key here: `[lints]` accepts only rustc lint options, and cargo
+# rejects a `reason` field with an "unused manifest key" warning.
+rust.unstable_features = "deny"
 rust.missing_docs = "warn"
 
 [workspace.lints.clippy]
@@ -308,17 +316,17 @@ allow_attributes_without_reason = "warn"
 
 [dependencies]
 vtcode-bash-runner = { workspace = true }
-vtcode-diff = { path = "crates/common/vtcode-diff", version = "0.181.0", features = ["serde"] }
-vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.181.0" }
-vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.181.0" }
-vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.181.0" }
-vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.181.0" }
-vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.181.0" }
-vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.181.0", default-features = false }
-vtcode-webmcp = { path = "crates/codegen/vtcode-webmcp", version = "0.181.0" }
-vtcode-agent-plugins = { path = "crates/common/vtcode-agent-plugins", version = "0.181.0" }
-vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.181.0" }
-vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.181.0" }
+vtcode-diff = { path = "crates/common/vtcode-diff", version = "0.181.8", features = ["serde"] }
+vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.181.8" }
+vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.181.8" }
+vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.181.8" }
+vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.181.8" }
+vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.181.8" }
+vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.181.8", default-features = false }
+vtcode-webmcp = { path = "crates/codegen/vtcode-webmcp", version = "0.181.8" }
+vtcode-agent-plugins = { path = "crates/common/vtcode-agent-plugins", version = "0.181.8" }
+vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.181.8" }
+vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.181.8" }
 vtcode-desktop-protocol = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
@@ -429,32 +437,6 @@ codegen-units = 16
 [profile.dev.package."*"]
 opt-level = 1
 debug = false
-
-# Keep GPUI rendering and text dependencies responsive in `cargo run` while
-# leaving VT Code Desktop itself in the normal, debuggable dev profile.
-[profile.dev.package."gpui-pre"]
-opt-level = 3
-
-[profile.dev.package."gpui-component"]
-opt-level = 3
-
-[profile.dev.package."gpui-kit"]
-opt-level = 3
-
-[profile.dev.package."gpui-kit-assets"]
-opt-level = 3
-
-[profile.dev.package."gpui-pre-platform"]
-opt-level = 3
-
-[profile.dev.package."rustybuzz"]
-opt-level = 3
-
-[profile.dev.package."taffy"]
-opt-level = 3
-
-[profile.dev.package."ttf-parser"]
-opt-level = 3
 
 [profile.dev-optimized]
 inherits = "dev"
@@ -589,6 +571,7 @@ assert_cmd = "2.1"
 predicates = "3.1"
 insta = "1.39"
 serial_test = { workspace = true }
+fs2 = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = []

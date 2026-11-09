@@ -11,7 +11,7 @@
 #
 # Optional checks (via flags):
 #   - Tests (--test)
-#   - Structured logging lint (--lints)
+#   - Structured logging and Markdown lint (--lints)
 #   - Workspace-wide checks (--workspace)
 #   - Quiet mode (--quiet): suppress progress banners and cargo noise; keep
 #     errors/warnings and the final summary visible. Useful for agents and CI.
@@ -154,16 +154,7 @@ run_check() {
 	fi
 }
 
-run_file_length_gate() {
-	print_status "Running file length gate (max 1000 lines)..."
-	if python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
-		print_success "File lengths within budget!"
-		return 0
-	else
-		print_error "File length violations found."
-		return 1
-	fi
-}
+
 
 run_tests() {
 	local nextest_args=()
@@ -342,7 +333,7 @@ print_usage() {
 	echo "Options:"
 	echo "  --test, -t          Also run tests (uses nextest quick profile when available)"
 	echo "  --workspace, -w     Run checks on full workspace (default: default-members only)"
-	echo "  --lints, -l         Run extra lints (structured logging, agent legibility)"
+	echo "  --lints, -l         Run extra lints (structured logging, agent legibility, Markdown)"
 	echo "  --changed, -c       Only run tests in crates changed since HEAD~1 (implies --test)"
 	echo "  --quiet, -q         Suppress progress banners and cargo noise; errors and"
 	echo "                      the final summary still print (agent/CI friendly)"
@@ -426,11 +417,12 @@ main() {
 	run_rustfmt || ((FAILED_CHECKS++))
 	run_clippy || ((FAILED_CHECKS++))
 	run_check || ((FAILED_CHECKS++))
-	run_file_length_gate || ((FAILED_CHECKS++))
+	run_repo_governance_gates || ((FAILED_CHECKS++))
 
 	# Run extra lints if requested
 	if [ "$RUN_EXTRA_LINTS" = true ]; then
 		run_structured_logging_lint || ((FAILED_CHECKS++))
+		run_markdown_lint_gate || ((FAILED_CHECKS++))
 		run_agent_legibility_lint || ((FAILED_CHECKS++))
 		run_shell_scripts_lint || ((FAILED_CHECKS++))
 	fi

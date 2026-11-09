@@ -188,6 +188,32 @@ impl Provider {
         ]
     }
 
+    /// Providers in model-picker display order: frontier labs first, then the
+    /// open-source/local family, then every remaining provider in
+    /// [`all_providers`](Provider::all_providers) relative order.
+    ///
+    /// The tail is derived from `all_providers()` rather than hardcoded, so a
+    /// newly added provider always appears instead of silently vanishing from
+    /// the picker. The result is always a permutation of `all_providers()`.
+    pub fn picker_display_order() -> Vec<Provider> {
+        const PINNED_HEAD: &[Provider] = &[
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::HuggingFace,
+            Provider::Ollama,
+            Provider::OllamaCloud,
+            Provider::LmStudio,
+            Provider::LlamaCpp,
+        ];
+        let mut order = PINNED_HEAD.to_vec();
+        order.extend(
+            Self::all_providers()
+                .into_iter()
+                .filter(|provider| !PINNED_HEAD.contains(provider)),
+        );
+        order
+    }
+
     /// Human-friendly label for display purposes
     pub fn label(&self) -> &'static str {
         match self {
@@ -467,5 +493,33 @@ mod name_match_tests {
         assert!(!Provider::Anthropic.name_matches("openai"));
         assert!(!Provider::OpenAI.name_matches("OpenAICompat"));
         assert!(!Provider::Anthropic.name_matches(""));
+    }
+
+    #[test]
+    fn picker_display_order_pins_frontier_then_open_source() {
+        let head: Vec<Provider> = Provider::picker_display_order().into_iter().take(7).collect();
+        assert_eq!(
+            head,
+            [
+                Provider::OpenAI,
+                Provider::Anthropic,
+                Provider::HuggingFace,
+                Provider::Ollama,
+                Provider::OllamaCloud,
+                Provider::LmStudio,
+                Provider::LlamaCpp,
+            ]
+        );
+    }
+
+    /// Totality guard: the picker order must cover every known provider
+    /// exactly once, so adding a variant to `all_providers()` without wiring
+    /// it into the picker fails here instead of hiding the provider.
+    #[test]
+    fn picker_display_order_is_permutation_of_all_providers() {
+        let order = Provider::picker_display_order();
+        let all = Provider::all_providers();
+        assert_eq!(order.len(), all.len());
+        assert!(all.iter().all(|provider| order.contains(provider)));
     }
 }

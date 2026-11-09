@@ -1,3 +1,4 @@
+mod turn;
 use std::collections::VecDeque;
 use std::ops::Range;
 
@@ -5,6 +6,15 @@ use gpui_kit::SharedString;
 use vtcode_exec_events::AppPreviewItem;
 
 use super::markdown::prepare_markdown;
+
+mod activity;
+mod activity_verbs;
+mod output;
+mod tool_summary;
+mod user_attachments;
+pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
+pub(super) use tool_summary::{activity_details_summary, activity_output_text, activity_payload, activity_text};
+pub(super) use user_attachments::UserAttachment;
 
 pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
 
@@ -129,11 +139,27 @@ pub(super) struct TranscriptItem {
     pub text: SharedString,
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
+    pub completed_at: Option<SharedString>,
+    pub turn_id: Option<SharedString>,
+    pub canonical_turn_id: Option<SharedString>,
+    pub canonical_item_id: Option<SharedString>,
+    pub archived_final: bool,
+    pub archived_phase: Option<SharedString>,
+    pub turn_group_head: bool,
+    pub turn_grouped: bool,
+    pub turn_group_expanded: bool,
+    pub turn_files: Vec<TurnFile>,
+    pub turn_file_totals: Option<(u64, u64)>,
+    pub turn_files_incomplete: bool,
+    pub turn_files_offset: usize,
     /// Whether the prepared Markdown contains a list. Lists need a definite
     /// bubble width (see `PreparedMarkdown::has_list`); kept beside the other
     /// render projections so every prepare/clone path carries it together.
     pub has_list: bool,
     pub expanded: bool,
+    /// Whether this notice row carries collapsible operational details behind
+    /// a Show/Hide toggle. Plain notices render their full text instead.
+    pub collapsible_details: bool,
     /// Shared expansion state copied to each row so virtualized rendering stays constant-time.
     pub activity_expanded: bool,
     /// Whether this tool row is part of a consecutive group of at least two rows.
@@ -142,13 +168,23 @@ pub(super) struct TranscriptItem {
     pub activity_group_head: bool,
     /// Status totals kept on the group head so streamed updates do not rescan every tool row.
     pub activity_group_summary: ActivityGroupSummary,
+    /// Verb category for the group summary, set at projection from the live
+    /// event details. `None` for rows that never pass through projection;
+    /// those groups keep the legacy count label.
+    pub activity_category: Option<ToolCategory>,
     /// Whether this row carries structured activity status rather than archive text.
     pub has_activity_status: bool,
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
     pub output: Option<SharedString>,
+    /// Canonical output item identity when capture is attached to an invocation.
+    pub output_item_id: Option<String>,
+    /// Earlier live output was discarded from the bounded preview.
+    pub output_truncated: bool,
     /// MCP Apps referenced by this output, for preview cards. Empty for non-app results.
     pub app_previews: Vec<AppPreviewItem>,
+    /// Structured attachments for user echo rows; history rows and other roles leave this empty.
+    pub user_attachments: Vec<UserAttachment>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -224,6 +260,12 @@ pub(super) struct DiffFile {
     pub kind: DiffFileKind,
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct TurnFile {
+    pub file: DiffFile,
+    pub counts: Option<(u64, u64)>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DiffFileKind {
     Add,
@@ -256,11 +298,36 @@ impl TranscriptItem {
         self.has_role(TranscriptRole::Notice)
     }
 
+    /// Whether this row offers searchable conversation content: a searchable
+    /// role with non-empty body. Shared by the palette search list, its
+    /// availability check, and the filter-match snapshot.
+    pub(super) fn is_conversation_searchable(&self) -> bool {
+        TranscriptRole::from_str(&self.role).is_some_and(TranscriptRole::is_searchable_conversation)
+            && !self.text.trim().is_empty()
+    }
+
+    /// Whether this row carries captured output worth jumping to. Shared by
+    /// the activity projection, the transcript output CTA, and conversation
+    /// search so the affordance can never disagree across surfaces.
+    pub(super) fn has_output(&self) -> bool {
+        self.output.is_some()
+    }
+
     /// Notice row (runtime errors, compaction/reset notices, run status) with
     /// its severity set at construction.
     pub fn notice(id: String, title: SharedString, text: String, severity: NoticeSeverity) -> Self {
         let mut item = Self::new(id, TranscriptRole::Notice.as_str().to_string(), title, text);
         item.notice_severity = severity;
+        item
+    }
+
+    /// Diagnostic notice from a `ThreadEvent` reasoning payload: a
+    /// severity-styled summary with collapsible operational details. Empty
+    /// evidence offers no toggle, mirroring the terminal transcript.
+    pub fn diagnostic_notice(id: String, title: SharedString, details: String, severity: NoticeSeverity) -> Self {
+        let collapsible = !details.trim().is_empty();
+        let mut item = Self::notice(id, title, details, severity);
+        item.collapsible_details = collapsible;
         item
     }
 
@@ -281,15 +348,33 @@ impl TranscriptItem {
             text,
             markdown: SharedString::default(),
             accessibility_text: SharedString::default(),
+            completed_at: None,
+            turn_id: None,
+            canonical_turn_id: None,
+            canonical_item_id: None,
+            archived_final: false,
+            archived_phase: None,
+            turn_group_head: false,
+            turn_grouped: false,
+            turn_group_expanded: false,
+            turn_files: Vec::new(),
+            turn_file_totals: None,
+            turn_files_incomplete: false,
+            turn_files_offset: 0,
             has_list: false,
             expanded: false,
+            collapsible_details: false,
             activity_expanded: false,
             activity_grouped: false,
             activity_group_head: false,
             activity_group_summary,
+            activity_category: None,
             diff: None,
             output: None,
+            output_item_id: None,
+            output_truncated: false,
             app_previews: Vec::new(),
+            user_attachments: Vec::new(),
         }
     }
 
@@ -312,6 +397,7 @@ impl TranscriptItem {
         let prepared = prepare_markdown(&self.text);
         self.markdown = prepared.markdown;
         self.accessibility_text = prepared.accessible_text;
+        self.append_attachment_accessibility_suffix();
         self.has_list = prepared.has_list;
     }
 }
@@ -469,18 +555,21 @@ impl Transcript {
         let evict_oldest = self.items.len() == MAX_TRANSCRIPT_ITEMS;
         let mut promoted_group_head = false;
         if evict_oldest {
-            if let Some(removed) = self.items.pop_front()
-                && removed.activity_group_head
-            {
-                let mut summary = removed.activity_group_summary;
-                summary.remove_status(ToolActivityStatus::from_text(&removed.text));
-                if let Some(head) = self.items.front_mut().filter(|item| item.is_tool()) {
-                    let grouped = summary.total > 1;
-                    head.activity_group_summary = summary;
-                    head.activity_grouped = grouped;
-                    head.activity_group_head = grouped;
-                    head.activity_expanded = grouped && removed.activity_expanded;
-                    promoted_group_head = true;
+            if let Some(removed) = self.items.pop_front() {
+                if removed.turn_group_head {
+                    self.promote_turn_group_head(removed.turn_id.as_deref());
+                }
+                if removed.activity_group_head {
+                    let mut summary = removed.activity_group_summary;
+                    summary.remove_status(ToolActivityStatus::from_text(&removed.text));
+                    if let Some(head) = self.items.front_mut().filter(|item| item.is_tool()) {
+                        let grouped = summary.total > 1;
+                        head.activity_group_summary = summary;
+                        head.activity_grouped = grouped;
+                        head.activity_group_head = grouped;
+                        head.activity_expanded = grouped && removed.activity_expanded;
+                        promoted_group_head = true;
+                    }
                 }
             }
             self.layout_changes
@@ -533,7 +622,11 @@ impl Transcript {
     /// Remove a local unsent echo together with its measured row.
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.position_by_id(id) {
-            let removed_was_tool = self.items.remove(index).is_some_and(|item| item.is_tool());
+            let removed = self.items.remove(index);
+            let removed_was_tool = removed.as_ref().is_some_and(|item| item.is_tool());
+            if let Some(removed) = removed.as_ref().filter(|item| item.turn_group_head) {
+                self.promote_turn_group_head(removed.turn_id.as_deref());
+            }
             self.bump_revision();
             self.rebuild_activity_group_flags();
             self.refresh_trailing_tool_group_start();
@@ -551,6 +644,18 @@ impl Transcript {
                 self.layout_changes
                     .push(TranscriptLayoutChange::RemeasureItems(group.start..group.start + 1));
             }
+        }
+    }
+
+    fn promote_turn_group_head(&mut self, turn_id: Option<&str>) {
+        let Some(turn_id) = turn_id else { return };
+        if let Some(item) = self
+            .items
+            .iter_mut()
+            .find(|item| item.turn_grouped && item.turn_id.as_deref() == Some(turn_id))
+        {
+            item.turn_group_head = true;
+            self.layout_changes.push(TranscriptLayoutChange::Reset(self.items.len()));
         }
     }
 
@@ -642,12 +747,30 @@ impl Transcript {
                 item.has_list = existing.has_list;
             }
             item.expanded = existing.expanded;
+            item.completed_at.clone_from(&existing.completed_at);
+            item.turn_id.clone_from(&existing.turn_id);
+            item.canonical_turn_id.clone_from(&existing.canonical_turn_id);
+            item.canonical_item_id.clone_from(&existing.canonical_item_id);
+            item.archived_final = existing.archived_final;
+            item.archived_phase.clone_from(&existing.archived_phase);
+            item.turn_group_head = existing.turn_group_head;
+            item.turn_grouped = existing.turn_grouped;
+            item.turn_group_expanded = existing.turn_group_expanded;
+            item.turn_files.clone_from(&existing.turn_files);
+            item.turn_file_totals = existing.turn_file_totals;
+            item.turn_files_incomplete = existing.turn_files_incomplete;
+            item.turn_files_offset = existing.turn_files_offset;
             item.activity_expanded = existing.activity_expanded;
             item.activity_grouped = existing.activity_grouped;
             item.activity_group_head = existing.activity_group_head;
             item.activity_group_summary = existing.activity_group_summary;
+            item.output_truncated = existing.output_truncated;
+            item.output_item_id.clone_from(&existing.output_item_id);
             if item.output.is_none() {
                 item.output.clone_from(&existing.output);
+            }
+            if item.activity_category.is_none() {
+                item.activity_category = existing.activity_category;
             }
             let remeasure_row = role_changed
                 || title_changed
@@ -691,12 +814,15 @@ impl Transcript {
         }
     }
 
-    /// Attach or replace raw command output, which is presented outside the transcript row.
-    pub fn set_output(&mut self, id: &str, output: Option<SharedString>) {
+    /// Record the verb category projected from a live event, mirroring
+    /// [`Transcript::set_output`]: find by id, set on change, no layout
+    /// remeasure (the category lands in the same cycle as the row push or
+    /// upsert that already remeasures the affected rows).
+    pub fn set_activity_category(&mut self, id: &str, category: ToolCategory) {
         if let Some(index) = self.position_by_id(id) {
             if let Some(item) = self.items.get_mut(index) {
-                if item.output != output {
-                    item.output = output;
+                if item.activity_category != Some(category) {
+                    item.activity_category = Some(category);
                     self.bump_revision();
                 }
             }
@@ -791,58 +917,6 @@ impl Transcript {
         self.trailing_tool_group_start = Some(start);
     }
 
-    pub fn toggle_activity_group(&mut self, id: &str) {
-        if let Some(index) = self.position_by_id(id)
-            && let Some(range) = self.activity_group(index)
-        {
-            let expanded = !self.items.get(range.start).is_some_and(|head| head.activity_expanded);
-            for index in range.clone() {
-                if let Some(item) = self.items.get_mut(index) {
-                    item.activity_expanded = expanded;
-                }
-            }
-            self.bump_revision();
-            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
-            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
-        }
-    }
-
-    /// Expand a tool row and its containing activity group so a search result is visible.
-    pub(super) fn reveal_tool_item(&mut self, id: &str) -> Option<usize> {
-        let index = self.position_by_id(id)?;
-        if !self.items.get(index).is_some_and(|item| item.is_tool()) {
-            return None;
-        }
-
-        let group = self.activity_group(index);
-        let expand_group = group
-            .as_ref()
-            .is_some_and(|range| !self.items.get(range.start).is_some_and(|item| item.activity_expanded));
-        let expand_item = self.items.get(index).is_some_and(|item| !item.expanded);
-        if !expand_group && !expand_item {
-            return Some(index);
-        }
-
-        self.bump_revision();
-        self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
-        if expand_group && let Some(range) = group {
-            for group_index in range.clone() {
-                if let Some(item) = self.items.get_mut(group_index) {
-                    item.activity_expanded = true;
-                }
-            }
-            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
-        }
-        if expand_item {
-            if let Some(item) = self.items.get_mut(index) {
-                item.expanded = true;
-            }
-            self.layout_changes
-                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
-        }
-        Some(index)
-    }
-
     pub fn toggle_tool(&mut self, id: &str) {
         let last_index = self.items.len().checked_sub(1);
         let index = last_index
@@ -875,12 +949,44 @@ impl Transcript {
         }
     }
 
+    pub fn toggle_notice(&mut self, id: &str) {
+        let last_index = self.items.len().checked_sub(1);
+        let index = last_index
+            .filter(|index| {
+                self.items
+                    .get(*index)
+                    .is_some_and(|item| item.id == id && item.is_notice() && item.collapsible_details)
+            })
+            .or_else(|| {
+                self.items
+                    .iter()
+                    .rposition(|item| item.id == id && item.is_notice() && item.collapsible_details)
+            });
+        if let Some(index) = index {
+            if let Some(item) = self.items.get_mut(index) {
+                item.expanded = !item.expanded;
+            }
+            self.bump_revision();
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+        }
+    }
+
     pub fn follow_latest(&mut self) {
         self.layout_changes.push(TranscriptLayoutChange::FollowLatest);
     }
 
     pub fn remeasure(&mut self) {
-        self.layout_changes.push(TranscriptLayoutChange::Remeasure);
+        // Consecutive full remeasures are redundant by construction: nothing
+        // changed between them, so measuring twice yields the same layout.
+        // Theme browsing, contrast drags, and font stepping enqueue bursts
+        // while the transcript is unmounted (routes), and the consumer
+        // applies every entry; collapsing the burst here keeps one probe per
+        // drain instead of one per click.
+        if !matches!(self.layout_changes.last(), Some(TranscriptLayoutChange::Remeasure)) {
+            self.layout_changes.push(TranscriptLayoutChange::Remeasure);
+        }
     }
 }
 

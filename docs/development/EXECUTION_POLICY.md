@@ -8,6 +8,10 @@ confirmation.
 The execution policy is designed to allow engineers typical software development workflows while maintaining safety
 boundaries. Common development tools work automatically, while dangerous operations require confirmation.
 
+By default, pipe and PTY commands use the same configured and fallback executable search paths. An explicit pipe
+`PATH` override replaces that default. Sandboxed commands still apply the environment allowlist, and tools outside
+those paths may require explicit configuration.
+
 ## Auto-Allowed Commands
 
 ### Version Control (Git)
@@ -79,8 +83,8 @@ Example pivot:
 3. **Argument Validation**: Common flags are validated (e.g., git force-push is blocked)
 4. **Confirmation Required**: Destructive operations still require user confirmation
 5. **Two-Layer Control**:
-   - Tool-level: Which tools can be used
-   - Command-level: Which specific commands and flags are permitted
+    - Tool-level: Which tools can be used
+    - Command-level: Which specific commands and flags are permitted
 
 ## Dangerous Operations (Blocked)
 

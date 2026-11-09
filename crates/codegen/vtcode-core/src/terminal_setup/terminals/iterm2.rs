@@ -239,7 +239,8 @@ pub fn profile_icon_instructions() -> Vec<String> {
 }
 
 /// Fail closed unless the session runs under iTerm2. Returns false after
-/// reporting, so callers just early-return.
+/// reporting, so callers just early-return. Reset-only: it emits a
+/// live-session profile switch, which is meaningless outside iTerm2.
 fn check_iterm2_terminal(renderer: &mut crate::utils::ansi::AnsiRenderer) -> Result<bool> {
     use crate::utils::ansi::MessageStyle;
 
@@ -248,6 +249,23 @@ fn check_iterm2_terminal(renderer: &mut crate::utils::ansi::AnsiRenderer) -> Res
         return Ok(true);
     }
     renderer.line(MessageStyle::Error, &format!("Tab icon commands need iTerm2 (detected {}).", terminal.name()))?;
+    Ok(false)
+}
+
+/// Fail closed off macOS. Returns false after reporting, so callers just
+/// early-return.
+///
+/// Install/show/switch only write VT Code-owned files (show only reads
+/// theme state), so they accept any terminal on macOS: a stale iTerm2
+/// profile can be repaired from Rex, Ghostty, or anywhere else without
+/// launching iTerm2 first.
+fn check_macos(renderer: &mut crate::utils::ansi::AnsiRenderer) -> Result<bool> {
+    use crate::utils::ansi::MessageStyle;
+
+    if cfg!(target_os = "macos") {
+        return Ok(true);
+    }
+    renderer.line(MessageStyle::Error, "Tab icon commands need macOS (iTerm2 profiles are macOS-only).")?;
     Ok(false)
 }
 
@@ -280,19 +298,20 @@ pub fn parse_terminal_icon_command(args: &str) -> Option<TerminalIconCommand> {
 /// Run the non-interactive profile-icon install with progress output.
 ///
 /// Installs the `Dynamic` artwork (resolved against the active CLI theme).
-/// Fails closed outside iTerm2 or off macOS; never touches existing profiles.
+/// Fails closed off macOS; works from any terminal since it only writes
+/// VT Code-owned files, never existing profiles.
 pub fn run_profile_icon_install(renderer: &mut crate::utils::ansi::AnsiRenderer) -> Result<()> {
     run_terminal_icon_switch(renderer, AppIconPreference::Dynamic)
 }
 
 /// Report the Dynamic artwork resolution without writing files.
 ///
-/// Fails closed outside iTerm2 like the installer: the advice only applies
+/// Fails closed off macOS like the installer: the advice only applies
 /// to the iTerm2 dynamic profile.
 pub fn run_terminal_icon_show(renderer: &mut crate::utils::ansi::AnsiRenderer) -> Result<()> {
     use crate::utils::ansi::MessageStyle;
 
-    if !check_iterm2_terminal(renderer)? {
+    if !check_macos(renderer)? {
         return Ok(());
     }
     let theme_id = crate::ui::theme::active_theme_id();
@@ -311,14 +330,15 @@ pub fn run_terminal_icon_show(renderer: &mut crate::utils::ansi::AnsiRenderer) -
 ///
 /// Explicit variants apply for this session (persist via `ui.app_icon`);
 /// `Dynamic` is the default and needs no persistence note. Fails closed
-/// outside iTerm2 or off macOS; never touches existing profiles.
+/// off macOS; works from any terminal since it only writes VT Code-owned
+/// files, never existing profiles.
 pub fn run_terminal_icon_switch(
     renderer: &mut crate::utils::ansi::AnsiRenderer,
     preference: AppIconPreference,
 ) -> Result<()> {
     use crate::utils::ansi::MessageStyle;
 
-    if !check_iterm2_terminal(renderer)? {
+    if !check_macos(renderer)? {
         return Ok(());
     }
     let (home, data_dir) = default_install_paths()?;
@@ -708,5 +728,46 @@ mod tests {
 
         let stored: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&profile_path).unwrap()).unwrap();
         assert!(stored["Profiles"][0].get("Automatic Profile Switching").is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn ensure_repairs_profile_pointing_at_retired_legacy_artwork() {
+        let home = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+
+        // Arrange: an older install whose profile still points at the
+        // retired `vtcode-profile-120.png` filename (observed in the wild).
+        let legacy = installed_icon_path(data.path())
+            .parent()
+            .unwrap()
+            .join(LEGACY_PROFILE_ICON_FILENAME);
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, b"stale-legacy-bytes").unwrap();
+        let profiles_dir = iterm2_dynamic_profiles_dir(home.path());
+        std::fs::create_dir_all(&profiles_dir).unwrap();
+        let profile_path = installed_iterm2_profile_path(home.path());
+        let stale = serde_json::json!({
+            "Profiles": [{
+                "Name": ITERM2_PROFILE_NAME,
+                "Guid": PROFILE_GUID,
+                "Icon": ITERM2_ICON_MODE_CUSTOM,
+                "Custom Icon Path": legacy.to_string_lossy(),
+            }],
+        });
+        std::fs::write(&profile_path, serde_json::to_string_pretty(&stale).unwrap()).unwrap();
+
+        // Act.
+        let refreshed = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
+        let report = refreshed.expect("legacy-path profile must trigger a reinstall");
+
+        // Assert: profile repoints at the current artwork and the retired
+        // file is gone, so the tab can no longer load stale bytes.
+        assert_eq!(report.profile_path, profile_path);
+        assert_eq!(report.icon_path, installed_icon_path(data.path()));
+        assert_eq!(std::fs::read(&report.icon_path).unwrap(), artwork_bytes(AppIconPreference::Dark));
+        assert!(!legacy.exists(), "retired artwork must be removed on repair");
+        let stored: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&profile_path).unwrap()).unwrap();
+        assert_eq!(stored["Profiles"][0]["Custom Icon Path"].as_str().unwrap(), report.icon_path.to_string_lossy());
     }
 }

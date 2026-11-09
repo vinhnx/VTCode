@@ -6,6 +6,7 @@ use crate::accessibility::reduce_motion_preference;
 use crate::status_line::StatusLineConfig;
 use crate::terminal_title::TerminalTitleConfig;
 use vtcode_commons::ui_protocol::AppIconPreference;
+use vtcode_commons::ui_protocol::BusyEnterBehavior;
 use vtcode_commons::ui_protocol::DiffPreviewMode;
 
 mod modes;
@@ -232,6 +233,13 @@ pub struct UiConfig {
     #[serde(default = "default_vim_mode")]
     pub vim_mode: bool,
 
+    /// How plain Enter submits while a turn is running ("queue" or "steer").
+    /// "queue" (default) holds each message for the next turn; "steer" injects
+    /// plain-text input into the live turn via the steering channel. Slash
+    /// commands and attachments always queue. Options: "queue", "steer".
+    #[serde(default = "default_busy_enter_behavior")]
+    pub busy_enter_behavior: BusyEnterBehavior,
+
     /// Status line configuration settings
     #[serde(default)]
     pub status_line: StatusLineConfig,
@@ -280,6 +288,10 @@ pub struct UiConfig {
     #[serde(default = "default_show_diagnostics_in_transcript")]
     pub show_diagnostics_in_transcript: bool,
 
+    /// Show one wall-clock footer after the final agent message of each turn.
+    #[serde(default = "default_show_message_timestamps")]
+    pub show_message_timestamps: bool,
+
     // === Color Accessibility Configuration ===
     // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research.
     /// Minimum contrast ratio for text against background (WCAG 2.1 standard)
@@ -315,7 +327,7 @@ pub struct UiConfig {
     /// - "dynamic": Follow the active light/dark mode (default)
     /// - "light": Always use the light-mode artwork
     /// - "dark": Always use the dark-mode artwork
-    /// - "clear": Always use the clear (transparent glass V) artwork
+    /// - "clear": Always use the clear (glass V on a subtle translucent tile) artwork
     /// - "tinted": Always use the tinted (monochrome slate) artwork
     #[serde(default = "default_app_icon")]
     pub app_icon: AppIconPreference,
@@ -425,8 +437,16 @@ fn default_show_diagnostics_in_transcript() -> bool {
     false
 }
 
+fn default_show_message_timestamps() -> bool {
+    true
+}
+
 fn default_vim_mode() -> bool {
     false
+}
+
+fn default_busy_enter_behavior() -> BusyEnterBehavior {
+    BusyEnterBehavior::Queue
 }
 
 fn default_notifications_enabled() -> bool {
@@ -560,6 +580,7 @@ impl Default for UiConfig {
             reasoning_visible_default: default_reasoning_visible_default(),
             thinking_display: default_thinking_display(),
             vim_mode: default_vim_mode(),
+            busy_enter_behavior: default_busy_enter_behavior(),
             status_line: StatusLineConfig::default(),
             terminal_title: TerminalTitleConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),
@@ -571,6 +592,7 @@ impl Default for UiConfig {
             message_block_spacing: default_message_block_spacing(),
             show_turn_timer: default_show_turn_timer(),
             show_diagnostics_in_transcript: default_show_diagnostics_in_transcript(),
+            show_message_timestamps: default_show_message_timestamps(),
             // Color accessibility defaults
             minimum_contrast: default_minimum_contrast(),
             bold_is_bright: default_bold_is_bright(),
@@ -595,7 +617,7 @@ impl Default for UiConfig {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct UiProgramStatusConfig {
-    /// Emit OSC 7501 status reports on the interactive TUI terminal stream.
+    /// Emit terminal status reports (OSC 7501 plus ConEmu OSC 9;4 tab progress on allowlisted terminals) on the interactive TUI terminal stream, plus single-shot exec reports on stderr when it is a terminal.
     #[serde(default = "default_program_status_enabled")]
     pub enabled: bool,
 }
@@ -650,7 +672,11 @@ pub struct PtyConfig {
     #[serde(default = "default_max_pty_sessions")]
     pub max_sessions: usize,
 
-    /// Command timeout in seconds (prevents hanging commands)
+    /// Deprecated and unused for enforcement.
+    ///
+    /// The authoritative PTY deadline is `[timeouts] pty_ceiling_seconds`.
+    /// This key is retained so existing `vtcode.toml` files keep parsing, but
+    /// changing it has no effect on command execution.
     #[serde(default = "default_pty_timeout")]
     pub command_timeout_seconds: u64,
 

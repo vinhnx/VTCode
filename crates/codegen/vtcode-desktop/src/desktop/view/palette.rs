@@ -1,6 +1,13 @@
 //! Command palette domain: entry types, search builders, and action dispatch.
 
+use super::context_format::format_context_window;
 use super::*;
+use vtcode_commons::provider::Provider;
+
+mod provider_identity;
+use provider_identity::{model_route_matches, provider_display_label, provider_group_key, provider_picker_rank};
+mod icons;
+pub(super) use icons::palette_action_icon;
 
 /// One executable entry in the command palette.
 #[derive(Debug)]
@@ -19,6 +26,12 @@ pub(super) type PaletteGroups = Vec<(String, Vec<Rc<PaletteCommand>>)>;
 /// into its keywords, so the palette keeps the newest rows instead of cloning
 /// all 2,000 transcript items on every open and refresh.
 pub(super) const MAX_CONVERSATION_SEARCH_ROWS: usize = 200;
+
+/// Workspace file rows per palette section. Each row clones its path (and the
+/// Commands palette translates a label), so file sections keep the sorted
+/// prefix of the shared snapshot instead of materializing all 5,000 rows on
+/// every open.
+pub(super) const MAX_FILE_ROWS: usize = 200;
 
 pub(super) fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>) -> PaletteGroups {
     groups
@@ -52,10 +65,22 @@ pub(super) enum PaletteKind {
 pub(super) enum PaletteAction {
     NewSession,
     CloseSession,
-    OpenConversationSearch { session_id: String },
+    CopyThreadTitle,
+    CloseOtherTabs,
+    OpenInCli,
+    OpenConversationSearch {
+        session_id: String,
+    },
     CopyLatestMessage,
-    JumpToTranscriptItem { session_id: String, item_id: String },
-    ShowActivityOutput { session_id: String, item_id: String },
+    JumpToTranscriptItem {
+        session_id: String,
+        item_id: String,
+        from_search: bool,
+    },
+    ShowActivityOutput {
+        session_id: String,
+        item_id: String,
+    },
     ChooseModel,
     ChooseWorkspace,
     RefreshSessions,
@@ -63,12 +88,18 @@ pub(super) enum PaletteAction {
     BrowseThreads,
     ToggleInspector,
     ToggleTheme,
-    SelectFont { target: FontTarget, family: Option<String> },
+    SelectFont {
+        target: FontTarget,
+        family: Option<String>,
+    },
     SelectSettingsTab(settings::SettingsTab),
     EditConfigSetting(String),
     LoadSession(String),
     PreviewFile(String),
-    SelectModel { provider: String, model: String },
+    SelectModel {
+        provider: String,
+        model: String,
+    },
     SelectSessionOptions(protocol::SessionOptionsSelectParams),
     ToggleZenMode,
     AttachFiles,
@@ -94,6 +125,12 @@ impl DesktopView {
             vec![
                 command(rust_i18n::t!("app.palette.command.new_session").to_string(), PaletteAction::NewSession),
                 command(rust_i18n::t!("app.palette.command.close_session").to_string(), PaletteAction::CloseSession),
+                // English literals match the thread-menu precedent: new
+                // user-visible strings stay untranslated until full
+                // native-quality translations ship for every locale.
+                command("Copy thread title".to_string(), PaletteAction::CopyThreadTitle),
+                command("Close other tabs".to_string(), PaletteAction::CloseOtherTabs),
+                command(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(), PaletteAction::OpenInCli),
                 command(
                     rust_i18n::t!(i18n::PALETTE_COMMAND_SWITCH_WORKSPACE).to_string(),
                     PaletteAction::ChooseWorkspace,
@@ -204,6 +241,7 @@ impl DesktopView {
             .files
             .iter()
             .filter(|entry| !entry.is_dir)
+            .take(MAX_FILE_ROWS)
             .map(|entry| {
                 command(
                     rust_i18n::t!("app.palette.command.open_file", path = entry.rel_path.as_str()).to_string(),
@@ -247,7 +285,7 @@ impl DesktopView {
     fn conversation_search_messages(&self, session_id: &str) -> Vec<PaletteCommand> {
         self.transcript
             .items_newest_first()
-            .filter(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+            .filter(|item| item.is_conversation_searchable())
             .take(MAX_CONVERSATION_SEARCH_ROWS)
             .map(|item| {
                 let speaker = if item.is_user() {
@@ -265,9 +303,10 @@ impl DesktopView {
                     PaletteAction::JumpToTranscriptItem {
                         session_id: session_id.to_string(),
                         item_id: item.id.clone(),
+                        from_search: true,
                     },
                 );
-                entry.shared_keywords.extend([item.text.clone(), item.title.clone()]);
+                entry.shared_keywords.extend(item.search_keywords());
                 entry
             })
             .collect()
@@ -286,7 +325,7 @@ impl DesktopView {
             .take(MAX_CONVERSATION_SEARCH_ROWS)
             .filter_map(|item| {
                 let output = item.output.as_ref()?;
-                let searchable_output = inspector::output_tail(output);
+                let searchable_output = inspector::display_output_tail(output);
                 let mut entry = command(
                     format!(
                         "{} · {} · {}",
@@ -332,7 +371,7 @@ impl DesktopView {
 
     pub(super) fn has_searchable_conversation_content(&self) -> bool {
         self.transcript.items().any(|item| {
-            (is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+            item.is_conversation_searchable()
                 || (item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
         }) || self
             .restored_activity
@@ -351,13 +390,24 @@ impl DesktopView {
         let active_model = self.active_model_fallback();
         for model in self.models.iter().chain(active_model.iter()) {
             let entry = model_palette_command(model, self.model_is_current(&model.provider, &model.id));
-            groups.entry(model.provider.clone()).or_default().push(entry);
+            groups.entry(provider_group_key(&model.provider)).or_default().push(entry);
         }
         let mut groups = groups.into_iter().collect::<Vec<_>>();
         for (_, entries) in &mut groups {
             entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
         }
-        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
+        // Groups follow the CLI picker's provider order: frontier labs
+        // (OpenAI, Anthropic), then the open-source/local family, then the
+        // rest. The active provider is highlighted in place instead of being
+        // hoisted so the frontier-first order stays stable. Unknown codes rank
+        // after every known provider; the sort is stable so they keep arrival
+        // order. Headers show human-readable labels.
+        let display_order = Provider::picker_display_order();
+        groups.sort_by_key(|(code, _)| provider_picker_rank(code, &display_order));
+        let groups = groups
+            .into_iter()
+            .map(|(code, entries)| (provider_display_label(&code), entries))
+            .collect();
         self.show_palette(PaletteKind::Models, groups, window, cx);
     }
 
@@ -365,10 +415,9 @@ impl DesktopView {
         self.configuration
             .as_ref()
             .filter(|configuration| {
-                !self
-                    .models
-                    .iter()
-                    .any(|model| model.provider == configuration.provider && model.id == configuration.model)
+                !self.models.iter().any(|model| {
+                    model_route_matches(&model.provider, &model.id, &configuration.provider, &configuration.model)
+                })
             })
             .map(|configuration| protocol::ModelInfo {
                 provider: configuration.provider.clone(),
@@ -383,12 +432,21 @@ impl DesktopView {
 
     pub(super) fn model_is_current(&self, provider: &str, model: &str) -> bool {
         if let Some(configuration) = self.configuration.as_ref() {
-            configuration.provider == provider && configuration.model == model
+            model_route_matches(provider, model, &configuration.provider, &configuration.model)
         } else {
             self.models
                 .iter()
-                .any(|entry| entry.provider == provider && entry.id == model && entry.current)
+                .any(|entry| model_route_matches(&entry.provider, &entry.id, provider, model) && entry.current)
         }
+    }
+
+    /// Human-readable display name for the active model route, when the
+    /// catalog knows it. Provider aliases and model-id casing still resolve.
+    pub(super) fn model_display_name(&self, provider: &str, model: &str) -> Option<&str> {
+        self.models
+            .iter()
+            .find(|entry| model_route_matches(&entry.provider, &entry.id, provider, model))
+            .map(|entry| entry.display_name.as_str())
     }
 
     pub(super) fn is_current_palette_action(&self, action: &PaletteAction) -> bool {
@@ -438,6 +496,10 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Composer-anchored transients are mutually exclusive: a palette
+        // opening over the picker drops it first, mirroring
+        // `open_attachment_picker` closing the palette.
+        self.close_attachment_picker(window, cx);
         if self.current_route() == Route::Review && kind != PaletteKind::ReviewFiles {
             self.close_review(window, cx);
         }
@@ -526,6 +588,8 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Close clears the query, so search jumps capture it first.
+        let palette_query = self.palette_query.clone();
         self.close_palette(window, cx);
         match action {
             PaletteAction::NewSession => {
@@ -536,36 +600,27 @@ impl DesktopView {
                 self.close_active_route(window, cx);
                 let _ = self.close_session_from_ui(window, cx);
             }
+            PaletteAction::CopyThreadTitle => {
+                if let Some(session_id) = self.selected_session_id.clone() {
+                    self.copy_thread_title(&session_id, cx);
+                }
+            }
+            PaletteAction::CloseOtherTabs => {
+                if let Some(session_id) = self.selected_session_id.clone() {
+                    self.close_other_tabs(&session_id, window, cx);
+                }
+            }
+            PaletteAction::OpenInCli => self.open_cli_handoff(cx),
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.open_conversation_search(session_id, window, cx);
             }
             PaletteAction::CopyLatestMessage => self.copy_latest_message(window, cx),
-            PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+            PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search } => {
                 if self.selected_session_id.as_deref() != Some(session_id.as_str()) {
                     return;
                 }
-                if let Some(index) = self.transcript.position_by_id(&item_id) {
-                    if self.transcript.get(index).is_some_and(|item| item.is_tool()) {
-                        if self.transcript.reveal_tool_item(&item_id).is_none() {
-                            return;
-                        }
-                        cx.notify();
-                        let session_id = session_id.clone();
-                        cx.on_next_frame(window, move |view, _, cx| {
-                            if view.selected_session_id.as_deref() != Some(session_id.as_str()) {
-                                return;
-                            }
-                            if let Some(index) = view.transcript.position_by_id(&item_id) {
-                                view.message_scroller.update(cx, |state, cx| {
-                                    let _scrolled = state.scroll_to_item(index, cx);
-                                });
-                            }
-                        });
-                    } else {
-                        self.message_scroller.update(cx, |state, cx| {
-                            let _scrolled = state.scroll_to_item(index, cx);
-                        });
-                    }
+                if self.jump_to_transcript_item(&item_id, window, cx) && from_search {
+                    self.remember_filter_matches(palette_query.as_str(), &item_id);
                 }
             }
             PaletteAction::ShowActivityOutput { session_id, item_id } => {
@@ -576,7 +631,10 @@ impl DesktopView {
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
             PaletteAction::RefreshSessions => {
-                let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+                // Refresh keeps the expanded depth: collapsing an explicit
+                // "show more" would discard rows the user asked to see.
+                let limit = self.session_list_limit;
+                let _queued = self.request_session_list(limit);
             }
             PaletteAction::RefreshFiles => self.refresh_files(cx),
             PaletteAction::BrowseThreads => self.open_thread_browser(window, cx),
@@ -589,10 +647,18 @@ impl DesktopView {
             PaletteAction::OpenGoTo => self.open_goto_palette(window, cx),
             PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
             PaletteAction::SelectSettingsTab(tab) => {
-                self.settings_tab = tab;
-                self.config_page_open = false;
+                self.select_settings_tab(tab);
+                if tab == settings::SettingsTab::VtCode {
+                    self.refresh_login_item_status(cx);
+                }
                 if tab == settings::SettingsTab::Storage {
                     self.maybe_request_storage_summary(cx);
+                }
+                // The About page reads cached release notes; ask only when
+                // launch never delivered a snapshot. Snapshot- and
+                // pending-gated, so repeat selection costs nothing.
+                if tab == settings::SettingsTab::About {
+                    self.maybe_request_update_status();
                 }
                 // Passive entry: refresh when a service can answer. Explicit
                 // refresh controls keep the loud no-backend failure instead.
@@ -600,7 +666,7 @@ impl DesktopView {
                     self.request_webmcp_status();
                 }
                 self.open_settings(window, cx);
-                self.settings_navigation_focus.focus(window, cx);
+                self.focus_settings_selection(window, cx);
                 cx.notify();
             }
             PaletteAction::EditConfigSetting(path) => self.open_cli_config_editor(path, window, cx),
@@ -669,7 +735,7 @@ impl DesktopView {
                     && self.has_searchable_conversation_content()
             }
             PaletteAction::CopyLatestMessage => self.latest_copyable_message().is_some(),
-            PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+            PaletteAction::JumpToTranscriptItem { session_id, item_id, .. } => {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
                     && self.transcript.position_by_id(item_id).is_some_and(|index| {
                         self.transcript
@@ -682,12 +748,12 @@ impl DesktopView {
                     && (self
                         .restored_activity
                         .iter()
-                        .any(|item| item.id == *item_id && item.is_tool() && item.output.is_some())
+                        .any(|item| item.id == *item_id && item.is_tool() && item.has_output())
                         || self
                             .transcript
                             .position_by_id(item_id)
                             .and_then(|index| self.transcript.get(index))
-                            .is_some_and(|item| item.is_tool() && item.output.is_some()))
+                            .is_some_and(|item| item.is_tool() && item.has_output()))
             }
             PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
             PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => {
@@ -698,6 +764,14 @@ impl DesktopView {
             | PaletteAction::CompleteSlashCommand(_)
             | PaletteAction::InsertHistoryPrompt(_) => true,
             PaletteAction::CloseSession => self.selected_session_id.is_some() && self.new_thread_available(),
+            PaletteAction::CopyThreadTitle => self.selected_session_id.is_some(),
+            PaletteAction::CloseOtherTabs => {
+                self.selected_session_id
+                    .as_deref()
+                    .is_some_and(|id| self.open_tabs.iter().any(|tab| tab == id))
+                    && self.open_tabs.len() > 1
+            }
+            PaletteAction::OpenInCli => self.selected_session_id.is_some(),
             PaletteAction::LoadSession(session_id) => self.load_session_available(session_id),
             PaletteAction::SelectWorkspaceReviewFile(_) => {
                 self.current_route() == Route::Review
@@ -721,6 +795,7 @@ impl DesktopView {
                 | deeplinks::DeepLink::SettingsTab(_)
                 | deeplinks::DeepLink::ConfigPage
                 | deeplinks::DeepLink::ConfigPath(_) => true,
+                deeplinks::DeepLink::Changelog => self.can_view_any_changelog(),
                 deeplinks::DeepLink::Palette(deeplinks::PaletteLink::ConversationSearch) => {
                     self.selected_session_id.is_some() && self.has_searchable_conversation_content()
                 }
@@ -747,7 +822,7 @@ impl DesktopView {
                         || self
                             .models
                             .iter()
-                            .any(|entry| entry.provider == *provider && entry.id == *model))
+                            .any(|entry| model_route_matches(&entry.provider, &entry.id, provider, model)))
             }
         }
     }
@@ -763,7 +838,7 @@ pub(super) fn command(label: impl Into<String>, action: PaletteAction) -> Palett
     }
 }
 
-/// Shield mode for permission-picker rows; every other palette and action stays text-only.
+/// Shield mode for permission-picker rows (Commands rows use icons instead).
 pub(super) fn permission_palette_mode(kind: PaletteKind, action: &PaletteAction) -> Option<protocol::PermissionMode> {
     if kind != PaletteKind::Permissions {
         return None;
@@ -789,73 +864,6 @@ fn is_searchable_conversation_role(role: &str) -> bool {
     TranscriptRole::from_str(role).is_some_and(TranscriptRole::is_searchable_conversation)
 }
 
-/// Keep palette label identity attached to the command when search/filtering changes row order.
-/// Hash payloads so file paths and draft text do not appear in rendered element IDs.
-pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    std::mem::discriminant(action).hash(&mut hasher);
-    match action {
-        PaletteAction::SelectFont { target, family } => {
-            match target {
-                FontTarget::Ui => 0_u8,
-                FontTarget::Code => 1_u8,
-            }
-            .hash(&mut hasher);
-            family.hash(&mut hasher);
-        }
-        PaletteAction::EditConfigSetting(value)
-        | PaletteAction::LoadSession(value)
-        | PaletteAction::PreviewFile(value)
-        | PaletteAction::SelectWorkspaceReviewFile(value)
-        | PaletteAction::AttachFile(value)
-        | PaletteAction::InsertFileMention(value)
-        | PaletteAction::CompleteSlashCommand(value)
-        | PaletteAction::InsertHistoryPrompt(value)
-        | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
-        PaletteAction::OpenConversationSearch { session_id } => session_id.hash(&mut hasher),
-        PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
-            session_id.hash(&mut hasher);
-            item_id.hash(&mut hasher);
-        }
-        PaletteAction::ShowActivityOutput { session_id, item_id } => {
-            session_id.hash(&mut hasher);
-            item_id.hash(&mut hasher);
-        }
-        PaletteAction::SelectSettingsTab(tab) => std::mem::discriminant(tab).hash(&mut hasher),
-        PaletteAction::SelectModel { provider, model } => {
-            provider.hash(&mut hasher);
-            model.hash(&mut hasher);
-        }
-        PaletteAction::SelectSessionOptions(options) => {
-            match options.permission_mode {
-                None => 0_u8,
-                Some(protocol::PermissionMode::Ask) => 1,
-                Some(protocol::PermissionMode::AutoApproveCommands) => 2,
-                Some(protocol::PermissionMode::FullAccess) => 3,
-            }
-            .hash(&mut hasher);
-            options.mode.hash(&mut hasher);
-            options.reasoning_effort.hash(&mut hasher);
-            options.fast_mode.hash(&mut hasher);
-        }
-        PaletteAction::OpenDeepLink(link) => link.path().unwrap_or_else(|| format!("{link:?}")).hash(&mut hasher),
-        PaletteAction::NewSession
-        | PaletteAction::CloseSession
-        | PaletteAction::CopyLatestMessage
-        | PaletteAction::ChooseModel
-        | PaletteAction::ChooseWorkspace
-        | PaletteAction::RefreshSessions
-        | PaletteAction::RefreshFiles
-        | PaletteAction::BrowseThreads
-        | PaletteAction::ToggleInspector
-        | PaletteAction::ToggleZenMode
-        | PaletteAction::ToggleTheme
-        | PaletteAction::AttachFiles
-        | PaletteAction::OpenGoTo => {}
-    }
-    format!("palette-label-{:016x}", hasher.finish())
-}
-
 pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
     let context = model
         .context_window
@@ -874,7 +882,8 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
             model: model.id.clone(),
         },
     );
-    let mut details = vec![model.provider.clone()];
+    let provider_label = provider_display_label(&model.provider);
+    let mut details = vec![provider_label.clone()];
     details.extend(capabilities.iter().map(|(_, display)| display.clone()));
     if !context.is_empty() {
         details.push(context.trim_start_matches(display::MIDDOT).to_string());
@@ -884,7 +893,7 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
         details.push(current.trim_start_matches(display::MIDDOT).to_string());
     }
     entry.description = Some(details.join(display::MIDDOT));
-    entry.keywords = vec![model.provider.clone(), model.id.clone()];
+    entry.keywords = vec![model.provider.clone(), provider_label, model.id.clone()];
     entry
         .keywords
         .extend(capabilities.into_iter().map(|(keyword, _)| keyword.to_string()));

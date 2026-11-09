@@ -247,7 +247,7 @@ impl SkillManager {
     pub async fn generate_index(&self) -> Result<PathBuf> {
         let skills = self.list_skills_with_origin().await?;
 
-        let mut content = String::new();
+        let mut content = String::from(SKILLS_INDEX_LINT_DIRECTIVE);
         content.push_str("# Skills Index\n\n");
         content.push_str("This file lists all available skills for dynamic discovery.\n");
         content.push_str("Use `read_file` on individual skill directories for full documentation.\n\n");
@@ -262,8 +262,7 @@ impl SkillManager {
             content.push_str("Create skills using the `save_skill` tool.\n");
         } else {
             content.push_str("## Available Skills\n\n");
-            content.push_str("| Name | Language | Description | Tags |\n");
-            content.push_str("|------|----------|-------------|------|\n");
+            push_index_table_header(&mut content, &["Name", "Language", "Description", "Tags"]);
 
             for entry in &skills {
                 let skill = &entry.metadata;
@@ -293,8 +292,7 @@ impl SkillManager {
             }
         }
 
-        content.push_str("\n---\n");
-        content.push_str("*Generated automatically. Do not edit manually.*\n");
+        finish_skills_index(&mut content);
 
         // Ensure directory exists
         ensure_dir_exists(&self.skills_dir).await.context(ERR_CREATE_SKILLS_DIR)?;
@@ -441,6 +439,31 @@ impl SkillManager {
     }
 }
 
+/// Markdownlint rules disabled in generated skill indexes. Skill descriptions
+/// are user-authored prose (long lines, `<placeholder>` text) that the
+/// generator must not rewrite; every other rule stays enforced.
+pub const SKILLS_INDEX_LINT_DIRECTIVE: &str = "<!-- markdownlint-disable MD013 MD033 -->\n\n";
+
+/// Append a table header whose delimiter row uses the same spaced `| x |`
+/// style as the generated body rows, as markdownlint MD060 requires.
+pub fn push_index_table_header(content: &mut String, columns: &[&str]) {
+    content.push_str("| ");
+    content.push_str(&columns.join(" | "));
+    content.push_str(" |\n|");
+    for _ in columns {
+        content.push_str(" --- |");
+    }
+    content.push('\n');
+}
+
+/// End a generated skills index with exactly one blank line before the
+/// footer rule, so the rule never turns a preceding line into a setext heading
+/// and never leaves consecutive blank lines (MD012).
+pub fn finish_skills_index(content: &mut String) {
+    content.truncate(content.trim_end().len());
+    content.push_str("\n\n---\n\n*Generated automatically. Do not edit manually.*\n");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -469,5 +492,33 @@ mod tests {
         let deserialized: SkillMetadata =
             serde_json::from_str(&json).expect("Serialized skill metadata should deserialize");
         assert_eq!(deserialized.name, metadata.name);
+    }
+
+    #[test]
+    fn index_table_header_delimiter_matches_body_row_style() {
+        let mut content = String::new();
+        push_index_table_header(&mut content, &["Name", "Description", "Type"]);
+        assert_eq!(content, "| Name | Description | Type |\n| --- | --- | --- |\n");
+    }
+
+    #[test]
+    fn finish_skills_index_leaves_exactly_one_blank_line_before_the_rule() {
+        for body in ["Create skills.\n", "- **Path**: `x`\n\n", "- **Path**: `x`\n\n\n"] {
+            let mut content = body.to_string();
+            finish_skills_index(&mut content);
+            let footer = "\n\n---\n\n*Generated automatically. Do not edit manually.*\n";
+            assert!(content.ends_with(footer), "{content:?}");
+            assert!(!content.contains("\n\n\n"), "{content:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn generated_empty_index_starts_with_lint_directive() {
+        let workspace = tempfile::tempdir().expect("tempdir");
+        let path = SkillManager::new(workspace.path()).generate_index().await.expect("index");
+        let content = tokio::fs::read_to_string(path).await.expect("read index");
+        assert!(content.starts_with(SKILLS_INDEX_LINT_DIRECTIVE));
+        assert!(content.contains("save_skill` tool.\n\n---\n"), "{content}");
+        assert!(!content.contains("\n\n\n"), "{content}");
     }
 }

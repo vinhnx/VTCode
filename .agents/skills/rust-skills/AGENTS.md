@@ -1,7 +1,7 @@
 ---
 name: rust-skills
 description: >
-  193 Rust coding rules across 14 categories. Use when writing, reviewing,
+  194 Rust coding rules across 14 categories. Use when writing, reviewing,
   or refactoring Rust code. Covers ownership, error handling, async patterns,
   API design, memory optimization, performance, testing, and common
   anti-patterns. Invoke with /rust-skills.
@@ -19,7 +19,7 @@ metadata:
 
 # Rust Best Practices
 
-Comprehensive guide for writing high-quality, idiomatic, and highly optimized Rust code. Contains 193 rules across 14 categories, prioritized by impact to guide LLMs in code generation and refactoring.
+Comprehensive guide for writing high-quality, idiomatic, and highly optimized Rust code. Contains 194 rules across 14 categories, prioritized by impact to guide LLMs in code generation and refactoring.
 
 ## Rule Categories by Priority
 
@@ -31,14 +31,14 @@ Comprehensive guide for writing high-quality, idiomatic, and highly optimized Ru
 | 4 | API Design | HIGH | `api-` | 17 |
 | 5 | Async/Await | HIGH | `async-` | 16 |
 | 6 | Compiler Optimization | HIGH | `opt-` | 12 |
-| 7 | Naming Conventions | MEDIUM | `name-` | 16 |
-| 8 | Type Safety | MEDIUM | `type-` | 10 |
-| 9 | Testing | MEDIUM | `test-` | 13 |
+| 7 | Naming Conventions | MEDIUM | `name-` | 17 |
+| 8 | Type Safety | MEDIUM | `type-` | 11 |
+| 9 | Testing | MEDIUM | `test-` | 15 |
 | 10 | Documentation | MEDIUM | `doc-` | 11 |
 | 11 | Performance Patterns | MEDIUM | `perf-` | 11 |
-| 12 | Project Structure | LOW | `proj-` | 11 |
-| 13 | Clippy & Linting | LOW | `lint-` | 11 |
-| 14 | Anti-patterns | REFERENCE | `anti-` | 15 |
+| 12 | Project Structure | LOW | `proj-` | 12 |
+| 13 | Clippy & Linting | LOW | `lint-` | 12 |
+| 14 | Anti-patterns | REFERENCE | `anti-` | 17 |
 
 Full rule reference and detailed examples live in `rules/`; per-source digests live in
 `references/` (adapted from [BeautifulRust](https://github.com/morganlinton/BeautifulRust), MIT). See the [SKILL.md](SKILL.md) for complete quick-reference tables, task-based guidance, and sources.

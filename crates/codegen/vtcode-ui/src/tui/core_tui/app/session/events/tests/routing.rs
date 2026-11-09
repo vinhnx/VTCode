@@ -69,6 +69,7 @@ fn cancelling_a_list_modal_notifies_the_preview_owner() {
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     }));
 
     let event = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -110,6 +111,7 @@ fn paste_routes_to_list_search_after_composer_is_reenabled() {
             }),
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         }));
         session.core.set_input_enabled(true);
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();

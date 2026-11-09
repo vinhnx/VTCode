@@ -405,6 +405,43 @@ the 4-session / 160-byte / single-session 1 KiB bounds, and settle via `write_st
 
 ---
 
+## 23. Item Handles Are Process-Unique
+
+`ThreadItem.id` is a handle, not a label: the desktop transcript (`position_by_id`), the canonical memory projection
+(`task\0actor\0id`) and replay all key rows on it. A handle minted twice rebinds a live row to a different item, which
+is the "slot reused by a new item" failure mode of an ungenerationed handle.
+
+Key guarantees:
+
+- **Single authority**: `SharedLifecycleEmitter::next_item_id` draws from one process-wide `AtomicU64`
+  (`NEXT_ITEM_HANDLE`). Per-emitter counters are forbidden — emitters are rebuilt per recorder, per runtime and per
+  streaming step, so each restarted at `item_0`.
+- **Derived handles inherit uniqueness**: composite ids (`{call_id}:changes`, `{call_item_id}:output`,
+  `{call_item_id}:decision`, `{call_item_id}:delegated-agent`, `{call_item_id}:session-message`) are only unique while
+  their base handle is. Never base a derived handle on an id from a different namespace (for example the
+  provider-facing `vtcode-llm` `generate_item_id`, which mints its own `item_N` for Open Responses payloads and never
+  becomes a `ThreadItem.id`).
+- **Miss, never panic**: a handle→value lookup must return `Option`, including for handles the store never issued
+  (`StringInterner::get_bytes` range-checks the offset table; a stale or foreign `StringId` is `None`, not a panic).
+- **Fail closed**: an unknown exec-session or PTY handle returns a typed "not found" error and is never silently
+  re-created. `ExecSessionManager::insert_session` uses `entry()` so identity is never reused.
+
+**Known limit — resume across processes**: the counter is process-local, so a resumed session whose event log already
+contains `item_0..item_N` mints those handles again from zero. Today this does not corrupt restored rows because
+restore projects history items straight into the view (`historical: true`) and the client drops a restored row only
+when a *live* item supersedes it; it is not a real generation mechanism. A future change that replays restore through
+the live update path must first seed the counter from the restored maximum. The tripwire test
+`item_handles_do_not_account_for_restored_history_from_a_previous_process` pins the current behaviour.
+
+**Violation**: two live items sharing an id in one session log; an emitter that restarts its counter; a public
+`Option`-returning lookup that indexes a table directly; a stale handle that panics or silently binds to a new item.
+
+**Remediation**: mint handles through `next_item_id` (or a UUID when the handle is not a `ThreadItem`), keep lookups
+total, and cover the case with a test that constructs two independent producers — a single-emitter test cannot observe a
+collision.
+
+---
+
 ## Enforcement
 
 These invariants should be enforced by:

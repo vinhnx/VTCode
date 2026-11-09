@@ -437,3 +437,16 @@ base_url = "https://api.mycorp.example.com/v1"
     let config: vtcode_config::VTCodeConfig = toml::from_str(toml).unwrap();
     assert!(config.validate().is_ok(), "custom provider name in whitelist should pass");
 }
+
+#[test]
+fn desktop_suggest_install_opt_out_parses() {
+    let toml = "[desktop]\nsuggest-install = false\n";
+    let config: vtcode_config::VTCodeConfig = toml::from_str(toml).unwrap();
+    assert!(!config.desktop.suggest_install);
+}
+
+#[test]
+fn desktop_suggest_install_defaults_on() {
+    let config: vtcode_config::VTCodeConfig = toml::from_str("").unwrap();
+    assert!(config.desktop.suggest_install);
+}

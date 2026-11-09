@@ -69,4 +69,4 @@ Checklist:
 ## See also
 
 - [Local Inference Servers (CLI & `/local` command)](../providers/local-servers.md)
-- [Ollama Provider](ollama.md) · [LM Studio Provider](lmstudio.md) · [llama.cpp Provider](llamacpp.md)
+- [Ollama Provider](../providers/ollama.md) · [LM Studio Provider](../providers/lmstudio.md) · [llama.cpp Provider](../providers/llamacpp.md)

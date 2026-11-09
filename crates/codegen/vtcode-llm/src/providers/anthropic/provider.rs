@@ -58,6 +58,7 @@ pub struct AnthropicProvider {
     custom_provider_auth: Option<CustomProviderAuthHandle>,
     custom_provider: bool,
     model_behavior: Option<ModelConfig>,
+    session_affinity_header: Option<&'static str>,
 }
 
 impl AnthropicProvider {
@@ -103,6 +104,7 @@ impl AnthropicProvider {
             custom_provider_auth: None,
             custom_provider: false,
             model_behavior: None,
+            session_affinity_header: None,
         }
     }
 
@@ -164,12 +166,21 @@ impl AnthropicProvider {
             custom_provider_auth: None,
             custom_provider: false,
             model_behavior,
+            session_affinity_header: None,
         }
     }
 
     pub(crate) fn with_custom_auth(mut self, custom_provider_auth: Option<CustomProviderAuthHandle>) -> Self {
         self.custom_provider_auth = custom_provider_auth;
         self.custom_provider = true;
+        self
+    }
+
+    /// Attach a session-affinity header (e.g. OpenCode Go's
+    /// `x-opencode-session`) carrying the request's session lineage. Used by
+    /// dispatchers that route Messages-API traffic through this provider.
+    pub(crate) fn with_session_affinity_header(mut self, header: &'static str) -> Self {
+        self.session_affinity_header = Some(header);
         self
     }
 
@@ -430,6 +441,10 @@ impl AnthropicProvider {
         let beta_header =
             self.beta_header_for_request(request, anthropic_request, include_advanced_tool_use, betas.as_deref());
         let metadata = request.metadata.clone();
+        let session_affinity = self.session_affinity_header.and_then(|header| {
+            crate::providers::shared::session_lineage_from_prompt_cache_key(request.prompt_cache_key.as_deref())
+                .map(|lineage| (header, lineage))
+        });
 
         let send_once = |api_key: String| {
             let mut request_builder = self
@@ -440,6 +455,10 @@ impl AnthropicProvider {
 
             if let Some(beta_header) = beta_header.clone() {
                 request_builder = request_builder.header("anthropic-beta", beta_header);
+            }
+
+            if let Some((header, lineage)) = session_affinity.clone() {
+                request_builder = request_builder.header(header, lineage);
             }
 
             if let Some(metadata) = metadata.as_ref()

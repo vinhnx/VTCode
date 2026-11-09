@@ -1,24 +1,11 @@
-//! Inspector Files, Output, and Activity panels.
+//! Inspector Files and Output panels.
 
 use super::*;
+mod activity;
+mod tasks;
 
-/// One nonzero status line in the activity summary legend.
-struct ActivityLegendEntry {
-    state: ActivityState,
-    label: String,
-    count: usize,
-}
-
-/// Stable per-status slug for activity-summary legend element ids.
-fn activity_state_slug(state: ActivityState) -> &'static str {
-    match state {
-        ActivityState::Running => "running",
-        ActivityState::Completed => "done",
-        ActivityState::Failed => "failed",
-        ActivityState::Interrupted => "interrupted",
-        ActivityState::Other => "other",
-    }
-}
+#[cfg(test)]
+pub(super) use tasks::tracker_current_index;
 
 /// A workspace entry being dragged out of the file tree.
 struct DragWorkspaceFile {
@@ -84,6 +71,16 @@ impl DesktopView {
         }
     }
 
+    /// Toggle the Activity tab's status filter. Selecting the active status
+    /// again clears the filter, so filtering stays visible and reversible.
+    pub(super) fn toggle_activity_filter(&mut self, state: ActivityState) {
+        self.activity_filter = if self.activity_filter == Some(state) {
+            None
+        } else {
+            Some(state)
+        };
+    }
+
     /// Shared activity projection, rebuilt only when the transcript or the
     /// restored history changed since the last call.
     pub(super) fn cached_activity_projection(&mut self) -> Rc<inspector::ActivityProjection> {
@@ -136,12 +133,7 @@ impl DesktopView {
         if !(item.is_tool() && item.expanded) {
             return None;
         }
-        let output = item
-            .output
-            .as_ref()
-            .filter(|output| !output.is_empty())
-            .cloned()
-            .unwrap_or_else(|| item.text.clone());
+        let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());
         let id = item.id.clone();
         let revision = self.transcript.revision();
         Some(inspector::resolve_tool_tail(&id, &output, revision, &mut self.tool_tail_cache))
@@ -171,6 +163,42 @@ impl DesktopView {
                 .ghost()
                 .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
         ));
+        let searching = self.file_search_hit_count.is_some();
+        let filter_count = self.file_search_hit_count.map(|shown| {
+            rust_i18n::t!("app.inspector.filtered_count", shown = shown, total = self.files.len()).to_string()
+        });
+        body = body.child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .py_1()
+                .child(
+                    Input::new(&self.file_filter_input)
+                        .id("file-list-filter")
+                        .flex_1()
+                        .min_w_0()
+                        .small()
+                        .aria_label(files_panel::FILTER_FILES_LABEL.to_string())
+                        .prefix(Icon::new(IconName::Search).size_4())
+                        .cleanable(true),
+                )
+                .when_some(filter_count, |row, count| {
+                    row.child(
+                        div()
+                            .id("file-list-filter-count")
+                            .test_support()
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(count.clone())
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground)
+                            .child(count),
+                    )
+                }),
+        );
         let directory_paths = self.file_directory_paths.clone();
         let menu_directory_paths = directory_paths.clone();
         let file_tree = self.file_tree.clone();
@@ -193,7 +221,12 @@ impl DesktopView {
                     .p_3()
                     .text_sm()
                     .text_color(cx.theme().colors.muted_foreground)
-                    .child(shimmer_label("file-scan-loading-label", rust_i18n::t!("app.files.scanning").to_string())),
+                    .child(loading_marker_row(
+                        "file-scan-loading-label",
+                        rust_i18n::t!("app.files.scanning").to_string(),
+                        cx.theme().colors.muted_foreground,
+                        cx,
+                    )),
             );
         } else if self.files.is_empty() {
             let (title, description) = if self.workspace.is_some() {
@@ -221,6 +254,25 @@ impl DesktopView {
                     .justify_center()
                     .child(empty_state(title, description, IconName::Folder)),
             );
+        } else if searching && self.file_search_hit_count == Some(0) {
+            let note = files_panel::NO_MATCHING_FILES_NOTE.to_string();
+            body = body.child(
+                div()
+                    .id("file-list-filter-empty")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(note.clone())
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p_3()
+                    .text_sm()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child(note),
+            );
         } else {
             body = body.child(
                 div()
@@ -231,20 +283,25 @@ impl DesktopView {
                     .on_action(
                         cx.listener(|this, _: &OpenSelectedFile, window, cx| this.open_selected_file(window, cx)),
                     )
+                    .on_action(
+                        cx.listener(|this, _: &RenameSelectedFile, window, cx| this.rename_selected_file(window, cx)),
+                    )
+                    .on_action(
+                        cx.listener(|this, _: &DeleteSelectedFile, window, cx| this.delete_selected_file(window, cx)),
+                    )
                     .child(
                         Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
                             let rel_path = entry.item().id.to_string();
                             let is_dir = directory_paths.contains(&rel_path);
                             let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
-                            let icon = if is_dir {
-                                if entry.is_expanded() {
-                                    IconName::FolderOpen
-                                } else {
-                                    IconName::FolderClosed
-                                }
+                            // Ranked hits from different directories share
+                            // names; the muted parent keeps them distinct.
+                            let search_parent = if searching {
+                                rel_path.rsplit_once('/').map(|(dir, _)| dir)
                             } else {
-                                IconName::FileText
+                                None
                             };
+                            let icon = files_panel::file_tree_row_icon(is_dir, entry.is_expanded());
                             let tree = file_tree.clone();
                             let view = weak_view.clone();
                             let open_path = rel_path.clone();
@@ -258,14 +315,14 @@ impl DesktopView {
                                 } else {
                                     rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
                                 })
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_x_2()
-                                        .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
-                                        .child(div().text_sm().child(display_name)),
-                                )
+                                .child(files_panel::file_tree_row_label(
+                                    format!("workspace-file-label-{rel_path}"),
+                                    entry.depth(),
+                                    display_name,
+                                    search_parent,
+                                    icon,
+                                    app,
+                                ))
                                 // Dragging a row out of the window promotes the
                                 // drag to a native session, so the file can be
                                 // dropped into Finder or an editor.
@@ -296,22 +353,30 @@ impl DesktopView {
                             let directory_paths = menu_directory_paths.clone();
                             move |_, entry, menu, _, _| {
                                 let rel_path = entry.item().id.to_string();
-                                let menu = menu.menu(
-                                    "Copy path",
-                                    Box::new(files_panel::CopyFilePath { path: rel_path.clone().into() }),
-                                );
-                                if directory_paths.contains(&rel_path) {
-                                    menu
-                                } else {
-                                    menu.menu(
-                                        "Open preview",
-                                        Box::new(files_panel::OpenFilePath { path: rel_path.clone().into() }),
-                                    )
-                                }
+                                let is_dir = directory_paths.contains(&rel_path);
+                                files_panel::file_row_menu(menu, &rel_path, is_dir)
                             }
                         }),
                     ),
             );
+            if self.files_truncated {
+                // English literal: new user-visible strings stay untranslated
+                // until full native-quality coverage ships for every locale.
+                let notice = format!("Showing the first {} files", files::SNAPSHOT_MAX_ENTRIES);
+                body = body.child(
+                    div()
+                        .id("file-list-truncated")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(notice.clone())
+                        .w_full()
+                        .px_3()
+                        .pb_2()
+                        .text_xs()
+                        .text_color(cx.theme().colors.muted_foreground)
+                        .child(notice),
+                );
+            }
         }
         body.into_any_element()
     }
@@ -331,7 +396,7 @@ impl DesktopView {
         }
         let (output, tail) = self.cached_output_view();
         let Some(output) = output else {
-            self.output_tail_len = 0;
+            self.output_tail_seen = None;
             return pane
                 .child(empty_state(
                     rust_i18n::t!("app.inspector.empty_output_title").to_string(),
@@ -341,16 +406,16 @@ impl DesktopView {
                 .into_any_element();
         };
         // Follow the live edge while the reader stays pinned: streaming
-        // output only grows, so a longer tail plus a bottom-pinned viewport
-        // means new content arrived below. A reader who scrolled up keeps
+        // the bounded tail can change even when its length stays constant.
+        // A reader who scrolled up keeps
         // their offset; the jump button below resumes following.
         if self.output_follow_selection != self.selected_output_id {
             self.output_scroll.set_offset(point(px(0.), px(0.)));
             self.output_follow_selection = self.selected_output_id.clone();
         }
-        let grown = tail.len() > self.output_tail_len;
-        self.output_tail_len = tail.len();
-        if output.running && grown && output_pinned_to_bottom(&self.output_scroll) {
+        let changed = self.output_tail_seen.as_ref() != Some(&tail);
+        self.output_tail_seen = Some(tail.clone());
+        if output.running && changed && output_pinned_to_bottom(&self.output_scroll) {
             self.output_scroll.scroll_to_bottom();
         }
         let pinned = output_pinned_to_bottom(&self.output_scroll);
@@ -412,12 +477,12 @@ impl DesktopView {
             .child(
                 desktop_button("copy-output")
                     .icon(IconName::Copy)
-                    .accessibility_label(if has_more_output {
+                    .accessibility_label(if has_more_output || output.truncated {
                         rust_i18n::t!("app.inspector.copy_loaded").to_string()
                     } else {
                         rust_i18n::t!("app.inspector.copy_output").to_string()
                     })
-                    .tooltip(if has_more_output {
+                    .tooltip(if has_more_output || output.truncated {
                         rust_i18n::t!("app.inspector.copy_loaded_notice").to_string()
                     } else {
                         rust_i18n::t!("app.inspector.copy_captured").to_string()
@@ -470,6 +535,8 @@ impl DesktopView {
                         .child(shimmer_label(
                             "output-page-loading-label",
                             rust_i18n::t!("app.inspector.reading_next_page").to_string(),
+                            colors.muted_foreground,
+                            cx,
                         )),
                 );
             }
@@ -478,6 +545,71 @@ impl DesktopView {
             }
             pane = pane.child(recovery);
         }
+        // Line filter over the loaded tail; follow-tracking above keeps using
+        // the unfiltered tail so live growth still pins while filtered.
+        let filter_query = self.output_filter_input.read(cx).value().trim().to_string();
+        let filtering = !filter_query.is_empty();
+        let (shown_text, matched_lines, total_lines) = if filtering {
+            let (text, matched, total) = inspector::filter_output_lines(&tail, &filter_query);
+            (gpui_kit::SharedString::from(text), matched, total)
+        } else {
+            (tail.clone(), 0, 0)
+        };
+        let filter_count = filtering.then(|| {
+            rust_i18n::t!("app.inspector.filtered_count", shown = matched_lines, total = total_lines).to_string()
+        });
+        pane = pane.child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .py_1()
+                .child(
+                    Input::new(&self.output_filter_input)
+                        .id("output-filter")
+                        .flex_1()
+                        .min_w_0()
+                        .small()
+                        .aria_label(rust_i18n::t!("app.inspector.filter_output_lines").to_string())
+                        .prefix(Icon::new(IconName::Search).size_4())
+                        .cleanable(true),
+                )
+                .when_some(filter_count, |row, count| {
+                    row.child(
+                        div()
+                            .id("output-filter-count")
+                            .test_support()
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(count.clone())
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child(count),
+                    )
+                }),
+        );
+        let body_content = if filtering && matched_lines == 0 {
+            let note = rust_i18n::t!("app.inspector.no_matching_output_lines").to_string();
+            div()
+                .id("output-filter-empty")
+                .test_support()
+                .role(gpui_kit::Role::Status)
+                .aria_label(note.clone())
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .p_3()
+                .text_sm()
+                .text_color(colors.muted_foreground)
+                .child(note)
+                .into_any_element()
+        } else {
+            render_output_sections("output-body".to_string(), &shown_text, &colors, markdown_style(cx))
+                .into_any_element()
+        };
         pane.child(
             div()
                 .relative()
@@ -492,7 +624,7 @@ impl DesktopView {
                         .lock_scroll_axis()
                         .test_support()
                         .role(gpui_kit::Role::Label)
-                        .aria_label(tail.clone())
+                        .aria_label(shown_text.clone())
                         .flex_1()
                         .min_h_0()
                         .track_scroll(&self.output_scroll)
@@ -502,7 +634,7 @@ impl DesktopView {
                         .text_xs()
                         .font_family(mono)
                         .text_size(theme.mono_font_size)
-                        .child(render_output_sections("output-body".to_string(), &tail, &colors, markdown_style(cx))),
+                        .child(body_content),
                 )
                 .when(!pinned, |wrap| {
                     // Bottom-centered overlay in the transcript jump-button
@@ -529,353 +661,6 @@ impl DesktopView {
                 }),
         )
         .into_any_element()
-    }
-
-    pub(super) fn render_activity_tab(
-        &mut self,
-        colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let activity = self.cached_activity_projection();
-        let counts = ActivityCounts::from_rows(&activity.rows);
-        let has_older_activity = activity.has_older;
-        let mut body = inspector_tab_body()
-            .id("activity-list")
-            .test_support()
-            .overflow_hidden()
-            .gap_2()
-            .p_3();
-        if self.restored_activity_history_incomplete {
-            body = body.child(warning_alert(
-                "activity-history-warning",
-                rust_i18n::t!("app.inspector.partial_activity_history").to_string(),
-                colors,
-            ));
-        }
-        if activity.rows.is_empty() {
-            return body
-                .child(empty_state(
-                    rust_i18n::t!(i18n::INSPECTOR_EMPTY_ACTIVITY_TITLE).to_string(),
-                    rust_i18n::t!("app.inspector.empty_activity_description").to_string(),
-                    IconName::Activity,
-                ))
-                .into_any_element();
-        }
-        let summary = counts.summary();
-        let legend = [
-            ActivityLegendEntry {
-                state: ActivityState::Running,
-                label: rust_i18n::t!("app.inspector.status_running").to_string(),
-                count: counts.running,
-            },
-            ActivityLegendEntry {
-                state: ActivityState::Completed,
-                label: rust_i18n::t!("app.inspector.status_done").to_string(),
-                count: counts.completed,
-            },
-            ActivityLegendEntry {
-                state: ActivityState::Failed,
-                label: rust_i18n::t!("app.inspector.status_failed").to_string(),
-                count: counts.failed,
-            },
-            ActivityLegendEntry {
-                state: ActivityState::Interrupted,
-                label: rust_i18n::t!("app.inspector.status_interrupted").to_string(),
-                count: counts.interrupted,
-            },
-            ActivityLegendEntry {
-                state: ActivityState::Other,
-                label: rust_i18n::t!("app.inspector.status_other").to_string(),
-                count: counts.other,
-            },
-        ]
-        .into_iter()
-        .filter(|entry| entry.count > 0)
-        .collect::<Vec<_>>();
-        body = body.child(
-            div()
-                .id("activity-status-chart")
-                .test_support()
-                .role(gpui_kit::Role::Group)
-                .aria_label({
-                    let older = if has_older_activity {
-                        rust_i18n::t!("app.inspector.older_excluded").to_string()
-                    } else {
-                        String::new()
-                    };
-                    rust_i18n::t!("app.inspector.statuses_label", summary = summary.as_str(), older = older.as_str())
-                        .to_string()
-                })
-                .w_full()
-                .flex_shrink_0()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .px_2()
-                .py_1()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .child(row_title(rust_i18n::t!("app.inspector.recent_activity").to_string(), colors)),
-                        )
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_xs()
-                                .text_color(colors.muted_foreground)
-                                .child(rust_i18n::t!("app.inspector.shown_count", count = counts.total()).to_string()),
-                        ),
-                )
-                .child(div().flex().flex_col().gap_1().children(legend.into_iter().map(|entry| {
-                    div()
-                        .id(format!("activity-summary-{}", activity_state_slug(entry.state)))
-                        .test_support()
-                        .aria_label(format!("{}: {}", entry.label, entry.count))
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .flex_shrink_0()
-                                .rounded_full()
-                                .bg(Self::activity_status_color(entry.state, *colors)),
-                        )
-                        .child(div().flex_1().min_w_0().truncate().text_sm().child(entry.label))
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_sm()
-                                .font_medium()
-                                .text_color(colors.foreground)
-                                .child(entry.count.to_string()),
-                        )
-                }))),
-        );
-
-        if has_older_activity {
-            let notice = rust_i18n::t!("app.activity.history.notice", count = inspector::MAX_ACTIVITY_ROWS).to_string();
-            let search_label = rust_i18n::t!("app.activity.history.search").to_string();
-            body = body.child(
-                div()
-                    .id("activity-history-notice")
-                    .test_support()
-                    .w_full()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .rounded_md()
-                    .bg(colors.secondary)
-                    .px_2()
-                    .py_1()
-                    .child(
-                        div()
-                            .id("activity-history-status")
-                            .test_support()
-                            .role(gpui_kit::Role::Status)
-                            .aria_label(notice.clone())
-                            .flex_1()
-                            .min_w_0()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
-                            .child(notice),
-                    )
-                    .child(
-                        desktop_button("activity-search-history")
-                            .icon(IconName::Search)
-                            .ghost()
-                            .small()
-                            .accessibility_label(search_label.clone())
-                            .tooltip(search_label)
-                            .desktop_disabled(self.selected_session_id.is_none())
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                if let Some(session_id) = view.selected_session_id.clone() {
-                                    view.open_conversation_search(session_id, window, cx);
-                                }
-                            })),
-                    ),
-            );
-        }
-
-        let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
-        let item_sizes = self.activity_row_sizes.get(activity.rows.len(), activity_row_height);
-        let activity_count = activity.rows.len();
-        let activity_rows = Rc::clone(&activity);
-        let row_colors = *colors;
-        let weak_view = cx.entity().downgrade();
-        body = body.child(
-            div()
-                .id("activity-rows")
-                .test_support()
-                .role(gpui_kit::Role::List)
-                .aria_label(rust_i18n::t!("app.inspector.recent_activity").to_string())
-                .relative()
-                .w_full()
-                .flex_1()
-                .min_h_0()
-                .overflow_hidden()
-                .child(
-                    v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
-                        visible_range
-                            .map(|index| {
-                                activity_rows.rows.get(index).map_or_else(
-                                    || div().into_any_element(),
-                                    |row| {
-                                        let output_action = row.has_output.then(|| {
-                                            let view = weak_view.clone();
-                                            let output_id = row.id.clone();
-                                            let output_title = row.title.to_string();
-                                            desktop_button(format!("activity-output-{}", row.id))
-                                                .icon(IconName::Terminal)
-                                                .ghost()
-                                                .small()
-                                                .accessibility_label(
-                                                    rust_i18n::t!(
-                                                        "app.inspector.view_output_for",
-                                                        title = output_title.as_str()
-                                                    )
-                                                    .to_string(),
-                                                )
-                                                .tooltip(
-                                                    rust_i18n::t!("app.inspector.view_captured_output").to_string(),
-                                                )
-                                                .on_click(move |_, window, app| {
-                                                    if let Some(view) = view.upgrade() {
-                                                        view.update(app, |view, cx| {
-                                                            view.select_activity_output(output_id.clone(), window, cx);
-                                                        });
-                                                    }
-                                                })
-                                                .into_any_element()
-                                        });
-                                        Self::render_activity_row(
-                                            row,
-                                            row_colors,
-                                            activity_row_height,
-                                            index + 1,
-                                            activity_count,
-                                            output_action,
-                                        )
-                                        .into_any_element()
-                                    },
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .track_scroll(&self.activity_scroll),
-                )
-                .child(Scrollbar::vertical(&self.activity_scroll)),
-        );
-        body.into_any_element()
-    }
-
-    pub(super) fn render_activity_status_indicator(
-        id_prefix: &str,
-        row_id: &str,
-        state: ActivityState,
-        color: gpui_kit::Hsla,
-    ) -> AnyElement {
-        if state == ActivityState::Running {
-            div()
-                .id(format!("{id_prefix}-{row_id}-spinner"))
-                .test_support()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(Spinner::new().small().color(color))
-                .into_any_element()
-        } else {
-            let icon = match state {
-                ActivityState::Completed => IconName::Check,
-                ActivityState::Failed | ActivityState::Interrupted => IconName::X,
-                ActivityState::Running | ActivityState::Other => IconName::Activity,
-            };
-            Icon::new(icon).small().text_color(color).into_any_element()
-        }
-    }
-
-    pub(super) fn activity_status_color(
-        state: ActivityState,
-        colors: gpui_kit::component::theme::ThemeColor,
-    ) -> gpui_kit::Hsla {
-        match state {
-            ActivityState::Running => colors.primary,
-            ActivityState::Completed => colors.success,
-            ActivityState::Failed => colors.danger,
-            ActivityState::Interrupted => colors.warning,
-            // Subdued rows still carry small text, so they use the brighter
-            // secondary ramp instead of the caption-grade muted floor.
-            ActivityState::Other => themes::muted_text(&colors),
-        }
-    }
-
-    /// Transcript tool-row title tone: finished work drops to the secondary
-    /// ramp so primary prose keeps the column, while live rows stay at full
-    /// foreground. The status indicator keeps its semantic color either way,
-    /// so state is never carried by the title tone alone.
-    pub(super) fn tool_row_title_color(
-        state: ActivityState,
-        colors: gpui_kit::component::theme::ThemeColor,
-    ) -> gpui_kit::Hsla {
-        if state == ActivityState::Completed {
-            themes::muted_text(&colors)
-        } else {
-            colors.foreground
-        }
-    }
-
-    fn render_activity_row(
-        row: &ActivityRow,
-        colors: gpui_kit::component::theme::ThemeColor,
-        row_height: f32,
-        position: usize,
-        set_size: usize,
-        output_action: Option<AnyElement>,
-    ) -> impl IntoElement {
-        let status_color = Self::activity_status_color(row.state, colors);
-        let status = gpui_kit::SharedString::from(row.status.as_str());
-        let mut row_element =
-            div()
-                .id(format!("activity-{}", row.id))
-                .test_support()
-                .role(gpui_kit::Role::ListItem)
-                .aria_label(row.title.clone())
-                .aria_description(status.clone())
-                .aria_position_in_set(position)
-                .aria_size_of_set(set_size)
-                .w_full()
-                .h(px(row_height))
-                .flex()
-                .items_center()
-                .gap_2()
-                .px_2()
-                .py_1()
-                .child(div().flex().items_center().justify_center().flex_shrink_0().child(
-                    Self::render_activity_status_indicator("activity-indicator", &row.id, row.state, status_color),
-                ))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .justify_center()
-                        .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
-                        .child(div().text_xs().truncate().text_color(themes::muted_text(&colors)).child(status)),
-                );
-        if let Some(output_action) = output_action {
-            row_element = row_element.child(div().flex_shrink_0().child(output_action));
-        }
-        row_element
     }
 }
 

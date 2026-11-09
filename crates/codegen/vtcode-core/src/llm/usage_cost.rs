@@ -15,6 +15,7 @@ use vtcode_config::models::ModelPricing;
 use crate::llm::provider::ToolDefinition;
 #[cfg(test)]
 use crate::llm::provider::Usage as ProviderUsage;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len_u64;
 
 /// Estimate the token overhead of sending `tools` in the request payload.
 ///
@@ -36,7 +37,7 @@ pub fn estimate_tool_definition_tokens(tools: &[ToolDefinition]) -> u64 {
             serde_json::to_writer(&mut buf, tool).map(|_| buf.len() as u64).unwrap_or(0)
         })
         .sum();
-    total_bytes.div_ceil(4)
+    heuristic_tokens_from_byte_len_u64(total_bytes)
 }
 
 pub use vtcode_llm::usage_cost::{

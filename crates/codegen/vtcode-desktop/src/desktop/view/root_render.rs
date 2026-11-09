@@ -5,11 +5,9 @@ impl DesktopView {
     /// Native window title: the selected thread title, or the app name when
     /// no thread is selected or its title is blank.
     pub(super) fn window_title(&self) -> &str {
-        self.sessions
-            .iter()
-            .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
-            .and_then(|session| session.title.as_deref())
-            .filter(|title| !title.trim().is_empty())
+        self.selected_session_id
+            .as_deref()
+            .and_then(|id| self.session_title(id))
             .unwrap_or(app::NAME)
     }
 }
@@ -21,11 +19,11 @@ impl Render for DesktopView {
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
         let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
         let navigation_on_right = self.preferences.navigation_on_right();
-        // Compact layout: an open panel yields the sidebar to its rail so the
-        // embedded slot stays usable. The preference is untouched, so the
-        // sidebar returns when the panel closes or the window widens.
-        let narrow_panel =
-            window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT) && self.current_route() != Route::Workspace;
+        // Compact layout: a narrow viewport yields the sidebar to its rail
+        // on every route so the main column (and its title bar) stays
+        // usable. The preference is untouched, so the sidebar returns when
+        // the panel closes or the window widens.
+        let narrow_panel = compact_viewport(window);
         // One identity row: several tabs get the switch strip, while zero or one
         // tab gets the compact header for a thread with content or a selection
         // (a lone tab would only repeat the window title). The header carries
@@ -49,6 +47,7 @@ impl Render for DesktopView {
                     && !self.pending_blank_transition(),
                 |column| column.child(self.render_thread_header(cx.theme())),
             )
+            .when(self.release_notes_banner_visible(), |column| column.child(self.render_release_notes_banner(cx)))
             .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
                 column.child(self.render_navigation_loading(cx))
             })
@@ -181,6 +180,11 @@ impl Render for DesktopView {
                     let _ = view.close_session_from_ui(window, cx);
                 }))
             })
+            .when(self.selected_session_id.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenCliHandoff, _, cx| {
+                    view.open_cli_handoff(cx);
+                }))
+            })
             .when(
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open,
                 |body| {
@@ -214,19 +218,25 @@ impl Render for DesktopView {
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|view, _, _, cx| {
-                    if view.swipe_navigation_allowed() {
-                        view.navigate_back(cx);
+                    if view.swipe_navigation_allowed() && view.swipe_direction_available(NavigationDirection::Back) {
+                        view.arm_pending_swipe(NavigationDirection::Back, cx);
                     }
                 }),
             )
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|view, _, _, cx| {
-                    if view.swipe_navigation_allowed() {
-                        view.navigate_forward(cx);
+                    if view.swipe_navigation_allowed() && view.swipe_direction_available(NavigationDirection::Forward) {
+                        view.arm_pending_swipe(NavigationDirection::Forward, cx);
                     }
                 }),
             )
+            // Trackpads without the system "swipe between pages" gesture
+            // report sideways movement as scroll deltas instead of discrete
+            // swipes; sustained horizontal scrolling navigates the same way.
+            .on_scroll(cx.listener(|view, event: &ScrollEvent, window, cx| {
+                view.handle_swipe_scroll(event, window, cx);
+            }))
             .on_action(cx.listener(|view, _: &ToggleZenMode, window, cx| view.toggle_zen_mode(window, cx)))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
             .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {
@@ -251,7 +261,15 @@ impl Render for DesktopView {
                 }))
             })
             .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
+            .when(self.running, |body| {
+                body.on_action(
+                    cx.listener(|view, _: &BackgroundOperation, _, cx| view.background_foreground_session(cx)),
+                )
+            })
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
+            .on_action(
+                cx.listener(|view, _: &SavePreviewSource, window, cx| view.save_preview_via_shortcut(window, cx)),
+            )
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
             .on_action(cx.listener(|view, _: &OpenThreadBrowser, window, cx| view.open_thread_browser(window, cx)))
             .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {
@@ -259,7 +277,11 @@ impl Render for DesktopView {
                     view.open_conversation_search(session_id, window, cx);
                 }
             }))
-            .on_action(cx.listener(|view, _: &OpenPromptHistory, window, cx| view.open_prompt_history(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenPromptHistory, window, cx| {
+                view.on_prompt_history_shortcut(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &CycleHistoryScope, window, cx| view.cycle_history_scope(window, cx)))
+            .on_action(cx.listener(|view, _: &CancelPromptHistory, window, cx| view.cancel_prompt_history(window, cx)))
             .on_action(cx.listener(|view, _: &TakeLatestQueued, window, cx| {
                 if view.composer.read(cx).focus_handle(cx).is_focused(window) {
                     view.take_latest_queued(cx);
@@ -301,6 +323,15 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, action: &files_panel::OpenFilePath, window, cx| {
                 view.open_file_preview(action.path.to_string(), window, cx)
             }))
+            .on_action(cx.listener(|view, action: &files_panel::RevealFilePath, window, cx| {
+                view.reveal_file_in_finder(&action.path, window, cx)
+            }))
+            .on_action(cx.listener(|view, action: &files_panel::RenameFilePath, window, cx| {
+                view.open_file_rename(action.path.to_string(), window, cx)
+            }))
+            .on_action(cx.listener(|view, action: &files_panel::DeleteFilePath, window, cx| {
+                view.confirm_delete_file(&action.path, window, cx)
+            }))
             .when(self.session_change_allowed(None), |body| {
                 body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
             })
@@ -330,8 +361,23 @@ impl Render for DesktopView {
         } else {
             body = body.child(main);
         }
+        // Armed-swipe pill paints beneath the modals, and only while the
+        // swipe gate passes: a route or overlay opened mid-arm hides the
+        // pill (reopening it if the arm outlives the interruption), while
+        // the commit re-check keeps the navigation itself fail-closed.
+        if self.swipe_arming.pending_direction().is_some() && self.swipe_navigation_allowed() {
+            body = body.child(self.render_swipe_navigation_overlay(cx));
+        }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
+        }
+        if self.license_viewer.is_some() {
+            body = body.child(self.render_license_viewer(cx));
+        }
+        // The changelog viewer paints above the license viewer (opening it
+        // discards that layer) and below the palette popovers.
+        if self.changelog_open {
+            body = body.child(self.render_changelog_viewer(cx));
         }
         if !(self.current_route() == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch)
             && !self.palette_kind.is_composer_popup()
@@ -344,6 +390,10 @@ impl Render for DesktopView {
         }
         if self.running_confirm.is_some() {
             body = body.child(self.render_running_confirm(cx));
+        }
+        // Rename paints above the preview: it can repoint a previewing file.
+        if self.file_rename.is_some() {
+            body = body.child(self.render_file_rename(cx));
         }
         // About is the topmost modal: it opens from the application menu over
         // any route, so it paints last and Escape dismisses it first.

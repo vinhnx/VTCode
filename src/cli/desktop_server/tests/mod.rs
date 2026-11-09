@@ -51,6 +51,21 @@ fn test_startup_context(workspace: &Path) -> StartupContext {
     }
 }
 
+/// Hermetic config workspace: a temp dir containing a `vtcode.toml` so
+/// `ConfigManager::save_config` targets the workspace file. Without a
+/// workspace file `config_path` falls back to the real user config and saves
+/// stomp it (cross-test flakes plus user-config corruption). Same precedent
+/// as the `theme_preferences` writer test.
+pub(super) fn hermetic_workspace() -> tempfile::TempDir {
+    let workspace = tempfile::tempdir().expect("workspace");
+    std::fs::write(
+        workspace.path().join("vtcode.toml"),
+        "# Hermetic desktop-server test workspace; see hermetic_workspace.\n",
+    )
+    .expect("workspace config");
+    workspace
+}
+
 fn test_service_context(
     startup: StartupContext,
     workspace: PathBuf,
@@ -65,6 +80,77 @@ fn test_service_context(
         webmcp: Mutex::new(None),
     };
     (context, receiver)
+}
+
+/// Isolated session-store scope: `VT_SESSION_DIR` rooted at a temp dir.
+/// Restores the environment on drop. Tests using this must be `#[serial]`.
+struct IsolatedSessionStore {
+    _temp: tempfile::TempDir,
+    _env: vtcode_commons::env_lock::EnvGuard,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl IsolatedSessionStore {
+    fn new() -> Self {
+        let temp = tempfile::tempdir().expect("sessions dir");
+        let env = vtcode_commons::env_lock::lock();
+        let previous = std::env::var_os(vtcode_core::utils::session_archive::SESSION_DIR_ENV);
+        env.set_var(vtcode_core::utils::session_archive::SESSION_DIR_ENV, temp.path());
+        Self { _temp: temp, _env: env, previous }
+    }
+
+    fn path(&self) -> &Path {
+        self._temp.path()
+    }
+}
+
+impl Drop for IsolatedSessionStore {
+    fn drop(&mut self) {
+        self._env
+            .restore_var(vtcode_core::utils::session_archive::SESSION_DIR_ENV, self.previous.clone());
+    }
+}
+
+/// Run a runloop-booting test body on a multi-thread runtime with
+/// production-like stacks. The desktop service runs its workers at 8 MiB
+/// (`main.rs`), and unoptimized test builds overflow the default 2 MiB test
+/// thread; 16 MiB matches `MAIN_THREAD_STACK_BYTES` and `scripts/run.sh`.
+pub(super) fn block_on_with_desktop_stack<F: Future>(future: F) -> F::Output {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(16 * 1024 * 1024)
+        .build()
+        .expect("test runtime")
+        .block_on(future)
+}
+
+pub(super) async fn seed_archive(
+    sessions: &Path,
+    session_id: &str,
+    workspace: &Path,
+    messages: Vec<vtcode_core::utils::session_archive::SessionMessage>,
+) {
+    let snapshot = vtcode_core::utils::session_archive::SessionSnapshot {
+        metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata::new(
+            "workspace",
+            workspace.to_string_lossy(),
+            "model",
+            "provider",
+            "theme",
+            "medium",
+        ),
+        started_at: chrono::Utc::now(),
+        ended_at: chrono::Utc::now(),
+        total_messages: messages.len(),
+        distinct_tools: Vec::new(),
+        transcript: vec!["hello".into()],
+        messages,
+        progress: None,
+        error_logs: Vec::new(),
+    };
+    vtcode_commons::fs::write_private_json_file(&sessions.join(format!("{session_id}.json")), &snapshot)
+        .await
+        .expect("seed archive");
 }
 
 fn test_git(workspace: &Path, args: &[&str]) {
@@ -111,6 +197,7 @@ fn review_item(id: &str, patch: &str) -> vtcode_core::exec::events::ThreadItem {
             changes: vec![FileUpdateChange {
                 path: "src/app.rs".into(),
                 kind: PatchChangeKind::Update,
+                terminators_normalized: None,
             }],
             status: PatchApplyStatus::Completed,
             unified_diff: Some(patch.into()),
@@ -128,6 +215,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
         id: id.into(),
         context: None,
         details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: format!("{id}-call"),
             tool_call_id: None,
             spool_path: spool_path.map(str::to_owned),
@@ -139,10 +227,15 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
     }
 }
 
+mod cancel_watchdog;
 mod config_auth;
+mod config_restart;
+mod exec_commands;
 mod model_review;
+mod recent_prompts;
 mod secret_store;
 mod session_history;
+mod session_load_probe;
 mod shutdown_turns;
 mod spooled_scope;
 mod startup_interaction;
@@ -150,4 +243,5 @@ mod stop_signal;
 mod storage;
 mod terminal_pump;
 mod turn_queue;
+mod turn_undo;
 mod update_status;

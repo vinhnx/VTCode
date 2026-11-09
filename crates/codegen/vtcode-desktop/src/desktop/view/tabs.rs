@@ -6,6 +6,7 @@
 //! Tab-scoped menu items dispatch payload actions (the first in this crate)
 //! because popup menus cannot run view callbacks directly.
 
+use super::session_nav::step_highlight_order;
 use super::*;
 use gpui_kit::Action;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -45,12 +46,29 @@ pub(super) fn session_row_menu(menu: PopupMenu, session_id: &str, tabbed: bool) 
         .menu("Delete thread…", Box::new(DeleteThread { session_id: session_id.into() }))
 }
 
+/// Items for one thread tab's right-click menu. Kit gives `Tab` no wrapper
+/// to own a menu (`.context_menu()` returns a `ContextMenu<Tab>` the bar
+/// cannot take back), so the tab-surface trigger and the close button each
+/// carry these items and together cover the whole tab.
+fn thread_tab_menu(menu: PopupMenu, session_id: &str) -> PopupMenu {
+    menu.menu("Close tab", Box::new(CloseThreadTab { session_id: session_id.into() }))
+        .menu("Close other tabs", Box::new(CloseOtherThreadTabs { session_id: session_id.into() }))
+        .separator()
+        .menu("Copy thread title", Box::new(CopyThreadTitle { session_id: session_id.into() }))
+}
+
 impl DesktopView {
     /// Track a freshly selected session as an open tab. Order is first-open;
-    /// selection stays in [`DesktopView::selected_session_id`].
+    /// selection stays in [`DesktopView::selected_session_id`]. Every
+    /// selection path funnels through here, so this is also where the strip
+    /// reveals the tab: Kit only reveals on clicks, and `scroll_to_item`
+    /// scrolls minimally, making this a no-op for fully visible tabs.
     pub(super) fn ensure_tab(&mut self, session_id: String) {
         if !self.open_tabs.iter().any(|tab| tab == &session_id) {
-            self.open_tabs.push(session_id);
+            self.open_tabs.push(session_id.clone());
+        }
+        if let Some(position) = self.open_tabs.iter().position(|tab| tab == &session_id) {
+            self.tab_strip_scroll.scroll_to_item(position);
         }
     }
 
@@ -152,100 +170,232 @@ impl DesktopView {
         session_display_title(session_id, title.as_deref())
     }
 
-    /// Horizontal quick-switch strip: one button per open tab with a close
-    /// affordance, a trailing new-thread button, and a right-click menu per
-    /// tab. Rendered only while more than one tab is open; zero/single-tab
-    /// windows use the compact thread header instead.
+    /// Move the keyboard highlight across open tabs (Left/Right with the
+    /// strip focused), stepping the shared thread highlight in first-open
+    /// order. Clamps at both ends; the strip reveals the highlight when it
+    /// would sit outside the visible tabs.
+    pub(super) fn move_tab_focus(&mut self, next: bool, cx: &mut Context<Self>) {
+        let target = {
+            let order: Vec<&str> = self.open_tabs.iter().map(String::as_str).collect();
+            step_highlight_order(&order, self.keyboard_focused_session.as_deref(), next)
+                .and_then(|position| order.get(position).map(|id| (position, id.to_string())))
+        };
+        let Some((position, session_id)) = target else {
+            return;
+        };
+        self.keyboard_focused_session = Some(session_id);
+        self.tab_strip_scroll.scroll_to_item(position);
+        cx.notify();
+    }
+
+    /// Jump the tab highlight to the first/last open tab (Home/End).
+    pub(super) fn move_tab_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
+        let target = if first {
+            self.open_tabs.first().map(|id| (0, id.clone()))
+        } else {
+            let last = self.open_tabs.len().saturating_sub(1);
+            self.open_tabs.last().map(|id| (last, id.clone()))
+        };
+        let Some((position, session_id)) = target else {
+            return;
+        };
+        self.keyboard_focused_session = Some(session_id);
+        self.tab_strip_scroll.scroll_to_item(position);
+        cx.notify();
+    }
+
+    /// Load the highlighted tab (Enter). The strip is a subset view: a
+    /// highlight left on an untabbed thread is position memory for the
+    /// thread lists, not a visible tab action, so Enter only fires when
+    /// the highlight names an open tab.
+    pub(super) fn activate_focused_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let visible = self
+            .keyboard_focused_session
+            .as_deref()
+            .is_some_and(|id| self.open_tabs.iter().any(|tab| tab == id));
+        if visible {
+            self.activate_focused_session(window, cx);
+        }
+    }
+
+    /// Horizontal quick-switch strip: one folder tab per open thread with a
+    /// close affordance, a trailing new-thread button, an overflow menu, and
+    /// a right-click menu per tab. Rendered only while more than one tab is
+    /// open; zero/single-tab windows use the compact thread header instead.
+    /// Tabs take no keyboard focus themselves (Kit contract), so the strip
+    /// keeps its single tab stop while Left/Right/Home/End rove the shared
+    /// thread highlight. The bar sits flush on the canvas so the selected
+    /// tab joins the conversation below it.
     pub(super) fn render_thread_tabs(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let mut strip = div()
-            .id("thread-tabs")
-            .test_support()
-            .flex()
-            .items_center()
-            .gap_1()
-            .w_full()
-            .pb_1();
+        let selected_position = self
+            .selected_session_id
+            .as_deref()
+            .and_then(|id| self.open_tabs.iter().position(|tab| tab == id));
+        // No width cap (Kit default): tabs keep their natural width and the
+        // strip scrolls with an overflow menu. Clipped close buttons stay
+        // clickable through explicit reveal — keyboard moves reveal the
+        // highlight, and tests scroll via click_thread_tab_close.
+        let entries = self
+            .open_tabs
+            .iter()
+            .map(|id| (id.clone(), self.tab_title(id)))
+            .collect::<Vec<_>>();
+        let current = self.selected_session_id.clone();
+        let weak_view = cx.entity().downgrade();
+        let overflow = desktop_button("thread-tabs-menu")
+            .ghost()
+            .xsmall()
+            .dropdown_caret(true)
+            .accessibility_label("Open threads")
+            .tooltip("Open threads")
+            .dropdown_menu(move |menu, _, _| {
+                let mut menu = menu.scrollable(true);
+                for (id, title) in &entries {
+                    let id = id.clone();
+                    let view = weak_view.clone();
+                    menu = menu.item(
+                        gpui_kit::component::menu::PopupMenuItem::new(title.clone())
+                            .checked(current.as_deref() == Some(id.as_str()))
+                            .on_click(move |_, window, cx| {
+                                if let Some(view) = view.upgrade() {
+                                    view.update(cx, |view, cx| {
+                                        if let Some(index) = view.open_tabs.iter().position(|tab| tab == &id) {
+                                            // Immediate feedback; ensure_tab re-reveals once the load lands.
+                                            view.tab_strip_scroll.scroll_to_item(index);
+                                            view.keyboard_focused_session = Some(id.clone());
+                                            let _ = view.load_session_from_ui(id.clone(), window, cx);
+                                        }
+                                    });
+                                }
+                            }),
+                    );
+                }
+                menu
+            })
+            // Right-edge trigger: keep the TopRight anchor Kit's menu button
+            // used so the popup opens leftward instead of past the window.
+            .anchor(Anchor::TopRight);
+        let mut bar = desktop_folder_tab_bar("thread-tabs-bar")
+            .track_scroll(&self.tab_strip_scroll)
+            .suffix(
+                div().flex().items_center().child(overflow).child(
+                    desktop_button("thread-tab-new")
+                        .icon(IconName::Plus)
+                        .ghost()
+                        .small()
+                        .accessibility_label("New thread")
+                        .tooltip("New thread")
+                        .desktop_disabled(!self.new_thread_available())
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let _ = this.create_session_from_ui(window, cx);
+                        })),
+                ),
+            )
+            .on_click(cx.listener(|view, index: &usize, window, cx| {
+                let Some(session_id) = view.open_tabs.get(*index).cloned() else {
+                    return;
+                };
+                // Clicking anchors the keyboard highlight as position memory,
+                // like thread-list rows.
+                view.keyboard_focused_session = Some(session_id.clone());
+                let _ = view.load_session_from_ui(session_id, window, cx);
+            }));
+        if let Some(index) = selected_position {
+            bar = bar.selected_index(index);
+        }
         for session_id in &self.open_tabs {
             let id = session_id.clone();
             let title = self.tab_title(&id);
             let selected = self.selected_session_id.as_deref() == Some(id.as_str());
             let running = self.is_session_running(&id);
-            let select_id = id.clone();
+            let keyboard_focused = self.keyboard_focused_session.as_deref() == Some(id.as_str());
             let close_id = id.clone();
             let menu_id = id.clone();
-            strip = strip.child(
+            let trigger_menu_id = id.clone();
+            // The rail slot is constant width and always mounted: the accent
+            // marker only mounts while focused, so the highlight never
+            // reflows the tab. It spans the icon lane rather than the full
+            // tab — Kit owns the tab box, so a full-height overlay has no
+            // anchor that survives clipping.
+            let rail = div().w(px(2.)).self_stretch().when(keyboard_focused, |slot| {
+                slot.child(
+                    div()
+                        .id(format!("thread-tab-focus-rail-{id}"))
+                        .test_support()
+                        .w_full()
+                        .h_full()
+                        .bg(colors.accent),
+                )
+            });
+            // The Kit Tab carries the accessible name and selected state
+            // (addressable by its index id); the overlay below keeps the
+            // historic per-tab id for clicks and menus.
+            let tab_name = if running {
+                rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = title.as_str()).to_string()
+            } else if selected {
+                format!("Current thread: {title}")
+            } else {
+                format!("Switch to thread: {title}")
+            };
+            let mut tab = Tab::new()
+                .label(title.clone())
+                .aria_label(tab_name)
+                .aria_selected(selected)
+                .when(keyboard_focused, |tab| tab.aria_active_descendant())
+                .prefix(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(rail)
+                        .child(Icon::new(IconName::MessageSquare).small()),
+                )
+                .suffix(
+                    desktop_button(format!("thread-tab-close-{id}"))
+                        .icon(IconName::X)
+                        .ghost()
+                        .xsmall()
+                        .accessibility_label(format!("Close tab {title}"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            // The close button nests inside the tab: stop the
+                            // click here or it bubbles up and selects the tab.
+                            cx.stop_propagation();
+                            this.close_tab(&close_id, window, cx);
+                        }))
+                        // The surface trigger below sits under the suffix, so
+                        // the close button carries the same menu items to keep
+                        // right-click coverage whole-tab.
+                        .context_menu(move |menu, _, _| thread_tab_menu(menu, &menu_id)),
+                );
+            if running {
+                tab = tab.child(running_indicator(format!("thread-tab-running-{id}"), &colors));
+            }
+            // Transparent menu trigger over the tab body. It keeps the
+            // historic per-tab test id: clicks bubble through to the tab, so
+            // selection and right-click coverage stay id-addressable.
+            tab = tab.child(
                 div()
-                    .id(format!("thread-tab-row-{id}"))
-                    .flex()
-                    .items_center()
-                    .flex_shrink_1()
-                    .min_w_0()
-                    .max_w(px(220.))
-                    .child(
-                        desktop_button(format!("thread-tab-{id}"))
-                            .icon(IconName::MessageSquare)
-                            .ghost()
-                            .toggled(selected)
-                            .with_size(gpui_kit::component::Size::Medium)
-                            .flex_1()
-                            .min_w_0()
-                            .accessibility_label(if running {
-                                rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = title.as_str()).to_string()
-                            } else if selected {
-                                format!("Current thread: {title}")
-                            } else {
-                                format!("Switch to thread: {title}")
-                            })
-                            .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                            // The label is a child so the tab can carry body-size
-                            // type: the kit's small/medium buttons pin text_sm,
-                            // which reads thin and small for a tab title on a
-                            // dark surface. Medium weight keeps the stems dense
-                            // (smoother at this size) while the color stays
-                            // inherited so hover/selected states keep working.
-                            .child(div().min_w_0().truncate().text_base().font_medium().child(title.clone()))
-                            .when(running, |button| {
-                                button.child(running_indicator(format!("thread-tab-running-{id}"), &colors))
-                            })
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                let _ = this.load_session_from_ui(select_id.clone(), window, cx);
-                            })),
-                    )
-                    .child(
-                        desktop_button(format!("thread-tab-close-{id}"))
-                            .icon(IconName::X)
-                            .ghost()
-                            .xsmall()
-                            .accessibility_label(format!("Close tab {title}"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.close_tab(&close_id, window, cx);
-                            })),
-                    )
-                    .context_menu(move |menu, _, _| {
-                        menu.menu("Close tab", Box::new(CloseThreadTab { session_id: menu_id.clone().into() }))
-                            .menu(
-                                "Close other tabs",
-                                Box::new(CloseOtherThreadTabs { session_id: menu_id.clone().into() }),
-                            )
-                            .separator()
-                            .menu("Copy thread title", Box::new(CopyThreadTitle { session_id: menu_id.clone().into() }))
-                    }),
+                    .id(format!("thread-tab-{id}"))
+                    .test_support()
+                    .absolute()
+                    .inset_0()
+                    .context_menu(move |menu, _, _| thread_tab_menu(menu, &trigger_menu_id)),
             );
+            bar = bar.child(tab);
         }
-        strip
-            .child(
-                desktop_button("thread-tab-new")
-                    .icon(IconName::Plus)
-                    .ghost()
-                    .small()
-                    .accessibility_label("New thread")
-                    .tooltip("New thread")
-                    .desktop_disabled(!self.new_thread_available())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        let _ = this.create_session_from_ui(window, cx);
-                    })),
-            )
+        div()
+            .id("thread-tabs")
+            .test_support()
+            .track_focus(&self.tab_strip_focus)
+            .key_context(key_context::THREAD_TABS)
+            .on_action(cx.listener(|view, _: &PreviousThreadTab, _, cx| view.move_tab_focus(false, cx)))
+            .on_action(cx.listener(|view, _: &NextThreadTab, _, cx| view.move_tab_focus(true, cx)))
+            .on_action(cx.listener(|view, _: &FirstThreadTab, _, cx| view.move_tab_focus_edge(true, cx)))
+            .on_action(cx.listener(|view, _: &LastThreadTab, _, cx| view.move_tab_focus_edge(false, cx)))
+            .on_action(cx.listener(|view, _: &OpenSelectedThreadTab, window, cx| view.activate_focused_tab(window, cx)))
+            .w_full()
+            .child(bar)
             .into_any_element()
     }
 }

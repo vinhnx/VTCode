@@ -23,7 +23,7 @@ use super::{
     },
 };
 use crate::tui::config::constants::ui;
-use crate::tui::core_tui::types::LocalAgentEntry;
+use crate::tui::core_tui::types::{ActivePlanEntry, LocalAgentEntry};
 use crate::tui::options::FullscreenInteractionSettings;
 use crate::tui::ui::tui::widgets::SessionWidget;
 
@@ -209,6 +209,15 @@ pub(crate) struct FullscreenSessionState {
     pub(crate) interaction: FullscreenInteractionSettings,
 }
 
+/// Transient jump-landing tint: which transcript line index glows and when
+/// the glow ends. Message-index keying keeps the paint reflow-safe; eviction
+/// and clears drop it rather than shifting a 1.5s cosmetic.
+#[derive(Clone, Debug)]
+pub(crate) struct TranscriptFlash {
+    pub(crate) line_idx: usize,
+    pub(crate) expires_at: Instant,
+}
+
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
@@ -268,6 +277,8 @@ pub struct Session {
     /// Most recent transcript line index that was created or revised.
     /// Backs the minimal Jump-to-last-change navigation (`Ctrl+End`).
     pub(crate) last_change_line_idx: Option<usize>,
+    /// Transient tint on the jump-landing message; expires via `handle_tick`.
+    pub(crate) transcript_flash: Option<TranscriptFlash>,
     should_exit: bool,
     /// Timestamp of the last Ctrl+C press for double-press exit detection.
     pub(crate) last_interrupt_press: Option<Instant>,
@@ -312,6 +323,7 @@ pub struct Session {
     visible_lines_cache: Option<(usize, u16, usize, Arc<Vec<TranscriptLine>>)>,
     pub(crate) queued_inputs: Vec<String>,
     pub(crate) local_agents: Vec<LocalAgentEntry>,
+    pub(crate) active_plan: Option<ActivePlanEntry>,
     local_agents_drawer_visible: bool,
     subprocess_entries: Vec<String>,
     subagent_preview: Option<String>,

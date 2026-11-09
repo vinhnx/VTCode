@@ -304,3 +304,93 @@ fn verification_completion_after_a_later_edit_cannot_clear_the_checkpoint() {
     assert!(tracker.verification_is_pending());
     assert_eq!(tracker.consecutive_mutations, BLIND_EDITING_THRESHOLD);
 }
+
+fn lint_failure(exit_code: i64, stdout_text: &str) -> ToolPipelineOutcome {
+    ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+        output: json!({"exit_code": exit_code, "stdout": stdout_text}),
+        stdout: Some(stdout_text.trim().to_string()),
+        modified_files: vec![],
+        command_success: false,
+    })
+}
+
+#[test]
+fn identical_consecutive_verifier_failures_surface_stalled_guidance() {
+    let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
+    let lint_args = json!({"cmd": "npx --yes markdownlint-cli2 README.md"});
+    let first = lint_failure(1, "README.md:54 error MD060\n");
+
+    update_repetition_tracker(&mut tracker, &first, tools::EXEC_COMMAND, &lint_args);
+    assert!(tracker.take_verifier_failed_guidance().is_some(), "first failure gets standard guidance");
+    assert!(tracker.take_verifier_stalled_guidance().is_none(), "first failure is not a stall");
+
+    update_repetition_tracker(
+        &mut tracker,
+        &lint_failure(1, "README.md:54 error MD060\n"),
+        tools::EXEC_COMMAND,
+        &lint_args,
+    );
+    let stalled = tracker.take_verifier_stalled_guidance().expect("identical rerun must stall");
+    assert!(stalled.contains("identical"), "stall guidance must name the repetition: {stalled}");
+    assert!(stalled.contains("Do not re-run"), "stall guidance must stop the loop: {stalled}");
+    assert!(tracker.take_verifier_failed_guidance().is_none(), "stall replaces standard guidance");
+    assert!(tracker.verification_is_pending(), "stall keeps the gate pending");
+}
+
+#[test]
+fn changed_verifier_output_or_command_does_not_stall() {
+    let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
+    let lint_args = json!({"cmd": "npx --yes markdownlint-cli2 README.md"});
+
+    // Same command, evolved findings: progress, not a stall.
+    update_repetition_tracker(
+        &mut tracker,
+        &lint_failure(1, "README.md:54 error MD060\n"),
+        tools::EXEC_COMMAND,
+        &lint_args,
+    );
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+    update_repetition_tracker(
+        &mut tracker,
+        &lint_failure(1, "README.md:54 error MD060\nREADME.md:60 error MD013\n"),
+        tools::EXEC_COMMAND,
+        &lint_args,
+    );
+    assert!(tracker.take_verifier_stalled_guidance().is_none(), "evolved output must not stall");
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+
+    // Same findings, different command: a new question, not a rerun.
+    update_repetition_tracker(
+        &mut tracker,
+        &lint_failure(1, "README.md:54 error MD060\nREADME.md:60 error MD013\n"),
+        tools::EXEC_COMMAND,
+        &json!({"cmd": "npx --yes markdownlint-cli2 README.md docs/CONTRIBUTING.md"}),
+    );
+    assert!(tracker.take_verifier_stalled_guidance().is_none(), "new command must not stall");
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+}
+
+#[test]
+fn mutation_and_success_clear_verifier_stall_state() {
+    let lint_args = json!({"cmd": "npx --yes markdownlint-cli2 README.md"});
+    let failure = || lint_failure(1, "README.md:54 error MD060\n");
+
+    // A mutation between identical failures means the second run verifies new
+    // content: standard guidance, not a stall.
+    let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
+    update_repetition_tracker(&mut tracker, &failure(), tools::EXEC_COMMAND, &lint_args);
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+    tracker.record_successful_mutation();
+    update_repetition_tracker(&mut tracker, &failure(), tools::EXEC_COMMAND, &lint_args);
+    assert!(tracker.take_verifier_stalled_guidance().is_none(), "post-mutation rerun is fresh evidence");
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+
+    // A successful verification also clears: a later identical failure is new.
+    let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
+    update_repetition_tracker(&mut tracker, &failure(), tools::EXEC_COMMAND, &lint_args);
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+    tracker.mark_verification_complete();
+    update_repetition_tracker(&mut tracker, &failure(), tools::EXEC_COMMAND, &lint_args);
+    assert!(tracker.take_verifier_stalled_guidance().is_none(), "post-success failure is new");
+    assert!(tracker.take_verifier_failed_guidance().is_some());
+}

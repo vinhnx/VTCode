@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::core_tui::session::config::BusyEnterBehavior;
 
 pub(super) fn handle_escape_key(session: &mut Session) -> Option<InlineEvent> {
     // A visible text selection is the innermost dismissible state, so a
@@ -172,6 +173,11 @@ pub(super) fn handle_enter_key(
         };
     }
 
+    if session.core.consume_enter_jump_to_latest() {
+        session.mark_dirty();
+        return None;
+    }
+
     let should_submit_now = slash::should_submit_immediately_from_palette(session);
     let Some(submitted) = take_submitted_input(session) else {
         session.mark_dirty();
@@ -192,10 +198,85 @@ pub(super) fn handle_enter_key(
     // queue snapshots in order. Each plain-Enter stays its own
     // non-batchable turn (only Ctrl+Enter merges). Unblocked slash
     // keeps the existing queue path (blockable slash is rejected
-    // earlier); Ctrl+Enter keeps the queue role.
+    // earlier); Ctrl+Enter keeps the queue role. In steer mode,
+    // plain-text input instead injects into the live turn via `Steer`.
     if session.is_running_activity() {
+        if matches!(session.core.appearance.busy_enter_behavior, BusyEnterBehavior::Steer)
+            && submitted.is_steerable_text()
+        {
+            return Some(InlineEvent::Steer(submitted));
+        }
         session.push_queued_input(submitted.text.clone());
         return Some(InlineEvent::QueueSubmit(submitted));
     }
     Some(InlineEvent::Submit(submitted))
+}
+
+pub(super) fn handle_left_key(
+    session: &mut Session,
+    has_control: bool,
+    has_shift: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> Option<InlineEvent> {
+    if session.core.input_enabled() {
+        let tmux_queue_edit = has_shift
+            && !has_control
+            && !has_command
+            && !has_alt
+            && crate::tui::core_tui::session::terminal_capabilities::queued_input_edit_uses_shift_left()
+            && !session.core.queued_inputs.is_empty();
+        if tmux_queue_edit {
+            if let Some(latest) = session.pop_latest_queued_input() {
+                session.clear_inline_prompt_suggestion();
+                session.core.input_manager.set_content(latest);
+                session
+                    .core
+                    .set_input_compact_mode(session.input_compact_placeholder().is_some());
+                session.core.scroll_manager.set_offset(0);
+                slash::update_slash_suggestions(session);
+            }
+            session.mark_dirty();
+            return Some(InlineEvent::EditQueue);
+        }
+
+        session.clear_inline_prompt_suggestion();
+        if has_shift && has_command {
+            session.select_to_start_of_line();
+        } else if has_shift {
+            session.select_left();
+        } else if has_command {
+            session.move_to_start_of_line();
+        } else if has_alt {
+            session.move_left_word();
+        } else {
+            session.move_left();
+        }
+        session.mark_dirty();
+    }
+    None
+}
+
+pub(super) fn handle_right_key(
+    session: &mut Session,
+    has_shift: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> Option<InlineEvent> {
+    if session.core.input_enabled() {
+        session.clear_inline_prompt_suggestion();
+        if has_shift && has_command {
+            session.select_to_end_of_line();
+        } else if has_shift {
+            session.select_right();
+        } else if has_command {
+            session.move_to_end_of_line();
+        } else if has_alt {
+            session.move_right_word();
+        } else {
+            session.move_right();
+        }
+        session.mark_dirty();
+    }
+    None // Right arrow never triggers any event, including editor launch
 }

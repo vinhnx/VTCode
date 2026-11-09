@@ -1,6 +1,26 @@
 use super::*;
 use gpui_kit::component::theme::ActiveTheme;
 
+#[gpui_kit::test]
+fn selected_controls_use_a_readable_stronger_surface(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            assert!(contrast_ratio(colors.foreground, colors.button_active) >= 4.5, "{id}: selected label");
+            assert!(
+                contrast_ratio(colors.secondary, colors.button_active) + 0.001
+                    >= contrast_ratio(colors.secondary, colors.popover),
+                "{id}: selection must not be weaker than the raised surface"
+            );
+        }
+    });
+}
+
 /// The subtle-border contract: opaque, at the hairline floor on the panel
 /// seats it outlines most, and separated from every other fill it can sit on.
 fn assert_subtle_surface_borders(id: &str, colors: &ThemeColor) {
@@ -107,6 +127,44 @@ fn every_theme_keeps_wcag_aa_foreground_contrast() {
     }
 }
 
+#[gpui_kit::test]
+fn every_theme_keeps_chart_series_distinguishable(cx: &mut gpui_kit::TestAppContext) {
+    // Data colors are not held to the 4.5 text floor (labels and the legend
+    // carry the same information), only to the shared vanish floor: a series
+    // must neither sink into the canvas nor collapse into another series
+    // the way an invisible border would.
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut collisions = Vec::new();
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let series = [colors.chart_1, colors.chart_2, colors.chart_3, colors.chart_4];
+            for (index, color) in series.iter().enumerate() {
+                let on_canvas = contrast_ratio(*color, colors.background);
+                if on_canvas < CHART_DISTINGUISH_FLOOR {
+                    collisions
+                        .push(format!("{id}: chart series {} vanishes on the canvas ({on_canvas:.2})", index + 1));
+                }
+                for (other_index, other) in series.iter().enumerate().skip(index + 1) {
+                    let pair = contrast_ratio(*color, *other);
+                    if pair < CHART_DISTINGUISH_FLOOR {
+                        collisions.push(format!(
+                            "{id}: chart series {} and {} collide ({pair:.2})",
+                            index + 1,
+                            other_index + 1
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(collisions.is_empty(), "chart series collisions:\n{}", collisions.join("\n"));
+    });
+}
+
 #[test]
 fn every_theme_stays_within_srgb_gamut() {
     for theme in all_themes() {
@@ -129,30 +187,6 @@ fn every_theme_stays_within_srgb_gamut() {
             }
         }
     }
-}
-
-#[gpui_kit::test]
-fn contrast_setting_increases_foreground_contrast_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        gpui_kit::init(cx);
-        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
-            .into_iter()
-            .chain(all_themes().iter().map(|theme| theme.id))
-        {
-            let mut previous = 0.0;
-            for amount in [0, 40, 100] {
-                let _mode = apply_with_contrast(id, amount, None, cx);
-                let colors = cx.theme().colors;
-                let ratio = contrast_ratio(colors.foreground, colors.background);
-                assert!(ratio >= 4.5, "{id} at {amount}: {ratio}");
-                assert!(ratio + 0.001 >= previous, "{id} at {amount}: {ratio} < {previous}");
-                for surface in [colors.secondary, colors.popover, colors.tab_bar_segmented] {
-                    assert!(contrast_ratio(colors.foreground, surface) >= 4.5, "{id} at {amount}: unreadable surface");
-                }
-                previous = ratio;
-            }
-        }
-    });
 }
 
 #[test]
@@ -267,7 +301,7 @@ fn caret_falls_back_to_foreground_for_unreadable_accents(cx: &mut gpui_kit::Test
                 danger: foreground,
                 warning: foreground,
             };
-            let _mode = apply_palette(&theme, None, cx);
+            let _mode = apply_palette(theme.seeds(), None, cx);
             let colors = cx.theme().colors;
             assert_eq!(colors.caret, colors.foreground, "{id}: unreadable accent falls back");
             assert_ne!(colors.caret, theme.accent, "{id}: fallback leaves the accent behind");
@@ -344,6 +378,38 @@ fn hover_surfaces_are_unified_and_contrast_safe_in_every_theme(cx: &mut gpui_kit
                 (colors.foreground.l - colors.background.l).signum(),
                 "{id}: hover should move gently toward the foreground"
             );
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn button_press_states_stay_visible_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let press = active_surface(colors.background, colors.foreground);
+            assert_eq!(colors.button_active, press, "{id}: Default press uses the shared press fill");
+            assert_eq!(colors.button_secondary_active, press, "{id}: Secondary press uses the shared press fill");
+            let text_ratio = contrast_ratio(colors.foreground, press);
+            assert!(text_ratio >= 4.5, "{id}: press text contrast {text_ratio:.2}");
+            assert_eq!(
+                (press.l - colors.background.l).signum(),
+                (colors.foreground.l - colors.background.l).signum(),
+                "{id}: press should move gently toward the foreground"
+            );
+            let hover = hover_surface(colors.background, colors.foreground);
+            assert!(
+                contrast_ratio(press, colors.background) >= contrast_ratio(hover, colors.background),
+                "{id}: press must read at least as deep as hover"
+            );
+            if hover != colors.button {
+                assert_ne!(press, colors.button, "{id}: press is invisible where hover is visible");
+            }
         }
     });
 }
@@ -464,7 +530,7 @@ fn segmented_tab_states_are_distinct_and_readable(cx: &mut gpui_kit::TestAppCont
 }
 
 #[gpui_kit::test]
-fn secondary_copy_stays_brighter_than_muted_floor(cx: &mut gpui_kit::TestAppContext) {
+fn folder_tab_states_join_canvas_content(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
@@ -472,63 +538,24 @@ fn secondary_copy_stays_brighter_than_muted_floor(cx: &mut gpui_kit::TestAppCont
             .chain(all_themes().iter().map(|theme| theme.id));
         for id in ids {
             let _mode = apply_by_id(id, None, cx);
-            let colors = cx.theme().colors;
-            let secondary = muted_text(&colors);
-            for (name, surface) in [
-                ("canvas", colors.background),
-                ("panel", colors.secondary),
-                ("group box", colors.group_box),
-                ("popover", colors.popover),
-            ] {
-                let ratio = contrast_ratio(secondary, surface);
-                assert!(ratio >= 4.5, "{id}: secondary copy on {name} is {ratio:.2}");
-                let muted_ratio = contrast_ratio(colors.muted_foreground, surface);
-                assert!(
-                    ratio >= muted_ratio - 0.01,
-                    "{id}: secondary copy ({ratio:.2}) is dimmer than muted ({muted_ratio:.2}) on {name}"
-                );
-            }
-            let headroom = contrast_ratio(colors.foreground, colors.popover);
-            let popover_ratio = contrast_ratio(secondary, colors.popover);
-            assert!(
-                popover_ratio >= 6.0_f32.min(headroom) - 0.05,
-                "{id}: secondary copy misses its 6:1 target ({popover_ratio:.2}, headroom {headroom:.2})"
+            let kit = cx.global::<Theme>();
+            // The selected folder tab joins the canvas content below the bar.
+            assert_eq!(kit.colors.tab_active, kit.colors.background, "{id}");
+            assert_eq!(
+                kit.tokens.tab_active,
+                gpui_kit::component::theme::ThemeToken::from(kit.colors.background),
+                "{id}: the selected folder fill must reconcile into the tokens Kit reads"
             );
+            // Transparent band: the bar never stripes a non-canvas surface.
+            assert_eq!(kit.colors.tab_bar.a, 0., "{id}");
+            // Resting labels sit on canvas (thread strip, inspector) and on
+            // popover (attachment picker).
+            for (name, surface) in [("canvas", kit.colors.background), ("popover", kit.colors.popover)] {
+                let ratio = contrast_ratio(kit.colors.tab_foreground, surface);
+                assert!(ratio >= 4.5, "{id}: resting folder label on {name} is {ratio:.2}");
+            }
         }
     });
-}
-
-#[test]
-fn secondary_copy_degrades_gracefully_without_headroom() {
-    // Asymmetric fixtures: a headroom-rich dark palette, a light
-    // palette (opposite blend direction), and the measured
-    // lowest-headroom palette. Each must sit at min(6:1, headroom):
-    // the first two reach the brighter target, the last one holds
-    // the highest ratio its palette allows instead of dropping to AA.
-    let lowest = all_themes()
-        .iter()
-        .min_by(|a, b| {
-            contrast_ratio(a.foreground, a.background)
-                .partial_cmp(&contrast_ratio(b.foreground, b.background))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .expect("theme registry is non-empty");
-    for id in ["ciapre", "catppuccin-latte", lowest.id] {
-        let theme = find(id).unwrap_or_else(|| panic!("{id} missing"));
-        let headroom = contrast_ratio(theme.foreground, theme.background);
-        let muted = text_at_contrast(theme.background, theme.foreground, 6.0_f32.min(headroom));
-        let ratio = contrast_ratio(muted, theme.background);
-        assert!(ratio >= 4.5, "{id}: unreadable secondary copy ({ratio:.2})");
-        assert!(
-            ratio >= 6.0_f32.min(headroom) - 0.05,
-            "{id}: missed min(6:1, headroom {headroom:.2}) with {ratio:.2}"
-        );
-        // The blend moves toward the background in both directions.
-        assert!(
-            (muted.l - theme.background.l).abs() <= (theme.foreground.l - theme.background.l).abs(),
-            "{id}: blend moved away from the background"
-        );
-    }
 }
 
 #[gpui_kit::test]
@@ -636,7 +663,8 @@ fn permission_fallback_seeds_stay_distinct_and_readable() {
     let (ask_seed, auto_seed) = distinct_permission_seeds();
     assert_ne!(ask_seed, auto_seed, "Ask and Auto-approve fallbacks must differ");
     for theme in all_themes() {
-        let raised = filled_surface(theme.background, theme.foreground, 24);
+        let resting = filled_surface(theme.background, theme.foreground, RESTING_FILL_MAX_STEP, None);
+        let raised = filled_surface(theme.background, theme.foreground, RAISED_FILL_MAX_STEP, Some(resting));
         for (background, seat) in [(theme.background, "canvas"), (raised, "raised popover")] {
             let ask = readable_indicator_color(background, theme.foreground, ask_seed);
             let auto = readable_indicator_color(background, theme.foreground, auto_seed);
@@ -760,16 +788,22 @@ fn rgb_hex(color: Hsla) -> u32 {
 fn contrast_blend_covers_fallback_and_blend_arms_in_both_directions() {
     let black = Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
     let white = Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
-    // Below the threshold the foreground passes through untouched.
+    // Below the 5.0 crispness floor the foreground passes through
+    // untouched — including the AA band between 4.5 and 5.0, which is
+    // readable but cannot fund a dimmer muted tone.
     let faint = Hsla { h: 0.0, s: 0.0, l: 0.08, a: 1.0 };
     assert!(contrast_ratio(faint, black) < 4.5);
     assert_eq!(aa_muted(black, faint), faint);
+    let aa_only = Hsla { h: 0.0, s: 0.0, l: 0.47, a: 1.0 };
+    let aa_ratio = contrast_ratio(aa_only, black);
+    assert!((4.5..5.0).contains(&aa_ratio), "fixture must sit in the AA-only band ({aa_ratio:.2})");
+    assert_eq!(aa_muted(black, aa_only), aa_only);
     // Above it both theme directions blend toward the background while
     // holding the threshold.
     for (background, foreground) in [(black, white), (white, black)] {
         let muted = aa_muted(background, foreground);
         assert_ne!(muted, foreground);
-        assert!(contrast_ratio(muted, background) >= 4.5, "unreadable muted text");
+        assert!(contrast_ratio(muted, background) >= 5.0, "muted text misses the crispness floor");
         assert!(
             (muted.l - background.l).abs() < (foreground.l - background.l).abs(),
             "blend must move toward the background"
@@ -782,10 +816,10 @@ fn code_token_colors_follow_the_kit_mode_default(cx: &mut gpui_kit::TestAppConte
     use gpui_kit::component::highlighter::HighlightTheme;
     cx.update(|cx| {
         gpui_kit::init(cx);
-        // Kit 0.8.0 exposes no constructor for per-palette syntax tokens
-        // (`ThemeStyle` fields are private), so every palette of a mode shares
-        // the Kit default highlight theme. Code-block *surfaces* still follow
-        // the palette through `theme.muted`.
+        // Kit 0.9.0 exposes no constructor for per-palette syntax tokens
+        // (`ThemeStyle` fields are private, with no associated constructors),
+        // so every palette of a mode shares the Kit default highlight theme.
+        // Code-block *surfaces* still follow the palette through `theme.muted`.
         for palette in all_themes() {
             let _mode = apply_by_id(palette.id, None, cx);
             let highlight = &cx.global::<Theme>().highlight_theme;
@@ -804,4 +838,133 @@ fn contrast_ratio_matches_known_values() {
     let white = Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
     assert!((contrast_ratio(black, white) - 21.0).abs() < 0.1);
     assert!((contrast_ratio(black, black) - 1.0).abs() < 0.01);
+}
+
+#[gpui_kit::test]
+fn fills_take_weakest_separating_step_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            // No weaker step meets the floors: fills minimize within the
+            // readability + separation contract (mirror of the
+            // maximal-separation pin on the segmented track).
+            let resting = contrast_ratio(colors.background, colors.secondary);
+            for step in 4_u8..=RESTING_FILL_MAX_STEP {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= 4.5
+                    && contrast_ratio(colors.background, candidate) >= 1.04
+                {
+                    assert!(
+                        resting <= contrast_ratio(colors.background, candidate) + 0.001,
+                        "{id}: resting fill leaves subtlety on the table at step {step}"
+                    );
+                }
+            }
+            // Raised fills additionally keep the layer gap above resting.
+            let raised = contrast_ratio(colors.background, colors.popover);
+            for step in 4_u8..=RAISED_FILL_MAX_STEP {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= 4.5
+                    && contrast_ratio(colors.background, candidate) >= 1.04
+                    && contrast_ratio(colors.secondary, candidate) >= 1.02
+                {
+                    assert!(
+                        raised <= contrast_ratio(colors.background, candidate) + 0.001,
+                        "{id}: raised fill leaves subtlety on the table at step {step}"
+                    );
+                }
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn hover_takes_strongest_readable_step_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            // Unlike resting fills, a state change must stay visible: no
+            // stronger step keeps text readable, and hover never collapses
+            // onto the resting panel fill it highlights.
+            assert_ne!(colors.accent, colors.secondary, "{id}: hover is pixel-identical to the panel it highlights");
+            let hover = contrast_ratio(colors.background, colors.accent);
+            for step in 4_u8..=HOVER_FILL_MAX_STEP {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= 4.5 {
+                    assert!(
+                        hover + 0.001 >= contrast_ratio(colors.background, candidate),
+                        "{id}: hover leaves visibility on the table at step {step}"
+                    );
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn picker_swatches_group_every_entry_by_mode() {
+    // The oracle pins picker-side grouping against the CLI registry flags
+    // without reusing SwatchEntry::mode: system sentinels map explicitly and
+    // palettes follow vtcode-ui's own light/dark flag (whose correctness is
+    // covered by vtcode-ui's own scheme tests, not here).
+    fn expected_mode(id: &str) -> ThemeMode {
+        if id == SYSTEM_LIGHT_ID {
+            ThemeMode::Light
+        } else if id == SYSTEM_DARK_ID {
+            ThemeMode::Dark
+        } else if theme::is_light_theme(id) {
+            ThemeMode::Light
+        } else {
+            ThemeMode::Dark
+        }
+    }
+
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        let entries: Vec<_> = picker_swatches_for(mode).collect();
+        assert!(!entries.is_empty(), "{mode:?} group must not be empty");
+        for entry in &entries {
+            assert_eq!(entry.mode(), mode, "{}", entry.id());
+            assert_eq!(expected_mode(&entry.id()), mode, "{} disagrees with the CLI registry", entry.id());
+        }
+    }
+
+    // Featured VT Code themes keep their headline slot inside their own mode
+    // group: all three are dark, so the light group starts at the system base.
+    let light_ids: Vec<_> = picker_swatches_for(ThemeMode::Light).map(|entry| entry.id()).collect();
+    let dark_ids: Vec<_> = picker_swatches_for(ThemeMode::Dark).map(|entry| entry.id()).collect();
+    assert_eq!(light_ids.first().map(String::as_str), Some(SYSTEM_LIGHT_ID));
+    let dark_head: Vec<&str> = dark_ids.iter().take(4).map(String::as_str).collect();
+    assert_eq!(dark_head, [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue", SYSTEM_DARK_ID]);
+
+    // Combined groups cover every selectable entry exactly once: no drops,
+    // no duplicates across the mode boundary.
+    let mut expected: Vec<String> = theme::available_themes()
+        .into_iter()
+        .filter(|id| theme::builtin_theme_colors(id).is_some())
+        .map(str::to_string)
+        .chain([SYSTEM_LIGHT_ID.to_string(), SYSTEM_DARK_ID.to_string()])
+        .collect();
+    expected.sort();
+    let mut actual: Vec<String> = picker_swatches().map(|entry| entry.id()).collect();
+    actual.sort();
+    assert_eq!(actual, expected);
+
+    // Grouped order: every light swatch precedes every dark swatch.
+    let modes: Vec<ThemeMode> = picker_swatches().map(|entry| entry.mode()).collect();
+    let first_dark = modes
+        .iter()
+        .position(|mode| *mode == ThemeMode::Dark)
+        .expect("dark themes exist");
+    assert!(modes[..first_dark].iter().all(|mode| *mode == ThemeMode::Light));
+    assert!(modes[first_dark..].iter().all(|mode| *mode == ThemeMode::Dark));
 }

@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// First page of the recent-thread list; "show more" grows by the same step.
+pub(super) const SESSION_LIST_PAGE_SIZE: usize = 50;
+
 /// Retain the exact submitted content until the service accepts it.
 #[derive(Debug)]
 pub(super) struct SubmissionDraft {
@@ -53,7 +56,7 @@ pub(super) fn append_restored_output_page(
         .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
         .unwrap_or(current_output.as_ref());
     let pages = pages_by_item
-        .entry(item.id.clone())
+        .entry(item.output_item_id.clone().unwrap_or_else(|| item.id.clone()))
         .or_insert_with(|| vec![current_preview.into()]);
 
     let mut next_preview = String::with_capacity(
@@ -383,7 +386,9 @@ impl DesktopView {
                     return;
                 }
 
-                let Some(item) = view.restored_activity.iter_mut().find(|item| item.id == pending.item_id) else {
+                let Some(item) = view.restored_activity.iter_mut().find(|item| {
+                    item.id == pending.item_id || item.output_item_id.as_deref() == Some(pending.item_id.as_str())
+                }) else {
                     view.fail_output_page(cx);
                     return;
                 };
@@ -419,6 +424,11 @@ impl DesktopView {
         self.configuration.as_ref().and_then(|config| config.session_options.as_ref())
     }
 
+    /// Borrowed secret-store info, once the service has discovered it.
+    pub(super) fn secret_store_info(&self) -> Option<&protocol::SecretStoreInfo> {
+        self.configuration.as_ref().and_then(|config| config.secret_store.as_ref())
+    }
+
     /// Refresh the cached session options after a session boundary while Full
     /// access was active. The mode is session-only: the service restores the
     /// prior mode, so the client re-discovers to stay in sync.
@@ -439,6 +449,7 @@ impl DesktopView {
         self.session_load_generation = self.session_load_generation.wrapping_add(1);
         let generation = self.session_load_generation;
         self.status = rust_i18n::t!("app.session.restoring").to_string();
+        let decode_phase = vtcode_commons::startup_trace::phase_started();
         self.session_load_task = Some(cx.spawn(async move |view, cx| {
             let loaded = cx
                 .background_spawn(async move {
@@ -449,6 +460,7 @@ impl DesktopView {
                     })
                 })
                 .await;
+            vtcode_commons::startup_trace::record_phase("desktop_session_decode", decode_phase);
             let _updated = view.update(cx, |view, cx| {
                 if view.session_load_generation != generation
                     || view.session_request != Some(protocol::method::SESSION_LOAD)
@@ -528,6 +540,13 @@ impl DesktopView {
                     {
                         let visible_count = history.len();
                         let inserted = view.transcript.prepend_prepared(history);
+                        if inserted > 0 {
+                            view.transcript.group_archived_prefix(inserted);
+                            view.transcript.group_archived_boundary(inserted);
+                            let timeline = Arc::clone(&view.restored_timeline);
+                            view.restore_completion_times(&timeline);
+                            view.restore_review_summaries(&timeline);
+                        }
                         if visible_count > 0 && inserted == 0 {
                             view.history_page_error = Some(rust_i18n::t!("app.session.transcript_limit").to_string());
                         } else {
@@ -584,6 +603,9 @@ impl DesktopView {
         let retained_submission = self.retained_submission.take();
         let thumbnails = std::mem::take(&mut self.attachment_thumbnails);
         self.load_history(history);
+        self.restored_timeline = Arc::new(loaded.timeline_events);
+        let timeline = Arc::clone(&self.restored_timeline);
+        self.restore_completion_times(&timeline);
         self.history_start_index = loaded.history_start_index;
         self.history_has_earlier = loaded.history_has_earlier && loaded.history_start_index > 0;
         self.restored_review_history_incomplete = loaded.review_history_incomplete;
@@ -611,6 +633,9 @@ impl DesktopView {
         self.output_page_task = None;
         self.output_page_error = None;
         self.project_restored_review(&loaded.review_items);
+        let timeline = Arc::clone(&self.restored_timeline);
+        self.restore_review_summaries(&timeline);
+        self.restore_tracker_snapshot(&timeline);
         for item in &loaded.activity_items {
             use vtcode_exec_events::ThreadItemDetails;
             if !matches!(
@@ -640,6 +665,7 @@ impl DesktopView {
         } else {
             rust_i18n::t!("app.session.loaded_prompt").to_string()
         };
+        vtcode_commons::startup_trace::record_milestone("desktop_session_ready");
         cx.notify();
     }
 
@@ -668,8 +694,9 @@ impl DesktopView {
         }
     }
 
-    /// Switch the service to another catalog model. The service restarts its
-    /// session; the next prompt starts a fresh one under the new model.
+    /// Switch the service to another catalog model. The service restarts the
+    /// runtime under the same session id; the thread keeps its history and
+    /// the new route applies to subsequent turns.
     pub(super) fn select_model(&mut self, provider: String, model: String, cx: &mut Context<Self>) {
         if self.attachments_picker_open {
             return;
@@ -703,6 +730,12 @@ impl DesktopView {
         self.ui_progress_active = false;
         self.cancel_session_load_task();
         self.active_primary_agent_display = None;
+        self.keyboard_focused_message = None;
+        self.transcript_flash = None;
+        self.transcript_flash_generation = self.transcript_flash_generation.wrapping_add(1);
+        self.hovered_message = None;
+        self.transcript_layout_settled = false;
+        self.filter_matches = None;
         self.transcript.clear();
         self.clear_restored_activity();
         self.history_start_index = 0;
@@ -714,11 +747,18 @@ impl DesktopView {
         self.output_page_error = None;
         self.selected_output_id = None;
         self.activity_scroll = VirtualListScrollHandle::new();
+        self.activity_filter = None;
+        self.activity_follow_filter = None;
+        self.activity_seen_head = None;
         self.change_list_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
+        self.restored_timeline = Arc::new(Vec::new());
+        self.tracker_snapshot = None;
+        self.reset_hidden_inspector_tab_if_stranded();
         self.changes = ChangesProjection::default();
         self.selected_change = None;
+        self.change_kind_filter = None;
         self.change_viewer = None;
         self.change_viewer_dirty = false;
         if self.current_route() == Route::Review {
@@ -730,6 +770,7 @@ impl DesktopView {
         self.finished_turn_id = None;
         self.clear_pending_interaction();
         self.active_turn_id = None;
+        self.turn_undos.clear();
         self.cancel_requested = false;
         self.cancel_request_sent = false;
         self.attachments_task = None;
@@ -763,8 +804,10 @@ impl DesktopView {
         self.prune_attachment_thumbnails();
     }
 
-    /// Mirror a service-side session discard (provider switch, credential
-    /// repair): drop the selection and turn state, keep attachments for reuse.
+    /// Mirror a genuine service-side session discard (secret-store rotation
+    /// that reports `session_reset`): drop the selection and turn state, keep
+    /// attachments for reuse. Provider/model switches and runtime option
+    /// changes preserve the thread and must not call this.
     pub(super) fn clear_session_after_service_reset(&mut self) {
         self.selected_session_id = None;
         self.reset_preserving_composer_attachments();
@@ -778,6 +821,93 @@ impl DesktopView {
                 .try_send(BackendCommand::Request { method: method.to_string(), params })
                 .is_ok()
         })
+    }
+
+    /// Request the recent-thread list with an explicit page limit, newest
+    /// first. Records the limit only when the request queues, so a failed
+    /// send never desynchronizes the "show more" affordance.
+    pub(super) fn request_session_list(&mut self, limit: usize) -> bool {
+        if self.request(protocol::method::SESSION_LIST, json!({ keys::LIMIT: limit })) {
+            self.session_list_limit = limit;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Grow the thread list by one page. The service answers requests in
+    /// arrival order, so rapid clicks apply in limit order and never shrink
+    /// the list.
+    pub(super) fn show_more_sessions(&mut self, cx: &mut Context<Self>) {
+        let limit = self
+            .session_list_limit
+            .saturating_add(SESSION_LIST_PAGE_SIZE)
+            .min(protocol::MAX_SESSION_LIST_LIMIT);
+        let _queued = self.request_session_list(limit);
+        cx.notify();
+    }
+
+    /// Apply a `session/list` page, replacing the cached rows. Titles the
+    /// archive has not persisted yet survive from the previous page.
+    pub(super) fn apply_session_list(&mut self, result: Value, cx: &mut Context<Self>) {
+        match serde_json::from_value::<Vec<SessionSummary>>(result) {
+            Ok(mut refreshed) => {
+                self.session_list_received = true;
+                let mut session_ids = HashSet::with_capacity(refreshed.len());
+                let has_invalid_session_id = refreshed.iter().any(|session| {
+                    session.session_id.trim().is_empty() || !session_ids.insert(session.session_id.as_str())
+                });
+                if has_invalid_session_id {
+                    self.fail_pending_navigation();
+                    self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
+                } else {
+                    // Keep a locally derived title when the archive has
+                    // not persisted its own preview yet.
+                    for session in &mut refreshed {
+                        if session.title.as_deref().is_none_or(str::is_empty) {
+                            session.title = self
+                                .sessions
+                                .iter()
+                                .find(|existing| existing.session_id == session.session_id)
+                                .and_then(|existing| existing.title.clone());
+                        }
+                    }
+                    self.sessions = refreshed;
+                    // An exact-limit hit below the maximum may hide older
+                    // threads. An exact multiple costs one empty refetch;
+                    // over-limit answers (older servers ignore the limit)
+                    // read as complete.
+                    self.session_list_has_older = self.sessions.len() == self.session_list_limit
+                        && self.session_list_limit < protocol::MAX_SESSION_LIST_LIMIT;
+                    self.prune_tabs();
+                    self.continue_pending_workspace_navigation(cx);
+                }
+            }
+            Err(_) => {
+                self.fail_pending_navigation();
+                self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
+            }
+        }
+    }
+
+    /// Shared "show more threads" footer for the sidebar list and the thread
+    /// browser. English literal: no catalog key covers thread paging, and the
+    /// tab/session-row menus set the literal precedent for new chrome.
+    pub(super) fn render_session_list_more(&self, id: &'static str, cx: &Context<Self>) -> AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .justify_center()
+            .py_1()
+            .child(
+                desktop_button(id)
+                    .label("Show more threads")
+                    .ghost()
+                    .small()
+                    .w_full()
+                    .on_click(cx.listener(|view, _, _, cx| view.show_more_sessions(cx))),
+            )
+            .into_any_element()
     }
 
     pub(super) fn clear_error(&mut self) {
@@ -816,11 +946,15 @@ fn restored_archive_element_id(session_id: &str, archive_index: usize) -> String
 /// Prepare stable transcript rows and Markdown accessibility projections for archived messages.
 pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage>) -> Vec<TranscriptItem> {
     let mut occurrences = HashMap::<u64, usize>::new();
-    messages
+    let mut phases = Vec::new();
+    let rows: Vec<TranscriptItem> = messages
         .into_iter()
         .filter(|message| !message.hidden || message.role != TranscriptRole::System.as_str())
         .map(|message| {
-            let SessionHistoryMessage { archive_index, role, text, .. } = message;
+            let SessionHistoryMessage {
+                archive_index, role, text, phase, event_item_id, ..
+            } = message;
+            phases.push(phase.clone());
             let title = match TranscriptRole::from_str(&role) {
                 Some(TranscriptRole::User) => rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string(),
                 Some(TranscriptRole::Assistant) => app::NAME.to_string(),
@@ -841,9 +975,12 @@ pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHis
             );
             // Preserve collapsed archive tool text without inventing activity status.
             let mut item = TranscriptItem::new(id, role, title.into(), text);
+            item.archived_phase = phase.map(Into::into);
+            item.canonical_item_id = event_item_id.filter(|id| !id.is_empty() && id.len() <= 512).map(Into::into);
             item.has_activity_status = false;
             item.prepare_render_content();
             item
         })
-        .collect()
+        .collect();
+    Transcript::group_archive_turns(rows, phases)
 }

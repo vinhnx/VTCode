@@ -177,12 +177,14 @@ pub(crate) async fn run_turn_loop(
         ctx.session_stats.recent_touched_files().into_iter().collect();
     let mut pending_primary_agent: Option<String> = None;
     let mut pending_plan_execution_target = None;
-    *ctx.auto_finish_planning_attempted = false;
+    *ctx.auto_finish_planning_attempted = ctx.plan_session.take_recovery_input_pending()
+        || ctx.plan_session.recovery.outcome == vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
 
     // Compact command rows are a presentation-only active tail. A new turn
     // must start a fresh contiguous group even when the renderer is reused by
     // the session loop.
     ctx.renderer.flush_compact_command_group();
+    ctx.renderer.begin_turn_message_timestamp();
     ctx.set_phase(TurnPhase::Preparing);
     super::turn_loop_helpers::restore_fresh_turn_tool_guidance(
         working_history,
@@ -537,6 +539,12 @@ pub(crate) async fn run_turn_loop(
             }
         };
 
+        if let Some(stop) =
+            crate::agent::runloop::unified::stop_requests::stop_outcome(turn_processing_ctx.ctrl_c_state)
+        {
+            result = stop;
+            break;
+        }
         turn_processing_ctx.record_planning_response(&response).await?;
 
         // Track turn usage and context pressure before later processing borrows `response`.
@@ -864,6 +872,12 @@ pub(crate) async fn run_turn_loop(
     }
 
     ctx.renderer.flush_compact_command_group();
+    // Exactly one clock per turn: intermediate agent responses rendered above
+    // (pre-tool commentary, plan prose) leave the footer pending, and this
+    // stamp closes the turn's final message.
+    if let Err(err) = ctx.renderer.finish_turn_message_timestamp() {
+        tracing::debug!(error = %err, "turn timestamp footer emission failed");
+    }
     ctx.set_phase(TurnPhase::Finalizing);
     finalize_turn(&mut ctx, working_history, &result, &turn_usage).await;
 

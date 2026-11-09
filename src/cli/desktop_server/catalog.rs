@@ -242,18 +242,57 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
     let current = env!("CARGO_PKG_VERSION");
     let updater = crate::updater::Updater::new(current)?;
     let check = updater.startup_update_check()?;
-    let (latest_version, release_url, update_available) = match check.cached_notice {
+    // The current-version accessor self-matches against the running version,
+    // so it needs no extra pairing check.
+    let (current_highlights, current_url) = match crate::updater::cached_current_release_highlights() {
+        Some((version, items)) => (items, Some(crate::updater::Updater::release_url(&version))),
+        None => (Vec::new(), None),
+    };
+    let current_release_seen = crate::updater::current_version_notes_seen();
+    // Release notes are readable whether or not an update is being offered, but
+    // `latest_version` must always name a release *newer* than the running one:
+    // an equal or older cached release would make the reader claim backwards
+    // ("latest known" pointing at the version you already run, or below it).
+    // The client falls back to the running version's own notes then, which is
+    // the honest label. `update_available` stays the separate offer gate, so a
+    // dismissed update keeps its notes readable.
+    let current_semver = semver::Version::parse(current).ok();
+    let cached_release = crate::updater::cached_latest_release();
+    let newer_cached_release = cached_release
+        .as_ref()
+        .filter(|(version, _)| current_semver.as_ref().is_some_and(|running| version > running));
+    let update_available = check.cached_notice.is_some();
+    let (latest_version, release_url, release_highlights) = match check.cached_notice {
+        // An offered update wins the slot even when its notes are missing, so a
+        // notes-less cache can never hide an update. Notes attach only when the
+        // same release backed them (two cache reads, so a concurrent refresh
+        // must not pair one release's version with another's changelog).
         Some(notice) => {
+            let highlights = cached_release
+                .as_ref()
+                .filter(|(version, _)| *version == notice.latest_version)
+                .map(|(_, items)| items.clone())
+                .unwrap_or_default();
             let url = crate::updater::Updater::release_url(&notice.latest_version);
-            (Some(notice.latest_version.to_string()), Some(url), true)
+            (Some(notice.latest_version.to_string()), Some(url), highlights)
         }
-        None => (None, None, false),
+        None => match newer_cached_release {
+            Some((version, items)) => {
+                let url = crate::updater::Updater::release_url(version);
+                (Some(version.to_string()), Some(url), items.clone())
+            }
+            None => (None, None, Vec::new()),
+        },
     };
     Ok(protocol::UpdateStatusSnapshot {
         current_version: current.to_string(),
         latest_version,
         update_available,
         release_url,
+        release_highlights,
+        current_release_highlights: current_highlights,
+        current_release_url: current_url,
+        current_release_seen,
         channel: Some(updater.config().channel.to_string()),
         check_due: check.should_refresh,
     })

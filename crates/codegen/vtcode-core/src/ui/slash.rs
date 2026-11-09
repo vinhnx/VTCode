@@ -296,6 +296,22 @@ mod tests {
     }
 
     #[test]
+    fn doctor_is_visible_while_checkup_stays_a_hidden_alias() {
+        assert!(find_command("doctor").is_some(), "/doctor must be registered");
+        assert!(find_command("checkup").is_none(), "/checkup must stay a hidden alias for /doctor");
+        assert!(
+            suggestions_for_terminal("doc", TerminalType::Unknown)
+                .iter()
+                .any(|command| command.name == "doctor"),
+            "/doctor must be suggested for its prefix"
+        );
+        assert!(
+            visible_commands_for_desktop().iter().any(|command| command.name == "doctor"),
+            "desktop catalog must retain /doctor"
+        );
+    }
+
+    #[test]
     fn config_consolidated_commands_are_not_registered() {
         for removed in [
             "checkup",

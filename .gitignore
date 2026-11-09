@@ -835,6 +835,7 @@ TODO2.md
 **/.vtcode/plans/
 **/.vtcode/skills/
 **/.vtcode/skills/INDEX.md
+.agents/skills/INDEX.md
 **/.vtcode/context/tool_outputs/
 **/.vtcode/context/history/
 **/.vtcode/mcp/tools/

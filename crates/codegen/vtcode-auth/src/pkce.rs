@@ -41,6 +41,16 @@ impl fmt::Debug for PkceChallenge {
 }
 
 impl PkceChallenge {
+    /// Return the code challenge (safe to share with the authorization server).
+    pub fn code_challenge(&self) -> &str {
+        &self.code_challenge
+    }
+
+    /// Return the challenge method (always `"S256"`).
+    pub fn code_challenge_method(&self) -> &str {
+        &self.code_challenge_method
+    }
+
     /// Create a new PKCE challenge from a code verifier.
     fn from_verifier(code_verifier: String) -> Result<Self> {
         let code_challenge = compute_s256_challenge(&code_verifier)?;
@@ -63,7 +73,7 @@ impl PkceChallenge {
 ///
 /// let challenge = generate_pkce_challenge().unwrap();
 /// // code_verifier is a secret — never print or log it.
-/// assert!(!challenge.code_challenge.is_empty());
+/// assert!(!challenge.code_challenge().is_empty());
 /// ```
 pub fn generate_pkce_challenge() -> Result<PkceChallenge> {
     let code_verifier = generate_code_verifier()?;

@@ -61,4 +61,4 @@ See [docs.rs/vtcode-auth](https://docs.rs/vtcode-auth) for full API documentatio
 
 ## Related docs
 
-- [Architecture overview](../docs/ARCHITECTURE.md)
+- [Architecture overview](../../../docs/ARCHITECTURE.md)

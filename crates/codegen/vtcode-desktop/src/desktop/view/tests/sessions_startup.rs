@@ -1,4 +1,5 @@
 use super::*;
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 #[gpui_kit::test]
 fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &mut TestAppContext) {
@@ -9,6 +10,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
             session_id: "session".into(),
             turn_id: Some(turn_id.into()),
             event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage {
                     input_tokens: 0,
@@ -77,6 +79,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
                     steps: Vec::new(),
                     selected_choice_id: None,
                     selected_choice_ids: Vec::new(),
+                    plan_markdown: None,
                 }))
                 .unwrap();
             let _batch_full = view.drain_events(window, cx);
@@ -275,7 +278,7 @@ fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
     })
     .unwrap();
     cx.update(|cx| {
-        let reopened = super::super::open_or_activate_main_window(cx, None).unwrap();
+        let reopened = super::super::open_or_activate_main_window(cx, None, None).unwrap();
         assert_eq!(reopened, window);
         assert_eq!(cx.windows().len(), 1);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this unsent draft");
@@ -294,7 +297,7 @@ fn reopening_activates_the_focused_window_when_multiple_are_open(cx: &mut TestAp
         .unwrap();
     cx.update(|cx| {
         assert_eq!(cx.active_window(), Some(second_window));
-        assert_eq!(super::super::open_or_activate_main_window(cx, None).unwrap(), second_window);
+        assert_eq!(super::super::open_or_activate_main_window(cx, None, None).unwrap(), second_window);
         assert_eq!(cx.windows().len(), 2, "reopening activates a window instead of duplicating it");
     });
 
@@ -350,10 +353,10 @@ fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppCon
     cx.update_window(closed, |_, window, _| window.remove_window()).unwrap();
     cx.update(|cx| {
         assert!(cx.windows().is_empty());
-        let reopened = super::super::open_or_activate_main_window(cx, None).unwrap();
+        let reopened = super::super::open_or_activate_main_window(cx, None, None).unwrap();
         assert_ne!(reopened, closed);
         assert_eq!(cx.windows(), vec![reopened]);
-        assert_eq!(super::super::open_or_activate_main_window(cx, None).unwrap(), reopened);
+        assert_eq!(super::super::open_or_activate_main_window(cx, None, None).unwrap(), reopened);
         assert_eq!(cx.windows().len(), 1);
     });
 }
@@ -365,7 +368,7 @@ fn native_close_uses_menu_bar_mode_only_when_enabled(cx: &mut TestAppContext) {
     cx.update_window(initial, |_, window, _| window.remove_window()).unwrap();
     let window = cx.update(|cx| {
         assert!(super::super::menu_bar::set_enabled(true, cx));
-        super::super::open_or_activate_main_window(cx, None).unwrap()
+        super::super::open_or_activate_main_window(cx, None, None).unwrap()
     });
     let mut visual = gpui_kit::VisualTestContext::from_window(window, cx);
     assert!(!visual.simulate_close(), "enabled mode retains the window");
@@ -396,7 +399,7 @@ fn reopening_restores_translucent_sidebar_root(cx: &mut TestAppContext) {
     })
     .unwrap();
     drop(view);
-    let reopened = cx.update(|cx| super::super::open_or_activate_main_window(cx, None).unwrap());
+    let reopened = cx.update(|cx| super::super::open_or_activate_main_window(cx, None, None).unwrap());
     cx.update_window(reopened, |_, window, cx| {
         let root = window.root::<gpui_kit::base::Root>().flatten().unwrap();
         assert!(root.update(cx, |root, _| root.style().background.is_some()));
@@ -524,7 +527,14 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
         window.click("send-prompt", cx);
         let view = view.read(cx);
         assert!(view.attachments.is_empty(), "attachments clear after submit");
-        assert!(view.transcript.get(0).unwrap().text.contains("Attached: notes.md"));
+        let echo = view.transcript.get(0).unwrap();
+        assert_eq!(echo.text.as_str(), "Summarize the attachment");
+        assert_eq!(echo.user_attachments.len(), 1, "the echo keeps the surviving attachment as card data");
+        assert_eq!(echo.user_attachments[0].path, "notes.md");
+        assert!(
+            echo.accessibility_text.contains("notes.md"),
+            "the removed chip stays out of the echo while the kept path stays announced"
+        );
     })
     .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
@@ -535,14 +545,22 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
-fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut TestAppContext) {
+fn selecting_a_model_switches_configuration_and_preserves_the_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _cx| {
             view.backend = Some(BackendHandle { commands });
             view.workspace = Some(std::env::temp_dir());
             view.selected_session_id = Some("session-old".to_string());
+            view.open_tabs = vec!["session-old".to_string()];
+            view.transcript.push(TranscriptItem::new(
+                "kept-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Conversation remains visible.".into(),
+            ));
             view.models = vec![
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "ollama".to_string(),
@@ -582,13 +600,13 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                 .selected_index()
                 .unwrap()
                 .section,
-            0,
-            "the active provider and model are placed first and selected"
+            1,
+            "frontier labs lead while the active entry stays selected in place"
         );
         let groups = &view.read(cx).palette_groups;
-        assert_eq!(groups[0].1[0].label, "GPT OSS 20B");
-        assert!(groups[0].1[0].description.as_ref().unwrap().contains("gpt-oss:20b"));
-        assert_eq!(groups[1].1[0].label, "Claude Sonnet 5");
+        assert_eq!(groups[0].1[0].label, "Claude Sonnet 5");
+        assert_eq!(groups[1].1[0].label, "GPT OSS 20B");
+        assert!(groups[1].1[0].description.as_ref().unwrap().contains("gpt-oss:20b"));
         window.input("claude-sonnet-5", cx);
     })
     .unwrap();
@@ -621,8 +639,8 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
     assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
 
-    // The service answers with the new snapshot; the client resets session
-    // state and refreshes the catalog.
+    // The service answers with the new snapshot; the client keeps the thread
+    // and refreshes the catalog.
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
             view.handle_backend_event(
@@ -640,11 +658,15 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                 },
                 cx,
             );
-            assert_eq!(view.selected_session_id, None, "session resets after a model switch");
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-old"), "model switch preserves the thread");
+            assert_eq!(view.open_tabs, vec!["session-old".to_string()], "tabs survive a model switch");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Conversation remains visible.");
+            assert!(view.transcript.get(1).is_none(), "no transcript row is added or dropped");
             assert_eq!(
                 view.configuration.as_ref().map(|configuration| configuration.model.clone()),
                 Some("claude-sonnet-5".to_string())
             );
+            assert_eq!(view.status, "Switched to claude-sonnet-5.");
         });
     })
     .unwrap();
@@ -757,6 +779,7 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
                 turn_id: Some("turn-9".to_string()),
                 event: vtcode_exec_events::VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(
                     vtcode_exec_events::TurnCompletedEvent {
+                        final_response_item_id: None,
                         completed_at: None,
                         usage: vtcode_exec_events::Usage {
                             input_tokens: 0,
@@ -879,4 +902,64 @@ fn window_title_follows_the_selected_thread_title(cx: &mut TestAppContext) {
         view.selected_session_id = Some("missing".into());
         assert_eq!(view.window_title(), "VT Code");
     });
+}
+
+fn appkit_rect(x: f64, y: f64, width: f64, height: f64) -> NSRect {
+    NSRect {
+        origin: NSPoint { x, y },
+        size: NSSize { width, height },
+    }
+}
+
+#[test]
+fn maximized_launch_bounds_fill_the_main_screen_visible_frame() {
+    // Main screen in AppKit's bottom-left origin: 28px menu bar on top, 60px Dock at the bottom.
+    let frame = appkit_rect(0.0, 0.0, 1512.0, 982.0);
+    let visible = appkit_rect(0.0, 60.0, 1512.0, 894.0);
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, visible).expect("insets convert");
+    assert_eq!(bounds.origin, point(px(0.), px(28.)));
+    assert_eq!(bounds.size, size(px(1512.), px(894.)));
+
+    // Asymmetric: a left Dock shifts the origin right instead of down.
+    let visible = appkit_rect(80.0, 0.0, 1432.0, 954.0);
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, visible).expect("left Dock converts");
+    assert_eq!(bounds.origin, point(px(80.), px(28.)));
+    assert_eq!(bounds.size, size(px(1432.), px(954.)));
+
+    // No insets: visible equals frame, origin stays top-left.
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, frame).expect("full frame converts");
+    assert_eq!(bounds.origin, point(px(0.), px(0.)));
+    assert_eq!(bounds.size, size(px(1512.), px(982.)));
+
+    // Offset frame with insets on both axes: the origin stays relative to the frame.
+    let frame = appkit_rect(100.0, 200.0, 1000.0, 800.0);
+    let visible = appkit_rect(180.0, 260.0, 920.0, 512.0);
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, visible).expect("offset converts");
+    assert_eq!(bounds.origin, point(px(80.), px(228.)));
+    assert_eq!(bounds.size, size(px(920.), px(512.)));
+}
+
+#[test]
+fn maximized_launch_bounds_reject_degenerate_or_escaped_frames() {
+    let frame = appkit_rect(0.0, 0.0, 1512.0, 982.0);
+    for (name, visible) in [
+        ("zero width", appkit_rect(0.0, 60.0, 0.0, 894.0)),
+        ("negative height", appkit_rect(0.0, 60.0, 1512.0, -10.0)),
+        ("NaN width", appkit_rect(0.0, 60.0, f64::NAN, 894.0)),
+        ("escaped left", appkit_rect(-5.0, 60.0, 1512.0, 894.0)),
+        ("taller than frame", appkit_rect(0.0, 0.0, 1512.0, 1000.0)),
+    ] {
+        assert!(
+            super::super::launch_bounds::visible_bounds_from_frames(frame, visible).is_none(),
+            "{name} must fall back to zoom"
+        );
+    }
+}
+
+#[test]
+fn headless_probe_keeps_the_zoom_fallback() {
+    assert!(
+        super::super::launch_bounds::main_screen_visible_bounds().is_none(),
+        "no AppKit screens headless: launch keeps the zoom fallback"
+    );
 }

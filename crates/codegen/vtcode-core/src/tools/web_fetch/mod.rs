@@ -29,8 +29,8 @@ pub(crate) mod request_budget;
 pub use classify_helpers::extract_http_status;
 pub use domains::{BUILTIN_BLOCKED_DOMAINS, BUILTIN_BLOCKED_PATTERNS, MALICIOUS_PATTERNS};
 use errors::web_fetch_error_response;
-pub(super) use network_guards::is_private_host;
 use network_guards::{domain_matches_allowed, extract_domain};
+pub(crate) use network_guards::{is_blocked_special_use_tld, is_private_host};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 const MAX_CONTENT_SIZE: usize = 500_000; // 500KB max content size
@@ -332,11 +332,13 @@ impl WebFetchTool {
             follow_with_budget(attempt, redirect_budget.as_ref())
         });
 
-        let client = reqwest::Client::builder()
-            .default_headers(default_headers)
-            .timeout(std::time::Duration::from_secs(timeout_secs))
-            .redirect(redirect_policy)
-            .build()?;
+        let client = vtcode_commons::http::apply_connect_timeout(
+            reqwest::Client::builder()
+                .default_headers(default_headers)
+                .timeout(std::time::Duration::from_secs(timeout_secs))
+                .redirect(redirect_policy),
+        )
+        .build()?;
 
         let response = fetch_response(&client, url, max_bytes, timeout_secs, budget.as_ref()).await?;
 
@@ -416,21 +418,9 @@ impl WebFetchTool {
             return Err(anyhow!("Access to local/private networks is blocked"));
         }
 
-        // Block special-use TLDs per RFC 6761 and mDNS/split-DNS conventions:
-        // - .local (mDNS)
-        // - .internal (private split-DNS)
-        // - .localhost (loopback)
-        // - .test (testing, RFC 6761)
-        // - .invalid (always fails, RFC 6761)
-        // - .home.arpa (home networking, RFC 7788)
-        let domain_lower = domain.to_ascii_lowercase();
-        if domain_lower.ends_with(".local")
-            || domain_lower.ends_with(".internal")
-            || domain_lower.ends_with(".localhost")
-            || domain_lower.ends_with(".test")
-            || domain_lower.ends_with(".invalid")
-            || domain_lower.ends_with(".home.arpa")
-        {
+        // Block special-use TLDs per RFC 6761 and mDNS/split-DNS conventions
+        // (shared predicate; also guards the `@<url>` image fetcher).
+        if is_blocked_special_use_tld(&domain) {
             return Err(anyhow!("Access to local/private networks is blocked"));
         }
 

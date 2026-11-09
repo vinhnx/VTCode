@@ -233,11 +233,15 @@ pub fn search_memory(
                 let Some(fact) = item.get("fact").and_then(|f| f.as_str()) else {
                     continue;
                 };
+                let mut terms = tokenize(fact);
+                // Sorted once: run-length dedup below and binary-search term
+                // counts in scoring replace two per-document hash tables.
+                terms.sort_unstable();
                 documents.push((
                     format!("{session_id}:{idx}"),
                     memory_path.clone(),
                     fact.to_owned(),
-                    tokenize(fact),
+                    terms,
                     created_at,
                 ));
             }
@@ -252,10 +256,13 @@ pub fn search_memory(
         documents.iter().map(|(_, _, _, terms, _)| terms.len() as f64).sum::<f64>() / document_count as f64;
     let mut document_frequency: HashMap<String, usize> = HashMap::new();
     for (_, _, _, terms, _) in &documents {
-        let mut seen = std::collections::HashSet::new();
+        // Terms are pre-sorted: consecutive duplicates form one run.
+        let mut previous: Option<&str> = None;
         for term in terms {
-            if seen.insert(term.as_str()) {
-                *document_frequency.entry(term.clone()).or_insert(0) += 1;
+            let term = term.as_str();
+            if previous != Some(term) {
+                previous = Some(term);
+                *document_frequency.entry(term.to_owned()).or_insert(0) += 1;
             }
         }
     }
@@ -264,15 +271,15 @@ pub fn search_memory(
     let now = Utc::now();
     for (chunk_id, path, fact, terms, created_at) in documents {
         let length = terms.len() as f64;
-        let mut term_frequency = HashMap::<&str, usize>::new();
-        for term in &terms {
-            *term_frequency.entry(term.as_str()).or_insert(0) += 1;
-        }
         let mut score = 0.0;
         for query_term in &query_terms {
-            let Some(&frequency) = term_frequency.get(query_term.as_str()) else {
+            // Terms are pre-sorted: count occurrences via binary search.
+            let start = terms.partition_point(|term| term.as_str() < query_term.as_str());
+            let end = terms.partition_point(|term| term.as_str() <= query_term.as_str());
+            let frequency = end - start;
+            if frequency == 0 {
                 continue;
-            };
+            }
             let Some(&frequency_in_documents) = document_frequency.get(query_term) else {
                 continue;
             };
@@ -695,6 +702,31 @@ mod tests {
         let results = search_memory(dir.path(), "tokio", 5, 0.0).expect("search");
         assert_eq!(results.len(), 1);
         assert!(results[0].snippet.contains("tokio"));
+    }
+
+    #[test]
+    fn search_memory_ranks_higher_term_frequency_first() {
+        let dir = TempDir::new().expect("tempdir");
+        for (session_id, fact) in [("once", "cargo alpha beta"), ("twice", "cargo cargo beta")] {
+            let session = crate::session_dir(dir.path(), session_id);
+            std::fs::create_dir_all(session.join(crate::DERIVED_DIR)).expect("mkdir");
+            let memory = serde_json::json!({
+                "grounded_facts": [{"fact": fact}]
+            });
+            std::fs::write(
+                session.join(crate::DERIVED_DIR).join("memory.json"),
+                serde_json::to_vec(&memory).expect("serialize"),
+            )
+            .expect("write");
+        }
+
+        let results = search_memory(dir.path(), "cargo", 10, 0.0).expect("search");
+        assert_eq!(results.len(), 2);
+        // Same document length, same idf, no timestamps: BM25 increases
+        // monotonically in term frequency, so the twice-mentioned term ranks first.
+        assert_eq!(results[0].chunk_id, "twice:0");
+        assert_eq!(results[1].chunk_id, "once:0");
+        assert!(results[0].score > results[1].score);
     }
 
     #[test]

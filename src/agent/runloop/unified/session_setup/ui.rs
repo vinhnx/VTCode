@@ -301,6 +301,7 @@ pub(crate) async fn initialize_session_ui(
     if let Some(cfg) = vt_cfg {
         renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
         renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
+        renderer.set_show_message_timestamps(cfg.ui.show_message_timestamps);
         renderer.set_tool_display_mode(cfg.ui.tool_display_mode);
         renderer.set_diff_preview_mode(cfg.ui.diff_preview_mode);
     }
@@ -520,7 +521,9 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref() {
+    // Disabled checkpoints skip enumeration: the counter is unused without a
+    // lease (turn prep skips begin; turn end returns early).
+    let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref().filter(|manager| manager.enabled()) {
         let manager = manager.clone();
         let session_id = session_id.to_owned();
         match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number(&session_id))) {

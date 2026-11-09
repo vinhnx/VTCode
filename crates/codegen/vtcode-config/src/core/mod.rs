@@ -5,6 +5,7 @@ pub mod auth;
 pub mod automation;
 pub mod commands;
 pub mod custom_provider;
+pub mod desktop;
 pub mod dotfile_protection;
 pub mod model;
 pub mod permissions;
@@ -30,6 +31,7 @@ pub use custom_provider::{
     CustomProviderApiFormat, CustomProviderCommandAuthConfig, CustomProviderConfig, CustomProviderProfileConfig,
     ResolvedCustomProviderProfile,
 };
+pub use desktop::DesktopConfig;
 pub use dotfile_protection::DotfileProtectionConfig;
 pub use model::ModelConfig;
 pub use permissions::{

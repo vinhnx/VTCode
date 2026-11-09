@@ -8,8 +8,8 @@ use std::sync::{
 };
 
 use vtcode_commons::program_status::{
-    InteractionKind, ProgramState, ProgramStatusUpdate, clear_iterm21337, encode_iterm21337, encode_report,
-    record_segment,
+    ConEmuProgress, InteractionKind, ProgramState, ProgramStatusUpdate, clear_iterm21337, encode_clear,
+    encode_conemu94, encode_iterm21337, encode_report, record_segment,
 };
 use vtcode_commons::ui_protocol::{ActivityState, ProgressPhase, ProgressUpdate};
 
@@ -31,12 +31,31 @@ struct Report {
     message: &'static str,
 }
 
+/// Project a parent report onto the ConEmu `OSC 9;4` tab-progress state.
+///
+/// Blocked waits read as paused (a wait, not a failure); finished-clear
+/// states remove the indicator, matching the Windows Terminal guidance to
+/// clear progress on completion.
+fn conemu94_for_report(report: &Report) -> ConEmuProgress {
+    match report.state {
+        ProgramState::Working => match report.progress {
+            Some(percent) => ConEmuProgress::Normal(percent),
+            None => ConEmuProgress::Indeterminate,
+        },
+        ProgramState::Blocked => ConEmuProgress::Paused,
+        ProgramState::Error => ConEmuProgress::Error,
+        ProgramState::Idle | ProgramState::Done | ProgramState::Clear => ConEmuProgress::Remove,
+    }
+}
+
 pub(crate) struct ProgramStatus {
     parent: String,
     enabled: bool,
     terminal: bool,
     iterm21337: bool,
     last_iterm21337: Option<String>,
+    conemu94: bool,
+    last_conemu94: Option<String>,
     closed: bool,
     underlying: ProgramState,
     operation: Option<u64>,
@@ -64,6 +83,8 @@ impl Default for ProgramStatus {
             terminal: false,
             iterm21337: false,
             last_iterm21337: None,
+            conemu94: false,
+            last_conemu94: None,
             closed: false,
             underlying: ProgramState::Idle,
             operation: None,
@@ -88,6 +109,7 @@ impl ProgramStatus {
             && io::stderr().is_terminal()
             && vtcode_commons::program_status::vte_allows_unknown_osc();
         self.iterm21337 = vtcode_commons::program_status::should_emit_iterm21337_now();
+        self.conemu94 = vtcode_commons::program_status::should_emit_conemu94_now();
     }
 
     pub(crate) fn apply(&mut self, update: ProgramStatusUpdate) {
@@ -260,6 +282,10 @@ impl ProgramStatus {
             Some(report) => encode_iterm21337(report.state, report.message),
             None => clear_iterm21337(),
         });
+        let conemu94 = self.conemu94.then(|| match desired.get(&self.parent) {
+            Some(report) => encode_conemu94(conemu94_for_report(report)),
+            None => encode_conemu94(ConEmuProgress::Remove),
+        });
         let removed: Vec<_> = self.attempted.iter().filter(|id| !desired.contains_key(*id)).cloned().collect();
         for id in removed {
             // Clearing a parent would also remove its retained finished children.
@@ -269,7 +295,11 @@ impl ProgramStatus {
             } else {
                 ProgramState::Clear
             };
-            let wire = encode_report(&id, state, None, None, "", "")?;
+            let wire = if state == ProgramState::Clear {
+                encode_clear(&id)?
+            } else {
+                encode_report(&id, state, None, None, "", "")?
+            };
             // Even a failed flush may change the terminal. A subtree clear
             // invalidates all successful-report cache entries beneath it.
             if id == self.parent && state == ProgramState::Clear {
@@ -306,6 +336,13 @@ impl ProgramStatus {
                 .context("writing iterm21337 session status")?;
             writer.flush().context("flushing iterm21337 session status")?;
             self.last_iterm21337 = Some(sequence);
+        }
+        if let Some(sequence) = conemu94
+            && self.last_conemu94.as_ref() != Some(&sequence)
+        {
+            writer.write_all(sequence.as_bytes()).context("writing conemu94 tab progress")?;
+            writer.flush().context("flushing conemu94 tab progress")?;
+            self.last_conemu94 = Some(sequence);
         }
         Ok(())
     }
@@ -347,6 +384,14 @@ pub(crate) fn cleanup_before_restore(writer: &mut impl Write) {
             tracing::warn!(%error, "iterm21337 restoration cleanup failed");
         }
     }
+    if vtcode_commons::program_status::should_emit_conemu94_now() {
+        if let Err(error) = writer
+            .write_all(encode_conemu94(ConEmuProgress::Remove).as_bytes())
+            .and_then(|()| writer.flush())
+        {
+            tracing::warn!(%error, "conemu94 restoration cleanup failed");
+        }
+    }
 }
 
 fn retire_records(records: &BTreeMap<String, ProgramState>, writer: &mut impl Write) {
@@ -362,7 +407,12 @@ fn retire_records(records: &BTreeMap<String, ProgramState>, writer: &mut impl Wr
         } else {
             ProgramState::Clear
         };
-        if let Err(error) = encode_report(id, state, None, None, "", "").and_then(|wire| {
+        let wire = if state == ProgramState::Clear {
+            encode_clear(id)
+        } else {
+            encode_report(id, state, None, None, "", "")
+        };
+        if let Err(error) = wire.and_then(|wire| {
             writer.write_all(wire.as_bytes())?;
             writer.flush()?;
             Ok(())

@@ -9,10 +9,12 @@ use crate::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AgentPermissionsConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
-    CustomProviderConfig, DotfileProtectionConfig, ModelConfig, OpenAIConfig, OpenRouterConfig, PermissionsConfig,
-    PromptCachingConfig, ProviderOverrideConfig, SandboxConfig, SecurityConfig, SkillsConfig, ToolsConfig,
+    CustomProviderConfig, DesktopConfig, DotfileProtectionConfig, ModelConfig, OpenAIConfig, OpenRouterConfig,
+    PermissionsConfig, PromptCachingConfig, ProviderOverrideConfig, SandboxConfig, SecurityConfig, SkillsConfig,
+    ToolsConfig,
 };
 use crate::debug::DebugConfig;
+use crate::env_helpers::default_true;
 use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
 use crate::models::{MiMoAuthMethod, Provider};
@@ -96,10 +98,6 @@ impl Default for WorkspaceConfig {
     }
 }
 
-fn default_true() -> bool {
-    true
-}
-
 /// Main configuration structure for VT Code
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -127,6 +125,10 @@ pub struct VTCodeConfig {
     /// Codex-compatible TUI settings.
     #[serde(default)]
     pub tui: TuiConfig,
+
+    /// Native macOS desktop app settings.
+    #[serde(default)]
+    pub desktop: DesktopConfig,
 
     /// Agent-wide settings
     #[serde(default)]
@@ -288,6 +290,7 @@ impl Default for VTCodeConfig {
             notify: Vec::new(),
             history: HistoryConfig::default(),
             tui: TuiConfig::default(),
+            desktop: DesktopConfig::default(),
             agent: AgentConfig::default(),
             auth: AuthConfig::default(),
             tools: ToolsConfig::default(),

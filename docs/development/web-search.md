@@ -42,7 +42,11 @@ cooldowns also report a positive `retry_after_ms`, while a session cap reports
 `request_budget_remaining: 0`. Agents should not retry an anti-bot response
 immediately from the same network or session. They should use `web_fetch` for
 a known result URL under its separate approval and domain rules, or ask the
-user about a future alternate backend.
+user about a future alternate backend. For GitHub-flavored queries, the
+`next_action` on cooldown, cap, and anti-bot responses — and the warning on
+empty results — instead points at `gh search`/`gh api` via `exec_command`
+(subject to exec policy), which queries `api.github.com` outside the
+web_search budget.
 
 The response reader rejects bodies over 1,000,000 bytes before parsing. The streaming
 HTML parser limits results to 20, truncates titles and snippets, and accepts

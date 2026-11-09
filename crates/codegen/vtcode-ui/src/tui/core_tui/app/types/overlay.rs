@@ -26,6 +26,9 @@ pub struct ListOverlayRequest {
     pub hotkeys: Vec<TransientHotkey>,
     /// Latest apply/save feedback rendered as a toned status strip.
     pub status: Option<InlineStatus>,
+    /// Full plan markdown for non-terminal hosts. The TUI renders `lines`
+    /// plus transcript content and ignores this; `None` for non-plan lists.
+    pub plan_markdown: Option<String>,
 }
 
 #[derive(Clone, Debug)]

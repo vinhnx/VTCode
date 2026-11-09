@@ -20,13 +20,13 @@ fn disconnected_config_catalog_cannot_be_edited(cx: &mut TestAppContext) {
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     view.update(cx, |view, _| {
         view.workspace = Some("/workspace".into());
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: Vec::new(),
             target_versions: Vec::new(),
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
         assert!(!view.can_edit_cli_settings());
         view.backend = Some(BackendHandle { commands });
         assert!(view.can_edit_cli_settings());
@@ -63,8 +63,8 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-420.))), cx);
+        // The appearance page scrolls: center the language row before use.
+        scroll_settings_into_view(window, "ui-language-select", cx);
     })
     .unwrap();
 
@@ -92,6 +92,9 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         ("sv", "Inställningar", Some("Ny tråd"), crate::desktop::localization::UiLanguage::Swedish),
     ] {
         cx.update_window(window, |_, window, cx| {
+            // Relocalizing re-renders the hosted page: re-center the row
+            // every iteration so the click survives scroll resets.
+            scroll_settings_into_view(window, "ui-language-select", cx);
             window.within("ui-language-select").click("input", cx);
             window.input(locale, cx);
         })
@@ -311,6 +314,7 @@ fn context_boundary_events_notice_and_reset_stale_usage(cx: &mut TestAppContext)
                 session_id: "session".into(),
                 turn_id: Some("turn-1".into()),
                 event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
                     completed_at: None,
                     usage: Usage {
                         input_tokens: 5_000,
@@ -504,17 +508,20 @@ fn grouped_tool_rows_nest_under_their_header(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.click("activity-group-read", cx);
         window.render_frame(cx);
-        let header_x = window.find("activity-group-read").bounds().origin.x;
-        let child_x = window.find("tool-build").bounds().origin.x;
-        let single_x = window.find("tool-retry").bounds().origin.x;
-        assert!(child_x > header_x, "grouped rows nest under their header");
-        assert_eq!(single_x, header_x, "ungrouped rows stay flush");
+        // Nesting and flush are text contracts: the toggles carry different
+        // leading chrome (the group slot sits beside its toggle), so button
+        // boxes no longer encode them. Titles share one spine instead.
+        let header_x = window.find("activity-group-label-read").bounds().origin.x;
+        let child_x = window.find("tool-title-build").bounds().origin.x;
+        let single_x = window.find("tool-title-retry").bounds().origin.x;
+        assert!(child_x > header_x, "grouped titles nest under their header label");
+        assert_eq!(single_x, header_x, "single tool titles share the header spine");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn turn_dividers_separate_later_user_turns(cx: &mut TestAppContext) {
+fn user_turns_render_without_dividers(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -529,7 +536,7 @@ fn turn_dividers_separate_later_user_turns(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         assert!(window.try_find("turn-divider-first-turn").is_none(), "no divider above the first turn");
-        assert!(window.try_find("turn-divider-second-turn").is_some(), "later turns get a divider");
+        assert!(window.try_find("turn-divider-second-turn").is_none(), "later turns have no divider");
     })
     .unwrap();
 }
@@ -625,6 +632,7 @@ fn context_boundary_hides_and_restores_rendered_context_usage(cx: &mut TestAppCo
                 session_id: "session".into(),
                 turn_id: Some("turn-1".into()),
                 event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
                     completed_at: None,
                     usage: Usage {
                         input_tokens: 5_000,
@@ -758,54 +766,37 @@ fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
 }
 
 #[test]
-fn activity_details_omit_tool_output_from_the_metadata_copy() {
+fn tool_summaries_keep_captured_output_out_of_details() {
     use vtcode_exec_events::{
         CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
     };
 
+    // Details stay empty: call identities and exit codes are not user content, and
+    // the captured text belongs to the output body alone.
+    let body = "large captured result".repeat(32);
     let details = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+        is_delta: None,
         call_id: "call-1".into(),
         tool_call_id: Some("provider-call-1".into()),
         spool_path: Some(".vtcode/tool-outputs/call-1".into()),
-        output: "large captured result".repeat(32),
+        output: body.clone(),
         exit_code: Some(0),
         status: ToolCallStatus::Completed,
         app_previews: Vec::new(),
     }));
-    let payload = super::super::activity_details_payload(&details);
+    assert_eq!(super::super::activity_details_summary(&details, None), "");
+    assert_eq!(super::super::activity_output_text(&details).as_deref(), Some(body.as_str()));
 
-    assert!(payload.contains("call-1"), "tool identity remains available in metadata");
-    assert!(!payload.contains("large captured result"), "the separate output field owns captured text");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
-        json!({
-            "type": "tool_output",
-            "call_id": "call-1",
-            "tool_call_id": "provider-call-1",
-            "spool_path": ".vtcode/tool-outputs/call-1",
-            "exit_code": 0,
-            "status": "completed"
-        })
-    );
-
+    let aggregated = "discarded command output".repeat(64);
     let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
         command: "cargo check".into(),
         arguments: Some(json!({ "cwd": "/workspace" })),
-        aggregated_output: "discarded command output".repeat(64),
+        aggregated_output: aggregated.clone(),
         exit_code: None,
         status: CommandExecutionStatus::InProgress,
     }));
-    let payload = super::super::activity_details_payload(&command);
-    assert!(!payload.contains("discarded command output"));
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
-        json!({
-            "type": "command_execution",
-            "command": "cargo check",
-            "arguments": { "cwd": "/workspace" },
-            "status": "in_progress"
-        })
-    );
+    assert_eq!(super::super::activity_details_summary(&command, None), "");
+    assert_eq!(super::super::activity_output_text(&command).as_deref(), Some(aggregated.as_str()));
 }
 
 #[test]
@@ -950,6 +941,27 @@ fn loading_shimmer_labels_render_under_reduced_motion(cx: &mut TestAppContext) {
         assert!(window.find("turn-pending-label").bounds().size.height > px(0.));
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn restarted_failure_status_shows_localized_recovery_copy(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".into());
+        view.handle_backend_event(
+            BackendEvent::TurnStatus(
+                json!({ "sessionId": "session", "turnId": "old-turn", "status": "failed", "restarted": true }),
+            ),
+            cx,
+        );
+        assert_eq!(view.status, rust_i18n::t!("app.service.turn_recovered").to_string());
+        // A plain failure without the escalation marker keeps the raw label.
+        view.handle_backend_event(
+            BackendEvent::TurnStatus(json!({ "sessionId": "session", "turnId": "old-turn", "status": "failed" })),
+            cx,
+        );
+        assert_eq!(view.status, "failed");
+    });
 }
 
 #[gpui_kit::test]

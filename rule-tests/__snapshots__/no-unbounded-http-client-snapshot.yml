@@ -1,0 +1,42 @@
+id: no-unbounded-http-client
+snapshots:
+  ? |
+    fn build() {
+        let client = Client::new();
+        let _ = client;
+    }
+  : labels:
+    - source: Client::new()
+      style: primary
+      start: 30
+      end: 43
+  ? |
+    fn build() {
+        let client = HttpClient::new();
+        let _ = client;
+    }
+  : labels:
+    - source: HttpClient::new()
+      style: primary
+      start: 30
+      end: 47
+  ? |
+    fn build() {
+        let client = ReqwestClient::new();
+        let _ = client;
+    }
+  : labels:
+    - source: ReqwestClient::new()
+      style: primary
+      start: 30
+      end: 50
+  ? |
+    fn build() {
+        let client = reqwest::Client::new();
+        let _ = client;
+    }
+  : labels:
+    - source: reqwest::Client::new()
+      style: primary
+      start: 30
+      end: 52

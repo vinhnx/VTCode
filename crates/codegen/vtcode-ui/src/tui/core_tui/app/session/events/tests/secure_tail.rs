@@ -275,6 +275,170 @@ fn diagnostic_details_affordance_click_expands_through_the_production_event_path
     );
 }
 #[test]
+fn diagnostic_click_while_streaming_expands_and_pins_the_viewport() {
+    use ratatui::backend::TestBackend;
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+
+    // Production shape from tool failure diagnosis: a warning summary with
+    // prose recovery evidence that the transcript discloses in place.
+    let diagnostic = Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        code: "tool.execution_failed".into(),
+        summary: "Tool 'task_tracker' failed.".into(),
+        agent_details: "Likely cause: duplicate create.\nNext action: run task_tracker.list and continue.".into(),
+        correlation_id: "tool-diagnosis:streaming-click".into(),
+        actions: Vec::new(),
+    };
+
+    let mut session = build_session();
+    // A running turn: busy activity plus a streaming tail below the incident so
+    // the transcript overflows the viewport and bottom-follows.
+    session
+        .core
+        .handle_command(CoreInlineCommand::SetActivityState(vtcode_commons::ui_protocol::ActivityState::Building));
+    for index in 0..40 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![text_segment(format!("streamed line {index}"))],
+        });
+    }
+    session.core.upsert_diagnostic(diagnostic);
+    for index in 0..2 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![text_segment(format!("tail line {index}"))],
+        });
+    }
+    let is_expanded = |session: &Session| {
+        session
+            .core
+            .lines
+            .iter()
+            .any(|line| line.diagnostic.as_ref().is_some_and(|entry| entry.expanded))
+    };
+    assert!(!is_expanded(&session), "the incident starts collapsed");
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render streaming transcript");
+    let affordance_row = |terminal: &Terminal<TestBackend>, needle: &str| {
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .find(|row| {
+                (0..buffer.area.width)
+                    .map(|col| buffer[(col, *row)].symbol())
+                    .collect::<String>()
+                    .contains(needle)
+            })
+            .unwrap_or_else(|| panic!("expected a rendered row containing {needle:?}"))
+    };
+    let body = session.core.transcript_area().expect("transcript body");
+    let click = |session: &mut Session, row: u16| {
+        let (events, _received) = tokio::sync::mpsc::unbounded_channel();
+        session.handle_event(
+            CrosstermEvent::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(crossterm::event::MouseButton::Left),
+                column: body.x + 1,
+                row,
+                modifiers: KeyModifiers::NONE,
+            }),
+            &events,
+            None,
+        );
+    };
+
+    // Perfect aim at the freshly painted affordance: hit-testing resolves
+    // against the painted state, so the toggle itself must land.
+    click(&mut session, affordance_row(&terminal, "click or F8 to expand"));
+    assert!(is_expanded(&session), "clicking the visible affordance must expand while streaming");
+
+    // Continued streaming must not scroll the just-expanded evidence away: the
+    // toggle pins the viewport instead of bottom-following.
+    for index in 0..24 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![text_segment(format!("later streamed line {index}"))],
+        });
+    }
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render after continued streaming");
+    let rendered = rendered_buffer_text(&terminal);
+    assert!(
+        rendered.contains("duplicate create"),
+        "expanded evidence must stay visible while streaming continues: {rendered}"
+    );
+
+    // Asymmetric direction: collapsing through the same path restores the
+    // concise view and releases the pin back to bottom-follow.
+    click(&mut session, affordance_row(&terminal, "click or F8 to collapse"));
+    assert!(!is_expanded(&session), "clicking the affordance again must collapse");
+    terminal.draw(|frame| session.render(frame)).expect("render after collapse");
+    let rendered = rendered_buffer_text(&terminal);
+    assert!(!rendered.contains("duplicate create"), "collapsed evidence must leave the transcript: {rendered}");
+    assert!(
+        session.core.scroll_manager.offset() > 0,
+        "collapsing keeps the pinned viewport stable like any scroll-away; jump-to-bottom resumes follow"
+    );
+}
+#[test]
+fn diagnostic_f8_while_streaming_expands_and_pins_the_viewport() {
+    use ratatui::backend::TestBackend;
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+
+    let diagnostic = Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        code: "tool.execution_failed".into(),
+        summary: "Tool 'task_tracker' failed.".into(),
+        agent_details: "Likely cause: duplicate create.\nNext action: run task_tracker.list and continue.".into(),
+        correlation_id: "tool-diagnosis:streaming-f8".into(),
+        actions: Vec::new(),
+    };
+
+    let mut session = build_session();
+    session
+        .core
+        .handle_command(CoreInlineCommand::SetActivityState(vtcode_commons::ui_protocol::ActivityState::Building));
+    for index in 0..40 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![text_segment(format!("streamed line {index}"))],
+        });
+    }
+    session.core.upsert_diagnostic(diagnostic);
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render streaming transcript");
+    let event = session.process_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
+    assert!(event.is_none(), "F8 toggles locally and emits no runtime event");
+    assert!(
+        session
+            .core
+            .lines
+            .iter()
+            .any(|line| line.diagnostic.as_ref().is_some_and(|entry| entry.expanded)),
+        "F8 must expand the latest incident while streaming"
+    );
+
+    for index in 0..24 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![text_segment(format!("later streamed line {index}"))],
+        });
+    }
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render after continued streaming");
+    let rendered = rendered_buffer_text(&terminal);
+    assert!(
+        rendered.contains("duplicate create"),
+        "F8-expanded evidence must stay visible while streaming continues: {rendered}"
+    );
+}
+#[test]
 fn diagnostic_structured_payload_has_no_transcript_disclosure_affordance() {
     use ratatui::backend::TestBackend;
     use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};

@@ -157,6 +157,22 @@ vtcode --version
 brew uninstall vtcode
 ```
 
+### Homebrew Cask (desktop app)
+
+```bash
+# Test locally (macOS 15+, Apple Silicon)
+brew install --verbose --cask ./homebrew/vtcode-desktop.rb
+brew uninstall --cask vtcode-desktop
+```
+
+`scripts/release.sh` updates `homebrew/vtcode-desktop.rb` from the release's
+`vtcode-desktop-<version>-aarch64-apple-darwin.zip.sha256` and publishes it to
+`vinhnx/homebrew-tap/Casks/vtcode-desktop.rb`. Verify the transformation without publishing:
+
+```bash
+python3 scripts/tests/test_homebrew_cask.py
+```
+
 ## Updating for New Releases
 
 ### 1. Create GitHub Release
@@ -204,15 +220,22 @@ shasum -a 256 vtcode-v*.zip
 
 ### 3. Update Homebrew Tap (if applicable)
 
-If using a personal tap (github.com/vinhnx/homebrew-vtcode):
+`scripts/release.sh` normally publishes both packages for you: it updates `homebrew/vtcode.rb` and
+`homebrew/vtcode-desktop.rb`, commits them, and pushes `vtcode.rb` plus `Casks/vtcode-desktop.rb` to
+`vinhnx/homebrew-tap`. To repair a tap by hand:
 
 ```bash
-cd ~/homebrew-vtcode
-cp ../vtcode/homebrew/vtcode.rb Formula/
-git add Formula/vtcode.rb
-git commit -m "Update VT Code to v{VERSION}"
-git push
+git clone https://github.com/vinhnx/homebrew-tap
+cp homebrew/vtcode.rb <tap>/vtcode.rb
+mkdir -p <tap>/Casks
+cp homebrew/vtcode-desktop.rb <tap>/Casks/vtcode-desktop.rb
+git -C <tap> add vtcode.rb Casks/vtcode-desktop.rb
+git -C <tap> commit -m "Update VT Code to v{VERSION}"
+git -C <tap> push
 ```
+
+The cask's `sha256` is the digest from
+`vtcode-desktop-<version>-aarch64-apple-darwin.zip.sha256`, not the CLI tarball digests.
 
 ### 4. Verify Installation
 
@@ -228,7 +251,8 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 vtcode --version
 
 # Homebrew
-brew install vtcode
+brew trust vinhnx/tap
+brew install vinhnx/tap/vtcode
 vtcode --version
 ```
 

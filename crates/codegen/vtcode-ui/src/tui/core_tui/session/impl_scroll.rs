@@ -145,9 +145,23 @@ impl Session {
         self.scroll_manager.scroll_to_top();
         let offset_delta = self.scroll_manager.offset() as i64 - previous_offset as i64;
         self.mouse_selection.adjust_for_scroll(offset_delta as i32);
-        self.user_scrolled = false;
+        self.sync_follow_state();
         self.invalidate_transcript_viewport();
         self.mark_dirty();
+    }
+
+    /// Plain-Enter viewport reconciliation shared by both Enter funnels
+    /// (core + app): when the draft is non-empty and the transcript sits
+    /// away from the tail, jump to the latest message with the draft
+    /// preserved and report the key consumed so the caller submits nothing.
+    /// Blank drafts fall through to the submit path, whose take already
+    /// re-follows the tail while clearing.
+    pub(crate) fn consume_enter_jump_to_latest(&mut self) -> bool {
+        if self.input_manager.content().trim().is_empty() || self.scroll_offset() == 0 {
+            return false;
+        }
+        self.scroll_to_bottom();
+        true
     }
 
     /// Whether the Jump to last change hint should be shown.
@@ -189,8 +203,9 @@ impl Session {
         if offset_delta != 0 {
             self.mouse_selection.adjust_for_scroll(offset_delta as i32);
         }
-        self.user_scrolled = new_offset != 0;
+        self.sync_follow_state();
         self.invalidate_transcript_viewport();
+        self.arm_transcript_flash(target_idx);
         self.mark_dirty();
         true
     }

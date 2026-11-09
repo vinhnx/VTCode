@@ -16,6 +16,11 @@ The row disappears when the operation ends.
 Approval waits stay static; reduced-motion and screen-reader settings keep labels visible without shimmer. Progress
 does not appear in saved conversation history or exports, and queued messages keep their existing display.
 
+A completed turn carries one wall-clock footer (`· 3:12 PM`, local time) after its final agent message in both the
+TUI transcript and plain CLI output. Intermediate responses within the same turn (pre-tool commentary, plan prose) stay
+unstamped, so the clock marks the turn's summary point. Replayed history (resume, rewind) keeps its original text
+without fresh stamps. Disable all footers with `ui.show_message_timestamps = false`.
+
 For measurements and integration details, see [response progress and latency](../development/response-progress.md).
 
 ## Keyboard Shortcuts
@@ -333,6 +338,11 @@ When a task is already running, VT Code keeps the active turn alive and queues f
   a mid-turn injection.
   Harness-generated continuations (tracker/plan auto-continue, recoverable blocked-end resume, background
   completion, verification recovery) stay quiet and never echo their full internal prompt.
+- Set `ui.busy_enter_behavior = "steer"` (via `/config` or `vtcode.toml`) to inject busy plain-Enter text into the
+  live turn instead of queueing it. Steered input applies at the next model/tool boundary mid-turn, or at the next
+  turn boundary if the turn ends first; when the steering channel is unavailable the message falls through to the
+  queue instead of vanishing. Slash commands and attachments always queue, even in steer mode, and `Ctrl+Enter`/`Tab`
+  keep their explicit queue role. The default is `"queue"`.
 - `Ctrl+Enter` queues the current draft as a _batchable_ message. Consecutive text-only Ctrl+Enter messages queued while
   a turn runs are joined into a single combined prompt for the next turn. Slash commands other than `/stop`, `/pause`,
   `/resume`, and `/model` are queued non-batchable so their intent is preserved; `/stop`, `/pause`, and `/resume` take

@@ -8,6 +8,18 @@ use crate::tools::file_ops::{canonical_diff_previews, diff_preview_user_message}
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Process-wide source of `ThreadItem` handles.
+///
+/// `ThreadItem.id` is the handle every consumer keys on (transcript rows,
+/// canonical memory projections, replay), so it must be unique across all
+/// emitters in a session. A per-emitter counter is not enough: emitters are
+/// created per recorder, per runtime and per streaming step, so each one
+/// restarted at `item_0` and rebound an existing handle to a different item —
+/// a dangling handle that silently overwrote an earlier row. One monotonic
+/// counter keeps handles unique across emitters, turns and retries.
+static NEXT_ITEM_HANDLE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Default)]
 struct StreamingTextState {
@@ -101,7 +113,11 @@ pub fn file_change_completed_event(
             Some("deleted" | "removed") => PatchChangeKind::Delete,
             _ => PatchChangeKind::Update,
         };
-        changes.push(FileUpdateChange { path: path.to_owned(), kind });
+        changes.push(FileUpdateChange {
+            path: path.to_owned(),
+            kind,
+            terminators_normalized: preview.get("normalized_terminators").and_then(Value::as_bool),
+        });
         diff_incomplete |= preview.get("truncated").and_then(Value::as_bool) == Some(true)
             || preview.get("skipped").and_then(Value::as_bool) == Some(true)
             || preview.get("content").and_then(Value::as_str).is_none();
@@ -132,6 +148,7 @@ pub fn file_change_completed_event(
             changes.push(FileUpdateChange {
                 path: path.to_owned(),
                 kind: PatchChangeKind::Update,
+                terminators_normalized: None,
             });
         }
     }
@@ -157,7 +174,6 @@ pub fn file_change_completed_event(
 /// Shared lifecycle state for assistant text, reasoning, and model-emitted tool calls.
 #[derive(Debug, Default)]
 pub struct SharedLifecycleEmitter {
-    next_item_index: u64,
     assistant: StreamingTextState,
     reasoning: StreamingTextState,
     reasoning_stage: Option<String>,
@@ -167,11 +183,12 @@ pub struct SharedLifecycleEmitter {
 
 impl SharedLifecycleEmitter {
     /// Generate the next unique item ID for lifecycle events.
+    ///
+    /// Takes `&self` because the counter is process-wide: uniqueness must not
+    /// depend on which emitter instance mints the handle.
     #[must_use]
-    pub fn next_item_id(&mut self) -> String {
-        let id = self.next_item_index;
-        self.next_item_index += 1;
-        format!("item_{id}")
+    pub fn next_item_id(&self) -> String {
+        format!("item_{}", NEXT_ITEM_HANDLE.fetch_add(1, Ordering::Relaxed))
     }
 
     /// Emit a completed agent message event with the full text.
@@ -663,6 +680,7 @@ fn tool_output_item(
         context: None,
         id: tool_output_item_id(call_item_id),
         details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: call_item_id.to_string(),
             tool_call_id: tool_call_id.map(str::to_string),
             spool_path: spool_path.map(str::to_string),
@@ -737,6 +755,22 @@ pub fn tool_output_updated_event(
     ThreadEvent::ItemUpdated(ItemUpdatedEvent {
         item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, output, Vec::new()),
     })
+}
+
+/// Emit an incremental output chunk instead of an output snapshot.
+#[must_use]
+pub fn tool_output_delta_event(
+    call_item_id: String,
+    tool_call_id: Option<&str>,
+    output: impl Into<String>,
+) -> ThreadEvent {
+    let mut event = tool_output_updated_event(call_item_id, tool_call_id, output);
+    if let ThreadEvent::ItemUpdated(update) = &mut event
+        && let ThreadItemDetails::ToolOutput(output) = &mut update.item.details
+    {
+        output.is_delta = Some(true);
+    }
+    event
 }
 
 #[must_use]

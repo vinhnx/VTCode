@@ -186,9 +186,9 @@ mismatches and symlink aliases cannot replenish the allowance.
 
 Reuse successful reads and saved checker diagnostics. Read only missing or changed ranges, and rerun checks after
 changes or unresolved failures. Standalone `markdownlint-cli2` checks, including explicit `npx` invocations, count as
-verification when they do not request `--fix`. The default `python3 scripts/check_markdown.py` invocation also counts;
-its `--fix`, `--list`, and help forms do not. Availability probes such as `command -v npx` remain inspection. Unknown
-scripts stay subject to planning and execution policy.
+verification when they do not request `--fix`. The default `python3 scripts/check_markdown.py` invocation and its
+path-scoped forms also count; its `--fix`, `--list`, and help forms do not. Availability probes such as
+`command -v npx` remain inspection. Unknown scripts stay subject to planning and execution policy.
 
 Indexed tracker updates send the model checklist totals and the changed item. Explicit list calls retain the complete
 checklist; persistence and UI events keep the full original result. This avoids repeatedly sending unchanged task

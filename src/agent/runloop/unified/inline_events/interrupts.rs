@@ -20,13 +20,12 @@ impl<'a> InlineInterruptCoordinator<'a> {
 
     pub(crate) fn reset_after_user_action(self, notice_displayed: &mut bool) {
         if !self.state.is_cancel_requested() && !self.state.is_cancel_handled() {
-            self.state.reset();
             *notice_displayed = false;
         }
     }
 
     pub(crate) fn reset_after_submission(self, notice_displayed: &mut bool) {
-        self.state.reset();
+        self.state.reset_handled_cancel();
         *notice_displayed = false;
     }
 

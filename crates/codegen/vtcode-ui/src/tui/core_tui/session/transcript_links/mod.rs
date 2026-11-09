@@ -643,10 +643,10 @@ fn project_match_onto_located_row(
     let mut relative_start = overlap_start - located.start + located.indent;
     let mut relative_end = overlap_end - located.start + located.indent;
     if !wrapped_text.is_char_boundary(relative_start) {
-        relative_start = floor_char_boundary_impl(wrapped_text, relative_start);
+        relative_start = wrapped_text.floor_char_boundary(relative_start);
     }
     if !wrapped_text.is_char_boundary(relative_end) {
-        relative_end = ceil_char_boundary_impl(wrapped_text, relative_end);
+        relative_end = wrapped_text.ceil_char_boundary(relative_end);
     }
 
     (relative_start < relative_end && relative_end <= wrapped_text.len()).then_some((relative_start, relative_end))
@@ -672,22 +672,6 @@ fn each_projected_row_link(
         }
         emit(relative_start, relative_end, link_match);
     }
-}
-
-fn floor_char_boundary_impl(s: &str, i: usize) -> usize {
-    let mut idx = i.min(s.len());
-    while idx > 0 && !s.is_char_boundary(idx) {
-        idx -= 1;
-    }
-    idx
-}
-
-fn ceil_char_boundary_impl(s: &str, i: usize) -> usize {
-    let mut idx = i.min(s.len());
-    while idx < s.len() && !s.is_char_boundary(idx) {
-        idx += 1;
-    }
-    idx
 }
 
 #[inline]

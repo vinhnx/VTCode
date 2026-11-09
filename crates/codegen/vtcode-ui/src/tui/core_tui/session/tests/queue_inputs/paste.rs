@@ -129,3 +129,57 @@ fn shift_enter_after_large_paste_inserts_newline() {
     assert_eq!(data.cursor_y, 1);
     assert!(session.desired_input_lines(VIEW_WIDTH) >= 2);
 }
+#[test]
+fn paste_expand_pins_viewport_while_following() {
+    use crate::tui::prelude::InlineSegment;
+
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.apply_transcript_width(100);
+    for index in 0..40 {
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![InlineSegment {
+                text: format!("streamed line {index}"),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        );
+    }
+    let mut json = String::from("{\n");
+    let line_total = ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD + 5;
+    for idx in 0..line_total {
+        json.push_str(&format!("  \"key{idx}\": \"value{idx}\",\n"));
+    }
+    json.push_str("  \"end\": true\n}");
+    session.append_pasted_message(InlineMessageKind::Tool, json.clone(), json.lines().count());
+    assert_eq!(session.collapsed_pastes.len(), 1);
+    let collapsed_index = session.collapsed_pastes[0].line_index;
+    for index in 0..2 {
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![InlineSegment {
+                text: format!("tail line {index}"),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        );
+    }
+    let top_row = |session: &mut Session| session.current_max_scroll_offset() - session.scroll_manager.offset();
+    assert_eq!(session.scroll_manager.offset(), 0, "the transcript starts bottom-following");
+    let pinned_top = top_row(&mut session);
+
+    assert!(session.expand_collapsed_paste_at_line_index(collapsed_index));
+    assert!(session.scroll_manager.offset() > 0, "expanding pins the viewport instead of following");
+    assert_eq!(top_row(&mut session), pinned_top, "expansion keeps the pre-toggle top row");
+
+    // Continued streaming must not move the pinned view.
+    for index in 0..12 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![InlineSegment {
+                text: format!("later line {index}"),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        });
+    }
+    assert_eq!(top_row(&mut session), pinned_top, "streaming preserves the pinned view");
+    assert!(session.pending_new_messages > 0, "pinned arrivals feed the new-content hint");
+}

@@ -7,7 +7,7 @@ fn config_deep_link_selects_group_setting_or_search(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![
                     config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
                     config_page_setting("agent.thinking_budget", json!(8_000), "Model & Provider"),
@@ -17,7 +17,7 @@ fn config_deep_link_selects_group_setting_or_search(cx: &mut TestAppContext) {
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             let action = super::super::composer_controls::DesktopSlashAction::Configuration(Some("Tools".into()));
             assert!(view.handle_desktop_slash_action(action, window, cx));
         });
@@ -92,7 +92,7 @@ fn config_deep_link_before_catalog_load_filters_once_settings_arrive(cx: &mut Te
         assert!(window.try_find("config-loading-label").is_some());
 
         view.update(cx, |view, _| {
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![
                     config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
                     config_page_setting("agent.thinking_budget", json!(8_000), "Model & Provider"),
@@ -102,7 +102,7 @@ fn config_deep_link_before_catalog_load_filters_once_settings_arrive(cx: &mut Te
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
         });
         window.render_frame(cx);
         assert!(window.try_find("config-edit-agent.thinking_budget").is_some());

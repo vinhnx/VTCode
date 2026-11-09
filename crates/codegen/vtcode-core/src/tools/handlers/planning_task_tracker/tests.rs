@@ -8,7 +8,7 @@ async fn setup_planning_workflow() -> (TempDir, PlanningWorkflowState, PlanningT
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
     let plan_file = plans_dir.join("test-plan.md");
     std::fs::write(&plan_file, "# Test Plan\n").expect("write plan");
-    state.set_plan_file(Some(plan_file)).await;
+    state.set_plan_file(Some(plan_file));
     state.enable();
 
     let tool = PlanningTaskTrackerTool::new(state.clone());

@@ -9,8 +9,10 @@ fn duckduckgo_guidance_is_present_only_with_search_and_stays_bounded() {
     assert!(enabled.contains("antiban_blocked"));
     assert!(enabled.contains("retryable: false"));
     assert!(enabled.contains("retry_after_ms"));
+    assert!(enabled.contains("gh search"));
     assert!(!disabled.contains("DuckDuckGo results"));
-    assert!(enabled.len().saturating_sub(disabled.len()) < 250);
+    assert!(!disabled.contains("gh search"));
+    assert!(enabled.len().saturating_sub(disabled.len()) < 320);
 }
 #[test]
 fn model_tool_prompt_reuse_matches_rebuild_across_density_and_capabilities() {

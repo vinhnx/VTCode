@@ -20,6 +20,7 @@ pub(super) fn fixtures(count: usize, payload_bytes: usize) -> Vec<ThreadEvent> {
         }));
     }
     events.push(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),

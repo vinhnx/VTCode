@@ -54,12 +54,20 @@ fn interaction_copy_is_localized_for_every_language() {
             "app.interaction.progress_aria",
             "app.interaction.steps_aria",
             "app.interaction.cancel_request",
+            "app.interaction.confirm",
             "app.interaction.previous",
             "app.interaction.submit_answers",
             "app.interaction.next_question",
             "app.interaction.your_answer",
             "app.interaction.recommended",
+            "app.interaction.recommended_badge",
             "app.interaction.choice_hint",
+            "app.interaction.show_full_plan",
+            "app.interaction.hide_full_plan",
+            "app.interaction.open_in_inspector",
+            "app.interaction.edit_plan",
+            "app.interaction.editing_plan",
+            "app.interaction.editing_plan_aria",
         ],
         &[],
     );
@@ -120,6 +128,8 @@ fn notifications_copy_is_localized_for_every_language() {
             "app.notifications.input_waiting",
             "app.notifications.service_disconnected",
             "app.notifications.update_available",
+            "app.notifications.turn_undo_done",
+            "app.notifications.turn_undo_failed",
         ],
         &[],
     );
@@ -441,11 +451,7 @@ fn palette_badges_copy_is_localized_for_every_language() {
 #[test]
 fn settings_diagnostics_copy_is_localized_for_every_language() {
     assert_localized(
-        &[
-            "app.settings.licenses.locate_failed",
-            "app.settings.storage.byte_one",
-            "app.settings.storage.bytes_many",
-        ],
+        &["app.settings.storage.byte_one", "app.settings.storage.bytes_many"],
         &[
             ("vi", "app.settings.storage.byte_one"),
             ("es", "app.settings.storage.byte_one"),
@@ -460,9 +466,6 @@ fn settings_diagnostics_copy_is_localized_for_every_language() {
     );
     for language in UiLanguage::ALL {
         let locale = language.locale();
-        let failed =
-            rust_i18n::t!("app.settings.licenses.locate_failed", locale = locale, error = "demo-error").to_string();
-        assert!(failed.contains("demo-error"), "{locale}: {failed}");
         let many = rust_i18n::t!("app.settings.storage.bytes_many", locale = locale, n = 42).to_string();
         assert!(many.contains("42"), "{locale}: {many}");
     }
@@ -477,4 +480,52 @@ fn workspace_review_stats_copy_is_localized_for_every_language() {
         assert!(stats.contains('7'), "{locale}: {stats}");
         assert!(stats.contains('3'), "{locale}: {stats}");
     }
+}
+
+#[test]
+fn diff_copy_is_localized_for_every_language() {
+    assert_localized(
+        &[
+            "app.settings.diff.group",
+            "app.settings.diff.wrap.label",
+            "app.settings.diff.numbers.label",
+            "app.settings.diff.syntax.label",
+            "app.settings.diff.headers.label",
+            "app.settings.diff.tint.label",
+            "app.settings.diff.indicator.label",
+            "app.settings.diff.indicator.description",
+            "app.settings.diff.indicator.signs",
+            "app.settings.diff.indicator.bars",
+            "app.settings.diff.indicator.none",
+            "app.settings.diff.separator.label",
+            "app.settings.diff.separator.description",
+            "app.settings.diff.separator.metadata",
+            "app.settings.diff.separator.line_info",
+            "app.settings.diff.separator.simple",
+            "app.settings.diff.hover.label",
+            "app.settings.diff.hover.description",
+            "app.settings.diff.hover.none",
+            "app.settings.diff.hover.line",
+            "app.settings.diff.hover.line_number",
+            "app.settings.diff.hover.both",
+            "app.settings.diff.context.label",
+            "app.settings.diff.context.description",
+            "app.settings.diff.context.depth_3",
+            "app.settings.diff.context.depth_5",
+            "app.settings.diff.context.depth_10",
+            "app.settings.diff.context.unfolded",
+            "app.settings.diff.inline.label",
+            "app.settings.diff.inline.description",
+            "app.settings.diff.inline.words",
+            "app.settings.diff.inline.characters",
+            "app.settings.diff.inline.lines",
+        ],
+        &[
+            ("es", "app.settings.diff.group"),
+            ("fr", "app.settings.diff.group"),
+            ("de", "app.settings.diff.group"),
+            ("pt-BR", "app.settings.diff.group"),
+            ("nl", "app.settings.diff.group"),
+        ],
+    );
 }

@@ -11,7 +11,7 @@
 //! settings/<tab>            (tab names share the /settings aliases)
 //! config | config/<path>
 //! palette/<kind>            (commands, models, fonts/ui, …)
-//! command/<id>              (the 33 configurable shortcut ids)
+//! command/<id>              (the 34 configurable shortcut ids)
 //! action/<verb>[/<args>]    (sessions, files, models, …)
 //! ```
 //!
@@ -21,6 +21,7 @@
 //! which only make sense with live trigger state.
 
 use super::*;
+use gpui_kit::{ClickEvent, WeakEntity};
 
 /// Prefix an OS-registered scheme would wrap these links with. Accepted and
 /// stripped so typed, pasted, and future external links parse identically.
@@ -87,6 +88,75 @@ pub(super) enum DeepLink {
     Palette(PaletteLink),
     Command(shortcuts::CommandId),
     Action(PaletteAction),
+    /// The changelog viewer: latest release when an update is available,
+    /// else the running version's known notes. A viewer, not a palette
+    /// action, so it bypasses [`PaletteAction`](super::palette::PaletteAction).
+    Changelog,
+}
+
+/// Click destination for a notification banner. Owned so the banner callback
+/// (`Fn + 'static`) can carry it past the notifying event; resolved by
+/// [`DesktopView::open_notification_target`], which tolerates threads the
+/// user has since left and interactions that have since resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum NotificationTarget {
+    /// A thread that finished or needs attention.
+    Thread { session_id: String },
+    /// A waiting approval/question; focuses the interaction when still current.
+    Interaction { session_id: String, interaction_id: String },
+    /// Service disconnect: land on the workspace status.
+    Workspace,
+    /// New release: the About settings tab (update row + Check button).
+    UpdateSettings,
+    /// New release: the changelog viewer for the notified version, falling
+    /// back to [`NotificationTarget::UpdateSettings`] when the status moved on.
+    UpdateChangelog { version: String },
+}
+
+impl NotificationTarget {
+    /// Canonical deeplink address for this target, so every notification
+    /// destination round-trips through the same `verb/path` spelling `/go`
+    /// accepts. Address only: clicks still resolve through
+    /// [`DesktopView::open_notification_target`], which carries the
+    /// stale-tolerance (thread re-select, focus-only-if-current) a bare
+    /// deeplink lacks. An Interaction degrades to its thread link; the
+    /// waiting-prompt focus has no link form.
+    #[cfg(test)]
+    fn to_deeplink(&self) -> DeepLink {
+        match self {
+            Self::Thread { session_id } | Self::Interaction { session_id, .. } => {
+                DeepLink::Action(PaletteAction::LoadSession(session_id.clone()))
+            }
+            Self::Workspace => DeepLink::Route(Route::Workspace),
+            Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::About),
+            // The viewer has a real link form; the pinned version only rides
+            // the live click, which falls back to the tab when stale.
+            Self::UpdateChangelog { .. } => DeepLink::Changelog,
+        }
+    }
+
+    /// Canonical link text for this target. Test-only contract pin: every
+    /// target must stay addressable through the same `verb/path` spelling
+    /// `/go` accepts. Clicks resolve through
+    /// [`DesktopView::open_notification_target`], not this address.
+    #[cfg(test)]
+    pub(super) fn path(&self) -> Option<String> {
+        self.to_deeplink().path()
+    }
+}
+
+/// Shared banner/toast click handler: carry an owned target behind a weak
+/// view so clicks land after thread switches and view teardown alike. One
+/// construction for the agent-activity, update, and turn-undo emitters.
+pub(super) fn click_handler(
+    target: NotificationTarget,
+    view: WeakEntity<DesktopView>,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    move |_, window, cx| {
+        let _updated = view.update(cx, |view, cx| {
+            view.open_notification_target(target.clone(), window, cx);
+        });
+    }
 }
 
 impl DeepLink {
@@ -109,6 +179,7 @@ impl DeepLink {
             Self::Palette(kind) => Some(format!("palette/{}", kind.verb())),
             Self::Command(id) => Some(format!("command/{}", id.as_str())),
             Self::Action(action) => action_path(action),
+            Self::Changelog => Some("changelog".to_string()),
         }
     }
 }
@@ -123,6 +194,7 @@ fn tab_name(tab: settings::SettingsTab) -> &'static str {
         settings::SettingsTab::Connections => "connections",
         settings::SettingsTab::Notifications => "notifications",
         settings::SettingsTab::Storage => "storage",
+        settings::SettingsTab::About => "about",
     }
 }
 
@@ -134,6 +206,9 @@ fn action_path(action: &PaletteAction) -> Option<String> {
     match action {
         PaletteAction::NewSession => Some("action/new-session".to_string()),
         PaletteAction::CloseSession => Some("action/close-session".to_string()),
+        PaletteAction::CopyThreadTitle => Some("action/copy-thread-title".to_string()),
+        PaletteAction::CloseOtherTabs => Some("action/close-other-tabs".to_string()),
+        PaletteAction::OpenInCli => Some("action/open-in-cli".to_string()),
         PaletteAction::CopyLatestMessage => Some("action/copy-latest".to_string()),
         PaletteAction::ChooseModel => Some("action/choose-model".to_string()),
         PaletteAction::ChooseWorkspace => Some("action/choose-workspace".to_string()),
@@ -147,7 +222,7 @@ fn action_path(action: &PaletteAction) -> Option<String> {
         PaletteAction::OpenConversationSearch { session_id } => {
             Some(format!("action/conversation-search/{session_id}"))
         }
-        PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+        PaletteAction::JumpToTranscriptItem { session_id, item_id, .. } => {
             Some(format!("action/jump/{session_id}/{item_id}"))
         }
         PaletteAction::ShowActivityOutput { session_id, item_id } => {
@@ -199,6 +274,7 @@ pub(super) fn parse(input: &str) -> Option<DeepLink> {
         "workspace" => exact(tail, DeepLink::Route(Route::Workspace)),
         "browser" => exact(tail, DeepLink::Route(Route::Browser)),
         "review" => exact(tail, DeepLink::Route(Route::Review)),
+        "changelog" => exact(tail, DeepLink::Changelog),
         "settings" => parse_settings(tail),
         "config" => parse_config(tail),
         "palette" => parse_palette(tail),
@@ -308,6 +384,9 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
     let action = match verb.to_ascii_lowercase().as_str() {
         "new-session" => exact(rest, PaletteAction::NewSession)?,
         "close-session" => exact(rest, PaletteAction::CloseSession)?,
+        "copy-thread-title" => exact(rest, PaletteAction::CopyThreadTitle)?,
+        "close-other-tabs" => exact(rest, PaletteAction::CloseOtherTabs)?,
+        "open-in-cli" => exact(rest, PaletteAction::OpenInCli)?,
         "copy-latest" => exact(rest, PaletteAction::CopyLatestMessage)?,
         "choose-model" => exact(rest, PaletteAction::ChooseModel)?,
         "choose-workspace" => exact(rest, PaletteAction::ChooseWorkspace)?,
@@ -332,7 +411,7 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
         }
         "jump" => {
             let (session_id, item_id) = pair(rest)?;
-            PaletteAction::JumpToTranscriptItem { session_id, item_id }
+            PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search: false }
         }
         "output" => {
             let (session_id, item_id) = pair(rest)?;
@@ -400,6 +479,11 @@ impl DesktopView {
                 self.run_palette_action(action, window, cx);
                 reachable
             }
+            DeepLink::Changelog => {
+                let reachable = self.can_view_any_changelog();
+                self.open_best_changelog(window, cx);
+                reachable
+            }
         }
     }
 
@@ -409,6 +493,63 @@ impl DesktopView {
             Route::Settings => self.open_settings(window, cx),
             Route::Browser => self.open_thread_browser(window, cx),
             Route::Review => self.show_review(window, cx),
+        }
+    }
+
+    /// Open a notification click destination. Stale targets degrade to the
+    /// workspace: a resolved interaction still lands on its thread rather
+    /// than failing, and a switched thread is re-selected through the UI
+    /// entry so a running turn gets the confirm modal instead of a yank.
+    pub(super) fn open_notification_target(
+        &mut self,
+        target: NotificationTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match target {
+            NotificationTarget::Thread { session_id } => {
+                self.ensure_notification_session(&session_id, window, cx);
+                self.open_route_link(Route::Workspace, window, cx);
+            }
+            NotificationTarget::Interaction { session_id, interaction_id } => {
+                self.ensure_notification_session(&session_id, window, cx);
+                self.open_route_link(Route::Workspace, window, cx);
+                if self
+                    .interaction
+                    .as_ref()
+                    .is_some_and(|current| current.interaction_id == interaction_id)
+                {
+                    self.interaction_focus.focus(window, cx);
+                }
+            }
+            NotificationTarget::Workspace => self.open_route_link(Route::Workspace, window, cx),
+            NotificationTarget::UpdateSettings => {
+                self.run_palette_action(PaletteAction::SelectSettingsTab(settings::SettingsTab::About), window, cx);
+            }
+            NotificationTarget::UpdateChangelog { version } => {
+                // Stale-tolerance: the status may have refreshed between the
+                // notification and the click. Open the viewer only when it
+                // still describes the notified release; otherwise land on
+                // the update row, which always reflects the live status.
+                let still_current = self
+                    .update_status
+                    .as_ref()
+                    .filter(|status| status.update_available)
+                    .and_then(|status| status.latest_version.as_deref())
+                    == Some(version.as_str());
+                if still_current {
+                    self.open_changelog(window, cx);
+                } else {
+                    self.open_notification_target(NotificationTarget::UpdateSettings, window, cx);
+                }
+            }
+        }
+    }
+
+    /// Re-select the notified thread when the user has since moved elsewhere.
+    fn ensure_notification_session(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_session_id.as_deref() != Some(session_id) {
+            let _loaded = self.load_session_from_ui(session_id.to_string(), window, cx);
         }
     }
 
@@ -594,6 +735,7 @@ mod tests {
             ("connections", SettingsTab::Connections),
             ("notifications", SettingsTab::Notifications),
             ("storage", SettingsTab::Storage),
+            ("about", SettingsTab::About),
         ] {
             assert_eq!(parse(&format!("settings/{name}")), Some(DeepLink::SettingsTab(tab)), "{name}");
         }
@@ -627,6 +769,7 @@ mod tests {
         }
         // Representative actions, parameterless and parameterized.
         assert_eq!(parse("action/toggle-zen"), Some(DeepLink::Action(PaletteAction::ToggleZenMode)));
+        assert_eq!(parse("action/open-in-cli"), Some(DeepLink::Action(PaletteAction::OpenInCli)));
         assert_eq!(parse("action/load-session/abc"), Some(DeepLink::Action(PaletteAction::LoadSession("abc".into()))));
         assert_eq!(
             parse("action/preview-file/src/main.rs"),
@@ -645,6 +788,7 @@ mod tests {
             Some(DeepLink::Action(PaletteAction::JumpToTranscriptItem {
                 session_id: "sess".into(),
                 item_id: "item-1".into(),
+                from_search: false,
             }))
         );
     }
@@ -722,6 +866,9 @@ mod tests {
             DeepLink::Command(CommandId::ZenMode),
             DeepLink::Action(PaletteAction::ToggleInspector),
             DeepLink::Action(PaletteAction::PreviewFile("src/main.rs".into())),
+            DeepLink::Action(PaletteAction::CopyThreadTitle),
+            DeepLink::Action(PaletteAction::CloseOtherTabs),
+            DeepLink::Changelog,
         ];
         for link in links {
             let path = link.path().expect("addressable links have paths");
@@ -752,6 +899,46 @@ mod tests {
                 .path()
                 .as_deref(),
             Some("config/agent.x")
+        );
+    }
+
+    #[test]
+    fn notification_target_paths_round_trip_through_parse() {
+        let targets = [
+            NotificationTarget::Thread { session_id: "thread-a".into() },
+            NotificationTarget::Interaction {
+                session_id: "thread-a".into(),
+                interaction_id: "prompt-1".into(),
+            },
+            NotificationTarget::Workspace,
+            NotificationTarget::UpdateSettings,
+            NotificationTarget::UpdateChangelog { version: "0.182.0".into() },
+        ];
+        for target in targets {
+            let path = target.path().expect("every target has a link form");
+            let link = parse(&path).expect("target paths parse as deeplinks");
+            assert_eq!(link.path().as_deref(), Some(path.as_str()), "re-parsed link keeps its spelling");
+        }
+        // Asymmetric by design: an interaction shares its thread link (the
+        // waiting-prompt focus has no link form), while workspace and update
+        // settings address distinctly.
+        assert_eq!(
+            NotificationTarget::Thread { session_id: "s".into() }.path(),
+            NotificationTarget::Interaction { session_id: "s".into(), interaction_id: "i".into() }.path()
+        );
+        assert_eq!(
+            NotificationTarget::Thread { session_id: "s".into() }.path().as_deref(),
+            Some("action/load-session/s")
+        );
+        assert_eq!(NotificationTarget::Workspace.path().as_deref(), Some("workspace"));
+        assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/about"));
+        // The viewer has a real link form now (the pinned version only rides
+        // the live click).
+        assert_eq!(
+            NotificationTarget::UpdateChangelog { version: "0.182.0".into() }
+                .path()
+                .as_deref(),
+            Some("changelog")
         );
     }
 }

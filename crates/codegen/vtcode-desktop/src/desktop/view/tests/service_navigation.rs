@@ -121,6 +121,7 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
                 steps: Vec::new(),
                 selected_choice_id: None,
                 selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             });
             view.interaction_choice_ids = vec![Some("approve".into())];
             view.pending_interaction_response = Some("approval".into());
@@ -281,6 +282,7 @@ fn delayed_acknowledgement_cannot_restart_a_completed_turn(cx: &mut TestAppConte
                 turn_id: Some("finished-turn".into()),
                 event: vtcode_exec_events::VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(
                     vtcode_exec_events::TurnCompletedEvent {
+                        final_response_item_id: None,
                         completed_at: None,
                         usage: vtcode_exec_events::Usage {
                             input_tokens: 1,
@@ -407,6 +409,27 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
         }
     }
     assert!(requests.try_recv().is_err(), "active work blocks session changes for shortcuts too");
+}
+
+#[gpui_kit::test]
+fn cancel_shortcut_stays_silent_while_idle(cx: &mut TestAppContext) {
+    // The CancelRun handler is render-gated on `running` (the menu item
+    // stays disabled while idle); an idle press must send nothing.
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".into());
+            view.focus_composer(window, cx);
+        });
+        window.render_frame(cx);
+        window.press("cmd-.", cx);
+        assert!(!view.read(cx).running);
+        assert!(!view.read(cx).cancel_requested);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "an idle shortcut sends nothing");
 }
 
 #[gpui_kit::test]
@@ -541,6 +564,8 @@ fn trackpad_swipe_back_loads_previous_thread_with_loading_feedback(cx: &mut Test
     let summaries = swipe_history_fixture(cx, &view, commands);
 
     swipe_navigate(window, NavigationDirection::Back, cx);
+    assert!(requests.try_recv().is_err(), "a discrete swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("swipe back should load the previous thread");
     };
@@ -595,6 +620,8 @@ fn trackpad_swipe_forward_loads_next_thread_with_loading_feedback(cx: &mut TestA
     let _summaries = swipe_history_fixture(cx, &view, commands);
 
     swipe_navigate(window, NavigationDirection::Forward, cx);
+    assert!(requests.try_recv().is_err(), "a discrete swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("swipe forward should load the next thread");
     };
@@ -623,6 +650,7 @@ fn trackpad_swipe_ignores_empty_history(cx: &mut TestAppContext) {
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
         view.workspace = Some(workspace.clone());
+        view.preferences.swipe_navigation = true;
         view.selected_session_id = Some("only-session".into());
         view.navigation_history
             .record(NavigationLocation { workspace, session_id: Some("only-session".into()) });
@@ -631,6 +659,130 @@ fn trackpad_swipe_ignores_empty_history(cx: &mut TestAppContext) {
     swipe_navigate(window, NavigationDirection::Back, cx);
     swipe_navigate(window, NavigationDirection::Forward, cx);
     assert!(requests.try_recv().is_err(), "swipes with no history in either direction must not navigate");
+}
+
+#[gpui_kit::test]
+fn horizontal_scroll_back_loads_previous_thread_with_loading_feedback(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    scroll_swipe(window, 70., 0., cx);
+    assert!(requests.try_recv().is_err(), "a sub-threshold scroll must not navigate");
+    view.update(cx, |view, _| {
+        assert_eq!(view.swipe_scroll.armed(), Some(NavigationDirection::Back));
+    });
+
+    scroll_swipe(window, 70., 0., cx);
+    assert!(requests.try_recv().is_err(), "a threshold crossing arms instead of navigating");
+    scroll_swipe_with_phase(window, 0., 0., TouchPhase::Ended, cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("finger lift should commit the armed scroll");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert_eq!(view_state.pending_navigation.map(|pending| pending.target_index), Some(0));
+        assert_eq!(view_state.pending_navigation_direction(), Some(NavigationDirection::Back));
+        assert_eq!(window.find("navigate-back").label(), Some("Back (navigating…)"));
+        let loading = window.find("navigation-loading");
+        assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(loading.label(), Some("Navigating back…"));
+    })
+    .unwrap();
+
+    scroll_swipe(window, 140., 0., cx);
+    assert!(requests.try_recv().is_err(), "a scroll while pending must not issue another request");
+}
+
+#[gpui_kit::test]
+fn horizontal_scroll_forward_loads_next_thread(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    scroll_swipe(window, -140., 0., cx);
+    assert!(requests.try_recv().is_err(), "a threshold crossing arms instead of navigating");
+    settle_swipe_commit(cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("the settle timer should commit the armed scroll");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-third" }));
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("navigate-forward").label(), Some("Forward (navigating…)"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn vertical_scroll_never_navigates(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    scroll_swipe(window, 0., 500., cx);
+    scroll_swipe(window, 10., 500., cx);
+    scroll_swipe(window, -10., -500., cx);
+    assert!(requests.try_recv().is_err(), "vertical scrolling must never navigate history");
+    view.update(cx, |view, _| {
+        assert_eq!(view.swipe_scroll.armed(), None);
+    });
+}
+
+#[gpui_kit::test]
+fn horizontal_scroll_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+    })
+    .unwrap();
+    scroll_swipe(window, 140., 0., cx);
+    assert!(requests.try_recv().is_err(), "a scroll over an open palette must not navigate the background");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    scroll_swipe(window, 140., 0., cx);
+    assert!(requests.try_recv().is_err(), "the scroll arms instead of navigating");
+    scroll_swipe_with_phase(window, 0., 0., TouchPhase::Ended, cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("the same scroll navigates once the palette is closed");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+}
+
+#[gpui_kit::test]
+fn line_based_horizontal_scroll_navigates(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    cx.update_window(window, |_, window, cx| {
+        window.scroll("pane-root", gpui_kit::ScrollDelta::Lines(point(20., 0.)), cx);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "a wheel crossing arms instead of navigating");
+    // A notched wheel never sends `Ended`, so the settle timer is its commit path.
+    settle_swipe_commit(cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("a notched horizontal wheel scroll should navigate like a trackpad swipe");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
 }
 
 #[gpui_kit::test]
@@ -662,6 +814,8 @@ fn trackpad_swipe_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
         );
     })
     .unwrap();
+    assert!(requests.try_recv().is_err(), "the swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("the same swipe navigates once the palette is closed");
     };
@@ -673,6 +827,7 @@ fn trackpad_swipe_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
 fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
+        view.preferences.swipe_navigation = true;
         assert!(view.swipe_navigation_allowed());
         view.route_history.open(Route::Settings);
         assert!(!view.swipe_navigation_allowed());
@@ -688,6 +843,8 @@ fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
             rel_path: "src/app.rs".into(),
             text: "preview".into(),
             truncated: false,
+            show_source: false,
+            editing: false,
         });
         assert!(!view.swipe_navigation_allowed());
         view.file_preview = None;

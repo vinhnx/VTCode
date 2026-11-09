@@ -58,7 +58,7 @@ impl Drop for LaunchWorktree {
     }
 }
 
-async fn wait_for_child_stop(handle: JoinHandle<()>, child_id: &str) -> Result<()> {
+async fn wait_for_child_stop(handle: &mut JoinHandle<()>, child_id: &str) -> Result<()> {
     match handle.await {
         Ok(()) => Ok(()),
         Err(error) if error.is_cancelled() => Ok(()),
@@ -236,7 +236,7 @@ impl SubagentController {
                 .get_mut(&request.target)
                 .ok_or_else(|| anyhow!("Unknown subagent id {}", request.target))?;
 
-            if record.status == SubagentStatus::Closed {
+            if record.status == SubagentStatus::Closed || record.closing {
                 bail!("Subagent {} is closed", request.target);
             }
 
@@ -343,6 +343,14 @@ impl SubagentController {
         let target_owned = target.to_string();
         Box::pin(async move {
             let subtree_ids = self_owned.collect_spawn_subtree_ids(&target_owned).await?;
+            {
+                let mut state = self_owned.state.write().await;
+                for id in &subtree_ids {
+                    if let Some(record) = state.children.get_mut(id) {
+                        record.closing = true;
+                    }
+                }
+            }
             let nested = self_owned.nested_controllers_in_subtree(&subtree_ids).await;
             // Mark every child-scoped controller in the subtree as closing so
             // it rejects new grandchild spawns before we start aborting.
@@ -356,6 +364,7 @@ impl SubagentController {
             for node_id in subtree_ids.into_iter().rev() {
                 self_owned.close_single(node_id.as_str()).await?;
             }
+            let mut nested_errors = Vec::new();
             // ...then recursively close each child-scoped controller's subtree.
             // Grandchildren live in the child controller's state, not ours, so
             // they are closed through that controller to keep node ownership
@@ -367,6 +376,7 @@ impl SubagentController {
                 for id in ids {
                     if let Err(err) = controller.close_tree(&id).await {
                         tracing::warn!(node_id = id.as_str(), error = %err, "Failed to close nested subagent subtree");
+                        nested_errors.push(format!("{id}: {err:#}"));
                     }
                 }
             }
@@ -381,6 +391,18 @@ impl SubagentController {
                 for id in ids {
                     if let Err(err) = controller.close_tree(&id).await {
                         tracing::warn!(node_id = id.as_str(), error = %err, "Failed to close late nested subagent subtree");
+                        nested_errors.push(format!("{id}: {err:#}"));
+                    }
+                }
+            }
+            if !nested_errors.is_empty() {
+                bail!("Failed to close nested subagents: {}", nested_errors.join("; "));
+            }
+            {
+                let mut state = self_owned.state.write().await;
+                for id in &subtree_ids_for_rescan {
+                    if let Some(record) = state.children.get_mut(id) {
+                        record.closing = false;
                     }
                 }
             }
@@ -514,6 +536,7 @@ impl SubagentController {
                 .children
                 .get_mut(target)
                 .ok_or_else(|| anyhow!("Unknown subagent id {target}"))?;
+            anyhow::ensure!(!record.closing, "Subagent {target} is closing");
             if !record.status.is_terminal() {
                 return Ok(false);
             }
@@ -522,6 +545,7 @@ impl SubagentController {
                 .clone()
                 .unwrap_or_else(|| "Continue the delegated task from the existing context.".to_string());
             record.status = SubagentStatus::Queued;
+            record.closing = false;
             record.updated_at = Utc::now();
             record.completed_at = None;
             record.error = None;
@@ -541,6 +565,7 @@ impl SubagentController {
     }
 
     async fn close_single(&self, target: &str) -> Result<SubagentStatusEntry> {
+        let mut pending = self.shutdown_handles.lock().await;
         let mut state = self.state.write().await;
         let record = state
             .children
@@ -549,20 +574,27 @@ impl SubagentController {
         if record.status == SubagentStatus::Closed {
             return Ok(record.build_status_entry());
         }
-        let handle = record.handle.take();
-        if let Some(handle) = handle.as_ref() {
+        record.closing = true;
+        if let Some(handle) = record.handle.take() {
             handle.abort();
+            assert!(pending.insert(target.to_owned(), handle).is_none(), "duplicate owned subagent handle");
         }
+        drop(state);
+        if let Some(handle) = pending.get_mut(target) {
+            let result = wait_for_child_stop(handle, target).await;
+            pending.remove(target);
+            result?;
+        }
+        let mut state = self.state.write().await;
+        let record = state
+            .children
+            .get_mut(target)
+            .ok_or_else(|| anyhow!("Unknown subagent id {target}"))?;
         record.status = SubagentStatus::Closed;
         record.updated_at = Utc::now();
         record.completed_at = Some(Utc::now());
         record.notify.notify_waiters();
-        let entry = record.build_status_entry();
-        drop(state);
-        if let Some(handle) = handle {
-            wait_for_child_stop(handle, target).await?;
-        }
-        Ok(entry)
+        Ok(record.build_status_entry())
     }
 
     pub(super) async fn find_spec(&self, candidate: &str) -> Option<SubagentSpec> {
@@ -822,6 +854,7 @@ impl SubagentController {
             reasoning_override,
             thread_handle: None,
             handle: None,
+            closing: false,
             notify,
             worktree_path,
             child_controller: None,
@@ -867,12 +900,14 @@ impl SubagentController {
     }
 
     async fn restart_child(&self, target: &str) -> Result<()> {
+        let mut pending = self.shutdown_handles.lock().await;
         let finishing_handle = {
             let mut state = self.state.write().await;
             let record = state
                 .children
                 .get_mut(target)
                 .ok_or_else(|| anyhow!("Unknown subagent id {target}"))?;
+            anyhow::ensure!(!record.closing, "Subagent {target} is closing");
             if record.queued_prompts.is_empty()
                 && let Some(prompt) = record.last_prompt.clone()
             {
@@ -887,7 +922,12 @@ impl SubagentController {
             // Abort schedules cancellation; await the owned launch before
             // reserving its replacement's concurrency slot.
             if let Some(handle) = finishing_handle {
-                wait_for_child_stop(handle, target).await?;
+                assert!(pending.insert(target.to_owned(), handle).is_none(), "duplicate owned subagent handle");
+            }
+            if let Some(handle) = pending.get_mut(target) {
+                let result = wait_for_child_stop(handle, target).await;
+                pending.remove(target);
+                result?;
             }
             self.launch_child(target).await
         }

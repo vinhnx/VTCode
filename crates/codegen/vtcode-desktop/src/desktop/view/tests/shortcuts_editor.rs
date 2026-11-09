@@ -1,4 +1,6 @@
+use super::super::shortcuts::{CommandId, action, bindings};
 use super::*;
+use std::collections::BTreeMap;
 
 #[gpui_kit::test]
 fn shortcut_search_filters_rows_and_reports_empty_results(cx: &mut TestAppContext) {
@@ -9,7 +11,7 @@ fn shortcut_search_filters_rows_and_reports_empty_results(cx: &mut TestAppContex
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.render_frame(cx);
         assert!(window.try_find("shortcut-row-model").is_some());
         assert!(window.try_find("shortcut-empty").is_none());
@@ -48,7 +50,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         let sidebar_open = view.read(cx).sidebar_open;
         window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
@@ -64,7 +66,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         assert!(view.read(cx).shortcut_message.is_none(), "tab never commits nor errors");
         assert!(window.try_find("shortcut-capture-commands").is_none(), "tabbing away hides the pill");
         assert!(window.try_find("shortcut-badge-commands").is_some());
-        assert!(window.try_find("keyboard-settings").is_some());
+        assert!(window.try_find("shortcut-search").is_some());
         window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
         window.press("cmd-b", cx);
@@ -74,7 +76,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         assert_eq!(view.read(cx).sidebar_open, sidebar_open, "captured chords stay inert inside settings");
         window.press("left", cx);
         window.render_frame(cx);
-        assert!(window.try_find("keyboard-settings").is_some(), "arrows never navigate away mid-capture");
+        assert!(window.try_find("shortcut-search").is_some(), "arrows never navigate away mid-capture");
         assert!(view.read(cx).shortcut_capture.is_some());
         window.press("cmd-f", cx);
         window.render_frame(cx);
@@ -88,7 +90,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("reserved"));
         assert!(view.read(cx).shortcut_capture.is_some());
-        assert!(window.try_find("keyboard-settings").is_some());
+        assert!(window.try_find("shortcut-search").is_some());
     })
     .unwrap();
 }
@@ -102,7 +104,7 @@ fn shortcut_reset_from_defaults_reports_noop(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.click("reset-shortcuts", cx);
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already match"));
@@ -120,7 +122,7 @@ fn shortcut_invalid_staged_value_marks_badge_and_blocks_save(cx: &mut TestAppCon
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         view.update(cx, |view, _| {
             let _previous = view.preferences.shortcuts.insert("model".into(), "a-b".into());
             view.shortcut_draft = super::super::shortcuts::draft_from(&view.preferences.shortcuts);
@@ -145,7 +147,7 @@ fn shortcut_unbind_marks_unassigned_and_persists(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         view.update(cx, |view, cx| {
             view.shortcut_search_input
                 .update(cx, |input, cx| input.set_value("model picker", window, cx));
@@ -278,4 +280,53 @@ fn command_palette_badges_follow_saved_overrides_and_hide_unbound(cx: &mut TestA
         assert!(window.try_find(palette_action_id(&zen_mode)).is_some(), "unbinding hides the badge, not the row");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn shortcut_save_applies_rebind_live_and_retires_old_chord(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
+        view.update(cx, |view, _| {
+            let _previous = view.shortcut_draft.insert("model".into(), "ctrl-shift-m".into());
+            view.shortcuts_editing = true;
+        });
+        window.render_frame(cx);
+        window.click("save-shortcuts", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load()
+                .shortcuts
+                .get("model")
+                .map(String::as_str),
+            Some("ctrl-shift-m")
+        );
+    })
+    .unwrap();
+    let desktop = crate::desktop::strings::key_context::DESKTOP;
+    let model = action(CommandId::Model);
+    let commands = action(CommandId::Commands);
+    cx.update(|cx| {
+        assert_chord_dead(cx, "cmd-shift-m", desktop);
+        assert_chord_resolves_once_to(cx, "ctrl-shift-m", desktop, model.as_ref());
+        assert_chord_resolves_to(cx, "cmd-k", desktop, commands.as_ref());
+    });
+}
+
+#[gpui_kit::test]
+fn fixed_preview_save_chord_rejects_configurable_overrides(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        // Cmd+S is fixed to the preview save: a user rebind would be
+        // shadowed by the deeper fixed binding, so validation refuses it
+        // with the reserved-shortcut error instead of failing silently.
+        // No other default owns cmd-s, so any rejection here is the
+        // reserved-shortcut path; the message itself is locale-dependent
+        // (other tests switch languages mid-run), so pin only the Err.
+        assert!(bindings(&BTreeMap::from([("model".into(), "cmd-s".into())]), cx).is_err());
+    });
 }

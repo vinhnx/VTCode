@@ -64,7 +64,14 @@ pub(crate) fn detect_planning_intent(text: &str, assistant_prompted_implementati
 
     // Priority 2-3: Direct exit commands, approval words/phrases, and exit
     // trigger phrases (combined by `matches_exit_intent`).
-    if planning::matches_exit_intent(&normalized) {
+    if text.split(['.', ';', '!', '?', '\n']).any(|clause| {
+        let normalized_clause = planning::normalize_plan_intent(clause);
+        let trimmed_clause = normalized_clause.trim();
+        (!planning::EXIT_DIRECT_COMMANDS.contains(&trimmed_clause)
+            || planning::APPROVAL_WORDS.contains(&trimmed_clause)
+            || trimmed_clause == trimmed)
+            && planning::matches_exit_intent(&normalized_clause)
+    }) {
         return PlanningIntent::ExitAndImplement;
     }
 
@@ -84,8 +91,8 @@ pub(crate) fn detect_enter_planning_intent(text: &str) -> bool {
         return true;
     }
 
-    let normalized = planning::normalize_plan_intent(text);
-    planning::matches_enter_intent(&normalized)
+    text.split(['.', ';', '!', '?', '\n'])
+        .any(|clause| planning::matches_enter_intent(&planning::normalize_plan_intent(clause)))
 }
 
 /// Check if the assistant recently prompted for implementation.
@@ -208,6 +215,22 @@ mod tests {
     }
 
     #[test]
+    fn negated_approval_does_not_exit() {
+        assert_eq!(detect_planning_intent("do not approve yet", false), PlanningIntent::None);
+        assert_eq!(detect_planning_intent("don't approve", false), PlanningIntent::None);
+        assert_eq!(detect_planning_intent("I disapprove", false), PlanningIntent::None);
+    }
+
+    #[test]
+    fn multi_clause_message_evaluates_each_clause() {
+        assert_eq!(
+            detect_planning_intent("do not approve yet. looks good actually", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(detect_planning_intent("yes. actually wait, let me reconsider", false), PlanningIntent::None);
+    }
+
+    #[test]
     fn bare_edit_token_routes_to_stay_in_planning() {
         // The yes/no/edit HITL prompt (surfaced when request_user_input is
         // unavailable) must route the bare `edit` reply back to planning
@@ -227,6 +250,12 @@ mod tests {
         assert!(detect_enter_planning_intent("make a plan for this"));
         assert!(detect_enter_planning_intent("/plan"));
         assert!(detect_enter_planning_intent("before implementing, create a plan"));
+    }
+
+    #[test]
+    fn detects_use_plan_mode_enter_intent_unless_negated() {
+        assert!(detect_enter_planning_intent("use plan mode, refine the readme"));
+        assert!(!detect_enter_planning_intent("don't use plan mode"));
     }
 
     #[test]

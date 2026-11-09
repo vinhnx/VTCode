@@ -24,6 +24,7 @@
     "@codemirror/view": "^6.36.5",
     "@lezer/highlight": "^1.2.1",
     "codemirror": "^6.0.1",
+    "pele": "^1.13.0",
     "vite": "^6.1.0"
   },
   "devDependencies": {

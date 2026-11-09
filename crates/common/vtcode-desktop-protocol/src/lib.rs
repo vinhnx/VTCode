@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vtcode_exec_events::VersionedThreadEvent;
 
+pub mod handoff_url;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 24 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 33 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -272,7 +273,9 @@ pub use config::{
 };
 
 pub mod interaction;
-pub use interaction::{InteractionChoice, InteractionKind, InteractionRequest, InteractionResponse, InteractionStep};
+pub use interaction::{
+    InteractionChoice, InteractionHotkey, InteractionKind, InteractionRequest, InteractionResponse, InteractionStep,
+};
 
 pub mod review;
 pub use review::{
@@ -281,17 +284,20 @@ pub use review::{
 
 pub mod session;
 pub use session::{
-    AgentModeInfo, MAX_SESSION_HISTORY_PAGE_MESSAGES, MAX_SESSION_OUTPUT_PAGE_BYTES, PermissionMode,
-    RESTORED_OUTPUT_TRUNCATION_SUFFIX, SessionCreateParams, SessionHistoryMessage, SessionHistoryPage,
-    SessionHistoryParams, SessionIdParams, SessionLoadResult, SessionOptionsSelectParams, SessionOptionsSnapshot,
-    SessionOutputCursor, SessionOutputPage, SessionOutputReadParams, SessionSummary, ThemePreferenceSelectParams,
+    AgentModeInfo, MAX_RECENT_PROMPTS, MAX_SESSION_HISTORY_PAGE_MESSAGES, MAX_SESSION_LIST_LIMIT,
+    MAX_SESSION_OUTPUT_PAGE_BYTES, PermissionMode, RESTORED_OUTPUT_TRUNCATION_SUFFIX, RecentPrompt,
+    RecentPromptsParams, RecentPromptsResult, SessionCreateParams, SessionHistoryMessage, SessionHistoryPage,
+    SessionHistoryParams, SessionIdParams, SessionListParams, SessionLoadResult, SessionOptionsSelectParams,
+    SessionOptionsSnapshot, SessionOutputCursor, SessionOutputPage, SessionOutputReadParams, SessionSummary,
+    ThemePreferenceSelectParams,
 };
 
 pub mod turn;
 pub use turn::{
-    MAX_QUEUE_PREVIEW_CHARS, MAX_QUEUE_STATUS_PREVIEWS, SESSION_START_TURN_ID, STARTUP_INTERACTION_PENDING_ERROR,
-    TurnAccepted, TurnAttachment, TurnCancelParams, TurnQueueStatus, TurnQueueTakeLatestParams,
-    TurnQueueTakeLatestResult, TurnSubmitParams, queue_preview_label,
+    MAX_QUEUE_ENTRY_ID_LEN, MAX_QUEUE_PREVIEW_CHARS, MAX_QUEUE_STATUS_PREVIEWS, SESSION_START_TURN_ID,
+    STARTUP_INTERACTION_PENDING_ERROR, TurnAccepted, TurnAttachment, TurnCancelParams, TurnQueueRemoveParams,
+    TurnQueueRemoveResult, TurnQueueStatus, TurnQueueTakeLatestParams, TurnQueueTakeLatestResult, TurnSubmitParams,
+    TurnUndoFile, TurnUndoParams, TurnUndoResult, queue_preview_label,
 };
 
 pub mod update;

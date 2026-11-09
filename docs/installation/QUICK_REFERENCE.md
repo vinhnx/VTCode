@@ -10,12 +10,29 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 
 # Homebrew
-brew install vtcode
+brew trust vinhnx/tap
+brew install vinhnx/tap/vtcode
+
+# Homebrew cask (desktop app, macOS 15+, Apple Silicon)
+brew install --cask vinhnx/tap/vtcode-desktop
 
 # Cargo
 cargo install vtcode
 
 ```
+
+## Desktop App (macOS 15+)
+
+```bash
+brew install --cask vinhnx/tap/vtcode-desktop   # Apple Silicon
+vtcode desktop --install   # download + install from the prebuilt release asset
+vtcode desktop             # open the app
+```
+
+> [!WARNING]
+> **First launch needs a one-time macOS security approval** — release builds are not notarized. Open the app once so
+> macOS records the block, then click **Open Anyway** in **System Settings › Privacy & Security** and open it again.
+> The button only shows for about an hour after a blocked launch. macOS 15+ has no right-click › Open shortcut.
 
 ## Quick Start
 
@@ -33,8 +50,14 @@ rm /usr/local/bin/vtcode
 # Homebrew
 brew uninstall vtcode
 
+# Homebrew cask (desktop app)
+brew uninstall --cask vinhnx/tap/vtcode-desktop
+
 # Cargo
 cargo uninstall vtcode
+
+# Desktop app (macOS)
+rm -rf ~/Applications/VT\ Code.app
 
 ```
 

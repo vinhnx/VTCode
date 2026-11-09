@@ -27,6 +27,40 @@ fn parse_checkup_rejects_conflicting_flags() {
     assert!(err.contains("either --quick or --full"));
 }
 #[test]
+fn parse_doctor_defaults_to_checkup_modes() {
+    let mode = parse_doctor_args("", false).expect("should parse");
+    assert!(matches!(mode, DoctorCommand::Checkup(CheckupCommand::Run { quick: false })));
+
+    let mode = parse_doctor_args("", true).expect("should parse");
+    assert!(matches!(mode, DoctorCommand::Checkup(CheckupCommand::Interactive)));
+
+    let mode = parse_doctor_args("--quick", false).expect("should parse");
+    assert!(matches!(mode, DoctorCommand::Checkup(CheckupCommand::Run { quick: true })));
+}
+#[test]
+fn parse_doctor_routes_prompt_audit() {
+    let mode = parse_doctor_args("prompt-audit", false).expect("should parse");
+    assert!(matches!(mode, DoctorCommand::PromptAudit));
+
+    let mode = parse_doctor_args("PROMPT-AUDIT", false).expect("should parse case-insensitively");
+    assert!(matches!(mode, DoctorCommand::PromptAudit));
+
+    let err = parse_doctor_args("prompt-audit extra", false).expect_err("must reject");
+    assert!(err.contains("/doctor prompt-audit"));
+
+    let err = parse_doctor_args("--quick prompt-audit", false).expect_err("must reject");
+    assert!(err.contains("/doctor prompt-audit"));
+
+    let err = parse_doctor_args("--quick PROMPT-AUDIT", false).expect_err("must reject case-insensitively");
+    assert!(err.contains("/doctor prompt-audit"));
+}
+#[test]
+fn parse_doctor_usage_names_the_command() {
+    let err = parse_doctor_args("--bogus", false).expect_err("must reject");
+    assert!(err.contains("/doctor"));
+    assert!(err.contains("prompt-audit"));
+}
+#[test]
 fn parse_update_rejects_conflicting_modes() {
     let err = parse_update_args("check install").expect_err("must reject");
     assert!(err.contains("either 'check' or 'install'"));

@@ -1,5 +1,6 @@
 //! Full-window thread browser: workspace-grouped triage over cached sessions.
 
+use super::session_nav::step_highlight_order;
 use super::*;
 use gpui_kit::component::menu::ContextMenuExt;
 
@@ -48,6 +49,21 @@ fn browser_rows(sessions: &[SessionSummary], current_workspace: Option<&str>) ->
     rows
 }
 
+/// Session rows in visual order as `(virtual-list row, session id)`.
+/// Group headers are omitted so keyboard movement skips them, while the row
+/// index still counts them for scroll alignment. Pure so unit tests pin the
+/// movement order without a window.
+fn browser_session_order<'a>(sessions: &'a [SessionSummary], current_workspace: Option<&str>) -> Vec<(usize, &'a str)> {
+    browser_rows(sessions, current_workspace)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(row, entry)| match entry {
+            BrowserRow::Session { index, .. } => sessions.get(index).map(|session| (row, session.session_id.as_str())),
+            BrowserRow::Group { .. } => None,
+        })
+        .collect()
+}
+
 fn current_group_first(a: &str, b: &str, current: Option<&str>) -> std::cmp::Ordering {
     match current {
         Some(workspace) => (a != workspace).cmp(&(b != workspace)),
@@ -86,6 +102,51 @@ fn now_unix_secs() -> u64 {
 }
 
 impl DesktopView {
+    /// Current workspace in the display form [`browser_rows`] groups by.
+    /// Render and keyboard movement share this so the highlight can never
+    /// drift from the painted row order.
+    fn browser_current_workspace(&self) -> Option<String> {
+        self.workspace.as_ref().map(|path| path.display().to_string())
+    }
+
+    /// Move the keyboard highlight across browser threads (Up/Down with the
+    /// browser list focused). Steps session rows in visual order, skipping
+    /// group headers; clamps at both ends and scrolls the row into view.
+    pub(super) fn move_browser_session_focus(&mut self, down: bool, cx: &mut Context<Self>) {
+        let next = {
+            let current = self.browser_current_workspace();
+            let sessions = browser_session_order(&self.sessions, current.as_deref());
+            let order: Vec<&str> = sessions.iter().map(|(_, id)| *id).collect();
+            step_highlight_order(&order, self.keyboard_focused_session.as_deref(), down)
+                .and_then(|position| sessions.get(position).map(|(row, id)| (*row, id.to_string())))
+        };
+        let Some((row, session_id)) = next else {
+            return;
+        };
+        self.focus_browser_session_at(row, session_id, cx);
+    }
+
+    /// Jump the browser highlight to the first/last thread (Home/End).
+    pub(super) fn move_browser_session_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
+        let next = {
+            let current = self.browser_current_workspace();
+            let sessions = browser_session_order(&self.sessions, current.as_deref());
+            (if first { sessions.first() } else { sessions.last() }).map(|(row, id)| (*row, id.to_string()))
+        };
+        let Some((row, session_id)) = next else {
+            return;
+        };
+        self.focus_browser_session_at(row, session_id, cx);
+    }
+
+    fn focus_browser_session_at(&mut self, row: usize, session_id: String, cx: &mut Context<Self>) {
+        self.keyboard_focused_session = Some(session_id);
+        // Same Kit limitation as the sidebar: `scroll_to_item` pins to the
+        // viewport top, so every step re-pins instead of revealing minimally.
+        self.browser_scroll.scroll_to_item(row, gpui_kit::ScrollStrategy::Top);
+        cx.notify();
+    }
+
     /// Full-window thread browser over the cached session list. Selecting a
     /// row loads the thread and dismisses the browser; Escape and backdrop
     /// click only dismiss.
@@ -93,7 +154,7 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
         let row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
-        let current = self.workspace.as_ref().map(|path| path.display().to_string());
+        let current = self.browser_current_workspace();
         let now = now_unix_secs();
         let rows = browser_rows(&self.sessions, current.as_deref());
         let sizes = self.browser_row_sizes.get(rows.len(), row_height);
@@ -113,6 +174,18 @@ impl DesktopView {
             div()
                 .id("thread-browser-list")
                 .test_support()
+                .track_focus(&self.browser_list_focus)
+                .key_context(key_context::SESSIONS)
+                .on_action(cx.listener(|view, _: &SessionPrevious, _, cx| view.move_browser_session_focus(false, cx)))
+                .on_action(cx.listener(|view, _: &SessionNext, _, cx| view.move_browser_session_focus(true, cx)))
+                .on_action(cx.listener(|view, _: &SessionFirst, _, cx| view.move_browser_session_focus_edge(true, cx)))
+                .on_action(cx.listener(|view, _: &SessionLast, _, cx| view.move_browser_session_focus_edge(false, cx)))
+                .on_action(
+                    cx.listener(|view, _: &OpenSelectedSession, window, cx| view.activate_focused_session(window, cx)),
+                )
+                .on_action(cx.listener(|view, _: &DeleteHighlightedSession, window, cx| {
+                    view.delete_highlighted_session(window, cx)
+                }))
                 .role(gpui_kit::Role::List)
                 .aria_label(rust_i18n::t!("app.workspace.recent_threads").to_string())
                 .relative()
@@ -166,6 +239,8 @@ impl DesktopView {
                                         let running = view.is_session_running(&session_id);
                                         let menu_id = session_id.clone();
                                         let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
+                                        let keyboard_focused =
+                                            view.keyboard_focused_session.as_deref() == Some(session_id.as_str());
                                         let accessible_label = if running {
                                             rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = label.as_str())
                                                 .to_string()
@@ -183,12 +258,28 @@ impl DesktopView {
                                                 .id(format!("browser-session-row-{session_id}"))
                                                 .test_support()
                                                 .role(gpui_kit::Role::ListItem)
+                                                .when(keyboard_focused, |row| row.aria_active_descendant())
                                                 .aria_label(accessible_label.clone())
                                                 .aria_position_in_set(ordinal + 1)
                                                 .aria_size_of_set(view.sessions.len())
                                                 .aria_selected(selected)
                                                 .h(px(row_height))
                                                 .w_full()
+                                                // Absolutely positioned so the highlight never reflows the
+                                                // row; mirrors the sidebar session list.
+                                                .when(keyboard_focused, |row| {
+                                                    row.child(
+                                                        div()
+                                                            .id(format!("browser-focus-rail-{session_id}"))
+                                                            .test_support()
+                                                            .absolute()
+                                                            .left_0()
+                                                            .top_0()
+                                                            .bottom_0()
+                                                            .w(px(2.))
+                                                            .bg(cx.theme().colors.accent),
+                                                    )
+                                                })
                                                 .child(
                                                     desktop_button(format!("browser-session-{session_id}"))
                                                         .accessibility_label(accessible_label)
@@ -234,6 +325,9 @@ impl DesktopView {
                                                         )
                                                         .ghost()
                                                         .toggled(selected)
+                                                        // Single-tab-stop list: arrows drive the shared
+                                                        // highlight, so rows stay out of Tab order.
+                                                        .tab_stop(false)
                                                         .desktop_disabled(!enabled)
                                                         .w_full()
                                                         .justify_start()
@@ -244,6 +338,9 @@ impl DesktopView {
                                                             button.bg(popover).text_color(foreground)
                                                         })
                                                         .on_click(cx.listener(move |this, _, window, cx| {
+                                                            // Clicking anchors the keyboard highlight as
+                                                            // position memory, like sidebar rows.
+                                                            this.keyboard_focused_session = Some(session_id.clone());
                                                             if this.load_session_from_ui(session_id.clone(), window, cx)
                                                             {
                                                                 this.close_browser(window, cx);
@@ -265,7 +362,7 @@ impl DesktopView {
                 .child(Scrollbar::vertical(&self.browser_scroll))
                 .into_any_element()
         };
-        route_page(
+        dismissable_route_page(
             div()
                 .id("thread-browser")
                 .test_support()
@@ -277,6 +374,9 @@ impl DesktopView {
                 .flex_col()
                 .rounded_xl()
                 .bg(colors.secondary)
+                // Inner presses stop here so the gutter only sees true
+                // background presses.
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(panel_header(
                     div().text_lg().font_semibold().child(title),
                     div()
@@ -312,16 +412,28 @@ impl DesktopView {
                                 .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                         )
                         .child(
-                            desktop_button("browser-dismiss")
-                                .icon(IconName::X)
-                                .accessibility_label(rust_i18n::t!("app.browser.close").to_string())
-                                .tooltip(rust_i18n::t!("app.browser.close").to_string())
-                                .ghost()
+                            desktop_dismiss_button("browser-dismiss", rust_i18n::t!("app.browser.close").to_string())
                                 .small()
-                                .on_click(cx.listener(|view, _, window, cx| view.close_browser(window, cx))),
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.request_panel_dismiss(window, cx);
+                                })),
                         ),
                 ))
-                .child(div().flex_1().min_h_0().w_full().flex().flex_col().px_3().pb_3().child(content)),
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .px_3()
+                        .pb_3()
+                        .child(content)
+                        .when(self.session_list_has_older, |panel| {
+                            panel.child(self.render_session_list_more("browser-list-more", cx))
+                        }),
+                ),
+            cx,
         )
         .into_any_element()
     }
@@ -443,5 +555,33 @@ mod tests {
     fn compact_age_hides_unknown_timestamps_and_saturates_future_skew() {
         assert_eq!(compact_age(None, 1_000_000), None);
         assert_eq!(compact_age(Some(1_000_001), 1_000_000).as_deref(), Some("0s"));
+    }
+
+    #[test]
+    fn session_order_skips_group_headers_but_keeps_row_indices() {
+        // Asymmetric groups (2 vs 1) so a header/index slip cannot hide.
+        let sessions = vec![
+            summary("a-old", "/work/alpha", Some(10)),
+            summary("b-only", "/work/beta", Some(20)),
+            summary("a-new", "/work/alpha", Some(30)),
+        ];
+        let order = browser_session_order(&sessions, None);
+        assert_eq!(order, vec![(1, "a-new"), (2, "a-old"), (4, "b-only")]);
+    }
+
+    #[test]
+    fn session_order_pins_current_workspace_first() {
+        let sessions = vec![
+            summary("a-old", "/work/alpha", Some(10)),
+            summary("b-only", "/work/beta", Some(20)),
+            summary("a-new", "/work/alpha", Some(30)),
+        ];
+        let order = browser_session_order(&sessions, Some("/work/beta"));
+        assert_eq!(order, vec![(1, "b-only"), (3, "a-new"), (4, "a-old")]);
+    }
+
+    #[test]
+    fn session_order_stays_empty_without_sessions() {
+        assert!(browser_session_order(&[], Some("/work/current")).is_empty());
     }
 }

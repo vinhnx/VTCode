@@ -93,9 +93,22 @@ fn license_settings_copy_is_translated_and_interpolates_errors() {
     for language in UiLanguage::ALL {
         let locale = language.locale();
         for key in [
-            "app.settings.licenses.title",
-            "app.settings.licenses.description",
-            "app.settings.licenses.view",
+            "app.licenses.title",
+            "app.licenses.description",
+            "app.licenses.first_party_title",
+            "app.licenses.first_party_description",
+            "app.licenses.third_party_title",
+            "app.licenses.third_party_description",
+            "app.licenses.view",
+            "app.licenses.viewer_description",
+            "app.licenses.notices",
+            "app.licenses.dependencies",
+            "app.licenses.license_texts",
+            "app.licenses.third_party_group",
+            "app.licenses.copy",
+            "app.licenses.close",
+            "app.licenses.open_in_editor",
+            "app.licenses.about_license",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -103,10 +116,17 @@ fn license_settings_copy_is_translated_and_interpolates_errors() {
                 assert_ne!(value, rust_i18n::t!(key, locale = "en").to_string(), "{locale}/{key}");
             }
         }
-        let error = rust_i18n::t!("app.settings.licenses.error", locale = locale, error = "example-error").to_string();
+        let error = rust_i18n::t!(
+            "app.licenses.open_error",
+            locale = locale,
+            document = "LICENSE-MIT",
+            error = "example-error"
+        )
+        .to_string();
+        assert!(error.contains("LICENSE-MIT"), "{locale}: {error}");
         assert!(error.contains("example-error"), "{locale}: {error}");
         if language != UiLanguage::English {
-            assert_ne!(error, "Could not open third-party notices: example-error", "{locale}");
+            assert_ne!(error, "Could not open LICENSE-MIT: example-error", "{locale}");
         }
     }
 }
@@ -196,7 +216,7 @@ fn app_catalog_covers_language_controls_and_kit_overrides() {
 }
 
 #[test]
-fn notification_settings_copy_covers_every_language() {
+fn notification_and_about_settings_copy_covers_every_language() {
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "en").to_string(), "Notifications");
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "vi").to_string(), "Thông báo");
     assert_eq!(
@@ -220,12 +240,9 @@ fn notification_settings_copy_covers_every_language() {
         rust_i18n::t!("app.settings.notifications.permission", locale = "vi").to_string(),
         "Bật thông báo xin phép"
     );
+    assert_eq!(rust_i18n::t!("app.settings.about.up_to_date", locale = "en").to_string(), "You're up to date");
     assert_eq!(
-        rust_i18n::t!("app.settings.notifications.up_to_date", locale = "en").to_string(),
-        "You're up to date"
-    );
-    assert_eq!(
-        rust_i18n::t!("app.settings.notifications.up_to_date", locale = "vi").to_string(),
+        rust_i18n::t!("app.settings.about.up_to_date", locale = "vi").to_string(),
         "Bạn đang dùng bản mới nhất"
     );
 
@@ -266,11 +283,11 @@ fn notification_settings_copy_covers_every_language() {
     assert_catalog_key!("app.settings.notifications.questions_description");
     assert_catalog_key!("app.settings.notifications.updates");
     assert_catalog_key!("app.settings.notifications.updates_description");
-    assert_catalog_key!("app.settings.notifications.updates_status");
-    assert_catalog_key!("app.settings.notifications.check_for_updates");
-    assert_catalog_key!("app.settings.notifications.up_to_date");
-    assert_catalog_key!("app.settings.notifications.update_available");
-    assert_catalog_key!("app.settings.notifications.status_unavailable");
+    assert_catalog_key!("app.settings.about.update_status");
+    assert_catalog_key!("app.settings.about.check_for_updates");
+    assert_catalog_key!("app.settings.about.up_to_date");
+    assert_catalog_key!("app.settings.about.update_available");
+    assert_catalog_key!("app.settings.about.status_unavailable");
 }
 
 #[test]
@@ -680,7 +697,6 @@ fn command_and_composer_palettes_are_translated_for_every_language() {
         assert_translated!(locale, "app.palette.placeholder.commands");
         assert_translated!(locale, "app.palette.placeholder.changed_files");
         assert_translated!(locale, "app.palette.placeholder.conversation");
-        assert_translated!(locale, "app.palette.placeholder.prompts");
         assert_translated!(locale, "app.palette.placeholder.modes");
         assert_translated!(locale, "app.palette.placeholder.default");
         assert_translated!(locale, "app.palette.conversation_search_header");
@@ -724,6 +740,17 @@ fn command_and_composer_palettes_are_translated_for_every_language() {
             assert!(value.contains(expected), "{key} lost its interpolation in {locale}");
         }
     }
+}
+
+#[test]
+fn history_scope_strings_resolve_in_english_until_translated() {
+    // En-only by design (thread-menu precedent): other locales fall back to
+    // English until native-quality translations ship.
+    assert_eq!(
+        rust_i18n::t!("app.palette.placeholder.filter_history", locale = "en").to_string(),
+        "Filter history…"
+    );
+    assert_eq!(rust_i18n::t!("app.palette.sections.other_threads", locale = "en").to_string(), "Other threads");
 }
 
 #[test]

@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result, anyhow, bail};
 use fs2::FileExt;
-use reqwest::Client;
 use serde::Deserialize;
 use std::fs;
 use std::fs::OpenOptions;
@@ -36,11 +35,16 @@ pub async fn exchange_openai_chatgpt_code_for_tokens(
         urlencoding::encode(&challenge.code_verifier),
     );
 
-    let token_response: OpenAITokenResponse = Client::new()
-        .post(OPENAI_TOKEN_URL)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
+    let token_client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openai token client")?;
+    let token_response: OpenAITokenResponse =
+        vtcode_commons::http::send_with_retry_transport_only(&crate::oauth_token_retry_policy(), || {
+            token_client
+                .post(OPENAI_TOKEN_URL)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(body.clone())
+                .send()
+        })
         .await
         .context("failed to exchange openai authorization code")?
         .error_for_status()
@@ -127,17 +131,21 @@ async fn refresh_openai_chatgpt_session_without_lock(
     storage_mode: AuthCredentialsStoreMode,
 ) -> Result<OpenAIChatGptSession> {
     let identity = resolve_oauth_client_identity()?;
-    let response = Client::new()
-        .post(OPENAI_TOKEN_URL)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(format!(
-            "grant_type=refresh_token&client_id={}&refresh_token={}",
-            urlencoding::encode(&identity.client_id),
-            urlencoding::encode(&current.refresh_token),
-        ))
-        .send()
-        .await
-        .context("failed to refresh openai chatgpt token")?;
+    let token_client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openai token client")?;
+    let response = vtcode_commons::http::send_with_retry_transport_only(&crate::oauth_token_retry_policy(), || {
+        token_client
+            .post(OPENAI_TOKEN_URL)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(format!(
+                "grant_type=refresh_token&client_id={}&refresh_token={}",
+                urlencoding::encode(&identity.client_id),
+                urlencoding::encode(&current.refresh_token),
+            ))
+            .send()
+    })
+    .await
+    .context("failed to refresh openai chatgpt token")?;
 
     // Check for HTTP errors. Unlike error_for_status_ref(), we capture the
     // response body to classify token-endpoint errors (e.g. invalid_grant,
@@ -295,18 +303,23 @@ async fn exchange_openai_chatgpt_api_key(id_token: &str) -> Result<String> {
     }
 
     let identity = resolve_oauth_client_identity()?;
-    let exchange: ExchangeResponse = Client::new()
-        .post(OPENAI_TOKEN_URL)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(format!(
-            "grant_type={}&client_id={}&requested_token={}&subject_token={}&subject_token_type={}",
-            urlencoding::encode("urn:ietf:params:oauth:grant-type:token-exchange"),
-            urlencoding::encode(&identity.client_id),
-            urlencoding::encode("openai-api-key"),
-            urlencoding::encode(id_token),
-            urlencoding::encode("urn:ietf:params:oauth:token-type:id_token"),
-        ))
-        .send()
+    let token_client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openai token client")?;
+    let exchange: ExchangeResponse =
+        vtcode_commons::http::send_with_retry_transport_only(&crate::oauth_token_retry_policy(), || {
+            token_client
+                .post(OPENAI_TOKEN_URL)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(format!(
+                    "grant_type={}&client_id={}&requested_token={}&subject_token={}&subject_token_type={}",
+                    urlencoding::encode("urn:ietf:params:oauth:grant-type:token-exchange"),
+                    urlencoding::encode(&identity.client_id),
+                    urlencoding::encode("openai-api-key"),
+                    urlencoding::encode(id_token),
+                    urlencoding::encode("urn:ietf:params:oauth:token-type:id_token"),
+                ))
+                .send()
+        })
         .await
         .context("failed to exchange openai id token for api key")?
         .error_for_status()

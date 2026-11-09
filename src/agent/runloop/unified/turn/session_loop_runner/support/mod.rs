@@ -5,10 +5,12 @@ use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_ov
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::context::last_user_message_index;
 use anyhow::Result;
+use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::agent::snapshots::{BeginPromptFailure, SnapshotSkippedPaths, classify_begin_prompt_error};
 use vtcode_core::core::agent::steering::{FollowUpProvenance, QueuedFollowUpIntent};
 use vtcode_core::llm::provider::{AssistantPhase, MessageRole};
 use vtcode_core::tools::registry::ToolRegistry;
@@ -149,21 +151,81 @@ pub(super) fn remove_transient_system_notes(history: &mut Vec<vtcode_core::llm::
     }
 }
 
+/// Bound on the inline error detail carried by checkpoint notices.
+const MAX_CHECKPOINT_ERROR_DETAIL_CHARS: usize = 120;
+
+/// One-line, bounded rendering of a checkpoint error chain for user notices.
+fn truncate_error_detail(err: &anyhow::Error) -> String {
+    format!("{err:#}")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(MAX_CHECKPOINT_ERROR_DETAIL_CHARS)
+        .collect()
+}
+
 /// User-facing notice when a prompt checkpoint cannot be taken.
 ///
-/// Pure policy: maps the checkpoint error text to a short `Info` notice.
-/// The full error stays in the tracing log; the UI stays concise. The busy
-/// branch fires only when this same session already has a running turn
+/// Pure policy: maps the classified failure to a short `Info` notice.
+/// The busy branch fires only when this same session already has a running turn
 /// (other sessions proceed concurrently), so it points at the duplicate
-/// holder instead of a separate worktree.
-pub(super) fn checkpoint_unavailable_notice(err_text: &str) -> &'static str {
-    if err_text.contains("Another turn is using this session") {
-        "Prompt kept — session busy (safety lock prevents checkpoint corruption). If another terminal holds this session, continue there; otherwise wait then retry."
-    } else if err_text.contains("Interrupted rewind") {
-        "Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry."
-    } else {
-        "Prompt kept — checkpoint unavailable. Wait a moment and retry."
+/// holder instead of a separate worktree. The fallback names the underlying
+/// cause (bounded) so a generic outage stays diagnosable.
+pub(super) fn checkpoint_unavailable_notice(err: &anyhow::Error) -> Cow<'static, str> {
+    match classify_begin_prompt_error(err) {
+        BeginPromptFailure::SessionBusy => Cow::Borrowed(
+            "Prompt kept — session busy (safety lock prevents checkpoint corruption). If another terminal holds this session, continue there; otherwise wait then retry.",
+        ),
+        BeginPromptFailure::InterruptedRewind => {
+            Cow::Borrowed("Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry.")
+        }
+        BeginPromptFailure::Other => Cow::Owned(format!(
+            "Prompt kept — checkpoint unavailable ({}). Wait a moment and retry.",
+            truncate_error_detail(err)
+        )),
     }
+}
+
+/// Warning when a turn proceeds without its start-of-turn checkpoint: this
+/// turn cannot be rewound. Names the cause (bounded) instead of blocking.
+pub(super) fn degraded_checkpoint_warning(err: &anyhow::Error) -> String {
+    format!("Checkpoint unavailable ({}); proceeding without rewind for this turn.", truncate_error_detail(err))
+}
+
+/// Restore a kept prompt to the input after removing its history message.
+///
+/// The prompt was already appended by the interaction loop (or the approved-plan
+/// handoff); truncating it here keeps a retry from duplicating the message.
+pub(super) fn restore_kept_prompt(
+    working_history: &mut Vec<vtcode_core::llm::provider::Message>,
+    handle: &InlineHandle,
+    prompt_message_index: Option<usize>,
+    prompt_text: &str,
+) {
+    if let Some(index) = prompt_message_index {
+        if index < working_history.len() {
+            working_history.truncate(index);
+        }
+        handle.set_input(prompt_text.to_owned());
+        handle.force_redraw();
+    } else if working_history.last().is_some_and(|message| {
+        message.role == MessageRole::User && message.content.as_text().trim() == prompt_text.trim()
+    }) {
+        working_history.pop();
+        handle.set_input(prompt_text.to_owned());
+        handle.force_redraw();
+    }
+}
+
+/// Warning when a turn proceeds with a degraded checkpoint: the capture left
+/// paths out, so this turn's rewind may be incomplete. Names the exclusions
+/// and the one-step remedy instead of blocking the turn.
+pub(super) fn skipped_paths_turn_warning(skipped: &SnapshotSkippedPaths) -> String {
+    format!(
+        "Checkpoint skipped {} — this turn's /rewind may be incomplete. List unrelated paths in .filesnapignore.",
+        skipped.summary()
+    )
 }
 
 pub(super) fn build_tracked_file_freshness_note(
@@ -892,6 +954,7 @@ pub(super) async fn prompt_startup_planning_workflow(
         selected: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string())),
         search: None,
         status: None,
+        plan_markdown: None,
         hotkeys: Vec::new(),
     });
 

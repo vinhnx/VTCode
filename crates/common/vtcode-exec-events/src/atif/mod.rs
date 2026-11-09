@@ -504,6 +504,7 @@ impl AtifTrajectoryBuilder {
                 }
             }
             ThreadEvent::MatrixUpdated(_)
+            | ThreadEvent::TrackerUpdated(_)
             | ThreadEvent::ItemStarted(_)
             | ThreadEvent::ItemUpdated(_)
             | ThreadEvent::PlanDelta(_)

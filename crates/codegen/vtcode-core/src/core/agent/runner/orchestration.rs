@@ -632,10 +632,7 @@ const PLANNER_PARSE_FAILURE_SAMPLE_BYTES: usize = 2_048;
 /// Bound a failure sample at the cap, stopping before a multi-byte UTF-8
 /// character boundary instead of panicking on a truncated one.
 fn bounded_failure_sample(text: &str) -> String {
-    let mut end = PLANNER_PARSE_FAILURE_SAMPLE_BYTES.min(text.len());
-    while end > 0 && !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(PLANNER_PARSE_FAILURE_SAMPLE_BYTES);
     let marker = if end < text.len() { "…" } else { "" };
     format!("{}{marker}", &text[..end])
 }

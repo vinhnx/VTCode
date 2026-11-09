@@ -1,6 +1,6 @@
 """Regression coverage for the maintained Markdown boundary."""
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import json
@@ -31,7 +31,10 @@ class MarkdownSelectionTests(unittest.TestCase):
                 self.assertEqual(module.tracked_markdown(), ["README.md"])
 
     def test_maintained_sources_and_instructions_are_selected(self):
-        for path in ["README.md", "docs/development/testing.md", "src/AGENTS.md", ".vtcode/README.md"]:
+        for path in [
+            "README.md", "docs/development/testing.md", "src/AGENTS.md", ".vtcode/README.md",
+            ".agents/skills/agentic-testing/SKILL.md",
+        ]:
             with self.subTest(path=path):
                 self.assertTrue(module.is_maintained_markdown(path))
 
@@ -56,7 +59,7 @@ class MarkdownSelectionTests(unittest.TestCase):
 
     def test_protected_vendor_and_fixture_files_are_excluded(self):
         for path in [
-            "docs/project/TODO.md", "patches/crossterm/README.md",
+            "docs/project/TODO.md", "patches/crossterm/README.md", ".agents/skills/rust-skills/rules/own-borrow.md",
             "crates/core/src/fixtures/invalid.md", "tests/snapshots/table.md",
             "crates/core/embedded_assets_source/docs/map.md", ".vtcode/reviews/session.md", "Cargo.toml",
         ]:
@@ -93,6 +96,62 @@ class MarkdownInvocationTests(unittest.TestCase):
             with redirect_stdout(output):
                 self.assertEqual(module.main(), 0)
             self.assertEqual(output.getvalue(), "README.md\ndocs/guide.md\n")
+            run.assert_not_called()
+
+    def test_missing_linter_binary_reports_a_toolchain_error_with_exit_two(self):
+        base = ["npx", "--no-install", "--loglevel=error", "markdownlint-cli2@0.23.3",
+                "--config", ".markdownlint-cli2.jsonc"]
+        with mock.patch.object(module, "tracked_markdown", return_value=["README.md"]), \
+                mock.patch.object(module, "linter_command", return_value=list(base)), \
+                mock.patch.object(sys, "argv", ["check_markdown.py"]), \
+                mock.patch.object(module.subprocess, "run",
+                                  side_effect=FileNotFoundError(2, "No such file or directory", "npx")):
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                self.assertEqual(module.main(), 2)
+            self.assertIn("'npx' was not found on PATH", stderr.getvalue())
+            self.assertIn("Install Node.js 22", stderr.getvalue())
+            self.assertIn("failed (exit 2)", stdout.getvalue())
+
+    def test_scoped_paths_lint_only_the_requested_files_in_requested_order(self):
+        files = ["README.md", "docs/guide.md", "docs/other.md"]
+        base = ["npx", "--no-install", "--loglevel=error", "markdownlint-cli2@0.23.3",
+                "--config", ".markdownlint-cli2.jsonc"]
+        with mock.patch.object(module, "tracked_markdown", return_value=files), \
+                mock.patch.object(module, "linter_command", return_value=list(base)), \
+                mock.patch.object(sys, "argv", ["check_markdown.py", "docs/guide.md", "./README.md",
+                                                "docs/guide.md"]), \
+                mock.patch.object(module.subprocess, "run",
+                                  return_value=subprocess.CompletedProcess([], 0)) as run:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(module.main(), 0)
+            command = run.call_args.args[0]
+            self.assertEqual(command[-2:], [":docs/guide.md", ":README.md"])
+            self.assertEqual(output.getvalue(), "Markdown lint passed: 2 selected files.\n")
+
+    def test_scoped_path_outside_the_maintained_selection_fails_closed(self):
+        for requested in ["docs/missing.md", "docs/project/TODO.md", "Cargo.toml"]:
+            with self.subTest(requested=requested), \
+                    mock.patch.object(module, "tracked_markdown", return_value=["README.md"]), \
+                    mock.patch.object(sys, "argv", ["check_markdown.py", requested]), \
+                    mock.patch.object(module.subprocess, "run") as run:
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    with self.assertRaises(SystemExit) as raised:
+                        module.main()
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn("is not a tracked, maintained Markdown file", stderr.getvalue())
+                run.assert_not_called()
+
+    def test_list_respects_path_scope(self):
+        with mock.patch.object(module, "tracked_markdown", return_value=["README.md", "docs/guide.md"]), \
+                mock.patch.object(sys, "argv", ["check_markdown.py", "--list", "docs/guide.md"]), \
+                mock.patch.object(module.subprocess, "run") as run:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(module.main(), 0)
+            self.assertEqual(output.getvalue(), "docs/guide.md\n")
             run.assert_not_called()
 
 

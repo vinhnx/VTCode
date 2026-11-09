@@ -13,8 +13,9 @@ fn visible_step_index(interaction: &InteractionRequest, step_index: usize) -> us
 
 /// Rows the user actually sees: the active wizard step's options for
 /// multi-step questions, else the first step's (or top-level) choice list.
-/// Render and the digit shortcuts share this so numbers always match rows.
-fn visible_choices(interaction: &InteractionRequest, step_index: usize) -> &[InteractionChoice] {
+/// Render, the digit shortcuts, and the immediate Confirm path share this so
+/// numbers, highlight, and submission always agree on the same rows.
+pub(super) fn visible_choices(interaction: &InteractionRequest, step_index: usize) -> &[InteractionChoice] {
     if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
         let step_index = visible_step_index(interaction, step_index);
         match interaction.steps.get(step_index) {
@@ -28,21 +29,85 @@ fn visible_choices(interaction: &InteractionRequest, step_index: usize) -> &[Int
     }
 }
 
-/// Default (preselected) row: the service's selected identity when it names a
-/// visible row, else the first row — mirroring the TUI list cursor.
-fn default_choice_index(choices: &[InteractionChoice], selected_id: Option<&str>) -> Option<usize> {
-    if choices.is_empty() {
-        return None;
-    }
-    choices
-        .iter()
-        .position(|choice| Some(choice.id.as_str()) == selected_id)
-        .or(Some(0))
+/// Multi-step question prompts render the wizard (stepper + Previous/Next);
+/// every other prompt is an immediate select-then-confirm panel.
+pub(super) fn is_wizard_interaction(interaction: &InteractionRequest) -> bool {
+    interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty()
 }
 
 /// 1-based digit chip for rows inside the shortcut range.
 fn digit_shortcut(choice_index: usize) -> Option<usize> {
     (choice_index < MAX_DIGIT_SHORTCUT).then_some(choice_index + 1)
+}
+
+/// A detail that is exactly one `` `$ ...` `` span is the tool call under
+/// review: return the shell source so it renders highlighted. Anything else
+/// (prose, mixed spans) stays on its own path.
+fn shell_command_span(detail: &str) -> Option<&str> {
+    let inner = detail.trim().strip_prefix("`$")?.strip_suffix('`')?;
+    let command = inner.trim_start();
+    (!command.is_empty()).then_some(command)
+}
+
+/// One supporting line under the title.
+///
+/// Prose keeps the plain themed paragraph (first-line hierarchy intact); a
+/// lone `` `$ ...` `` span renders as a highlighted `sh` block and any other
+/// backtick content as inline Markdown, so tool calls never show raw ticks.
+/// Parsing runs per render over a handful of short strings (unlike the
+/// transcript, which prepares hundreds of streaming rows at ingestion);
+/// memoize at the call site if profiling ever implicates this.
+/// Every wrapper clamps to the panel width: `min_w_0` breaks the flex
+/// min-content chain that otherwise shoves trailing content past the card
+/// edge, and `overflow_hidden` clips unbreakable paint instead of the layout.
+fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx: &App) -> AnyElement {
+    let colors = cx.theme().colors;
+    let wrapper = div()
+        .id(format!("interaction-detail-{detail_index}"))
+        .test_support()
+        .w_full()
+        .min_w_0()
+        .max_w_full()
+        .overflow_hidden();
+    if let Some(command) = shell_command_span(detail) {
+        let mut fenced = String::with_capacity(command.len().saturating_add(8));
+        fenced.push_str("```sh\n");
+        fenced.push_str(command);
+        fenced.push_str("\n```");
+        let prepared = prepare_markdown(&gpui_kit::SharedString::from(fenced));
+        return wrapper
+            .role(gpui_kit::Role::Label)
+            .aria_label(format!("Command: {}", prepared.accessible_text))
+            .child(render_markdown_with_style(
+                format!("interaction-detail-code-{detail_index}"),
+                prepared.markdown,
+                false,
+                markdown_style(cx),
+            ))
+            .into_any_element();
+    }
+    if detail.contains('`') {
+        let prepared = prepare_markdown(&gpui_kit::SharedString::from(detail));
+        return wrapper
+            .role(gpui_kit::Role::Label)
+            .aria_label(prepared.accessible_text.to_string())
+            .child(render_markdown_with_style(
+                format!("interaction-detail-md-{detail_index}"),
+                prepared.markdown,
+                false,
+                markdown_style(cx),
+            ))
+            .into_any_element();
+    }
+    wrapper
+        .text_sm()
+        .text_color(if first {
+            colors.foreground
+        } else {
+            themes::muted_text(&colors)
+        })
+        .child(detail.to_string())
+        .into_any_element()
 }
 
 /// One selectable option card: label, inline description, digit chip.
@@ -69,13 +134,13 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let submitting = self.pending_interaction_response.as_deref() == Some(interaction.interaction_id.as_str());
         let is_question = interaction.kind == protocol::InteractionKind::Question;
-        let has_steps = !interaction.steps.is_empty();
+        let is_wizard = is_wizard_interaction(interaction);
         let step_index = visible_step_index(interaction, self.interaction_step_index);
         // A visible freeform answer owns every keystroke: typing digits must
         // never commit a row, so panel shortcuts stay off while it renders.
         let freeform_visible = is_question && interaction.steps.get(step_index).is_some_and(|step| step.allow_freeform);
-        // Approvals carry the warning treatment; plain choices stay neutral so
-        // the tone keeps meaning "review carefully".
+        // Approvals keep the marker icon; plain choices stay neutral so the
+        // marker keeps meaning "review carefully".
         let is_approval =
             matches!(interaction.kind, protocol::InteractionKind::Approval | protocol::InteractionKind::PlanApproval);
         let mut panel = div()
@@ -89,35 +154,152 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_2()
+            .rounded_lg()
+            .bg(colors.popover)
             .border_1()
-            .border_color(if is_approval { colors.warning } else { colors.border })
-            .rounded_md()
-            .p_4()
-            .when(is_approval, |panel| panel.bg(colors.warning.opacity(0.08)))
-            .child(div().font_semibold().child(interaction.title.clone()));
+            .border_color(colors.border)
+            .p_4();
+        // Questionnaire order: progress eyebrow, title, description. The
+        // panel is one framed card; approvals keep the marker icon so the
+        // severity never rests on color alone, but no longer wash the
+        // whole surface in warning tint. Choice rows stay borderless
+        // inside the frame (no nested cards): selection reads through
+        // the checked wash. A one-item counter restates the title
+        // without aiding navigation, so the eyebrow renders only for
+        // genuine multi-step flows.
+        if is_wizard && interaction.steps.len() > 1 {
+            let counter =
+                rust_i18n::t!("app.interaction.step_counter", n = step_index + 1, total = interaction.steps.len())
+                    .to_string();
+            panel = panel.child(
+                div()
+                    .id("question-step-counter")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(counter.clone())
+                    .text_xs()
+                    .text_color(colors.muted_foreground)
+                    .child(counter),
+            );
+        }
+        // No title-row dismiss: Cancel request and Esc own cancellation,
+        // matching the consent modals (full-access, running-switch).
+        panel = panel.child(
+            div()
+                .id("interaction-title-row")
+                .test_support()
+                .flex()
+                .items_center()
+                .gap_2()
+                .when(is_approval, |row| {
+                    row.child(
+                        div()
+                            .id("interaction-approval-marker")
+                            .test_support()
+                            .flex_shrink_0()
+                            .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning)),
+                    )
+                })
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_lg()
+                        .font_semibold()
+                        .text_color(colors.foreground)
+                        .child(interaction.title.clone()),
+                ),
+        );
         // The first detail line carries the decision facts; the rest recede as
         // supporting metadata.
         for (detail_index, detail) in interaction.details.iter().enumerate() {
+            panel = panel.child(render_interaction_detail(detail, detail_index, detail_index == 0, cx));
+        }
+        // The details are the collapsed preview; the toggle below reveals the
+        // full proposal in the shared viewer before the choice rows, Edit plan
+        // signals the service to open its editor, and the icon button opens
+        // the same viewer in the inspector side panel.
+        if has_viewable_plan_markdown(interaction.plan_markdown.as_deref()) {
+            let expanded = self.interaction_plan_expanded;
+            let toggle_label = if expanded {
+                rust_i18n::t!("app.interaction.hide_full_plan").to_string()
+            } else {
+                rust_i18n::t!("app.interaction.show_full_plan").to_string()
+            };
+            let open_label = rust_i18n::t!("app.interaction.open_in_inspector").to_string();
+            let edit_label = rust_i18n::t!("app.interaction.edit_plan").to_string();
             panel = panel.child(
                 div()
-                    .text_sm()
-                    .text_color(if detail_index == 0 {
-                        colors.foreground
-                    } else {
-                        themes::muted_text(&colors)
-                    })
-                    .child(detail.clone()),
+                    .id("interaction-plan-row")
+                    .test_support()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .w_full()
+                    .child(
+                        desktop_button("interaction-plan-toggle")
+                            .label(toggle_label.clone())
+                            .accessibility_label(toggle_label)
+                            .toggled(expanded)
+                            .child(transcript_chevron_lane(expanded))
+                            .ghost()
+                            .small()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.interaction_plan_expanded = !view.interaction_plan_expanded;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        desktop_button("interaction-plan-edit")
+                            .label(edit_label.clone())
+                            .accessibility_label(edit_label)
+                            .icon(IconName::Pencil)
+                            .ghost()
+                            .small()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|view, _, _, cx| view.submit_interaction_hotkey(cx))),
+                    )
+                    .child(
+                        desktop_button("interaction-plan-open-inspector")
+                            .icon(IconName::PanelRight)
+                            .accessibility_label(open_label.clone())
+                            .tooltip(open_label)
+                            .ghost()
+                            .small()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|view, _, _, cx| view.open_inspector_tab(InspectorTab::Plan, cx))),
+                    ),
             );
+            if expanded && let Some(markdown) = interaction.plan_markdown.as_deref() {
+                panel = panel.child(render_markdown_view(
+                    "interaction-plan-proposal".to_string(),
+                    markdown.into(),
+                    MarkdownViewHeight::Panel,
+                    cx,
+                ));
+            }
         }
         if submitting {
+            let (status_aria, status_text) = if self.interaction_edit_pending {
+                (
+                    rust_i18n::t!("app.interaction.editing_plan_aria").to_string(),
+                    rust_i18n::t!("app.interaction.editing_plan").to_string(),
+                )
+            } else {
+                (
+                    rust_i18n::t!("app.interaction.sending_aria").to_string(),
+                    rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string(),
+                )
+            };
             panel = panel.child(
                 div()
                     .id("interaction-response-status")
                     .test_support()
                     .role(gpui_kit::Role::Status)
-                    .aria_label(rust_i18n::t!("app.interaction.sending_aria").to_string())
+                    .aria_label(status_aria)
                     .text_sm()
-                    .child(rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string()),
+                    .child(status_text),
             );
         }
         if !freeform_visible {
@@ -149,13 +331,21 @@ impl DesktopView {
                 if let Some(choice) = visible_choices(&interaction, step_index).get(choice_index) {
                     let choice_id = choice.id.clone();
                     cx.stop_propagation();
-                    this.choose_interaction_option(step_index, choice_id, window, cx);
+                    if is_wizard_interaction(&interaction) {
+                        this.choose_interaction_option(step_index, choice_id, window, cx);
+                    } else {
+                        // Digits keep their immediate-commit contract; only
+                        // mouse clicks became select-then-confirm.
+                        this.submit_interaction(vec![choice_id], false, window, cx);
+                    }
                 }
             }));
         }
 
         let step_choices = visible_choices(interaction, step_index);
-        if is_question && has_steps {
+        // A one-item stepper restates the title and counter without aiding
+        // navigation, so progress renders only for genuine multi-step flows.
+        if is_wizard && interaction.steps.len() > 1 {
             let steps = interaction.steps.iter().enumerate().map(|(index, step)| {
                 let title = if step.title.trim().is_empty() {
                     rust_i18n::t!("app.interaction.step_fallback", n = index + 1).to_string()
@@ -190,13 +380,18 @@ impl DesktopView {
             );
         }
 
-        if is_question && has_steps {
+        if is_wizard {
             if let Some(step) = interaction.steps.get(step_index) {
-                panel = panel.child(self.render_question_step(step, step_index, interaction.steps.len(), window, cx));
+                panel = panel.child(self.render_question_step(step, step_index, window, cx));
             }
         } else {
             let choices = step_choices;
-            let default_index = default_choice_index(choices, interaction.selected_choice_id.as_deref());
+            // The highlight is the mouse selection when set, else the service
+            // default — the same row Confirm submits.
+            let effective_id = self.effective_immediate_choice_id();
+            let effective_index = effective_id
+                .as_deref()
+                .and_then(|id| choices.iter().position(|choice| choice.id == id));
             let total = choices.len();
             let mut options = div()
                 .id("interaction-choice-options")
@@ -208,7 +403,7 @@ impl DesktopView {
                 .flex_col()
                 .gap_2();
             for (choice_index, choice) in choices.iter().enumerate() {
-                options = options.child(self.render_choice(choice, choice_index, total, default_index, cx));
+                options = options.child(self.render_choice(choice, choice_index, total, effective_index, cx));
             }
             panel = panel.child(options);
         }
@@ -232,16 +427,28 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
+                // The decision row is its own group, not another option:
+                // one extra step over the panel gap lands it on the lg rung.
+                .mt_2()
                 .child(
-                    desktop_button("cancel-interaction")
+                    desktop_default_button("cancel-interaction")
                         .label(rust_i18n::t!("app.interaction.cancel_request").to_string())
-                        .ghost()
                         .desktop_disabled(submitting)
                         .on_click(
                             cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
                         ),
                 )
-                .when(is_question && has_steps, |row| {
+                .when(!is_wizard && !step_choices.is_empty(), |row| {
+                    // Immediate choices commit nothing on their own: activating
+                    // the checked card is a no-op, so the highlighted row
+                    // needs an explicit default commitment next to Cancel.
+                    row.child(
+                        desktop_glass_popover_primary_button("confirm-interaction", &colors, submitting)
+                            .label(rust_i18n::t!("app.interaction.confirm").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| this.confirm_immediate_choice(window, cx))),
+                    )
+                })
+                .when(is_wizard, |row| {
                     row.child(
                         div()
                             .flex()
@@ -249,10 +456,9 @@ impl DesktopView {
                             .gap_2()
                             .when(self.interaction_step_index > 0, |row| {
                                 row.child(
-                                    desktop_button("previous-question")
+                                    desktop_default_button("previous-question")
                                         .label(rust_i18n::t!("app.interaction.previous").to_string())
                                         .icon(IconName::ChevronLeft)
-                                        .ghost()
                                         .desktop_disabled(submitting)
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.show_interaction_step(
@@ -264,14 +470,12 @@ impl DesktopView {
                                 )
                             })
                             .child(
-                                desktop_button("continue-question")
+                                desktop_glass_popover_primary_button("continue-question", &colors, submitting)
                                     .label(if self.interaction_step_index + 1 == interaction.steps.len() {
                                         rust_i18n::t!("app.interaction.submit_answers").to_string()
                                     } else {
                                         rust_i18n::t!("app.interaction.next_question").to_string()
                                     })
-                                    .primary()
-                                    .desktop_disabled(submitting)
                                     .on_click(
                                         cx.listener(|this, _, window, cx| this.advance_interaction_step(window, cx)),
                                     ),
@@ -285,7 +489,6 @@ impl DesktopView {
         &self,
         step: &InteractionStep,
         index: usize,
-        total: usize,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -321,69 +524,63 @@ impl DesktopView {
             .flex_col()
             .gap_2()
             .children(choice_radios);
-        let mut content = div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .id("question-step-counter")
-                    .test_support()
-                    .role(gpui_kit::Role::Status)
-                    .aria_label(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string())
-                    .text_xs()
-                    .text_color(colors.muted_foreground)
-                    .child(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string()),
-            )
-            .child(div().font_medium().child(step.question.clone()));
+        // The step counter lives in the panel header eyebrow now; the step
+        // itself starts at its question.
+        let mut content = div().w_full().flex().flex_col().gap_2();
+        content = content.child(div().font_medium().child(step.question.clone()));
         if !step.choices.is_empty() {
             content = content.child(options);
         }
         if step.allow_freeform {
+            // The panel owns the popover surface, so the answer box drops to
+            // the base background to stay distinct. The wrapper stays
+            // borderless: the Textarea already paints its own input border,
+            // and disabling that would also drop its focus ring.
             content = content.child(
-                div().w_full().rounded_sm().bg(colors.popover).p_2().child(
+                div().w_full().rounded_md().bg(colors.background).p_2().child(
                     Textarea::new(&self.question_answer)
                         .accessibility_id("question-answer")
                         .aria_label(rust_i18n::t!("app.interaction.your_answer").to_string())
                         .cursor_text()
                         .disabled(self.pending_interaction_response.is_some())
-                        .bg(colors.popover)
-                        .h(px(72.)),
+                        .bg(colors.background)
+                        .h(gpui_kit::rems(4.5)),
                 ),
             );
         }
         content.into_any_element()
     }
 
-    /// One selectable option card shared by question steps and immediate
-    /// choices: bordered card, inline description, trailing digit chip.
+    /// One selectable option row shared by question steps and immediate
+    /// choices: plain label, Recommended pill, inline description,
+    /// trailing digit chip.
     fn render_choice_card(&self, card: ChoiceCard<'_>, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let label = if card.choice.recommended {
+        // The visual label stays plain: the recommendation becomes a pill
+        // below it, while screen readers keep hearing the combined
+        // announcement on the row itself.
+        let accessible_label = if card.choice.recommended {
             rust_i18n::t!("app.interaction.recommended", label = card.choice.label.as_str()).to_string()
         } else {
             card.choice.label.clone()
         };
+        let disabled = self.pending_interaction_response.is_some();
         let mut radio = Radio::new(card.element_id)
-            .label(label.clone())
-            .accessibility_label(label)
+            .label(card.choice.label.clone())
+            .accessibility_label(accessible_label)
             .checked(card.checked)
-            .disabled(self.pending_interaction_response.is_some())
+            .disabled(disabled)
             .w_full()
             .p_3()
             .rounded_md()
-            .border_1()
-            .border_color(if card.checked {
-                colors.primary.opacity(0.6)
-            } else {
-                colors.border
-            })
-            .bg(if card.checked {
-                colors.primary.opacity(0.08)
-            } else {
-                colors.popover
-            });
+            // Borderless rows inside the framed panel: rest is transparent
+            // and checked keeps the primary wash. Kit Radio owns no hover
+            // state, so unchecked rows borrow a lighter cut of that wash:
+            // rest, hover, and checked still read as three distinct rungs.
+            // Disabled and checked rows stay put — selection and
+            // submission already speak.
+            .when(card.checked, |radio| radio.bg(colors.primary.opacity(0.08)))
+            .when(!disabled && !card.checked, |radio| radio.hover(|hover| hover.bg(colors.primary.opacity(0.04))));
         let choice_id = card.choice.id.clone();
         let step_index = card.step_index;
         radio = radio
@@ -394,13 +591,41 @@ impl DesktopView {
                     this.choose_interaction_option(step_index, choice_id.clone(), window, cx);
                 }
             }));
+        if card.choice.recommended {
+            // Tag is RenderOnce and cannot carry `.test_support()`, so the
+            // wrapper owns the test identity (domain-derived choice id).
+            // The pill sits on the checked/hover wash seats, where the
+            // outline default (`muted_foreground`) drops below AA — like
+            // every other row copy, it uses `muted_text` instead (pinned
+            // by recommended_pill_holds_contrast_on_washed_rows).
+            radio = radio.child(
+                div()
+                    .id(format!("choice-recommended-{}", card.choice.id))
+                    .test_support()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .child(
+                        Tag::secondary()
+                            .outline()
+                            .small()
+                            .text_color(themes::muted_text(&colors))
+                            .child(rust_i18n::t!("app.interaction.recommended_badge").to_string()),
+                    ),
+            );
+        }
         // Decision-critical descriptions stay fully visible (never truncated,
-        // never tooltip-only); the digit chip trails in its own lane.
+        // never tooltip-only); the digit chip trails in its own lane. The row
+        // breaks the flex min-content chain (`min_w_0`) so a long command in
+        // the description cannot shove the chip past the card edge; the chip
+        // itself never shrinks and unbreakable paint clips inside the text
+        // instead of escaping the layout.
         if card.choice.description.is_some() || card.digit.is_some() {
             let mut row = div()
                 .id(format!("choice-desc-{}", card.choice.id))
                 .test_support()
                 .w_full()
+                .min_w_0()
                 .flex()
                 .items_start()
                 .gap_2();
@@ -410,6 +635,8 @@ impl DesktopView {
                         div()
                             .flex_1()
                             .min_w_0()
+                            .max_w_full()
+                            .overflow_hidden()
                             .text_sm()
                             .text_color(themes::muted_text(&colors))
                             .child(description.clone()),
@@ -420,9 +647,15 @@ impl DesktopView {
                 }
             }
             if let Some(digit) = card.digit
-                && let Ok(keystroke) = gpui_kit::Keystroke::parse(&digit.to_string())
+                && let Ok(keystroke) = gpui_kit::Keystroke::parse_with_os(&digit.to_string(), cx.platform_info().os)
             {
-                row = row.child(Kbd::new(keystroke).outline());
+                row = row.child(
+                    div()
+                        .id(format!("choice-digit-{}", card.choice.id))
+                        .test_support()
+                        .flex_shrink_0()
+                        .child(Kbd::new(keystroke).outline()),
+                );
             }
             radio = radio.child(row);
         }
@@ -434,7 +667,7 @@ impl DesktopView {
         choice: &InteractionChoice,
         choice_index: usize,
         total_choices: usize,
-        default_index: Option<usize>,
+        selected_index: Option<usize>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         self.render_choice_card(
@@ -443,11 +676,30 @@ impl DesktopView {
                 choice,
                 position: choice_index + 1,
                 total: total_choices,
-                checked: default_index == Some(choice_index),
+                checked: selected_index == Some(choice_index),
                 digit: digit_shortcut(choice_index),
                 step_index: 0,
             },
             cx,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shell_command_span;
+
+    #[test]
+    fn shell_span_detects_only_lone_dollar_spans() {
+        // Both sides of every boundary: spacing, position, emptiness.
+        assert_eq!(shell_command_span("`$ python3 -c 'print(1)'`"), Some("python3 -c 'print(1)'"));
+        assert_eq!(shell_command_span("`$cmd`"), Some("cmd"));
+        assert_eq!(shell_command_span("  `$  ls`  "), Some("ls"));
+        assert_eq!(shell_command_span("Run `$ foo` now"), None);
+        assert_eq!(shell_command_span("`code`"), None);
+        assert_eq!(shell_command_span("$ bare"), None);
+        assert_eq!(shell_command_span("`$ `"), None);
+        assert_eq!(shell_command_span("``"), None);
+        assert_eq!(shell_command_span(""), None);
     }
 }

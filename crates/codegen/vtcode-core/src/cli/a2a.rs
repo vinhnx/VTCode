@@ -336,13 +336,26 @@ async fn cancel_agent_task(agent_url: String, task_id: String) -> anyhow::Result
 const A2A_TOKEN_ENV_VAR: &str = "VTCODE_A2A_TOKEN";
 
 fn a2a_client(agent_url: &str) -> anyhow::Result<crate::a2a::A2aClient> {
-    let client = crate::a2a::A2aClient::new(agent_url)?;
+    // `vtcode-a2a` is a Layer 0 crate and cannot read `[timeouts]` itself, so the
+    // host resolves the configured budgets and passes them in. These come from
+    // the globally installed defaults that startup/live-reload seed, so the A2A
+    // CLI honors the same `[timeouts]` keys as every other client.
+    let http = vtcode_commons::http::http_timeouts();
+    let client = crate::a2a::A2aClient::with_timeouts(
+        agent_url,
+        http.connect.unwrap_or(DEFAULT_A2A_CONNECT_TIMEOUT),
+        http.request.unwrap_or(DEFAULT_A2A_REQUEST_TIMEOUT),
+    )?;
     match std::env::var(A2A_TOKEN_ENV_VAR) {
         Ok(auth_token) => Ok(client.with_bearer_token(auth_token)),
         Err(std::env::VarError::NotPresent) => Ok(client),
         Err(error) => anyhow::bail!("Failed to read {A2A_TOKEN_ENV_VAR}: {error}"),
     }
 }
+
+/// Fallbacks when `[timeouts]` disables the HTTP budget (`0`).
+const DEFAULT_A2A_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const DEFAULT_A2A_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[cfg(test)]
 mod tests {

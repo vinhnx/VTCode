@@ -389,25 +389,29 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn detects_workspace_config_change() {
         let dir = tempfile::tempdir().expect("tempdir");
         let config_path = dir.path().join("vtcode.toml");
         std::fs::write(&config_path, "mode = \"auto\"\n").expect("write config");
 
-        let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
-        watcher.set_debounce_duration(0);
-        open_check_window(&mut watcher);
+        with_isolated_defaults(dir.path(), || {
+            let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
+            watcher.set_debounce_duration(0);
+            open_check_window(&mut watcher);
 
-        assert!(!watcher.should_reload(), "baseline poll records mtimes, sees no change");
+            assert!(!watcher.should_reload(), "baseline poll records mtimes, sees no change");
 
-        std::thread::sleep(Duration::from_millis(30));
-        std::fs::write(&config_path, "mode = \"hidden\"\n").expect("rewrite config");
-        open_check_window(&mut watcher);
+            std::thread::sleep(Duration::from_millis(30));
+            std::fs::write(&config_path, "mode = \"hidden\"\n").expect("rewrite config");
+            open_check_window(&mut watcher);
 
-        assert!(watcher.should_reload(), "modified workspace config must trigger reload");
+            assert!(watcher.should_reload(), "modified workspace config must trigger reload");
+        });
     }
 
     #[test]
+    #[serial]
     fn tracks_additional_watch_paths() {
         let dir = tempfile::tempdir().expect("tempdir");
         let workspace_config = dir.path().join("vtcode.toml");
@@ -415,79 +419,90 @@ mod tests {
         std::fs::write(&workspace_config, "mode = \"auto\"\n").expect("write config");
         std::fs::write(&extra_config, "key = 1\n").expect("write extra config");
 
-        let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
-        watcher.add_watch_path(extra_config.clone());
-        watcher.set_debounce_duration(0);
-        open_check_window(&mut watcher);
+        with_isolated_defaults(dir.path(), || {
+            let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
+            watcher.add_watch_path(extra_config.clone());
+            watcher.set_debounce_duration(0);
+            open_check_window(&mut watcher);
 
-        assert!(!watcher.should_reload(), "baseline poll records mtimes, sees no change");
+            assert!(!watcher.should_reload(), "baseline poll records mtimes, sees no change");
 
-        std::thread::sleep(Duration::from_millis(30));
-        std::fs::write(&extra_config, "key = 2\n").expect("rewrite extra config");
-        open_check_window(&mut watcher);
+            std::thread::sleep(Duration::from_millis(30));
+            std::fs::write(&extra_config, "key = 2\n").expect("rewrite extra config");
+            open_check_window(&mut watcher);
 
-        assert!(watcher.should_reload(), "modified additional config must trigger reload");
+            assert!(watcher.should_reload(), "modified additional config must trigger reload");
+        });
     }
 
     #[test]
+    #[serial]
     fn detects_creation_of_missing_additional_watch_path() {
         let dir = tempfile::tempdir().expect("tempdir");
         let extra_config = dir.path().join("created-user-config.toml");
 
-        let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
-        watcher.add_watch_path(extra_config.clone());
-        watcher.set_debounce_duration(0);
-        open_check_window(&mut watcher);
+        with_isolated_defaults(dir.path(), || {
+            let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
+            watcher.add_watch_path(extra_config.clone());
+            watcher.set_debounce_duration(0);
+            open_check_window(&mut watcher);
 
-        assert!(!watcher.should_reload(), "missing path establishes a baseline");
+            assert!(!watcher.should_reload(), "missing path establishes a baseline");
 
-        std::fs::write(&extra_config, "key = 1\n").expect("create extra config");
-        open_check_window(&mut watcher);
+            std::fs::write(&extra_config, "key = 1\n").expect("create extra config");
+            open_check_window(&mut watcher);
 
-        assert!(watcher.should_reload(), "creating a watched config must trigger reload");
+            assert!(watcher.should_reload(), "creating a watched config must trigger reload");
+        });
     }
 
     #[test]
+    #[serial]
     fn detects_change_before_first_poll_after_baseline_seed() {
         let dir = tempfile::tempdir().expect("tempdir");
         let extra_config = dir.path().join("user-vtcode.toml");
         std::fs::write(&extra_config, "mode = \"auto\"\n").expect("write config");
 
-        let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
-        watcher.add_watch_path(extra_config.clone());
-        watcher.seed_current_mtimes();
-        watcher.set_debounce_duration(0);
-        std::fs::write(&extra_config, "mode = \"command\"\n").expect("modify config");
-        open_check_window(&mut watcher);
+        with_isolated_defaults(dir.path(), || {
+            let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
+            watcher.add_watch_path(extra_config.clone());
+            watcher.seed_current_mtimes();
+            watcher.set_debounce_duration(0);
+            std::fs::write(&extra_config, "mode = \"command\"\n").expect("modify config");
+            open_check_window(&mut watcher);
 
-        assert!(watcher.should_reload(), "a change after baseline seeding must trigger reload");
+            assert!(watcher.should_reload(), "a change after baseline seeding must trigger reload");
+        });
     }
 
     #[test]
+    #[serial]
     fn does_not_consume_a_change_during_debounce() {
         let dir = tempfile::tempdir().expect("tempdir");
         let config_path = dir.path().join("vtcode.toml");
         std::fs::write(&config_path, "mode = \"auto\"\n").expect("write config");
 
-        let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
-        watcher.set_debounce_duration(0);
-        open_check_window(&mut watcher);
-        assert!(!watcher.should_reload(), "baseline poll records mtimes");
+        with_isolated_defaults(dir.path(), || {
+            let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
+            watcher.set_debounce_duration(0);
+            open_check_window(&mut watcher);
+            assert!(!watcher.should_reload(), "baseline poll records mtimes");
 
-        std::thread::sleep(Duration::from_millis(30));
-        std::fs::write(&config_path, "mode = \"hidden\"\n").expect("rewrite config");
-        open_check_window(&mut watcher);
-        assert!(watcher.should_reload(), "first change is outside the debounce window");
+            std::thread::sleep(Duration::from_millis(30));
+            std::fs::write(&config_path, "mode = \"hidden\"\n").expect("rewrite config");
+            open_check_window(&mut watcher);
+            assert!(watcher.should_reload(), "first change is outside the debounce window");
 
-        watcher.set_debounce_duration(60_000);
-        std::thread::sleep(Duration::from_millis(30));
-        std::fs::write(&config_path, "mode = \"command\"\n").expect("rewrite config again");
-        open_check_window(&mut watcher);
-        assert!(!watcher.should_reload(), "second change is debounced");
+            watcher.set_debounce_duration(60_000);
+            std::thread::sleep(Duration::from_millis(30));
+            std::fs::write(&config_path, "mode = \"command\"\n").expect("rewrite config again");
+            open_check_window(&mut watcher);
+            assert!(!watcher.should_reload(), "second change is debounced");
 
-        watcher.set_debounce_duration(0);
-        open_check_window(&mut watcher);
-        assert!(watcher.should_reload(), "debounced change remains observable");
+            watcher.set_debounce_duration(0);
+            open_check_window(&mut watcher);
+            assert!(watcher.should_reload(), "debounced change remains observable");
+        });
     }
 
     #[test]

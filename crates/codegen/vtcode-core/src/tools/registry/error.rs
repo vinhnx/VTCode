@@ -21,6 +21,7 @@ pub struct ToolErrorDebugContext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PatchFailure {
     ContextMismatch { path: String, evidence: String },
+    RedactedContext { path: String },
     Other,
 }
 
@@ -265,14 +266,20 @@ impl ToolExecutionError {
             let mut structured = Self::from_category(tool_name.clone(), category, patch_error.to_string());
             structured.original_error =
                 Some(vtcode_commons::formatting::head_tail_truncate(&format!("{error:#}"), 640, " ... ").0);
-            structured.patch_failure = Some(match patch_error.context_mismatch() {
-                Some((path, evidence)) => PatchFailure::ContextMismatch {
-                    path: path.to_string(),
-                    evidence: vtcode_commons::formatting::head_tail_truncate(evidence, 320, " ... ").0,
-                },
-                None => PatchFailure::Other,
-            });
-            if let Some(path) = structured.patch_context_mismatch_path() {
+            structured.patch_failure =
+                Some(match (patch_error.redacted_context_path(), patch_error.context_mismatch()) {
+                    (Some(path), _) => PatchFailure::RedactedContext { path: path.to_string() },
+                    (_, Some((path, evidence))) => PatchFailure::ContextMismatch {
+                        path: path.to_string(),
+                        evidence: vtcode_commons::formatting::head_tail_truncate(evidence, 320, " ... ").0,
+                    },
+                    _ => PatchFailure::Other,
+                });
+            if patch_error.redacted_context_path().is_some() {
+                structured.recovery_suggestions = vec![Cow::Borrowed(
+                    "Repeated reads show the same redaction. Split the edit around the hidden line if possible; ask the user for help if that line must change. Do not guess or write the redaction marker as a replacement.",
+                )];
+            } else if let Some(path) = structured.patch_context_mismatch_path() {
                 structured.message = format!(
                     "Patch context mismatch in '{path}': use complete current lines and preserve internal whitespace."
                 );
@@ -319,6 +326,12 @@ impl ToolExecutionError {
             Some(PatchFailure::ContextMismatch { path, .. }) => Some(path),
             _ => self.edit_failure.as_ref().map(|failure| failure.path.as_str()),
         }
+    }
+
+    /// Whether a patch failed because its source view was redacted.
+    #[must_use]
+    pub fn is_redacted_patch_context(&self) -> bool {
+        matches!(self.patch_failure, Some(PatchFailure::RedactedContext { .. }))
     }
 
     /// Whether a typed runtime lookup failed, independent of quoted text.

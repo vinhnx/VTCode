@@ -4,7 +4,7 @@ use std::path::Path;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::super::matcher::{PatchContextMatcher, seek_segment};
+use super::super::matcher::{PatchContextMatcher, redacted_context_matches, seek_segment};
 use super::super::semantic::{resolve_semantic_match, semantic_anchor_term};
 use super::io::AtomicWriter;
 use super::{PatchChunk, PatchError};
@@ -122,6 +122,7 @@ async fn compute_replacements_with_inspection(
 
     for chunk in chunks {
         let mut context_found = true;
+        let mut redacted_anchor = false;
         if let Some(hint_line) = chunk.parse_line_number() {
             line_index = hint_line.saturating_sub(1);
         } else if let Some(context) = chunk.change_context() {
@@ -131,12 +132,16 @@ async fn compute_replacements_with_inspection(
                 line_index = idx + 1;
             } else {
                 context_found = false;
+                redacted_anchor = redacted_context_matches(original_lines, &search_pattern, line_index, false);
             }
         }
 
         let (mut old_segment, mut new_segment) = chunk.to_segments();
 
         if !chunk.has_old_lines() {
+            if redacted_anchor {
+                return Err(PatchError::RedactedContext { path: path.to_string() });
+            }
             if !context_found && let Some(context) = chunk.change_context() {
                 return Err(PatchError::ContextNotFound {
                     path: path.to_string(),
@@ -161,6 +166,11 @@ async fn compute_replacements_with_inspection(
             None
         };
 
+        let mut redacted_match = redacted_anchor
+            || (found.is_none()
+                && context_found
+                && redacted_context_matches(original_lines, &old_segment, line_index, chunk.is_end_of_file()));
+
         if found.is_none() && chunk.change_context().and_then(semantic_anchor_term).is_some() {
             match resolve_semantic_match(
                 source_path,
@@ -181,6 +191,11 @@ async fn compute_replacements_with_inspection(
                     // Language not supported by ast-grep (e.g. markdown, yaml).
                     // Fall back to exact text search from the beginning of the file.
                     found = seek_segment(&matcher, &mut old_segment, &mut new_segment, 0, chunk.is_end_of_file());
+                    redacted_match |= found.is_none()
+                        && redacted_context_matches(original_lines, &old_segment, 0, chunk.is_end_of_file());
+                }
+                Err(PatchError::SemanticResolutionFailed { .. }) if redacted_match => {
+                    return Err(PatchError::RedactedContext { path: path.to_string() });
                 }
                 Err(err) => return Err(err),
             }
@@ -194,6 +209,9 @@ async fn compute_replacements_with_inspection(
             line_index = start_idx + old_segment.len();
             replacements.push((start_idx, old_segment.len(), new_segment));
         } else {
+            if redacted_match {
+                return Err(PatchError::RedactedContext { path: path.to_string() });
+            }
             if !context_found && let Some(context) = chunk.change_context() {
                 return Err(PatchError::ContextNotFound {
                     path: path.to_string(),

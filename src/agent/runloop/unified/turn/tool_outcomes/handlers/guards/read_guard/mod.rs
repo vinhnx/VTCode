@@ -458,7 +458,14 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     // distinct queries on one path are diverse research guarded by the
     // query-aware family cap above, not pagination.
     if let Some(path) = repeated_read_path(canonical_tool_name, effective_args) {
-        let path_count = ctx.harness_state.record_file_read_path_call(path.clone());
+        // Count by workspace-normalized path so the same file read via
+        // different spellings (relative vs absolute) shares one counter —
+        // and so a later write, recorded normalized, resets this exact key.
+        // The model-facing message keeps the raw spelling it used.
+        let normalized = normalize_workspace_path(&ctx.config.workspace, std::path::Path::new(&path))
+            .to_string_lossy()
+            .to_string();
+        let path_count = ctx.harness_state.record_file_read_path_call(normalized);
         if path_count > path_cap && !recovery_allowed {
             let block_reason = format!(
                 "Repeated reads of '{path}' hit the per-file-path cap ({path_cap}), so further reads of this path are blocked for the rest of this turn. Prefer wider windows (e.g. sed -n '1,200p' or read_file) over overlapping slices and reuse spooled evidence; reads of other paths, edits, and other useful actions remain available."

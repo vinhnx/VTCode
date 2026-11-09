@@ -4,7 +4,7 @@ pub(super) use std::time::Duration;
 
 pub(super) use super::{
     AutoPermissionDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction, PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX,
-    PromptCacheDiagnostics, SessionStats, ValidationCategory, is_follow_up_prompt_like,
+    PromptCacheDiagnostics, SessionStats, ValidationCategory, is_follow_up_prompt_like, missing_executable_hint,
     should_enforce_safe_mode_prompts,
 };
 pub(super) use vtcode_core::config::WorkspaceTrustLevel;

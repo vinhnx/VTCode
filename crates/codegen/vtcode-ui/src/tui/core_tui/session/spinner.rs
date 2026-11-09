@@ -41,7 +41,9 @@ impl ThinkingSpinner {
     }
 
     pub fn update(&mut self) -> bool {
-        if self.is_active && self.last_update.elapsed().as_millis() >= 80 {
+        if self.is_active
+            && self.last_update.elapsed().as_millis() >= u128::from(ui::TUI_THINKING_SPINNER_FRAME_INTERVAL_MS)
+        {
             self.spinner_index = (self.spinner_index + 1) % SPINNER_FRAMES.len();
             self.last_update = Instant::now();
             return true;

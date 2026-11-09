@@ -15,8 +15,9 @@ use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
 
 /// Cap so a long-running session cannot grow the projection without bound.
 pub(super) const MAX_ACTIVITY_ROWS: usize = 300;
-const MAX_OUTPUT_LINES: usize = 1_000;
-const MAX_OUTPUT_BYTES: usize = 128 * 1024;
+#[cfg(test)]
+use super::output_tail::{MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES};
+pub(super) use super::output_tail::{compact_output_tail, display_output_tail, output_tail};
 
 /// Selected inspector view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -25,17 +26,21 @@ pub(super) enum InspectorTab {
     Changes,
     Files,
     Activity,
+    Tasks,
     Output,
     Utilities,
+    Plan,
 }
 
 impl InspectorTab {
-    pub(super) const ALL: [Self; 5] = [
+    pub(super) const ALL: [Self; 7] = [
         Self::Changes,
         Self::Files,
         Self::Activity,
+        Self::Tasks,
         Self::Output,
         Self::Utilities,
+        Self::Plan,
     ];
 
     pub(super) fn label(self) -> String {
@@ -43,8 +48,11 @@ impl InspectorTab {
             Self::Changes => rust_i18n::t!("app.inspector.tab_changes").to_string(),
             Self::Files => rust_i18n::t!("app.inspector.tab_files").to_string(),
             Self::Activity => rust_i18n::t!("app.inspector.tab_activity").to_string(),
+            // English literal: no translated key covers the Tasks tab yet.
+            Self::Tasks => "Tasks".to_string(),
             Self::Output => rust_i18n::t!("app.inspector.tab_output").to_string(),
             Self::Utilities => rust_i18n::t!("app.inspector.tab_utilities").to_string(),
+            Self::Plan => rust_i18n::t!("app.inspector.tab_plan").to_string(),
         }
     }
 }
@@ -67,6 +75,9 @@ pub(super) struct ActivityRow {
     pub status: String,
     pub state: ActivityState,
     pub has_output: bool,
+    /// Whether the row resolves in the live transcript. Restored-only rows
+    /// predate the loaded window, so they offer output but no transcript jump.
+    pub in_transcript: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -240,8 +251,13 @@ impl ChangesProjection {
         self.projected.get(path).is_some_and(|projected| projected.preview.is_some())
     }
 
-    pub(super) fn preview_count(&self) -> usize {
-        self.entries.iter().filter(|entry| self.has_preview(&entry.path)).count()
+    /// Previewable entries matching an optional kind filter.
+    pub(super) fn filtered_preview_count(&self, filter: Option<DiffFileKind>) -> usize {
+        self.entries
+            .iter()
+            .filter(|entry| filter.is_none_or(|kind| kind == entry.kind))
+            .filter(|entry| self.has_preview(&entry.path))
+            .count()
     }
 
     /// The full raw patch text for the change-set that last touched a path.
@@ -259,28 +275,32 @@ impl ChangesProjection {
 }
 
 /// One tool row projected for the Activity tab, with its latest status.
+///
+/// Rows read newest-first so the live edge stays visible without scrolling;
+/// the cap keeps the newest rows and reports the dropped tail via `has_older`.
 pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]) -> ActivityProjection {
     let mut activities = restored
         .iter()
-        .chain(transcript.items())
+        .map(|item| (item, false))
+        .chain(transcript.items().map(|item| (item, true)))
         .rev()
-        .filter(|item| item.has_activity_status);
-    let mut rows: Vec<_> = activities
+        .filter(|(item, _)| item.has_activity_status);
+    let rows: Vec<_> = activities
         .by_ref()
         .take(MAX_ACTIVITY_ROWS)
-        .map(|item| {
+        .map(|(item, in_transcript)| {
             let status = item.text.lines().next().unwrap_or_default().to_string();
             ActivityRow {
                 id: item.id.clone(),
                 title: item.title.clone(),
                 state: ActivityState::from_status(&status),
                 status,
-                has_output: item.output.is_some(),
+                has_output: item.has_output(),
+                in_transcript,
             }
         })
         .collect();
     let has_older = activities.next().is_some();
-    rows.reverse();
     ActivityProjection { rows, has_older }
 }
 
@@ -291,6 +311,7 @@ pub(super) struct OutputView {
     pub title: SharedString,
     pub text: SharedString,
     pub running: bool,
+    pub truncated: bool,
 }
 
 pub(super) fn output_for(
@@ -302,8 +323,12 @@ pub(super) fn output_for(
         .and_then(|id| {
             restored
                 .iter()
-                .find(|item| item.id == id)
-                .or_else(|| transcript.items().find(|item| item.id == id))
+                .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
+                .or_else(|| {
+                    transcript
+                        .items()
+                        .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
+                })
         })
         .and_then(output_view)
         .or_else(|| restored.iter().chain(transcript.items()).rev().find_map(output_view))
@@ -311,9 +336,10 @@ pub(super) fn output_for(
 
 fn output_view(item: &TranscriptItem) -> Option<OutputView> {
     Some(OutputView {
-        id: item.id.clone(),
+        id: item.output_item_id.clone().unwrap_or_else(|| item.id.clone()),
         title: item.title.clone(),
-        text: item.output.clone()?,
+        text: output_with_truncation_notice(item.output.as_ref()?, item.output_truncated),
+        truncated: item.output_truncated,
         running: item
             .text
             .lines()
@@ -322,39 +348,38 @@ fn output_view(item: &TranscriptItem) -> Option<OutputView> {
     })
 }
 
-/// Cap the rendered output tail so a chatty command stays cheap to draw.
-pub(super) fn output_tail(text: &SharedString) -> SharedString {
-    let mut start = text.len().saturating_sub(MAX_OUTPUT_BYTES);
-    while !text.is_char_boundary(start) {
-        start += 1;
+pub(super) fn output_with_truncation_notice(text: &SharedString, truncated: bool) -> SharedString {
+    let notice = rust_i18n::t!("app.inspector.truncation_notice");
+    if truncated && !text.starts_with(notice.as_ref()) {
+        format!("{notice}{text}").into()
+    } else {
+        text.clone()
     }
-    let mut tail = text.get(start..).unwrap_or_default();
-    let mut newlines_to_keep = MAX_OUTPUT_LINES + usize::from(tail.ends_with('\n'));
-    for (index, byte) in tail.bytes().enumerate().rev() {
-        if byte == b'\n' {
-            newlines_to_keep -= 1;
-            if newlines_to_keep == 0 {
-                start += index + 1;
-                tail = text.get(start..).unwrap_or_default();
-                break;
+}
+
+/// Narrow output text to lines matching a case-insensitive substring query.
+///
+/// Returns the kept text plus matched/total line counts. An empty query keeps
+/// everything, so callers only branch on whether the query is blank.
+pub(super) fn filter_output_lines(tail: &str, query: &str) -> (String, usize, usize) {
+    let total = tail.lines().count();
+    let query = query.trim();
+    if query.is_empty() {
+        return (tail.to_string(), total, total);
+    }
+    let folded = query.to_lowercase();
+    let mut kept = String::new();
+    let mut matched = 0;
+    for line in tail.lines() {
+        if line.to_lowercase().contains(&folded) {
+            if matched > 0 {
+                kept.push('\n');
             }
+            kept.push_str(line);
+            matched += 1;
         }
     }
-
-    if start == 0 {
-        return text.clone();
-    }
-
-    // `str::lines()` omits one final line terminator; match the previous
-    // projection's join behavior when building a truncated tail.
-    if let Some(without_terminator) = tail.strip_suffix('\n') {
-        tail = without_terminator;
-    }
-    let notice = rust_i18n::t!("app.inspector.truncation_notice").to_string();
-    let mut rendered = String::with_capacity(notice.len().saturating_add(tail.len()));
-    rendered.push_str(&notice);
-    rendered.push_str(tail);
-    rendered.into()
+    (kept, matched, total)
 }
 
 /// Memoized [`activity_rows`] projection, keyed on both input generations.
@@ -411,7 +436,9 @@ impl OutputViewCache {
         selected_id: Option<String>,
         view: Option<OutputView>,
     ) -> Self {
-        let tail = view.as_ref().map_or_else(SharedString::default, |view| output_tail(&view.text));
+        let tail = view
+            .as_ref()
+            .map_or_else(SharedString::default, |view| display_output_tail(&view.text));
         Self {
             transcript_revision,
             restored_revision,
@@ -466,7 +493,7 @@ pub(super) fn resolve_tool_tail(
     {
         return entry.tail.clone();
     }
-    let tail = output_tail(output);
+    let tail = compact_output_tail(output);
     cache.retain(|_, entry| entry.transcript_revision == revision);
     let _previous =
         cache.insert(id.to_string(), ToolTailCacheEntry { transcript_revision: revision, tail: tail.clone() });
@@ -481,7 +508,7 @@ fn change_kind(status: DiffFileStatus) -> DiffFileKind {
     }
 }
 
-fn preview_counts(preview: Option<&DiffFile>, incomplete: bool) -> (Option<u64>, Option<u64>) {
+pub(super) fn preview_counts(preview: Option<&DiffFile>, incomplete: bool) -> (Option<u64>, Option<u64>) {
     if incomplete {
         return (None, None);
     }
@@ -548,12 +575,48 @@ mod tests {
             status: String::new(),
             state,
             has_output: false,
+            in_transcript: true,
         })
         .collect::<Vec<_>>();
 
         let counts = ActivityCounts::from_rows(&rows);
         assert_eq!(counts.total(), rows.len());
         assert_eq!(counts.summary(), "1 running · 2 done · 1 failed · 1 interrupted · 1 other");
+    }
+
+    #[test]
+    fn output_line_filter_matches_case_insensitively_and_counts() {
+        let tail = "alpha one\nbeta two\nALPHA three\n";
+        let (kept, matched, total) = filter_output_lines(tail, "  AlPhA ");
+        assert_eq!(kept, "alpha one\nALPHA three");
+        assert_eq!((matched, total), (2, 3));
+        let (kept, matched, total) = filter_output_lines(tail, "zzz");
+        assert_eq!(kept, "");
+        assert_eq!((matched, total), (0, 3));
+        let (kept, matched, total) = filter_output_lines(tail, "   ");
+        assert_eq!(kept, tail);
+        assert_eq!((matched, total), (3, 3));
+    }
+
+    #[test]
+    fn activity_rows_lead_with_the_newest_tool_action() {
+        let mut transcript = Transcript::default();
+        // Asymmetric statuses so a reversed projection cannot pass by symmetry.
+        for (id, status) in [("old", "completed"), ("mid", "failed"), ("new", "in progress")] {
+            transcript.push(TranscriptItem::new(
+                id.to_string(),
+                "tool".to_string(),
+                format!("tool {id}").into(),
+                status.to_string(),
+            ));
+        }
+
+        let projection = activity_rows(&transcript, &[]);
+
+        let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+        assert_eq!(ids, vec!["new", "mid", "old"]);
+        assert_eq!(projection.rows[0].state, ActivityState::Running);
+        assert!(!projection.has_older);
     }
 
     #[test]
@@ -688,7 +751,7 @@ mod tests {
     }
 
     #[test]
-    fn activity_limit_keeps_the_newest_rows_in_chronological_order() {
+    fn activity_limit_keeps_the_newest_rows_newest_first() {
         let mut transcript = Transcript::default();
         for index in 0..=MAX_ACTIVITY_ROWS {
             transcript.push(TranscriptItem::new(
@@ -701,8 +764,8 @@ mod tests {
         let rows = activity_rows(&transcript, &[]);
         assert_eq!(rows.rows.len(), MAX_ACTIVITY_ROWS);
         assert!(rows.has_older);
-        assert_eq!(rows.rows[0].id, "tool-1");
-        assert_eq!(rows.rows[MAX_ACTIVITY_ROWS - 1].id, format!("tool-{MAX_ACTIVITY_ROWS}"));
+        assert_eq!(rows.rows[0].id, format!("tool-{MAX_ACTIVITY_ROWS}"));
+        assert_eq!(rows.rows[MAX_ACTIVITY_ROWS - 1].id, "tool-1");
     }
 
     #[test]
@@ -892,7 +955,7 @@ mod tests {
 
         // First resolve computes; the repeat at the same revision hits.
         let first = resolve_tool_tail("tool-1", &long_output, 5, &mut cache);
-        assert_eq!(first, output_tail(&long_output));
+        assert_eq!(first, compact_output_tail(&long_output));
         let second = resolve_tool_tail("tool-1", &long_output, 5, &mut cache);
         assert_eq!(second, first);
         assert_eq!(cache.len(), 1, "hits must not duplicate entries");

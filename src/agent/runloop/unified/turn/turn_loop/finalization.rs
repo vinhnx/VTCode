@@ -80,7 +80,7 @@ pub(super) async fn finalize_turn(
     }
     if let Some(emitter) = ctx.harness_emitter {
         // Exit is a graceful user-initiated action, not a failure
-        let event = match result {
+        let mut event = match result {
             TurnLoopResult::Exit => turn_completed_event(turn_usage.clone()),
             TurnLoopResult::Completed { .. } => {
                 // Capture live exec sessions only for the completed path so
@@ -116,6 +116,10 @@ pub(super) async fn finalize_turn(
                 turn_failed_event("turn blocked", has_turn_usage(turn_usage).then_some(turn_usage.clone()))
             }
         };
+        if let vtcode_core::exec::events::ThreadEvent::TurnCompleted(completed) = &mut event {
+            completed.final_response_item_id =
+                ctx.harness_state.final_response_item_id().map(|id| Box::new(id.to_owned()));
+        }
         if let Err(e) = emitter.emit(event) {
             tracing::debug!(error = %e, "harness turn outcome event emission failed");
         }

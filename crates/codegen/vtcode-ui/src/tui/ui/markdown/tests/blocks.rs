@@ -92,6 +92,137 @@ fn test_markdown_unordered_list_bullets() {
     );
 }
 #[test]
+fn tight_unordered_list_separates_items_with_single_blank() {
+    let lines = render_markdown("- Alpha\n- Beta\n- Gamma\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(
+        text_lines,
+        vec![
+            "• Alpha".to_string(),
+            String::new(),
+            "• Beta".to_string(),
+            String::new(),
+            "• Gamma".to_string()
+        ],
+        "tight items must be separated by exactly one blank row, got {text_lines:?}"
+    );
+}
+
+#[test]
+fn tight_ordered_list_separates_items_with_single_blank() {
+    let lines = render_markdown("1. First\n2. Second\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(
+        text_lines,
+        vec!["1. First".to_string(), String::new(), "2. Second".to_string()],
+        "ordered items must be separated by exactly one blank row, got {text_lines:?}"
+    );
+}
+
+#[test]
+fn loose_list_keeps_exactly_one_blank_between_items() {
+    let lines = render_markdown("- Alpha\n\n- Beta\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(
+        text_lines,
+        vec!["• Alpha".to_string(), String::new(), "• Beta".to_string()],
+        "loose items must keep exactly one blank row (no stacking), got {text_lines:?}"
+    );
+}
+
+#[test]
+fn single_item_list_has_no_interior_blank() {
+    let lines = render_markdown("- Solo\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(text_lines, vec!["• Solo".to_string()], "got {text_lines:?}");
+}
+
+#[test]
+fn empty_items_keep_bullet_row() {
+    // Asymmetric: empty item first vs empty item last.
+    let lines = render_markdown("- \n- Beta\n");
+    assert_eq!(
+        lines_to_text(&lines),
+        vec!["• ".to_string(), String::new(), "• Beta".to_string()],
+        "got {:?}",
+        lines_to_text(&lines)
+    );
+    let lines = render_markdown("- Alpha\n-\n");
+    assert_eq!(
+        lines_to_text(&lines),
+        vec!["• Alpha".to_string(), String::new(), "• ".to_string()],
+        "got {:?}",
+        lines_to_text(&lines)
+    );
+}
+
+#[test]
+fn empty_outer_item_keeps_bullet_before_nested_list() {
+    let lines = render_markdown("- \n  - Inner\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(
+        text_lines,
+        vec!["• ".to_string(), "  ◦ Inner".to_string()],
+        "outer bullet must not be dropped before a nested list, got {text_lines:?}"
+    );
+}
+
+#[test]
+fn nested_list_separators_do_not_stack() {
+    let lines = render_markdown("- Outer one\n  - Inner one\n  - Inner two\n- Outer two\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(
+        text_lines,
+        vec![
+            "• Outer one".to_string(),
+            "  ◦ Inner one".to_string(),
+            String::new(),
+            "  ◦ Inner two".to_string(),
+            String::new(),
+            "• Outer two".to_string(),
+        ],
+        "nested separators must not stack, got {text_lines:?}"
+    );
+}
+
+#[test]
+fn list_item_with_code_block_keeps_single_separator() {
+    let lines = render_markdown("- Before\n```\ncode\n```\n- After\n");
+    let text_lines = lines_to_text(&lines);
+    let before = text_lines.iter().position(|line| line.contains("Before")).expect("before item");
+    let after = text_lines.iter().position(|line| line.contains("After")).expect("after item");
+    assert!(
+        before + 1 < after,
+        "expected a blank separator between the item and the code block, got {text_lines:?}"
+    );
+    for window in text_lines.windows(2) {
+        assert!(
+            !(window[0].trim().is_empty() && window[1].trim().is_empty()),
+            "blank rows must never stack, got {text_lines:?}"
+        );
+    }
+}
+
+#[test]
+fn paragraph_list_paragraph_keeps_single_blank_rhythm() {
+    let lines = render_markdown("Intro\n\n- Alpha\n- Beta\n\nOutro\n");
+    let text_lines = lines_to_text(&lines);
+    assert_eq!(
+        text_lines,
+        vec![
+            "Intro".to_string(),
+            String::new(),
+            "• Alpha".to_string(),
+            String::new(),
+            "• Beta".to_string(),
+            String::new(),
+            "Outro".to_string(),
+        ],
+        "got {text_lines:?}"
+    );
+}
+
+#[test]
 fn test_propose_plan_wrappers_are_stripped_and_bullets_normalized() {
     let markdown = "<proposed_plan>\n## Summary\nFix scrolling.\n\n• Down reaches the final item.\n</proposed_plan>";
     let lines = render_markdown(markdown);

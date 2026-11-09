@@ -1,4 +1,4 @@
-//! macOS AppKit interop: monochrome status item, grouped status menu, and close-to-menu-bar lifecycle.
+//! macOS menus: the native application menu bar, plus AppKit interop for the monochrome status item, grouped status menu, and close-to-menu-bar lifecycle.
 use super::*;
 use gpui_kit::Global;
 #[cfg(not(test))]
@@ -343,7 +343,13 @@ pub(super) fn hide(cx: &mut App) {
 }
 
 impl DesktopView {
-    pub(super) fn render_menu_bar_settings(&self, cx: &Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_menu_bar_settings_content(
+        show_in_menu_bar: bool,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let title = rust_i18n::t!("app.settings.menu_bar.title").to_string();
         accessible_group_box(
             "menu-bar-settings-group",
@@ -352,26 +358,115 @@ impl DesktopView {
                 title.clone(),
                 rust_i18n::t!("app.settings.menu_bar.description").to_string(),
                 gpui_kit::component::switch::Switch::new("show-in-menu-bar")
-                    .checked(self.preferences.show_in_menu_bar && enabled(cx))
+                    .checked(show_in_menu_bar && enabled(cx))
                     .accessibility_label(title)
-                    .on_click(cx.listener(|view, checked, window, cx| {
-                        if set_enabled(*checked, cx) {
-                            view.preferences.show_in_menu_bar = *checked;
-                            view.save_preferences();
-                            cx.notify();
-                        } else {
-                            window.push_notification(
-                                gpui_kit::component::notification::Notification::error(
-                                    rust_i18n::t!("app.settings.menu_bar.unavailable").to_string(),
-                                ),
-                                cx,
-                            );
+                    .on_click({
+                        let view = view.clone();
+                        move |checked: &bool, window: &mut Window, cx: &mut App| {
+                            if set_enabled(*checked, cx) {
+                                view.update(cx, |view, cx| {
+                                    view.preferences.show_in_menu_bar = *checked;
+                                    view.save_preferences();
+                                    cx.notify();
+                                });
+                            } else {
+                                window.push_notification(
+                                    gpui_kit::component::notification::Notification::error(
+                                        rust_i18n::t!("app.settings.menu_bar.unavailable").to_string(),
+                                    ),
+                                    cx,
+                                );
+                            }
                         }
-                    })),
+                    }),
                 &cx.theme().colors,
             )),
         )
     }
+}
+
+pub(super) fn init_native_menus(cx: &mut App) {
+    register_global_actions(cx);
+    set_native_menus(cx, false);
+}
+
+/// Register the global action handlers backing native menu items. Called once
+/// at startup: `on_action` handlers accumulate, so re-registering on every
+/// menu rebuild would run actions (OpenHelp, ShowMainWindow) N+1 times.
+fn register_global_actions(cx: &mut App) {
+    let _app = cx.on_action(|_: &QuitApplication, cx| cx.quit());
+    let _app = cx.on_action(|_: &HideApplication, cx| cx.hide());
+    let _app = cx.on_action(|_: &HideOtherApplications, cx| cx.hide_other_apps());
+    let _app = cx.on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps());
+    let _app = cx.on_action(|_: &ShowMainWindow, cx| bootstrap::show_main_window(cx));
+    let _app = cx.on_action(|_: &OpenHelp, cx| cx.open_url(bootstrap::HELP_URL));
+}
+
+/// (Re)install the native menus. Re-invoked when full-screen state changes so
+/// the View item reads Enter or Exit Full Screen as HIG requires.
+pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
+    cx.set_menus([
+        Menu::new(app::NAME).items([
+            MenuItem::action(rust_i18n::t!("app.menus.about").to_string(), AboutApplication),
+            MenuItem::separator(),
+            MenuItem::action(rust_i18n::t!("app.menus.settings_menu").to_string(), OpenSettings),
+            MenuItem::separator(),
+            MenuItem::os_submenu(rust_i18n::t!("app.menus.services").to_string(), SystemMenuType::Services),
+            MenuItem::separator(),
+            MenuItem::action(rust_i18n::t!("app.menus.hide_app").to_string(), HideApplication),
+            MenuItem::action(rust_i18n::t!("app.menus.hide_others").to_string(), HideOtherApplications),
+            MenuItem::action(rust_i18n::t!("app.menus.show_all").to_string(), ShowAllApplications),
+            MenuItem::separator(),
+            MenuItem::action(rust_i18n::t!("app.menus.quit_app").to_string(), QuitApplication),
+        ]),
+        Menu::new(rust_i18n::t!("app.menus.file_menu").to_string()).items([
+            MenuItem::action(rust_i18n::t!("app.menus.new_session").to_string(), NewSession),
+            MenuItem::action(rust_i18n::t!("app.menus.open_workspace").to_string(), ChooseWorkspace),
+            MenuItem::action(rust_i18n::t!("app.menus.close_session").to_string(), CloseSession),
+            MenuItem::action(rust_i18n::t!("app.menus.choose_model").to_string(), OpenModelPicker),
+        ]),
+        Menu::new(rust_i18n::t!("app.menus.edit_menu").to_string()).items([
+            MenuItem::os_action(rust_i18n::t!("app.menus.undo").to_string(), Undo, OsAction::Undo),
+            MenuItem::os_action(rust_i18n::t!("app.menus.redo").to_string(), Redo, OsAction::Redo),
+            MenuItem::separator(),
+            MenuItem::os_action(rust_i18n::t!("app.menus.cut").to_string(), Cut, OsAction::Cut),
+            MenuItem::os_action(rust_i18n::t!("app.menus.copy").to_string(), Copy, OsAction::Copy),
+            MenuItem::os_action(rust_i18n::t!("app.menus.paste").to_string(), Paste, OsAction::Paste),
+            MenuItem::os_action(rust_i18n::t!("app.menus.select_all").to_string(), SelectAll, OsAction::SelectAll),
+        ]),
+        Menu::new(rust_i18n::t!("app.menus.view_menu").to_string()).items([
+            MenuItem::action(rust_i18n::t!("app.menus.command_palette").to_string(), OpenCommandPalette),
+            MenuItem::action(rust_i18n::t!("app.menus.find_conversation").to_string(), OpenConversationSearch),
+            MenuItem::action(rust_i18n::t!("app.menus.focus_composer").to_string(), FocusComposer),
+            MenuItem::action(rust_i18n::t!("app.menus.toggle_inspector").to_string(), ToggleInspector),
+            MenuItem::action(rust_i18n::t!("app.menus.toggle_sidebar").to_string(), ToggleSidebar),
+            MenuItem::action(rust_i18n::t!("app.menus.toggle_zen").to_string(), ToggleZenMode),
+            MenuItem::separator(),
+            MenuItem::action(rust_i18n::t!("app.menus.cancel_run").to_string(), CancelRun),
+            MenuItem::separator(),
+            // macOS convention: the full-screen toggle closes the View menu;
+            // ⌃⌘F is the system-standard shortcut (HIG: full screen offers a
+            // distraction-free context). The label tracks the current state.
+            MenuItem::action(
+                if full_screen {
+                    rust_i18n::t!("app.menus.exit_full_screen").to_string()
+                } else {
+                    rust_i18n::t!("app.menus.enter_full_screen").to_string()
+                },
+                ToggleFullScreen,
+            ),
+        ]),
+        Menu::new(rust_i18n::t!("app.menus.window_menu").to_string()).items([
+            MenuItem::action(rust_i18n::t!("app.menus.show_app").to_string(), ShowMainWindow),
+            MenuItem::action(rust_i18n::t!("app.menus.minimize").to_string(), MinimizeWindow),
+            MenuItem::action(rust_i18n::t!("app.menus.zoom").to_string(), ZoomWindow),
+            MenuItem::action(rust_i18n::t!("app.menus.close_window").to_string(), CloseWindow),
+        ]),
+        Menu::new(rust_i18n::t!("app.menus.help_menu").to_string()).items([MenuItem::action(
+            rust_i18n::t!("app.menus.help_website").to_string(),
+            OpenHelp,
+        )]),
+    ]);
 }
 
 #[cfg(test)]

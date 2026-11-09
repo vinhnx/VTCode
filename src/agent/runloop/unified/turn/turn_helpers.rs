@@ -115,11 +115,19 @@ pub(crate) fn sanitize_error_for_display(raw: &str) -> String {
     first_line.to_string()
 }
 
-/// Exponential backoff calculation
+/// Exponential backoff calculation with jitter, via the canonical [`RetryPolicy`](vtcode_commons::retry::RetryPolicy) curve.
+#[must_use]
 pub(crate) fn calculate_backoff(attempt: usize, base_ms: u64, max_ms: u64) -> Duration {
-    let exp = 2_u64.saturating_pow(attempt.min(4) as u32);
-    let backoff_ms = base_ms.saturating_mul(exp);
-    Duration::from_millis(backoff_ms.min(max_ms))
+    // Concurrent turns and subagents must not retry provider rate limits in lockstep.
+    let attempt = u32::try_from(attempt).unwrap_or(u32::MAX);
+    vtcode_commons::retry::RetryPolicy::from_retries(
+        u32::MAX,
+        Duration::from_millis(base_ms),
+        Duration::from_millis(max_ms),
+        2.0,
+    )
+    .with_jitter(vtcode_commons::retry::RetryPolicy::DEFAULT_JITTER)
+    .delay_for_attempt(attempt)
 }
 
 #[cfg(test)]
@@ -236,5 +244,21 @@ mod tests {
     fn raw_body_none_when_no_metadata() {
         let llm_err = LLMError::Provider { message: "some error".to_string(), metadata: None };
         assert!(llm_error_raw_body(&llm_err).is_none());
+    }
+
+    #[test]
+    fn calculate_backoff_is_capped_exponential_with_jitter() {
+        // Exact pins on the doubling curve (base 1000ms, cap 30s).
+        assert_eq!(calculate_backoff(0, 1000, 30_000), Duration::from_millis(1000));
+        assert_eq!(calculate_backoff(1, 1000, 30_000), Duration::from_millis(2031));
+        assert_eq!(calculate_backoff(2, 1000, 30_000), Duration::from_millis(4062));
+        // The cap plus jitter bound holds at any scale, including overflow bait.
+        for attempt in [5, 100, usize::MAX] {
+            let delay = calculate_backoff(attempt, 1000, 30_000);
+            assert!(
+                (Duration::from_millis(30_000)..=Duration::from_millis(34_500)).contains(&delay),
+                "attempt {attempt} escaped the cap: {delay:?}"
+            );
+        }
     }
 }

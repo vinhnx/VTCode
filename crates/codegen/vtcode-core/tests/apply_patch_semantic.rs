@@ -76,6 +76,75 @@ fn create_ast_grep_stub(temp_dir: &TempDir, lines: &[&str]) -> PathBuf {
 
 #[tokio::test]
 #[serial]
+async fn redacted_semantic_context_requires_a_matching_structural_candidate() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("sample.rs");
+    let original = "fn first() {\n    password=fixture-private-value\n}\n\nfn second() {\n    other();\n}\n";
+    fs::write(&source, original).unwrap();
+    let patch = "*** Begin Patch\n*** Update File: sample.rs\n@@ fn second()\n-    password=[REDACTED_SECRET]\n+    changed();\n*** End Patch";
+    let stub = create_ast_grep_stub(
+        &temp,
+        &[
+            r#"{"text":"fn second() {\n    other();\n}","range":{"start":{"line":4,"column":0},"end":{"line":6,"column":0}}}"#,
+        ],
+    );
+    let _guard = set_ast_grep_binary_override_for_tests(Some(stub));
+    let registry = setup_registry(temp.path()).await;
+    let result = registry.execute_tool("apply_patch", json!({"input":patch})).await.unwrap();
+    assert!(!result.to_string().contains("RedactedContext"), "{result}");
+    assert!(result.to_string().contains("could not be resolved safely"), "{result}");
+    assert_eq!(fs::read_to_string(source).unwrap(), original);
+}
+
+#[tokio::test]
+#[serial]
+async fn redacted_semantic_context_inside_candidate_is_diagnosed() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("sample.rs");
+    let original = "pub fn first() {\n    password=fixture-private-value\n}\n";
+    fs::write(&source, original).unwrap();
+    let stub = create_ast_grep_stub(
+        &temp,
+        &[
+            r#"{"text":"pub fn first() {\n    password=fixture-private-value\n}","range":{"start":{"line":0,"column":0},"end":{"line":2,"column":0}}}"#,
+        ],
+    );
+    let _guard = set_ast_grep_binary_override_for_tests(Some(stub));
+    let registry = setup_registry(temp.path()).await;
+    let patch = "*** Begin Patch\n*** Update File: sample.rs\n@@ fn first()\n-    password=[REDACTED_SECRET]\n+    changed();\n*** End Patch";
+    let result = registry.execute_tool("apply_patch", json!({"input":patch})).await.unwrap();
+    assert!(result.to_string().contains("RedactedContext"), "{result}");
+    assert!(!result.to_string().contains("fixture-private-value"));
+    assert_eq!(fs::read_to_string(source).unwrap(), original);
+}
+
+#[tokio::test]
+#[serial]
+async fn exact_semantic_candidate_takes_precedence_over_redacted_candidate() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("sample.rs");
+    let original = "pub fn first() {\n    password=fixture-private-value\n}\n\npub fn first() {\n    password=[REDACTED_SECRET]\n}\n";
+    fs::write(&source, original).unwrap();
+    let stub = create_ast_grep_stub(
+        &temp,
+        &[
+            r#"{"text":"pub fn first() {\n    password=fixture-private-value\n}","range":{"start":{"line":0,"column":0},"end":{"line":2,"column":0}}}"#,
+            r#"{"text":"pub fn first() {\n    password=[REDACTED_SECRET]\n}","range":{"start":{"line":4,"column":0},"end":{"line":6,"column":0}}}"#,
+        ],
+    );
+    let _guard = set_ast_grep_binary_override_for_tests(Some(stub));
+    let registry = setup_registry(temp.path()).await;
+    let patch = "*** Begin Patch\n*** Update File: sample.rs\n@@ fn first()\n-    password=[REDACTED_SECRET]\n+    changed();\n*** End Patch";
+    let result = registry.execute_tool("apply_patch", json!({"input":patch})).await.unwrap();
+    assert_eq!(result["success"], true, "{result}");
+    assert_eq!(
+        fs::read_to_string(source).unwrap(),
+        "pub fn first() {\n    password=fixture-private-value\n}\n\npub fn first() {\n    changed();\n}\n"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn rust_function_anchor_resolves_without_exact_context_line() {
     let temp_dir = TempDir::new().unwrap();
     let source = temp_dir.path().join("sample.rs");

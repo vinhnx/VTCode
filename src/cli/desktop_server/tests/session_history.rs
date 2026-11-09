@@ -20,6 +20,31 @@ fn restored_history_retains_indices_for_hidden_runtime_context() {
     assert!(page.messages[1].text.is_empty());
     assert!(!page.messages[2].hidden);
 }
+
+#[test]
+fn restored_history_preserves_explicit_assistant_phase() {
+    use vtcode_core::llm::provider::{AssistantPhase, Message};
+    use vtcode_core::utils::session_archive::SessionMessage;
+    let mut metadata = vtcode_commons::message_metadata::MessageMetadata::llm_response(42, 1);
+    metadata.set_event_item_id("canonical-final".into());
+    let messages = [
+        SessionMessage::from(&Message::user("question".into())),
+        SessionMessage::from(&Message::assistant("working".into()).with_phase(Some(AssistantPhase::Commentary))),
+        SessionMessage::from(
+            &Message::assistant("answer".into())
+                .with_phase(Some(AssistantPhase::FinalAnswer))
+                .with_metadata(metadata),
+        ),
+        SessionMessage::from(&Message::assistant("legacy".into())),
+    ];
+    let page = restored_history_page(&messages, None, 4);
+    assert_eq!(
+        page.messages.iter().map(|message| message.phase.as_deref()).collect::<Vec<_>>(),
+        [None, Some("commentary"), Some("final_answer"), None]
+    );
+    assert_eq!(page.messages[2].event_item_id.as_deref(), Some("canonical-final"));
+    assert!(page.messages[3].event_item_id.is_none());
+}
 #[test]
 fn restored_history_pages_are_bounded_ordered_and_non_overlapping() {
     use vtcode_core::llm::provider::Message;

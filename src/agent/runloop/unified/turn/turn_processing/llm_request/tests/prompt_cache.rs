@@ -8,13 +8,16 @@ fn openai_prompt_cache_enablement_requires_provider_and_flags() {
     assert!(!is_openai_prompt_cache_enabled("openai", true, false));
     assert!(!is_openai_prompt_cache_enabled("merge-gateway", false, true));
     assert!(!is_openai_prompt_cache_enabled("anthropic", true, true));
-    // openrouter/xai use session affinity keys independently of the OpenAI cache flag.
+    // Sticky-routing providers use session affinity keys independently of the OpenAI cache flag.
     assert!(!is_openai_prompt_cache_enabled("openrouter", true, true));
+    assert!(!is_openai_prompt_cache_enabled("opencode-go", true, true));
     assert!(is_session_affinity_key_enabled("openrouter", true, false));
     assert!(is_session_affinity_key_enabled("xai", true, false));
+    assert!(is_session_affinity_key_enabled("opencode-go", true, false));
     assert!(is_session_affinity_key_enabled("openai", true, true));
     assert!(!is_session_affinity_key_enabled("openai", true, false));
     assert!(!is_session_affinity_key_enabled("openrouter", false, true));
+    assert!(!is_session_affinity_key_enabled("opencode-go", false, true));
     assert!(!is_session_affinity_key_enabled("anthropic", true, true));
 }
 #[test]
@@ -71,28 +74,22 @@ fn openai_prompt_cache_key_uses_stable_session_identifier() {
     assert_eq!(first, second);
 }
 #[test]
-fn session_affinity_prompt_cache_key_is_populated_for_openrouter_and_xai() {
+fn session_affinity_prompt_cache_key_is_populated_for_sticky_routing_providers() {
     use vtcode_core::config::build_session_affinity_prompt_cache_key;
 
-    // Production gate: OpenRouter/xAI get lineage when global prompt-cache is on.
-    assert!(is_session_affinity_key_enabled("openrouter", true, false));
-    assert!(is_session_affinity_key_enabled("xai", true, false));
+    // Production gate: sticky-routing providers get lineage when global prompt-cache is on.
+    for provider in ["openrouter", "xai", "opencode-go"] {
+        assert!(is_session_affinity_key_enabled(provider, true, false), "{provider}");
 
-    let key = build_session_affinity_prompt_cache_key(
-        "openrouter",
-        is_session_affinity_key_enabled("openrouter", true, false),
-        &OpenAIPromptCacheKeyMode::Off,
-        Some("session-lineage-9"),
-    );
-    assert_eq!(key.as_deref(), Some("vtcode:openrouter:session-lineage-9"));
-
-    let key = build_session_affinity_prompt_cache_key(
-        "xai",
-        is_session_affinity_key_enabled("xai", true, false),
-        &OpenAIPromptCacheKeyMode::Off,
-        Some("session-lineage-9"),
-    );
-    assert_eq!(key.as_deref(), Some("vtcode:xai:session-lineage-9"));
+        let key = build_session_affinity_prompt_cache_key(
+            provider,
+            is_session_affinity_key_enabled(provider, true, false),
+            &OpenAIPromptCacheKeyMode::Off,
+            Some("session-lineage-9"),
+        );
+        let expected = format!("vtcode:{provider}:session-lineage-9");
+        assert_eq!(key.as_deref(), Some(expected.as_str()), "{provider}");
+    }
 
     // Global prompt-cache off leaves production lineage unset.
     assert_eq!(

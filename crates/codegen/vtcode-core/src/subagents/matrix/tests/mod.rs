@@ -100,6 +100,24 @@ fn init_git(root: &std::path::Path) {
     );
 }
 
+#[tokio::test]
+async fn shutdown_waits_for_matrix_driver_reconciliation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
+    controller.matrix.driver_active.store(true, Ordering::Release);
+    let shutdown = controller.signal_shutdown();
+    tokio::pin!(shutdown);
+    assert!(tokio::time::timeout(Duration::from_millis(100), &mut shutdown).await.is_err());
+    controller.matrix.driver_active.store(false, Ordering::Release);
+    controller.background_completion_notify.notify_one();
+    tokio::time::timeout(Duration::from_secs(2), &mut shutdown)
+        .await
+        .expect("shutdown resumes after the driver is idle");
+}
+
 mod admission;
 mod lifecycle;
 mod pause_persistence;

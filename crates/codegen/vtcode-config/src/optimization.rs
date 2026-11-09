@@ -121,7 +121,11 @@ pub struct ToolRegistryConfig {
     /// Hot cache size for frequently used tools
     pub hot_cache_size: usize,
 
-    /// Tool execution timeout in seconds
+    /// Deprecated and unused for enforcement.
+    ///
+    /// The authoritative tool deadline is `[timeouts] default_ceiling_seconds`.
+    /// Kept as a private field so existing files keep parsing; it is not read
+    /// by the tool registry.
     default_timeout_secs: u64,
 
     /// When `true`, middleware `before_execute` failures are logged but do
@@ -262,7 +266,9 @@ impl Default for FileReadCacheConfig {
             max_size_bytes: crate::constants::optimization::FILE_READ_CACHE_MAX_SIZE_BYTES,
             ttl_secs: crate::constants::optimization::FILE_READ_CACHE_TTL_SECS,
             max_entries: crate::constants::optimization::FILE_READ_CACHE_MAX_ENTRIES,
-            max_read_lines: crate::constants::optimization::DEFAULT_MAX_READ_LINES,
+            // Same source as the serde default, so a partial config and
+            // `FileReadCacheConfig::default()` cannot disagree.
+            max_read_lines: default_max_read_lines(),
         }
     }
 }

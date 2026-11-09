@@ -74,6 +74,10 @@ pub(crate) fn apply_workspace_config_snapshot(
     if !custom_providers_unchanged {
         vtcode_core::llm::factory::register_custom_providers(&snapshot.custom_providers);
     }
+    // `[timeouts]` HTTP keys are process-global defaults, so re-installing them
+    // here is what makes a settings-palette edit or a live config reload take
+    // effect without a restart. Clients already built keep their old values.
+    vtcode_commons::http::install_http_timeouts(snapshot.timeouts.http_timeouts());
     *vt_cfg = Some(snapshot);
     Ok(())
 }

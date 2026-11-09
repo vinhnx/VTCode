@@ -11,6 +11,8 @@ pub const SESSION_CREATE: &str = "session/create";
 pub const SESSION_LOAD: &str = "session/load";
 /// Load one bounded earlier page from the selected durable session.
 pub const SESSION_HISTORY: &str = "session/history";
+/// List recent genuine user prompts across workspace sessions for history search.
+pub const SESSION_RECENT_PROMPTS: &str = "session/recent-prompts";
 /// Read one bounded page of archived tool output on demand.
 pub const SESSION_OUTPUT_READ: &str = "session/output/read";
 /// Read one bounded MCP app-resource body for static preview.
@@ -31,6 +33,16 @@ pub const TURN_SUBMIT: &str = "turn/submit";
 pub const TURN_CANCEL: &str = "turn/cancel";
 /// Pop the newest queued message back for editing.
 pub const TURN_QUEUE_TAKE_LATEST: &str = "turn/queue/take-latest";
+/// Remove one queued message by entry id.
+pub const TURN_QUEUE_REMOVE: &str = "turn/queue/remove";
+
+/// Reverse one completed turn's exact file changes.
+pub const TURN_UNDO: &str = "turn/undo";
+
+/// Force-terminate the selected session's foreground exec sessions.
+pub const EXEC_FORCE_CANCEL: &str = "session/exec/force-cancel";
+/// Move the selected session's foreground exec session to the background.
+pub const EXEC_BACKGROUND: &str = "session/exec/background";
 /// Respond to a pending interaction.
 pub const INTERACTION_RESPOND: &str = "interaction/respond";
 /// Discover active provider/model setup.
@@ -49,7 +61,8 @@ pub const CONFIG_OPEN_FILE: &str = "config/openFile";
 pub const COMPOSER_RESOURCES: &str = "composer/resources";
 /// List selectable models from the service's catalog.
 pub const CONFIG_MODELS: &str = "config/models";
-/// Select the provider/model used for the next session.
+/// Select the provider/model for the selected session. The service restarts
+/// the session runtime under the same session id; the thread is preserved.
 pub const CONFIG_SELECT: &str = "config/select";
 /// Store a provider API key from the desktop client in secure storage.
 /// The secret travels the local channel only and is never echoed back.
@@ -74,6 +87,9 @@ pub const WEBMCP_PAIR: &str = "webmcp/pair";
 pub const WEBMCP_STOP: &str = "webmcp/stop";
 /// Read the cached updater status (current/latest version, no network I/O).
 pub const UPDATE_STATUS: &str = "update/status";
+/// Mark the running version's release notes as seen in the shared update
+/// cache, so the CLI and desktop app never show the same release twice.
+pub const UPDATE_ACKNOWLEDGE: &str = "update/acknowledge";
 
 /// Transient UI progress for the active desktop session.
 pub const UI_PROGRESS: &str = "session/ui_progress";

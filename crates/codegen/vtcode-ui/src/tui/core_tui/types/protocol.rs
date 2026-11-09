@@ -58,6 +58,13 @@ impl SubmittedInput {
     pub fn has_attachments(&self) -> bool {
         !self.attachments.is_empty()
     }
+
+    /// Whether this submission may steer a live turn: plain text only.
+    /// Slash commands are runloop actions and the steering channel is
+    /// text-only, so those stay queued.
+    pub fn is_steerable_text(&self) -> bool {
+        !self.has_attachments() && !self.text.trim_start().starts_with('/')
+    }
 }
 
 impl From<String> for SubmittedInput {
@@ -202,9 +209,10 @@ define_inline_message_commands! {
 pub enum InlineEvent {
     Submit(SubmittedInput),
     QueueSubmit(SubmittedInput),
-    /// Mid-turn steer from external embedders. The built-in TUI no longer
-    /// emits this (busy input queues via `QueueSubmit`); the variant and its
-    /// handlers stay as the reserved external steering path.
+    /// Mid-turn steer. External embedders emit this directly; the built-in
+    /// TUI emits it for busy plain-Enter text only when
+    /// `ui.busy_enter_behavior` is `steer` (default `queue` keeps
+    /// `QueueSubmit`).
     Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)

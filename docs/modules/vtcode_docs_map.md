@@ -297,13 +297,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Hypothesis revision validation?", "How does Acceptance work?", "How
     does Deterministic checks work?"
 
-- **File**: `docs/development/refactor-scan-2026-10-04.md`
-  - **Content**: Large-file and reusable-component refactor plan
-  - **Topics**: Inventory and interpretation, Production responsibility hotspots, Concrete deduplication opportunities,
-    Incremental execution plan, Verification required during implementation
-  - **User Questions**: "What can you tell me about Large-file and reusable-component refactor plan?", "How does
-    Inventory and interpretation work?", "How does Production responsibility hotspots work?"
-
 - **File**: `docs/development/markdown-quality.md`
   - **Content**: Markdown Quality
   - **User Questions**: "What can you tell me about Markdown Quality?"
@@ -370,13 +363,6 @@ below based on the topic area.
     and deferred optimizations
   - **User Questions**: "What can you tell me about Prompt-cache measurement?", "How does Available observations work?",
     "How does Read-only report work?"
-
-- **File**: `docs/development/24-hour-review-2026-10-23.md`
-  - **Content**: Recent-change review and implementation evidence
-  - **Topics**: Scope and limits, Risk boundaries checked, Implemented DRY/KISS improvements, Remaining large-file plan,
-    Session and tool-efficiency evidence
-  - **User Questions**: "What can you tell me about Recent-change review and implementation evidence?", "How does Scope
-    and limits work?", "How does Risk boundaries checked work?"
 
 - **File**: `docs/development/release-changelog-ownership.md`
   - **Content**: Release changelog ownership
@@ -487,7 +473,7 @@ below based on the topic area.
 - **File**: `docs/development/terminal-program-status.md`
   - **Content**: Terminal program status
   - **Topics**: Adoption and existing telemetry, Terminal pane icons (Rex/Ghostty), iTerm2 session status (OSC 21337),
-    Lifecycle, Ownership and privacy
+    Tab progress (OSC 9;4), Lifecycle
   - **User Questions**: "What can you tell me about Terminal program status?", "How does Adoption and existing telemetry
     work?", "How does Terminal pane icons (Rex/Ghostty) work?"
 
@@ -499,10 +485,10 @@ below based on the topic area.
 
 - **File**: `docs/development/tool-summary-display.md`
   - **Content**: Tool Summary Display
-  - **Topics**: Exec-session calls (`write_stdin` and the session readers), Model-visible tool output budget, Guardrails
-    quick reference
-  - **User Questions**: "What can you tell me about Tool Summary Display?", "How does Exec-session calls (`write_stdin`
-    and the session readers) work?", "How does Model-visible tool output budget work?"
+  - **Topics**: Desktop parity, Exec-session calls (`write_stdin` and the session readers), Model-visible tool output
+    budget, Guardrails quick reference
+  - **User Questions**: "What can you tell me about Tool Summary Display?", "How does Desktop parity work?", "How does
+    Exec-session calls (`write_stdin` and the session readers) work?"
 
 - **File**: `docs/development/tool-execution-pipeline.md`
   - **Content**: Tool execution pipeline ownership
@@ -546,9 +532,10 @@ below based on the topic area.
 
 - **File**: `docs/development/desktop-workspace.md`
   - **Content**: VT Code Desktop Workspace
-  - **Topics**: System requirements, Build and launch, Runtime and session behavior, UI quick reference, Accessibility
+  - **Topics**: System requirements, Download a release build, Build and launch, Runtime and session behavior, UI quick
+    reference
   - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does System requirements work?",
-    "How does Build and launch work?"
+    "How does Download a release build work?"
 
 - **File**: `docs/development/EXECUTION_POLICY.md`
   - **Content**: VT Code Execution Policy
@@ -606,12 +593,6 @@ below based on the topic area.
     vtcode-plugins
   - **User Questions**: "What can you tell me about Agent Plugins?", "How does What a plugin gives you work?", "How does
     Install a plugin work?"
-
-- **File**: `docs/concurrency-improvements-report.md`
-  - **Content**: Concurrency Improvements Report
-  - **Topics**: Executive Summary, Changes Made, Bug Summary Table, False Positives Eliminated, Test Results
-  - **User Questions**: "What can you tell me about Concurrency Improvements Report?", "How does Executive Summary
-    work?", "How does Changes Made work?"
 
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
@@ -1071,6 +1052,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about OmniRoute Integration Guide?", "How does Configuration work?", "How
     does Model Selection work?"
 
+- **File**: `docs/providers/openllm.md`
+  - **Content**: OpenLLM Integration Guide
+  - **Topics**: Configuration, Model Selection, Cloud Origin, Protocol Behavior, Troubleshooting
+  - **User Questions**: "What can you tell me about OpenLLM Integration Guide?", "How does Configuration work?", "How
+    does Model Selection work?"
+
 - **File**: `docs/providers/openrouter.md`
   - **Content**: OpenRouter Integration Guide
   - **Topics**: Quickstart, Meta Muse models, Persisting configuration, Runtime behaviour, App attribution (opt-in)
@@ -1268,13 +1255,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does
     Diagnostics work?", "How does Most Common Sequences work?"
 
-- **File**: `docs/audits/agent-harness-duplication-report.md`
-  - **Content**: Agent / Harness Duplication & Optimization Report
-  - **Topics**: Architectural root cause, Findings, Revised status after line-by-line verification, Open questions for
-    maintainers (behavior-changing — not auto-applied), Changelog
-  - **User Questions**: "What can you tell me about Agent / Harness Duplication & Optimization Report?", "How does
-    Architectural root cause work?", "How does Findings work?"
-
 - **File**: `docs/harness/AGENT_LEGIBILITY_GUIDE.md`
   - **Content**: Agent Legibility Guide
   - **Topics**: Core Rules, Examples, Why It Matters, Active Monitoring, Grounding & Uncertainty
@@ -1327,29 +1307,9 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Architecture: Anstyle Integration in Vtcode?", "How does System
     Architecture Diagram work?", "How does Data Flow: Style Parsing and Application work?"
 
-- **File**: `docs/compose/spec/background-agents-window.md`
-  - **Content**: Background Agents Expanded Window
-  - **Topics**: Follow-up 2026-10-10 — inline bottom-dock replaces the centered window, Report, [S1] Problem, [S2]
-    Design, [S3] Out of Scope
-  - **User Questions**: "What can you tell me about Background Agents Expanded Window?", "How does Follow-up 2026-10-10
-    — inline bottom-dock replaces the centered window work?", "How does Report work?"
-
 - **File**: `docs/examples/background-subagent-demo.md`
   - **Content**: Background Subagent Demo
   - **User Questions**: "What can you tell me about Background Subagent Demo?"
-
-- **File**: `docs/analysis/BLOATY_ANALYSIS.md`
-  - **Content**: Bloaty Analysis Report for vtcode
-  - **Topics**: Overview, Binary Size Summary, Release-fast Binary Analysis (32 MiB), Debug Binary Analysis (84 MiB),
-    Recommendations
-  - **User Questions**: "What can you tell me about Bloaty Analysis Report for vtcode?", "How does Overview work?", "How
-    does Binary Size Summary work?"
-
-- **File**: `docs/compose/spec/budget-retune-dead-tools.md`
-  - **Content**: Budget Retune and Dead Tool IDs
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Budget Retune and Dead Tool IDs?", "How does Report work?", "How
-    does [S1] Problem work?"
 
 - **File**: `docs/blog/building-vt-code-a-year-in.md`
   - **Content**: Building VT Code, a year in
@@ -1358,43 +1318,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Building VT Code, a year in?", "How does The model shelf, September
     2026 work?", "How does Benchmarks, with honest framing work?"
 
-- **File**: `docs/compose/spec/ui-design-system.md`
-  - **Content**: Canonical TUI Design System in vtcode-ui
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Canonical TUI Design System in vtcode-ui?", "How does Report work?",
-    "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/clear-tool-inputs-default.md`
-  - **Content**: Clear Tool Inputs by Default
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Clear Tool Inputs by Default?", "How does Report work?", "How does
-    [S1] Problem work?"
-
-- **File**: `docs/audits/code-review-2026-08-07.md`
-  - **Content**: Code Review + Fixes — 2026-08-07
-  - **Topics**: Completed fixes, Decomposition: `core/loop_detector.rs` → `core/loop_detector/mod.rs` +
-    `normalization.rs`, Intentionally not changed, Verification summary, Status
-  - **User Questions**: "What can you tell me about Code Review + Fixes — 2026-08-07?", "How does Completed fixes
-    work?", "How does Decomposition: `core/loop_detector.rs` → `core/loop_detector/mod.rs` + `normalization.rs` work?"
-
-- **File**: `docs/audits/code-review-2026-08-10.md`
-  - **Content**: Code Review + Fixes — 2026-08-10
-  - **Topics**: Findings and disposition, Compatibility and false-positive filtering, Refactoring guard rails,
-    Verification
-  - **User Questions**: "What can you tell me about Code Review + Fixes — 2026-08-10?", "How does Findings and
-    disposition work?", "How does Compatibility and false-positive filtering work?"
-
 - **File**: `docs/project/code-review-action-plan.md`
   - **Content**: Code Review Action Plan
   - **Topics**: MEDIUM SEVERITY, LOW SEVERITY, STYLE / QUALITY (bulk fixes), PRIORITY ORDER
   - **User Questions**: "What can you tell me about Code Review Action Plan?", "How does MEDIUM SEVERITY work?", "How
     does LOW SEVERITY work?"
-
-- **File**: `docs/compose/spec/config-models-modal-ux.md`
-  - **Content**: Config & Models Modal UX
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Config & Models Modal UX?", "How does Report work?", "How does [S1]
-    Problem work?"
 
 - **File**: `docs/context/context_engineering.md`
   - **Content**: Context Engineering in VT Code
@@ -1403,30 +1331,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Context Engineering in VT Code?", "How does Overview work?", "How
     does Context Engineering vs Prompt Engineering work?"
 
-- **File**: `docs/compose/spec/continuation-end-turn-ux.md`
-  - **Content**: Continuation End-Turn UX + Classifiers
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Continuation End-Turn UX + Classifiers?", "How does Report work?",
-    "How does [S1] Problem work?"
-
 - **File**: `docs/harness/CORE_BELIEFS.md`
   - **Content**: Core Beliefs
   - **Topics**: 1. Humans Steer, Agents Execute, 2. Repository as System of Record, 3. Progressive Disclosure, 4. Agent
     Legibility Over Human Aesthetics, 5. Enforce Invariants, Not Implementations
   - **User Questions**: "What can you tell me about Core Beliefs?", "How does 1. Humans Steer, Agents Execute work?",
     "How does 2. Repository as System of Record work?"
-
-- **File**: `docs/analysis/DRY_DUPLICATION_AUDIT.md`
-  - **Content**: DRY/KISS Duplication Audit
-  - **Topics**: Scope, Implemented Refactors, Duplication Intentionally Left Alone, Expected Benefits, Verification
-  - **User Questions**: "What can you tell me about DRY/KISS Duplication Audit?", "How does Scope work?", "How does
-    Implemented Refactors work?"
-
-- **File**: `docs/harness/exec-plans/active/001-tui-runloop-decomposition.md`
-  - **Content**: EP-001: TUI Runloop and Slash Command Decomposition
-  - **Topics**: Goal, Context, Steps, Decision Log, Retrospective
-  - **User Questions**: "What can you tell me about EP-001: TUI Runloop and Slash Command Decomposition?", "How does
-    Goal work?", "How does Context work?"
 
 - **File**: `docs/harness/EXEC_PLANS.md`
   - **Content**: Execution Plans
@@ -1452,30 +1362,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Harness Engineering Knowledge Base?", "How does Purpose work?", "How
     does File Index work?"
 
-- **File**: `docs/compose/spec/harness-fence-share-and-close-race.md`
-  - **Content**: Harness Fence Share and Close Race
-  - **Topics**: Report, [S1] Problem, [S2] Design, Tasks
-  - **User Questions**: "What can you tell me about Harness Fence Share and Close Race?", "How does Report work?", "How
-    does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/harness-stability-cost-p1.md`
-  - **Content**: Harness Stability Cost P1
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Harness Stability Cost P1?", "How does Report work?", "How does [S1]
-    Problem work?"
-
-- **File**: `docs/compose/spec/harness-tax-observability.md`
-  - **Content**: Harness Tax Observability
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Harness Tax Observability?", "How does Report work?", "How does [S1]
-    Problem work?"
-
-- **File**: `docs/compose/spec/harness-textual-tool-call-harden.md`
-  - **Content**: Harness Textual Tool-Call Harden
-  - **Topics**: Report, [S1] Problem, [S2] Design, Tasks
-  - **User Questions**: "What can you tell me about Harness Textual Tool-Call Harden?", "How does Report work?", "How
-    does [S1] Problem work?"
-
 - **File**: `docs/huggingface/index.md`
   - **Content**: Hugging Face Inference Providers Integrations
   - **Topics**: Featured Integrations, About This Directory, Overview, Configuration, Resources
@@ -1484,21 +1370,15 @@ below based on the topic area.
 
 - **File**: `docs/installation/README.md`
   - **Content**: Installation Guide
-  - **Topics**: Quick Install, Supported AI Providers, Troubleshooting, Uninstall, Additional Resources
+  - **Topics**: Quick Install, Desktop App (macOS 15+), Supported AI Providers, Troubleshooting, Uninstall
   - **User Questions**: "What can you tell me about Installation Guide?", "How does Quick Install work?", "How does
-    Supported AI Providers work?"
+    Desktop App (macOS 15+) work?"
 
 - **File**: `docs/installation/DEVELOPERS.md`
   - **Content**: Installer Development Guide
   - **Topics**: Overview, Platform Detection, Release Binaries, GitHub Releases Setup, Testing Installers
   - **User Questions**: "What can you tell me about Installer Development Guide?", "How does Overview work?", "How does
     Platform Detection work?"
-
-- **File**: `docs/compose/spec/instant-tui-startup.md`
-  - **Content**: Instant TUI Startup
-  - **Topics**: Report, [S1] Problem, [S2] Design, Tasks
-  - **User Questions**: "What can you tell me about Instant TUI Startup?", "How does Report work?", "How does [S1]
-    Problem work?"
 
 - **File**: `docs/protocols/KITTY_KEYBOARD_PROTOCOL_RESTORATION.md`
   - **Content**: Kitty Keyboard Protocol Restoration
@@ -1511,39 +1391,6 @@ below based on the topic area.
   - **Topics**: Semantic Understanding, Tree-sitter Security Parsing (Bash), Syntax Highlighting
   - **User Questions**: "What can you tell me about Language Support in VT Code?", "How does Semantic Understanding
     work?", "How does Tree-sitter Security Parsing (Bash) work?"
-
-- **File**: `docs/compose/spec/lean-harness-defaults.md`
-  - **Content**: Lean Harness Defaults
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Lean Harness Defaults?", "How does Report work?", "How does [S1]
-    Problem work?"
-
-- **File**: `docs/compose/spec/local-tool-result-clearing.md`
-  - **Content**: Local Tool-Result Clearing (non-Anthropic)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Local Tool-Result Clearing (non-Anthropic)?", "How does Report
-    work?", "How does [S1] Problem work?"
-
-- **File**: `docs/build-with-claude/migrating-to-claude-opus-5.md`
-  - **Content**: Migrating Claude models in VT Code
-  - **Topics**: Quick navigation, Model comparison, Where to make changes in VT Code, Migrating to Claude Fable 5 /
-    Claude Mythos 5, Migrating to Claude Opus 5
-  - **User Questions**: "What can you tell me about Migrating Claude models in VT Code?", "How does Quick navigation
-    work?", "How does Model comparison work?"
-
-- **File**: `docs/build-with-claude/migrating-to-claude-opus-5-5.md`
-  - **Content**: Migrating to Claude Opus 5.5 in VT Code
-  - **Topics**: Quick navigation, Model comparison, Where to make changes in VT Code, Opus 5 → Opus 5.5, Opus 4.8 → Opus
-    5.5
-  - **User Questions**: "What can you tell me about Migrating to Claude Opus 5.5 in VT Code?", "How does Quick
-    navigation work?", "How does Model comparison work?"
-
-- **File**: `docs/build-with-claude/migrating-to-claude-sonnet-5-5.md`
-  - **Content**: Migrating to Claude Sonnet 5.5 in VT Code
-  - **Topics**: Quick navigation, Model comparison, Where to make changes in VT Code, Sonnet 5 → Sonnet 5.5, Sonnet 4.6
-    → Sonnet 5.5
-  - **User Questions**: "What can you tell me about Migrating to Claude Sonnet 5.5 in VT Code?", "How does Quick
-    navigation work?", "How does Model comparison work?"
 
 - **File**: `docs/installation/NATIVE_INSTALLERS.md`
   - **Content**: Native Installers
@@ -1594,61 +1441,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about PTY and Pipe Infrastructure?", "How does Overview work?", "How does
     Module Structure work?"
 
-- **File**: `docs/compose/spec/plan-rejection-model-feedback.md`
-  - **Content**: Plan Rejection Must Reach Model History
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Plan Rejection Must Reach Model History?", "How does Report work?",
-    "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/plan-mode-tracker-continuity.md`
-  - **Content**: Planning Workflow + Tracker Continuity (Dedupe, Scope/Task, Continuation, Progress)
-  - **Topics**: Report, [S1] Problem, [S2] Design, Follow-up (2026-09-21) — auto-continue directive misread as a user
-    stay signal, [S3] Out of Scope
-  - **User Questions**: "What can you tell me about Planning Workflow + Tracker Continuity (Dedupe, Scope/Task,
-    Continuation, Progress)?", "How does Report work?", "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/plan-mode-entry-handoff.md`
-  - **Content**: Planning Workflow Entry Handoff (Seamless Build → Plan Switch)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Planning Workflow Entry Handoff (Seamless Build → Plan Switch)?",
-    "How does Report work?", "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/plan-mode-header-handoff.md`
-  - **Content**: Planning Workflow Header + Modes Handoff Sync
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Planning Workflow Header + Modes Handoff Sync?", "How does Report
-    work?", "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/planning-verify-commands.md`
-  - **Content**: Planning verify commands accept common inspection tools
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Planning verify commands accept common inspection tools?", "How does
-    Report work?", "How does [S1] Problem work?"
-
 - **File**: `docs/harness/prompt-architecture.md`
   - **Content**: Prompt Architecture
   - **Topics**: Cache-stable segments, Assembly order, Prompt style, Few-shot management (Section 18.3.3), Tool
     description contract (Section 18.3.4)
   - **User Questions**: "What can you tell me about Prompt Architecture?", "How does Cache-stable segments work?", "How
     does Assembly order work?"
-
-- **File**: `docs/compose/spec/prompt-cache-hitrate.md`
-  - **Content**: Prompt Cache Hit-Rate Recovery
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Prompt Cache Hit-Rate Recovery?", "How does Report work?", "How does
-    [S1] Problem work?"
-
-- **File**: `docs/compose/spec/prompt-cache-provider-gaps.md`
-  - **Content**: Prompt Cache Provider Gaps
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Prompt Cache Provider Gaps?", "How does Report work?", "How does
-    [S1] Problem work?"
-
-- **File**: `docs/compose/spec/provider-cache-affinity-p2.md`
-  - **Content**: Provider Cache Affinity P2
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Provider Cache Affinity P2?", "How does Report work?", "How does
-    [S1] Problem work?"
 
 - **File**: `docs/harness/QUALITY_SCORE.md`
   - **Content**: Quality Score
@@ -1658,9 +1456,9 @@ below based on the topic area.
 
 - **File**: `docs/installation/QUICK_REFERENCE.md`
   - **Content**: Quick Reference
-  - **Topics**: Install, Uninstall, Verify, Troubleshooting, API Keys
-  - **User Questions**: "What can you tell me about Quick Reference?", "How does Install work?", "How does Uninstall
-    work?"
+  - **Topics**: Install, Desktop App (macOS 15+), Uninstall, Verify, Troubleshooting
+  - **User Questions**: "What can you tell me about Quick Reference?", "How does Install work?", "How does Desktop App
+    (macOS 15+) work?"
 
 - **File**: `docs/styling/quick-reference.md`
   - **Content**: Quick Reference: Anstyle Crates
@@ -1669,53 +1467,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Quick Reference: Anstyle Crates?", "How does anstyle-git Syntax
     work?", "How does anstyle-ls Syntax work?"
 
-- **File**: `docs/compose/spec/registry-light-critical.md`
-  - **Content**: Registry-Light Critical Path
-  - **Topics**: Report, [S1] Problem, [S2] Design, Tasks
-  - **User Questions**: "What can you tell me about Registry-Light Critical Path?", "How does Report work?", "How does
-    [S1] Problem work?"
-
-- **File**: `docs/compose/spec/tui-config-search.md`
-  - **Content**: Responsive TUI Configuration Search
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Responsive TUI Configuration Search?", "How does Report work?", "How
-    does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/risk-audit-deferred-items.md`
-  - **Content**: Risk-Audit Deferred Items
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Risk-Audit Deferred Items?", "How does Report work?", "How does [S1]
-    Problem work?"
-
-- **File**: `docs/compose/spec/s3-followups.md`
-  - **Content**: S3 Follow-ups (session-efficiency out-of-scope)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about S3 Follow-ups (session-efficiency out-of-scope)?", "How does Report
-    work?", "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/session-audit-harness-fixes.md`
-  - **Content**: Session Audit Harness Fixes
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Session Audit Harness Fixes?", "How does Report work?", "How does
-    [S1] Problem work?"
-
-- **File**: `docs/compose/spec/session-close-harden.md`
-  - **Content**: Session Close Harden (Unresponsive UI)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Session Close Harden (Unresponsive UI)?", "How does Report work?",
-    "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/session-close-and-skill-markup-harden.md`
-  - **Content**: Session Close and Skill Markup Harden
-  - **Topics**: Report, [S1] Problem, [S2] Design, Tasks
-  - **User Questions**: "What can you tell me about Session Close and Skill Markup Harden?", "How does Report work?",
-    "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/session-efficiency.md`
-  - **Content**: Session Efficiency (cost + reliability)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Session Efficiency (cost + reliability)?", "How does Report work?",
-    "How does [S1] Problem work?"
+- **File**: `docs/development/maintainer-notes/root.md`
+  - **Content**: Root AGENTS.md maintainer notes
+  - **Topics**: Purpose, Core Workflow, Rules, Build & Verification, Testing
+  - **User Questions**: "What can you tell me about Root AGENTS.md maintainer notes?", "How does Purpose work?", "How
+    does Core Workflow work?"
 
 - **File**: `docs/harness/SESSION_LOG_REVIEW.md`
   - **Content**: Session Log Review
@@ -1727,29 +1483,11 @@ below based on the topic area.
     hid the draft in desktop and retry never rearmed work?", "How does 2026-10-11 | Semantic operation identity bounds
     repeated preflight rejections across turns work?"
 
-- **File**: `docs/compose/spec/session-residual-hygiene.md`
-  - **Content**: Session Residual Hygiene
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Session Residual Hygiene?", "How does Report work?", "How does [S1]
-    Problem work?"
-
-- **File**: `docs/compose/spec/session-stdio-dimmer.md`
-  - **Content**: Session Stdin/Stdout Dimmer and Expand
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Session Stdin/Stdout Dimmer and Expand?", "How does Report work?",
-    "How does [S1] Problem work?"
-
 - **File**: `docs/features/SHELL_SNAPSHOT.md`
   - **Content**: Shell Environment Snapshot
   - **Topics**: Problem, Solution, Usage, Architecture, Excluded Environment Variables
   - **User Questions**: "What can you tell me about Shell Environment Snapshot?", "How does Problem work?", "How does
     Solution work?"
-
-- **File**: `docs/compose/spec/shell-handler-output-cap.md`
-  - **Content**: Shell Handler Output Cap
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Shell Handler Output Cap?", "How does Report work?", "How does [S1]
-    Problem work?"
 
 - **File**: `docs/skills/SKILL_AUTHORING_GUIDE.md`
   - **Content**: Skill Authoring Guide
@@ -1769,12 +1507,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Skill Tool Usage?", "How does Discovery Queries work?", "How does
     Prompt Integration work?"
 
-- **File**: `docs/compose/spec/static-first-paint.md`
-  - **Content**: Static First Paint
-  - **Topics**: Report, [S1] Problem, [S2] Design, Tasks
-  - **User Questions**: "What can you tell me about Static First Paint?", "How does Report work?", "How does [S1]
-    Problem work?"
-
 - **File**: `docs/styling/styling_integration.md`
   - **Content**: Styling Integration: anstyle-crossterm
   - **Topics**: Overview, Architecture, Components, Usage Examples, Benefits
@@ -1787,53 +1519,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How
     does For TUI Widgets work?"
 
-- **File**: `docs/compose/spec/todo-continuation-hardening.md`
-  - **Content**: TODO Continuation Hardening (Residual)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about TODO Continuation Hardening (Residual)?", "How does Report work?",
-    "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/tui-diagnostics-cleanup.md`
-  - **Content**: TUI Diagnostics Cleanup
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about TUI Diagnostics Cleanup?", "How does Report work?", "How does [S1]
-    Problem work?"
-
-- **File**: `docs/compose/spec/tui-diff-auto-expand.md`
-  - **Content**: TUI Diff Auto-Resize and Expand
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about TUI Diff Auto-Resize and Expand?", "How does Report work?", "How
-    does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/tui-fps-responsiveness.md`
-  - **Content**: TUI FPS and Responsiveness
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about TUI FPS and Responsiveness?", "How does Report work?", "How does
-    [S1] Problem work?"
-
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
   - **User Questions**: "What can you tell me about Tech Debt Tracker?", "How does Priority Levels work?", "How does
     Status Values work?"
-
-- **File**: `docs/compose/spec/tool-loop-session-auto-grant.md`
-  - **Content**: Tool Loop Session Auto-Grant
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Tool Loop Session Auto-Grant?", "How does Report work?", "How does
-    [S1] Problem work?"
-
-- **File**: `docs/compose/spec/tracker-continuation.md`
-  - **Content**: Tracker Continuation (Run Loop + TODO Resume)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Tracker Continuation (Run Loop + TODO Resume)?", "How does Report
-    work?", "How does [S1] Problem work?"
-
-- **File**: `docs/compose/spec/tracker-user-facing-ui.md`
-  - **Content**: Tracker User-Facing UI (Title + Progress Only)
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Tracker User-Facing UI (Title + Progress Only)?", "How does Report
-    work?", "How does [S1] Problem work?"
 
 - **File**: `docs/huggingface/vtcode.md`
   - **Content**: VT Code
@@ -1917,25 +1607,106 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Zen Alignment for VT Code?", "How does Scope work?", "How does Full
     Principle Mapping (All 19) work?"
 
-- **File**: `docs/ansi/ANSTYLE_CROSSTERM_IMPROVEMENTS.md`
-  - **Content**: anstyle-crossterm Integration Improvements
-  - **Topics**: Overview, Key Improvements, Color Mapping Behavior, Architecture Flow, Usage Patterns
-  - **User Questions**: "What can you tell me about anstyle-crossterm Integration Improvements?", "How does Overview
-    work?", "How does Key Improvements work?"
-
-- **File**: `docs/ansi/ANSTYLE_PARSE_INTEGRATION.md`
-  - **Content**: anstyle-parse Integration Guide
-  - **Topics**: Implementation Steps for vtcode System, Step 1: Add Dependency, Step 2: Create Parser Wrapper Module,
-    Step 3: Update Module Exports, Step 4: Replace Manual Parser in PTY
-  - **User Questions**: "What can you tell me about anstyle-parse Integration Guide?", "How does Implementation Steps
-    for vtcode System work?", "How does Step 1: Add Dependency work?"
-
 - **File**: `docs/project/ROADMAP.md`
   - **Content**: vtcode Development Roadmap
   - **Topics**: **Recently Completed - Major Breakthroughs**, **High Priority - SWE-bench Performance Optimization**,
     Medium Priority, Low Priority, Implementation Notes
   - **User Questions**: "What can you tell me about vtcode Development Roadmap?", "How does **Recently Completed - Major
     Breakthroughs** work?", "How does **High Priority - SWE-bench Performance Optimization** work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-acp.md`
+  - **Content**: vtcode-acp maintainer notes
+  - **Topics**: Modules, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-acp maintainer notes?", "How does Modules work?", "How does
+    Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-auth.md`
+  - **Content**: vtcode-auth maintainer notes
+  - **Topics**: Modules, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-auth maintainer notes?", "How does Modules work?", "How does
+    Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-bash-runner.md`
+  - **Content**: vtcode-bash-runner maintainer notes
+  - **Topics**: Modules, Rules, Testing, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-bash-runner maintainer notes?", "How does Modules work?",
+    "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-binary.md`
+  - **Content**: vtcode-binary maintainer notes
+  - **Topics**: Modules (active bridge: `agent/runloop/unified/webmcp.rs`), Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-binary maintainer notes?", "How does Modules (active bridge:
+    `agent/runloop/unified/webmcp.rs`) work?", "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-commons.md`
+  - **Content**: vtcode-commons maintainer notes
+  - **Topics**: Module Groups, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-commons maintainer notes?", "How does Module Groups work?",
+    "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-config.md`
+  - **Content**: vtcode-config maintainer notes
+  - **Topics**: Modules, Rules, Adding a Model — **OpenRouter** (code-generated): edit `ModelId`, `Provider::OpenRouter`
+    match, and `docs/models.json`; the build script handles the rest. **Non-OpenRouter** (manual): add the constant,
+    `ModelId` variant and match arms, defaults if needed, preset, optional resolver update, and `docs/models.json`;
+    gateway providers may intentionally accept explicit catalog-missing route IDs. See `adding-llm-providers` skill for
+    the checklist, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-config maintainer notes?", "How does Modules work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-core.md`
+  - **Content**: vtcode-core maintainer notes
+  - **Topics**: Module map, Rules, Workflows, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-core maintainer notes?", "How does Module map work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-desktop.md`
+  - **Content**: vtcode-desktop maintainer notes
+  - **Topics**: Hard rules, Best practice, Typography & accessibility, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-desktop maintainer notes?", "How does Hard rules work?", "How
+    does Best practice work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-eval.md`
+  - **Content**: vtcode-eval maintainer notes
+  - **Topics**: Module Groups, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-eval maintainer notes?", "How does Module Groups work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-exec-events.md`
+  - **Content**: vtcode-exec-events maintainer notes
+  - **Topics**: Key Types, ThreadEvent Variants, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-exec-events maintainer notes?", "How does Key Types work?",
+    "How does ThreadEvent Variants work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-indexer.md`
+  - **Content**: vtcode-indexer maintainer notes
+  - **Topics**: Key Types, Rules, Testing, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-indexer maintainer notes?", "How does Key Types work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-llm.md`
+  - **Content**: vtcode-llm maintainer notes
+  - **Topics**: Key Modules, Architecture Notes, Dependencies, Coding Conventions, OpenAI-Compatible Providers
+  - **User Questions**: "What can you tell me about vtcode-llm maintainer notes?", "How does Key Modules work?", "How
+    does Architecture Notes work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-memory.md`
+  - **Content**: vtcode-memory maintainer notes
+  - **Topics**: Conventions, Dependencies, Testing
+  - **User Questions**: "What can you tell me about vtcode-memory maintainer notes?", "How does Conventions work?", "How
+    does Dependencies work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-safety.md`
+  - **Content**: vtcode-safety maintainer notes
+  - **Topics**: Module Groups, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-safety maintainer notes?", "How does Module Groups work?",
+    "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-ui.md`
+  - **Content**: vtcode-ui maintainer notes
+  - **Topics**: Modules, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-ui maintainer notes?", "How does Modules work?", "How does
+    Rules work?"
 
 ### Performance & Optimization
 

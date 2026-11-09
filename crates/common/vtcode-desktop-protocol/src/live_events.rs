@@ -7,9 +7,10 @@ use vtcode_exec_events::VersionedThreadEvent;
 /// agent runloop to the desktop service pump.
 ///
 /// Unlike a plain bounded channel, a full queue never fails the producer:
-/// `item.updated` snapshots replace the pending snapshot for the same item and
-/// consecutive `plan.delta` events for one item merge into one entry, so a
-/// slow consumer degrades the stream instead of failing a healthy turn.
+/// `item.updated` snapshots replace the pending snapshot for the same item,
+/// consecutive `plan.delta` events for one item merge into one entry, and
+/// consecutive tool-output deltas for one item concatenate into one entry, so
+/// a slow consumer degrades the stream instead of failing a healthy turn.
 /// Ordered events are only dropped when the queue holds no coalescable entry,
 /// and every such drop is counted for consumer-side degradation reporting.
 pub fn live_event_channel(capacity: usize) -> (LiveEventSender, LiveEventReceiver) {
@@ -33,6 +34,8 @@ enum CoalesceOp {
     Replace,
     /// The new event carries incremental text appended to the pending one.
     Merge,
+    /// The new event carries an output chunk appended to the pending one.
+    MergeOutput,
 }
 
 /// One queue entry: a coalescable streaming event keyed by item, or an
@@ -56,7 +59,15 @@ struct LiveEventQueueInner {
 impl LiveEventQueueInner {
     fn classify(event: &VersionedThreadEvent) -> Option<(String, CoalesceOp)> {
         match event.event() {
-            vtcode_exec_events::ThreadEvent::ItemUpdated(update) => Some((update.item.id.clone(), CoalesceOp::Replace)),
+            vtcode_exec_events::ThreadEvent::ItemUpdated(update) => {
+                let op = match &update.item.details {
+                    vtcode_exec_events::ThreadItemDetails::ToolOutput(output) if output.is_delta == Some(true) => {
+                        CoalesceOp::MergeOutput
+                    }
+                    _ => CoalesceOp::Replace,
+                };
+                Some((update.item.id.clone(), op))
+            }
             vtcode_exec_events::ThreadEvent::PlanDelta(delta) => Some((delta.item_id.clone(), CoalesceOp::Merge)),
             _ => None,
         }
@@ -83,6 +94,7 @@ impl LiveEventQueueInner {
                 let merged = match op {
                     CoalesceOp::Replace => event,
                     CoalesceOp::Merge => Self::merge_plan_deltas(pending.event, event),
+                    CoalesceOp::MergeOutput => Self::merge_tool_output_deltas(pending.event, event),
                 };
                 queue.insert(index, LiveEventSlot { key: Some(key), op, event: merged });
                 drop(queue);
@@ -110,6 +122,46 @@ impl LiveEventQueueInner {
         drop(queue);
         self.notify.notify_waiters();
         Ok(())
+    }
+
+    /// Concatenate two tool-output deltas for the same item, keeping the
+    /// newest metadata and the freshest non-empty optional fields.
+    fn merge_tool_output_deltas(pending: VersionedThreadEvent, next: VersionedThreadEvent) -> VersionedThreadEvent {
+        let (pending, next) = (pending.into_event(), next.into_event());
+        match (pending, next) {
+            (
+                vtcode_exec_events::ThreadEvent::ItemUpdated(older),
+                vtcode_exec_events::ThreadEvent::ItemUpdated(newer),
+            ) => {
+                let (
+                    vtcode_exec_events::ThreadItemDetails::ToolOutput(older_output),
+                    vtcode_exec_events::ThreadItemDetails::ToolOutput(newer_output),
+                ) = (&older.item.details, &newer.item.details)
+                else {
+                    return VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::ItemUpdated(newer));
+                };
+                let mut merged = newer.clone();
+                let mut output = older_output.output.clone();
+                output.push_str(&newer_output.output);
+                merged.item.details =
+                    vtcode_exec_events::ThreadItemDetails::ToolOutput(Box::new(vtcode_exec_events::ToolOutputItem {
+                        call_id: newer_output.call_id.clone(),
+                        tool_call_id: newer_output.tool_call_id.clone().or_else(|| older_output.tool_call_id.clone()),
+                        spool_path: newer_output.spool_path.clone().or_else(|| older_output.spool_path.clone()),
+                        output,
+                        is_delta: Some(true),
+                        exit_code: newer_output.exit_code.or(older_output.exit_code),
+                        status: newer_output.status.clone(),
+                        app_previews: if newer_output.app_previews.is_empty() {
+                            older_output.app_previews.clone()
+                        } else {
+                            newer_output.app_previews.clone()
+                        },
+                    }));
+                VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::ItemUpdated(merged))
+            }
+            (_, fallback) => VersionedThreadEvent::new(fallback),
+        }
     }
 
     /// Concatenate two `plan.delta` events for the same item, keeping the

@@ -715,11 +715,21 @@ pub enum Commands {
     ///
     /// Locates VT Code.app (explicit path, VTCODE_DESKTOP_APP, then
     /// ~/Applications and /Applications) and opens a new instance.
+    /// Pass --install to download and install it from the release asset instead.
+    ///
+    ///   vtcode desktop --install
     #[command(name = "desktop")]
     Desktop {
         /// Path to VT Code.app when it is outside the standard locations
         #[arg(value_name = "APP_PATH")]
         app_path: Option<PathBuf>,
+        /// Download and install the app from the prebuilt release asset instead of opening it
+        #[arg(
+            long,
+            conflicts_with = "app_path",
+            long_help = "Download and install the desktop app from the prebuilt release asset instead of opening it.\nUpdates install in place; fresh installs go to ~/Applications."
+        )]
+        install: bool,
     },
 
     /// Manage models and providers
@@ -827,6 +837,7 @@ pub enum Commands {
     ///   vtcode update --list
     ///   vtcode update --pin 0.120.0
     ///   vtcode update --unpin
+    ///   vtcode update --with-desktop
     #[command(name = "update")]
     Update {
         /// Check for updates without installing
@@ -874,6 +885,20 @@ pub enum Commands {
             long_help = "Display the current update configuration (channel, pin, intervals) and exit."
         )]
         show_config: bool,
+        /// Install or update the macOS desktop app without prompting
+        #[arg(
+            long,
+            conflicts_with = "without_desktop",
+            long_help = "Install or update the macOS desktop app from the prebuilt release asset without prompting.\nFails on non-macOS platforms."
+        )]
+        with_desktop: bool,
+        /// Skip the macOS desktop app without prompting
+        #[arg(
+            long,
+            conflicts_with = "with_desktop",
+            long_help = "Skip the macOS desktop app install/update step without prompting."
+        )]
+        without_desktop: bool,
     },
 
     /// Start Anthropic API compatibility server

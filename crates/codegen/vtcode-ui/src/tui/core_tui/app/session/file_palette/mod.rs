@@ -231,11 +231,21 @@ impl FilePalette {
 
     /// Human-readable breadcrumb of the current directory relative to the
     /// workspace root (or `/` when at the root).
+    ///
+    /// `current_dir` is filled from directory listings, which report resolved
+    /// paths, while `workspace_root` keeps whatever the caller passed. A bare
+    /// `strip_prefix` therefore fails whenever the workspace is reached through
+    /// an alias (`/var` vs macOS's `/private/var`) and the crumb would print an
+    /// absolute path; the shared renderer compares both spellings instead.
     pub(crate) fn breadcrumb(&self) -> String {
-        match self.current_dir.strip_prefix(&self.workspace_root) {
-            Ok(rel) if rel.as_os_str().is_empty() => "/".to_string(),
-            Ok(rel) => format!("/{}", rel.display()),
-            Err(_) => self.current_dir.display().to_string(),
+        let relative = vtcode_commons::workspace_relative_display(&self.workspace_root, &self.current_dir);
+        if relative.is_empty() {
+            "/".to_string()
+        } else if Path::new(&relative).is_absolute() {
+            // Outside the workspace: show the real location rather than faking a crumb.
+            relative
+        } else {
+            format!("/{relative}")
         }
     }
 

@@ -227,7 +227,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflo
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
     let plan_file = plans_dir.join("tracker-test-task-tracker.md");
     std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
-    registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
+    registry.planning_workflow_state().set_plan_file(Some(plan_file));
 
     let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -293,7 +293,7 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_wor
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
     let plan_file = plans_dir.join("tracker-test-task-tracker-non-prevalidated.md");
     std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
-    registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
+    registry.planning_workflow_state().set_plan_file(Some(plan_file));
 
     let mut harness_state = build_harness_state_with(2);
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(

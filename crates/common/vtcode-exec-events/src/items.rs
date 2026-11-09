@@ -215,9 +215,13 @@ pub struct ToolOutputItem {
     /// Canonical spool file path when the full output was written to disk.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spool_path: Option<String>,
-    /// Aggregated output emitted by the tool.
+    /// Output snapshot, or a chunk when `is_delta` is true.
     #[serde(default)]
     pub output: String,
+    /// Whether an updated item appends to the prior output. Absent means a
+    /// snapshot for compatibility with older event producers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_delta: Option<bool>,
     /// Exit code reported by the tool, when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
@@ -308,6 +312,11 @@ pub struct FileUpdateChange {
     pub path: String,
     /// Type of change applied to the file.
     pub kind: PatchChangeKind,
+    /// Whether the recorded preview normalized line endings (a `\r` was
+    /// present, so the recorded bytes cannot reproduce the original
+    /// exactly). `None` means unknown (legacy events predating the flag).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminators_normalized: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -320,7 +329,7 @@ pub enum PatchApplyStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PatchChangeKind {

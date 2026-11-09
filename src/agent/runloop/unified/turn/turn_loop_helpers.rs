@@ -453,7 +453,8 @@ pub(super) async fn handle_steering_messages(
     let ctrl_c_notify = ctx.ctrl_c_notify;
 
     let Some(mut receiver) = ctx.runtime_steering.take_receiver() else {
-        apply_pending_follow_ups_mid_turn(renderer, ctx.runtime_steering, working_history)?;
+        let user_input = apply_pending_follow_ups_mid_turn(renderer, ctx.runtime_steering, working_history)?;
+        record_planning_steering_revision(ctx, user_input).await?;
         return Ok(false);
     };
 
@@ -516,7 +517,8 @@ pub(super) async fn handle_steering_messages(
         // in this turn already sees it. Intents move to the in-flight queue
         // and are acknowledged by the post-turn history checkpoint, exactly
         // like turn-boundary delivery.
-        apply_pending_follow_ups_mid_turn(renderer, ctx.runtime_steering, working_history)?;
+        let user_input = apply_pending_follow_ups_mid_turn(renderer, ctx.runtime_steering, working_history)?;
+        record_planning_steering_revision(ctx, user_input).await?;
     }
     if !ctx.runtime_steering.pending_follow_up_intents_snapshot().is_empty() {
         let session_id = ctx.tool_registry.harness_context_snapshot().session_id;
@@ -540,7 +542,7 @@ pub(super) async fn handle_steering_messages(
     }
     if steering_interrupted {
         for input in &accepted_this_call {
-            display_status(renderer, &format!("Queued Follow-up Input: {input}"))?;
+            display_status(ctx.renderer, &format!("Queued Follow-up Input: {input}"))?;
         }
         return Ok(true);
     }
@@ -578,7 +580,8 @@ fn apply_pending_follow_ups_mid_turn(
     renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
     runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     working_history: &mut Vec<uni::Message>,
-) -> Result<()> {
+) -> Result<bool> {
+    let mut user_input = false;
     for intent in runtime_steering.drain_follow_up_intents_to_in_flight() {
         let (intent_id, input, provenance) = intent.into_parts_with_provenance();
         push_steered_user_message(working_history, &intent_id, &input, provenance);
@@ -586,7 +589,27 @@ fn apply_pending_follow_ups_mid_turn(
             tracing::debug!("Applied synthetic follow-up mid-turn without TUI echo");
             continue;
         }
+        user_input = true;
         display_status(renderer, &format!("Steered into active turn: {input}"))?;
+    }
+    Ok(user_input)
+}
+
+async fn record_planning_steering_revision(ctx: &mut TurnLoopContext<'_>, user_input: bool) -> Result<()> {
+    if user_input
+        && ctx.is_planning_active()
+        && crate::agent::runloop::unified::planning_workflow::recovery_state::begin_user_revision(
+            &mut ctx.plan_session.recovery,
+        )
+        && let Some(emitter) = ctx.harness_emitter
+    {
+        emitter
+            .persist_checkpoint(&crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
+                &ctx.plan_session.recovery,
+                &ctx.harness_state.run_id.0,
+                &ctx.harness_state.turn_id.0,
+            ))
+            .await?;
     }
     Ok(())
 }
@@ -596,7 +619,8 @@ fn apply_pending_follow_ups_mid_turn(
 /// reworded tail cannot reintroduce transcript noise.
 pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
     use crate::agent::runloop::unified::turn::session_loop::{
-        BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
+        BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, MONITOR_CONTINUATION_PROMPT_PREFIX,
+        VERIFICATION_AUTO_RECOVERY_PREFIX,
     };
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
         PLAN_MODE_AUTO_CONTINUE_MARKER, RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX,
@@ -608,6 +632,7 @@ pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
         || input.starts_with(PLAN_MODE_AUTO_CONTINUE_MARKER)
         || input.starts_with(RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX)
         || input.starts_with(BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX)
+        || input.starts_with(MONITOR_CONTINUATION_PROMPT_PREFIX)
         || input.starts_with(VERIFICATION_AUTO_RECOVERY_PREFIX)
 }
 
@@ -689,7 +714,7 @@ fn push_steered_user_message(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs());
-    let tokens = input.len().saturating_div(4);
+    let tokens = vtcode_commons::tokens::heuristic_tokens_from_byte_len(input.len());
     let metadata = match provenance {
         FollowUpProvenance::UserInput => vtcode_commons::message_metadata::MessageMetadata::user_input(now, tokens),
         FollowUpProvenance::Synthetic => vtcode_commons::message_metadata::MessageMetadata::harness_notice(now, tokens),
@@ -778,16 +803,17 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
     step_count: usize,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
-    if ctx.is_planning_active() {
-        return Ok(false);
-    }
-
     let Some(last_user_msg) = last_user_message(working_history) else {
         return Ok(false);
     };
 
     let text = last_user_msg.content.as_text();
-    if !detect_enter_planning_intent(&text) {
+    if is_internal_harness_follow_up(&text) || !detect_enter_planning_intent(&text) {
+        return Ok(false);
+    }
+    *ctx.auto_finish_planning_attempted = true;
+    if ctx.is_planning_active() {
+        ctx.plan_session.mark_explicit_plan_request();
         return Ok(false);
     }
 
@@ -826,7 +852,10 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
     )
     .await
     {
-        Ok(_) if ctx.is_planning_active() => Ok(false),
+        Ok(_) if ctx.is_planning_active() => {
+            ctx.plan_session.mark_explicit_plan_request();
+            Ok(false)
+        }
         Ok(_) => {
             *result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
             Ok(true)

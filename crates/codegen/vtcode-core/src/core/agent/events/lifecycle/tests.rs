@@ -670,3 +670,68 @@ fn tool_output_payload_excludes_app_keys_from_structured_metadata() {
         payload.aggregated_output
     );
 }
+
+#[test]
+fn item_handles_are_unique_across_independent_emitters() {
+    // Regression: emitters are constructed per recorder, per runtime and per
+    // streaming step. A per-emitter counter made each one restart at `item_0`,
+    // so a later event rebound an existing handle to a different item and
+    // silently overwrote the earlier row in the transcript and memory views.
+    let mut first = SharedLifecycleEmitter::default();
+    let mut second = SharedLifecycleEmitter::default();
+    // Drive both emitters through a mutating path first so the fixtures are
+    // realistic (a real emitter is always borrowed mutably for its events).
+    first.emit_completed_agent_message("first");
+    second.emit_completed_agent_message("second");
+
+    let first_ids: Vec<String> = (0..64).map(|_| first.next_item_id()).collect();
+    let second_ids: Vec<String> = (0..64).map(|_| second.next_item_id()).collect();
+
+    let mut seen = std::collections::HashSet::new();
+    for id in first_ids.iter().chain(second_ids.iter()) {
+        assert!(seen.insert(id.clone()), "item handle {id} was minted twice");
+    }
+}
+
+#[test]
+fn item_handles_do_not_account_for_restored_history_from_a_previous_process() {
+    // Documents the remaining boundary rather than claiming safety: the
+    // counter is process-local, so a resumed session whose event log already
+    // contains `item_0..item_N` mints the same handles again from the start.
+    // Restored rows are distinguished only by arriving through the history
+    // path (`historical: true`), never by a generation in the handle itself.
+    // If restore ever replays into the live update path, this assertion is the
+    // tripwire: it will fail as soon as the counter is made restore-aware.
+    let emitter = SharedLifecycleEmitter::default();
+    let restored_history = ["item_0", "item_1"];
+    let fresh = emitter.next_item_id();
+    assert!(
+        restored_history.contains(&fresh.as_str()),
+        "a fresh process reuses handles already present in restored history; \
+         fixing this requires seeding the counter from the restored maximum"
+    );
+}
+
+#[test]
+fn item_handles_stay_unique_when_emitted_through_different_event_paths() {
+    // A tool call and a lifecycle text item must never share a handle: the
+    // transcript keys rows by id, so a collision replaces a live row.
+    let mut emitter = SharedLifecycleEmitter::default();
+    let call_id = "call_shared".to_string();
+    emitter.start_tool_call(&call_id, Some("exec_command".to_string()), None);
+    emitter.emit_completed_agent_message("assistant text");
+
+    let ids: Vec<String> = emitter
+        .drain_events()
+        .iter()
+        .filter_map(|event| match event {
+            ThreadEvent::ItemStarted(event) => Some(event.item.id.clone()),
+            ThreadEvent::ItemCompleted(event) => Some(event.item.id.clone()),
+            ThreadEvent::ItemUpdated(event) => Some(event.item.id.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(ids.len(), 2, "expected one tool item and one message item: {ids:?}");
+    assert_ne!(ids[0], ids[1], "tool and message items must not share a handle");
+}

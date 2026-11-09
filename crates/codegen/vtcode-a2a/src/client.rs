@@ -11,6 +11,7 @@ use futures::{Stream, StreamExt};
 use reqwest::{Client, RequestBuilder};
 use serde_json::Value;
 use std::fmt;
+use std::time::Duration;
 
 use crate::agent_card::AgentCard;
 use crate::errors::{A2aError, A2aErrorCode, A2aResult};
@@ -42,11 +43,40 @@ impl fmt::Debug for A2aClient {
     }
 }
 
+/// Connect and request budgets used by [`A2aClient::new`].
+///
+/// `vtcode-a2a` is a Layer 0 crate with no internal VT Code dependencies, so it
+/// cannot read `[timeouts]` itself. Callers that own configuration resolve these
+/// and pass them in through [`A2aClient::with_timeouts`]; the constants below are
+/// the safe defaults for callers that do not.
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 impl A2aClient {
-    /// Create a new client with default reqwest settings
+    /// Create a new client with default HTTP timeouts.
+    ///
+    /// Redirects stay disabled: the bearer token must never be replayed to an
+    /// origin the remote agent redirects to.
     pub fn new(base_url: impl Into<String>) -> A2aResult<Self> {
+        Self::with_timeouts(base_url, DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT)
+    }
+
+    /// Create a client with explicit connect and request timeouts.
+    ///
+    /// A client built with no timeout at all can block forever on a remote agent
+    /// that accepts the connection and then stalls, so both budgets are required
+    /// rather than optional.
+    pub fn with_timeouts(
+        base_url: impl Into<String>,
+        connect_timeout: Duration,
+        request_timeout: Duration,
+    ) -> A2aResult<Self> {
+        use reqwest::redirect::Policy;
+
         let http = Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
+            .timeout(request_timeout)
+            .connect_timeout(connect_timeout)
+            .redirect(Policy::none())
             .build()
             .context("Failed to build HTTP client")
             .map_err(|e| A2aError::Internal(e.to_string()))?;
@@ -312,5 +342,30 @@ mod tests {
     fn test_parse_sse_event_empty() {
         let res = parse_sse_event(b"event: ping\n\n").unwrap();
         assert!(res.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_budget_bounds_a_stalled_endpoint() {
+        // Regression: the client used a bare `Client::builder()` with no timeout,
+        // so a remote agent that accepted the connection and then stalled would
+        // hang the caller forever. A short request budget must surface an error
+        // instead of hanging. `198.51.100.0/24` (TEST-NET-2) is reserved and
+        // unroutable, so this exercises the timeout path without a live server.
+        let client =
+            A2aClient::with_timeouts("http://198.51.100.1:9", Duration::from_millis(50), Duration::from_millis(100))
+                .expect("client builds");
+
+        let outcome = tokio::time::timeout(Duration::from_secs(10), client.agent_card()).await;
+        let error = outcome
+            .expect("the request budget must fire well before the outer guard")
+            .expect_err("an unroutable endpoint must not succeed");
+        assert!(!error.to_string().is_empty(), "failure must carry a diagnostic");
+    }
+
+    #[test]
+    fn default_constructor_uses_bounded_budgets() {
+        assert_eq!(DEFAULT_CONNECT_TIMEOUT, Duration::from_secs(5));
+        assert_eq!(DEFAULT_REQUEST_TIMEOUT, Duration::from_secs(30));
+        let _client = A2aClient::new("https://example.invalid").expect("client builds");
     }
 }

@@ -1,7 +1,6 @@
 use anstyle::Color;
 use serde_json::Value;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::warn;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -12,7 +11,7 @@ use vtcode_core::utils::style_helpers::ColorPalette;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_output_started_event, tool_updated_event,
+    HarnessEventEmitter, tool_delta_event, tool_output_started_event,
 };
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -51,7 +50,7 @@ impl Drop for ProgressCallbackGuard<'_> {
 
 #[derive(Clone)]
 struct StreamingOutputCoalescer {
-    started_emitted: Arc<AtomicBool>,
+    started_emitted: Arc<Mutex<bool>>,
     harness_emitter: HarnessEventEmitter,
     tool_item_id: String,
     tool_call_id: String,
@@ -60,7 +59,7 @@ struct StreamingOutputCoalescer {
 impl StreamingOutputCoalescer {
     fn new(harness_emitter: HarnessEventEmitter, tool_item_id: String, tool_call_id: String) -> Self {
         Self {
-            started_emitted: Arc::new(AtomicBool::new(false)),
+            started_emitted: Arc::new(Mutex::new(false)),
             harness_emitter,
             tool_item_id,
             tool_call_id,
@@ -71,22 +70,16 @@ impl StreamingOutputCoalescer {
         if chunk.is_empty() {
             return;
         }
-        let emit_started = !self.started_emitted.swap(true, Ordering::AcqRel);
-
-        if emit_started {
+        let mut started = self.started_emitted.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !*started {
             let _ = self
                 .harness_emitter
                 .emit(tool_output_started_event(self.tool_item_id.clone(), Some(self.tool_call_id.as_str())));
+            *started = true;
         }
 
-        // Emit the chunk directly as the update payload. The Open Responses bridge
-        // computes deltas via strip_prefix on successive updates; sending the chunk
-        // (rather than the full accumulated output) is correct because each chunk
-        // is a fresh string that won't prefix-match the previous state, so the
-        // bridge emits it as-is. This avoids O(n^2) memory from cloning the full
-        // output on every chunk. The final tool_output_completed_event carries the
-        // full output for consumers that need it.
-        let _ = self.harness_emitter.emit(tool_updated_event(
+        // Avoid cloning the full output on each chunk; completion carries the snapshot.
+        let _ = self.harness_emitter.emit(tool_delta_event(
             self.tool_item_id.clone(),
             Some(self.tool_call_id.as_str()),
             chunk,

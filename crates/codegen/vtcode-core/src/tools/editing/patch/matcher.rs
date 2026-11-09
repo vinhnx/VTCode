@@ -102,6 +102,35 @@ pub(crate) fn seek_segment(
     found
 }
 
+/// Diagnose only; never use a redacted match to select a mutation target.
+pub(crate) fn redacted_context_matches(lines: &[String], pattern: &[String], start: usize, eof: bool) -> bool {
+    const MARKER: &str = "[REDACTED_SECRET]";
+    if pattern.is_empty() || pattern.len() > lines.len() || !pattern.iter().any(|line| line.contains(MARKER)) {
+        return false;
+    }
+    let search_start = if eof { lines.len() - pattern.len() } else { start };
+    lines.windows(pattern.len()).skip(search_start).any(|window| {
+        let mut changed_marker = false;
+        for (original, expected) in window.iter().zip(pattern) {
+            if original == expected {
+                continue;
+            }
+            if !expected.contains(MARKER) {
+                if normalise_text(original) != normalise_text(expected) {
+                    return false;
+                }
+                continue;
+            }
+            let redacted = vtcode_commons::sanitizer::redact_secrets(original.clone());
+            if normalise_text(&redacted) != normalise_text(expected) {
+                return false;
+            }
+            changed_marker |= original != &redacted && expected.contains(MARKER);
+        }
+        changed_marker
+    })
+}
+
 pub(crate) fn normalise_text(input: &str) -> String {
     let trimmed = input.trim();
     let mut result = String::with_capacity(trimmed.len());
@@ -121,7 +150,22 @@ pub(crate) fn normalise_text(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::PatchContextMatcher;
+    use super::{PatchContextMatcher, redacted_context_matches};
+
+    #[test]
+    fn redacted_context_respects_start_and_end_of_file() {
+        let lines = vec!["password=fixture-private-value".to_string(), "other".to_string()];
+        let pattern = vec!["password=[REDACTED_SECRET]".to_string()];
+        assert!(redacted_context_matches(&lines, &pattern, 0, false));
+        assert!(!redacted_context_matches(&lines, &pattern, 1, false));
+        assert!(!redacted_context_matches(&lines, &pattern, 0, true));
+        assert!(!redacted_context_matches(&lines, &[], 0, false));
+        let indented = vec!["    password=fixture-private-value".to_string(), "   after".to_string()];
+        let trimmed = vec!["password=[REDACTED_SECRET]".to_string(), "after".to_string()];
+        assert!(redacted_context_matches(&indented, &trimmed, 0, false));
+        let incorrect = vec!["password = [REDACTED_SECRET]".to_string(), "after".to_string()];
+        assert!(!redacted_context_matches(&indented, &incorrect, 0, false));
+    }
 
     #[test]
     fn matching_preserves_internal_whitespace_and_full_lines() {

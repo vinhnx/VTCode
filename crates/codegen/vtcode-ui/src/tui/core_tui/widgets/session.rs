@@ -332,6 +332,7 @@ impl<'a> SessionWidget<'a> {
 
         SidebarWidget::new(&self.session.styles)
             .local_agents(self.session.local_agents.clone())
+            .plan(self.session.active_plan.clone())
             .queue_items(queue_items)
             .context_info(context_info)
             .mode(mode)

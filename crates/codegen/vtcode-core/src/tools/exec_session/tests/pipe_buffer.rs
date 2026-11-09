@@ -161,3 +161,43 @@ async fn close_proceeds_cleanly_when_output_read_lock_is_held() -> anyhow::Resul
     assert!(after.is_err(), "post-close read must be a clean error, got {after:?}");
     Ok(())
 }
+
+#[tokio::test]
+#[cfg(unix)]
+async fn pipe_output_keeps_multibyte_characters_split_across_reads() -> anyhow::Result<()> {
+    let temp_dir = tempdir()?;
+    let workspace_root = canonicalize_workspace(temp_dir.path());
+    let pty_sessions = PtySessionManager::new(workspace_root.clone(), PtyConfig::default());
+    let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
+
+    // `世` is E4 B8 96: write its first two bytes, pause so they arrive as their
+    // own read, then the rest followed by `界` (E7 95 8C).
+    manager
+        .create_pipe_session(
+            "utf8-split".to_string().into(),
+            vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "printf '\\344\\270'; sleep 0.3; printf '\\226\\347\\225\\214\\n'".to_string(),
+            ],
+            workspace_root,
+            HashMap::new(),
+        )
+        .await?;
+
+    let mut collected = String::new();
+    for _ in 0..40 {
+        if let Some(chunk) = manager.read_session_output("utf8-split", true).await? {
+            collected.push_str(&chunk);
+        }
+        if collected.contains('\n') {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(collected.contains("世界"), "split character must decode intact: {collected:?}");
+    assert!(!collected.contains('\u{FFFD}'), "no replacement characters: {collected:?}");
+
+    manager.close_session("utf8-split").await?;
+    Ok(())
+}

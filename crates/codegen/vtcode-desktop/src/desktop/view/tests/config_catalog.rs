@@ -31,7 +31,7 @@ fn open_paged_config(
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands: tokio::sync::mpsc::channel(2).0 });
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_group = Some(group);
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -55,15 +55,38 @@ fn scroll_config_show_more_into_view(
     view: &Entity<DesktopView>,
     cx: &mut gpui_kit::App,
 ) {
+    // Wide viewports host the Kit container: Kit's list owns the page
+    // scroll, so drive the button into the panel viewport with outer
+    // scrolls only (the inner frame never overflows inside the list).
+    let legacy = window.try_find("settings-content").is_some();
     for _ in 0..120 {
-        let viewport = window.find("cli-config-page-content").bounds();
+        let frame = window.find("cli-config-page-content").bounds();
+        if !legacy {
+            let panel = window.find("settings-panel").bounds();
+            let item = window
+                .find_all("config-show-more")
+                .into_iter()
+                .next()
+                .expect("show-more renders while rows remain")
+                .bounds();
+            if item.top() >= panel.top() - px(1.) && item.bottom() <= panel.bottom() + px(1.) {
+                return;
+            }
+            if item.bottom() > panel.bottom() {
+                scroll_settings_by(window, px(-600.), cx);
+            } else {
+                scroll_settings_by(window, px(600.), cx);
+            }
+            window.render_frame(cx);
+            continue;
+        }
         let item = window
             .find_all("config-show-more")
             .into_iter()
             .next()
             .expect("show-more renders while rows remain")
             .bounds();
-        if item.top() >= viewport.top() - px(1.) && item.bottom() <= viewport.bottom() + px(1.) {
+        if item.top() >= frame.top() - px(1.) && item.bottom() <= frame.bottom() + px(1.) {
             return;
         }
         view.update(cx, |view, cx| {
@@ -337,4 +360,64 @@ fn config_row_menu_copies_path_and_value(cx: &mut TestAppContext) {
     .unwrap();
     cx.run_until_parked();
     assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("0"));
+}
+
+#[gpui_kit::test]
+fn workspaceless_config_empty_offers_the_workspace_chooser(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands: tokio::sync::mpsc::channel(2).0 });
+            view.workspace = None;
+            view.cli_config_settings = None;
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("choose-workspace-from-config").label(), Some("Choose folder…"));
+        window.click("choose-workspace-from-config", cx);
+        assert!(view.read(cx).workspace_picker_open, "the empty-state action opens the native picker");
+    })
+    .unwrap();
+
+    assert!(cx.did_prompt_for_paths());
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories);
+        None
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        // Canceling keeps the workspaceless state; a workspace then moves the
+        // page to the loading branch, where the chooser has no business.
+        assert!(!view.read(cx).workspace_picker_open, "canceling the picker closes it");
+        assert!(view.read(cx).workspace.is_none(), "canceling keeps the workspaceless state");
+        view.update(cx, |view, cx| {
+            view.workspace = Some(PathBuf::from("/projects/demo"));
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(
+            window.find_all("choose-workspace-from-config").is_empty(),
+            "the chooser only renders for the workspaceless empty state"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn config_capture_shares_the_snapshot_pointer(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.cli_config_settings = Some(std::rc::Rc::new(paged_snapshot("tools", "Tools", 3)));
+    });
+    view.update(cx, |view, _| {
+        let captured = super::super::configuration_render::ConfigPageProps::capture(view);
+        let live = view.cli_config_settings.as_ref().expect("snapshot");
+        assert!(
+            std::rc::Rc::ptr_eq(live, captured.snapshot.as_ref().expect("captured snapshot")),
+            "capture must share the snapshot allocation, not deep-clone 730 settings per frame"
+        );
+    });
 }

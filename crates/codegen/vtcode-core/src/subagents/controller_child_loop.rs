@@ -63,6 +63,7 @@ impl SubagentController {
             .children
             .get_mut(child_id)
             .ok_or_else(|| anyhow!("Unknown subagent id {child_id}"))?;
+        anyhow::ensure!(!record.closing, "Subagent {child_id} is closing");
         anyhow::ensure!(
             record.handle.as_ref().is_none_or(|handle| handle.is_finished()),
             "Subagent already has a running launch"

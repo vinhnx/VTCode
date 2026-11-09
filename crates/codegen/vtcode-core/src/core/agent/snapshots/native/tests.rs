@@ -466,3 +466,94 @@ async fn rewind_waits_for_own_session_turn_but_not_others() -> Result<()> {
     manager.navigate_prompt(Some(1), RevertScope::Both, "session-a", &[]).await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn oversized_untracked_file_proceeds_with_recorded_exclusions() -> Result<()> {
+    let dir = TempDir::new()?;
+    // One byte over the filesnap recency size bound, untracked and
+    // undeclared, so the turn-start scan must drop it.
+    let big = vec![0u8; filesnap::ScanLimits::default().max_file_bytes as usize + 1];
+    fs::write(dir.path().join("demo.mov"), &big)?;
+    let manager = SnapshotManager::new(SnapshotConfig::new(dir.path().into()))?;
+    let session = uuid::Uuid::new_v4().to_string();
+    // The turn proceeds instead of failing closed ...
+    let lease = manager
+        .begin_prompt(1, &session, "prompt with an uncapturable file nearby", &[])
+        .await?;
+    // ... and the exclusions ride the lease for the turn-start warning.
+    let skipped = lease.skipped_paths().expect("lease must carry the exclusions");
+    assert_eq!(skipped.total, 1);
+    assert_eq!(skipped.sample.len(), 1);
+    assert!(skipped.sample[0].path.ends_with("demo.mov"), "lease must name the path: {skipped:?}");
+    // ... and the persisted record for a later rewind.
+    let stored = manager
+        .load_snapshot_for_session(&session, 1)
+        .await?
+        .expect("checkpoint record");
+    let recorded = stored.metadata.skipped_paths.expect("record must carry the exclusions");
+    assert_eq!(recorded.total, 1);
+    assert!(recorded.sample[0].path.ends_with("demo.mov"), "record must name the path: {recorded:?}");
+    drop(lease);
+    // Ignoring the file restores a clean capture on the same fixture.
+    fs::write(dir.path().join(".filesnapignore"), "demo.mov\n")?;
+    let clean = manager.begin_prompt(2, &session, "retry after ignoring the file", &[]).await?;
+    assert!(clean.skipped_paths().is_none(), "ignored file must not leave exclusions");
+    Ok(())
+}
+
+#[test]
+fn skipped_paths_summary_names_sample_and_overflow() {
+    let full = SnapshotSkippedPaths {
+        total: 2,
+        sample: vec![
+            SnapshotSkippedPath {
+                path: "a.mov".to_string(),
+                reason: "larger than the 16 MiB snapshot size limit".to_string(),
+            },
+            SnapshotSkippedPath {
+                path: "b.sock".to_string(),
+                reason: "not a regular file".to_string(),
+            },
+        ],
+    };
+    assert_eq!(
+        full.summary(),
+        "2 paths (a.mov (larger than the 16 MiB snapshot size limit), b.sock (not a regular file))"
+    );
+    let truncated = SnapshotSkippedPaths {
+        total: 5,
+        sample: vec![SnapshotSkippedPath {
+            path: "a.mov".to_string(),
+            reason: "unreadable".to_string(),
+        }],
+    };
+    assert_eq!(truncated.summary(), "5 paths (a.mov (unreadable), and 4 more)");
+    let singular = SnapshotSkippedPaths { total: 1, sample: Vec::new() };
+    assert_eq!(singular.summary(), "1 path");
+    assert!(SnapshotSkippedPaths { total: 0, sample: Vec::new() }.is_empty());
+}
+
+#[tokio::test]
+async fn rewind_carries_destination_exclusions_but_rescue_stays_clean() -> Result<()> {
+    let dir = TempDir::new()?;
+    let big = vec![0u8; filesnap::ScanLimits::default().max_file_bytes as usize + 1];
+    fs::write(dir.path().join("demo.mov"), &big)?;
+    fs::write(dir.path().join("file.txt"), "v1")?;
+    let manager = SnapshotManager::new(SnapshotConfig::new(dir.path().into()))?;
+    let session = uuid::Uuid::new_v4().to_string();
+    let lease = manager.begin_prompt(1, &session, "first", &[]).await?;
+    drop(lease);
+    // The rewind target keeps its exclusions so the restore warning fires ...
+    let restored = manager.navigate_prompt(Some(1), RevertScope::Both, &session, &[]).await?;
+    let skipped = restored.metadata.skipped_paths.expect("destination exclusions must survive");
+    assert_eq!(skipped.total, 1);
+    // ... while the rescue record captured for redo stays clean: its explicit
+    // file list was captured fail-closed, so cloned exclusions would cry wolf.
+    let redone = manager.navigate_prompt(None, RevertScope::Both, &session, &[]).await?;
+    assert!(
+        redone.metadata.skipped_paths.is_none(),
+        "rescue record must not inherit exclusions: {:?}",
+        redone.metadata.skipped_paths
+    );
+    Ok(())
+}

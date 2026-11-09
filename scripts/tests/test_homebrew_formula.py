@@ -138,7 +138,9 @@ publish_homebrew_tap() {
 '''
                     invocation = 'update_homebrew_formula "1.2.3"'
                 else:
-                    function = self.caller_function(script, "publish_homebrew_tap")
+                    # release.sh sources its publication helper from this module.
+                    source_script = "homebrew-tap.sh" if script == "release.sh" else script
+                    function = self.caller_function(source_script, "publish_homebrew_tap")
                     # Local transformation precedes the caller's missing-token error.
                     invocation = 'if publish_homebrew_tap "1.2.3"; then exit 98; fi'
                 env = os.environ.copy()

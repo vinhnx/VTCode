@@ -76,6 +76,7 @@ pub(crate) async fn present_start_planning_confirmation(
         selected: Some(InlineListSelection::ConfigAction(START_PLANNING_APPROVE_ACTION.to_string())),
         search: None,
         status: None,
+        plan_markdown: None,
         hotkeys: Vec::new(),
     });
 
