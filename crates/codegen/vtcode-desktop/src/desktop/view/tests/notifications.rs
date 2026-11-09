@@ -153,7 +153,7 @@ fn notification_toggles_persist_to_preferences(cx: &mut TestAppContext) {
         select_settings_category(window, 5, cx);
         window.render_frame(cx);
         assert!(window.try_find("notification-settings").is_some());
-        assert!(window.try_find("check-for-updates").is_some());
+        assert!(window.try_find("about-settings-check-for-updates").is_none(), "the update check lives on About now");
 
         for control in [
             "notifications-enabled",
@@ -339,20 +339,14 @@ fn check_for_updates_button_requests_status(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
             view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
         });
         window.render_frame(cx);
-        select_settings_category(window, 5, cx);
-        window.render_frame(cx);
-        window.click("check-for-updates", cx);
+        assert!(window.try_find("about-settings-check-for-updates").is_some(), "the update check lives on About");
+        window.click("about-settings-check-for-updates", cx);
         window.render_frame(cx);
         assert!(view.read(cx).update_request_pending);
         let mut requests = requests;
-        // Keyboarding to Notifications passes through Connections, which
-        // refreshes live status like the storage summary.
-        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
-            panic!("connection status refresh")
-        };
-        assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
         let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
             panic!("update request")
         };
@@ -583,7 +577,7 @@ fn system_notification_click_opens_update_settings(cx: &mut TestAppContext) {
     cx.update_window(window, |_, _, cx| {
         let view = view.read(cx);
         assert!(view.current_route() == Route::Settings, "click opens settings");
-        assert_eq!(view.settings_tab, super::super::settings::SettingsTab::Notifications);
+        assert_eq!(view.settings_tab, super::super::settings::SettingsTab::About);
     })
     .unwrap();
 }

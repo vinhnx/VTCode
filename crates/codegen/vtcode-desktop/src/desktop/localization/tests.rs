@@ -216,7 +216,7 @@ fn app_catalog_covers_language_controls_and_kit_overrides() {
 }
 
 #[test]
-fn notification_settings_copy_covers_every_language() {
+fn notification_and_about_settings_copy_covers_every_language() {
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "en").to_string(), "Notifications");
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "vi").to_string(), "Thông báo");
     assert_eq!(
@@ -240,12 +240,9 @@ fn notification_settings_copy_covers_every_language() {
         rust_i18n::t!("app.settings.notifications.permission", locale = "vi").to_string(),
         "Bật thông báo xin phép"
     );
+    assert_eq!(rust_i18n::t!("app.settings.about.up_to_date", locale = "en").to_string(), "You're up to date");
     assert_eq!(
-        rust_i18n::t!("app.settings.notifications.up_to_date", locale = "en").to_string(),
-        "You're up to date"
-    );
-    assert_eq!(
-        rust_i18n::t!("app.settings.notifications.up_to_date", locale = "vi").to_string(),
+        rust_i18n::t!("app.settings.about.up_to_date", locale = "vi").to_string(),
         "Bạn đang dùng bản mới nhất"
     );
 
@@ -286,11 +283,11 @@ fn notification_settings_copy_covers_every_language() {
     assert_catalog_key!("app.settings.notifications.questions_description");
     assert_catalog_key!("app.settings.notifications.updates");
     assert_catalog_key!("app.settings.notifications.updates_description");
-    assert_catalog_key!("app.settings.notifications.updates_status");
-    assert_catalog_key!("app.settings.notifications.check_for_updates");
-    assert_catalog_key!("app.settings.notifications.up_to_date");
-    assert_catalog_key!("app.settings.notifications.update_available");
-    assert_catalog_key!("app.settings.notifications.status_unavailable");
+    assert_catalog_key!("app.settings.about.update_status");
+    assert_catalog_key!("app.settings.about.check_for_updates");
+    assert_catalog_key!("app.settings.about.up_to_date");
+    assert_catalog_key!("app.settings.about.update_available");
+    assert_catalog_key!("app.settings.about.status_unavailable");
 }
 
 #[test]

@@ -57,14 +57,16 @@ fn show_native_about_panel() -> bool {
     false
 }
 
-/// Cloned render inputs for the About pane. The changelog row advertises the
-/// release a reader can actually open — the newest cached one, else the
-/// running version's own notes — which is independent of whether an update is
-/// offered. Version and mode are captured together so the description cannot
-/// name a release the viewer would not present.
+/// Cloned render inputs for the About pane: the cached update-status line plus
+/// the row's advertised release. The changelog row advertises the release a
+/// reader can actually open — the newest cached one, else the running
+/// version's own notes — which is independent of whether an update is offered.
+/// Version and mode are captured together so the description cannot name a
+/// release the viewer would not present.
 #[derive(Clone)]
 pub(super) struct AboutSettingsProps {
     pub(super) changelog: Option<ChangelogReleaseProps>,
+    pub(super) update_status_description: String,
 }
 
 /// One readable release: the version the viewer will title, plus the mode it
@@ -82,6 +84,7 @@ impl AboutSettingsProps {
             changelog: view
                 .best_changelog_release()
                 .map(|(version, mode)| ChangelogReleaseProps { version: version.to_owned(), mode }),
+            update_status_description: view.update_status_description(),
         }
     }
 }
@@ -119,8 +122,8 @@ impl DesktopView {
         self.open_license_viewer(licenses::LicenseDocument::Mit, window, cx);
     }
 
-    /// Settings → About page: brand identity plus the release-notes, license,
-    /// acknowledgments, and project link rows.
+    /// Settings → About page: brand identity plus the update-status,
+    /// release-notes, license, acknowledgments, and project link rows.
     pub(super) fn render_about_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         Self::render_about_settings_content(AboutSettingsProps::capture(self), cx.entity(), cx)
     }
@@ -180,6 +183,7 @@ impl DesktopView {
                 title,
                 settings_group_box_untitled(&colors)
                     .child(identity)
+                    .child(Self::about_update_status_row(&props, &view, &colors))
                     .child(Self::about_changelog_row(&props, &view, &colors))
                     .child(Self::license_viewer_row(
                         &view,
@@ -207,6 +211,46 @@ impl DesktopView {
                     )),
             ))
             .into_any_element()
+    }
+
+    /// Update-status row: the cached snapshot plus a manual check. Release
+    /// notes have their own row below, so this one carries only the check
+    /// action and keeps that stable slot in every state.
+    fn about_update_status_row(
+        props: &AboutSettingsProps,
+        view: &Entity<Self>,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
+        settings_row(
+            rust_i18n::t!("app.settings.about.update_status").to_string(),
+            props.update_status_description.clone(),
+            desktop_button("about-settings-check-for-updates")
+                .label(rust_i18n::t!("app.settings.about.check_for_updates").to_string())
+                .on_click({
+                    let view = view.clone();
+                    move |_, _: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| {
+                            view.request_update_status();
+                            cx.notify();
+                        });
+                    }
+                }),
+            colors,
+        )
+        .into_any_element()
+    }
+
+    fn update_status_description(&self) -> String {
+        let Some(status) = self.update_status.as_ref() else {
+            return rust_i18n::t!("app.settings.about.status_unavailable").to_string();
+        };
+        match (status.update_available, status.latest_version.as_deref()) {
+            (true, Some(latest)) => format!("{} {latest}", rust_i18n::t!("app.settings.about.update_available")),
+            (true, None) => rust_i18n::t!("app.settings.about.status_unavailable").to_string(),
+            (false, _) => {
+                format!("{} ({})", rust_i18n::t!("app.settings.about.up_to_date"), status.current_version)
+            }
+        }
     }
 
     /// Release-notes row: offers whichever release a reader can actually open

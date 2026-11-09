@@ -37,20 +37,8 @@ fn with_current_notes(mut payload: serde_json::Value, highlights: &[&str], url: 
     payload
 }
 
-fn open_notification_settings(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.open_settings(window, cx);
-            view.settings_tab = SettingsTab::Notifications;
-        });
-        window.render_frame(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-}
-
 #[gpui_kit::test]
-fn settings_button_opens_viewer_with_highlights(cx: &mut TestAppContext) {
+fn about_release_notes_row_opens_viewer_with_highlights(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(
         &view,
@@ -63,11 +51,13 @@ fn settings_button_opens_viewer_with_highlights(cx: &mut TestAppContext) {
         ),
         cx,
     );
-    open_notification_settings(window, &view, cx);
+    open_about_settings(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
-        assert_eq!(window.find("view-changelog").label(), Some("View changelog"));
-        assert_eq!(window.find("view-changelog").role(), Some(gpui_kit::Role::Button));
-        window.click("view-changelog", cx);
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        assert_eq!(window.find("about-settings-changelog").label(), Some("Release notes"));
+        assert_eq!(window.find("about-settings-changelog").role(), Some(gpui_kit::Role::Button));
+        assert!(window.try_find("view-changelog").is_none(), "one changelog entry point on About");
+        window.click("about-settings-changelog", cx);
         window.render_frame(cx);
     })
     .unwrap();
@@ -86,14 +76,15 @@ fn settings_button_opens_viewer_with_highlights(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn settings_button_hides_without_an_available_update(cx: &mut TestAppContext) {
+fn about_pane_offers_a_single_changelog_entry(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.182.0", None, false, &[], None), cx);
-    open_notification_settings(window, &view, cx);
+    seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
+    open_about_settings(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("check-for-updates").is_some(), "check keeps its slot");
-        assert!(window.try_find("view-changelog").is_none(), "no update means no viewer entry");
+        assert!(window.try_find("about-settings-check-for-updates").is_some(), "check keeps its slot");
+        assert!(window.try_find("view-changelog").is_none(), "the update row has no duplicate changelog action");
+        assert!(window.try_find("about-settings-changelog").is_some(), "release notes stay the one entry point");
     })
     .unwrap();
 }
@@ -102,9 +93,10 @@ fn settings_button_hides_without_an_available_update(cx: &mut TestAppContext) {
 fn done_button_closes_and_consumes_return_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
-    open_notification_settings(window, &view, cx);
+    open_about_settings(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("view-changelog", cx);
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        window.click("about-settings-changelog", cx);
         window.render_frame(cx);
         assert!(view.read(cx).changelog_open);
         window.click("close-changelog", cx);
@@ -213,7 +205,7 @@ fn stale_notification_click_falls_back_to_settings(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(!view.read(cx).changelog_open, "stale click never opens a mismatched viewer");
         assert!(view.read(cx).current_route() == Route::Settings, "stale click lands on settings");
-        assert_eq!(view.read(cx).settings_tab, SettingsTab::Notifications);
+        assert_eq!(view.read(cx).settings_tab, SettingsTab::About);
     })
     .unwrap();
 }
@@ -541,9 +533,10 @@ fn changelog_viewer_traps_tab_across_its_footer_actions(cx: &mut TestAppContext)
         ),
         cx,
     );
-    open_notification_settings(window, &view, cx);
+    open_about_settings(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("view-changelog", cx);
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        window.click("about-settings-changelog", cx);
         window.render_frame(cx);
         assert!(window.try_find("changelog-dialog").is_some(), "the viewer opens");
         assert!(window.try_find("open-release-notes").is_some(), "two-stop footer renders");
@@ -566,7 +559,7 @@ fn open_about_settings(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: 
 
 /// Up-to-date launch that still knows the newest release from the cache: the
 /// About row must offer the notes even though no update is pending, while the
-/// update-specific Notifications action stays hidden.
+/// update-specific changelog action stays hidden.
 #[gpui_kit::test]
 fn about_row_reads_latest_notes_without_an_offered_update(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

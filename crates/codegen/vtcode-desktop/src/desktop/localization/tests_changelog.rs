@@ -38,10 +38,6 @@ fn changelog_copy_resolves_in_english_until_translated() {
         rust_i18n::t!("app.changelog.description_current", locale = "en", version = "0.182.0").to_string(),
         "Release notes for the version you're running (v0.182.0)"
     );
-    assert_eq!(
-        rust_i18n::t!("app.settings.notifications.view_changelog", locale = "en").to_string(),
-        "View changelog"
-    );
     for language in UiLanguage::ALL {
         let locale = language.locale();
         for key in [
@@ -59,7 +55,6 @@ fn changelog_copy_resolves_in_english_until_translated() {
             "app.changelog.banner_more",
             "app.changelog.banner_view",
             "app.changelog.banner_dismiss",
-            "app.settings.notifications.view_changelog",
         ] {
             let value = rust_i18n::t!(
                 key,

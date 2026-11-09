@@ -106,7 +106,7 @@ pub(super) enum NotificationTarget {
     Interaction { session_id: String, interaction_id: String },
     /// Service disconnect: land on the workspace status.
     Workspace,
-    /// New release: the Notifications settings tab (update row + Check button).
+    /// New release: the About settings tab (update row + Check button).
     UpdateSettings,
     /// New release: the changelog viewer for the notified version, falling
     /// back to [`NotificationTarget::UpdateSettings`] when the status moved on.
@@ -128,7 +128,7 @@ impl NotificationTarget {
                 DeepLink::Action(PaletteAction::LoadSession(session_id.clone()))
             }
             Self::Workspace => DeepLink::Route(Route::Workspace),
-            Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::Notifications),
+            Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::About),
             // The viewer has a real link form; the pinned version only rides
             // the live click, which falls back to the tab when stale.
             Self::UpdateChangelog { .. } => DeepLink::Changelog,
@@ -524,11 +524,7 @@ impl DesktopView {
             }
             NotificationTarget::Workspace => self.open_route_link(Route::Workspace, window, cx),
             NotificationTarget::UpdateSettings => {
-                self.run_palette_action(
-                    PaletteAction::SelectSettingsTab(settings::SettingsTab::Notifications),
-                    window,
-                    cx,
-                );
+                self.run_palette_action(PaletteAction::SelectSettingsTab(settings::SettingsTab::About), window, cx);
             }
             NotificationTarget::UpdateChangelog { version } => {
                 // Stale-tolerance: the status may have refreshed between the
@@ -935,7 +931,7 @@ mod tests {
             Some("action/load-session/s")
         );
         assert_eq!(NotificationTarget::Workspace.path().as_deref(), Some("workspace"));
-        assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/notifications"));
+        assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/about"));
         // The viewer has a real link form now (the pinned version only rides
         // the live click).
         assert_eq!(

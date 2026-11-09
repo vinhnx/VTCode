@@ -9,8 +9,6 @@ use super::*;
 pub(super) struct NotificationSettingsProps {
     pub(super) notifications: preferences::NotificationPreferences,
     pub(super) turn_completion_select: Entity<preferences::TurnCompletionModeSelectState>,
-    pub(super) update_status_description: String,
-    pub(super) can_view_changelog: bool,
 }
 
 impl NotificationSettingsProps {
@@ -20,8 +18,6 @@ impl NotificationSettingsProps {
         Self {
             notifications: view.preferences.notifications.clone(),
             turn_completion_select: view.turn_completion_select.clone(),
-            update_status_description: view.update_status_description(),
-            can_view_changelog: view.can_view_changelog(),
         }
     }
 }
@@ -104,49 +100,6 @@ impl DesktopView {
                             switch_action(&view, Self::set_notification_updates),
                         ),
                         &colors,
-                    ))
-                    .child(settings_row(
-                        rust_i18n::t!("app.settings.notifications.updates_status").to_string(),
-                        props.update_status_description.clone(),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                desktop_button("check-for-updates")
-                                    .label(rust_i18n::t!("app.settings.notifications.check_for_updates").to_string())
-                                    .ghost()
-                                    .small()
-                                    .on_click({
-                                        let view = view.clone();
-                                        move |_, _: &mut Window, cx: &mut App| {
-                                            view.update(cx, |view, cx| {
-                                                view.request_update_status();
-                                                cx.notify();
-                                            });
-                                        }
-                                    }),
-                            )
-                            // The changelog action only exists while an update
-                            // is viewable; the Check button keeps its stable
-                            // leading slot either way.
-                            .when(props.can_view_changelog, |row| {
-                                row.child(
-                                    desktop_button("view-changelog")
-                                        .label(rust_i18n::t!("app.settings.notifications.view_changelog").to_string())
-                                        .ghost()
-                                        .small()
-                                        .on_click({
-                                            let view = view.clone();
-                                            move |_, window: &mut Window, cx: &mut App| {
-                                                view.update(cx, |view, cx| {
-                                                    view.open_changelog(window, cx);
-                                                });
-                                            }
-                                        }),
-                                )
-                            }),
-                        &colors,
                     )),
             ))
             .into_any_element()
@@ -154,21 +107,6 @@ impl DesktopView {
 
     pub(super) fn render_notification_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         Self::render_notification_settings_content(NotificationSettingsProps::capture(self), cx.entity(), cx)
-    }
-
-    fn update_status_description(&self) -> String {
-        let Some(status) = self.update_status.as_ref() else {
-            return rust_i18n::t!("app.settings.notifications.status_unavailable").to_string();
-        };
-        match (status.update_available, status.latest_version.as_deref()) {
-            (true, Some(latest)) => {
-                format!("{} {latest}", rust_i18n::t!("app.settings.notifications.update_available"))
-            }
-            (true, None) => rust_i18n::t!("app.settings.notifications.status_unavailable").to_string(),
-            (false, _) => {
-                format!("{} ({})", rust_i18n::t!("app.settings.notifications.up_to_date"), status.current_version)
-            }
-        }
     }
 
     fn set_notification_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {

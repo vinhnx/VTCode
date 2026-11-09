@@ -157,10 +157,10 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Whether the viewer has an update to show. The notification and
-    /// Settings → Notifications gates sit here: they advertise an *update*,
-    /// which needs both the offer and a version. Reading the changelog without
-    /// one is [`Self::can_view_latest_changelog`].
+    /// Whether the viewer has an update to show. Drives the update
+    /// notification and the `Latest` viewer's upgrade subtitle: both advertise
+    /// an *update*, which needs both the offer and a version. Reading the
+    /// changelog without one is [`Self::can_view_latest_changelog`].
     pub(super) fn can_view_changelog(&self) -> bool {
         self.update_status
             .as_ref()
