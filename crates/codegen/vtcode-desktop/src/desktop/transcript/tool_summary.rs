@@ -22,8 +22,9 @@ use serde_json::Value;
 use vtcode_commons::formatting::truncate_middle;
 use vtcode_exec_events::{ThreadItemDetails, ToolInvocationItem};
 
+use super::super::output_sections::human_output_option;
 use super::super::strings::display::MIDDOT;
-use super::activity_verbs::{ToolCategory, session_tool_title};
+use super::activity_verbs::{ToolCategory, extra_gist_keys, relativize_to_workspace, session_tool_title};
 
 /// User-facing detail lines for a tool row, joined with `\n`.
 ///
@@ -39,10 +40,17 @@ pub(crate) fn activity_details_summary(details: &ThreadItemDetails, workspace_ro
 /// Drives both the expanded transcript tail and the Output inspector tab. MCP results
 /// and web-search hits join the command/tool outputs so their content stays reachable
 /// now that the JSON dump is gone.
+///
+/// Postcondition: the returned text is the human projection — core's `Structured
+/// output:` metadata envelope is stripped from the captures core annotates
+/// (command/tool outputs; only `spool_note` prose survives), MCP results and
+/// search hits pass through verbatim since they never carry the envelope, and
+/// blank captures collapse to `None`, so `has_output` never offers a tab or
+/// deep link that lands on nothing.
 pub(crate) fn activity_output_text(details: &ThreadItemDetails) -> Option<String> {
-    match details {
-        ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.clone()),
-        ThreadItemDetails::ToolOutput(output) => Some(output.output.clone()),
+    let raw = match details {
+        ThreadItemDetails::CommandExecution(command) => human_output_option(&command.aggregated_output),
+        ThreadItemDetails::ToolOutput(output) => human_output_option(&output.output),
         ThreadItemDetails::McpToolCall(call) => call.result.clone(),
         ThreadItemDetails::WebSearch(search) => search
             .results
@@ -57,7 +65,8 @@ pub(crate) fn activity_output_text(details: &ThreadItemDetails) -> Option<String
         | ThreadItemDetails::Reasoning(_)
         | ThreadItemDetails::Decision(_)
         | ThreadItemDetails::FileChange(_) => None,
-    }
+    }?;
+    (!raw.trim().is_empty()).then_some(raw)
 }
 
 /// Build tool-row body text preserving the status-first-line contract.
@@ -91,7 +100,7 @@ fn tool_detail_lines(details: &ThreadItemDetails, workspace_root: Option<&Path>)
         ThreadItemDetails::McpToolCall(call) => call
             .arguments
             .as_ref()
-            .map(|args| param_detail_lines(args, &[], workspace_root))
+            .map(|args| param_detail_lines(args, &[], &[], workspace_root))
             .unwrap_or_default(),
         // The harness message already sits on the status line and the command/path on
         // the title; only a failing exit code adds information.
@@ -130,21 +139,23 @@ fn invocation_lines(tool: &ToolInvocationItem, workspace_root: Option<&Path>) ->
         return exec_session_line(args).into_iter().collect();
     }
     let category = ToolCategory::from_tool_name(&tool.tool_name, Some(args));
-    param_detail_lines(args, gist_keys(category), workspace_root)
+    param_detail_lines(args, gist_keys(category), extra_gist_keys(tool), workspace_root)
 }
 
 /// Argument keys the row title already shows for a category, so details skip them.
 ///
 /// Contract with the gist readers in `activity_verbs.rs` (`file_basename`,
-/// `command_text`, search keys, fetch URL): a key added to a gist must join its set
-/// here, or the title and body repeat each other. `gist_keys_stay_silent_in_details`
-/// pins the agreement behaviorally.
+/// `command_text`, search keys, fetch URL): a key added to a category-wide gist
+/// must join its set here, or the title and body repeat each other.
+/// Tool-specific headline keys (`grep_file` scope, `list_files` patterns) join
+/// `extra_gist_keys` instead. `gist_keys_stay_silent_in_details` pins the
+/// agreement behaviorally.
 fn gist_keys(category: ToolCategory) -> &'static [&'static str] {
     match category {
         ToolCategory::Read => &["path", "file_path", "filepath", "target_path", "url"],
         ToolCategory::Edit => &["path", "file_path", "filepath", "target_path"],
         ToolCategory::Run => &["command", "cmd", "raw_command", "bash_command"],
-        ToolCategory::Search => &["query", "pattern"],
+        ToolCategory::Search => &["query", "pattern", "q", "text"],
         ToolCategory::Tracker | ToolCategory::Other => &[],
     }
 }
@@ -172,13 +183,22 @@ fn exec_session_line(args: &Value) -> Option<String> {
 /// columns, lists summarize to two items, and only `true` flags and non-zero numbers
 /// render. Key order follows `serde_json::Map` iteration (alphabetical without the
 /// `preserve_order` feature, which this workspace does not enable).
-fn param_detail_lines(args: &Value, skipped: &[&str], workspace_root: Option<&Path>) -> Vec<String> {
+fn param_detail_lines(
+    args: &Value,
+    skipped: &[&str],
+    extra_skipped: &[&str],
+    workspace_root: Option<&Path>,
+) -> Vec<String> {
     let mut details = Vec::new();
     let Some(map) = args.as_object() else {
         return details;
     };
     for (key, value) in map {
-        if is_verbose_key(key) || is_noise_param(key) || skipped.contains(&key.as_str()) {
+        if is_verbose_key(key)
+            || is_noise_param(key)
+            || skipped.contains(&key.as_str())
+            || extra_skipped.contains(&key.as_str())
+        {
             continue;
         }
         match value {
@@ -267,23 +287,6 @@ fn is_noise_param(key: &str) -> bool {
 /// Keys whose values are file-system paths, shown relative to the workspace.
 fn is_path_key(key: &str) -> bool {
     matches!(key, "path" | "file_path" | "filename" | "destination" | "source")
-}
-
-/// Display a path relative to the workspace root when it lies within it. Mirrors the
-/// CLI `relativize_to_workspace`.
-fn relativize_to_workspace<'a>(path: &'a str, workspace_root: Option<&Path>) -> Cow<'a, str> {
-    let Some(root) = workspace_root else {
-        return Cow::Borrowed(path);
-    };
-    let candidate = Path::new(path);
-    if candidate.is_absolute() {
-        if let Ok(rel) = candidate.strip_prefix(root) {
-            if !rel.as_os_str().is_empty() {
-                return Cow::Owned(rel.to_string_lossy().into_owned());
-            }
-        }
-    }
-    Cow::Borrowed(path)
 }
 
 fn humanize_key(key: &str) -> String {
@@ -457,6 +460,29 @@ mod tests {
     }
 
     #[test]
+    fn tool_specific_headline_keys_stay_silent_in_details() {
+        // The title already phrases these: grep_file's pattern and scope,
+        // list_files' location and patterns. An unconsumed knob on the same
+        // call still renders, proving the silence is keyed.
+        assert_eq!(summary(&invocation("grep_file", Some(json!({"pattern": "TODO", "path": "src"})))), "");
+        assert_eq!(summary(&invocation("list_files", Some(json!({"name_pattern": "*.rs"})))), "");
+        assert_eq!(summary(&invocation("list_files", Some(json!({"content_pattern": "TODO"})))), "");
+        let with_knob = invocation("grep_file", Some(json!({"pattern": "TODO", "path": "src", "limit": 5})));
+        assert_eq!(summary(&with_knob), "Limit: 5");
+        // Asymmetric: a plain grep keeps its scope in the details, since only
+        // grep_file phrases it in the title.
+        assert_eq!(summary(&invocation("grep", Some(json!({"pattern": "TODO", "path": "src"})))), "Path: src");
+        // Silence follows consumption, not the tool: skipped keys show, and
+        // headline-less calls hide nothing.
+        assert_eq!(
+            summary(&invocation("list_files", Some(json!({"path": "src", "name_pattern": "*.rs"})))),
+            "Name pattern: *.rs"
+        );
+        assert_eq!(summary(&invocation("grep_file", Some(json!({"path": "src"})))), "Path: src");
+        assert_eq!(summary(&invocation("code_search", Some(json!({"q": "Widget"})))), "");
+    }
+
+    #[test]
     fn output_text_routes_content_per_variant() {
         let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
             command: "cargo check".into(),
@@ -513,6 +539,76 @@ mod tests {
             status: None,
         }));
         assert_eq!(activity_output_text(&no_result), None);
+    }
+
+    fn command_output(aggregated: &str) -> ThreadItemDetails {
+        ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "cargo check".into(),
+            arguments: None,
+            aggregated_output: aggregated.into(),
+            exit_code: None,
+            status: CommandExecutionStatus::Completed,
+        }))
+    }
+
+    #[test]
+    fn output_text_strips_structured_envelope_but_keeps_spool_note() {
+        let details = command_output(
+            "log line\nStructured output:\n{\"backend\": \"pipe\", \"spool_note\": \"Spooled to out.txt\", \"pid\": 1}",
+        );
+        assert_eq!(activity_output_text(&details).as_deref(), Some("log line\nSpooled to out.txt"));
+        // Asymmetric: no note anywhere — only the prose survives.
+        let details = command_output("log line\nStructured output:\n{\"backend\": \"pipe\"}");
+        assert_eq!(activity_output_text(&details).as_deref(), Some("log line"));
+    }
+
+    #[test]
+    fn output_text_collapses_blank_captures_to_none() {
+        for blank in ["", "   ", "\n\n"] {
+            assert_eq!(activity_output_text(&command_output(blank)), None, "{blank:?} collapses");
+        }
+        // A metadata-only block with no note is blank after the strip.
+        let details = command_output("Structured output:\n{\"backend\": \"pipe\"}");
+        assert_eq!(activity_output_text(&details), None);
+        // Asymmetric: the same block with a note stays `Some`.
+        let details = command_output("Structured output:\n{\"spool_note\": \"Spooled\"}");
+        assert_eq!(activity_output_text(&details).as_deref(), Some("Spooled"));
+    }
+
+    #[test]
+    fn output_text_never_carries_structured_envelope() {
+        let variants = [
+            command_output("body\nStructured output:\n{\"backend\": \"pipe\", \"pid\": 1}"),
+            ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                call_id: "call-1".into(),
+                tool_call_id: None,
+                spool_path: None,
+                output: "body\nStructured output:\n{\"lifecycle_state\": \"exited\"}".into(),
+                is_delta: None,
+                exit_code: None,
+                status: ToolCallStatus::Completed,
+                app_previews: Vec::new(),
+            })),
+        ];
+        for details in &variants {
+            let text = activity_output_text(details).expect("prose survives the strip");
+            for marker in ["Structured output:", "\"backend\"", "\"pid\"", "\"lifecycle_state\""] {
+                assert!(!text.contains(marker), "no envelope marker {marker:?} in {text:?}");
+            }
+        }
+        // Asymmetric: MCP results never carry core's envelope, so even
+        // envelope-shaped server content passes through verbatim — the strip
+        // must not eat genuine result bytes.
+        let mcp = ThreadItemDetails::McpToolCall(Box::new(McpToolCallItem {
+            tool_name: "review".into(),
+            arguments: None,
+            result: Some("body\nStructured output:\n{\"total_output_bytes\": 9}".into()),
+            status: None,
+        }));
+        assert_eq!(
+            activity_output_text(&mcp).as_deref(),
+            Some("body\nStructured output:\n{\"total_output_bytes\": 9}")
+        );
     }
 
     #[test]

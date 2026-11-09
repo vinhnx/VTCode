@@ -1,5 +1,6 @@
 //! Session lifecycle: change guards, load/restore, history and output paging.
 
+use super::super::output_sections::human_output_text;
 use super::*;
 
 /// First page of the recent-thread list; "show more" grows by the same step.
@@ -67,7 +68,12 @@ pub(super) fn append_restored_output_page(
     );
     next_preview.push_str(current_preview);
     next_preview.push_str(&page.text);
-    let mut next_preview = inspector::output_tail(&next_preview.into()).to_string();
+    // Pages arrive raw from the service and are stored raw below; the join is
+    // stripped here so the preview stays human (a block straddling the page
+    // boundary only completes in the join). Cursor offsets are service bytes
+    // and never derive from this display text. Idempotent.
+    let joined: gpui_kit::SharedString = human_output_text(&next_preview).into();
+    let mut next_preview = inspector::output_tail(&joined).to_string();
     if page.has_more {
         next_preview.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
     }
@@ -93,7 +99,9 @@ pub(super) fn restored_output_for_copy(
     if has_more {
         output.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
     }
-    output
+    // Boundary-spanning metadata blocks only complete in the join; the strip
+    // is idempotent so already-human joins pass through unchanged.
+    human_output_text(&output)
 }
 
 pub(super) struct ActivePrimaryAgentDisplay {

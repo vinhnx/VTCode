@@ -69,7 +69,7 @@ fn shell_invocations_share_rows_with_interleaved_output(cx: &mut TestAppContext)
             }
             assert_eq!(view.transcript.items().filter(|row| row.role == "tool").count(), 2);
             let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
-            assert_eq!(row.title, "echo alpha");
+            assert_eq!(row.title, "Ran echo alpha");
             assert_eq!(row.output.as_deref(), Some("alpha tail"));
             assert_eq!(row.output_item_id.as_deref(), Some("out-a"));
             assert_eq!(output_inspector::output_for(&view.transcript, &[], Some("out-b")).unwrap().text, "beta");
@@ -115,6 +115,36 @@ fn restored_shell_activity_preserves_capture_identity(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn harness_telemetry_stays_out_of_the_transcript_but_failures_stay(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let harness = |kind: HarnessEventKind| {
+            let mut event = HarnessEventItem::new(kind);
+            event.message = Some("harness telemetry".into());
+            ThreadItem {
+                id: format!("harness-{event:?}"),
+                context: None,
+                details: ThreadItemDetails::Harness(Box::new(event)),
+            }
+        };
+        // Latency records and lifecycle chatter project to nothing, live or restored.
+        for historical in [false, true] {
+            view.project_runtime_item(&harness(HarnessEventKind::ToolLatencyRecorded), historical);
+            view.project_runtime_item(&harness(HarnessEventKind::PlanningStarted), historical);
+            view.project_runtime_item(&harness(HarnessEventKind::VerificationPassed), historical);
+        }
+        assert!(view.transcript.is_empty());
+        assert!(view.restored_activity.is_empty());
+        // Asymmetric: a failure stays visible with its message on the status line.
+        view.project_runtime_item(&harness(HarnessEventKind::VerificationFailed), false);
+        let rows: Vec<_> = view.transcript.items().filter(|row| row.role == "tool").collect();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].text.starts_with("harness telemetry"));
+    });
+}
+
+#[gpui_kit::test]
 fn merged_shell_row_opens_its_canonical_capture(cx: &mut TestAppContext) {
     use vtcode_exec_events::ToolCallStatus;
     let (window, view) = open_desktop(cx);
@@ -139,7 +169,7 @@ fn merged_shell_row_opens_its_canonical_capture(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn shell_output_does_not_merge_across_turns_or_into_non_shell_calls(cx: &mut TestAppContext) {
+fn shell_output_does_not_merge_across_turns(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::*;
     let (_window, view) = open_desktop(cx);
@@ -162,17 +192,58 @@ fn shell_output_does_not_merge_across_turns_or_into_non_shell_calls(cx: &mut Tes
         let call = view.transcript.items().find(|row| row.id == "call").unwrap();
         assert!(call.output.is_none());
         assert!(view.transcript.items().all(|row| row.id != "capture"));
-        let mut read = shell_call("read", "file");
-        if let ThreadItemDetails::ToolInvocation(invocation) = &mut read.details {
-            invocation.tool_name = "read_file".into();
+    });
+}
+
+#[gpui_kit::test]
+fn tool_output_merges_into_non_shell_invocations_live_and_restored(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let named_call = |id: &str, tool: &str| {
+            let mut call = shell_call(id, "unused");
+            if let ThreadItemDetails::ToolInvocation(invocation) = &mut call.details {
+                invocation.tool_name = tool.into();
+                invocation.arguments = None;
+            }
+            call
+        };
+        // Live: a read and an MCP-style diagram call each absorb their output —
+        // no bare "Tool output" rows dangle beside them.
+        for (call_id, tool, capture_id, body) in [
+            ("read", "read_file", "read-output", "data"),
+            ("diagram", "diagram_render", "diagram-output", "svg"),
+        ] {
+            view.project_runtime_item(&named_call(call_id, tool), false);
+            view.project_runtime_item(
+                &shell_output(capture_id, call_id, body, ToolCallStatus::Completed, false),
+                false,
+            );
+            assert!(
+                view.transcript.items().all(|row| row.id != capture_id),
+                "{capture_id} merges instead of standing alone"
+            );
+            let row = view.transcript.items().find(|row| row.id == call_id).unwrap();
+            assert_eq!(row.output.as_deref(), Some(body));
+            assert_eq!(row.output_item_id.as_deref(), Some(capture_id));
         }
-        view.project_runtime_item(&read, false);
+        // Restored: the same merge applies to historical projections.
+        view.project_runtime_item(&named_call("old-diagram", "diagram_render"), true);
         view.project_runtime_item(
-            &shell_output("read-output", "read", "data", ToolCallStatus::Completed, false),
+            &shell_output("old-output", "old-diagram", "old svg", ToolCallStatus::Completed, false),
+            true,
+        );
+        assert_eq!(view.restored_activity.len(), 1);
+        assert_eq!(view.restored_activity[0].id, "old-diagram");
+        assert_eq!(view.restored_activity[0].output.as_deref(), Some("old svg"));
+        // Asymmetric: an output whose invocation never projected keeps the
+        // standalone fallback so its capture stays reachable.
+        view.project_runtime_item(
+            &shell_output("orphan-output", "missing-call", "orphan body", ToolCallStatus::Completed, false),
             false,
         );
-        assert!(view.transcript.items().any(|row| row.id == "read-output"));
-        assert!(view.transcript.items().find(|row| row.id == "read").unwrap().output.is_none());
+        let orphan = view.transcript.items().find(|row| row.id == "orphan-output").unwrap();
+        assert_eq!(orphan.output.as_deref(), Some("orphan body"));
     });
 }
 
@@ -390,10 +461,10 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(warning.label(), Some("Saved tool history is partial. Some output may be missing or shortened."));
         assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::ListItem));
-        assert_eq!(window.find("activity-saved-command").label(), Some("cargo check --locked"));
+        assert_eq!(window.find("activity-saved-command").label(), Some("Ran cargo check --locked"));
         let output_action = window.find("activity-output-finished-command");
         assert_eq!(output_action.role(), Some(gpui_kit::Role::Button));
-        assert_eq!(output_action.label(), Some("View output for previous command"));
+        assert_eq!(output_action.label(), Some("View output: Ran previous command"));
         window.click("activity-output-finished-command", cx);
         window.render_frame(cx);
         let warning = window.find("activity-history-warning");

@@ -82,7 +82,7 @@ use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{
     MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepare_markdown, render_markdown,
-    render_markdown_view, render_markdown_with_style, render_output_sections,
+    render_markdown_view, render_markdown_with_style, render_output_text,
 };
 use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
@@ -90,7 +90,7 @@ use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, NoticeSeverity, ToolCategory, ToolCategoryCounts, Transcript, TranscriptItem,
     TranscriptRole, UserAttachment, activity_details_summary, activity_output_text, activity_payload, activity_text,
-    describe_activity_verbs, status as tool_status, tool_row_gist,
+    describe_activity_verbs, harness_is_user_visible, status as tool_status, tool_row_gist,
 };
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,
@@ -182,6 +182,7 @@ mod typography;
 mod updates;
 mod utilities;
 mod webmcp;
+mod welcome_copy;
 mod workspace;
 mod workspace_review;
 use super::localization::{UiLanguageOption, UiLanguageSelectState};
@@ -203,6 +204,7 @@ use runtime_items::*;
 use sessions::*;
 use transcript_nav::*;
 use typography::FontTarget;
+use welcome_copy::*;
 use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
@@ -214,7 +216,6 @@ const CONTENT_WIDTH: f32 = 768.;
 /// longer lines wrap, contained). Narrower than normal.
 const ZEN_CONTENT_WIDTH: f32 = 680.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
-const WELCOME_COPY_COUNT: usize = 3;
 
 const ACTIVITY_ROW_HEIGHT: f32 = 44.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
@@ -224,59 +225,6 @@ const COMMAND_PALETTE_ELEMENT_ID: &str = "command-palette";
 /// The single zen toggle slot: one title-bar trailing id shared by the
 /// enter/exit states across modes, so the button never moves when toggled.
 const ZEN_MODE_TOGGLE_ELEMENT_ID: &str = "zen-mode-toggle";
-
-struct WelcomeCopy {
-    action: String,
-    workspace_action: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum WelcomePeriod {
-    Morning,
-    Afternoon,
-    Evening,
-}
-
-fn welcome_period_for_hour(hour: u32) -> WelcomePeriod {
-    match hour % 24 {
-        5..=11 => WelcomePeriod::Morning,
-        12..=16 => WelcomePeriod::Afternoon,
-        _ => WelcomePeriod::Evening,
-    }
-}
-
-fn welcome_greeting(period: WelcomePeriod) -> String {
-    match period {
-        WelcomePeriod::Morning => rust_i18n::t!("app.welcome.greeting.morning"),
-        WelcomePeriod::Afternoon => rust_i18n::t!("app.welcome.greeting.afternoon"),
-        WelcomePeriod::Evening => rust_i18n::t!("app.welcome.greeting.evening"),
-    }
-    .to_string()
-}
-
-fn welcome_copy(index: usize) -> WelcomeCopy {
-    match index {
-        1 => WelcomeCopy {
-            action: rust_i18n::t!("app.welcome.action.improve").to_string(),
-            workspace_action: rust_i18n::t!("app.welcome.action.improve_in_workspace").to_string(),
-        },
-        2 => WelcomeCopy {
-            action: rust_i18n::t!("app.welcome.action.explore").to_string(),
-            workspace_action: rust_i18n::t!("app.welcome.action.explore_in_workspace").to_string(),
-        },
-        _ => WelcomeCopy {
-            action: rust_i18n::t!("app.welcome.action.build").to_string(),
-            workspace_action: rust_i18n::t!("app.welcome.action.build_in_workspace").to_string(),
-        },
-    }
-}
-
-fn welcome_prompt(greeting: &str, action: &str, workspace_action: &str, workspace_name: Option<&str>) -> String {
-    match workspace_name {
-        Some(name) => format!("{greeting}. {workspace_action} {name}?"),
-        None => format!("{greeting}. {action}?"),
-    }
-}
 
 fn service_reconnect_guidance(has_retained_submission: bool) -> String {
     if has_retained_submission {

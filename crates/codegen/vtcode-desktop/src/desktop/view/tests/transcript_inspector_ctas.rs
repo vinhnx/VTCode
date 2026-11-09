@@ -196,7 +196,7 @@ fn tool_output_cta_selects_that_tool_output_and_hides_without_output(cx: &mut Te
         assert_eq!(window.find("transcript-row-second").bounds(), row, "reveal must not reflow the row");
         let cta = window.find("tool-open-output-second");
         assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
-        assert_eq!(cta.label(), Some("View output for Second command"));
+        assert_eq!(cta.label(), Some("View output: Second command"));
         window.click("tool-open-output-second", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
@@ -355,7 +355,7 @@ fn expanded_tool_rows_show_argument_gists_not_registry_names(cx: &mut TestAppCon
         window.click("activity-group-read-1", cx);
         window.render_frame(cx);
         assert_eq!(window.find("tool-read-1").label(), Some("Show details for Read Cargo.toml, status: completed"));
-        assert_eq!(window.find("tool-exec-1").label(), Some("Show details for cargo check, status: completed"));
+        assert_eq!(window.find("tool-exec-1").label(), Some("Show details for Ran cargo check, status: completed"));
     })
     .unwrap();
 }

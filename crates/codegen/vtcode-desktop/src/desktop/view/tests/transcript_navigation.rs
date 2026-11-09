@@ -249,7 +249,7 @@ fn activity_rows_jump_to_live_messages_and_hide_for_restored_history(cx: &mut Te
         assert!(window.try_find("activity-deploy-live").is_some(), "filtered list keeps the live row");
         let jump = window.find("activity-jump-deploy-live");
         assert_eq!(jump.role(), Some(gpui_kit::Role::Button));
-        assert_eq!(jump.label(), Some("Jump to message for Run tests"));
+        assert_eq!(jump.label(), Some("Jump to message: Run tests"));
         assert!(window.try_find("activity-deploy-old").is_some(), "restored row renders in the filtered list");
         assert!(window.try_find("activity-jump-deploy-old").is_none(), "restored-only rows offer no transcript jump");
         window.click("activity-jump-deploy-live", cx);

@@ -10,7 +10,7 @@ impl Transcript {
             self.bump_revision();
         }
     }
-    /// Attach or replace raw output and remeasure an expanded transcript row.
+    /// Attach or replace human-projected output and remeasure an expanded transcript row.
     pub fn set_output(&mut self, id: &str, output: Option<SharedString>) {
         if let Some(index) = self.position_by_id(id) {
             if let Some(item) = self.items.get_mut(index) {

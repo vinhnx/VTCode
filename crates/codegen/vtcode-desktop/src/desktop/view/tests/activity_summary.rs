@@ -36,7 +36,7 @@ fn activity_summary_legend_lists_nonzero_statuses_and_rows_stay_compact(cx: &mut
             "zero-count statuses stay out of the legend"
         );
         assert_eq!(window.find("activity-build").bounds().size.height, px(44.));
-        assert_eq!(window.find("activity-output-build").label(), Some("View output for cargo check"));
+        assert_eq!(window.find("activity-output-build").label(), Some("View output: cargo check"));
         assert!(window.try_find("activity-output-read").is_none());
     })
     .unwrap();

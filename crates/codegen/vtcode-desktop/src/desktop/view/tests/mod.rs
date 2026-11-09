@@ -739,6 +739,7 @@ mod palette_icons;
 mod panel_dismiss;
 mod plan_proposal;
 mod prompt_history;
+mod restored_output_pages;
 mod review_changes;
 mod review_diff_mode;
 mod review_output;

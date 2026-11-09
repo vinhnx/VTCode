@@ -769,7 +769,7 @@ fn invocation_item(name: &str, arguments: Option<serde_json::Value>) -> ToolInvo
 }
 
 fn gist(name: &str, arguments: serde_json::Value) -> String {
-    tool_row_gist(&invocation_item(name, Some(arguments)))
+    tool_row_gist(&invocation_item(name, Some(arguments)), None)
 }
 
 #[test]
@@ -783,7 +783,7 @@ fn tool_row_gist_verbs_file_objects_with_basenames() {
     // carry no name and fall back.
     assert_eq!(gist("read_file", json!({"path": "src/"})), "Read src");
     assert_eq!(gist("read_file", json!({"path": "C:\\work\\lib.rs"})), "Read lib.rs");
-    assert_eq!(gist("read_file", json!({"path": "///"})), "read_file");
+    assert_eq!(gist("read_file", json!({"path": "///"})), "Read File");
     // Fetch tools read URLs, which keep the host: a basename would mislead.
     assert_eq!(
         gist("web_fetch", json!({"url": "https://example.com/page?x=1"})),
@@ -798,31 +798,31 @@ fn tool_row_gist_key_order_matches_service_precedence() {
     assert_eq!(gist("read_file", json!({"path": "a.rs", "file_path": "b.rs"})), "Read a.rs");
     assert_eq!(gist("read_file", json!({"file_path": "b.rs", "filepath": "c.rs"})), "Read b.rs");
     assert_eq!(gist("read_file", json!({"filepath": "c.rs", "target_path": "d.rs"})), "Read c.rs");
-    assert_eq!(gist("code_search", json!({"query": "Widget", "pattern": "Widg.*"})), "Widget");
-    assert_eq!(gist("exec_command", json!({"command": "cargo check", "cmd": "cargo build"})), "cargo check");
+    assert_eq!(gist("code_search", json!({"query": "Widget", "pattern": "Widg.*"})), "Search code for Widget");
+    assert_eq!(gist("exec_command", json!({"command": "cargo check", "cmd": "cargo build"})), "Ran cargo check");
     // A blank winner does not shadow a usable fallback key.
     assert_eq!(gist("read_file", json!({"path": "  ", "file_path": "fallback.rs"})), "Read fallback.rs");
 }
 
 #[test]
-fn tool_row_gist_renders_commands_and_queries_bare() {
+fn tool_row_gist_leads_runs_and_searches_with_verbs() {
     use serde_json::json;
-    assert_eq!(gist("exec_command", json!({"cmd": "cargo check --all"})), "cargo check --all");
-    assert_eq!(gist("exec_command", json!({"command": "  make test  "})), "make test");
-    assert_eq!(gist("exec_command", json!({"command": ["cargo", "check", "--all"]})), "cargo check --all");
-    assert_eq!(gist("exec_command", json!({"command": ["echo", 42, true, "hi"]})), "echo hi");
-    assert_eq!(gist("code_search", json!({"query": "Widget"})), "Widget");
-    // Grep scope stays out: the pattern alone matches the WebSearch row shape.
-    assert_eq!(gist("grep", json!({"pattern": "TODO", "path": "src"})), "TODO");
+    assert_eq!(gist("exec_command", json!({"cmd": "cargo check --all"})), "Ran cargo check --all");
+    assert_eq!(gist("exec_command", json!({"command": "  make test  "})), "Ran make test");
+    assert_eq!(gist("exec_command", json!({"command": ["cargo", "check", "--all"]})), "Ran cargo check --all");
+    assert_eq!(gist("exec_command", json!({"command": ["echo", 42, true, "hi"]})), "Ran echo hi");
+    assert_eq!(gist("code_search", json!({"query": "Widget"})), "Search code for Widget");
+    // Grep phrases the pattern; its scope stays in the detail lines.
+    assert_eq!(gist("grep", json!({"pattern": "TODO", "path": "src"})), "Search files for TODO");
 }
 
 #[test]
 fn tool_row_gist_renders_all_launch_tools_like_exec_command() {
     use serde_json::json;
     // Mirrors `tool_intent::is_command_run_tool_call`: every launch tool shows its
-    // command bare and classifies Run so its output merges into its row.
+    // command with the `Ran` verb and classifies Run so its output merges into its row.
     for name in ["run_pty_cmd", "create_pty_session", "shell", "bash"] {
-        assert_eq!(gist(name, json!({"command": "cargo check"})), "cargo check");
+        assert_eq!(gist(name, json!({"command": "cargo check"})), "Ran cargo check");
         let details =
             ThreadItemDetails::ToolInvocation(Box::new(invocation_item(name, Some(json!({"command": "cargo check"})))));
         assert_eq!(ToolCategory::from_details(&details), Some(ToolCategory::Run), "{name}");
@@ -830,9 +830,9 @@ fn tool_row_gist_renders_all_launch_tools_like_exec_command() {
 }
 
 #[test]
-fn tool_row_gist_falls_back_to_raw_tool_name() {
+fn tool_row_gist_falls_back_to_pretty_tool_name() {
     use serde_json::json;
-    assert_eq!(tool_row_gist(&invocation_item("read_file", None)), "read_file");
+    assert_eq!(tool_row_gist(&invocation_item("read_file", None), None), "Read File");
     for arguments in [
         json!({}),
         json!({"path": ""}),
@@ -843,12 +843,12 @@ fn tool_row_gist_falls_back_to_raw_tool_name() {
         json!({"path": null}),
         json!({"command": ["", 42]}),
     ] {
-        assert_eq!(gist("read_file", arguments.clone()), "read_file");
-        assert_eq!(gist("exec_command", arguments), "exec_command");
+        assert_eq!(gist("read_file", arguments.clone()), "Read File");
+        assert_eq!(gist("exec_command", arguments), "Exec Command");
     }
-    // Other-category tools keep raw names even with file-shaped args.
-    assert_eq!(gist("task_tracker", json!({"path": "plan.md"})), "task_tracker");
-    assert_eq!(gist("request_user_input", json!({"query": "color?"})), "request_user_input");
+    // Other-category tools prettify instead of echoing raw identifiers.
+    assert_eq!(gist("task_tracker", json!({"path": "plan.md"})), "Task Tracker");
+    assert_eq!(gist("request_user_input", json!({"query": "color?"})), "Request User Input");
 }
 
 #[test]
@@ -856,7 +856,7 @@ fn tool_row_gist_covers_unified_and_mcp_names() {
     use serde_json::json;
     assert_eq!(gist("file_operation_internal", json!({"action": "edit", "path": "src/main.rs"})), "Edited main.rs");
     assert_eq!(gist("file_operation_internal", json!({"action": "read", "path": "README.md"})), "Read README.md");
-    assert_eq!(gist("command_session_internal", json!({"action": "run", "cmd": "ls"})), "ls");
+    assert_eq!(gist("command_session_internal", json!({"action": "run", "cmd": "ls"})), "Ran ls");
     assert_eq!(
         gist("command_session_internal", json!({"action": "poll", "session_id": "run-1"})),
         "Read command session"
@@ -883,7 +883,7 @@ fn tool_row_gist_titles_session_followups_like_cli() {
         gist("write_stdin", json!({"action": "write", "session_id": "s", "input": "ls"})),
         "Send command input"
     );
-    // Unified action labels; launches keep the bare-command gist.
+    // Unified action labels; launches keep the `Ran` command gist.
     assert_eq!(
         gist("command_session_internal", json!({"action": "wait", "session_id": "s"})),
         "Wait for command session"

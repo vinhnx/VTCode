@@ -974,12 +974,7 @@ impl DesktopView {
                             .bg(colors.secondary)
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)
-                            .child(render_output_sections(
-                                format!("tool-output-{}", item.id),
-                                &output_excerpt,
-                                &colors,
-                                self.transcript_markdown_style.clone().unwrap_or_else(|| markdown_style(cx)),
-                            )),
+                            .child(render_output_text(&output_excerpt)),
                     )
                     .child(self.render_mcp_app_previews(item, cx)),
             );

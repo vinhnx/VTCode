@@ -28,12 +28,10 @@
 - Icons outside Kit's default bundle must join `ExtraIcons` and `DESKTOP_ICONS` in `assets.rs`, or they render blank with no headless failure.
 - `app_owns_titlebar_drag` disables all native drag, so zen mode needs its own drag strip, and headless `start_window_move` is unimplemented (guard with `#[cfg(not(test))]`).
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics, and `on_next_frame` never runs headless.
-- Kit 0.9.0 animations follow the test clock: headless tests must `settle_fade_animations(cx)` before clicking fade-wrapped controls or the click fails visibility at opacity 0.
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
-- Kit `Badge` is an overlay count, not a text pill — use `Tag::secondary().outline().small()` for pills, wrapped in an identified `div` since `RenderOnce` cannot carry `.test_support()`.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
 - Plan rail/edit locking, custom themes, dismiss guards, and login items live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
-- `components.rs` and `shortcuts.rs` sit exactly at the 1000-line ceiling (menus in `menu_bar.rs`, IDs in `view/ids.rs`): put new code in a focused module.
+- `components.rs` and `shortcuts.rs` sit exactly at the 1000-line ceiling (menus in `menu_bar.rs`, IDs in `view/ids.rs`), `sessions.rs` is at 994: put new code in a focused module.
 - Plain `Enter` while scrolled detours through `submit_or_jump_to_latest` (jump first, draft kept); the Send button always submits immediately.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.

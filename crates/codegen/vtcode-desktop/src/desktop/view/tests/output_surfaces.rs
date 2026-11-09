@@ -86,34 +86,41 @@ fn transcript_output_is_compact_and_inspector_retains_full_capture(cx: &mut Test
     .unwrap();
 }
 
+fn projected_command(id: &str, aggregated_output: &str) -> vtcode_exec_events::ThreadItem {
+    use vtcode_exec_events::*;
+    ThreadItem {
+        id: id.into(),
+        context: None,
+        details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "cargo check".into(),
+            arguments: None,
+            aggregated_output: aggregated_output.into(),
+            exit_code: Some(0),
+            status: CommandExecutionStatus::Completed,
+        })),
+    }
+}
+
 #[gpui_kit::test]
-fn output_surfaces_highlight_structured_json_while_keeping_full_text_accessible(cx: &mut TestAppContext) {
+fn output_surfaces_never_show_the_structured_envelope(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let output = "command output\nStructured output:\n{\"lifecycle_state\": \"exited\", \"exit_code\": 0}".to_string();
+    let raw = "command output\nStructured output:\n{\"lifecycle_state\": \"exited\", \"exit_code\": 0}";
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
-            let mut item = TranscriptItem::new(
-                "structured-output".into(),
-                "tool".into(),
-                "Structured command".into(),
-                "completed".into(),
-            );
-            item.output = Some(output.clone().into());
-            item.expanded = true;
-            view.transcript.push(item);
+            view.project_runtime_item(&projected_command("structured-command", raw), false);
+            view.transcript.toggle_tool("structured-command");
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
         });
         window.render_frame(cx);
 
-        // The structured block renders as its own highlighted section in both
-        // the Output tab and the expanded transcript row...
-        assert!(window.try_find("output-body-structured").is_some());
-        assert!(window.try_find("tool-output-structured-output-structured").is_some());
-        // ...while accessibility labels and copies keep the unsplit capture.
-        assert_eq!(window.find("output-body").label(), Some(output.as_str()));
-        assert_eq!(window.find("tool-output-structured-output").label(), Some(output.as_str()));
+        // Projection strips the envelope, so neither surface can render it…
+        assert!(window.try_find("output-body-structured").is_none());
+        assert!(window.try_find("tool-output-structured-command-structured").is_none());
+        // …and labels plus copies carry the same human text.
+        assert_eq!(window.find("output-body").label(), Some("command output"));
+        assert_eq!(window.find("tool-output-structured-command").label(), Some("command output"));
         window.click("copy-output", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(output.as_str()));
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("command output"));
     })
     .unwrap();
 }
@@ -121,26 +128,22 @@ fn output_surfaces_highlight_structured_json_while_keeping_full_text_accessible(
 #[gpui_kit::test]
 fn output_surfaces_leave_truncated_structured_json_as_plain_text(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let output = "command output\nStructured output:\n{\"lifecycle_state\": \"exited\",".to_string();
+    let output = "command output\nStructured output:\n{\"lifecycle_state\": \"exited\",";
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
-            let mut item = TranscriptItem::new(
-                "truncated-output".into(),
-                "tool".into(),
-                "Truncated command".into(),
-                "completed".into(),
-            );
-            item.output = Some(output.clone().into());
-            item.expanded = true;
-            view.transcript.push(item);
+            // Asymmetric with the stripping test: truncated JSON never parses,
+            // so the fail-open projection keeps every byte and the surfaces
+            // render it literally — noise, never loss.
+            view.project_runtime_item(&projected_command("truncated-output", output), false);
+            view.transcript.toggle_tool("truncated-output");
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
         });
         window.render_frame(cx);
 
         assert!(window.try_find("output-body-structured").is_none());
         assert!(window.try_find("tool-output-truncated-output-structured").is_none());
-        assert_eq!(window.find("output-body").label(), Some(output.as_str()));
-        assert_eq!(window.find("tool-output-truncated-output").label(), Some(output.as_str()));
+        assert_eq!(window.find("output-body").label(), Some(output));
+        assert_eq!(window.find("tool-output-truncated-output").label(), Some(output));
     })
     .unwrap();
 }

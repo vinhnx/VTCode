@@ -607,8 +607,7 @@ impl DesktopView {
                 .child(note)
                 .into_any_element()
         } else {
-            render_output_sections("output-body".to_string(), &shown_text, &colors, markdown_style(cx))
-                .into_any_element()
+            render_output_text(&shown_text)
         };
         pane.child(
             div()

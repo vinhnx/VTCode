@@ -1,6 +1,7 @@
 //! Runtime item projection: ThreadItems into transcript rows, diff cards,
 //! activity summaries, and bounded diff classification.
 
+use super::super::output_sections::human_output_option;
 use super::*;
 
 /// Retain a bounded, UTF-8-safe tail of live deltas. Completion replaces this
@@ -55,19 +56,38 @@ mod live_output_tests {
             exit_code: Some(17),
             status: CommandExecutionStatus::Failed,
         }));
-        assert_eq!(describe_activity(&output).1, "failed (exit 17)");
-        assert_eq!(describe_activity(&command).1, "failed (exit 17)");
+        assert_eq!(describe_activity(&output, None).1, "failed (exit 17)");
+        assert_eq!(describe_activity(&command, None).1, "failed (exit 17)");
         let ThreadItemDetails::ToolOutput(mut output) = output else {
             panic!("expected tool output")
         };
         output.status = ToolCallStatus::Completed;
         output.exit_code = Some(0);
-        assert_eq!(describe_activity(&ThreadItemDetails::ToolOutput(output)).1, "completed");
+        assert_eq!(describe_activity(&ThreadItemDetails::ToolOutput(output), None).1, "completed");
+    }
+
+    #[test]
+    fn blank_commands_fall_back_to_cli_placeholder_title() {
+        for blank in ["", "   "] {
+            let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                command: blank.into(),
+                arguments: None,
+                aggregated_output: String::new(),
+                exit_code: None,
+                status: CommandExecutionStatus::Completed,
+            }));
+            assert_eq!(describe_activity(&command, None).0, "Ran command");
+        }
     }
 }
 
 impl DesktopView {
-    /// Resolve a live shell output to its invocation only when identities are unambiguous.
+    /// Resolve a live tool output to its invocation row when identities are unambiguous.
+    ///
+    /// Merges into any tool row the `call_id` names — shell, MCP, read, edit,
+    /// or search — so one tool call renders as exactly one row. A row that
+    /// already absorbed a different capture keeps it (the newcomer stands
+    /// alone) and non-tool rows never absorb output.
     pub(super) fn runtime_output_row_id<'a>(&self, item: &'a vtcode_exec_events::ThreadItem) -> &'a str {
         let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &item.details else {
             return &item.id;
@@ -82,9 +102,7 @@ impl DesktopView {
         else {
             return &item.id;
         };
-        if row.activity_category == Some(ToolCategory::Run)
-            && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
-        {
+        if row.is_tool() && row.output_item_id.as_deref().is_none_or(|id| id == item.id) {
             &output.call_id
         } else {
             &item.id
@@ -304,6 +322,14 @@ impl DesktopView {
 
     pub(super) fn project_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem, historical: bool) {
         use vtcode_exec_events::ThreadItemDetails;
+        // Routine harness telemetry never reaches the transcript (live or
+        // restored): latency records and lifecycle chatter would drown the
+        // conversation. Failures and blocks stay visible; see the policy.
+        if let ThreadItemDetails::Harness(event) = &item.details
+            && !harness_is_user_visible(&event.event)
+        {
+            return;
+        }
         if historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
             let incoming_turn = item
                 .context
@@ -312,12 +338,12 @@ impl DesktopView {
                 .filter(|id| !id.is_empty());
             let index = self.restored_activity.iter().position(|row| {
                 row.id == output.call_id
-                    && row.activity_category == Some(ToolCategory::Run)
+                    && row.is_tool()
                     && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
                     && !matches!((row.canonical_turn_id.as_deref(), incoming_turn), (Some(a), Some(b)) if a != b)
             });
             if let Some(index) = index {
-                let (_, mut status) = describe_activity(&item.details);
+                let (_, mut status) = describe_activity(&item.details, None);
                 if ActivityState::from_status(&status) == ActivityState::Running {
                     status = tool_status::INTERRUPTED.to_string();
                 }
@@ -326,8 +352,15 @@ impl DesktopView {
                 };
                 let payload = activity_payload(&row.text);
                 row.text = activity_text(&status, payload).into();
-                row.output = Some(output.output.as_str().into());
-                row.output_item_id = Some(item.id.clone());
+                // Identity implies output: `output_for` resolves a selection by
+                // identity and falls back to the newest capture when the row is
+                // output-less, so a blank merge must not plant an identity.
+                if let Some(human) = human_output_option(&output.output) {
+                    row.output = Some(human.into());
+                    row.output_item_id = Some(item.id.clone());
+                } else {
+                    row.output = None;
+                }
                 row.app_previews.clone_from(&output.app_previews);
                 self.bump_restored_activity_revision();
                 return;
@@ -343,11 +376,17 @@ impl DesktopView {
             {
                 let title = row.title.to_string();
                 let payload = activity_payload(&row.text);
-                let status = describe_activity(&item.details).1;
+                let status = describe_activity(&item.details, None).1;
                 let text = activity_text(&status, payload);
                 self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
-                self.transcript.set_output(&row_id, Some(output.output.as_str().into()));
-                self.transcript.set_output_identity(&row_id, &item.id);
+                // Identity implies output (see the historical merge above): a
+                // blank capture stores no output and plants no identity.
+                if let Some(human) = human_output_option(&output.output) {
+                    self.transcript.set_output(&row_id, Some(human.into()));
+                    self.transcript.set_output_identity(&row_id, &item.id);
+                } else {
+                    self.transcript.set_output(&row_id, None);
+                }
                 if !output.app_previews.is_empty() {
                     self.transcript.set_app_previews(&row_id, output.app_previews.clone());
                 }
@@ -399,13 +438,13 @@ impl DesktopView {
             }
             ThreadItemDetails::FileChange(change) => self.upsert_diff_card(id, change),
             details => {
-                let (title, mut status) = describe_activity(details);
+                let (title, mut status) = describe_activity(details, self.workspace.as_deref());
                 if historical && ActivityState::from_status(&status) == ActivityState::Running {
                     status = tool_status::INTERRUPTED.to_string();
                 }
                 let payload = activity_details_summary(details, self.workspace.as_deref());
                 let text = activity_text(&status, &payload);
-                // Keep the raw aggregated output for the inspector's Output
+                // Keep the human-projected output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
                 let output = activity_output_text(details).map(gpui_kit::SharedString::from);
                 let app_previews = match details {
@@ -619,17 +658,29 @@ impl DesktopView {
 }
 
 /// Human title and lifecycle summary for a non-message activity item.
-fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String, String) {
+fn describe_activity(
+    details: &vtcode_exec_events::ThreadItemDetails,
+    workspace_root: Option<&Path>,
+) -> (String, String) {
     use vtcode_exec_events::ThreadItemDetails;
     match details {
-        ThreadItemDetails::ToolInvocation(tool) => (tool_row_gist(tool), tool_status_label(&tool.status)),
+        ThreadItemDetails::ToolInvocation(tool) => {
+            (tool_row_gist(tool, workspace_root), tool_status_label(&tool.status))
+        }
         ThreadItemDetails::ToolOutput(output) => {
             let label = status_with_exit_code(tool_status_label(&output.status), output.exit_code);
             (rust_i18n::t!("app.transcript.tool_output_title").to_string(), label)
         }
         ThreadItemDetails::CommandExecution(command) => {
             let label = status_with_exit_code(command_status_label(&command.status), command.exit_code);
-            (command.command.clone(), label)
+            // Blank commands are degenerate (real executions always name one);
+            // fall back to the CLI's own placeholder instead of a "Ran " stub.
+            let title = if command.command.trim().is_empty() {
+                "Ran command".to_string()
+            } else {
+                format!("Ran {}", command.command)
+            };
+            (title, label)
         }
         ThreadItemDetails::McpToolCall(call) => {
             let label = match call.status {

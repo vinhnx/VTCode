@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use gpui_kit::Styled;
 use gpui_kit::base::{Easing, TextView, TextViewMotion, TextViewStyle};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::theme::{ActiveTheme, ThemeColor};
+use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, ClipboardItem, ImageCacheError, ImageSource, SharedString, TestSupportExt, div, relative};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
@@ -285,68 +285,15 @@ pub(super) fn render_markdown_view(
         .into_any_element()
 }
 
-/// Tool-output body: literal prose plus an optional highlighted
-/// `Structured output:` JSON block.
+/// Tool-output body: literal text only.
 ///
-/// Splits per render over the already-bounded tail, so marker-less output
-/// pays one scan and structured output one extra JSON parse; memoize at the
-/// call site if profiling ever implicates this. Callers reuse the unsplit
-/// tail for accessibility labels and copies.
-pub(super) fn render_output_sections(
-    base_id: String,
-    tail: &SharedString,
-    colors: &ThemeColor,
-    style: TextViewStyle,
-) -> AnyElement {
-    let sections = super::output_sections::split_output_sections(tail);
-    let mut column = div().flex().flex_col().gap_2();
-    if !sections.leading.is_empty() {
-        column = column.child(sections.leading);
-    }
-    if let Some(structured) = sections.structured {
-        column = column.child(render_structured_output_block(
-            format!("{base_id}-structured"),
-            structured.json,
-            colors,
-            style,
-        ));
-        if !structured.trailing.is_empty() {
-            column = column.child(structured.trailing);
-        }
-    }
-    column.into_any_element()
-}
-
-/// Highlighted `Structured output:` JSON block for tool-output surfaces.
-///
-/// Renders the localized section label plus the validated JSON through the
-/// shared transcript Markdown path, so code-block theming, syntax
-/// highlighting, and hardening (blocked images, web-only links, copy action)
-/// match fenced code in conversation rows.
-fn render_structured_output_block(
-    base_id: String,
-    json: SharedString,
-    colors: &ThemeColor,
-    style: TextViewStyle,
-) -> AnyElement {
-    let mut fenced = String::with_capacity(json.len().saturating_add(12));
-    fenced.push_str("```json\n");
-    fenced.push_str(&json);
-    fenced.push_str("\n```");
-    div()
-        .id(base_id.clone())
-        .test_support()
-        .flex()
-        .flex_col()
-        .gap_1()
-        .child(
-            div()
-                .text_xs()
-                .text_color(super::themes::muted_text(colors))
-                .child(rust_i18n::t!("app.inspector.structured_output_label").to_string()),
-        )
-        .child(render_markdown_with_style(format!("{base_id}-code"), fenced.into(), false, style))
-        .into_any_element()
+/// Captured output is projected to its human form at store time (see
+/// `output_sections::human_output_text`), so renderers never see the
+/// `Structured output:` metadata envelope — there is no JSON branch to keep
+/// in sync here. Call sites reuse this same tail for accessibility labels
+/// and copies.
+pub(super) fn render_output_text(tail: &SharedString) -> AnyElement {
+    div().child(tail.clone()).into_any_element()
 }
 
 fn harden_transcript_text_view(text_view: TextView) -> TextView {
