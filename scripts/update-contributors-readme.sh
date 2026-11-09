@@ -6,7 +6,9 @@
 # and coding agents, and regenerates the avatar HTML between the
 # <!-- CONTRIBUTORS:START --> / <!-- CONTRIBUTORS:END --> marker comments.
 # The grid is grouped, in order: Security Advisors, Main Contributor,
-# Core Contributors (curated list), then Contributors (everyone else).
+# Core Contributors (curated list), then Contributors (everyone else). Within
+# the Core Contributors and Contributors groups, entries are ordered by latest
+# contribution date, newest first. The whole grid is center-aligned.
 # Curated security-advisor attributions (people the contributor API cannot
 # list, e.g. security researchers who reported advisories) are emitted via
 # SECURITY_ADVISORS.
@@ -57,6 +59,7 @@ note_for() {
         EvoLinkAI) echo "Evolink provider (#664)" ;;
         rs545837) echo "optional Sem code discovery docs (#783)" ;;
         georgeatparallel) echo "opt-in Parallel Search MCP config (#779)" ;;
+        apewithllm) echo "OpenLLM provider guide (#804)" ;;
         *) echo "" ;;
     esac
 }
@@ -109,6 +112,20 @@ if [[ -z "$contributors" || "$contributors" == "[]" ]]; then
     exit 0
 fi
 
+print_info "Fetching latest contribution dates from GitHub API..."
+
+# Map each contributor login to the author date of their most recent commit
+# (ISO 8601 UTC; squash merges preserve the PR author). Falls back to the
+# epoch when a login has no reachable commit, so it sorts last.
+latest_dates=$(echo "$contributors" | python3 -c "
+import json, sys
+for c in json.load(sys.stdin):
+    print(c['login'])
+" | while IFS= read -r login; do
+    d=$(gh api "repos/vinhnx/vtcode/commits?author=${login}&per_page=1" --jq '.[0].commit.author.date // empty' 2>/dev/null)
+    printf '%s\t%s\n' "$login" "${d:-1970-01-01T00:00:00Z}"
+done)
+
 print_info "Generating grouped avatar HTML..."
 
 # Group buffers accumulated through append_line's indirect expansion (${!group_var}).
@@ -152,7 +169,9 @@ emit_entry() {
     append_line "${group}_html" "$line"
 }
 
-while IFS=$'\t' read -r login contributions avatar_url html_url; do
+# The latest-date field already determined input order in the sort above; it is
+# intentionally not rendered, so read it into `_`.
+while IFS=$'\t' read -r login contributions _ avatar_url html_url; do
     if echo "$EXCLUDED_USERS" | tr ',' '\n' | grep -qx "$login"; then
         print_info "  Excluding: $login"
         continue
@@ -169,12 +188,18 @@ while IFS=$'\t' read -r login contributions avatar_url html_url; do
         emit_entry contributor "$login" "$contributions" "$avatar_url" "$html_url"
     fi
 done < <(
-    echo "$contributors" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for c in data:
-    print(f\"{c['login']}\t{c['contributions']}\t{c['avatar_url']}\t{c['html_url']}\")
-" | sort -t$'\t' -k2 -rn
+    echo "$contributors" | LATEST_DATES="$latest_dates" python3 -c "
+import json, os, sys
+dates = dict(
+    line.split('\t')
+    for line in os.environ.get('LATEST_DATES', '').splitlines()
+    if '\t' in line
+)
+for c in json.load(sys.stdin):
+    login = c['login']
+    latest = dates.get(login, '1970-01-01T00:00:00Z')
+    print(f\"{login}\t{c['contributions']}\t{latest}\t{c['avatar_url']}\t{c['html_url']}\")
+" | sort -s -t$'\t' -k3,3r
 )
 
 print_info "Adding curated security-advisor attributions..."
@@ -211,6 +236,9 @@ emit_group "Security Advisors" advisors_html
 emit_group "Main Contributor" main_html
 emit_group "Core Contributors" core_html
 emit_group "Contributors" contributor_html
+
+# Center-align the whole grid, mirroring the Support VT Code section.
+html='<div align="center">'$'\n\n'"${html}"$'\n\n'"</div>"
 
 COUNT_START="<!-- CONTRIBUTORS-COUNT:START -->"
 COUNT_END="<!-- CONTRIBUTORS-COUNT:END -->"
