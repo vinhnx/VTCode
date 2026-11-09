@@ -29,10 +29,8 @@ fi
 # Users to exclude (owner, CI accounts, coding agents, bots)
 EXCLUDED_USERS="vinhnguyenxuan-ct,vinhnx"
 
-# Regex exclusions on top of EXCLUDED_USERS: any login starting with
-# "vinhnguyenxuan" (owner's automation accounts) or ending in "[bot]" or
-# "-bot" (bots and coding agents).
-EXCLUDED_LOGIN_RE='^vinhnguyenxuan|\[[bB][oO][tT]\]$|-bot$'
+# Glob exclusions on top of EXCLUDED_USERS: the owner's automation accounts
+# (vinhnguyenxuan*) plus bots and coding agents (*[bot], *-bot).
 
 # The single main contributor (non-owner) shown after security advisors.
 MAIN_USER="kernitus"
@@ -44,9 +42,9 @@ MAIN_USER="kernitus"
 CORE_USERS="7jrxt42BxFZo4iAnN4CX oiwn Sachin-Bhat chenrui333 gzsombor leonj1 netbrah xcrong"
 CORE_MIN_COMMITS=7
 
-# Curated security-advisor attributions, tab-separated: login<TAB>title<TAB>border
+# Curated security-advisor attributions, tab-separated: login<TAB>title
 # These reporters are not commit contributors, so the API fetch cannot list them.
-SECURITY_ADVISORS=$'glmgbj233\tGHSA-wqgw-crr5-cr2p (security advisory)\t#FF6B6B\nnnfrog\tGHSA-r249-hpfx-x2w7 (security advisory)\t#FF6B6B'
+SECURITY_ADVISORS=$'glmgbj233\tGHSA-wqgw-crr5-cr2p (security advisory)\nnnfrog\tGHSA-r249-hpfx-x2w7 (security advisory)'
 
 # Optional curated notes per login, appended to the title attribute.
 note_for() {
@@ -64,21 +62,14 @@ note_for() {
     esac
 }
 
-# Border color per group tier.
-border_for_group() {
-    case "$1" in
-        main) echo "#FFD700" ;;
-        core) echo "#50C878" ;;
-        contributor) echo "#B19CD9" ;;
-        advisor) echo "#FF6B6B" ;;
-        *) echo "#B19CD9" ;;
-    esac
-}
-
+# NOTE: no inline `style` here on purpose. GitHub's README sanitizer strips
+# `style` attributes and re-renders avatars with its own look, so ring
+# borders only ever appeared in local markdown previews. Tier meaning is
+# carried by the group headings and the title text instead.
 avatar_html() {
-    local login=$1 url=$2 avatar=$3 title=$4 border=$5
-    printf '<a href="%s"><img src="%s&s=60" width="40" height="40" alt="@%s" title="%s" style="border-radius: 50%%; border: 2px solid %s;" /></a>&nbsp;' \
-        "$url" "$avatar" "$login" "$title" "$border"
+    local login=$1 url=$2 avatar=$3 title=$4
+    printf '<a href="%s"><img src="%s&s=60" width="40" height="40" alt="@%s" title="%s" /></a>&nbsp;' \
+        "$url" "$avatar" "$login" "$title"
 }
 
 README="$SCRIPT_DIR/../README.md"
@@ -114,16 +105,19 @@ fi
 
 print_info "Fetching latest contribution dates from GitHub API..."
 
-# Map each contributor login to the author date of their most recent commit
-# (ISO 8601 UTC; squash merges preserve the PR author). Falls back to the
-# epoch when a login has no reachable commit, so it sorts last.
+# Author date of a login's most recent commit (ISO 8601 UTC; squash merges
+# preserve the PR author). Empty when a login has no reachable commit.
+latest_commit_date() {
+    gh api "repos/vinhnx/vtcode/commits?author=${1}&per_page=1" \
+        --jq '.[0].commit.author.date // empty' 2>/dev/null
+}
+
 latest_dates=$(echo "$contributors" | python3 -c "
 import json, sys
 for c in json.load(sys.stdin):
     print(c['login'])
 " | while IFS= read -r login; do
-    d=$(gh api "repos/vinhnx/vtcode/commits?author=${login}&per_page=1" --jq '.[0].commit.author.date // empty' 2>/dev/null)
-    printf '%s\t%s\n' "$login" "${d:-1970-01-01T00:00:00Z}"
+    printf '%s\t%s\n' "$login" "$(latest_commit_date "$login")"
 done)
 
 print_info "Generating grouped avatar HTML..."
@@ -165,24 +159,35 @@ emit_entry() {
         title="${title} - ${note}"
     fi
     local line
-    line=$(avatar_html "$login" "$html_url" "$avatar_url" "$title" "$(border_for_group "$group")")
+    line=$(avatar_html "$login" "$html_url" "$avatar_url" "$title")
     append_line "${group}_html" "$line"
 }
 
-# The latest-date field already determined input order in the sort above; it is
-# intentionally not rendered, so read it into `_`.
-while IFS=$'\t' read -r login contributions _ avatar_url html_url; do
-    if echo "$EXCLUDED_USERS" | tr ',' '\n' | grep -qx "$login"; then
+is_excluded() {
+    case ",${EXCLUDED_USERS}," in
+        *",${1},"*) return 0 ;;
+    esac
+    case "$1" in
+        vinhnguyenxuan*|*\[Bb][Oo][Tt]|*-bot) return 0 ;;
+    esac
+    return 1
+}
+
+is_core() {
+    case " ${CORE_USERS} " in
+        *" ${1} "*) return 0 ;;
+    esac
+    [[ "$2" -ge "$CORE_MIN_COMMITS" ]]
+}
+
+while IFS=$'\t' read -r login contributions avatar_url html_url; do
+    if is_excluded "$login"; then
         print_info "  Excluding: $login"
-        continue
-    fi
-    if echo "$login" | grep -Eq "$EXCLUDED_LOGIN_RE"; then
-        print_info "  Excluding (pattern): $login"
         continue
     fi
     if [[ "$login" == "$MAIN_USER" ]]; then
         emit_entry main "$login" "$contributions" "$avatar_url" "$html_url"
-    elif echo "$CORE_USERS" | tr ' ' '\n' | grep -qx "$login" || [[ "$contributions" -ge "$CORE_MIN_COMMITS" ]]; then
+    elif is_core "$login" "$contributions"; then
         emit_entry core "$login" "$contributions" "$avatar_url" "$html_url"
     else
         emit_entry contributor "$login" "$contributions" "$avatar_url" "$html_url"
@@ -193,29 +198,30 @@ import json, os, sys
 dates = dict(
     line.split('\t')
     for line in os.environ.get('LATEST_DATES', '').splitlines()
-    if '\t' in line
+    if line
 )
-for c in json.load(sys.stdin):
-    login = c['login']
-    latest = dates.get(login, '1970-01-01T00:00:00Z')
-    print(f\"{login}\t{c['contributions']}\t{latest}\t{c['avatar_url']}\t{c['html_url']}\")
-" | sort -s -t$'\t' -k3,3r
+rows = [
+    (dates.get(c['login']) or '1970-01-01T00:00:00Z', c)
+    for c in json.load(sys.stdin)
+]
+for _, c in sorted(rows, key=lambda row: row[0], reverse=True):
+    print(f\"{c['login']}\t{c['contributions']}\t{c['avatar_url']}\t{c['html_url']}\")
+"
 )
 
 print_info "Adding curated security-advisor attributions..."
 
-while IFS=$'\t' read -r login title border; do
+while IFS=$'\t' read -r login title _; do
     if [[ -z "$login" ]]; then
         continue
     fi
-    user_json=$(gh api "users/$login" --jq '{avatar_url: .avatar_url, html_url: .html_url}' 2>/dev/null) || {
+    profile=$(gh api "users/$login" --jq '[.avatar_url, .html_url] | @tsv' 2>/dev/null) || {
         print_warning "Could not fetch profile for security advisor @$login; skipping."
         continue
     }
-    avatar_url=$(echo "$user_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['avatar_url'])")
-    html_url=$(echo "$user_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['html_url'])")
+    IFS=$'\t' read -r avatar_url html_url <<< "$profile"
     local_title="@${login} ${title}"
-    line=$(avatar_html "$login" "$html_url" "$avatar_url" "$local_title" "$border")
+    line=$(avatar_html "$login" "$html_url" "$avatar_url" "$local_title")
     append_line advisors_html "$line"
 done <<< "$SECURITY_ADVISORS"
 
@@ -243,33 +249,6 @@ html='<div align="center">'$'\n\n'"${html}"$'\n\n'"</div>"
 COUNT_START="<!-- CONTRIBUTORS-COUNT:START -->"
 COUNT_END="<!-- CONTRIBUTORS-COUNT:END -->"
 
-if ! grep -q "$COUNT_START" "$README" || ! grep -q "$COUNT_END" "$README"; then
-    print_warning "Count markers not found in README.md ($COUNT_START / $COUNT_END); skipping count update."
-else
-    count=$(printf '%s' "$html" | grep -o '<a href=' | wc -l | tr -d ' ')
-    summary="<summary>View all contributors (${count})</summary>"
-    MARKER_START="$COUNT_START" MARKER_END="$COUNT_END" README="$README" SUMMARY="$summary" python3 - <<'PY'
-import os
-
-readme_path = os.environ["README"]
-marker_start = os.environ["MARKER_START"]
-marker_end = os.environ["MARKER_END"]
-summary = os.environ["SUMMARY"]
-
-with open(readme_path) as f:
-    content = f.read()
-
-start_idx = content.index(marker_start) + len(marker_start)
-end_idx = content.index(marker_end)
-content = content[:start_idx] + summary + content[end_idx:]
-
-with open(readme_path, "w") as f:
-    f.write(content)
-
-print(f"SUCCESS: Contributor summary updated to {summary}")
-PY
-fi
-
 if [[ -z "$html" ]]; then
     print_error "No contributors to display after filtering."
     exit 1
@@ -281,21 +260,32 @@ if $DRY_RUN; then
     exit 0
 fi
 
-MARKER_START="$MARKER_START" MARKER_END="$MARKER_END" README="$README" HTML="$html" python3 - <<'PY'
+update_count=true
+if ! grep -q "$COUNT_START" "$README" || ! grep -q "$COUNT_END" "$README"; then
+    update_count=false
+    print_warning "Count markers not found in README.md ($COUNT_START / $COUNT_END); skipping count update."
+fi
+
+MARKER_START="$MARKER_START" MARKER_END="$MARKER_END" README="$README" HTML="$html" \
+    COUNT_START="$COUNT_START" COUNT_END="$COUNT_END" UPDATE_COUNT="$update_count" python3 - <<'PY'
 import os
 
 readme_path = os.environ["README"]
-marker_start = os.environ["MARKER_START"]
-marker_end = os.environ["MARKER_END"]
-html = "<!-- markdownlint-disable MD013 -->\n\n" + os.environ["HTML"] + "\n\n<!-- markdownlint-enable MD013 -->"
-
 with open(readme_path) as f:
     content = f.read()
 
-start_idx = content.index(marker_start)
-end_idx = content.index(marker_end) + len(marker_end)
-new_block = marker_start + "\n\n" + html + "\n\n" + marker_end
-content = content[:start_idx] + new_block + content[end_idx:]
+if os.environ["UPDATE_COUNT"] == "true":
+    count = os.environ["HTML"].count("<a href=")
+    summary = f"<summary>View all contributors ({count})</summary>"
+    start_idx = content.index(os.environ["COUNT_START"]) + len(os.environ["COUNT_START"])
+    end_idx = content.index(os.environ["COUNT_END"])
+    content = content[:start_idx] + summary + content[end_idx:]
+    print(f"SUCCESS: Contributor summary updated to {summary}")
+
+html = "<!-- markdownlint-disable MD013 -->\n\n" + os.environ["HTML"] + "\n\n<!-- markdownlint-enable MD013 -->"
+start_idx = content.index(os.environ["MARKER_START"])
+end_idx = content.index(os.environ["MARKER_END"]) + len(os.environ["MARKER_END"])
+content = content[:start_idx] + os.environ["MARKER_START"] + "\n\n" + html + "\n\n" + os.environ["MARKER_END"] + content[end_idx:]
 
 with open(readme_path, "w") as f:
     f.write(content)
