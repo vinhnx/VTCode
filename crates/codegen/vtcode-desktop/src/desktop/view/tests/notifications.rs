@@ -446,6 +446,7 @@ fn install_progress_drives_the_row_description_and_retires_the_action(cx: &mut T
         view.update(cx, |view, _cx| {
             view.handle_update_install_progress(vtcode_desktop_protocol::UpdateInstallState::Completed {
                 version: "0.181.8".into(),
+                needs_gatekeeper_approval: false,
             });
         });
         window.render_frame(cx);
@@ -885,6 +886,35 @@ fn system_notification_click_returns_a_disconnect_to_the_workspace(cx: &mut Test
 
     cx.update_window(window, |_, _, cx| {
         assert!(view.read(cx).current_route() == Route::Workspace, "click lands on the service status");
+    })
+    .unwrap();
+}
+
+/// A finished ad hoc-signed install names the Gatekeeper approval step: the
+/// restart alone lands on a macOS block with no guidance otherwise.
+#[gpui_kit::test]
+fn completed_install_with_gatekeeper_names_the_approval_step(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.apply_update_status(update_status_json("0.181.7", Some("0.181.8"), true));
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
+            view.handle_update_install_progress(vtcode_desktop_protocol::UpdateInstallState::Completed {
+                version: "0.181.8".into(),
+                needs_gatekeeper_approval: true,
+            });
+        });
+        window.render_frame(cx);
+
+        let props = super::super::about::AboutSettingsProps::capture(view.read(cx));
+        let description = props.update_row_description();
+        assert!(description.contains("0.181.8"), "{description}");
+        assert!(description.contains("Open Anyway"), "{description}");
+        assert!(
+            window.try_find("about-settings-install-update").is_none(),
+            "a gated install still needs a relaunch, not a reinstall"
+        );
     })
     .unwrap();
 }

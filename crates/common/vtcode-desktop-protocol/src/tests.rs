@@ -753,6 +753,11 @@ fn storage_dtos_round_trip_with_camel_case_keys() {
     // The release-notes acknowledgement rides beside the cached status read.
     assert_eq!(method::UPDATE_STATUS, "update/status");
     assert_eq!(method::UPDATE_ACKNOWLEDGE, "update/acknowledge");
+    // In-app update flow: a live check, an install that streams progress, and
+    // the progress notification itself (protocol 1.34).
+    assert_eq!(method::UPDATE_CHECK, "update/check");
+    assert_eq!(method::UPDATE_INSTALL, "update/install");
+    assert_eq!(method::UPDATE_INSTALL_PROGRESS, "update/installProgress");
 }
 
 #[tokio::test]

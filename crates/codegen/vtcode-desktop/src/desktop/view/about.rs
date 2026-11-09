@@ -134,8 +134,15 @@ impl AboutSettingsProps {
             protocol::UpdateInstallState::Installing => {
                 return rust_i18n::t!("app.settings.about.replacing").to_string();
             }
-            protocol::UpdateInstallState::Completed { version } => {
-                return format!("{} ({version})", rust_i18n::t!("app.settings.about.installed"));
+            protocol::UpdateInstallState::Completed { version, needs_gatekeeper_approval } => {
+                let done = format!("{} ({version})", rust_i18n::t!("app.settings.about.installed"));
+                if *needs_gatekeeper_approval {
+                    // Ad hoc-signed builds need a one-time manual approval
+                    // before macOS launches the replaced bundle; without this
+                    // the restart lands on a Gatekeeper block with no guidance.
+                    return rust_i18n::t!("app.settings.about.installed_gatekeeper", done = done.as_str()).to_string();
+                }
+                return done;
             }
             protocol::UpdateInstallState::Failed { message } => {
                 return rust_i18n::t!("app.settings.about.install_failed", message = message.as_str()).to_string();

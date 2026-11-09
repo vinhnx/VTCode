@@ -106,6 +106,7 @@ app:
       extracting: {en: "Unpacking update…"}
       replacing: {en: "Installing new version…"}
       installed: {en: "Update installed. Restart VT Code to finish."}
+      installed_gatekeeper: {en: "%{done} Then allow it once in System Settings › Privacy & Security (Open Anyway)."}
       install_failed: {en: "Update failed: %{message}"}
     files:
       group: {en: "Files", sv: "Filer", uk: "Файли", hi: "फ़ाइलें", pl: "Pliki", tr: "Dosyalar", es: "Archivos", fr: "Fichiers", ja: "ファイル", vi: "Tệp", de: "Dateien", it: "File", zh-CN: "文件", zh-TW: "檔案", zh-HK: "檔案", pt-BR: "Arquivos", ko: "파일", nl: "Bestanden", ru: "Файлы", id: "Berkas"}

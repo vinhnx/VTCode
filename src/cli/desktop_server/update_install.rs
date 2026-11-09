@@ -17,6 +17,7 @@ use anyhow::{Context, Result};
 use tracing::{info, warn};
 
 use super::ServiceContext;
+use super::catalog::sanitize_public_error;
 use super::send_notification;
 use crate::updater::{
     DesktopInstallOutcome, UpdateProgress, Updater, default_install_dir, desktop_supported, existing_install_dir,
@@ -59,9 +60,21 @@ pub(super) fn install_in_flight() -> bool {
 /// waiting for the configured interval. Errors propagate: a failed check is
 /// reported to the user instead of silently re-serving a stale cache.
 pub(super) async fn check_for_updates() -> Result<()> {
-    let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
-    updater.refresh_startup_update_cache().await?;
-    Ok(())
+    // Upper bound for the whole check: the service request loop only drains
+    // notifications between requests, so an unbounded check would stall every
+    // other desktop surface for the duration of a GitHub API outage (the
+    // shared retry budget spans minutes by design). The About row already
+    // renders a Checking state, so a timeout surfaces as a failed check there.
+    const UPDATE_CHECK_TIMEOUT_SECS: u64 = 30;
+    let check = async {
+        let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
+        updater.refresh_startup_update_cache().await?;
+        Ok(())
+    };
+    match tokio::time::timeout(std::time::Duration::from_secs(UPDATE_CHECK_TIMEOUT_SECS), check).await {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!("update check timed out"),
+    }
 }
 
 /// Start installing the newest release, streaming progress to `context`.
@@ -86,15 +99,24 @@ pub(super) async fn start_install(context: &ServiceContext) -> Result<UpdateInst
     let notifications = context.notifications.clone();
     publish_progress(&notifications, starting.clone()).await;
     tokio::spawn(async move {
-        let outcome = run_install(notifications.clone()).await;
+        let outcome = run_install(&notifications).await;
         match outcome {
-            Ok(version) => {
-                set_install_state(UpdateInstallState::Completed { version });
+            Ok(DesktopInstallOutcome::Installed { version, needs_gatekeeper_approval, .. }) => {
+                if needs_gatekeeper_approval {
+                    info!(target: "vtcode.desktop", "installed bundle needs one-time Gatekeeper approval");
+                }
+                set_install_state(UpdateInstallState::Completed { version, needs_gatekeeper_approval });
+                info!(target: "vtcode.desktop", "in-app update install completed");
+            }
+            Ok(DesktopInstallOutcome::UpToDate { version, .. }) => {
+                set_install_state(UpdateInstallState::Completed { version, needs_gatekeeper_approval: false });
                 info!(target: "vtcode.desktop", "in-app update install completed");
             }
             Err(error) => {
-                // Sanitized by the protocol contract: never a raw path or URL.
-                let message = format!("{error:#}");
+                // Sanitized like every other service error (secrets stripped,
+                // length-capped), never the raw chain: the message renders in
+                // the About row, and paths add nothing there.
+                let message = sanitize_public_error(&format!("{error:#}"));
                 warn!(target: "vtcode.desktop", %error, "in-app update install failed");
                 set_install_state(UpdateInstallState::Failed { message });
             }
@@ -107,8 +129,8 @@ pub(super) async fn start_install(context: &ServiceContext) -> Result<UpdateInst
 
 /// Drive the bundle install, mapping updater phases onto the wire state.
 async fn run_install(
-    notifications: tokio::sync::mpsc::Sender<vtcode_desktop_protocol::Notification>,
-) -> Result<String> {
+    notifications: &tokio::sync::mpsc::Sender<vtcode_desktop_protocol::Notification>,
+) -> Result<DesktopInstallOutcome> {
     let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
     // Updates install in place so a system-wide install is never duplicated
     // per-user; a fresh install lands in ~/Applications.
@@ -139,15 +161,7 @@ async fn run_install(
     })
     .await?;
 
-    match outcome {
-        DesktopInstallOutcome::Installed { version, needs_gatekeeper_approval, .. } => {
-            if needs_gatekeeper_approval {
-                info!(target: "vtcode.desktop", "installed bundle needs one-time Gatekeeper approval");
-            }
-            Ok(version)
-        }
-        DesktopInstallOutcome::UpToDate { version, .. } => Ok(version),
-    }
+    Ok(outcome)
 }
 
 async fn publish_progress(
@@ -187,9 +201,18 @@ mod tests {
         set_install_state(UpdateInstallState::Installing);
         assert!(install_in_flight(), "installing counts as in flight");
 
-        set_install_state(UpdateInstallState::Completed { version: "0.181.8".into() });
+        set_install_state(UpdateInstallState::Completed {
+            version: "0.181.8".into(),
+            needs_gatekeeper_approval: true,
+        });
         assert!(!install_in_flight(), "a finished install is not in flight");
-        assert_eq!(install_state(), UpdateInstallState::Completed { version: "0.181.8".into() });
+        assert_eq!(
+            install_state(),
+            UpdateInstallState::Completed {
+                version: "0.181.8".into(),
+                needs_gatekeeper_approval: true
+            }
+        );
 
         set_install_state(UpdateInstallState::Idle);
     }

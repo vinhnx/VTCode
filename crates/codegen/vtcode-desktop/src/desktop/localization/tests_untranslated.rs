@@ -131,6 +131,13 @@ fn update_install_copy_resolves_in_every_language() {
         assert!(unknown.contains("1.0 MB"), "{locale} dropped the byte count");
         let installed = rust_i18n::t!("app.settings.about.installed", locale = locale).to_string();
         assert!(!installed.is_empty(), "{locale}/installed");
+        let gated = rust_i18n::t!(
+            "app.settings.about.installed_gatekeeper",
+            locale = locale,
+            done = "Update installed (0.181.8)"
+        )
+        .to_string();
+        assert!(gated.contains("Open Anyway"), "{locale} dropped the approval step");
         let failed = rust_i18n::t!("app.settings.about.install_failed", locale = locale, message = "boom").to_string();
         assert!(failed.contains("boom"), "{locale} dropped the failure message");
     }

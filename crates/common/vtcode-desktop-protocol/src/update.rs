@@ -85,6 +85,12 @@ pub enum UpdateInstallState {
     Completed {
         /// Version now on disk.
         version: String,
+        /// The replaced bundle needs a one-time Gatekeeper approval before
+        /// macOS launches it (ad hoc-signed builds): the client must say so
+        /// instead of only prompting a restart. `#[serde(default)]` keeps
+        /// older services decodable.
+        #[serde(default)]
+        needs_gatekeeper_approval: bool,
     },
     /// The install failed.
     Failed {
@@ -171,7 +177,10 @@ mod tests {
             UpdateInstallState::Verifying,
             UpdateInstallState::Extracting,
             UpdateInstallState::Installing,
-            UpdateInstallState::Completed { version: "0.181.8".into() },
+            UpdateInstallState::Completed {
+                version: "0.181.8".into(),
+                needs_gatekeeper_approval: false,
+            },
             UpdateInstallState::Failed { message: "network unreachable".into() },
         ];
 
@@ -181,6 +190,26 @@ mod tests {
             assert_eq!(decoded, state);
             assert!(encoded.get("phase").is_some_and(|phase| phase.is_string()), "{encoded}");
         }
+
+        // An ad hoc-signed bundle needs its approval flag to survive the wire.
+        let gated = UpdateInstallState::Completed {
+            version: "0.181.8".into(),
+            needs_gatekeeper_approval: true,
+        };
+        let decoded: UpdateInstallState = serde_json::from_value(serde_json::to_value(&gated).unwrap()).unwrap();
+        assert_eq!(decoded, gated);
+
+        // Older services send no approval flag at all; that must read as a
+        // build that needs no extra step, not as a decode failure.
+        let legacy: UpdateInstallState =
+            serde_json::from_value(serde_json::json!({ "phase": "completed", "version": "0.181.8" })).unwrap();
+        assert_eq!(
+            legacy,
+            UpdateInstallState::Completed {
+                version: "0.181.8".into(),
+                needs_gatekeeper_approval: false
+            }
+        );
 
         assert_eq!(
             serde_json::to_value(UpdateInstallState::Downloading { downloaded: 7, total: None }).unwrap(),
@@ -201,7 +230,13 @@ mod tests {
     #[test]
     fn only_active_phases_report_an_install_in_flight() {
         assert!(!UpdateInstallState::Idle.is_in_flight());
-        assert!(!UpdateInstallState::Completed { version: "0.181.8".into() }.is_in_flight());
+        assert!(
+            !UpdateInstallState::Completed {
+                version: "0.181.8".into(),
+                needs_gatekeeper_approval: true
+            }
+            .is_in_flight()
+        );
         assert!(!UpdateInstallState::Failed { message: "boom".into() }.is_in_flight());
         assert!(UpdateInstallState::Downloading { downloaded: 1, total: Some(2) }.is_in_flight());
         assert!(UpdateInstallState::Verifying.is_in_flight());

@@ -324,6 +324,10 @@ desktop app is already current, the command reports that and never prompts.
   which can still build from source.
 - Outside an update, `vtcode desktop --install` installs or updates the app on its own and reports the installed
   `VT Code.app` path.
+- The running app updates itself from Settings → About: Check for updates runs a live check (the row shows
+  checking progress), and an offered update gains an Install update action with streamed download/verify/install
+  progress. A finished ad hoc-signed install names the one-time Gatekeeper approval (System Settings › Privacy &
+  Security → Open Anyway) before relaunch; notarized builds relaunch without it.
 
 Homebrew cask installs are managed by Homebrew instead: `brew upgrade --cask vinhnx/tap/vtcode-desktop` updates the
 bundle (macOS 15+, Apple Silicon). The cask places the app in `/Applications`, which `vtcode desktop` and

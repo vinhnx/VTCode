@@ -162,10 +162,13 @@ impl DesktopView {
                     }
                     if method == protocol::method::UPDATE_INSTALL {
                         // A rejected install must not leave the UI showing an
-                        // in-flight download; report the failure instead.
+                        // in-flight download; report the failure instead and
+                        // skip the generic banner below, which would repeat
+                        // the raw error the row already sanitizes.
                         self.update_install_state = protocol::UpdateInstallState::Failed {
                             message: rust_i18n::t!("app.service.invalid_updates").to_string(),
                         };
+                        return;
                     }
                     if method == protocol::method::WORKSPACE_REVIEW {
                         self.fail_workspace_review(error);
