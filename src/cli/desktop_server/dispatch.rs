@@ -388,6 +388,18 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             let status = update_status_snapshot()?;
             Ok((serde_json::to_value(status)?, false))
         }
+        method::UPDATE_CHECK => {
+            // Unlike `update/status`, this one does network I/O: it refreshes
+            // the cache so a release published since the last check is
+            // visible. A failure propagates instead of re-serving stale data.
+            update_install::check_for_updates().await?;
+            let status = update_status_snapshot()?;
+            Ok((serde_json::to_value(status)?, false))
+        }
+        method::UPDATE_INSTALL => {
+            let state = update_install::start_install(context).await?;
+            Ok((serde_json::to_value(state)?, false))
+        }
         method::UPDATE_ACKNOWLEDGE => {
             // Best-effort: the banner already rendered, so a cache write
             // failure only risks one extra reminder next launch.

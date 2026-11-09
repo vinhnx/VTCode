@@ -806,6 +806,10 @@ struct DesktopView {
     webmcp_notice: Option<webmcp::WebmcpNotice>,
     update_status: Option<protocol::UpdateStatusSnapshot>,
     update_request_pending: bool,
+    /// Live install state, updated by `update/installProgress`. Kept beside
+    /// the cached snapshot rather than inside it: progress is ephemeral and
+    /// must survive a status refresh that carries no install field.
+    update_install_state: protocol::UpdateInstallState,
     cli_config_settings: Option<Rc<protocol::ConfigSettingsSnapshot>>,
     /// Memoized catalog grouping; refreshed on every snapshot/query change.
     /// `refresh_config_catalog` is the only writer besides tests.

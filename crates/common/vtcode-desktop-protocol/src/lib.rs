@@ -11,7 +11,7 @@ pub mod handoff_url;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 33 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 34 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -301,7 +301,7 @@ pub use turn::{
 };
 
 pub mod update;
-pub use update::UpdateStatusSnapshot;
+pub use update::{UpdateInstallState, UpdateStatusSnapshot};
 
 pub mod webmcp;
 pub use webmcp::{WebmcpBridgeStatus, WebmcpPairParams, WebmcpPairResult};

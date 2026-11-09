@@ -295,6 +295,7 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
         current_release_seen,
         channel: Some(updater.config().channel.to_string()),
         check_due: check.should_refresh,
+        install: install_state(),
     })
 }
 

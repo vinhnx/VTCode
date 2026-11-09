@@ -22,6 +22,38 @@ impl DesktopView {
         }
     }
 
+    /// Re-run the update check against GitHub instead of re-reading the cache.
+    ///
+    /// `update/status` is read-only, so the old "Check for updates" button
+    /// returned an identical snapshot and looked inert. This one does network
+    /// I/O and reports the refreshed result, which is what the label promises.
+    pub(super) fn request_update_check(&mut self) {
+        if self.update_request_pending {
+            return;
+        }
+        self.update_request_pending = true;
+        if !self.request(protocol::method::UPDATE_CHECK, json!({})) {
+            self.update_request_pending = false;
+        }
+    }
+
+    /// Ask the service to install the newest release. Progress arrives on
+    /// `update/installProgress`; the response only starts the install.
+    ///
+    /// The optimistic `Downloading` state is reverted when the request cannot
+    /// even be sent, so a dead transport never leaves the row claiming a
+    /// download that never began. A request the service *rejects* is handled
+    /// by the error path in `handle.rs`, which records the failure.
+    pub(super) fn request_update_install(&mut self) {
+        if self.update_install_state.is_in_flight() {
+            return;
+        }
+        self.update_install_state = protocol::UpdateInstallState::Downloading { downloaded: 0, total: None };
+        if !self.request(protocol::method::UPDATE_INSTALL, json!({})) {
+            self.update_install_state = protocol::UpdateInstallState::Idle;
+        }
+    }
+
     /// Fetch the status only when no snapshot is stored yet. The Settings →
     /// About row reads a snapshot and renders an inert "no notes" state without
     /// one, so a missing snapshot is the one case worth a round-trip. Called
@@ -38,12 +70,30 @@ impl DesktopView {
         self.apply_update_status(result);
     }
 
+    /// `update/check` and `update/status` share a snapshot shape, so one
+    /// applier serves both: the live check simply refreshes what is displayed.
+    pub(super) fn handle_update_check_response(&mut self, result: Value) {
+        self.update_request_pending = false;
+        self.apply_update_status(result);
+    }
+
+    /// Apply an `update/installProgress` notification. Coalescable: only the
+    /// newest phase matters, so a burst of download ticks keeps the last one.
+    pub(super) fn handle_update_install_progress(&mut self, state: protocol::UpdateInstallState) {
+        self.update_install_state = state;
+    }
+
     /// Store a status snapshot and re-derive the release-notes banner. Shared
     /// by the status request and the acknowledgement response (which also
     /// carries a snapshot) without touching the status-request in-flight flag.
     pub(super) fn apply_update_status(&mut self, result: Value) {
         match serde_json::from_value::<protocol::UpdateStatusSnapshot>(result) {
             Ok(status) => {
+                // The snapshot is the service's authoritative install state:
+                // adopting it keeps a restarted client (or one that missed a
+                // progress tick) consistent with the install. Progress
+                // notifications still drive the live row between refreshes.
+                self.update_install_state = status.install.clone();
                 self.update_status = Some(status);
                 // The viewer implies viewable content; a refresh that clears
                 // the open mode (updated elsewhere) closes it rather than

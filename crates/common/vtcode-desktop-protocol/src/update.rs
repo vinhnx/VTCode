@@ -48,6 +48,57 @@ pub struct UpdateStatusSnapshot {
     /// Whether the configured check interval has elapsed since the last check.
     #[serde(default)]
     pub check_due: bool,
+    /// State of an in-app update install. The service owns install policy and
+    /// the download itself; clients render this and never derive progress from
+    /// anything else, so a re-render cannot disagree with the install.
+    #[serde(default)]
+    pub install: UpdateInstallState,
+}
+
+/// Phase of an in-app update install, carried by [`UpdateStatusSnapshot`] and
+/// the `update/installProgress` notification.
+///
+/// Internally tagged so the wire form names its own phase
+/// (`{"phase":"downloading","downloaded":10,"total":100}`), which keeps a
+/// client from mislabeling a phase it did not expect.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "phase", rename_all_fields = "camelCase")]
+pub enum UpdateInstallState {
+    /// No install has run, or the last one was superseded by a newer check.
+    #[default]
+    Idle,
+    /// Downloading the release archive.
+    Downloading {
+        /// Bytes written so far.
+        downloaded: u64,
+        /// Total archive size when the server sent `Content-Length`; `None`
+        /// otherwise, which renders as a byte count rather than a percentage.
+        total: Option<u64>,
+    },
+    /// Checksum metadata resolved; hashing the downloaded archive.
+    Verifying,
+    /// Unpacking the archive and staging the new bundle.
+    Extracting,
+    /// Replacing the installed bundle on disk.
+    Installing,
+    /// The install finished.
+    Completed {
+        /// Version now on disk.
+        version: String,
+    },
+    /// The install failed.
+    Failed {
+        /// Sanitized reason; never a raw path or URL.
+        message: String,
+    },
+}
+
+impl UpdateInstallState {
+    /// Whether an install is currently in flight, so a client can disable the
+    /// install action instead of starting a second concurrent one.
+    pub fn is_in_flight(&self) -> bool {
+        matches!(self, Self::Downloading { .. } | Self::Verifying | Self::Extracting | Self::Installing)
+    }
 }
 
 #[cfg(test)]
@@ -67,6 +118,7 @@ mod tests {
             current_release_seen: true,
             channel: Some("stable".into()),
             check_due: false,
+            install: UpdateInstallState::Downloading { downloaded: 1024, total: Some(2048) },
         };
         let decoded: UpdateStatusSnapshot = serde_json::from_value(serde_json::to_value(&snapshot).unwrap()).unwrap();
         assert_eq!(decoded, snapshot);
@@ -85,6 +137,7 @@ mod tests {
             current_release_seen: false,
             channel: None,
             check_due: true,
+            install: UpdateInstallState::Idle,
         };
         let decoded_quiet: UpdateStatusSnapshot =
             serde_json::from_value(serde_json::to_value(&quiet).unwrap()).unwrap();
@@ -102,5 +155,57 @@ mod tests {
         assert!(!legacy.current_release_seen);
         assert!(legacy.channel.is_none());
         assert!(!legacy.check_due);
+        assert_eq!(legacy.install, UpdateInstallState::Idle);
+    }
+
+    /// The install state is internally tagged, so the wire form names its own
+    /// phase and a client cannot mislabel one it did not expect.
+    #[test]
+    fn install_state_round_trips_with_a_named_phase() {
+        let states = [
+            UpdateInstallState::Idle,
+            UpdateInstallState::Downloading { downloaded: 1846, total: Some(18462109) },
+            // Asymmetric input: a missing Content-Length must survive as null
+            // rather than collapsing to a zero total that renders 0%.
+            UpdateInstallState::Downloading { downloaded: 4096, total: None },
+            UpdateInstallState::Verifying,
+            UpdateInstallState::Extracting,
+            UpdateInstallState::Installing,
+            UpdateInstallState::Completed { version: "0.181.8".into() },
+            UpdateInstallState::Failed { message: "network unreachable".into() },
+        ];
+
+        for state in states {
+            let encoded = serde_json::to_value(&state).unwrap();
+            let decoded: UpdateInstallState = serde_json::from_value(encoded.clone()).unwrap();
+            assert_eq!(decoded, state);
+            assert!(encoded.get("phase").is_some_and(|phase| phase.is_string()), "{encoded}");
+        }
+
+        assert_eq!(
+            serde_json::to_value(UpdateInstallState::Downloading { downloaded: 7, total: None }).unwrap(),
+            serde_json::json!({ "phase": "downloading", "downloaded": 7, "total": null })
+        );
+    }
+
+    /// An older service sends no install field at all; a newer client must
+    /// read that as "nothing running" rather than failing to decode.
+    #[test]
+    fn a_payload_without_install_decodes_as_idle() {
+        let decoded: UpdateStatusSnapshot =
+            serde_json::from_value(serde_json::json!({ "currentVersion": "0.181.7" })).unwrap();
+
+        assert_eq!(decoded.install, UpdateInstallState::Idle);
+    }
+
+    #[test]
+    fn only_active_phases_report_an_install_in_flight() {
+        assert!(!UpdateInstallState::Idle.is_in_flight());
+        assert!(!UpdateInstallState::Completed { version: "0.181.8".into() }.is_in_flight());
+        assert!(!UpdateInstallState::Failed { message: "boom".into() }.is_in_flight());
+        assert!(UpdateInstallState::Downloading { downloaded: 1, total: Some(2) }.is_in_flight());
+        assert!(UpdateInstallState::Verifying.is_in_flight());
+        assert!(UpdateInstallState::Extracting.is_in_flight());
+        assert!(UpdateInstallState::Installing.is_in_flight());
     }
 }

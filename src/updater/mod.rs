@@ -17,7 +17,7 @@ use vtcode_config::update::UpdateConfig;
 
 pub(crate) use desktop::{
     DesktopInstallOutcome, default_install_dir, desktop_macos_major, desktop_supported, existing_install_dir,
-    install_desktop_app, installed_desktop_version,
+    install_desktop_app, install_desktop_app_with_progress, installed_desktop_version,
 };
 pub(crate) use install_source::InstallSource;
 pub(crate) use interactive::{
@@ -140,13 +140,17 @@ impl Updater {
             return Ok(None);
         }
 
-        let latest = match github::fetch_latest_release_info(self.config.download_timeout_secs).await {
-            Ok(info) => info,
-            Err(err) => {
-                let _ = cache::record_failed_check();
-                return Err(err);
-            }
-        };
+        // Channel-aware: a beta/nightly follower must check its own channel,
+        // not stable. For stable this resolves to the same latest endpoint
+        // the old stable-only helper used.
+        let latest =
+            match github::fetch_latest_for_channel(self.config.download_timeout_secs, &self.config.channel).await {
+                Ok(info) => info,
+                Err(err) => {
+                    let _ = cache::record_failed_check();
+                    return Err(err);
+                }
+            };
 
         let latest_is_newer = latest.version > self.current_version;
         cache::record_successful_check_with_notes(

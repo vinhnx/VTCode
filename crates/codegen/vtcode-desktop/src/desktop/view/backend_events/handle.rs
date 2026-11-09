@@ -157,8 +157,15 @@ impl DesktopView {
                         // retired itself. Never banner for bookkeeping.
                         return;
                     }
-                    if method == protocol::method::UPDATE_STATUS {
+                    if method == protocol::method::UPDATE_STATUS || method == protocol::method::UPDATE_CHECK {
                         self.update_request_pending = false;
+                    }
+                    if method == protocol::method::UPDATE_INSTALL {
+                        // A rejected install must not leave the UI showing an
+                        // in-flight download; report the failure instead.
+                        self.update_install_state = protocol::UpdateInstallState::Failed {
+                            message: rust_i18n::t!("app.service.invalid_updates").to_string(),
+                        };
                     }
                     if method == protocol::method::WORKSPACE_REVIEW {
                         self.fail_workspace_review(error);
@@ -307,6 +314,22 @@ impl DesktopView {
                     }
                     protocol::method::UPDATE_STATUS => {
                         self.handle_update_status_response(result);
+                    }
+                    protocol::method::UPDATE_CHECK => {
+                        self.handle_update_check_response(result);
+                    }
+                    protocol::method::UPDATE_INSTALL => {
+                        // The response only acknowledges the start; phases
+                        // arrive on `update/installProgress`. Adopt the echoed
+                        // state so the UI never lags a rejected install.
+                        match serde_json::from_value::<protocol::UpdateInstallState>(result) {
+                            Ok(state) => self.update_install_state = state,
+                            Err(_) => {
+                                self.update_install_state = protocol::UpdateInstallState::Failed {
+                                    message: rust_i18n::t!("app.service.invalid_updates").to_string(),
+                                };
+                            }
+                        }
                     }
                     protocol::method::UPDATE_ACKNOWLEDGE => {
                         // Enhancement, not a requirement: an older service
@@ -707,6 +730,10 @@ impl DesktopView {
                 self.status = rust_i18n::t!("app.service.awaiting_decision").to_string();
             }
             BackendEvent::UiProgress(progress) => self.handle_ui_progress(progress, cx),
+            BackendEvent::UpdateInstallProgress(state) => {
+                self.handle_update_install_progress(state);
+                cx.notify();
+            }
             BackendEvent::TurnQueueStatus(status) => {
                 let Ok(snapshot) = serde_json::from_value::<protocol::TurnQueueStatus>(status) else {
                     return;

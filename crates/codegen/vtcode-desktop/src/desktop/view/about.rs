@@ -8,6 +8,7 @@
 //! project actions. Both the fallback dialog and the Settings → About pane use
 //! the monochrome V ([`brand_mark`]) rather than the Dock app-icon art.
 use super::bootstrap::HELP_URL;
+use super::storage::format_bytes;
 use super::updates::ChangelogMode;
 use super::*;
 
@@ -67,6 +68,15 @@ fn show_native_about_panel() -> bool {
 pub(super) struct AboutSettingsProps {
     pub(super) changelog: Option<ChangelogReleaseProps>,
     pub(super) update_status_description: String,
+    /// Whether a live check is in flight, so the row can show progress and
+    /// refuse a second one instead of looking inert.
+    pub(super) update_check_pending: bool,
+    /// Live install state. `Idle` outside an install.
+    pub(super) update_install: protocol::UpdateInstallState,
+    /// Whether the row offers an install: an update is available and none is
+    /// running. Kept out of the state enum because it is a policy decision,
+    /// not a phase.
+    pub(super) can_install_update: bool,
 }
 
 /// One readable release: the version the viewer will title, plus the mode it
@@ -85,7 +95,53 @@ impl AboutSettingsProps {
                 .best_changelog_release()
                 .map(|(version, mode)| ChangelogReleaseProps { version: version.to_owned(), mode }),
             update_status_description: view.update_status_description(),
+            update_check_pending: view.update_request_pending,
+            update_install: view.update_install_state.clone(),
+            // An install is offered only while one is not already running: the
+            // service refuses a second concurrent install anyway, so offering
+            // the action would just produce a rejection.
+            can_install_update: view.can_offer_update_install(),
         }
+    }
+
+    /// The row's description: the live install phase while one runs, else the
+    /// cached status. One line, so a long download never displaces the actions.
+    pub(super) fn update_row_description(&self) -> String {
+        match &self.update_install {
+            protocol::UpdateInstallState::Idle => {}
+            protocol::UpdateInstallState::Downloading { downloaded, total } => {
+                return match total {
+                    Some(total) if *total > 0 => rust_i18n::t!(
+                        "app.settings.about.download_progress",
+                        downloaded = format_bytes(*downloaded),
+                        total = format_bytes(*total)
+                    )
+                    .to_string(),
+                    // No Content-Length: a byte count, never a fake percentage.
+                    _ => rust_i18n::t!(
+                        "app.settings.about.download_progress_unknown_total",
+                        downloaded = format_bytes(*downloaded)
+                    )
+                    .to_string(),
+                };
+            }
+            protocol::UpdateInstallState::Verifying => {
+                return rust_i18n::t!("app.settings.about.verifying").to_string();
+            }
+            protocol::UpdateInstallState::Extracting => {
+                return rust_i18n::t!("app.settings.about.extracting").to_string();
+            }
+            protocol::UpdateInstallState::Installing => {
+                return rust_i18n::t!("app.settings.about.replacing").to_string();
+            }
+            protocol::UpdateInstallState::Completed { version } => {
+                return format!("{} ({version})", rust_i18n::t!("app.settings.about.installed"));
+            }
+            protocol::UpdateInstallState::Failed { message } => {
+                return rust_i18n::t!("app.settings.about.install_failed", message = message.as_str()).to_string();
+            }
+        }
+        self.update_status_description.clone()
     }
 }
 
@@ -213,34 +269,65 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// Update-status row: the cached snapshot plus a manual check. Release
-    /// notes have their own row below, so this one carries only the check
-    /// action and keeps that stable slot in every state.
+    /// Update-status row: the cached snapshot, a live check, and — when an
+    /// update is on offer — the install action itself. Release notes have
+    /// their own row below, so this one carries only update actions and keeps
+    /// that stable control slot in every state.
     fn about_update_status_row(
         props: &AboutSettingsProps,
         view: &Entity<Self>,
         colors: &gpui_kit::component::theme::ThemeColor,
     ) -> AnyElement {
+        let busy = props.update_check_pending || props.update_install.is_in_flight();
+        let check_label = if props.update_check_pending {
+            rust_i18n::t!("app.settings.about.checking").to_string()
+        } else {
+            rust_i18n::t!("app.settings.about.check_for_updates").to_string()
+        };
+
+        let controls = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(
+                desktop_button("about-settings-check-for-updates")
+                    .label(check_label)
+                    .desktop_disabled(busy)
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.request_update_check();
+                                cx.notify();
+                            });
+                        }
+                    }),
+            )
+            .when(props.can_install_update, |row| {
+                row.child(
+                    desktop_primary_button("about-settings-install-update")
+                        .label(rust_i18n::t!("app.settings.about.install_update").to_string())
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| {
+                                    view.request_update_install();
+                                    cx.notify();
+                                });
+                            }
+                        }),
+                )
+            });
+
         settings_row(
             rust_i18n::t!("app.settings.about.update_status").to_string(),
-            props.update_status_description.clone(),
-            desktop_button("about-settings-check-for-updates")
-                .label(rust_i18n::t!("app.settings.about.check_for_updates").to_string())
-                .on_click({
-                    let view = view.clone();
-                    move |_, _: &mut Window, cx: &mut App| {
-                        view.update(cx, |view, cx| {
-                            view.request_update_status();
-                            cx.notify();
-                        });
-                    }
-                }),
+            props.update_row_description(),
+            controls,
             colors,
         )
         .into_any_element()
     }
-
-    fn update_status_description(&self) -> String {
+    pub(super) fn update_status_description(&self) -> String {
         let Some(status) = self.update_status.as_ref() else {
             return rust_i18n::t!("app.settings.about.status_unavailable").to_string();
         };
@@ -251,6 +338,22 @@ impl DesktopView {
                 format!("{} ({})", rust_i18n::t!("app.settings.about.up_to_date"), status.current_version)
             }
         }
+    }
+
+    /// Whether the row should offer an install. Requires a cached offer, no
+    /// install already running, and no finished install: the service refuses
+    /// a concurrent install, and a completed one needs a relaunch rather
+    /// than a reinstall of the same bundle.
+    pub(super) fn can_offer_update_install(&self) -> bool {
+        if self.update_install_state.is_in_flight() {
+            return false;
+        }
+        if matches!(self.update_install_state, protocol::UpdateInstallState::Completed { .. }) {
+            return false;
+        }
+        self.update_status
+            .as_ref()
+            .is_some_and(|status| status.update_available && status.latest_version.is_some())
     }
 
     /// Release-notes row: offers whichever release a reader can actually open

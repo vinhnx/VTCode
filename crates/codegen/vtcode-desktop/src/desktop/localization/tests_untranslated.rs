@@ -99,3 +99,40 @@ fn swipe_navigation_copy_resolves_in_every_language() {
         "Forward to Demo"
     );
 }
+
+#[test]
+fn update_install_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: every locale
+    // carries the English text, so this pins resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.about.install_update",
+            "app.settings.about.checking",
+            "app.settings.about.verifying",
+            "app.settings.about.extracting",
+            "app.settings.about.replacing",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+        let progress = rust_i18n::t!(
+            "app.settings.about.download_progress",
+            locale = locale,
+            downloaded = "1.0 MB",
+            total = "2.0 MB"
+        )
+        .to_string();
+        assert!(progress.contains("1.0 MB") && progress.contains("2.0 MB"), "{locale} dropped byte counts");
+        let unknown =
+            rust_i18n::t!("app.settings.about.download_progress_unknown_total", locale = locale, downloaded = "1.0 MB")
+                .to_string();
+        assert!(unknown.contains("1.0 MB"), "{locale} dropped the byte count");
+        let installed = rust_i18n::t!("app.settings.about.installed", locale = locale).to_string();
+        assert!(!installed.is_empty(), "{locale}/installed");
+        let failed = rust_i18n::t!("app.settings.about.install_failed", locale = locale, message = "boom").to_string();
+        assert!(failed.contains("boom"), "{locale} dropped the failure message");
+    }
+    assert_eq!(rust_i18n::t!("app.settings.about.install_update", locale = "en").to_string(), "Install update");
+}

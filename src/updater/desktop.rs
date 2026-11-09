@@ -17,6 +17,7 @@ use super::Updater;
 use super::download;
 use super::github::{self, ReleaseAsset};
 use super::install_source;
+use super::progress::UpdateProgress;
 
 const DESKTOP_APP_NAME: &str = "VT Code.app";
 const DESKTOP_ASSET_PREFIX: &str = "vtcode-desktop-";
@@ -72,6 +73,22 @@ fn parse_macos_major(output: &str) -> Option<u32> {
 /// Re-checks the installed version against the live latest release so a stale
 /// prompt-time check never triggers a redundant download.
 pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -> Result<DesktopInstallOutcome> {
+    install_desktop_app_with_progress(updater, install_dir, |_| {}).await
+}
+
+/// [`install_desktop_app`] with per-phase progress reporting.
+///
+/// The desktop app drives its install UI from these events instead of a bare
+/// spinner, so a multi-minute download stays legible. The CLI passes a no-op
+/// and keeps its own byte-progress rendering.
+pub(crate) async fn install_desktop_app_with_progress<F>(
+    updater: &Updater,
+    install_dir: &Path,
+    mut on_progress: F,
+) -> Result<DesktopInstallOutcome>
+where
+    F: FnMut(UpdateProgress) + Send,
+{
     if !desktop_supported() {
         bail!("the VT Code desktop app requires macOS");
     }
@@ -110,10 +127,19 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
     // bytes, so a checksum outage — or a release that published none — fails
     // before the archive is downloaded and discarded.
     let expected = download::download_expected_checksum(&release.assets, &asset.name, timeout).await?;
-    download::download_asset(asset, &archive_path, timeout, true, None::<&mut fn(u64, Option<u64>)>)
-        .await
-        .context("failed to download desktop app archive")?;
+    download::download_asset(
+        asset,
+        &archive_path,
+        timeout,
+        true,
+        Some(&mut |downloaded, total| {
+            on_progress(UpdateProgress::Downloading { downloaded, total });
+        }),
+    )
+    .await
+    .context("failed to download desktop app archive")?;
 
+    on_progress(UpdateProgress::VerifyingChecksum);
     // `verify_file_checksum` does blocking `std::fs::read` + hashing; run it
     // on the blocking pool so the async runtime is not stalled.
     let archive_path_for_checksum = archive_path.clone();
@@ -122,6 +148,7 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
         .context("desktop checksum task panicked")?
         .context("downloaded desktop archive failed checksum verification")?;
 
+    on_progress(UpdateProgress::Extracting);
     let extract_directory = temporary_directory.path().join("extracted");
     let destination = install_dir.join(DESKTOP_APP_NAME);
     let installed =

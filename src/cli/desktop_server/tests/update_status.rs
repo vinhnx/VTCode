@@ -148,3 +148,63 @@ async fn update_acknowledge_records_the_running_version_as_seen() {
 
     crate::updater::set_test_update_cache_dir(previous);
 }
+
+/// The snapshot carries the live install state, so a client that missed a
+/// progress tick (or just launched mid-install) still renders the truth.
+#[tokio::test]
+#[serial_test::serial]
+async fn update_status_carries_the_live_install_state() {
+    let directory = tempfile::tempdir().expect("workspace");
+    let workspace = directory.path().to_path_buf();
+    let cache_dir = tempfile::tempdir().expect("cache");
+    let previous = crate::updater::set_test_update_cache_dir(Some(cache_dir.path().to_path_buf()));
+    update_install::set_test_install_state(protocol::UpdateInstallState::Downloading {
+        downloaded: 1024,
+        total: Some(2048),
+    });
+
+    let (context, _) = test_service_context(test_startup_context(&workspace), workspace);
+    context.state.lock().await.initialized = true;
+    let request = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::String("update-status-install".into()),
+        method: protocol::method::UPDATE_STATUS.into(),
+        params: json!({}),
+    };
+    let (result, _) = handle_request(&context, &request).await.expect("update status");
+    let status: protocol::UpdateStatusSnapshot = serde_json::from_value(result).expect("snapshot");
+    assert_eq!(
+        status.install,
+        protocol::UpdateInstallState::Downloading { downloaded: 1024, total: Some(2048) },
+        "the snapshot must carry the live install, not a stale Idle"
+    );
+
+    update_install::set_test_install_state(protocol::UpdateInstallState::Idle);
+    crate::updater::set_test_update_cache_dir(previous);
+}
+
+/// A second install while one runs is refused instead of racing two bundle
+/// replacements. The guard is exercised without touching the network or the
+/// app bundle by seeding the in-flight state directly.
+#[tokio::test]
+#[serial_test::serial]
+async fn update_install_refuses_a_second_concurrent_install() {
+    let directory = tempfile::tempdir().expect("workspace");
+    let workspace = directory.path().to_path_buf();
+    update_install::set_test_install_state(protocol::UpdateInstallState::Installing);
+
+    let (context, _) = test_service_context(test_startup_context(&workspace), workspace);
+    context.state.lock().await.initialized = true;
+    let request = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::String("update-install-busy".into()),
+        method: protocol::method::UPDATE_INSTALL.into(),
+        params: json!({}),
+    };
+    let error = handle_request(&context, &request)
+        .await
+        .expect_err("concurrent install must be refused");
+    assert!(error.to_string().contains("already in progress"), "{error:#}");
+
+    update_install::set_test_install_state(protocol::UpdateInstallState::Idle);
+}

@@ -292,14 +292,6 @@ pub(super) async fn fetch_latest_release(
     }
 }
 
-pub(super) async fn fetch_latest_release_info(timeout_secs: u64) -> Result<UpdateInfo> {
-    let release = fetch_latest_release_metadata(timeout_secs, &ReleaseChannel::Stable).await?;
-    Ok(UpdateInfo {
-        version: release.version,
-        release_notes: release.release_notes,
-    })
-}
-
 pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec<VersionInfo>> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases?per_page={limit}");
     let timeout = effective_timeout(timeout_secs);

@@ -90,6 +90,15 @@ pub const UPDATE_STATUS: &str = "update/status";
 /// Mark the running version's release notes as seen in the shared update
 /// cache, so the CLI and desktop app never show the same release twice.
 pub const UPDATE_ACKNOWLEDGE: &str = "update/acknowledge";
+/// Re-run the update check against GitHub (network I/O) and return the
+/// refreshed status, so a manual check observes a release the cache predates.
+pub const UPDATE_CHECK: &str = "update/check";
+/// Install the newest release. The response carries the starting install
+/// state; `update/installProgress` notifications then stream the phases.
+pub const UPDATE_INSTALL: &str = "update/install";
+/// Publish in-app update install progress. Coalescable: only the newest
+/// state matters, so a slow client never applies stale phases.
+pub const UPDATE_INSTALL_PROGRESS: &str = "update/installProgress";
 
 /// Transient UI progress for the active desktop session.
 pub const UI_PROGRESS: &str = "session/ui_progress";

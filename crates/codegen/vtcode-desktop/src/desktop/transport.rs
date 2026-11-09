@@ -72,6 +72,7 @@ pub(crate) enum BackendEvent {
     TurnStatus(Value),
     TurnQueueStatus(Value),
     UiProgress(Value),
+    UpdateInstallProgress(protocol::UpdateInstallState),
     Exited {
         status: Option<i32>,
         authentication_required: bool,
@@ -524,6 +525,10 @@ fn decode_frame(
             protocol::method::TURN_STATUS => Ok(Some(BackendEvent::TurnStatus(params))),
             protocol::method::TURN_QUEUE_STATUS => Ok(Some(BackendEvent::TurnQueueStatus(params))),
             protocol::method::UI_PROGRESS => Ok(Some(BackendEvent::UiProgress(params))),
+            protocol::method::UPDATE_INSTALL_PROGRESS => serde_json::from_value::<protocol::UpdateInstallState>(params)
+                .map(BackendEvent::UpdateInstallProgress)
+                .map(Some)
+                .map_err(|_error| ProtocolDecodeError),
             _ => Ok(None),
         };
     }

@@ -132,16 +132,22 @@ fn activity_severity_and_messages_cover_every_activity() {
 fn update_status_event(current: &str, latest: Option<&str>, available: bool) -> BackendEvent {
     BackendEvent::Response {
         method: vtcode_desktop_protocol::method::UPDATE_STATUS.into(),
-        result: Some(json!({
-            "currentVersion": current,
-            "latestVersion": latest,
-            "updateAvailable": available,
-            "releaseUrl": latest.map(|version| format!("https://github.com/vinhnx/vtcode/releases/tag/v{version}")),
-            "channel": "stable",
-            "checkDue": false,
-        })),
+        result: Some(update_status_json(current, latest, available)),
         error: None,
     }
+}
+
+/// The `update/status` / `update/check` snapshot body. Shared by the
+/// notification fixture and the About-row tests, which apply it directly.
+fn update_status_json(current: &str, latest: Option<&str>, available: bool) -> serde_json::Value {
+    json!({
+        "currentVersion": current,
+        "latestVersion": latest,
+        "updateAvailable": available,
+        "releaseUrl": latest.map(|version| format!("https://github.com/vinhnx/vtcode/releases/tag/v{version}")),
+        "channel": "stable",
+        "checkDue": false,
+    })
 }
 
 #[gpui_kit::test]
@@ -332,7 +338,7 @@ fn update_status_error_clears_the_pending_request(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn check_for_updates_button_requests_status(cx: &mut TestAppContext) {
+fn check_for_updates_button_requests_a_live_check(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, requests) = tokio::sync::mpsc::channel(8);
     cx.update_window(window, |_, window, cx| {
@@ -350,7 +356,133 @@ fn check_for_updates_button_requests_status(cx: &mut TestAppContext) {
         let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
             panic!("update request")
         };
-        assert_eq!(method, vtcode_desktop_protocol::method::UPDATE_STATUS);
+        // `update/status` is read-only, so a button that only re-read the cache
+        // could never observe a release published since the last check.
+        assert_eq!(method, vtcode_desktop_protocol::method::UPDATE_CHECK);
+    })
+    .unwrap();
+}
+
+/// An offered update gains an install action; the check stays disabled while
+/// one runs, so a second concurrent install can never be requested.
+#[gpui_kit::test]
+fn offered_update_gains_an_install_action_that_requests_install(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.apply_update_status(update_status_json("0.181.7", Some("0.181.8"), true));
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
+        });
+        window.render_frame(cx);
+
+        assert!(
+            window.try_find("about-settings-install-update").is_some(),
+            "an offered update must offer the install action"
+        );
+        window.click("about-settings-install-update", cx);
+        window.render_frame(cx);
+
+        let mut requests = requests;
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("install request")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::UPDATE_INSTALL);
+    })
+    .unwrap();
+}
+
+/// No offer means no install action: the row must not advertise installing a
+/// release the service would refuse.
+#[gpui_kit::test]
+fn an_up_to_date_build_offers_no_install_action(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.apply_update_status(update_status_json("0.181.8", None, false));
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
+        });
+        window.render_frame(cx);
+
+        assert!(
+            window.try_find("about-settings-install-update").is_none(),
+            "up-to-date builds must not offer an install"
+        );
+    })
+    .unwrap();
+}
+
+/// Progress notifications drive the row's description, and a finished install
+/// retires the action instead of offering to install twice.
+#[gpui_kit::test]
+fn install_progress_drives_the_row_description_and_retires_the_action(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.apply_update_status(update_status_json("0.181.7", Some("0.181.8"), true));
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("about-settings-install-update").is_some());
+
+        view.update(cx, |view, _cx| {
+            view.handle_update_install_progress(vtcode_desktop_protocol::UpdateInstallState::Downloading {
+                downloaded: 1024,
+                total: Some(2048),
+            });
+        });
+        window.render_frame(cx);
+        // Mid-install the action disappears: the service refuses a concurrent
+        // install, so offering one would only produce a rejection.
+        assert!(
+            window.try_find("about-settings-install-update").is_none(),
+            "an in-flight install must not offer a second one"
+        );
+
+        view.update(cx, |view, _cx| {
+            view.handle_update_install_progress(vtcode_desktop_protocol::UpdateInstallState::Completed {
+                version: "0.181.8".into(),
+            });
+        });
+        window.render_frame(cx);
+        assert!(
+            window.try_find("about-settings-install-update").is_none(),
+            "a finished install must not offer another"
+        );
+        assert!(!view.read(cx).update_install_state.is_in_flight());
+    })
+    .unwrap();
+}
+
+/// A failed install reports why and re-arms the action for a retry.
+#[gpui_kit::test]
+fn a_failed_install_re_arms_the_action(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.apply_update_status(update_status_json("0.181.7", Some("0.181.8"), true));
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
+        });
+        window.render_frame(cx);
+
+        view.update(cx, |view, _cx| {
+            view.handle_update_install_progress(vtcode_desktop_protocol::UpdateInstallState::Failed {
+                message: "network unreachable".into(),
+            });
+        });
+        window.render_frame(cx);
+
+        assert!(window.try_find("about-settings-install-update").is_some(), "a failed install must allow a retry");
+        // The failure renders in the row description, not the cached status
+        // line: capture the props the row actually renders from.
+        let props = super::super::about::AboutSettingsProps::capture(view.read(cx));
+        let description = props.update_row_description();
+        assert!(description.contains("network unreachable"), "{description}");
     })
     .unwrap();
 }
