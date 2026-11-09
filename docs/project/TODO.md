@@ -30,6 +30,19 @@ check and fix splitting the two 1000+ line files — is large surgery in view/
 
 ---
 
+check and improve vtcode-acp compile speed and efficiency to clear the bottlneck
+and improve effiency in build
+
+---
+
+scan and rename old docs files that is upper case and change to lower case, also audit and check for dead and wrong links and fix and improve, remove outdated docs and update if needed.
+
+for somple special docs file that need upper case (eg: SECURITY, ACCESSIBILITY. README LICENSE) -> keep as is. check github markdown files convention
+
+also chekc and audit the files and move to correct directory and group for a clean structure
+ 
+---
+
 plan: gpui cross-platform (mac-only today -> linux-first, defer windows/web)
 
 context: vtcode-desktop is macOS-gated (Cargo.toml macos-only deps, main.rs exit(1) elsewhere, objc2 NSStatusBar/NSApplication/NSFont/trash, package-desktop-macos.sh + install.sh check_desktop_os + desktop-macos.yml macos-15). upstream GPUI already ships gpui-fast-linux/windows/web/macos in Cargo.lock; desktop-protocol (serde/json/tokio/url) is portable. mac-only seams are ~6 sites: view/menu_bar.rs (NSStatusBar), app_icon.rs (dock), view/about.rs (NSApplication panel), preferences.rs (NSFont), files/mutate.rs (trashItemAtURL), view/navigation_history.rs (NSUserDefaults scroll). typography.rs + navigation_history.rs already have non-mac fallbacks.
