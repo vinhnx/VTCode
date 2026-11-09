@@ -45,7 +45,7 @@ Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` 
 
 ## Workspace
 
-Cargo workspace, 26 crates. Rust stable, MSRV 1.99.1, edition 2024. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
+Cargo workspace, 25 crates. Rust stable, MSRV 1.99.1, edition 2024. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
 
 Crate roles live in each crate's `Cargo.toml` `description` and [ARCHITECTURE](docs/ARCHITECTURE.md#workspace-crates). Not obvious from the code: `vtcode-desktop` is a non-publishable GPUI app while `vtcode-desktop-protocol` is published (the `vtcode` binary depends on it); `vtcode-llm` and `vtcode-skills` are partial extractions from `vtcode-core`.
 

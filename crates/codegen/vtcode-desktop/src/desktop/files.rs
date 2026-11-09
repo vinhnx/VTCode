@@ -13,9 +13,8 @@ mod model;
 mod mutate;
 
 pub(super) use launch::{
-    CLI_FORK_SESSION_FLAG, build_handoff_script, open_in_browser, open_in_editor, open_script_in_terminal,
-    open_terminal_at, reveal_in_finder, sweep_stale_previews, terminal_runs_handoff_script, write_handoff_script,
-    write_preview_html,
+    CLI_FORK_SESSION_FLAG, build_handoff_script, open_in_editor, open_script_in_terminal, open_terminal_at,
+    reveal_in_finder, terminal_runs_handoff_script, write_handoff_script,
 };
 pub(super) use model::{SEARCH_MAX_HITS, SNAPSHOT_MAX_ENTRIES, fuzzy_search, fuzzy_search_files, scan_snapshot};
 #[cfg(test)]

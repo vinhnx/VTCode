@@ -30,11 +30,11 @@ fn test_guidelines_stay_compact() {
     // never sudo; state which check was skipped and why).
     // Raised to 640 for wider-window reuse and code_search unavailable
     // no-retry guardrails (session-20261015 overlapping reads + identical
-    // retries).
-    // Raised to 700 for the diagram-render CLI hint (measured 680).
+    // retries). (The diagram-render CLI hint briefly raised this to 700;
+    // removing the diagram feature restores 640.)
     // Universal source-inspection guidance lives in Runtime Guidance;
     // both densities retain patch-specific permission and bounded-diff rules.
-    assert!(approx_tokens < 700, "got ~{approx_tokens} tokens");
+    assert!(approx_tokens < 640, "got ~{approx_tokens} tokens");
 }
 #[test]
 fn deferred_tools_section_caps_groups_and_truncates_descriptions() {

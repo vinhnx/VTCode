@@ -39,15 +39,6 @@ Zed GPUI macOS backend
   before AppKit callbacks, content-boundary guard and regression coverage.
   See patches/gpui-pre-macos/PATCH.md and LICENSE-APACHE.
 
-Pele diagram renderer
-  Source: https://github.com/obsidianmd/pele
-  Snapshot: pele 1.13.0 (npm registry tarball, 2026-11-08)
-  License: MIT
-  Vendored path: crates/common/vtcode-diagram/assets/pele.global.js
-  VT Code modifications: none; the bundle executes verbatim in the headless
-  renderer (CLI plus desktop previews) so rendering works offline.
-  See crates/common/vtcode-diagram/assets/PROVENANCE.md and LICENSE.
-
 ================================================================================
 PART I — CRATES.IO / GIT DEPENDENCIES
 ================================================================================
@@ -58,8 +49,8 @@ Do not edit by hand — regenerate after dependency changes.
 --------------------------------------------------------------------------------
 License Overview
 --------------------------------------------------------------------------------
-  Apache License 2.0 (790 crates) — SPDX: Apache-2.0
-  MIT License (304 crates) — SPDX: MIT
+  Apache License 2.0 (789 crates) — SPDX: Apache-2.0
+  MIT License (301 crates) — SPDX: MIT
   Unicode License v3 (23 crates) — SPDX: Unicode-3.0
   BSD 3-Clause "New" or "Revised" License (12 crates) — SPDX: BSD-3-Clause
   ISC License (9 crates) — SPDX: ISC
@@ -1938,9 +1929,6 @@ Apache License 2.0 — SPDX: Apache-2.0
   vtcode-desktop-protocol 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-diagram 0.181.8
-    Source: https://github.com/vinhnx/vtcode
-    License: MIT OR Apache-2.0
   vtcode-diff 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
@@ -3473,12 +3461,6 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  rquickjs 0.14.0
-    Source: https://github.com/DelSkayn/rquickjs.git
-    License: MIT
---------------------------------------------------------------------------------
-MIT License — SPDX: MIT
---------------------------------------------------------------------------------
   zed-xim 0.4.0-zed
     Source: https://github.com/Riey/xim-rs
     License: MIT
@@ -3742,9 +3724,6 @@ MIT License — SPDX: MIT
     License: MIT
   rio-vt 0.5.29
     Source: https://github.com/raphamorim/rio
-    License: MIT
-  rquickjs-core 0.14.0
-    Source: https://github.com/DelSkayn/rquickjs.git
     License: MIT
   rust-i18n-macro 4.2.4
     Source: https://github.com/longbridge/rust-i18n
@@ -4207,12 +4186,6 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
   os_pipe 1.2.3
     Source: https://github.com/oconnor663/os_pipe.rs
-    License: MIT
---------------------------------------------------------------------------------
-MIT License — SPDX: MIT
---------------------------------------------------------------------------------
-  rquickjs-sys 0.14.0
-    Source: https://github.com/DelSkayn/rquickjs.git
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT

@@ -44,7 +44,6 @@ tokio = { workspace = true }
 url = { workspace = true }
 vtcode-commons = { workspace = true }
 vtcode-desktop-protocol = { workspace = true }
-vtcode-diagram = { workspace = true }
 vtcode-exec-events = { workspace = true }
 vtcode-ui = { workspace = true }
 

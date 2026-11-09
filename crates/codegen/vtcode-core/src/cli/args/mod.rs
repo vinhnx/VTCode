@@ -13,7 +13,6 @@ mod check;
 mod companion;
 mod config;
 mod dependencies;
-mod diagram;
 mod exec;
 mod models;
 mod plugins;
@@ -39,7 +38,6 @@ pub use config::{
     ToolConfig,
 };
 pub use dependencies::{DependenciesSubcommand, ManagedDependency};
-pub use diagram::{DiagramCommand, DiagramRenderArgs};
 pub use exec::{EvalOutputFormat, ExecEvalArgs, ExecResumeArgs, ExecSubcommand};
 pub use models::ModelCommands;
 pub use plugins::PluginsSubcommand;
@@ -443,12 +441,6 @@ pub enum Commands {
         /// Type of analysis to perform
         #[arg(value_name = "TYPE", default_value = "full")]
         analysis_type: String,
-    },
-
-    /// Render Mermaid diagrams to standalone SVG files, fully offline
-    Diagram {
-        #[command(subcommand)]
-        command: DiagramCommand,
     },
 
     /// Pretty-print trajectory logs

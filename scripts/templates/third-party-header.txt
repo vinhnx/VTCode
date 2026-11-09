@@ -39,12 +39,3 @@ Zed GPUI macOS backend
   before AppKit callbacks, content-boundary guard and regression coverage.
   See patches/gpui-pre-macos/PATCH.md and LICENSE-APACHE.
 
-Pele diagram renderer
-  Source: https://github.com/obsidianmd/pele
-  Snapshot: pele 1.13.0 (npm registry tarball, 2026-11-08)
-  License: MIT
-  Vendored path: crates/common/vtcode-diagram/assets/pele.global.js
-  VT Code modifications: none; the bundle executes verbatim in the headless
-  renderer (CLI plus desktop previews) so rendering works offline.
-  See crates/common/vtcode-diagram/assets/PROVENANCE.md and LICENSE.
-

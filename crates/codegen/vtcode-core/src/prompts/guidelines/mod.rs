@@ -22,10 +22,6 @@ const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, check
 const SESSION_MESSAGING_GUIDANCE: &str = "- Peer sessions: `list_sessions` discovers live CLI sessions in this workspace; `ask_session` sends one a question and its `answer_session` reply arrives as a notice on a later turn. Delivery needs the peer running.";
 const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fetch needs separate approval. For `antiban_blocked` or `retryable: false`, do not retry; wait `retry_after_ms` for `cooldown`; retry `network_error`/`upstream_error` once. For GitHub queries prefer `gh search`/`gh api` via exec_command when available.";
 
-/// The single home of the diagram-render hint: the offline `diagram render`
-/// CLI replaces any network-fetched renderer. Emitted only outside planning
-/// (rendering writes a file, and planning exec stays read-only).
-const DIAGRAM_GUIDANCE_LINE: &str = "- Render Mermaid diagrams offline with `vtcode diagram render <input> -o <out.svg>` via exec_command (.mmd source or Markdown first-fence; `.svg` or `.png` output); never install or fetch an external renderer.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
 const OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE: &str = "- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.";
@@ -308,7 +304,6 @@ pub(crate) fn generate_tool_guidelines_for_profile(
         // verify incrementally first. Kept tool-agnostic: fast checks exist
         // in every stack (`cargo check`, `tsc --noEmit`, `pytest --collect-only`).
         lines.push("- Run fast checks before full builds.".to_string());
-        lines.push(DIAGRAM_GUIDANCE_LINE.to_owned());
     }
     // Tool-failure diagnosis, waiting on returned `next_wait_args` instead of
     // polling, the safeguard rule, the verification outcome rule (report

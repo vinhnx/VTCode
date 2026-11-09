@@ -57,24 +57,6 @@ fn parses_app_server_command_with_stdio_listen_target() {
 }
 
 #[test]
-fn parses_diagram_render_command_with_optional_output() {
-    let cli = Cli::parse_from(["vtcode", "diagram", "render", "flow.mmd", "-o", "flow.svg"]);
-
-    let Some(Commands::Diagram { command }) = cli.command else {
-        panic!("expected diagram command");
-    };
-    let DiagramCommand::Render(args) = command;
-    assert_eq!(args.input, PathBuf::from("flow.mmd"));
-    assert_eq!(args.output, Some(PathBuf::from("flow.svg")));
-
-    let cli = Cli::parse_from(["vtcode", "diagram", "render", "notes.md"]);
-    let Some(Commands::Diagram { command }) = cli.command else {
-        panic!("expected diagram command");
-    };
-    assert!(matches!(command, DiagramCommand::Render(args) if args.output.is_none()));
-}
-
-#[test]
 fn parses_init_force_flag() {
     let cli = Cli::parse_from(["vtcode", "init", "--force"]);
 

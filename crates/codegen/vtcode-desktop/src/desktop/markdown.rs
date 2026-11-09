@@ -6,7 +6,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::{ActiveTheme, ThemeColor};
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, ClipboardItem, ImageCacheError, ImageSource, SharedString, TestSupportExt, div, relative};
-use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 pub(super) struct PreparedMarkdown {
     pub markdown: SharedString,
@@ -49,81 +49,23 @@ fn apply_source_edits(source: &str, edits: &mut [SourceEdit]) -> Option<String> 
     Some(out)
 }
 
-/// Fence body accumulated between its start and end events.
-struct OpenFence {
-    body: String,
-}
-
-/// Whether a fenced code info string selects Mermaid diagrams. Only the
-/// first whitespace-separated token counts (`mermaid title` matches;
-/// `mermaidjs` and unlabeled fences never do).
-fn is_mermaid_info(info: &str) -> bool {
-    super::diagram::is_mermaid_fence(info.split_whitespace().next())
-}
-
-/// Whether a fenced block ends with a literal closing run. Pulldown spans
-/// fence events over the whole block (including auto-closed ones at end of
-/// input), so only a bare trailing run of backticks or tildes counts;
-/// partial fences must not render (streaming text, and parity with the
-/// WebMCP preview gate).
-fn fence_explicitly_closed(source: &str, fence_range: &std::ops::Range<usize>) -> bool {
-    let Some(span) = source.get(fence_range.clone()) else {
-        return false;
-    };
-    span.lines().next_back().is_some_and(|last| {
-        let line = last.trim();
-        line.len() >= 3 && (line.bytes().all(|byte| byte == b'`') || line.bytes().all(|byte| byte == b'~'))
-    })
-}
-
 /// Preserve Markdown structure and derive readable text while dropping raw
-/// HTML. Closed non-blank mermaid fences additionally gain an inline
-/// `diagram:` image reference (registered for the image hook) plus its alt
-/// text for assistive clients; unclosed and blank fences pass through, so
-/// streaming text never shows a half-rendered diagram.
+/// HTML. Code fences of every language pass through untouched.
 pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
     let mut accessible_text = String::new();
     let mut has_list = false;
     let mut edits: Vec<SourceEdit> = Vec::new();
-    let mut open_fence: Option<OpenFence> = None;
     for (event, range) in Parser::new(source).into_offset_iter() {
         append_accessible_text(&mut accessible_text, &event);
         if matches!(event, Event::Start(Tag::List(_))) {
             has_list = true;
         }
-        match event {
-            Event::Html(_) | Event::InlineHtml(_) => {
-                edits.push(SourceEdit {
-                    start: range.start,
-                    end: range.end,
-                    replacement: String::new(),
-                });
-            }
-            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) if is_mermaid_info(&info) => {
-                open_fence = Some(OpenFence { body: String::new() });
-            }
-            Event::Text(text) => {
-                if let Some(fence) = open_fence.as_mut() {
-                    fence.body.push_str(&text);
-                }
-            }
-            Event::End(TagEnd::CodeBlock) => {
-                if let Some(fence) = open_fence.take()
-                    && !fence.body.trim().is_empty()
-                    && fence_explicitly_closed(source, &range)
-                {
-                    let hash = super::diagram_inline::register_diagram_source(&fence.body);
-                    let alt = rust_i18n::t!("app.markdown.diagram_image_alt").to_string();
-                    edits.push(SourceEdit {
-                        start: range.end,
-                        end: range.end,
-                        replacement: super::diagram_inline::diagram_image_markdown(&hash, &alt),
-                    });
-                    append_block_separator(&mut accessible_text);
-                    accessible_text.push_str(&alt);
-                }
-            }
-            _ => {}
+        if matches!(event, Event::Html(_) | Event::InlineHtml(_)) {
+            edits.push(SourceEdit {
+                start: range.start,
+                end: range.end,
+                replacement: String::new(),
+            });
         }
     }
     let markdown = if edits.is_empty() {
@@ -413,17 +355,9 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         // text and app previews keep the same vertical rhythm.
         .line_height(relative(TRANSCRIPT_LINE_HEIGHT))
         .scrollable(false)
-        // A richer renderer must not fetch URLs or local files from agent output.
-        // The sole exception is inline diagrams: `prepare_markdown` appends
-        // `diagram:<hash>` references after mermaid fences, resolved here
-        // from the render cache. Anything else stays blocked.
-        .image_source(|uri| {
-            if let Some(hash) = super::diagram_inline::parse_diagram_uri(uri) {
-                ImageSource::Custom(Arc::new(move |_, cx| super::diagram_store::diagram_image_data(&hash, cx)))
-            } else {
-                blocked_image_source()
-            }
-        })
+        // A richer renderer must not fetch URLs or local files from agent output:
+        // every image stays blocked.
+        .image_source(|_| blocked_image_source())
         .on_link_click(|url, event, _, cx| {
             if !event.is_right_click()
                 && let Some(url) = external_web_url(url)
@@ -433,7 +367,7 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         })
         .code_block_actions(|block, _, _| {
             let code = block.code();
-            let copy = Button::new("copy-code")
+            Button::new("copy-code")
                 .tab_stop(true)
                 .cursor_pointer()
                 .label(rust_i18n::t!("app.markdown.copy_code").to_string())
@@ -441,20 +375,8 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
                 .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
                     super::notifications::copied_to_clipboard(window, cx);
-                });
-            if !super::diagram::is_mermaid_fence(block.lang().as_deref()) {
-                return copy.into_any_element();
-            }
-            let source = block.code();
-            let view = Button::new("view-diagram")
-                .tab_stop(true)
-                .cursor_pointer()
-                .label(rust_i18n::t!("app.markdown.view_diagram").to_string())
-                .ghost()
-                .on_click(move |_, window, cx| {
-                    super::diagram::open_diagram_preview(&source, window, cx);
-                });
-            div().flex().items_center().gap_1().child(copy).child(view).into_any_element()
+                })
+                .into_any_element()
         })
 }
 
@@ -763,106 +685,46 @@ mod tests {
         assert!(super::has_viewable_plan_markdown(Some("# Plan")));
     }
 
-    fn diagram_reference(markdown: &str) -> Option<String> {
-        let start = markdown.find("](diagram:")? + 2;
-        let tail = markdown.get(start..)?;
-        let end = tail.find(')')?;
-        tail.get(..end).map(str::to_string)
-    }
-
     #[test]
-    fn mermaid_fence_appends_a_stable_image_reference() {
-        let source = "Intro\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\nOutro";
-        let first = prepare_markdown(&source.into());
-        let reference = diagram_reference(&first.markdown).expect("image reference appended");
-        let hash = reference.strip_prefix("diagram:").expect("diagram scheme");
-        assert_eq!(hash.len(), 64, "sha256 hex: {hash:?}");
-        assert!(hash.bytes().all(|byte| byte.is_ascii_hexdigit()), "{hash:?}");
-        assert!(first.markdown.contains("```mermaid\nflowchart TD\n  A --> B\n```"), "fence intact");
-        // Deterministic: preparing twice yields the identical reference.
-        let second = prepare_markdown(&source.into());
-        assert_eq!(second.markdown, first.markdown);
-        // Distinct bodies hash distinctly.
-        let other = prepare_markdown(&"```mermaid\nflowchart TD\n  A --> C\n```".into());
-        assert_ne!(diagram_reference(&other.markdown), diagram_reference(&first.markdown));
-    }
-
-    #[test]
-    fn non_mermaid_unclosed_and_blank_fences_pass_through() {
+    fn code_fences_pass_through_byte_identical() {
         for source in [
             "```rust\nfn main() {}\n```",
             "```\nplain\n```",
-            "```mermaidjs\nflowchart TD\n  A --> B\n```",
+            "```mermaid\nflowchart TD\n  A --> B\n```",
+            "```mermaid title here\nflowchart TD\n  A --> B\n```",
+            "```Mermaid\nflowchart TD\n  A --> B\n```",
+            "~~~mermaid\nflowchart TD\n  A --> B\n~~~",
             "```mermaid\nunclosed",
-            "```mermaid\nfoo```",
             "```mermaid\n  \n```",
             "    indented code",
         ] {
             let prepared = prepare_markdown(&source.into());
-            assert!(!prepared.markdown.contains("](diagram:"), "unexpected image ref in {source:?}");
+            assert_eq!(prepared.markdown.as_str(), source, "fence mangled: {source:?}");
         }
-        // Info strings carry metadata after the language token.
-        let prepared = prepare_markdown(&"```mermaid title here\nflowchart TD\n  A --> B\n```".into());
-        assert!(diagram_reference(&prepared.markdown).is_some(), "info metadata must match");
-        // Case-insensitive like the action row.
-        let prepared = prepare_markdown(&"```Mermaid\nflowchart TD\n  A --> B\n```".into());
-        assert!(diagram_reference(&prepared.markdown).is_some(), "capitalized info must match");
-        // Tilde fences close with tildes.
-        let prepared = prepare_markdown(&"~~~mermaid\nflowchart TD\n  A --> B\n~~~".into());
-        assert!(diagram_reference(&prepared.markdown).is_some(), "tilde fence must match");
     }
 
-    /// Reference-style images (`![alt][id]` + `[id]: url`, rendered since
-    /// Kit 0.9.0) keep hook-routable URLs: the preprocessor leaves them
-    /// alone and the `diagram:`-only image hook decides, so foreign
-    /// definitions stay blocked while `diagram:` references resolve.
+    /// Reference-style images (`![alt][id]` + `[id]: url`) pass through the
+    /// preprocessor untouched; the image hook blocks every URL at render time.
     #[test]
-    fn reference_style_images_keep_hook_routable_urls() {
-        use crate::desktop::diagram_inline::{parse_diagram_uri, register_diagram_source, source_hash_hex};
-
-        let foreign = "Before ![logo][pic] after.\n\n[pic]: https://evil.example/x.png\n";
-        let prepared = prepare_markdown(&foreign.into());
+    fn reference_style_images_pass_through_untouched() {
+        let source = "Before ![logo][pic] after.\n\n[pic]: https://evil.example/x.png\n";
+        let prepared = prepare_markdown(&source.into());
         assert!(prepared.markdown.contains("![logo][pic]"), "reference kept: {}", prepared.markdown);
         assert!(
             prepared.markdown.contains("[pic]: https://evil.example/x.png"),
             "definition kept: {}",
             prepared.markdown
         );
-        for blocked in [
-            "https://evil.example/x.png",
-            "file:///etc/passwd",
-            "data:image/png;base64,iVBORw0KGgo=",
-        ] {
-            assert_eq!(parse_diagram_uri(blocked), None, "{blocked:?} stays blocked");
-        }
-
-        let hash = register_diagram_source("flowchart TD\n  A --> B");
-        let allowed = format!("diagram:{}", source_hash_hex(&hash));
-        let ok = format!("See ![chart][fig].\n\n[fig]: {allowed}\n");
-        let prepared = prepare_markdown(&ok.into());
-        assert!(prepared.markdown.contains("[fig]: diagram:"), "diagram definition kept");
-        assert_eq!(parse_diagram_uri(&allowed), Some(hash), "diagram reference resolves");
     }
 
     #[test]
-    fn html_strip_and_diagram_insertion_compose() {
+    fn html_strips_around_code_fences() {
         let source = "<div>banner</div>\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\ntail <b>bold</b>";
         let prepared = prepare_markdown(&source.into());
         assert!(!prepared.markdown.contains("<div>"), "html stripped: {}", prepared.markdown);
         assert!(!prepared.markdown.contains("<b>"), "inline html stripped: {}", prepared.markdown);
         assert!(prepared.markdown.contains("```mermaid\nflowchart TD\n  A --> B\n```"), "fence intact");
-        assert!(diagram_reference(&prepared.markdown).is_some(), "image inserted");
         assert!(prepared.markdown.contains("tail bold"), "tail intact");
-    }
-
-    #[test]
-    fn accessible_text_names_the_rendered_diagram_after_its_code() {
-        let source = "```mermaid\nflowchart TD\n  A --> B\n```";
-        let prepared = prepare_markdown(&source.into());
-        let alt = rust_i18n::t!("app.markdown.diagram_image_alt").to_string();
-        let code_at = prepared.accessible_text.find("flowchart TD").expect("code text kept");
-        let alt_at = prepared.accessible_text.find(&alt).expect("alt appended");
-        assert!(code_at < alt_at, "alt follows code: {:?}", prepared.accessible_text.as_str());
     }
 
     struct FenceFixture {
@@ -881,15 +743,12 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn mermaid_fences_gain_a_view_diagram_action(cx: &mut TestAppContext) {
+    fn code_fences_carry_copy_action_only(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
-        // Presence only: clicking would launch a real browser. Copy stays on
-        // every fence; View diagram joins mermaid fences alone.
-        for (source, expect_view) in [
-            ("```mermaid\nflowchart TD\n  A --> B\n```", true),
-            ("```Mermaid\nflowchart TD\n  A --> B\n```", true),
-            ("```rust\nfn main() {}\n```", false),
-            ("```\nplain\n```", false),
+        for source in [
+            "```mermaid\nflowchart TD\n  A --> B\n```",
+            "```rust\nfn main() {}\n```",
+            "```\nplain\n```",
         ] {
             let source: gpui_kit::SharedString = source.into();
             let (window, _) = cx.update(|cx| {
@@ -905,7 +764,7 @@ mod tests {
                 })
                 .unwrap();
             assert!(copy, "copy action missing for {source:?}");
-            assert_eq!(view, expect_view, "view action for {source:?}");
+            assert!(!view, "no view action for {source:?}");
         }
     }
 }

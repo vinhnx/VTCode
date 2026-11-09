@@ -30,7 +30,7 @@ fi
 
 # Generate the auto-generated dependency section. Workspace scope covers every
 # shipped binary (root CLI plus the desktop app); single-package scope would
-# silently drop desktop-only dependencies such as rquickjs.
+# silently drop desktop-only dependencies.
 body=$(cd "$root_dir" && cargo about generate --workspace --locked "$template" 2>/dev/null)
 
 # Assemble the full file.

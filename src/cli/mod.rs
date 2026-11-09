@@ -19,7 +19,6 @@ mod config;
 mod create_project;
 pub(crate) mod desktop;
 mod desktop_server;
-mod diagram;
 mod dispatch;
 mod full_auto_primary_agent;
 mod init;
