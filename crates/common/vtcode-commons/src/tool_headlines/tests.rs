@@ -127,6 +127,9 @@ fn is_noise_param_matches_expected_keys() {
     assert!(!is_noise_param("pattern"));
     assert!(!is_noise_param("path"));
     assert!(!is_noise_param("mode"));
+    // A query string is content in every consumer (search tools, skill
+    // search, MCP capability search), never plumbing.
+    assert!(!is_noise_param("query"));
 }
 
 #[test]
@@ -143,7 +146,7 @@ fn collect_param_details_skips_noise_params() {
         "max_bytes": 6000,
         "timeout_secs": 120
     });
-    let details = collect_param_details(&args, &["pattern"], None);
+    let details = collect_param_details("grep", &args, &["pattern"], None);
     // Only detail_level, max_results, and scope should remain;
     // pattern is skipped (headline-consumed), noise params (including action) are skipped.
     for detail in &details {
@@ -169,7 +172,7 @@ fn collect_param_details_skips_zero_numbers() {
         "offset": 0,
         "limit": 0
     });
-    let details = collect_param_details(&args, &["path"], None);
+    let details = collect_param_details("read_file", &args, &["path"], None);
     for detail in &details {
         assert!(
             !detail.contains("Offset") && !detail.contains("Limit"),
@@ -183,9 +186,37 @@ fn collect_param_details_skips_zero_numbers() {
 #[test]
 fn collect_param_details_empty_skipped_shows_all_displayable() {
     let args = json!({ "path": "src/main.rs", "pattern": "TODO" });
-    let details = collect_param_details(&args, &[], None);
+    let details = collect_param_details("grep_file", &args, &[], None);
     assert!(details.iter().any(|d| d.contains("Path: src/main.rs")), "{details:?}");
     assert!(details.iter().any(|d| d.contains("Pattern: TODO")), "{details:?}");
+}
+
+#[test]
+fn collect_param_details_shows_unconsumed_search_aliases() {
+    // When the headline phrases a sibling alias, the query value still shows
+    // instead of vanishing as noise: no alias value may be invisible in both
+    // the title and the details.
+    let details = collect_param_details("grep", &json!({"pattern": "B", "query": "A"}), &["pattern"], None);
+    assert!(details.iter().any(|detail| detail == "Query: A"), "{details:?}");
+    // Asymmetric: a headline-consumed query still hides (no title echo).
+    let details = collect_param_details("code_search", &json!({"query": "A"}), &["query"], None);
+    assert!(details.is_empty(), "{details:?}");
+}
+
+#[test]
+fn collect_param_details_exempts_text_only_for_search_queries() {
+    // `text` is an accepted query alias for code_search: unconsumed, it shows.
+    let details = collect_param_details("code_search", &json!({"pattern": "B", "text": "T"}), &["pattern"], None);
+    assert_eq!(details, vec!["Text: T".to_string()]);
+    // MCP-qualified search tools exempt identically.
+    let details =
+        collect_param_details("mcp__x__code_search", &json!({"pattern": "B", "text": "T"}), &["pattern"], None);
+    assert_eq!(details, vec!["Text: T".to_string()]);
+    // Asymmetric: edit bodies stay hidden, and consumed text stays hidden.
+    let details = collect_param_details("edit_file", &json!({"path": "f", "text": "body"}), &["path"], None);
+    assert!(details.iter().all(|detail| !detail.contains("Text")), "{details:?}");
+    let details = collect_param_details("code_search", &json!({"text": "T"}), &["text"], None);
+    assert!(details.is_empty(), "{details:?}");
 }
 
 #[test]

@@ -198,10 +198,20 @@ pub fn is_verbose_key(key: &str) -> bool {
     )
 }
 
+/// Whether `text` is an accepted query alias for this tool rather than a body.
+///
+/// `code_search` phrases `text` as a last-resort query alias, so an
+/// unconsumed `text` value shows instead of hiding as verbose content;
+/// everywhere else (edits, unknown tools) `text` stays a hidden body.
+fn text_is_search_query(tool_name: &str, key: &str) -> bool {
+    key == "text" && strip_mcp_prefix(tool_name) == "code_search"
+}
+
 /// Parameter keys that are infrastructure/plumbing noise, omitted from the
 /// human-facing summary. Session plumbing (`session_id`, `chars`, wait
 /// deadlines) is not noise: [`exec_session_param_detail`] folds it into one
-/// identity row instead.
+/// identity row instead. Search strings (`query`) are content, never
+/// plumbing: they hide only when the headline consumed them.
 #[must_use]
 pub fn is_noise_param(key: &str) -> bool {
     matches!(
@@ -229,7 +239,6 @@ pub fn is_noise_param(key: &str) -> bool {
             | "cwd"
             | "language"
             | "spool_path"
-            | "query"
             // Tool identity / routing
             | "type"
             | "tool_call_id"
@@ -249,15 +258,22 @@ pub fn is_noise_param(key: &str) -> bool {
 /// relativize against the workspace, lists summarize to two items, and only
 /// `true` flags and non-zero numbers render. Key order follows
 /// `serde_json::Map` iteration. An empty `skipped` slice shows every
-/// displayable key — no separate include-all flag needed.
+/// displayable key — no separate include-all flag needed. `tool_name` (MCP
+/// prefixes accepted) decides the `text` exemption below.
 #[must_use]
-pub fn collect_param_details(args: &Value, skipped: &[&str], workspace_root: Option<&Path>) -> Vec<String> {
+pub fn collect_param_details(
+    tool_name: &str,
+    args: &Value,
+    skipped: &[&str],
+    workspace_root: Option<&Path>,
+) -> Vec<String> {
     let mut details = Vec::new();
     let Some(map) = args.as_object() else {
         return details;
     };
     for (key, value) in map {
-        if is_verbose_key(key) || is_noise_param(key) || skipped.contains(&key.as_str()) {
+        let verbose_hidden = is_verbose_key(key) && !text_is_search_query(tool_name, key);
+        if is_noise_param(key) || verbose_hidden || skipped.contains(&key.as_str()) {
             continue;
         }
         match value {

@@ -96,7 +96,7 @@ fn tool_detail_lines(details: &ThreadItemDetails, workspace_root: Option<&Path>)
         ThreadItemDetails::McpToolCall(call) => call
             .arguments
             .as_ref()
-            .map(|args| collect_param_details(args, &[], workspace_root))
+            .map(|args| collect_param_details(&call.tool_name, args, &[], workspace_root))
             .unwrap_or_default(),
         // The harness message already sits on the status line and the command/path on
         // the title; only a failing exit code adds information.
@@ -141,7 +141,7 @@ fn invocation_lines(tool: &ToolInvocationItem, workspace_root: Option<&Path>) ->
         .chain(extra_gist_keys(tool).iter())
         .copied()
         .collect();
-    collect_param_details(args, &skipped, workspace_root)
+    collect_param_details(&tool.tool_name, args, &skipped, workspace_root)
 }
 
 /// Argument keys the row title already shows for a category, so details skip them.
@@ -325,6 +325,12 @@ mod tests {
         // unphrased sibling still renders.
         assert_eq!(summary(&invocation("code_search", Some(json!({"query": "A", "pattern": "B"})))), "Pattern: B");
         assert_eq!(summary(&invocation("code_search", Some(json!({"pattern": "A", "q": "B"})))), "Q: B");
+        // Search aliases hide only when the headline consumed them: an
+        // unphrased sibling shows instead of vanishing as noise/verbose.
+        assert_eq!(summary(&invocation("grep", Some(json!({"pattern": "A", "query": "B"})))), "Query: B");
+        assert_eq!(summary(&invocation("code_search", Some(json!({"pattern": "A", "text": "T"})))), "Text: T");
+        // Asymmetric: `text` stays a hidden body for edits.
+        assert_eq!(summary(&invocation("edit_file", Some(json!({"path": "f", "text": "body"})))), "");
     }
 
     #[test]

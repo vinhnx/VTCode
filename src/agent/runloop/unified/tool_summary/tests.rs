@@ -153,10 +153,11 @@ fn prepare_summary_data_keeps_stream_label_for_ordinary_tools() {
 
 #[test]
 fn prepare_summary_data_hides_output_caps_on_ordinary_tools() {
-    // The cap is plumbing for every tool, not just session follow-ups.
+    // The cap is plumbing for every tool, not just session follow-ups. The
+    // query is the search's content and shows; only the cap hides.
     let args = json!({ "query": "tool intent", "max_output_tokens": 200, "limit": 5 });
     let data = prepare_summary_data(tool_names::SEARCH_TOOLS, &args, None, None);
-    assert_eq!(data.details, vec!["Limit: 5".to_string()]);
+    assert_eq!(data.details, vec!["Query: tool intent".to_string(), "Limit: 5".to_string()]);
 }
 
 #[test]

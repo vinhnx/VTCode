@@ -325,7 +325,7 @@ fn prepare_summary_data(
     } else {
         // Shared collector takes a key slice; the highlight set owns them.
         let skipped: Vec<&str> = highlights.iter().map(String::as_str).collect();
-        collect_param_details(args, &skipped, workspace_root)
+        collect_param_details(tool_name, args, &skipped, workspace_root)
     };
 
     let mut summary = build_tool_summary(&action_label, &headline);
