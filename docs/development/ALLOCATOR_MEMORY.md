@@ -61,12 +61,12 @@ Two tools, no provider/API key needed:
 - **Allocation throughput** — `cargo bench --bench allocator_throughput` (optionally `--features allocator-jemalloc`)
   compares allocation speed of the two allocators for small, large, and mixed event-shaped allocations.
 
-Measured on macOS (dev machine), identical `bench-allocator` workload (2 bursts x 20 events x 200 tasks, 2s idle):
+Measured on macOS arm64, default workload (3 bursts x 30 events x 200 tokens, 2s idle, 2026-11-10):
 
 | Allocator          | Baseline MB | Final MB | Retained | Note               |
 | ------------------ | ----------- | -------- | -------- | ------------------ |
-| mimalloc (default) | 25.2        | 55.0     | +118%    | pins               |
-| jemalloc           | 24.8        | 44.9     | +81%     | pins on macOS only |
+| mimalloc (default) | 46.5        | 80.1     | +72%     | pins               |
+| jemalloc           | 38.7        | 61.8     | +60%     | pins on macOS only |
 
 The jemalloc row was measured on macOS where `background_thread` is unsupported; on Linux the same build returns memory
 between bursts (per the article's container findings).
