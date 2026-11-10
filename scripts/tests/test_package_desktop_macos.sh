@@ -163,6 +163,32 @@ NO_ASSETS_APP="${TEST_ROOT}/no-assets/VT Code.app"
 cmp -s "${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns" "${NO_ASSETS_APP}/Contents/Resources/VTCode.icns"
 printf 'PASS: --no-assets ships the icns fallback without Assets.car.\n'
 
+# VTCODE_PACKAGE_PROFILE builds the named cargo profile and packages the
+# binaries from target/<profile>/ instead of target/release/.
+PROFILE_RELEASE_DIR="${TARGET_DIR}/${TARGET_TRIPLE}/release-fast"
+mkdir -p "${PROFILE_RELEASE_DIR}"
+printf 'fast-profile desktop binary\n' >"${PROFILE_RELEASE_DIR}/vtcode-desktop"
+printf 'fast-profile CLI helper\n' >"${PROFILE_RELEASE_DIR}/vtcode"
+chmod +x "${PROFILE_RELEASE_DIR}/vtcode-desktop" "${PROFILE_RELEASE_DIR}/vtcode"
+PROFILE_APP="${TEST_ROOT}/profile/VT Code.app"
+VTCODE_PACKAGE_PROFILE=release-fast \
+	"${ROOT_DIR}/scripts/package-desktop-macos.sh" "${PROFILE_APP}" >/dev/null
+[[ "$(cat "${PROFILE_APP}/Contents/MacOS/vtcode-desktop")" == "fast-profile desktop binary" ]]
+[[ "$(cat "${PROFILE_APP}/Contents/Helpers/vtcode")" == "fast-profile CLI helper" ]]
+grep -Fq -- "build --locked --profile release-fast --manifest-path ${ROOT_DIR}/Cargo.toml -p vtcode -p vtcode-desktop" "${CARGO_LOG}"
+printf 'PASS: VTCODE_PACKAGE_PROFILE builds and packages the named profile.\n'
+
+# An invalid profile must fail fast without invoking cargo.
+PROFILE_CARGO_BEFORE="$(wc -l <"${CARGO_LOG}" | tr -d ' ')"
+if VTCODE_PACKAGE_PROFILE='../evil' \
+	"${ROOT_DIR}/scripts/package-desktop-macos.sh" "${TEST_ROOT}/evil/VT Code.app" >/dev/null 2>&1; then
+	printf 'FAIL: invalid VTCODE_PACKAGE_PROFILE must fail.\n' >&2
+	exit 1
+fi
+PROFILE_CARGO_AFTER="$(wc -l <"${CARGO_LOG}" | tr -d ' ')"
+[[ "${PROFILE_CARGO_BEFORE}" == "${PROFILE_CARGO_AFTER}" ]]
+printf 'PASS: invalid VTCODE_PACKAGE_PROFILE fails before invoking cargo.\n'
+
 "${ROOT_DIR}/scripts/package-desktop-macos.sh" --help >"${TEST_ROOT}/help.txt"
 grep -Fq -- "Usage:" "${TEST_ROOT}/help.txt"
 grep -Fq -- "--force" "${TEST_ROOT}/help.txt"

@@ -5,13 +5,15 @@
 #
 # Options:
 #   -f, --force, --overwrite   Remove an existing output bundle before packaging.
-#   --skip-build, --no-build   Reuse the binaries already in the release dir.
+#   --skip-build, --no-build   Reuse the binaries already in the profile output dir.
 #   --no-assets, --skip-assets  Skip the Liquid Glass Assets.car catalog
 #                              (the icns fallback still ships).
 #   -h, --help                 Show this help and exit.
 #
-# Environment (each accepts "1"; equivalent to the matching flag):
+# Environment:
 #   VTCODE_PACKAGE_FORCE, VTCODE_PACKAGE_SKIP_BUILD, VTCODE_PACKAGE_SKIP_ASSETS
+#   (each accepts "1"; equivalent to the matching flag).
+#   VTCODE_PACKAGE_PROFILE: cargo profile to build and package (default: release).
 
 set -euo pipefail
 
@@ -50,7 +52,7 @@ Options:
   -f, --force, --overwrite   Remove an existing output bundle before packaging.
                              Without this flag the script refuses to overwrite.
   --skip-build, --no-build   Skip 'cargo build' and reuse the binaries already
-                             in the release directory.
+                             in the profile output directory.
   --no-assets, --skip-assets  Skip compiling the Liquid Glass Assets.car catalog;
                              the icns fallback still ships.
   -h, --help                 Show this help and exit.
@@ -126,6 +128,26 @@ if [[ -z "${OUTPUT_APP}" ]]; then
 	OUTPUT_APP="${ROOT_DIR}/dist/VT Code.app"
 fi
 
+# Cargo profile to build and package. Custom profiles land in
+# target/<profile>/ (dev and test share target/debug/); the default keeps
+# the historical `cargo build --release` invocation byte-identical.
+PROFILE="${VTCODE_PACKAGE_PROFILE:-release}"
+case "${PROFILE}" in
+dev | test)
+	PROFILE_DIR="debug"
+	;;
+release | bench)
+	PROFILE_DIR="release"
+	;;
+*)
+	if [[ ! "${PROFILE}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+		printf 'Error: invalid cargo profile: %s (set VTCODE_PACKAGE_PROFILE to a profile name from Cargo.toml)\n' "${PROFILE}" >&2
+		exit 2
+	fi
+	PROFILE_DIR="${PROFILE}"
+	;;
+esac
+
 TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT_DIR}/target}"
 if [[ "${TARGET_DIR}" != /* ]]; then
 	TARGET_DIR="${PWD}/${TARGET_DIR}"
@@ -133,7 +155,7 @@ fi
 if [[ -n "${CARGO_BUILD_TARGET:-}" ]]; then
 	TARGET_DIR="${TARGET_DIR}/${CARGO_BUILD_TARGET}"
 fi
-RELEASE_DIR="${TARGET_DIR}/release"
+RELEASE_DIR="${TARGET_DIR}/${PROFILE_DIR}"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
 	printf 'Error: the VT Code desktop bundle must be built on macOS.\n' >&2
@@ -245,8 +267,10 @@ CONTENTS="${STAGED_APP}/Contents"
 
 if ((SKIP_BUILD)); then
 	printf '%b%s%b\n' "${DIM}" "Skipping cargo build; reusing ${RELEASE_DIR}." "${NC}"
-else
+elif [[ "${PROFILE}" == "release" ]]; then
 	cargo build --locked --release --manifest-path "${ROOT_DIR}/Cargo.toml" -p vtcode -p vtcode-desktop
+else
+	cargo build --locked --profile "${PROFILE}" --manifest-path "${ROOT_DIR}/Cargo.toml" -p vtcode -p vtcode-desktop
 fi
 
 # A misconfigured CARGO_TARGET_DIR/CARGO_BUILD_TARGET otherwise surfaces as a

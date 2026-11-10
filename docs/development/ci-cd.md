@@ -189,6 +189,7 @@ first-launch latency.
 | Build path                 | Profile                                           | Extra size flags                                 |
 | -------------------------- | ------------------------------------------------- | ------------------------------------------------ |
 | macOS local (`release.sh`) | `release`                                         | `-Wl,-dead_strip` via `CARGO_TARGET_*_RUSTFLAGS` |
+| macOS CI (desktop .app)    | `release-fast` (thin LTO, 4 codegen units)        | `-Wl,-dead_strip` (same as local)                |
 | Linux CI                   | `release-fast` (thin LTO, 4 codegen units)        | `-Wl,--gc-sections` via `RUSTFLAGS`              |
 | Windows CI                 | `release-fast-windows` (no LTO, 16 codegen units) | MSVC `/OPT:REF` (default)                        |
 

@@ -95,9 +95,6 @@ jobs:
           # action's own (stale) manifest — 0.9.132 — below nextest.toml's floor.
           tool: nextest@${{ steps.nextest.outputs.version }}
 
-      - name: Check desktop, protocol, and backend
-        run: cargo check --locked -p vtcode-desktop -p vtcode-desktop-protocol -p vtcode
-
       - name: Run host, UI, protocol, and GUI tests
         run: cargo nextest run --locked -p vtcode-ui -p vtcode-desktop-protocol -p vtcode-desktop
 
@@ -114,6 +111,14 @@ jobs:
         run: bash scripts/tests/test_install_desktop.sh
 
       - name: Build and verify the app bundle
+        # Push-to-main only: PRs pay ~35 min for a bundle whose upload is
+        # main-only, so the artifact would be discarded.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          # The CI bundle is an ad hoc signed, 7-day artifact: thin LTO +
+          # 4 codegen units instead of fat LTO + 1 (same as Linux/Windows
+          # CI), while keeping debug-assertions/overflow-checks.
+          VTCODE_PACKAGE_PROFILE: release-fast
         run: scripts/package-desktop-macos.sh "$RUNNER_TEMP/VT Code.app"
 
       - name: Upload the app bundle
