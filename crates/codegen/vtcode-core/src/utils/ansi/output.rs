@@ -33,6 +33,19 @@ impl AnsiRenderer {
         self.diagnostic_history.clear();
     }
 
+    /// Persist an operational diagnostic to the canonical sink without
+    /// displaying it. Rows the active communication style hides still belong
+    /// to the policy-complete event trail, so producers consult the visibility
+    /// predicate at paint time and call this entry point instead of
+    /// [`Self::diagnostic`] when a row must stay off screen.
+    pub fn persist_diagnostic(&mut self, diagnostic: &vtcode_commons::diagnostics::Diagnostic) -> Result<()> {
+        let (_, persistence_error) = self.persist_diagnostic_impl(diagnostic, true);
+        match persistence_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+
     /// Display an operational diagnostic. Payloads must also be sanitized before event persistence.
     pub fn diagnostic(&mut self, diagnostic: &vtcode_commons::diagnostics::Diagnostic) -> Result<()> {
         self.display_diagnostic(diagnostic, true)
@@ -48,7 +61,39 @@ impl AnsiRenderer {
         diagnostic: &vtcode_commons::diagnostics::Diagnostic,
         persist: bool,
     ) -> Result<()> {
-        use vtcode_commons::diagnostics::{DiagnosticSeverity, redact_diagnostic};
+        use vtcode_commons::diagnostics::DiagnosticSeverity;
+        let (diagnostic, persistence_error) = self.persist_diagnostic_impl(diagnostic, persist);
+        let style = match diagnostic.severity {
+            DiagnosticSeverity::Info => MessageStyle::Info,
+            DiagnosticSeverity::Warning => MessageStyle::Warning,
+            DiagnosticSeverity::Error => MessageStyle::Error,
+        };
+        if let Some(sink) = &self.sink {
+            if persist && self.diagnostic_sink.is_none() {
+                // Secondary renderers retain their owning handle's canonical observer.
+                sink.handle.diagnostic(diagnostic.clone());
+            } else {
+                sink.handle.present_diagnostic(diagnostic.clone());
+            }
+            transcript::append(&diagnostic.text());
+        } else {
+            self.render_markdown(style, &diagnostic.text())?;
+        }
+        if let Some(error) = persistence_error {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Flush, redact, deduplicate, and persist one diagnostic, returning the
+    /// redacted payload annotated with any persistence-failure note and the
+    /// sink error that caused it.
+    fn persist_diagnostic_impl(
+        &mut self,
+        diagnostic: &vtcode_commons::diagnostics::Diagnostic,
+        persist: bool,
+    ) -> (vtcode_commons::diagnostics::Diagnostic, Option<anyhow::Error>) {
+        use vtcode_commons::diagnostics::redact_diagnostic;
         self.flush_compact_command_group();
         let mut diagnostic = redact_diagnostic(diagnostic);
         let already_persisted = self.diagnostic_history.iter().any(|previous| previous == &diagnostic);
@@ -76,26 +121,7 @@ impl AnsiRenderer {
                 .agent_details
                 .push_str(&vtcode_commons::sanitizer::sanitize_provider_diagnostic(error.to_string()));
         }
-        let style = match diagnostic.severity {
-            DiagnosticSeverity::Info => MessageStyle::Info,
-            DiagnosticSeverity::Warning => MessageStyle::Warning,
-            DiagnosticSeverity::Error => MessageStyle::Error,
-        };
-        if let Some(sink) = &self.sink {
-            if persist && self.diagnostic_sink.is_none() {
-                // Secondary renderers retain their owning handle's canonical observer.
-                sink.handle.diagnostic(diagnostic.clone());
-            } else {
-                sink.handle.present_diagnostic(diagnostic.clone());
-            }
-            transcript::append(&diagnostic.text());
-        } else {
-            self.render_markdown(style, &diagnostic.text())?;
-        }
-        if let Some(error) = persistence_error {
-            return Err(error);
-        }
-        Ok(())
+        (diagnostic, persistence_error)
     }
 
     #[track_caller]

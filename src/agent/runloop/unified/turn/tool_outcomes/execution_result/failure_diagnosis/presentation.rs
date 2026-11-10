@@ -118,6 +118,16 @@ pub(crate) fn render_diagnosis(
         correlation_id: diagnostic_correlation_id(turn_id, tool_call_id, tool_name, diagnosis),
         actions: Vec::new(),
     };
+    // The canonical event always persists; only rows the active
+    // communication style admits reach the transcript paint path. Hidden
+    // rows still join the plain-text trail so exports keep them.
+    if !vtcode_commons::diagnostics::diagnostic_is_user_visible(renderer.communication_style(), &diagnostic.code) {
+        vtcode_core::utils::transcript::append(&diagnostic.text());
+        if let Err(error) = renderer.persist_diagnostic(&diagnostic) {
+            tracing::warn!(tool = %tool_name, error = %error, "failed to persist tool failure diagnosis");
+        }
+        return;
+    }
     // The renderer's canonical callback owns the event; do not emit a second incident.
     if let Err(error) = renderer.diagnostic(&diagnostic) {
         tracing::warn!(tool = %tool_name, error = %error, "failed to persist or render tool failure diagnosis");
@@ -206,6 +216,66 @@ mod tests {
             let painted = std::iter::from_fn(|| receiver.try_recv().ok())
                 .any(|command| matches!(command, InlineCommand::AppendLine { .. } | InlineCommand::Inline { .. }));
             assert_eq!(painted, paints, "{style:?} paints={paints} for empty searches");
+        }
+    }
+
+    #[test]
+    fn hidden_diagnostics_persist_but_never_reach_the_transcript_paint_path() {
+        use std::sync::{Arc, Mutex};
+
+        use tokio::sync::mpsc::unbounded_channel;
+        use vtcode_commons::diagnostics::Diagnostic;
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        use vtcode_core::utils::ansi::AnsiRenderer;
+        use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
+
+        // The classifier itself is covered by the failure_diagnosis routing
+        // tests; here the classes are pinned directly to the code + gate
+        // decision render_diagnosis makes. Command mirrors the failing
+        // `cat ... | head -c ...` launch from the latest session.
+        let command_diagnosis = ToolFailureDiagnosis::new(
+            "'exec_command' returned exit code 1. Command: cat docs/harness/INDEX.md | head -c 6000; echo ===; cat docs/harness/CORE_BELIEFS.md | head -c 4000.",
+            "The command reported a non-zero exit status; the bounded output does not establish a more specific cause.",
+            "Inspect the reported error and retry with corrected arguments or a narrower scope.",
+        )
+        .with_failure_class(ToolFailureClass::Command);
+        assert_eq!(command_diagnosis.failure_class(), ToolFailureClass::Command);
+        let routine_diagnosis = ToolFailureDiagnosis::new("routine failure", "cause", "action");
+        assert_eq!(routine_diagnosis.failure_class(), ToolFailureClass::Routine);
+
+        // Asymmetric matrix: the same code paints or stays silent depending
+        // on the style, and persistence never depends on the style.
+        for (style, diagnosis, expected_code, paints) in [
+            (CommunicationStyle::Quiet, &command_diagnosis, "tool.command_failed", false),
+            (CommunicationStyle::Balanced, &command_diagnosis, "tool.command_failed", true),
+            (CommunicationStyle::Verbose, &command_diagnosis, "tool.command_failed", true),
+            (CommunicationStyle::Quiet, &routine_diagnosis, "tool.execution_failed", false),
+            (CommunicationStyle::Balanced, &routine_diagnosis, "tool.execution_failed", false),
+            (CommunicationStyle::Verbose, &routine_diagnosis, "tool.execution_failed", true),
+        ] {
+            let (sender, mut receiver) = unbounded_channel();
+            let handle = InlineHandle::new_for_tests(sender);
+            let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+            renderer.set_communication_style(style);
+            let persisted = Arc::new(Mutex::new(Vec::<Diagnostic>::new()));
+            let output = Arc::clone(&persisted);
+            renderer.set_diagnostic_sink(Arc::new(move |diagnostic| {
+                output.lock().unwrap().push(diagnostic.clone());
+                Ok(())
+            }));
+
+            render_diagnosis(&mut renderer, None, "turn-1", None, "exec_command", diagnosis);
+
+            let persisted = persisted.lock().unwrap();
+            assert_eq!(persisted.len(), 1, "{style:?} must persist {expected_code}");
+            assert_eq!(persisted[0].code, expected_code);
+            let painted = std::iter::from_fn(|| receiver.try_recv().ok()).any(|command| {
+                matches!(
+                    command,
+                    InlineCommand::Diagnostic(_) | InlineCommand::AppendLine { .. } | InlineCommand::Inline { .. }
+                )
+            });
+            assert_eq!(painted, paints, "{style:?} paints={paints} for {expected_code}");
         }
     }
 
