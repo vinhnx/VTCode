@@ -3,9 +3,12 @@
 //! The macOS bundle ships the `Dynamic` split tile as its static icon. At
 //! runtime the picker selection resolves to concrete art: explicit variants
 //! (`Light`/`Dark`/`Clear`/`Tinted`) pin their artwork, while `Dynamic`
-//! follows the active theme mode (per the artwork README, automatic
-//! switching selects Light or Dark art at runtime; the split tile only
-//! previews the `Dynamic` option).
+//! follows the active theme mode on pre-Tahoe systems (per the artwork
+//! README, automatic switching selects Light or Dark art at runtime; the
+//! split tile only previews the `Dynamic` option). On macOS 26+ the bundled
+//! layered icon is system-composed in Liquid Glass, so `Dynamic` defers to
+//! the bundle icon instead of overriding it with a flat raster; only
+//! explicit pins override the Dock tile there.
 //!
 //! Two sizes are embedded: 512px for the Dock application and 128px for
 //! small in-app renders (picker tiles, brand logo), where the 512px art
@@ -25,6 +28,22 @@
 
 use gpui_kit::component::theme::ThemeMode;
 use vtcode_commons::ui_protocol::AppIconPreference;
+
+/// First macOS major where the bundle icon is system-composed Liquid Glass.
+/// At or above this version `Dynamic` defers to the bundle icon.
+const LIQUID_GLASS_MACOS_MAJOR: isize = 26;
+
+/// Whether the Dock tile should defer to the system-composed bundle icon.
+///
+/// Pure predicate (separate from the AppKit version query) so the contract
+/// is testable without a Dock. `Dynamic`/`Unknown` defer at or above macOS
+/// 26; explicit pins always override because the bundle icon is fixed at
+/// packaging time and cannot follow a pin.
+#[must_use]
+pub(super) const fn prefers_system_dock_icon(preference: AppIconPreference, macos_major: isize) -> bool {
+    matches!(preference, AppIconPreference::Dynamic | AppIconPreference::Unknown)
+        && macos_major >= LIQUID_GLASS_MACOS_MAJOR
+}
 
 const LIGHT_PNG: &[u8] = include_bytes!("../../../../../resources/icons/vtcode-app-light-512.png");
 const DARK_PNG: &[u8] = include_bytes!("../../../../../resources/icons/vtcode-app-dark-512.png");
@@ -108,6 +127,56 @@ pub(super) fn apply_dock_icon(_png: &'static [u8]) -> bool {
     false
 }
 
+/// Running macOS major version for the Dock gate. Headless tests never
+/// query the process; the pure gate takes the major explicitly.
+#[cfg(not(test))]
+fn macos_major_version() -> isize {
+    use objc2_foundation::NSProcessInfo;
+
+    NSProcessInfo::processInfo().operatingSystemVersion().majorVersion
+}
+
+#[cfg(test)]
+fn macos_major_version() -> isize {
+    LIQUID_GLASS_MACOS_MAJOR
+}
+
+/// Clear a prior Dock override so the system-composed bundle icon returns.
+///
+/// Returns false off the main thread. Headless tests take the stub below.
+#[cfg(not(test))]
+#[expect(unsafe_code, reason = "AppKit dock icon setter is an unsafe Objective-C call")]
+fn clear_dock_icon() -> bool {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    // SAFETY: called on the main thread; nil restores the bundle icon.
+    unsafe {
+        app.setApplicationIconImage(None);
+    }
+    true
+}
+
+#[cfg(test)]
+fn clear_dock_icon() -> bool {
+    false
+}
+
+/// Apply the saved preference to the Dock, deferring to the bundle icon on
+/// Tahoe+ `Dynamic`. The single entry point so startup, picker, theme-change,
+/// and reset cannot drift.
+pub(super) fn apply_dock_preference(preference: AppIconPreference, mode: ThemeMode) -> bool {
+    if prefers_system_dock_icon(preference, macos_major_version()) {
+        clear_dock_icon()
+    } else {
+        apply_dock_icon(png_bytes(preference, mode))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gpui_kit::component::theme::ThemeMode;
@@ -115,7 +184,8 @@ mod tests {
 
     use super::{
         CLEAR_128_PNG, CLEAR_PNG, DARK_128_PNG, DARK_PNG, DYNAMIC_128_PNG, DYNAMIC_PNG, LIGHT_128_PNG, LIGHT_PNG,
-        TINTED_128_PNG, TINTED_PNG, apply_dock_icon, png_bytes, preview_bytes,
+        TINTED_128_PNG, TINTED_PNG, apply_dock_icon, clear_dock_icon, png_bytes, prefers_system_dock_icon,
+        preview_bytes,
     };
 
     #[test]
@@ -287,5 +357,36 @@ mod tests {
     #[test]
     fn dock_icon_apply_is_a_headless_no_op_in_tests() {
         assert!(!apply_dock_icon(LIGHT_PNG));
+    }
+
+    #[test]
+    fn dock_clear_is_a_headless_no_op_in_tests() {
+        assert!(!clear_dock_icon());
+    }
+
+    #[test]
+    fn prefers_system_dock_icon_defers_only_dynamic_on_tahoe() {
+        // Tahoe boundary: Dynamic defers at and above the Liquid Glass major;
+        // below it each mode resolves to Light/Dark art (pre-Tahoe bundle
+        // cannot compose appearances). Pins never defer at any version.
+        for major in [26, 27, 28] {
+            assert!(prefers_system_dock_icon(AppIconPreference::Dynamic, major), "Dynamic defers on {major}");
+            assert!(prefers_system_dock_icon(AppIconPreference::Unknown, major), "Unknown defers on {major}");
+            for pin in [AppIconPreference::Light, AppIconPreference::Dark, AppIconPreference::Clear, AppIconPreference::Tinted] {
+                assert!(!prefers_system_dock_icon(pin, major), "{pin:?} must override on {major}");
+            }
+        }
+        for major in [15, 21, 25] {
+            for preference in [
+                AppIconPreference::Dynamic,
+                AppIconPreference::Unknown,
+                AppIconPreference::Light,
+                AppIconPreference::Dark,
+                AppIconPreference::Clear,
+                AppIconPreference::Tinted,
+            ] {
+                assert!(!prefers_system_dock_icon(preference, major), "{preference:?} must override on {major}");
+            }
+        }
     }
 }

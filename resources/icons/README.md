@@ -36,9 +36,11 @@ setups should use the `vtcode-app-*` set.
 artwork notes, automatic switching selects Light or Dark art at runtime — the Dynamic split tile itself is only used
 where the context cannot switch (bundle icon, manual setups, picker preview).
 
-- Desktop: Settings → Appearance → App Icon picker (Dynamic/Light/Dark/Clear/Tinted). The running app applies the
-  selection to the Dock via `NSApplication.setApplicationIconImage` at startup, on selection, and on theme-mode
-  changes while Dynamic is selected. Finder always shows the bundle (Dynamic) icon.
+- Desktop: Settings → Appearance → App Icon picker (Dynamic/Light/Dark/Clear/Tinted). On macOS 26+ the running
+  app defers `Dynamic` to the system-composed bundle icon and only overrides the Dock via
+  `NSApplication.setApplicationIconImage` for explicit pins; on pre-26 it resolves `Dynamic` against the active
+  theme mode and applies Light/Dark art at startup and on theme-mode changes. Finder always shows the bundle
+  (Dynamic) icon.
 - CLI: `ui.app_icon = "dynamic"|"light"|"dark"|"clear"|"tinted"` in `vtcode.toml` (default `"dynamic"`). The iTerm2
   tab icon installer resolves Dynamic against the active CLI theme at startup and reinstalls on drift, so a
   theme-mode change applies on the next launch. Switch immediately with

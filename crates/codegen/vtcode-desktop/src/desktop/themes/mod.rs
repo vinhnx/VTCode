@@ -9,7 +9,7 @@
 //! are mixed from the palette so every theme stays legible by construction.
 
 use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
-use gpui_kit::{App, Hsla, Window, rgb};
+use gpui_kit::{App, Hsla, Window, px, rgb};
 use vtcode_ui::theme::{self, UiThemeColors};
 
 mod custom;
@@ -390,9 +390,16 @@ pub(super) fn apply_selection_with_contrast(
     mode
 }
 
+/// Shared radius baseline (`md` 8px, `lg` 12px): Large buttons capsule at 16px, tiers stay concentric.
+fn apply_desktop_radii(kit_theme: &mut Theme) {
+    kit_theme.radius = px(8.);
+    kit_theme.radius_lg = px(12.);
+}
+
 fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
     Theme::change(seeds.mode, window, cx);
     Theme::update(cx, |kit_theme| {
+        apply_desktop_radii(kit_theme);
         let colors = &mut kit_theme.colors;
         colors.background = seeds.background;
         colors.foreground = seeds.foreground;
@@ -444,6 +451,7 @@ fn accessible_focus_color(accent: Hsla, colors: &ThemeColor) -> Hsla {
 
 fn normalize_system_interaction_colors(cx: &mut App) {
     Theme::update(cx, |kit_theme| {
+        apply_desktop_radii(kit_theme);
         let colors = &mut kit_theme.colors;
         apply_filled_surfaces(colors);
         apply_surface_borders(colors);

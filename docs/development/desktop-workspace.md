@@ -728,10 +728,10 @@ as `Contents/Resources/VTCode.icns` (pre-Tahoe fallback) and compiles
 `CFBundleIconFile` and `CFBundleIconName=AppIcon` in `Info.plist`; no checkout
 paths or external image requests are needed at runtime. On macOS 26+ the OS
 composes the layered Liquid Glass Default/Dark/Clear/Tinted appearances from
-the catalog at display time. The running app applies the saved Appearance
-picker selection (Dynamic/Light/Dark/Clear/Tinted) to the Dock via
-`NSApplication.setApplicationIconImage`, resolving Dynamic against the active
-theme mode. The flat PNGs and the `.icns` carry the rounded squircle with
+the catalog at display time. The running app defers `Dynamic` to that
+system-composed bundle icon and only overrides the Dock via
+`NSApplication.setApplicationIconImage` for explicit pins; on pre-26 it
+resolves Dynamic against the active theme mode. The flat PNGs and the `.icns` carry the rounded squircle with
 transparency baked in, because macOS clips neither `.icns` art nor
 `setApplicationIconImage` images to the system shape (only the layered
 `Assets.car` path is system-shaped); see `resources/icons/README.md`. The GPUI Kit

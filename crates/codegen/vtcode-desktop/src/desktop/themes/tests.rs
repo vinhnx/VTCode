@@ -101,6 +101,23 @@ fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mu
 }
 
 #[gpui_kit::test]
+fn every_theme_shares_the_round_radius_baseline(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let theme = cx.theme();
+            assert_eq!(theme.radius, px(8.), "{id}: base md radius");
+            assert_eq!(theme.radius_lg, px(12.), "{id}: large tier radius");
+            assert_eq!(theme.radius * 2., px(16.), "{id}: Large button capsule");
+        }
+    });
+}
+
+#[gpui_kit::test]
 fn system_themes_show_subtle_surface_borders(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

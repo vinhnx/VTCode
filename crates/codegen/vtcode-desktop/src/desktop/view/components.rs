@@ -1,9 +1,9 @@
 //! Shared stateless element builders reused by every desktop screen.
 //!
-//! Surface tiers: workspace shell and large overlays (palette, config editor,
-//! diff review) use `rounded_xl`; sidebar and inspector panels `rounded_lg`;
-//! nested cards and compact dialogs `rounded_md`; tiny inset boxes
-//! `rounded_sm`; pills only for intentional pill shapes. Panel toolbar rows
+//! Surface tiers from the shared theme baseline (`md` 8px, `lg` 12px): workspace
+//! shell and large overlays `rounded_xl`; sidebar/inspector `rounded_lg`;
+//! nested cards/dialogs `rounded_md`; tiny insets `rounded_sm`; pills only
+//! for intentional pill shapes. Panel toolbar rows
 //! share [`panel_header`]; short navigation labels share [`eyebrow_label`],
 //! settings section headings keep sentence case via [`section_label`] and
 //! [`group_box_title`] one size step above body text. Interactive controls
@@ -858,9 +858,9 @@ fn scroll_column_inner(
         .child(child)
 }
 
-/// Interactive desktop buttons use a pointing hand; disabled buttons keep the arrow.
+/// Interactive buttons: pointing hand (disabled keeps arrow); all share the round Large tier.
 pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    Button::new(id).tab_stop(true).cursor_pointer()
+    Button::new(id).tab_stop(true).cursor_pointer().rounded(ButtonRounded::Large)
 }
 
 /// Ordinary visible action: a filled push button for commands that deserve a

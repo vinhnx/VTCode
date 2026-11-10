@@ -25,7 +25,7 @@ gpui-kit = { version = "=0.9.0", features = ["syntect"] }
 nucleo-matcher = "0.3"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSMenu", "NSMenuItem", "NSResponder", "NSScreen", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
-objc2-foundation = "0.3.2"
+objc2-foundation = { version = "0.3.2", features = ["NSProcessInfo"] }
 objc2-service-management = { version = "0.3.2", default-features = false, features = [
     "std",
     "SMAppService",

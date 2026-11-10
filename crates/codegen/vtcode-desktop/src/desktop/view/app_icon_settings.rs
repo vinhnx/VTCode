@@ -30,9 +30,10 @@ impl DesktopView {
 
     /// Re-apply the saved icon selection to the Dock. AppKit failures stay
     /// silent: the bundle icon remains and the preference still applies on
-    /// future launches and theme-mode changes.
+    /// future launches and theme-mode changes. On Tahoe+ `Dynamic` clears
+    /// any prior override so the system-composed bundle icon returns.
     pub(super) fn refresh_dock_icon(&self) {
-        let _applied = app_icon::apply_dock_icon(app_icon::png_bytes(self.preferences.app_icon(), self.theme_mode));
+        let _applied = app_icon::apply_dock_preference(self.preferences.app_icon(), self.theme_mode);
     }
 
     fn render_app_icon_tile_content(

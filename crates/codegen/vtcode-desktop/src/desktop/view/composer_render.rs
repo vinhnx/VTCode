@@ -315,7 +315,8 @@ impl DesktopView {
         if self.running {
             model_actions = model_actions
                 .child(
-                    composer_run_geometry(desktop_button("force-cancel-exec").ghost())
+                    desktop_button("force-cancel-exec")
+                        .ghost()
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
                         .icon(IconName::X)
@@ -323,7 +324,7 @@ impl DesktopView {
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
                 .child(
-                    composer_run_geometry(desktop_glass_primary_button("cancel-turn", &colors, false))
+                    desktop_glass_primary_button("cancel-turn", &colors, false)
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -336,7 +337,7 @@ impl DesktopView {
                 );
         } else {
             model_actions = model_actions.child(
-                composer_run_geometry(desktop_glass_primary_button("send-prompt", &colors, !can_submit))
+                desktop_glass_primary_button("send-prompt", &colors, !can_submit)
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
@@ -656,13 +657,6 @@ impl DesktopView {
     }
 }
 
-/// Shared radius for the composer run cluster: the idle send and every
-/// running-state button render from this one definition, so the cluster
-/// reads as a single control across turn states. Size stays on Kit's
-/// Medium default: its icon-only frame is the same 32px as Large while the
-/// glyph runs 16px instead of 24px (see the running-trio comment). Kit
-/// replays the instance shadow inside its disabled arm, so elevation
-/// stays gated at each call site.
-fn composer_run_geometry(button: Button) -> Button {
-    button.rounded(ButtonRounded::Large)
-}
+// The run cluster shares `desktop_button`'s Large baseline directly; no
+// local radius override, so idle and running states cannot drift.
+
