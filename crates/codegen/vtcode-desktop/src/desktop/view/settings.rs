@@ -88,7 +88,6 @@ impl SettingsTab {
                 "appearance",
                 "themes",
                 "color",
-                "contrast",
                 "font",
                 "typography",
                 "visual style",

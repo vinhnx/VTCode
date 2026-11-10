@@ -144,6 +144,46 @@ fn menu_items() -> Vec<MenuBarAction> {
     menu_groups().iter().flat_map(|group| group.iter().copied()).collect()
 }
 
+/// One Dock-menu item for a status-menu action, dispatching through the same
+/// GPUI actions the native menus use so validation and handling stay in sync
+/// (Show/Quit are global; the rest land on the active window). Titles resolve
+/// through the ambient locale, so a language change rebuilds them.
+fn dock_menu_item(action: MenuBarAction) -> MenuItem {
+    let title = action.title_in_locale(&rust_i18n::locale());
+    match action {
+        MenuBarAction::Show => MenuItem::action(title, ShowMainWindow),
+        MenuBarAction::NewSession => MenuItem::action(title, NewSession),
+        MenuBarAction::OpenWorkspace => MenuItem::action(title, ChooseWorkspace),
+        MenuBarAction::OpenSettings => MenuItem::action(title, OpenSettings),
+        MenuBarAction::OpenHelp => MenuItem::action(title, OpenHelp),
+        MenuBarAction::About => MenuItem::action(title, AboutApplication),
+        MenuBarAction::Quit => MenuItem::action(title, QuitApplication),
+    }
+}
+
+/// Right-click Dock-menu items: the status-menu groups in the same order with
+/// separators between groups. GPUI serves them from `applicationDockMenu:`;
+/// items validate through the same `is_action_available` check as the main
+/// menu, so window-gated actions disable when no window is active.
+fn dock_menu_items() -> Vec<MenuItem> {
+    let mut items = Vec::new();
+    for (index, group) in menu_groups().iter().enumerate() {
+        if index > 0 {
+            items.push(MenuItem::separator());
+        }
+        for action in group.iter() {
+            items.push(dock_menu_item(*action));
+        }
+    }
+    items
+}
+
+/// Install the right-click Dock menu for the app icon. A no-op on the
+/// headless test platform (its `set_dock_menu` stub drops the items).
+pub(super) fn set_dock_menu(cx: &mut App) {
+    cx.set_dock_menu(dock_menu_items());
+}
+
 /// Run a status-menu action. Window-bound commands show and activate the main
 /// window first so they always have a view to land on.
 pub(super) fn dispatch_status_action(action: MenuBarAction, cx: &mut App) {
@@ -307,8 +347,9 @@ pub(super) fn set_enabled(enabled: bool, cx: &mut App) -> bool {
     true
 }
 
-/// Rebuild the status-menu items so titles follow the active locale.
+/// Rebuild the status-menu and Dock-menu items so titles follow the active locale.
 pub(super) fn refresh_labels(cx: &App) {
+    cx.set_dock_menu(dock_menu_items());
     #[cfg(not(test))]
     if let Some(mtm) = MainThreadMarker::new()
         && let Some(state) = cx.try_global::<MenuBarState>()
@@ -318,8 +359,6 @@ pub(super) fn refresh_labels(cx: &App) {
         menu.removeAllItems();
         add_menu_groups(&menu, target, mtm);
     }
-    #[cfg(test)]
-    let _ = cx;
 }
 
 /// Hide the app instead of closing when menu-bar mode owns the last window.
@@ -388,6 +427,7 @@ impl DesktopView {
 pub(super) fn init_native_menus(cx: &mut App) {
     register_global_actions(cx);
     set_native_menus(cx, false);
+    set_dock_menu(cx);
 }
 
 /// Register the global action handlers backing native menu items. Called once
@@ -471,7 +511,7 @@ pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{MenuBarAction, STATUS_ICON_PNG, menu_groups, menu_items};
+    use super::{MenuBarAction, STATUS_ICON_PNG, dock_menu_items, menu_groups, menu_items};
     use crate::desktop::localization::UiLanguage;
 
     #[test]
@@ -499,6 +539,48 @@ mod tests {
         }
         assert_eq!(MenuBarAction::from_tag(-1), None);
         assert_eq!(MenuBarAction::from_tag(flat.len().cast_signed()), None);
+    }
+
+    #[test]
+    fn dock_menu_mirrors_status_menu_groups() {
+        use super::{
+            AboutApplication, ChooseWorkspace, MenuItem, NewSession as ActionNewSession, OpenHelp as ActionOpenHelp,
+            OpenSettings as ActionOpenSettings, QuitApplication, ShowMainWindow,
+        };
+        use MenuBarAction::{About, NewSession, OpenHelp, OpenSettings, OpenWorkspace, Quit, Show};
+        let items = dock_menu_items();
+        assert_eq!(items.len(), 10, "7 actions plus 3 separators");
+        let expected: [(MenuBarAction, &dyn gpui_kit::Action); 7] = [
+            (Show, &ShowMainWindow),
+            (NewSession, &ActionNewSession),
+            (OpenWorkspace, &ChooseWorkspace),
+            (OpenSettings, &ActionOpenSettings),
+            (OpenHelp, &ActionOpenHelp),
+            (About, &AboutApplication),
+            (Quit, &QuitApplication),
+        ];
+        let mut leaders = expected.iter();
+        let mut order = Vec::new();
+        for item in &items {
+            match item {
+                MenuItem::Separator => {}
+                MenuItem::Action { name, action, .. } => {
+                    let (group_action, expected_action) = leaders.next().expect("no more actions than groups");
+                    assert_eq!(
+                        name.as_str(),
+                        group_action.title_in_locale(&rust_i18n::locale()).as_str(),
+                        "dock item keeps its status-menu title"
+                    );
+                    assert!(
+                        gpui_kit::Action::partial_eq(action.as_ref(), *expected_action),
+                        "dock item dispatches the main-menu action"
+                    );
+                    order.push(*group_action);
+                }
+                _ => panic!("dock menu holds only actions and separators"),
+            }
+        }
+        assert_eq!(order, menu_items(), "dock order matches the status groups");
     }
 
     #[test]

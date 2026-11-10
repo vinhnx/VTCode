@@ -1,7 +1,9 @@
 use std::io::Read;
 #[cfg(all(unix, not(any(target_os = "redox", target_os = "solaris"))))]
 use std::io::{Seek, SeekFrom, Write};
-use std::path::{Component, Path};
+#[cfg(all(unix, not(any(target_os = "redox", target_os = "solaris"))))]
+use std::path::Component;
+use std::path::Path;
 
 use crate::error::{Result, WebmcpError};
 use crate::runtime::FileSnapshot;

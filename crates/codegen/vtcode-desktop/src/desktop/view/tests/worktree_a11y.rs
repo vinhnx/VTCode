@@ -36,7 +36,10 @@ fn menu_bar_setting_keeps_the_window_and_draft_when_closed(cx: &mut TestAppConte
 fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.open_settings(window, cx));
+        view.update(cx, |view, cx| {
+            view.settings_tab = super::super::settings::SettingsTab::Accessibility;
+            view.open_settings(window, cx);
+        });
         window.render_frame(cx);
         scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
@@ -64,6 +67,10 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
         window.press("right", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).contrast_slider.read(cx).value().start(), f32::from(before + 1));
+        // Reset lives on the Appearance page; Contrast moved to Accessibility.
+        view.update(cx, |view, _| {
+            view.select_settings_tab(super::super::settings::SettingsTab::Appearance);
+        });
         // Geometry-driven scroll: center the reset button in the viewport
         // from the laid-out (possibly off-screen) bounds, so the click
         // survives card-height changes that fixed-pixel choreography cannot.

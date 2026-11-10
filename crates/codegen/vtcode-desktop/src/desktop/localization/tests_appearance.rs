@@ -4,8 +4,8 @@ use super::UiLanguage;
 fn contrast_description_is_localized_for_every_language() {
     for language in UiLanguage::ALL {
         let locale = language.locale();
-        let label = rust_i18n::t!("app.settings.appearance.contrast", locale = locale).to_string();
-        let description = rust_i18n::t!("app.settings.appearance.contrast_description", locale = locale).to_string();
+        let label = rust_i18n::t!("app.settings.accessibility.contrast", locale = locale).to_string();
+        let description = rust_i18n::t!("app.settings.accessibility.contrast_description", locale = locale).to_string();
         assert!(!label.is_empty() && !description.is_empty(), "{locale}");
         if language != UiLanguage::English {
             assert_ne!(description, "Increase text contrast while preserving the selected theme", "{locale}");
