@@ -153,8 +153,9 @@ Run a simple request after configuration:
 vtcode ask "Summarize this repository"
 ```
 
-Worked examples: [Atlas Cloud](./atlascloud.md), [OmniRoute](./omniroute.md), and [OpenLLM](./openllm.md). See the
-[Configuration guide](../config/models.md#custom_providers) for the complete field reference and precedence rules.
+Worked examples: [Atlas Cloud](./atlascloud.md), [OmniRoute](./omniroute.md), [OpenLLM](./openllm.md), and
+[UberLLM](./uberllm.md). See the [Configuration guide](../config/models.md#custom_providers) for the complete field
+reference and precedence rules.
 
 ## Collapsed tool-result disclosure
 
@@ -500,6 +501,19 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Default model:** `plus`. The `ultra`, `plus`, and `lite` aliases are built-in chains that depend on the accounts you
   have connected.
 - **Features:** Chat Completions, streaming, and function tools through VT Code's shared OpenAI-compatible transport.
+
+## UberLLM
+
+- **Guide:** [UberLLM Integration](./uberllm.md)
+- **Official docs:** [UberLLM docs](https://uberllm.dev/llms.txt)
+- **Integration mode:** configure UberLLM through `[[custom_providers]]` as a hosted gateway with one key for many chat
+  models.
+- **Base URL:** `https://api.uberllm.dev/v1`
+- **Auth:** `UBERLLM_API_KEY`
+- **Default model:** `deepseek/deepseek-v4.1-flash`. IDs use `<vendor>/<model>`; the public `GET /v1/models` lists them
+  with context lengths and prices.
+- **Features:** Chat Completions, Responses, streaming, and function tools through VT Code's shared OpenAI-compatible
+  transport. Per-model profiles can set `api_format = "anthropic-messages"` on the same base URL and key.
 
 ## Xiaomi MiMo
 

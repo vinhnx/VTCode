@@ -1070,6 +1070,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Provider Guides?", "How does Provider whitelisting work?", "How does
     Custom providers work?"
 
+- **File**: `docs/providers/uberllm.md`
+  - **Content**: UberLLM Integration Guide
+  - **Topics**: Configuration, Model Selection, Claude Models over Anthropic Messages, Protocol Behavior,
+    Troubleshooting
+  - **User Questions**: "What can you tell me about UberLLM Integration Guide?", "How does Configuration work?", "How
+    does Model Selection work?"
+
 - **File**: `docs/providers/vercel-ai-gateway.md`
   - **Content**: Vercel AI Gateway Integration
   - **Topics**: Setup, Curated models, Persisting configuration, Shared model IDs and provider precedence, Runtime
