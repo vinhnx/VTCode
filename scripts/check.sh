@@ -122,6 +122,18 @@ run_clippy() {
     fi
 }
 
+# Verify the headless vtcode-core contract (no TUI stack)
+run_headless_check() {
+    print_status "Checking headless vtcode-core (no default features)..."
+    if RUSTFLAGS="-D warnings" cargo clippy --locked -p vtcode-core --no-default-features --all-targets; then
+        print_success "Headless vtcode-core compiles warning-free!"
+        return 0
+    else
+        print_error "Headless vtcode-core check failed. vtcode-acp depends on it."
+        return 1
+    fi
+}
+
 # Run tests
 run_tests() {
     print_status "Running tests..."
@@ -422,6 +434,7 @@ main() {
     run_agent_legibility_checks || ((failed_checks++))
     run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
+    run_headless_check || ((failed_checks++))
     run_build || ((failed_checks++))
     run_tests || ((failed_checks++))
     run_harness_regression_tests || ((failed_checks++))
@@ -460,6 +473,9 @@ case "${1:-}" in
     "clippy"|"lint")
         check_clippy && run_clippy
         ;;
+    "headless")
+        check_clippy && run_headless_check
+        ;;
     "test")
         run_tests
         ;;
@@ -480,6 +496,7 @@ case "${1:-}" in
         echo "Commands:"
         echo "  fmt     - Check code formatting with rustfmt"
         echo "  clippy  - Run clippy lints"
+        echo "  headless - Verify headless vtcode-core compiles (vtcode-acp contract)"
         echo "  ast-grep - Run repo ast-grep rule tests and scan via 'vtcode check ast-grep'"
         echo "  test    - Run tests"
         echo "  harness - Run focused PTY/TUI harness regression tests"

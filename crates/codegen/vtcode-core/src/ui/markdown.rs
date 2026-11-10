@@ -91,6 +91,7 @@ pub fn render_markdown_to_lines_with_options(
                     link_target: None,
                 }]
             },
+            line_background: None,
         })
         .collect();
     if lines.is_empty() {

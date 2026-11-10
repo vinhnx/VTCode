@@ -24,6 +24,7 @@ pub mod theme;
 /// Theme configuration file parsing (`.vtcode/theme.toml`).
 pub mod theme_config;
 /// Theme manager for loading and applying custom themes.
+#[cfg(feature = "tui")]
 pub mod theme_manager;
 /// TUI module re-exports.
 pub mod tui;
@@ -42,10 +43,12 @@ pub use styled::*;
 pub use terminal::*;
 pub use theme::*;
 pub use theme_config::ThemeConfig;
+#[cfg(feature = "tui")]
 pub use theme_manager::ThemeManager;
 pub use tui::*;
 pub use tui_compat::*;
 pub use tui_mode::*;
+#[cfg(feature = "tui")]
 pub use vtcode_ui::tui::ui::FileColorizer;
 
 #[cfg(test)]

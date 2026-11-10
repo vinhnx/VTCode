@@ -173,10 +173,10 @@ impl AnsiRenderer {
             .as_ref()
             .and_then(|sink| {
                 sink.table_max_width_override
-                    .or_else(|| crossterm::terminal::size().ok().map(|(width, _)| usize::from(width)))
+                    .or_else(|| crate::utils::tty::terminal_size().map(|(width, _)| usize::from(width)))
                     .or(sink.table_max_width)
             })
-            .or_else(|| crossterm::terminal::size().ok().map(|(width, _)| usize::from(width)));
+            .or_else(|| crate::utils::tty::terminal_size().map(|(width, _)| usize::from(width)));
 
         terminal_width.map(|width| width.saturating_sub(indent_width).saturating_sub(frame_width))
     }
@@ -549,7 +549,7 @@ impl AnsiRenderer {
         if let Some(sink) = &mut self.sink {
             // Read terminal width fresh so tables adapt to resizes.
             if sink.table_max_width_override.is_none()
-                && let Ok((w, _)) = crossterm::terminal::size()
+                && let Some((w, _)) = crate::utils::tty::terminal_size()
             {
                 sink.table_max_width = Some(w as usize);
             }

@@ -15,7 +15,9 @@ use crate::ui::tui::{
 };
 #[cfg(feature = "tui")]
 use ansi_to_tui::IntoText;
-use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style};
+#[cfg(feature = "tui")]
+use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, RgbColor};
+use anstyle::{Effects, Style};
 use anyhow::Result;
 #[cfg(feature = "tui")]
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
@@ -554,10 +556,10 @@ impl InlineSink {
         }
 
         let had_trailing_newline = text.ends_with('\n');
-        let line_count_estimate = Self::count_lines(text).max(1);
 
         #[cfg(feature = "tui")]
         if let Ok(parsed) = text.as_bytes().into_text() {
+            let line_count_estimate = Self::count_lines(text).max(1);
             let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let base_style = RatatuiStyle::default().patch(parsed.style);

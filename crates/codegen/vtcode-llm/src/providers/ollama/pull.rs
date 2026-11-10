@@ -1,9 +1,9 @@
-use hashbrown::HashMap;
-use ratatui::crossterm::{
+use crossterm::{
     cursor::MoveToColumn,
     execute,
     terminal::{Clear, ClearType},
 };
+use hashbrown::HashMap;
 use std::io;
 use std::io::Write;
 

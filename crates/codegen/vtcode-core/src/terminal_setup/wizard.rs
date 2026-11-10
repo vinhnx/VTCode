@@ -323,8 +323,8 @@ mod tests {
     }
     #[test]
     fn zed_manual_setup_returns_before_path_resolution_or_file_operations() {
+        use crate::ui::tui::InlineHandle;
         use crate::utils::ansi::AnsiRenderer;
-        use vtcode_ui::tui::core_tui::app::types::InlineHandle;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let sandbox = tempfile::tempdir().unwrap();

@@ -38,7 +38,7 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 url = { workspace = true }
 percent-encoding = "2.3"
-vtcode-core = { workspace = true }
+vtcode-core = { workspace = true, default-features = false }
 vtcode-config = { workspace = true }
 vtcode-commons = { workspace = true }
 

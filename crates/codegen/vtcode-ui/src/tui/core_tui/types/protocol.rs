@@ -1,12 +1,10 @@
 use crate::tui::core_tui::types::{
     define_inline_message_commands, impl_inline_control_methods, impl_inline_message_methods,
 };
-use std::ops::Deref;
 use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::ContentPart;
 use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
 use super::selection::{InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig};
 use super::style::{InlineHeaderContext, InlineTextStyle, InlineTheme};
@@ -15,101 +13,7 @@ use crate::tui::options::FullscreenInteractionSettings;
 
 pub use vtcode_commons::ui_protocol::ActivityState;
 pub use vtcode_commons::ui_protocol::InlineMessageKind;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubmittedInput {
-    pub text: String,
-    pub attachments: Vec<ContentPart>,
-    /// Whether this submission may be merged with other queued text-only
-    /// submissions of the same agent into a single model turn. Ctrl+Enter and
-    /// Tab set this when they queue plain text while busy; busy plain-Enter
-    /// queues as its own non-batchable turn and slash commands stay a
-    /// one-per-turn dispatch.
-    pub batchable: bool,
-}
-
-impl SubmittedInput {
-    pub fn new(text: impl Into<String>, attachments: Vec<ContentPart>) -> Self {
-        Self { text: text.into(), attachments, batchable: false }
-    }
-
-    fn text_only(text: impl Into<String>) -> Self {
-        Self::new(text, Vec::new())
-    }
-
-    /// Mark this submission as eligible for queue batching (Ctrl+Enter).
-    pub fn batchable(mut self) -> Self {
-        self.batchable = true;
-        self
-    }
-
-    pub fn trim_text(self) -> Self {
-        Self {
-            text: self.text.trim().to_string(),
-            attachments: self.attachments,
-            batchable: self.batchable,
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.text.trim().is_empty() && self.attachments.is_empty()
-    }
-
-    pub fn has_attachments(&self) -> bool {
-        !self.attachments.is_empty()
-    }
-
-    /// Whether this submission may steer a live turn: plain text only.
-    /// Slash commands are runloop actions and the steering channel is
-    /// text-only, so those stay queued.
-    pub fn is_steerable_text(&self) -> bool {
-        !self.has_attachments() && !self.text.trim_start().starts_with('/')
-    }
-}
-
-impl From<String> for SubmittedInput {
-    fn from(text: String) -> Self {
-        Self::text_only(text)
-    }
-}
-
-impl From<&str> for SubmittedInput {
-    fn from(text: &str) -> Self {
-        Self::text_only(text)
-    }
-}
-
-impl Deref for SubmittedInput {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.text
-    }
-}
-
-impl PartialEq<&str> for SubmittedInput {
-    fn eq(&self, other: &&str) -> bool {
-        self.text == *other
-    }
-}
-
-impl PartialEq<&str> for &SubmittedInput {
-    fn eq(&self, other: &&str) -> bool {
-        self.text == *other
-    }
-}
-
-impl PartialEq<String> for SubmittedInput {
-    fn eq(&self, other: &String) -> bool {
-        self.text == *other
-    }
-}
-
-impl PartialEq<&String> for SubmittedInput {
-    fn eq(&self, other: &&String) -> bool {
-        self.text == **other
-    }
-}
+pub use vtcode_commons::ui_protocol::SubmittedInput;
 
 define_inline_message_commands! {
     pub enum InlineCommand {

@@ -24,6 +24,7 @@ Paths are under `src/`. `core/agent/` runtime, event recording, runner, request 
 
 ## Gotchas
 
+- The `tui` feature (default-on) owns `vtcode-ui`/`ratatui`/`crossterm`/`ansi-to-tui`; headless builds (`--no-default-features`, used by `vtcode-acp`) must keep compiling, so new UI uses need `#[cfg(feature = "tui")]` plus a stub, and shared types move to `vtcode-commons::ui_protocol` instead.
 - Headless fallible work must run inside an awaited async block; an ordinary block does not contain `?` propagation, so errors would skip terminal recording and persistence close.
 - Exec `wait`/`inspect` calls are turn-budget-exempt and counted in a separate control-plane bucket; do not re-couple them to the per-turn work budget.
 - `AgentSessionState.messages` is `Arc<Vec<Message>>`; mutate via `messages_mut()`/`Arc::make_mut` so request and continuation histories stay shared.

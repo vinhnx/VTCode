@@ -51,7 +51,7 @@ impl AnsiRenderer {
         if let Some(sink) = &mut self.sink {
             // Read terminal width fresh so tables adapt to resizes.
             if sink.table_max_width_override.is_none()
-                && let Ok((w, _)) = crossterm::terminal::size()
+                && let Some((w, _)) = crate::utils::tty::terminal_size()
             {
                 sink.table_max_width = Some(w as usize);
             }

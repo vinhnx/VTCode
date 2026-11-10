@@ -4,7 +4,7 @@
 //! define the output format so that `vtcode-core` can work with rendered
 //! markdown lines regardless of whether the TUI crate is compiled in.
 
-use anstyle::Style;
+use anstyle::{Color, Style};
 
 /// A styled segment inside a rendered markdown line.
 ///
@@ -12,15 +12,18 @@ use anstyle::Style;
 /// `vtcode-core` picks one of the two by feature and streams both through the same shapes.
 #[derive(Clone, Debug)]
 pub struct MarkdownSegment {
-    style: Style,
-    text: String,
-    link_target: Option<Box<str>>,
+    pub style: Style,
+    pub text: String,
+    pub link_target: Option<Box<str>>,
 }
 
 /// A single rendered markdown line made up of styled segments.
+///
+/// Keep field-compatible with the TUI variant `vtcode_ui::tui::ui::markdown::MarkdownLine`.
 #[derive(Clone, Debug, Default)]
 pub struct MarkdownLine {
-    segments: Vec<MarkdownSegment>,
+    pub segments: Vec<MarkdownSegment>,
+    pub line_background: Option<Color>,
 }
 
 impl MarkdownLine {
@@ -48,24 +51,28 @@ pub enum CodeBlockWeight {
 }
 
 /// Options for the markdown rendering pipeline.
+///
+/// Keep field-compatible with the TUI variant `vtcode_ui::tui::ui::markdown::RenderMarkdownOptions`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RenderMarkdownOptions {
-    preserve_code_indentation: bool,
-    disable_code_block_table_reparse: bool,
+    pub preserve_code_indentation: bool,
+    pub disable_code_block_table_reparse: bool,
     /// Available content width for tables. Headered tables keep a padded,
     /// width-aware grid while cells remain readable, then fall back to aligned
     /// labeled records when the grid becomes too cramped. Headerless tables
     /// retain their grid layout and scale columns to fit. Only effective in
     /// TUI mode.
-    table_max_width: Option<usize>,
+    pub table_max_width: Option<usize>,
     /// Visual weight applied to fenced code blocks. Only effective in TUI
     /// mode.
-    code_block_weight: CodeBlockWeight,
+    pub code_block_weight: CodeBlockWeight,
 }
 
 /// A syntax-highlighted text segment.
+///
+/// Keep field-compatible with the TUI variant `vtcode_ui::tui::ui::markdown::HighlightedSegment`.
 #[derive(Clone, Debug)]
 pub struct HighlightedSegment {
-    style: Style,
-    text: String,
+    pub style: Style,
+    pub text: String,
 }

@@ -59,8 +59,7 @@ fn is_remote_link_target(target: &str) -> bool {
 }
 
 pub(super) fn terminal_table_content_width(indent: &str) -> Option<usize> {
-    crossterm::terminal::size()
-        .ok()
+    crate::utils::tty::terminal_size()
         .map(|(width, _)| usize::from(width).saturating_sub(UnicodeWidthStr::width(indent)))
 }
 

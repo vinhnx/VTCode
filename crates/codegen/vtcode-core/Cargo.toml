@@ -106,14 +106,14 @@ ratatui = { workspace = true, features = [
     "crossterm",
     "unstable-rendered-line-info",
     "unstable-widget-ref",
-] }
+], optional = true }
 
 rig = { workspace = true }
 portable-pty = { workspace = true }
-ansi-to-tui = "8.0.1"
+ansi-to-tui = { version = "8.0.1", optional = true }
 vtcode-commons = { workspace = true }
 vtcode-diff = { workspace = true, features = ["serde"] }
-vtcode-ui = { workspace = true }
+vtcode-ui = { workspace = true, optional = true }
 vtcode-threads = { workspace = true }
 vtcode-macros = { workspace = true }
 vtcode-exec-events = { workspace = true }
@@ -185,7 +185,7 @@ path = "examples/migration_test.rs"
 
 [features]
 default = ["tui"]
-tui = ["dep:crossterm"]
+tui = ["dep:ansi-to-tui", "dep:crossterm", "dep:ratatui", "dep:vtcode-ui"]
 mock = []
 policies = []
 schema = ["dep:schemars", "vtcode-config/schema", "vtcode-commons/schema"]

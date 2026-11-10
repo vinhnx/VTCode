@@ -54,7 +54,7 @@ shell-words = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
 portable-pty = { workspace = true, optional = true }
-ratatui = { workspace = true }
+crossterm = { workspace = true }
 hotpath = { workspace = true, optional = true }
 
 [dev-dependencies]

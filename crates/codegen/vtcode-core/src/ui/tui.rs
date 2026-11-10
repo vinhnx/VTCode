@@ -29,11 +29,12 @@ pub use vtcode_ui::tui::app::*;
 #[cfg(not(feature = "tui"))]
 mod headless {
     use std::collections::VecDeque;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
     use hashbrown::HashMap;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+    use unicode_width::UnicodeWidthStr;
 
     use super::{
         CompactActivityMetadata, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
@@ -41,7 +42,7 @@ mod headless {
     };
 
     use crate::ui::theme::ThemeStyles;
-    pub use vtcode_ui::tui::app::{ContentPart, SubmittedInput};
+    pub use vtcode_commons::ui_protocol::{ContentPart, SubmittedInput};
 
     /// Headless `InlineEvent` — all variants present so match arms compile.
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -130,6 +131,7 @@ mod headless {
         sender: Option<UnboundedSender<InlineCommand>>,
         deferred_events: Arc<Mutex<VecDeque<InlineEvent>>>,
         next_tool_output_id: Arc<AtomicU64>,
+        agent_label_frame_width: Arc<AtomicUsize>,
     }
 
     const MAX_DEFERRED_EVENTS: usize = 32;
@@ -141,6 +143,7 @@ mod headless {
                 sender: Some(sender),
                 deferred_events: Arc::new(Mutex::new(VecDeque::new())),
                 next_tool_output_id: Arc::new(AtomicU64::new(0)),
+                agent_label_frame_width: Arc::new(AtomicUsize::new(0)),
             }
         }
 
@@ -162,6 +165,25 @@ mod headless {
 
         pub fn has_deferred_event(&self) -> bool {
             self.deferred_events.lock().is_ok_and(|events| !events.is_empty())
+        }
+
+        /// Record message labels.
+        ///
+        /// Mirrors the TUI width computation exactly so table-layout tests
+        /// behave identically headless; unlike the TUI handle, no command is
+        /// sent because there is no session to notify.
+        pub fn set_message_labels(&self, agent: Option<String>, _user: Option<String>) {
+            let width = agent
+                .as_deref()
+                .filter(|label| !label.is_empty())
+                .map(|label| UnicodeWidthStr::width(label) + 1)
+                .unwrap_or_default();
+            self.agent_label_frame_width.store(width, Ordering::Relaxed);
+        }
+
+        /// Return the display width of the current agent label and its separator.
+        pub fn agent_label_frame_width(&self) -> usize {
+            self.agent_label_frame_width.load(Ordering::Relaxed)
         }
 
         fn send_command(&self, command: InlineCommand) {
@@ -364,16 +386,20 @@ mod headless {
         /// so a non-zero value set here has no render effect.
         pub transcript_bottom_padding: u16,
         pub dim_completed_todos: bool,
+        pub show_task_panel: bool,
         pub message_block_spacing: u8,
         pub layout_mode: super::LayoutModeOverride,
         pub reasoning_display_mode: super::ReasoningDisplayMode,
         pub reasoning_visible_default: bool,
         pub thinking_display: super::ThinkingBlockState,
+        pub communication_style: vtcode_commons::ui_protocol::CommunicationStyle,
         pub vim_mode: bool,
+        pub readline_mode: bool,
         pub busy_enter_behavior: super::BusyEnterBehavior,
         pub screen_reader_mode: bool,
         pub reduce_motion_mode: bool,
         pub reduce_motion_keep_progress_animation: bool,
+        pub hide_header: bool,
         pub show_transcript_review_hints: bool,
         pub show_transcript_review_shortcut_guide: bool,
         pub show_transcript_review_close_button: bool,
