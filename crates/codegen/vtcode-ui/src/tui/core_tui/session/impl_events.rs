@@ -412,6 +412,10 @@ impl Session {
             CrosstermEvent::VisibilityReport { visible } => {
                 self.apply_terminal_visibility_report(visible);
             }
+            #[cfg(vendored_crossterm)]
+            CrosstermEvent::Clipboard5522Response(packet) => {
+                self.handle_clipboard_5522_packet(&packet);
+            }
         }
     }
 

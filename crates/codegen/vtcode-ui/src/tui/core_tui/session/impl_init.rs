@@ -113,6 +113,7 @@ impl Session {
             image_input_enabled: false,
             cursor_visible: true,
             terminal_visible: true,
+            clipboard_5522: Clipboard5522State::default(),
             render_state: RenderState::new(),
             transcript_clear_required: true,
             evicted_message_count: 0,

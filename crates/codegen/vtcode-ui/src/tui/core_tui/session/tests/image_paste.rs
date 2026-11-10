@@ -328,6 +328,9 @@ fn unsupported_model_warning_does_not_read_or_attach() {
 
 #[test]
 fn no_image_warning_leaves_text_and_attachments_unchanged() {
+    // Serialized with the 5522 fallback tests: they flip the global support
+    // hint, which would otherwise divert this synchronous warning path.
+    let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
     let mut session = app_session_with_input("keep text", "keep text".len());
     let existing_attachment = ContentPart::image("existing", "image/png");
     session.core.input_manager.set_attachments(vec![existing_attachment.clone()]);
@@ -345,6 +348,9 @@ fn no_image_warning_leaves_text_and_attachments_unchanged() {
 
 #[test]
 fn clipboard_unavailable_warning_leaves_text_unchanged() {
+    // See no_image_warning_leaves_text_and_attachments_unchanged for why this
+    // synchronous warning path holds the clipboard lock.
+    let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
     let mut session = app_session_with_input("keep text", "keep text".len());
     set_image_input_enabled(&mut session, true);
 
@@ -359,6 +365,9 @@ fn clipboard_unavailable_warning_leaves_text_unchanged() {
 
 #[test]
 fn wsl_fallback_failure_warning_leaves_text_unchanged() {
+    // See no_image_warning_leaves_text_and_attachments_unchanged for why this
+    // synchronous warning path holds the clipboard lock.
+    let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
     let mut session = app_session_with_input("keep text", "keep text".len());
     set_image_input_enabled(&mut session, true);
 

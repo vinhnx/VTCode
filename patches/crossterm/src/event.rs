@@ -593,6 +593,16 @@ pub enum Event {
         /// `true` when the terminal view may be observable.
         visible: bool,
     },
+    /// One Kitty OSC 5522 rich-clipboard reply packet.
+    ///
+    /// The payload is the packet's inner `5522;metadata;payload` content with
+    /// OSC framing stripped; the session parses it with
+    /// `vtcode_commons::clipboard_5522`. Emitted when the terminal answers a
+    /// `type=read` request (VT Code sends these as an image-paste fallback
+    /// over SSH/headless sessions).
+    ///
+    /// See <https://sw.kovidgoyal.net/kitty/clipboard/>
+    Clipboard5522Response(String),
 }
 
 impl Event {

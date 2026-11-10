@@ -14,7 +14,7 @@ use crate::tui::core_tui::session::action::{
     Action, is_double_escape_press, is_readline_editing_key, normalize_terminal_control_event,
 };
 use crate::tui::core_tui::session::clipboard_image::{
-    ClipboardImageError, ClipboardTextError, read_clipboard_image, read_clipboard_text,
+    ClipboardImageError, ClipboardTextError, image_paste_warning, read_clipboard_image, read_clipboard_text,
 };
 use crate::tui::core_tui::session::modal;
 use crate::tui::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};

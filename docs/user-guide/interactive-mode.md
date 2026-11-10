@@ -65,6 +65,10 @@ Ctrl+Enter retains submission/queueing behavior. Palettes and other overlays ret
   a warning.
 - On WSL, VT Code first tries direct Linux clipboard access. If that cannot read an image, it tries a Windows clipboard
   image fallback through PowerShell.
+- Over SSH and other sessions where the OS clipboard is unreachable, image paste falls back to a terminal-mediated read
+  (Kitty OSC 5522) when the terminal reports support for it at startup: VT Code lists the clipboard MIME types, then reads
+  the first JPEG, PNG, GIF, or WebP image. The terminal may ask permission on the first read; later reads reuse the
+  session authorization. Set `VTCODE_CLIPBOARD_5522=off` to disable the fallback or `=on` to force it.
 
 ### Quick Commands
 

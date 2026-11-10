@@ -65,6 +65,7 @@ mod command;
 mod editing;
 
 pub mod action;
+pub(crate) mod clipboard_5522;
 pub(crate) mod clipboard_image;
 pub mod config;
 mod driver;
@@ -95,6 +96,7 @@ use self::message::{MessageLabels, MessageLine};
 use self::modal::{ModalState, WizardModalState};
 
 pub use self::action::{Action, BindingStore, parse_key_binding};
+use self::clipboard_5522::Clipboard5522State;
 use self::config::AppearanceConfig;
 pub(crate) use self::input::status_requires_shimmer;
 use self::mouse_selection::{DragAutoScroll, DragAutoScrollDirection, MouseSelectionState};
@@ -274,6 +276,8 @@ pub struct Session {
     /// animation ticks; input and state updates continue so the session can
     /// repaint its latest state on return to visible.
     terminal_visible: bool,
+    /// Kitty OSC 5522 clipboard-read fallback state (image paste over SSH).
+    clipboard_5522: Clipboard5522State,
     render_state: RenderState,
     /// Track whether the transcript viewport must be cleared before repainting.
     pub(crate) transcript_clear_required: bool,

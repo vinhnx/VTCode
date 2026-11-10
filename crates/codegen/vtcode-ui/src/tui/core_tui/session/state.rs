@@ -390,6 +390,7 @@ impl Session {
         if self.last_shimmer_active && !shimmer_active {
             self.render_state.request_redraw();
         }
+        self.expire_clipboard_5522_read();
         self.last_shimmer_active = shimmer_active;
         if animation_updated {
             self.render_state.request_redraw();
@@ -419,10 +420,11 @@ impl Session {
             return true;
         }
         // Pending expiries need a future tick to clear promptly (scroll-steady
-        // 250ms, copy notification 2s, jump-landing tint 1.5s).
+        // 250ms, copy notification 2s, jump-landing tint 1.5s, 5522 read 30s).
         if self.scroll_cursor_steady_until.is_some()
             || self.copy_notification_until.is_some()
             || self.transcript_flash.is_some()
+            || self.clipboard_5522.has_pending()
         {
             return true;
         }

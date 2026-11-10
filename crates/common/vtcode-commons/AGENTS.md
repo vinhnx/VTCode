@@ -29,5 +29,6 @@
 - `ui_protocol::SessionSurface` defaults to `Inline`, so alternate-screen detection must request `Auto` or `Alternate` explicitly.
 - `runtime_diagnostics` exposes only stable Tokio metrics, since the rest need `--cfg tokio_unstable`.
 - `diff/` and `diff_preview/` are compatibility re-exports, so new diff consumers use `vtcode-diff` directly.
+- `clipboard_5522` is the Kitty OSC 5522 read path only (builders, reply parser, assembler, DECRQM probe parse, support hint); its 16 KiB packet cap is mirrored in the fork's `parse_osc_5522`, so keep both in sync.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-commons.md) — read the section for the subsystem you change before editing it.

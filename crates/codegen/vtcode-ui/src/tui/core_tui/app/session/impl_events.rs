@@ -825,6 +825,12 @@ impl Session {
             CrosstermEvent::VisibilityReport { visible } => {
                 self.core.apply_terminal_visibility_report(visible);
             }
+            #[cfg(vendored_crossterm)]
+            CrosstermEvent::Clipboard5522Response(packet) => {
+                if self.core.handle_clipboard_5522_packet(&packet) {
+                    self.update_input_triggers();
+                }
+            }
         }
     }
 

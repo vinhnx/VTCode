@@ -105,17 +105,6 @@ pub(crate) fn copy_selected_input_if_requested(session: &mut Session, key: &KeyE
     false
 }
 
-pub(crate) fn image_paste_warning(error: ClipboardImageError) -> &'static str {
-    match error {
-        ClipboardImageError::NoImage => "No image found in clipboard.",
-        ClipboardImageError::ClipboardUnavailable => {
-            "Clipboard image paste is unavailable in this terminal or desktop session."
-        }
-        ClipboardImageError::UnsupportedModel => "The selected model does not support image input.",
-        ClipboardImageError::WslFallbackFailure => "Could not read a clipboard image from Windows via PowerShell.",
-    }
-}
-
 pub(crate) fn push_warning_line(session: &mut Session, text: &'static str) {
     session.push_line(
         InlineMessageKind::Warning,
@@ -200,6 +189,15 @@ pub(crate) fn handle_image_paste_shortcut_with(
             session.update_input_triggers();
             session.mark_dirty();
         }
-        Err(error) => push_warning_line(session, image_paste_warning(error)),
+        Err(error) => {
+            // Local OS-clipboard read failed (SSH, containers, headless): try
+            // the terminal-mediated 5522 read when supported. Its async reply
+            // attaches the image or warns; only warn synchronously when no
+            // fallback exists.
+            if session.core.start_clipboard_5522_read() {
+                return;
+            }
+            push_warning_line(session, image_paste_warning(error))
+        }
     }
 }

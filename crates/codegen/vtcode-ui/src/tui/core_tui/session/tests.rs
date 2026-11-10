@@ -1,5 +1,7 @@
 mod batched_append;
 mod clipboard;
+#[cfg(vendored_crossterm)]
+mod clipboard_5522;
 mod color_scheme;
 mod diff_overlay;
 mod drag_autoscroll;

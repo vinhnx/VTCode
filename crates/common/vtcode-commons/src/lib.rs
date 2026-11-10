@@ -23,6 +23,7 @@ pub mod ansi_codes;
 pub mod async_utils;
 pub mod at_pattern;
 pub mod cgp;
+pub mod clipboard_5522;
 pub mod color256_theme;
 pub mod color_policy;
 pub mod colors;

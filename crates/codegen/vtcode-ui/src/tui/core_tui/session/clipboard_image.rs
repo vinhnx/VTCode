@@ -53,6 +53,21 @@ pub(crate) enum ClipboardImageError {
     WslFallbackFailure,
 }
 
+/// User-facing warning text for an image-paste failure.
+///
+/// Shared by the local OS-clipboard path and the Kitty OSC 5522 fallback so
+/// users see one consistent clipboard story.
+pub(crate) fn image_paste_warning(error: ClipboardImageError) -> &'static str {
+    match error {
+        ClipboardImageError::NoImage => "No image found in clipboard.",
+        ClipboardImageError::ClipboardUnavailable => {
+            "Clipboard image paste is unavailable in this terminal or desktop session."
+        }
+        ClipboardImageError::UnsupportedModel => "The selected model does not support image input.",
+        ClipboardImageError::WslFallbackFailure => "Could not read a clipboard image from Windows via PowerShell.",
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub(crate) enum ClipboardTextError {
     #[error("no text in clipboard")]

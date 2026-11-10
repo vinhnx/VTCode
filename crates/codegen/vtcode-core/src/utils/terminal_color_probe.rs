@@ -5,6 +5,8 @@
 //! - Query OSC 4;16 and OSC 4;231 for palette endpoints
 //! - Query the Contour color-scheme mode (`CSI ? 996 n`) for an explicit
 //!   dark/light answer (`CSI ? 997 ; Ps n`) from terminals that support it
+//! - Query rich-clipboard support (`CSI ? 5522 $ p`, DECRQM) so the TUI can
+//!   fall back to Kitty OSC 5522 reads for image paste over SSH/headless
 //! - Send DA1 (`ESC [ c`) as a flush sentinel
 //! - Read until a DA1 response begins (`ESC [ ?`)
 //! - Infer terminal light/dark scheme and palette harmony; the explicit
@@ -34,6 +36,8 @@ use vtcode_commons::ansi_codes::{
     COLOR_SCHEME_MODE_REQUEST, COLOR_SCHEME_REPORT_PREFIX, DEVICE_ATTRIBUTES_REQUEST, ESC_BYTE, ESC_CHAR, OSC, ST,
 };
 #[cfg(unix)]
+use vtcode_commons::clipboard_5522::{DECRQM_5522_QUERY, parse_decrpm_5522, set_clipboard_5522_hint};
+#[cfg(unix)]
 use vtcode_commons::color256_theme::set_harmonious_runtime_hint;
 
 #[cfg(unix)]
@@ -62,9 +66,11 @@ pub fn probe_and_cache_terminal_palette_harmony() {
                 });
                 set_color_scheme_override(Some(scheme));
                 set_harmonious_runtime_hint(Some(result.is_harmonious));
+                set_clipboard_5522_hint(result.clipboard_5522);
                 tracing::trace!(
                     scheme = scheme.name(),
                     explicit_scheme = result.scheme_report.is_some(),
+                    clipboard_5522 = result.clipboard_5522,
                     term_light = result.is_term_light_theme,
                     palette_light = result.is_palette_light_theme,
                     harmonious = result.is_harmonious,
@@ -89,6 +95,9 @@ struct ProbeResult {
     /// Explicit dark/light answer from a `CSI ? 997 ; Ps n` reply, when the
     /// terminal supports the Contour color-scheme query.
     scheme_report: Option<ColorScheme>,
+    /// Rich-clipboard verdict from a `CSI ? 5522 ; Ps $ y` reply; `None`
+    /// when the terminal sent no 5522 report (reads as unsupported).
+    clipboard_5522: Option<bool>,
 }
 
 #[cfg(unix)]
@@ -106,6 +115,8 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
     }
     tty.write_all(COLOR_SCHEME_MODE_REQUEST.as_bytes())
         .context("failed to write Contour color-scheme mode query")?;
+    tty.write_all(DECRQM_5522_QUERY.as_bytes())
+        .context("failed to write clipboard 5522 support query")?;
     tty.write_all(DEVICE_ATTRIBUTES_REQUEST.as_bytes())
         .context("failed to write DA1 sentinel query")?;
     tty.flush().context("failed to flush OSC probe queries")?;
@@ -135,6 +146,7 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
         is_harmonious: is_term_light_theme == is_palette_light_theme,
         is_generated: bg == c16 && fg == c231,
         scheme_report: parse_scheme_report(&response),
+        clipboard_5522: parse_decrpm_5522(&response),
     })
 }
 

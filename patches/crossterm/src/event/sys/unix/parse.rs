@@ -309,6 +309,48 @@ fn parse_csi_private_dsr(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
 /// so a coincidentally OSC-like keystroke burst cannot wedge input.
 const MAX_OSC_BUFFER_LEN: usize = 128;
 
+/// Upper bound for one buffered OSC 5522 reply packet without a terminator.
+///
+/// DATA chunks are ~5.5 KiB base64 each; 16 KiB accepts any conforming packet
+/// while bounding a malicious terminal's per-packet memory. Keep in sync with
+/// `vtcode_commons::clipboard_5522::MAX_PACKET_BYTES`.
+const MAX_OSC_5522_BUFFER_LEN: usize = 16 * 1024;
+
+/// Byte length of the OSC 5522 introducer (`ESC ] 5522 ;`).
+const OSC_5522_PREFIX_LEN: usize = 7;
+
+fn parse_osc_5522(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
+    assert!(buffer.starts_with(b"\x1B]5522;"));
+
+    // Scan for `BEL` or `ST` (`ESC \`) from the parameter start. Base64
+    // payloads contain neither byte, so the first terminator ends the packet.
+    let mut idx = OSC_5522_PREFIX_LEN;
+    while idx < buffer.len() {
+        if buffer[idx] == 0x07 {
+            let packet = String::from_utf8_lossy(&buffer[2..idx]).into_owned();
+            return Ok(Some(InternalEvent::Event(Event::Clipboard5522Response(packet))));
+        }
+        if buffer[idx] == 0x1B {
+            if idx + 1 < buffer.len() {
+                if buffer[idx + 1] == b'\\' {
+                    let packet = String::from_utf8_lossy(&buffer[2..idx]).into_owned();
+                    return Ok(Some(InternalEvent::Event(Event::Clipboard5522Response(packet))));
+                }
+            } else {
+                // Trailing lone `ESC`: possible split `ST` across reads.
+                return Ok(None);
+            }
+        }
+        idx += 1;
+    }
+
+    if buffer.len() > MAX_OSC_5522_BUFFER_LEN {
+        return Err(could_not_parse_event_error());
+    }
+    // No terminator yet: keep buffering for split reads.
+    Ok(None)
+}
+
 fn parse_osc(buffer: &[u8], input_available: bool) -> io::Result<Option<InternalEvent>> {
     // OSC — `ESC ] Ps ; Pt (BEL | ESC \)`. Terminal palette probes query
     // `OSC 10/11/4`; late replies race the TUI event loop on the same TTY
@@ -333,6 +375,15 @@ fn parse_osc(buffer: &[u8], input_available: bool) -> io::Result<Option<Internal
     // splitting an OSC reply leaks visible escape codes into the composer.
     if !buffer[2].is_ascii_digit() {
         return Ok(Some(InternalEvent::Event(Event::Key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::ALT)))));
+    }
+
+    // Kitty OSC 5522 clipboard replies (`ESC ] 5522 ; ...`) carry base64
+    // DATA chunks of ~5.5 KiB per packet, far beyond MAX_OSC_BUFFER_LEN.
+    // Frame exactly one packet per event with the protocol's own cap (kept
+    // in sync with `vtcode_commons::clipboard_5522::MAX_PACKET_BYTES`); the
+    // session owns packet parsing and multi-packet assembly.
+    if buffer.starts_with(b"\x1B]5522;") {
+        return parse_osc_5522(buffer);
     }
 
     // Scan for `BEL` or `ST` (`ESC \`) terminator from the parameter start.
@@ -1543,5 +1594,57 @@ mod tests {
     #[test]
     fn test_osc_trailing_esc_keeps_buffering_for_split_st() {
         assert_eq!(parse_event(b"\x1B]10;rgb:bbbb\x1B", true).unwrap(), None);
+    }
+
+    #[test]
+    fn test_osc_5522_reply_emits_inner_packet() {
+        assert_eq!(
+            parse_event(b"\x1B]5522;type=read:status=OK:id=abc\x1B\\", false).unwrap(),
+            Some(InternalEvent::Event(Event::Clipboard5522Response(
+                "5522;type=read:status=OK:id=abc".to_string()
+            ))),
+        );
+        assert_eq!(
+            parse_event(b"\x1B]5522;type=read:status=DONE\x07", false).unwrap(),
+            Some(InternalEvent::Event(Event::Clipboard5522Response(
+                "5522;type=read:status=DONE".to_string()
+            ))),
+        );
+    }
+
+    #[test]
+    fn test_osc_5522_large_data_packet_survives_small_osc_cap() {
+        // A conforming DATA chunk (~5.5 KiB base64) exceeds the 128-byte
+        // palette-reply cap; the 5522 path must frame it, not error.
+        let mut packet = b"\x1B]5522;type=read:status=DATA:mime=aW1hZ2UvcG5n;".to_vec();
+        packet.extend(std::iter::repeat_n(b'A', 5464));
+        packet.extend_from_slice(b"\x1B\\");
+        let expected = format!("5522;type=read:status=DATA:mime=aW1hZ2UvcG5n;{}", "A".repeat(5464));
+        assert_eq!(
+            parse_event(&packet, false).unwrap(),
+            Some(InternalEvent::Event(Event::Clipboard5522Response(expected))),
+        );
+    }
+
+    #[test]
+    fn test_osc_5522_partial_keeps_buffering() {
+        assert_eq!(parse_event(b"\x1B]5522;type=read:status=OK", true).unwrap(), None);
+        assert_eq!(parse_event(b"\x1B]5522;type=read:status=OK", false).unwrap(), None);
+        assert_eq!(parse_event(b"\x1B]5522;type=read:status=OK\x1B", true).unwrap(), None);
+    }
+
+    #[test]
+    fn test_osc_5522_oversize_without_terminator_errors() {
+        let mut oversize = b"\x1B]5522;".to_vec();
+        oversize.extend(std::iter::repeat_n(b'A', 17 * 1024));
+        assert!(parse_event(&oversize, false).is_err());
+    }
+
+    #[test]
+    fn test_osc_5522_response_passes_event_filter() {
+        use crate::event::filter::{EventFilter, Filter};
+        assert!(EventFilter.eval(&InternalEvent::Event(Event::Clipboard5522Response(
+            "5522;type=read:status=OK".to_string()
+        ))));
     }
 }
