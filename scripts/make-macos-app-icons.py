@@ -20,7 +20,10 @@ Clear additionally gets a subtle glass tile baked under the V (translucent
 fill, bright rim, edge hairline): flat PNGs get no system glass composition,
 so without it the Clear V floats borderless. The ``Clear`` layer background
 stays transparent as the Icon Composer source; only the shipped flat PNGs
-carry the baked tile.
+carry the baked tile. Opaque tiles (Light/Dark/Tinted/Dynamic) get the
+matching Liquid Glass shading baked over the tile (top sheen, bright rim,
+hairline) so a Dock override still answers the modern glass sheen a
+system-composed icon carries; see :func:`opaque_glass_shading`.
 
 Usage (from the repo root):
     pip install pillow  # once
@@ -252,6 +255,43 @@ def clear_glass_tile(alpha: Image.Image) -> Image.Image:
     return tile
 
 
+def opaque_glass_shading(alpha: Image.Image) -> Image.Image:
+    """Subtle Liquid Glass shading overlay for opaque tiles.
+
+    Flat PNGs get no system composition (the Dock override,
+    iTerm2 profile art, and picker previews all show raw pixels), so
+    opaque Light/Dark/Tinted/Dynamic tiles need baked shading to mimic
+    the modern macOS glass sheen a system-composed icon carries.
+    Layers: faint top sheen, bright inner rim (stronger at the top,
+    like glass lit from above), and a dark outer hairline.
+    """
+    size = alpha.size[0]
+    overlay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    sheen = ImageChops.multiply(alpha, _vertical_ramp(size, 22, 0, 0.28))
+    overlay = Image.alpha_composite(overlay, _solid_layer(size, (255, 255, 255), sheen))
+    band = ImageChops.subtract(alpha, _erode(alpha, 5))
+    gradient = _vertical_ramp(size, 255, 255 * 42 // 72)
+    rim = ImageChops.multiply(band, gradient).point(lambda v: v * 72 // 255)
+    overlay = Image.alpha_composite(overlay, _solid_layer(size, (255, 255, 255), rim))
+    edge = ImageChops.subtract(alpha, _erode(alpha, 2))
+    hairline = edge.point(lambda v: v * 28 // 255)
+    overlay = Image.alpha_composite(overlay, _solid_layer(size, (0, 0, 0), hairline))
+    return overlay
+
+
+def apply_opaque_shading(canvas: Image.Image, alpha: Image.Image) -> Image.Image:
+    """Composite opaque glass shading over an opaque tile on the 1024 canvas.
+
+    The overlay reuses the caller's squircle mask, so the shading aligns
+    exactly with the tile inset. Placement paste carries no mask (opaque
+    tile alphas are unaffected by the self-mask quirk noted in
+    :func:`apply_clear_glass_tile`).
+    """
+    overlay = Image.new("RGBA", (WORKING_SIZE, WORKING_SIZE), (0, 0, 0, 0))
+    overlay.paste(opaque_glass_shading(alpha), (CONTENT_OFFSET, CONTENT_OFFSET))
+    return Image.alpha_composite(canvas, overlay)
+
+
 def apply_clear_glass_tile(canvas: Image.Image, alpha: Image.Image) -> Image.Image:
     """Lay the glass tile under the masked Clear V on the 1024 canvas.
 
@@ -355,6 +395,9 @@ def main() -> int:
         }
         if "clear" in masters:
             masters["clear"] = apply_clear_glass_tile(masters["clear"], alpha)
+        for name, art in list(masters.items()):
+            if name != "clear":
+                masters[name] = apply_opaque_shading(art, alpha)
         for name, art in masters.items():
             if name == "clear":
                 check_shape_clear(name, art)

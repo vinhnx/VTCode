@@ -94,7 +94,10 @@ partial alpha). Clear's layer background stays transparent (the layered Icon Com
 glass from the system at composition time), but flat PNGs get no system composition, so the script
 bakes a subtle glass tile — frosted fill, bright rim, edge hairline — under the V; its gate requires
 transparent margins, faint fill in the V counter, a bright-but-subtle rim at the top edge, and the
-opaque fraction in the 0.005-0.15 glass-V band. The desktop `embedded_artwork_carries_macos_rounded_shape`
+opaque fraction in the 0.005-0.15 glass-V band. Opaque tiles (Light/Dark/Tinted/Dynamic) additionally
+get a baked Liquid Glass shading (top sheen, bright rim, hairline) over the tile so a Dock override
+still reads as modern glass; the desktop `embedded_opaque_artwork_carries_liquid_glass_shading`
+test pins the top-vs-center lightening. The desktop `embedded_artwork_carries_macos_rounded_shape`
 test rejects full-bleed squares. `iconutil`'s icns-write
 path is broken on some hosts (older macOS 27 builds reject even previously working iconsets while the
 read path works); generate on a host where it succeeds (verified on macOS 27.0.1).

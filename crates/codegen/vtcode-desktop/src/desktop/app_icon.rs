@@ -276,6 +276,47 @@ mod tests {
     }
 
     #[test]
+    fn embedded_opaque_artwork_carries_liquid_glass_shading() {
+        // Opaque tiles get no system composition when the Dock is overridden,
+        // so the regen bakes Liquid Glass shading (top sheen + rim). Without
+        // it the flat solid renders bias-free (fails on borderless art);
+        // an overly-strong rim (fails on blown highlights) is also rejected.
+        // Top interior probes the rim band, center probes flat background.
+        // Expected sums are asymmetric: rim > center for every opaque variant.
+        for png in [LIGHT_PNG, DARK_PNG, TINTED_PNG] {
+            let art = image::load_from_memory(png).expect("artwork must decode").to_rgba8();
+            let mid = 256;
+            let top = art.get_pixel(mid, 52);
+            let center = art.get_pixel(mid, 256);
+            let top_sum = top.0[0] as u32 + top.0[1] as u32 + top.0[2] as u32;
+            let center_sum = center.0[0] as u32 + center.0[1] as u32 + center.0[2] as u32;
+            assert!(
+                top_sum > center_sum && top_sum <= center_sum + 260,
+                "512 top rim must be lighter than center (shading) without blowing out: top={:?} center={:?}",
+                top,
+                center
+            );
+            assert!(top[3] > 240 && center[3] > 240, "opaque shading must keep tile opaque");
+        }
+        // Preview scale mirrors the Dock shading at display size: same
+        // top-vs-center asymmetry, smaller absolute delta.
+        for png in [LIGHT_128_PNG, DARK_128_PNG, TINTED_128_PNG] {
+            let art = image::load_from_memory(png).expect("preview must decode").to_rgba8();
+            let mid = 64;
+            let top = art.get_pixel(mid, 14);
+            let center = art.get_pixel(mid, 64);
+            let top_sum = top.0[0] as u32 + top.0[1] as u32 + top.0[2] as u32;
+            let center_sum = center.0[0] as u32 + center.0[1] as u32 + center.0[2] as u32;
+            assert!(
+                top_sum > center_sum && top_sum <= center_sum + 260,
+                "128 top rim must be lighter than center (shading): top={:?} center={:?}",
+                top,
+                center
+            );
+        }
+    }
+
+    #[test]
     fn embedded_artwork_carries_macos_rounded_shape() {
         // Stock inset geometry: the 824/1024 content box leaves 50px
         // transparent margins at 512, so corners AND edge midpoints are clear
@@ -372,7 +413,12 @@ mod tests {
         for major in [26, 27, 28] {
             assert!(prefers_system_dock_icon(AppIconPreference::Dynamic, major), "Dynamic defers on {major}");
             assert!(prefers_system_dock_icon(AppIconPreference::Unknown, major), "Unknown defers on {major}");
-            for pin in [AppIconPreference::Light, AppIconPreference::Dark, AppIconPreference::Clear, AppIconPreference::Tinted] {
+            for pin in [
+                AppIconPreference::Light,
+                AppIconPreference::Dark,
+                AppIconPreference::Clear,
+                AppIconPreference::Tinted,
+            ] {
                 assert!(!prefers_system_dock_icon(pin, major), "{pin:?} must override on {major}");
             }
         }
