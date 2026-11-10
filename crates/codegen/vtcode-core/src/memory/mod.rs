@@ -87,54 +87,25 @@ impl MemoryMonitor {
         }
     }
 
-    /// Get current RSS in bytes using platform-specific methods
-    #[cfg(target_os = "linux")]
+    /// Get current RSS in bytes using the shared platform sampler.
+    ///
+    /// Delegates to [`vtcode_commons::memory::resident_set_size_mb`] (Mach task
+    /// info on macOS, `/proc/self/statm` on Linux) instead of shelling out or
+    /// re-parsing procfs here, so every sample is one cheap syscall.
     pub fn get_rss_bytes() -> Result<usize, MemoryError> {
-        use std::fs;
-        use std::io::Read;
-
-        let mut status = String::new();
-        fs::File::open("/proc/self/status").and_then(|mut f| f.read_to_string(&mut status))?;
-
-        for line in status.lines() {
-            if line.starts_with("VmRSS:") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let kb: usize = parts[1]
-                        .parse()
-                        .map_err(|err| MemoryError::Parse(format!("invalid VmRSS value: {}: {err}", parts[1])))?;
-                    return Ok(kb * 1024); // Convert KB to bytes
-                }
-            }
+        let mb = vtcode_commons::memory::resident_set_size_mb().ok_or(MemoryError::Unsupported)?;
+        let bytes = (mb * 1024.0 * 1024.0).round();
+        // The sampler only returns finite, non-negative values; reject anything
+        // else rather than casting blindly.
+        if !bytes.is_finite() || bytes < 0.0 || bytes > usize::MAX as f64 {
+            return Err(MemoryError::Unsupported);
         }
-
-        Err(MemoryError::Parse("VmRSS not found in /proc/self/status".to_string()))
-    }
-
-    /// Get current RSS in bytes on macOS using /proc/self/stat or sysctl
-    #[cfg(target_os = "macos")]
-    pub fn get_rss_bytes() -> Result<usize, MemoryError> {
-        use std::process::Command;
-
-        // Use `ps` command to get RSS in kilobytes
-        let output = Command::new("ps")
-            .args(["-o", "rss=", "-p"])
-            .arg(std::process::id().to_string())
-            .output()?;
-
-        let rss_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-        let kb: usize = rss_str
-            .parse()
-            .map_err(|_e| MemoryError::Parse(format!("invalid ps output: {rss_str}")))?;
-
-        Ok(kb * 1024) // Convert KB to bytes
-    }
-
-    /// Get current RSS in bytes (fallback for unsupported platforms)
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    pub fn get_rss_bytes() -> Result<usize, MemoryError> {
-        Err(MemoryError::Unsupported)
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Range-checked above: finite, non-negative, and within usize::MAX."
+        )]
+        Ok(bytes as usize)
     }
 
     /// Check current memory pressure
@@ -262,6 +233,34 @@ mod tests {
             Err(e) => {
                 println!("Warning: Could not get RSS: {e}");
                 // This is acceptable on unsupported platforms
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_rss_bytes_matches_shared_sampler() {
+        // Independent oracle: the shared sampler this delegates to, with the
+        // MiB-to-bytes scale stated here rather than reused from production.
+        // RSS can move between the two samples, so assert closeness in both
+        // directions (plus an absolute floor) instead of exact equality.
+        let sampler_mb = vtcode_commons::memory::resident_set_size_mb();
+        match (MemoryMonitor::get_rss_bytes(), sampler_mb) {
+            (Ok(bytes), Some(mb)) => {
+                let expected = mb * 1024.0 * 1024.0;
+                let actual = bytes as f64;
+                assert!(actual >= expected * 0.95, "delegated RSS {bytes} bytes fell below sampler {mb} MiB");
+                assert!(
+                    actual <= expected * 1.05 + 1024.0 * 1024.0,
+                    "delegated RSS {bytes} bytes rose above sampler {mb} MiB"
+                );
+                assert!(bytes > 1024 * 1024, "RSS should exceed 1 MiB, got {bytes}");
+            }
+            (Err(_), None) => {} // Unsupported platform: both sides agree.
+            (Ok(bytes), None) => {
+                panic!("get_rss_bytes returned {bytes} but the sampler is unavailable")
+            }
+            (Err(e), Some(mb)) => {
+                panic!("get_rss_bytes failed ({e}) but the sampler returned {mb} MiB")
             }
         }
     }

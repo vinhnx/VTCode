@@ -19,7 +19,7 @@ use std::time::Duration;
     unused_qualifications,
     reason = "Intentional compatibility, platform, or test-only suppression."
 )] // libc::mach_task_self is deprecated; qualification is required here
-fn resident_set_size_mb() -> Option<f64> {
+pub fn resident_set_size_mb() -> Option<f64> {
     // SAFETY: `mach_task_basic_info` is a plain old data struct; zeroing it
     // produces a valid (all-zero) starting value before `task_info` fills it.
     let mut info: libc::mach_task_basic_info = unsafe { std::mem::zeroed() };

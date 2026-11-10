@@ -36,13 +36,16 @@ cargo run --release --bin vtcode --features allocator-jemalloc -- bench-allocato
 ## Allocation throughput trade-off (measured)
 
 `jemalloc` trades allocation speed for better memory behavior. Measured on macOS
-(`cargo bench --bench allocator_throughput`, `release-fast`):
+arm64 (`cargo bench --profile release-fast --bench allocator_throughput`, 2026-11-10):
 
 | Benchmark                     | mimalloc | jemalloc | Delta                 |
 | ----------------------------- | -------- | -------- | --------------------- |
-| `alloc_free_64B` (200k iters) | 583 us   | 2.65 ms  | jemalloc ~4.7x slower |
-| `alloc_free_4KB` (20k iters)  | 763 us   | 881 us   | jemalloc ~17% slower  |
-| `event_burst` 200x1000        | 23.0 ms  | 30.0 ms  | jemalloc ~30% slower  |
+| `alloc_free_64B` (200k iters) | 1.21 ms  | 5.07 ms  | jemalloc ~4.2x slower |
+| `alloc_free_4KB` (20k iters)  | 19.77 ms | 20.65 ms | jemalloc ~4.5% slower |
+| `event_burst` 200x1000        | 26.05 ms | 35.68 ms | jemalloc ~37% slower  |
+
+Absolute times vary by machine; the ratios match the earlier macOS run
+(~4.7x / ~17% / ~30%), so the trade-off conclusion below still holds.
 
 So on macOS, switching to jemalloc would _hurt_ allocation latency with no memory benefit (background_thread
 unsupported) — which is why `mimalloc` stays the default there. On Linux, jemalloc's memory reclamation is the win; the
