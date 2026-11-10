@@ -8,6 +8,7 @@ fn test_convert_to_anthropic_format_uses_model_default_effort_when_unset() {
         (models::anthropic::CLAUDE_OPUS_5, "high"),
         (models::CLAUDE_SONNET_5, "high"),
         (models::anthropic::CLAUDE_FABLE_5_1, "high"),
+        (models::anthropic::CLAUDE_FABLE_5_2, "high"),
     ] {
         let payload = adaptive_effort_payload(model, None, None);
         assert_eq!(payload["output_config"]["effort"], expected, "model {model}");

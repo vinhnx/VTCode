@@ -68,6 +68,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::ANTHROPIC_CLAUDE_FABLE_5_2,
+            "Claude Fable 5.2 (Merge Gateway)",
+            "Anthropic Claude Fable 5.2 through Merge Gateway",
+            1_000_000,
+            false,
+        ),
+        (
             models::merge_gateway::GOOGLE_GEMINI_3_8_FLASH,
             "Gemini 3.8 Flash (Merge Gateway)",
             "Google Gemini 3.8 Flash through Merge Gateway",

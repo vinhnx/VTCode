@@ -1431,6 +1431,42 @@
           "max"
         ]
       },
+      "claude-fable-5-2": {
+        "id": "claude-fable-5-2",
+        "name": "Claude Fable 5.2",
+        "description": "Latest Claude Fable for demanding reasoning and long-horizon agentic work, adaptive thinking always on, 1M context, 128K output, default effort high",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "current",
+        "version": "5.2",
+        "cost": {
+          "input": 8e-06,
+          "output": 4e-05,
+          "cache_read": 2e-07,
+          "cache_write": 1e-05
+        },
+        "is_pro": true,
+        "lightweight_model": "claude-sonnet-5",
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
       "claude-mythos-5-1": {
         "id": "claude-mythos-5-1",
         "name": "Claude Mythos 5.1",
@@ -4680,6 +4716,38 @@
         "id": "anthropic/claude-fable-5-1",
         "name": "Claude Fable 5.1 (Merge Gateway)",
         "description": "Anthropic Claude Fable 5.1 served through Merge Gateway native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
+        "is_pro": true
+      },
+      "anthropic/claude-fable-5-2": {
+        "id": "anthropic/claude-fable-5-2",
+        "name": "Claude Fable 5.2 (Merge Gateway)",
+        "description": "Anthropic Claude Fable 5.2 served through Merge Gateway native Responses API.",
         "reasoning": true,
         "reasoning_efforts": [
           "minimal",

@@ -371,6 +371,7 @@ mod tests {
             // Adaptive-only models have no "thinking off" setting.
             (anthropic::CLAUDE_OPUS_5_5, "adaptive"),
             (anthropic::CLAUDE_FABLE_5_1, "adaptive"),
+            (anthropic::CLAUDE_FABLE_5_2, "adaptive"),
         ] {
             let request = LLMRequest { model: model.to_string(), ..Default::default() };
             let (thinking, _) = build_thinking_config(&request, &config, anthropic::DEFAULT_MODEL).expect("config");
@@ -478,6 +479,7 @@ mod tests {
             anthropic::CLAUDE_OPUS_5_5,
             anthropic::CLAUDE_FABLE_5,
             anthropic::CLAUDE_FABLE_5_1,
+            anthropic::CLAUDE_FABLE_5_2,
         ] {
             let request = manual_budget_override_request(model, 8192);
             let (thinking, _) =
@@ -664,6 +666,7 @@ mod tests {
             anthropic::CLAUDE_SONNET_5_5,
             anthropic::CLAUDE_FABLE_5,
             anthropic::CLAUDE_FABLE_5_1,
+            anthropic::CLAUDE_FABLE_5_2,
         ] {
             let request = display_override_request(model, AnthropicThinkingDisplayOverride::Updates);
             let (thinking, _) =

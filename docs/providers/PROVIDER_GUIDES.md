@@ -321,8 +321,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 
 - **Provider key:** `anthropic` (env: `ANTHROPIC_API_KEY`)
 - **Default model:** `claude-sonnet-5`
-- **Curated models:** `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-fable-5`, `claude-fable-5-1`, `claude-mythos-5`,
-  `claude-mythos-5-1`, `claude-opus-5`, `claude-opus-5-5`, `claude-opus-4-8`, `claude-sonnet-4-6`, and
+- **Curated models:** `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-fable-5`, `claude-fable-5-1`, `claude-fable-5-2`,
+  `claude-mythos-5`, `claude-mythos-5-1`, `claude-opus-5`, `claude-opus-5-5`, `claude-opus-4-8`, `claude-sonnet-4-6`, and
   `claude-haiku-4-5`
 - Collapsed or bounded tool output is disclosed to every provider/model with the fixed turn-scoped notice. Anthropic
   wire routes use `clear_at: "next_user_message"` plus the required beta only when the selected provider/model
@@ -407,7 +407,7 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
   `zai/glm-5.3-flashx`, `openai/gpt-5.6-luna`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-6-astra`,
   `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6.1-terra`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
-  and `meta/muse-spark-open`
+  `anthropic/claude-fable-5-1`, `anthropic/claude-fable-5-2`, and `meta/muse-spark-open`
 - **Features:** Native Responses, streaming, tool calling, structured outputs, authenticated paginated model catalog,
   cache-backed picker metadata, and arbitrary explicit Merge route IDs
 - **Limitations:** Reasoning controls remain route-specific and are not inferred generically; routing metadata and

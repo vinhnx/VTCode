@@ -2,7 +2,11 @@ use super::*;
 
 #[test]
 fn test_long_context_hoisting_is_skipped_for_preserved_thinking_models() {
-    for model in [models::anthropic::CLAUDE_OPUS_5_5, models::anthropic::CLAUDE_FABLE_5_1] {
+    for model in [
+        models::anthropic::CLAUDE_OPUS_5_5,
+        models::anthropic::CLAUDE_FABLE_5_1,
+        models::anthropic::CLAUDE_FABLE_5_2,
+    ] {
         let payload = long_context_payload(model);
         let messages = payload["messages"].as_array().expect("messages");
         assert_eq!(messages.len(), 3, "{model}: {payload}");

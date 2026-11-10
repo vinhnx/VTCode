@@ -110,6 +110,30 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
         });
     }
 
+    // `claude-fable-5-2` contains `claude-fable-5`, so the 5.2 profile must be
+    // checked before the 5 profile. Fable 5.2 keeps Fable 5.1's always-on
+    // adaptive thinking, `high` default effort, forced-tool-choice rejection,
+    // and server-side fallback support.
+    if matches_model(requested, models::anthropic::CLAUDE_FABLE_5_2) {
+        return Some(ClaudeThinkingProfile {
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
+            adaptive_only: true,
+            default_thinking_enabled: true,
+            manual_interleaved_beta: false,
+            supports_effort: true,
+            supports_task_budget: true,
+            default_display: ThinkingDisplay::Omitted,
+            default_effort: reasoning::HIGH,
+            supports_xhigh_effort: true,
+            supports_max_effort: true,
+            default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
+            rejects_forced_tool_choice: true,
+            supports_server_side_fallback: true,
+            rejects_disabled_thinking: false,
+        });
+    }
+
     // `claude-sonnet-5-5` contains `claude-sonnet-5`, so the 5.5 profile must
     // be checked before the 5 profile. Sonnet 5.5 runs adaptive thinking by
     // default but rejects `disabled`: its lowest setting is `between_tools`,
@@ -246,13 +270,15 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
 }
 
 /// Claude 5.x family ids. `matches_model` uses `contains`, so the Fable 5 id
-/// also matches `claude-fable-5-1`, the Opus 5 id matches `claude-opus-5-5`,
-/// and the Sonnet 5 id matches `claude-sonnet-5-5`. The 5.5 ids (including
-/// Haiku 5.5) are listed explicitly so the family stays readable as it grows.
+/// also matches `claude-fable-5-1`/`claude-fable-5-2`, the Opus 5 id matches
+/// `claude-opus-5-5`, and the Sonnet 5 id matches `claude-sonnet-5-5`. The 5.5
+/// ids (including Haiku 5.5) are listed explicitly so the family stays readable
+/// as it grows.
 const CLAUDE_5_FAMILY: &[&str] = &[
     models::anthropic::CLAUDE_SONNET_5_5,
     models::anthropic::CLAUDE_SONNET_5,
     models::anthropic::CLAUDE_HAIKU_5_5,
+    models::anthropic::CLAUDE_FABLE_5_2,
     models::anthropic::CLAUDE_FABLE_5,
     models::anthropic::CLAUDE_OPUS_5_5,
     models::anthropic::CLAUDE_OPUS_5,
@@ -358,7 +384,8 @@ pub(crate) fn supports_mid_conversation_system_messages(model: &str, default_mod
 /// alongside per-message effort and mid-conversation tool changes).
 pub(crate) fn supports_turn_scoped_system_messages(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
-    matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
+    matches_model(requested, models::anthropic::CLAUDE_FABLE_5_2)
+        || matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
         || matches_model(requested, CLAUDE_OPUS_4_8)
         || matches_model(requested, models::anthropic::CLAUDE_OPUS_5)
         || matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5)
@@ -418,6 +445,7 @@ pub(crate) fn preserves_thinking_across_turns(model: &str, default_model: &str) 
         || matches_model(requested, models::anthropic::CLAUDE_HAIKU_5_5)
         || matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5)
         || matches_model(requested, models::anthropic::CLAUDE_FABLE_5_1)
+        || matches_model(requested, models::anthropic::CLAUDE_FABLE_5_2)
 }
 
 /// Whether the model accepts `thinking.display: "updates"` (beta
@@ -429,6 +457,7 @@ pub(crate) fn supports_thinking_display_updates(model: &str, default_model: &str
     let requested = resolve_model_name(model, default_model);
     matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5)
         || matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5)
+        || matches_model(requested, models::anthropic::CLAUDE_FABLE_5_2)
         || matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
 }
 
@@ -646,6 +675,34 @@ mod tests {
     }
 
     #[test]
+    fn fable_5_2_profile_wins_over_the_fable_5_substring_offset() {
+        // `claude-fable-5-2` contains `claude-fable-5` (`matches_model` uses
+        // `contains`), so the 5.2 profile must be checked first. Fable 5.2
+        // mirrors Fable 5.1's always-on adaptive thinking and `high` default,
+        // and differs from Fable 5 by rejecting forced tool choice.
+        let profile = claude_thinking_profile(models::anthropic::CLAUDE_FABLE_5_2, "").expect("fable 5.2 profile");
+        assert!(profile.adaptive_only);
+        assert_eq!(profile.default_effort, reasoning::HIGH);
+        assert!(profile.rejects_forced_tool_choice);
+        assert!(profile.supports_task_budget);
+        assert!(profile.supports_server_side_fallback);
+        assert_eq!(default_effort_for_model(models::anthropic::CLAUDE_FABLE_5_2, ""), Some(reasoning::HIGH));
+
+        // The offset must not leak sideways: the 5 and 5.1 rows keep their own
+        // profiles (5 allows forced tool choice, 5.1 rejects it).
+        assert!(
+            !claude_thinking_profile(models::anthropic::CLAUDE_FABLE_5, "")
+                .expect("5")
+                .rejects_forced_tool_choice
+        );
+        assert!(
+            claude_thinking_profile(models::anthropic::CLAUDE_FABLE_5_1, "")
+                .expect("5.1")
+                .rejects_forced_tool_choice
+        );
+    }
+
+    #[test]
     fn opus_5_profile_is_unchanged_by_opus_5_5() {
         // `claude-opus-5-5` contains `claude-opus-5`; the 5 profile must still
         // resolve for the exact 5 id with its high default and opt-out support.
@@ -658,6 +715,7 @@ mod tests {
     #[test]
     fn claude_5_models_default_to_64k_max_tokens_regardless_of_thinking() {
         for model in [
+            models::anthropic::CLAUDE_FABLE_5_2,
             models::anthropic::CLAUDE_FABLE_5_1,
             models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_SONNET_5,
@@ -679,6 +737,7 @@ mod tests {
             models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_OPUS_5_5,
             models::anthropic::CLAUDE_FABLE_5_1,
+            models::anthropic::CLAUDE_FABLE_5_2,
         ] {
             assert!(rejects_forced_tool_choice(model, ""), "{model}");
         }
@@ -735,6 +794,7 @@ mod tests {
             models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_OPUS_5_5,
             models::anthropic::CLAUDE_FABLE_5_1,
+            models::anthropic::CLAUDE_FABLE_5_2,
         ] {
             assert!(preserves_thinking_across_turns(model, ""), "{model}");
         }
@@ -753,6 +813,7 @@ mod tests {
         for model in [
             models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_OPUS_5_5,
+            models::anthropic::CLAUDE_FABLE_5_2,
             models::anthropic::CLAUDE_FABLE_5_1,
             models::anthropic::CLAUDE_FABLE_5,
         ] {
@@ -778,6 +839,7 @@ mod tests {
             models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_FABLE_5,
             models::anthropic::CLAUDE_FABLE_5_1,
+            models::anthropic::CLAUDE_FABLE_5_2,
             models::anthropic::CLAUDE_OPUS_5,
             models::anthropic::CLAUDE_OPUS_5_5,
         ] {
@@ -807,6 +869,7 @@ mod tests {
             models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_FABLE_5,
             models::anthropic::CLAUDE_FABLE_5_1,
+            models::anthropic::CLAUDE_FABLE_5_2,
             models::anthropic::CLAUDE_OPUS_5,
             models::anthropic::CLAUDE_OPUS_5_5,
             CLAUDE_OPUS_4_8,

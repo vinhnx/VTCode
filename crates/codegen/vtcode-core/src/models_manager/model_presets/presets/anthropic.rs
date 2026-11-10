@@ -95,6 +95,28 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             context_window: Some(1_000_000),
         },
         ModelPreset {
+            id: "claude-fable-5-2".to_string(),
+            model: "claude-fable-5-2".to_string(),
+            display_name: "Claude Fable 5.2".to_string(),
+            description:
+                "Latest Claude Fable for demanding reasoning and long-horizon agentic work, adaptive thinking always on, 1M context, 128K output, and default effort high"
+                    .to_string(),
+            provider: Provider::Anthropic,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the most capability-sensitive workloads"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
+        ModelPreset {
             id: "claude-opus-5".to_string(),
             model: "claude-opus-5".to_string(),
             display_name: "Claude Opus 5".to_string(),

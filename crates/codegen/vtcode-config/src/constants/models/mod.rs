@@ -52,5 +52,6 @@ pub const CLAUDE_OPUS_5: &str = anthropic::CLAUDE_OPUS_5;
 pub const CLAUDE_OPUS_5_5: &str = anthropic::CLAUDE_OPUS_5_5;
 pub(crate) const CLAUDE_FABLE_5: &str = anthropic::CLAUDE_FABLE_5;
 pub(crate) const CLAUDE_FABLE_5_1: &str = anthropic::CLAUDE_FABLE_5_1;
+pub(crate) const CLAUDE_FABLE_5_2: &str = anthropic::CLAUDE_FABLE_5_2;
 pub const COPILOT: &str = copilot::DEFAULT_MODEL;
 pub const MINIMAX_M3: &str = minimax::MINIMAX_M3;

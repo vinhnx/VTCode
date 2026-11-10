@@ -62,6 +62,8 @@ pub enum ModelId {
     ClaudeFable5,
     /// Claude Fable 5.1 - successor to Fable 5 for demanding reasoning and long-horizon agentic work, 1M context, adaptive thinking always on, cache reads at 1/4 cost
     ClaudeFable51,
+    /// Claude Fable 5.2 - latest Fable for demanding reasoning and long-horizon agentic work, 1M context, 128K output, adaptive thinking always on, default effort high
+    ClaudeFable52,
     /// Claude Opus 5 - Anthropic's newest Opus-tier model with 1M context, thinking on by default
     ClaudeOpus5,
     /// Claude Opus 5.5 - Opus-tier successor for long-running agentic coding, adaptive thinking always on, 1M context, 128K output, default effort medium
@@ -150,6 +152,8 @@ pub enum ModelId {
     MergeGatewayAnthropicClaudeHaiku55,
     /// Anthropic Claude Fable 5.1 through Merge Gateway
     MergeGatewayAnthropicClaudeFable51,
+    /// Anthropic Claude Fable 5.2 through Merge Gateway
+    MergeGatewayAnthropicClaudeFable52,
     /// OpenAI GPT-6 Astra through Merge Gateway
     MergeGatewayOpenAIGpt6Astra,
     /// OpenAI GPT-6 Sol through Merge Gateway

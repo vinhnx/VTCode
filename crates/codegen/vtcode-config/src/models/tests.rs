@@ -222,11 +222,11 @@ fn test_model_generation() {
 
     // DeepSeek generations
     assert_eq!(ModelId::DeepSeekFlash.generation(), "4");
-    assert_eq!(ModelId::MetaMuseEmber10.generation(), "Muse-Ember-1.0");
     assert_eq!(ModelId::MetaMuseSpark13.generation(), "Muse-Spark-1.3");
     assert_eq!(ModelId::MetaMuseSpark13Contributor.generation(), "Muse-Spark-1.3");
     assert_eq!(ModelId::MetaMuseWonder10.generation(), "Muse-Wonder-1.0");
     assert_eq!(ModelId::MetaMuseWonderFull10.generation(), "Muse-Wonder-Full-1.0");
+    assert_eq!(ModelId::MetaMuseEmber10.generation(), "Muse-Ember-1.0");
 
     // Z.AI generations
     assert_eq!(ModelId::ZaiGlm53.generation(), "5.3");
@@ -278,7 +278,7 @@ fn test_models_for_provider() {
     assert!(nvidia_models.contains(&ModelId::NvidiaNemotron3Super120bA12b));
 
     let merge_gateway_models = ModelId::models_for_provider(Provider::MergeGateway);
-    assert_eq!(merge_gateway_models.len(), 32);
+    assert_eq!(merge_gateway_models.len(), 33);
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayMoonshotKimiK31Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Flash));
@@ -471,6 +471,18 @@ fn test_generated_model_capability_lookup() {
         model_catalog_entry("merge-gateway", models::merge_gateway::OPENAI_GPT_5_6_SOL).expect("GPT metadata");
     assert_eq!(merge_gateway_gpt.context_window, 1_100_000);
     assert!(merge_gateway_gpt.vision);
+    // Both the native Anthropic model and its Merge Gateway route must resolve
+    // in the generated catalog: reasoning-effort and context lookups key on it.
+    for (provider, id) in [
+        ("anthropic", models::anthropic::CLAUDE_FABLE_5_2),
+        ("merge-gateway", models::merge_gateway::ANTHROPIC_CLAUDE_FABLE_5_2),
+    ] {
+        let entry = model_catalog_entry(provider, id).unwrap_or_else(|| panic!("{provider} {id} catalog entry"));
+        assert_eq!(entry.context_window, 1_000_000, "{id}");
+        assert!(entry.reasoning, "{id}");
+        assert!(!entry.reasoning_efforts.is_empty(), "{id}");
+        assert!(entry.is_pro, "{id}");
+    }
     let ollama_cloud_catalog =
         model_catalog_entry("ollama", models::ollama::GPT_OSS_20B_CLOUD).expect("Ollama Cloud metadata");
     assert_eq!(ollama_cloud_catalog.context_window, 131_072);
@@ -508,10 +520,10 @@ fn test_generated_model_capability_lookup() {
     let meta_models = supported_models_for_provider("meta-ai").expect("Meta AI models");
     assert!(meta_models.contains(&models::meta::MUSE_WONDER_1_0));
     assert!(meta_models.contains(&models::meta::MUSE_WONDER_FULL_1_0));
+    assert!(meta_models.contains(&models::meta::MUSE_EMBER_1_0));
     assert!(catalog_provider_keys().contains(&"meta"));
     let meta_catalog = model_catalog_entry("meta", models::meta::MUSE_WONDER_1_0).expect("muse-wonder-1.0 metadata");
     assert_eq!(meta_catalog.context_window, 1_048_576);
-    assert!(meta_models.contains(&models::meta::MUSE_EMBER_1_0));
     let ember_catalog = model_catalog_entry("meta", models::meta::MUSE_EMBER_1_0).expect("muse-ember-1.0 metadata");
     assert_eq!(ember_catalog.context_window, 1_048_576);
     assert!(ember_catalog.reasoning);

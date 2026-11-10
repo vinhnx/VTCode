@@ -11,6 +11,7 @@ are sent without a `thinking` field.
 | ------------------- | ----------------------- | -------------- | --------------------- | ------------- | -------------------- |
 | `claude-opus-5-5`   | Adaptive, always on     | `medium`       | `updates` (VT Code)   | Yes           | Rejected             |
 | `claude-opus-5`     | Adaptive, on by default | `high`         | API default (omitted) | Yes           | Allowed              |
+| `claude-fable-5-2`  | Adaptive, always on     | `high`         | API default (omitted) | Yes           | Rejected             |
 | `claude-fable-5-1`  | Adaptive, always on     | `high`         | API default (omitted) | Yes           | Rejected             |
 | `claude-fable-5`    | Adaptive, always on     | `high`         | API default (omitted) | Yes           | Allowed              |
 | `claude-sonnet-5-5` | Adaptive, on by default | `high`         | `updates` (VT Code)   | No            | Rejected             |
@@ -33,12 +34,11 @@ All six models share these limits:
 blocks. It is itself rejected at `xhigh`/`max` effort, so VT Code omits the field and lets the model run adaptive
 thinking there.
 
-| Model                                                   | Lowest setting sent           | At `xhigh`/`max` effort  |
-| ------------------------------------------------------- | ----------------------------- | ------------------------ |
-| `claude-sonnet-5-5`                                     | `{ "type": "between_tools" }` | field omitted (adaptive) |
-| `claude-sonnet-5`                                       | `{ "type": "disabled" }`      | `{ "type": "disabled" }` |
-| `claude-opus-5`                                         | `{ "type": "disabled" }`      | field omitted (adaptive) |
-| `claude-opus-5-5`, `claude-fable-5`, `claude-fable-5-1` | none                          | none                     |
+| Model                                                   | Lowest setting sent      | At `xhigh`/`max` effort  |
+| ------------------------------------------------------- | ------------------------ | ------------------------ |
+| `claude-sonnet-5`                                       | `{ "type": "disabled" }` | `{ "type": "disabled" }` |
+| `claude-opus-5`                                         | `{ "type": "disabled" }` | field omitted (adaptive) |
+| `claude-opus-5-5`, `claude-fable-5`, `claude-fable-5-1` | none                     | none                     |
 
 Both settings are produced by `extended_thinking_enabled = false` and by a `thinking_mode = disabled` request override,
 and rewritten per model for server-side fallback entries.
@@ -58,11 +58,11 @@ thinking_display = "summarized"  # optional: "summarized", "omitted", or "update
 - `effort` is unset by default, so each model uses its own default (`medium` on Claude Opus 5.5, `high` on the others).
   An explicit `agent.reasoning_effort` or `/model` picker effort takes precedence. A configured level the model does not
   support falls back to the model default.
-- `task_budget_tokens` is only sent for Claude Fable 5/5.1, Opus 5, and Opus 5.5 (not Claude Sonnet 5 or Sonnet 5.5).
+- `task_budget_tokens` is only sent for Claude Fable 5/5.1/5.2, Opus 5, and Opus 5.5 (not Claude Sonnet 5 or Sonnet 5.5).
 - `thinking_display` defaults to the model default when unset.
   - Claude Opus 5.5 and Claude Sonnet 5.5 request `updates` (beta `thinking-display-updates-2026-08-18`, sent only when
     used), so the text they write between tool calls stays visible while the reasoning itself stays hidden.
-  - `updates` is accepted only by Sonnet 5.5, Opus 5.5 and Fable 5/5.1. On other models a configured `updates` is
+  - `updates` is accepted only by Sonnet 5.5, Opus 5.5 and Fable 5/5.1/5.2. On other models a configured `updates` is
     omitted, not sent.
 - When unset, `max_tokens` defaults to 64k for every Claude 5.x model, with thinking on or off.
 
@@ -102,9 +102,11 @@ The budget is clamped below `max_tokens`.
 - **Assistant prefill:** a trailing assistant turn returns 400 on Claude 4.6 and later, including every Claude 5.x
   model, so VT Code never sends one there.
 - **Forced `tool_choice`:** `any` and `tool` are downgraded to `auto` when thinking is on, or when the model rejects
-  forced tool use (Sonnet 5.5, Opus 5.5, Fable 5.1). The same check applies to every server-side fallback model.
+  forced tool use (Sonnet 5.5, Opus 5.5, Fable 5.1, Fable 5.2). The same check applies to every server-side fallback
+  model.
 - **Replayed thinking:** thinking blocks are replayed in their original position (`anthropic_block_order`). Sonnet 5.5,
-  Opus 5.5 and Fable 5.1 bind each thinking signature to the exact prior prefix, so history stays append-only for them.
+  Opus 5.5, Fable 5.1 and Fable 5.2 bind each thinking signature to the exact prior prefix, so history stays append-only
+  for them.
 - **Refusals:**
   - A refusal's `stop_details` is surfaced on both the streaming and the non-streaming path.
   - Server-side fallbacks use the `"default"` form (beta `server-side-fallback-2026-07-01`).
@@ -114,12 +116,12 @@ The budget is clamped below `max_tokens`.
 
 The lowest thinking setting depends on the model:
 
-| Model                               | Lowest setting sent                                     |
-| ----------------------------------- | ------------------------------------------------------- |
-| Claude Sonnet 5.5                   | `{ "type": "between_tools" }`; omitted at `xhigh`/`max` |
-| Claude Opus 5.5, Fable 5, Fable 5.1 | None; validation errors, fallbacks rewrite to adaptive  |
-| Claude Opus 5                       | `{ "type": "disabled" }` only at effort `high` or below |
-| Claude Sonnet 5                     | `{ "type": "disabled" }`                                |
+| Model                                          | Lowest setting sent                                     |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| Claude Sonnet 5.5                              | `{ "type": "between_tools" }`; omitted at `xhigh`/`max` |
+| Claude Opus 5.5, Fable 5, Fable 5.1, Fable 5.2 | None; validation errors, fallbacks rewrite to adaptive  |
+| Claude Opus 5                                  | `{ "type": "disabled" }` only at effort `high` or below |
+| Claude Sonnet 5                                | `{ "type": "disabled" }`                                |
 
 The per-request disabled override omits the field on models that reject it, so those models keep their default thinking.
 
@@ -204,18 +206,17 @@ VT Code exposes a portable effort ladder (`none`, `minimal`, `low`, `medium`, `h
 `agent.reasoning_effort`, the `/model` picker, and the `/model` picker. `xhigh` and `max` are only offered for models
 that natively support them; other models hide those levels instead of aliasing silently.
 
-| Provider / models                                                                                                          | `xhigh`                     | `max`                                                                      | Wire shape                                                     |
-| -------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| OpenAI GPT-5.6 family (`gpt-5.6`, `-sol`, `-terra`, `-luna`), `gpt-6-astra`                                                | Native                      | Native (5.6+ only; `minimal` dropped on 5.6+)                              | `reasoning: { effort, summary: "auto" }`                       |
-| OpenAI GPT-5 Codex / 5.2 Codex, GPT-5.1-mini, `gpt-oss-*`                                                                  | Codex only                  | Not supported                                                              | Same Responses shape                                           |
-| Anthropic Claude 5.x (`claude-sonnet-5`, `claude-sonnet-5-5`, `claude-fable-5`/`-5-1`, `claude-opus-5`, `claude-opus-5-5`) | Native                      | Native                                                                     | `thinking: { type: "adaptive" }` + `output_config: { effort }` |
-| xAI `grok-4.6+`                                                                                                            | Native                      | Clamped to `xhigh` (no native `max`; older models treat `xhigh` as `high`) | `reasoning_effort`                                             |
-| Meta Muse Spark 1.3                                                                                                        | Native                      | Aliased to `xhigh` (`max` ships after additional safety testing)           | `reasoning_effort`                                             |
-| DeepSeek V4 Pro / Flash                                                                                                    | Alias to `high`             | Native (`low` also native; `medium` maps to `high`)                        | `thinking: { type: "enabled" }` + `reasoning_effort`           |
-| Moonshot Kimi K3                                                                                                           | Alias to `max`              | Native (default; `minimal` maps to `low`, `medium`/`high` map to `high`)   | Top-level `reasoning_effort`                                   |
-| ZAI GLM-5.3 / 5.3-Flash / 5.3-FlashX / 5.2                                                                                 | Alias to `max` (5.2)        | Native (`low`/`high`/`max`; `medium` maps to `high`)                       | `thinking: { type: "enabled" }` + `reasoning_effort`           |
-| StepFun (`step-3.7-flash`, `step-5-preview`)                                                                               | Hidden (collapse to `high`) | Hidden (collapse to `high`)                                                | `reasoning: { effort }` (native `low`/`medium`/`high`)         |
-| Gemini 3.x, Ollama, LlamaCpp, Evolink, HuggingFace, Mistral                                                                | Hidden (collapse to `high`) | Hidden (collapse to `high`)                                                | `thinking_level` / omitted                                     |
+| Provider / models                                                                                                                 | `xhigh`                     | `max`                                                                      | Wire shape                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| OpenAI GPT-5 Codex / 5.2 Codex, GPT-5.1-mini, `gpt-oss-*`                                                                         | Codex only                  | Not supported                                                              | Same Responses shape                                           |
+| Anthropic Claude 5.x (`claude-sonnet-5`, `claude-sonnet-5-5`, `claude-fable-5`/`-5-1`/`-5-2`, `claude-opus-5`, `claude-opus-5-5`) | Native                      | Native                                                                     | `thinking: { type: "adaptive" }` + `output_config: { effort }` |
+| xAI `grok-4.6+`                                                                                                                   | Native                      | Clamped to `xhigh` (no native `max`; older models treat `xhigh` as `high`) | `reasoning_effort`                                             |
+| Meta Muse Spark 1.3                                                                                                               | Native                      | Aliased to `xhigh` (`max` ships after additional safety testing)           | `reasoning_effort`                                             |
+| DeepSeek V4 Pro / Flash                                                                                                           | Alias to `high`             | Native (`low` also native; `medium` maps to `high`)                        | `thinking: { type: "enabled" }` + `reasoning_effort`           |
+| Moonshot Kimi K3                                                                                                                  | Alias to `max`              | Native (default; `minimal` maps to `low`, `medium`/`high` map to `high`)   | Top-level `reasoning_effort`                                   |
+| ZAI GLM-5.3 / 5.3-Flash / 5.3-FlashX / 5.2                                                                                        | Alias to `max` (5.2)        | Native (`low`/`high`/`max`; `medium` maps to `high`)                       | `thinking: { type: "enabled" }` + `reasoning_effort`           |
+| StepFun (`step-3.7-flash`, `step-5-preview`)                                                                                      | Hidden (collapse to `high`) | Hidden (collapse to `high`)                                                | `reasoning: { effort }` (native `low`/`medium`/`high`)         |
+| Gemini 3.x, Ollama, LlamaCpp, Evolink, HuggingFace, Mistral                                                                       | Hidden (collapse to `high`) | Hidden (collapse to `high`)                                                | `thinking_level` / omitted                                     |
 
 ### How to use
 

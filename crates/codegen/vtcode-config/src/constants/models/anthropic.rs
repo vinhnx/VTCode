@@ -6,6 +6,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "claude-haiku-5-5", // High-volume latency-sensitive work: classification, routing, extraction, subagents; adaptive thinking, 1M context, 128K output
     "claude-fable-5",   // Most capable widely released model
     "claude-fable-5-1", // Successor to Fable 5, 1M context, cache reads at 1/4 cost
+    "claude-fable-5-2", // Latest Fable: demanding reasoning and long-horizon agentic work, 1M context, 128K output, default effort high
     "claude-opus-5",    // Opus-tier premium flagship with adaptive thinking, 1M context
     "claude-opus-5-5",  // Opus-tier successor with adaptive thinking always on, 1M context
 ];
@@ -18,6 +19,7 @@ pub const CLAUDE_SONNET_5_5: &str = "claude-sonnet-5-5";
 pub const CLAUDE_HAIKU_5_5: &str = "claude-haiku-5-5";
 pub const CLAUDE_FABLE_5: &str = "claude-fable-5";
 pub const CLAUDE_FABLE_5_1: &str = "claude-fable-5-1";
+pub const CLAUDE_FABLE_5_2: &str = "claude-fable-5-2";
 
 /// Models that accept the reasoning effort parameter or extended thinking
 pub const REASONING_MODELS: &[&str] = &[
@@ -26,6 +28,7 @@ pub const REASONING_MODELS: &[&str] = &[
     CLAUDE_HAIKU_5_5,
     CLAUDE_FABLE_5,
     CLAUDE_FABLE_5_1,
+    CLAUDE_FABLE_5_2,
     CLAUDE_OPUS_5,
     CLAUDE_OPUS_5_5,
 ];
@@ -61,6 +64,7 @@ fn advisor_tier(model: &str) -> Option<u8> {
         CLAUDE_OPUS_5_5 => Some(7),
         CLAUDE_FABLE_5 => Some(8),
         CLAUDE_FABLE_5_1 => Some(8),
+        CLAUDE_FABLE_5_2 => Some(9),
         _ => None,
     }
 }
@@ -115,6 +119,7 @@ pub fn default_advisor_model(executor: &str) -> &'static str {
         CLAUDE_OPUS_5_5 => CLAUDE_OPUS_5_5,
         CLAUDE_FABLE_5 => CLAUDE_FABLE_5,
         CLAUDE_FABLE_5_1 => CLAUDE_FABLE_5_1,
+        CLAUDE_FABLE_5_2 => CLAUDE_FABLE_5_2,
         _ => CLAUDE_OPUS_5,
     }
 }

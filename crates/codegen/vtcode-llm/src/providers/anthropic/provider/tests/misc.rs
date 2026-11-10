@@ -117,6 +117,7 @@ fn turn_scoped_system_notice_is_promoted_for_unsupported_sonnet() {
 #[test]
 fn turn_scoped_system_capability_matches_supported_model_families() {
     assert!(capabilities::supports_turn_scoped_system_messages(models::anthropic::CLAUDE_FABLE_5, ""));
+    assert!(capabilities::supports_turn_scoped_system_messages(models::anthropic::CLAUDE_FABLE_5_2, ""));
     assert!(capabilities::supports_turn_scoped_system_messages("claude-opus-4-8", ""));
     assert!(capabilities::supports_turn_scoped_system_messages(models::anthropic::CLAUDE_OPUS_5, ""));
     assert!(capabilities::supports_turn_scoped_system_messages(models::anthropic::CLAUDE_SONNET_5_5, ""));

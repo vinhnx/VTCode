@@ -82,6 +82,30 @@ fn parse_aliases_resolve_to_canonical_variants() {
 }
 
 #[test]
+fn derived_parse_resolves_rows_that_omit_parse() {
+    // Rows without a `parse` field derive their resolve arm from `id`; rows
+    // with an explicit list resolve only those strings; `parse: []` is
+    // picker-only and must not resolve from the table.
+    for model in [ModelId::ClaudeFable52, ModelId::MergeGatewayAnthropicClaudeFable52] {
+        let id = model.as_str();
+        assert_eq!(ModelId::from_str(&id).expect("derived parse"), model, "{id}");
+    }
+
+    // Picker-only: the OpenCode Go bare id is not in the table's parse arms,
+    // so it resolves to the native Moonshot variant instead of OpenCode Go.
+    // Only the `opencode-go/` prefix reaches the OpenCode Go row.
+    assert_eq!(
+        ModelId::from_str(models::opencode_go::KIMI_K3).unwrap(),
+        ModelId::MoonshotKimiK3,
+        "a bare picker-only id must not resolve to the OpenCode Go row"
+    );
+    assert_eq!(
+        ModelId::from_str(&format!("opencode-go/{}", models::opencode_go::KIMI_K3)).unwrap(),
+        ModelId::OpenCodeGoKimiK3
+    );
+}
+
+#[test]
 fn shared_gpt_oss_20b_id_resolves_to_openai() {
     assert_eq!(models::openai::GPT_OSS_20B, models::llamacpp::GPT_OSS_20B);
     assert_eq!(ModelId::from_str(models::llamacpp::GPT_OSS_20B).unwrap(), ModelId::OpenAIGptOss20b);

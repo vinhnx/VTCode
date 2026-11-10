@@ -58,6 +58,8 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `anthropic/claude-opus-5-5` | 1M | Yes | Anthropic route |
 | `anthropic/claude-sonnet-5` | 1M | Yes | Anthropic route |
 | `anthropic/claude-sonnet-5-5` | 1M | Yes | Anthropic route, adaptive thinking on by default, forced `tool_choice` rejected |
+| `anthropic/claude-fable-5-1` | 1M | Yes | Anthropic route, adaptive thinking always on, forced `tool_choice` rejected |
+| `anthropic/claude-fable-5-2` | 1M | Yes | Anthropic route, latest Fable, adaptive thinking always on, default effort high, forced `tool_choice` rejected |
 | `google/gemini-3.6-flash` | 1M | Yes | Google route |
 | `google/gemini-3.7-flash` | 1M | Yes | Google route |
 | `google/gemini-4-argon` | 1.05M | Yes | Google route, flagship reasoning model |

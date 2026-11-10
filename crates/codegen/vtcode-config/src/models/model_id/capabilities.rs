@@ -345,6 +345,7 @@ impl ModelId {
                 | ModelId::ClaudeSonnet55
                 | ModelId::ClaudeFable5
                 | ModelId::ClaudeFable51
+                | ModelId::ClaudeFable52
                 | ModelId::ClaudeOpus5
                 | ModelId::ClaudeOpus55
                 | ModelId::MistralLarge4
@@ -432,6 +433,7 @@ impl ModelId {
             ModelId::ClaudeHaiku55 => "5.5",
             ModelId::ClaudeFable5 => "5",
             ModelId::ClaudeFable51 => "5.1",
+            ModelId::ClaudeFable52 => "5.2",
             ModelId::ClaudeOpus5 => "5",
             ModelId::ClaudeOpus55 => "5.5",
             // DeepSeek generations
@@ -506,6 +508,7 @@ impl ModelId {
             ModelId::MergeGatewayAnthropicClaudeSonnet55 => "5.5",
             ModelId::MergeGatewayAnthropicClaudeHaiku55 => "5.5",
             ModelId::MergeGatewayAnthropicClaudeFable51 => "5.1",
+            ModelId::MergeGatewayAnthropicClaudeFable52 => "5.2",
             ModelId::MergeGatewayAnthropicClaudeHaiku4520251001 => "4.5",
             ModelId::MergeGatewayMinimaxH3 => "H3",
             ModelId::MergeGatewayThinkingMachinesInkling => "Inkling",

@@ -43,6 +43,7 @@ fn default_config_requests_default_fallbacks_on_supporting_models() {
         anthropic::CLAUDE_OPUS_5,
         anthropic::CLAUDE_FABLE_5,
         anthropic::CLAUDE_FABLE_5_1,
+        anthropic::CLAUDE_FABLE_5_2,
     ] {
         let payload = convert_with(&user_request(model), &AnthropicConfig::default(), true);
         assert_eq!(payload["fallbacks"], json!("default"), "{model}");
@@ -423,7 +424,11 @@ fn forced_tool_request(model: &str, disable_thinking: bool) -> LLMRequest {
 
 #[test]
 fn forced_tool_choice_is_downgraded_for_models_that_reject_it_even_without_thinking() {
-    for model in [anthropic::CLAUDE_OPUS_5_5, anthropic::CLAUDE_FABLE_5_1] {
+    for model in [
+        anthropic::CLAUDE_OPUS_5_5,
+        anthropic::CLAUDE_FABLE_5_1,
+        anthropic::CLAUDE_FABLE_5_2,
+    ] {
         let payload = convert(&forced_tool_request(model, true));
 
         assert!(payload.get("thinking").is_none(), "{model}: {payload}");
@@ -535,4 +540,27 @@ fn resolve_advisor_tool_supports_dated_executor_suffix() {
     // A dated pin for a currently supported model must not break the
     // supported-model check.
     assert!(resolve_advisor_tool("claude-sonnet-5-20251001", &cfg).is_some());
+}
+
+#[test]
+fn resolve_advisor_tool_enforces_fable_5_2_advisor_rules() {
+    // Default: a Fable 5.2 executor self-advises, because the API accepts only
+    // Fable 5.2 or Mythos 5.2 advisors (and Mythos 5.2 is not offered here).
+    let default_cfg = advisor_config(true, "", None);
+    assert!(anthropic::default_advisor_model("claude-fable-5-2") == "claude-fable-5-2");
+    assert!(resolve_advisor_tool("claude-fable-5-2", &default_cfg).is_some());
+
+    // Any other advisor, Fable 5.1 included, is rejected for a Fable 5.2
+    // executor.
+    for advisor in ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5"] {
+        let cfg = advisor_config(true, advisor, None);
+        assert!(
+            resolve_advisor_tool("claude-fable-5-2", &cfg).is_none(),
+            "{advisor} must not advise a Fable 5.2 executor"
+        );
+    }
+
+    // A Fable 5.2 advisor is accepted by every executor model.
+    let cfg = advisor_config(true, "claude-fable-5-2", None);
+    assert!(resolve_advisor_tool("claude-sonnet-5", &cfg).is_some());
 }
