@@ -623,7 +623,7 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
     {
         let is_gemini3_flash_preview = request.model.contains("gemini-3-flash-preview");
         let is_gemini3_flash = request.model.contains("gemini-3") && request.model.contains("flash");
-        let is_gemini4_argon = request.model.contains("gemini-4-argon");
+        let is_gemini4_argon = request.model.contains("gemini-4-argon") || request.model.contains("gemini-4-carbon");
         let thinking_level = match effort {
             ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => Some("low"),
             ReasoningEffortLevel::Minimal => {
@@ -637,7 +637,7 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
             ReasoningEffortLevel::Low => Some("low"),
             ReasoningEffortLevel::Medium => {
                 if is_gemini3_flash || is_gemini4_argon {
-                    // Gemini 3 Flash and Gemini 4 Argon natively support medium
+                    // Gemini 3 Flash and Gemini 4 Argon/Carbon natively support medium
                     Some("medium")
                 } else {
                     Some("high")

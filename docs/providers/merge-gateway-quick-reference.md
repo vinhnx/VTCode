@@ -30,6 +30,7 @@ anthropic/claude-sonnet-5-5
 google/gemini-3.6-flash
 google/gemini-3.7-flash
 google/gemini-4-argon
+google/gemini-4-carbon
 deepseek/deepseek-v4.1-flash-1017
 xai/grok-4.6
 qwen/qwen3.8-max

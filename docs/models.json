@@ -10,6 +10,48 @@
     "doc": "https://ai.google.dev/gemini-api/docs/models",
     "default_model": "gemini-3.7-flash",
     "models": {
+      "gemini-4-carbon": {
+        "id": "gemini-4-carbon",
+        "name": "Gemini 4 Carbon",
+        "description": "Strongest reasoning model for sustained agentic coding, multimodal knowledge work, scientific reasoning, and cybersecurity defense with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high)",
+        "version": "stable",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "caching": true,
+          "code_execution": true,
+          "batch_api": true,
+          "structured_output": true,
+          "search_grounding": true,
+          "url_context": true,
+          "thinking": true
+        },
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "cost": {
+          "input": 2e-6,
+          "output": 1e-5,
+          "cache_read": 1e-7
+        },
+        "is_pro": true
+      },
       "gemini-4-argon": {
         "id": "gemini-4-argon",
         "name": "Gemini 4 Argon",
@@ -4684,6 +4726,38 @@
         "id": "google/gemini-4-argon",
         "name": "Gemini 4 Argon (Merge Gateway)",
         "description": "Google Gemini 4 Argon flagship reasoning model served through Merge Gateway native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
+        "is_pro": true
+      },
+      "google/gemini-4-carbon": {
+        "id": "google/gemini-4-carbon",
+        "name": "Gemini 4 Carbon (Merge Gateway)",
+        "description": "Google Gemini 4 Carbon strongest reasoning model served through Merge Gateway native Responses API.",
         "reasoning": true,
         "reasoning_efforts": [
           "minimal",

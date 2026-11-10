@@ -19,6 +19,7 @@ impl ModelId {
             // Gemini models
             ModelId::Gemini38Flash,
             ModelId::Gemini4Argon,
+            ModelId::Gemini4Carbon,
             // OpenAI models
             ModelId::GPT6Astra,
             ModelId::GPT6Sol,
@@ -76,6 +77,7 @@ impl ModelId {
             ModelId::MergeGatewayOpenAIGpt56Terra,
             ModelId::MergeGatewayGoogleGemini38Flash,
             ModelId::MergeGatewayGoogleGemini4Argon,
+            ModelId::MergeGatewayGoogleGemini4Carbon,
             ModelId::MergeGatewayAnthropicClaudeHaiku4520251001,
             ModelId::MergeGatewayAnthropicClaudeHaiku55,
             ModelId::MergeGatewayAnthropicClaudeFable51,

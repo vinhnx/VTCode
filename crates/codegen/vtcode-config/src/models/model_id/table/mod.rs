@@ -115,6 +115,12 @@ model_id_table! {
         display: "Gemini 4 Argon",
         description: "Flagship reasoning model for the hardest coding, agentic, math, and science problems with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high)",
     },
+    Gemini4Carbon {
+        provider: Gemini,
+        id: models::GEMINI_4_CARBON,
+        display: "Gemini 4 Carbon",
+        description: "Strongest reasoning model for sustained agentic coding, multimodal knowledge work, scientific reasoning, and cybersecurity defense with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high)",
+    },
     // OpenAI models
     GPT6Astra {
         provider: OpenAI,
@@ -459,6 +465,12 @@ model_id_table! {
         id: models::merge_gateway::GOOGLE_GEMINI_4_ARGON,
         display: "Gemini 4 Argon (Merge Gateway)",
         description: "Google Gemini 4 Argon flagship reasoning model accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
+    MergeGatewayGoogleGemini4Carbon {
+        provider: MergeGateway,
+        id: models::merge_gateway::GOOGLE_GEMINI_4_CARBON,
+        display: "Gemini 4 Carbon (Merge Gateway)",
+        description: "Google Gemini 4 Carbon strongest reasoning model accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
     MergeGatewayAnthropicClaudeHaiku4520251001 {
         provider: MergeGateway,

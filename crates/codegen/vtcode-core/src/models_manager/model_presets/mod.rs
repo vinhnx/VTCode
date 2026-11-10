@@ -306,6 +306,11 @@ mod tests {
         let presets = presets::gemini_presets();
         assert!(!presets.is_empty());
         assert!(presets.iter().any(|p| p.id.contains("gemini")));
+        assert!(
+            presets
+                .iter()
+                .any(|p| p.id == "gemini-4-carbon" && p.context_window == Some(1_048_576) && p.show_in_picker)
+        );
     }
 
     #[test]
@@ -454,7 +459,12 @@ mod tests {
     #[test]
     fn merge_gateway_presets_expose_curated_routes_and_default() {
         let presets = presets::merge_gateway_presets();
-        assert_eq!(presets.len(), 32);
+        assert_eq!(presets.len(), 33);
+        assert!(
+            presets
+                .iter()
+                .any(|preset| preset.model == "google/gemini-4-carbon" && preset.context_window == Some(1_048_576))
+        );
         let default = presets
             .iter()
             .find(|preset| preset.is_default)
