@@ -161,18 +161,34 @@ fn dock_menu_item(action: MenuBarAction) -> MenuItem {
     }
 }
 
-/// Right-click Dock-menu items: the status-menu groups in the same order with
-/// separators between groups. GPUI serves them from `applicationDockMenu:`;
-/// items validate through the same `is_action_available` check as the main
-/// menu, so window-gated actions disable when no window is active.
+/// Right-click Dock-menu items: AppKit's `applicationDockMenu:` already
+/// supplies system Open (reopen/show) and Quit items, so we only add the
+/// app-specific actions. Mirrors the status-menu groups for ordering,
+/// with separators between groups. Show and Quit are omitted to avoid
+/// duplicating the system items. Items validate through the same
+/// `is_action_available` check as the main menu, so window-gated actions
+/// disable when no window is active.
 fn dock_menu_items() -> Vec<MenuItem> {
+    // Derive from `menu_groups()` so the two surfaces cannot drift: omit
+    // Show (Open) and Quit, which macOS supplies. Empty groups (the
+    // singleton Show and Quit groups) drop out, leaving workspace and app.
     let mut items = Vec::new();
-    for (index, group) in menu_groups().iter().enumerate() {
-        if index > 0 {
+    let mut first = true;
+    for group in menu_groups().iter() {
+        let filtered: Vec<MenuBarAction> = group
+            .iter()
+            .copied()
+            .filter(|action| !matches!(action, MenuBarAction::Show | MenuBarAction::Quit))
+            .collect();
+        if filtered.is_empty() {
+            continue;
+        }
+        if !first {
             items.push(MenuItem::separator());
         }
-        for action in group.iter() {
-            items.push(dock_menu_item(*action));
+        first = false;
+        for action in filtered {
+            items.push(dock_menu_item(action));
         }
     }
     items
@@ -542,22 +558,21 @@ mod tests {
     }
 
     #[test]
-    fn dock_menu_mirrors_status_menu_groups() {
+    fn dock_menu_mirrors_status_menu_without_system_dupes() {
         use super::{
             AboutApplication, ChooseWorkspace, MenuItem, NewSession as ActionNewSession, OpenHelp as ActionOpenHelp,
-            OpenSettings as ActionOpenSettings, QuitApplication, ShowMainWindow,
+            OpenSettings as ActionOpenSettings,
         };
         use MenuBarAction::{About, NewSession, OpenHelp, OpenSettings, OpenWorkspace, Quit, Show};
         let items = dock_menu_items();
-        assert_eq!(items.len(), 10, "7 actions plus 3 separators");
-        let expected: [(MenuBarAction, &dyn gpui_kit::Action); 7] = [
-            (Show, &ShowMainWindow),
+        // 5 actions plus 1 separator: macOS supplies Open and Quit, so we must not duplicate them.
+        assert_eq!(items.len(), 6, "5 actions plus 1 separator; Open/Quit are system-provided");
+        let expected: [(MenuBarAction, &dyn gpui_kit::Action); 5] = [
             (NewSession, &ActionNewSession),
             (OpenWorkspace, &ChooseWorkspace),
             (OpenSettings, &ActionOpenSettings),
             (OpenHelp, &ActionOpenHelp),
             (About, &AboutApplication),
-            (Quit, &QuitApplication),
         ];
         let mut leaders = expected.iter();
         let mut order = Vec::new();
@@ -580,7 +595,13 @@ mod tests {
                 _ => panic!("dock menu holds only actions and separators"),
             }
         }
-        assert_eq!(order, menu_items(), "dock order matches the status groups");
+        assert_eq!(
+            order,
+            [NewSession, OpenWorkspace, OpenSettings, OpenHelp, About],
+            "dock order excludes system Open (Show) and Quit"
+        );
+        // Regression: dock menu must never carry the system-duplicate actions.
+        assert!(!order.contains(&Show) && !order.contains(&Quit), "dock menu must not duplicate system Open/Quit");
     }
 
     #[test]
