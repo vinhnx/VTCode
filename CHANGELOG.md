@@ -5,6 +5,24 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.10 - 2026-11-10
+
+### Highlights
+
+#### Bug Fixes
+
+- Declare vtcode-core tui feature for vtcode binary (64d38ff0)
+
+#### Documentation
+
+- Add crate-ops module/crate ops workflow (c52cacba)
+
+### Other Changes
+
+#### Other
+
+- Cleanup scripts (f7821cdf)
+
 ## 0.181.9 - 2026-11-10
 
 ### Highlights
