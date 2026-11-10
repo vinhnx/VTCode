@@ -44,6 +44,11 @@ required.
 | `muse-spark-1.3-contributor` | Opt-in Contributor-tier variant; review Meta's data-use terms before use              |
 | `muse-ember-1.0`             | Efficient execution model for high-volume sub-agent tasks, tool calls, and routing   |
 
+For development and test runs, prefer `muse-spark-1.3-contributor`: it serves the same Muse Spark 1.3 model at
+Contributor pricing (`$0.10` input / `$0.20` output per 1M tokens, versus `$1.25` / `$4.25` Standard) in exchange for
+allowing Meta to train on the prompts and completions. Keep Standard `muse-spark-1.3` for real work with content you
+cannot share.
+
 All five models are exposed through the `/model` picker and support streaming, function tools, structured output,
 multimodal input, and reasoning effort controls through Meta's OpenAI-compatible Chat Completions API.
 
