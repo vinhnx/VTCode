@@ -1,10 +1,12 @@
 name: Dependency audit
 
 # RustSec advisories, license compliance, duplicate deps, and crate sources are
-# checked by cargo-deny using the policy in deny.toml at the repo root. The
-# weekly schedule keeps auditing the lockfile even when no PR touches it, so a
-# newly published advisory against an already-locked dependency fails here
-# without any code change. Note: schedule events always run on the default
+# checked by cargo-deny using the policy in deny.toml at the repo root, while
+# third-party audit provenance is checked by cargo-vet using supply-chain/ at
+# the repo root (Mozilla + Google audit imports, exemptions ratcheted down over
+# time). The weekly schedule keeps auditing the lockfile even when no PR touches
+# it, so a newly published advisory against an already-locked dependency fails
+# here without any code change. Note: schedule events always run on the default
 # branch and ignore path filters.
 on:
   pull_request:
@@ -13,6 +15,7 @@ on:
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "deny.toml"
+      - "supply-chain/**"
       - ".github/workflows/deny.yml"
   push:
     branches: [main]
@@ -21,6 +24,7 @@ on:
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "deny.toml"
+      - "supply-chain/**"
       - ".github/workflows/deny.yml"
   schedule:
     # Every Monday 05:00 UTC.
@@ -54,3 +58,30 @@ jobs:
         with:
           command: check
           arguments: --locked
+
+  cargo-vet:
+    name: Cargo vet check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: 1.99.1
+
+      - name: Install cargo-vet
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: cargo-vet
+
+      # --locked reuses the committed imports.lock without fetching new upstream
+      # audits, so the check is deterministic. Refresh imports explicitly with
+      # plain `cargo vet` and commit the updated lock.
+      - name: Run cargo-vet
+        run: cargo vet --locked
+        shell: bash

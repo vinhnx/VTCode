@@ -337,8 +337,8 @@ print_usage() {
 	echo "  --changed, -c       Only run tests in crates changed since HEAD~1 (implies --test)"
 	echo "  --quiet, -q         Suppress progress banners and cargo noise; errors and"
 	echo "                      the final summary still print (agent/CI friendly)"
-	echo "  --deny, -d          Also run cargo-deny (RustSec advisories, licenses, bans,"
-	echo "                      sources; network-bound on first advisory-DB fetch)"
+	echo "  --deny, -d          Also run dependency audit (cargo-deny advisories/licenses/bans/"
+	echo "                      sources + cargo-vet audit provenance; network-bound on first run)"
 	echo "  --help, -h          Show this help message"
 	echo ""
 	echo "Examples:"
@@ -434,6 +434,7 @@ main() {
 	# explicit flag hard-requires the tool rather than skipping.
 	if [ "$RUN_DENY" = true ]; then
 		run_cargo_deny required || ((FAILED_CHECKS++))
+		run_cargo_vet required || ((FAILED_CHECKS++))
 	fi
 
 	# Run tests if requested (always last, as they're the slowest)

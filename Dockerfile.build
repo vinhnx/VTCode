@@ -1,5 +1,10 @@
-# Multi-stage Dockerfile for building vtcode with sufficient memory and resources
-FROM rust:1.99.1-bookworm as builder
+# Multi-stage Dockerfile for building vtcode with sufficient memory and resources.
+# This is a contributor build image, not a shipped runtime: releases ship
+# prebuilt binaries (see scripts/release.sh), not containers. Base images are
+# pinned by digest for reproducible builds; refresh with `docker buildx
+# imagetools inspect <tag>` when the toolchain pin moves (checked by
+# scripts/check_compatibility.sh, which reads the tag, not the digest).
+FROM rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c AS builder
 
 # Install required system dependencies
 RUN apt-get update && apt-get install -y \
@@ -30,7 +35,7 @@ RUN cargo build --release
 RUN test -f /build/target/release/vtcode
 
 # Optional: Create a minimal runtime image
-FROM debian:bookworm-slim as runtime
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -39,7 +44,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary from builder stage
-COPY --from=builder /build/target/release/vtcode /usr/local/bin/vtcode
+COPY --from=builder --chmod=755 /build/target/release/vtcode /usr/local/bin/vtcode
+
+# Run as an unprivileged user: nothing in this image needs root. The home
+# directory is created (not /nonexistent) because interactive vtcode sessions
+# write config/state under $HOME.
+RUN groupadd -r vtcode && useradd -r -m -g vtcode -d /home/vtcode -s /usr/sbin/nologin vtcode
+USER vtcode
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/vtcode"]

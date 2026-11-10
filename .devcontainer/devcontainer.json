@@ -1,0 +1,18 @@
+// Contributor dev container: an isolated sandbox for opening (possibly
+// untrusted) checkouts. The base image tracks the same pinned toolchain as
+// the builder stage in Dockerfile.build; keep both digests in sync when the
+// toolchain pin moves (manual step in docs/development/toolchain-updates.md).
+{
+	"name": "VT Code",
+	"image": "rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c",
+	// System deps mirror the builder stage in Dockerfile.build (plus git,
+	// which dev iterations need for the test suite and hooks).
+	"postCreateCommand": "apt-get update && apt-get install -y pkg-config libssl-dev build-essential git && rm -rf /var/lib/apt/lists/*",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"rust-lang.rust-analyzer"
+			]
+		}
+	}
+}

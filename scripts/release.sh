@@ -706,6 +706,10 @@ main() {
 			fi
 		fi
 
+		# Per-artifact embedded-audit report (informational, never fails the
+		# release): makes silent cargo-auditable regressions visible in the log.
+		report_audit_data_coverage "$binaries_dir" "$released_version"
+
 		# Ensure install scripts are executable
 		chmod +x "$SCRIPT_DIR/install.sh" 2>/dev/null || true
 		chmod +x "$SCRIPT_DIR/install.ps1" 2>/dev/null || true

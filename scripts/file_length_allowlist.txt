@@ -44,3 +44,9 @@ docs/development/diagnostics/producer-audit.json=3_000
 
 # Sample skill asset shipped for ast-grep workflows and tests.
 crates/codegen/vtcode-skills/src/skills/assets/samples/ast-grep/SKILL.md=2_000
+
+# Machine-maintained by cargo-vet (exemptions baseline + trusted-audit lock).
+# config.toml churns with dependency updates; ratchet the cap down as exemptions
+# become real audits. Touch only via `cargo vet` subcommands, never by hand.
+supply-chain/config.toml=5_000
+supply-chain/imports.lock=2_000

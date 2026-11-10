@@ -177,3 +177,23 @@ run_cargo_deny() {
         return 1
     fi
 }
+
+run_cargo_vet() {
+    local require_binary="${1:-optional}"
+    if [ "$require_binary" != "required" ]; then
+        if ! command -v cargo-vet > /dev/null 2>&1; then
+            print_warning "cargo-vet is not available. Skipping audit-provenance check (CI enforces the same policy via .github/workflows/deny.yml). Install it with 'cargo binstall cargo-vet' or 'cargo install cargo-vet --locked'."
+            return 0
+        fi
+    fi
+    print_status "Running cargo-vet (third-party audit provenance)..."
+    # --locked reuses imports.lock without fetching new upstream audits, so the
+    # check is deterministic. Refresh imports explicitly with plain `cargo vet`.
+    if cargo vet --locked; then
+        print_success "cargo-vet checks passed!"
+        return 0
+    else
+        print_error "cargo-vet found unaudited dependencies. Audit them with 'cargo vet certify' or record an exemption, then shrink supply-chain/config.toml over time."
+        return 1
+    fi
+}

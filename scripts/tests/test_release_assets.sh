@@ -678,6 +678,124 @@ else
     pass "notes helper missing args rejected"
 fi
 
+echo "Testing report_audit_data_coverage..."
+
+cov_stage="$tmp/stage-coverage"
+mkdir -p "$cov_stage"
+cov_version="9.9.9"
+# Asymmetric fixtures: extracted content drives the stubbed `cargo audit bin`
+# verdict, so each classification branch gets both sides.
+make_cov_archive() { # <target> <ext> <binary-name> <content>
+    local target=$1 ext=$2 binary=$3 content=$4
+    local dir="$tmp/covbin-$target"
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    printf '%s' "$content" >"$dir/$binary"
+    if [[ "$ext" == "tar.gz" ]]; then
+        tar -czf "$cov_stage/vtcode-${cov_version}-${target}.tar.gz" -C "$dir" "$binary"
+    else
+        (cd "$dir" && zip -q "$cov_stage/vtcode-${cov_version}-${target}.zip" "$binary")
+    fi
+}
+make_cov_archive "x86_64-unknown-linux-gnu" "tar.gz" "vtcode" "HASDATA"
+make_cov_archive "aarch64-apple-darwin" "tar.gz" "vtcode" "NODATA"
+make_cov_archive "x86_64-unknown-linux-musl" "tar.gz" "vtcode" "NODATA"
+make_cov_archive "aarch64-unknown-linux-gnu" "tar.gz" "vtcode" "HASDATA"
+make_cov_archive "fake-huge-target" "tar.gz" "vtcode" "BIGDATA"
+if command -v zip >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+    make_cov_archive "x86_64-pc-windows-msvc" "zip" "vtcode.exe" "HASDATA"
+    cov_has_zip=true
+else
+    echo "  - zip/unzip not installed; skipping windows zip coverage fixture"
+    cov_has_zip=false
+fi
+printf 'not-an-archive' >"$cov_stage/vtcode-${cov_version}-fake-corrupt-target.tar.gz"
+
+# Stub `cargo audit bin` with the exact signals the real tool prints
+# (verified against cargo-audit on 2026-11-10). Exit codes are inverted from
+# the naive reading on purpose: EMBEDDED exits 1 (advisories found, data
+# present) and MISSING exits 0, proving classification ignores exit status.
+# shellcheck disable=SC2329 # invoked indirectly via report_audit_data_coverage
+cargo() {
+    if [[ "${1:-}" == "audit" && "${2:-}" == "bin" && -n "${3:-}" ]]; then
+        if grep -q "BIGDATA" "$3" 2>/dev/null; then
+            echo "error: $3 exceeds max size limit of 104857600 bytes" >&2
+            return 1
+        fi
+        if grep -q "HASDATA" "$3" 2>/dev/null; then
+            echo "     Found 'cargo auditable' data in $3 (42 dependencies)"
+            return 1
+        fi
+        echo "warning: $3 was not built with 'cargo auditable', the report will be incomplete" >&2
+        return 0
+    fi
+    echo "unexpected cargo invocation: $*" >&2
+    return 1
+}
+
+# Stub cargo-audit on PATH so the classification run is hermetic on machines
+# without the real tool. The `cargo` function above intercepts every audit
+# invocation, so this stub only satisfies the presence check; it exits 1 if
+# ever executed, turning a direct-call regression into a visible failure.
+covbin="$tmp/covbin"
+mkdir -p "$covbin"
+printf '#!/bin/sh\necho "unexpected cargo-audit invocation" >&2\nexit 1\n' >"$covbin/cargo-audit"
+chmod +x "$covbin/cargo-audit"
+if PATH="$covbin:$PATH" report_audit_data_coverage "$cov_stage" "$cov_version" >"$tmp/coverage.out" 2>&1; then
+    pass "coverage report returns 0 despite MISSING artifacts (report, not gate)"
+else
+    fail_test "coverage report should return 0 even with MISSING artifacts"
+fi
+cov_out=$(cat "$tmp/coverage.out")
+check_cov() { # <fixed-string> <label>
+    if printf '%s\n' "$cov_out" | grep -qF "$1"; then
+        pass "$2"
+    else
+        fail_test "$2 (missing: $1)"
+    fi
+}
+check_cov "vtcode-9.9.9-x86_64-unknown-linux-gnu.tar.gz: EMBEDDED (42 dependencies)" \
+    "gnu binary with data reports EMBEDDED with count"
+check_cov "vtcode-9.9.9-aarch64-apple-darwin.tar.gz: MISSING (WARNING:" \
+    "unexpected MISSING reports WARNING"
+check_cov "vtcode-9.9.9-x86_64-unknown-linux-musl.tar.gz: MISSING (expected:" \
+    "cross-built MISSING is expected, not a warning"
+check_cov "vtcode-9.9.9-aarch64-unknown-linux-gnu.tar.gz: EMBEDDED (42 dependencies)" \
+    "EMBEDDED wins over the cross rule when data is present"
+if [[ "$cov_has_zip" == true ]]; then
+    check_cov "vtcode-9.9.9-x86_64-pc-windows-msvc.zip: EMBEDDED (42 dependencies)" \
+        "windows zip binary is scanned"
+fi
+check_cov "vtcode-9.9.9-fake-huge-target.tar.gz: TOO-LARGE" \
+    "oversized binary reports TOO-LARGE instead of a misleading verdict"
+check_cov "vtcode-9.9.9-fake-corrupt-target.tar.gz: UNREADABLE (could not extract binary)" \
+    "corrupt archive reports UNREADABLE without aborting the report"
+
+unset -f cargo
+# cargo present but cargo-audit absent: the realistic missing-tool shape
+# (release machines always have cargo). Proves the skip checks for the audit
+# subcommand, not the driver.
+noauditbin="$tmp/noauditbin"
+mkdir -p "$noauditbin"
+printf '#!/bin/sh\nexit 0\n' >"$noauditbin/cargo"
+chmod +x "$noauditbin/cargo"
+if PATH="$noauditbin" report_audit_data_coverage "$cov_stage" "$cov_version" >"$tmp/coverage-skip.out" 2>&1; then
+    pass "coverage report skips cleanly without cargo-audit"
+else
+    fail_test "coverage report should return 0 when cargo-audit is missing"
+fi
+if grep -qF "audit-data: skipped" "$tmp/coverage-skip.out"; then
+    pass "missing cargo-audit prints the skip notice"
+else
+    fail_test "missing cargo-audit should print the skip notice"
+fi
+
+if report_audit_data_coverage "only-one-arg" >/dev/null 2>&1; then
+    fail_test "coverage helper missing args should fail"
+else
+    pass "coverage helper missing args rejected"
+fi
+
 if [[ "$fail" -ne 0 ]]; then
     echo "FAIL: release-assets tests failed"
     exit 1

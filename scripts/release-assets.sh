@@ -459,3 +459,75 @@ validate_release_assets() {
     fi
     return 0
 }
+
+# Report embedded dependency-audit coverage for each staged release archive.
+#
+#   report_audit_data_coverage <stage-dir> <version>
+#
+# Extracts the binary from every `vtcode-<version>-*` archive present and runs
+# `cargo audit bin` over it, printing one `audit-data:` line per artifact:
+# EMBEDDED (with dependency count), MISSING, TOO-LARGE, or UNREADABLE.
+# Presence of archives is validate_release_assets' job; this function only
+# reports on what is already staged, so it owns no target list to keep in sync.
+#
+# Cross-built musl/aarch64-linux-gnu artifacts cannot embed cargo-auditable
+# data (cargo runs inside the cross container), so MISSING is expected for
+# them. MISSING anywhere else prints a WARNING: either the auditable build
+# step regressed or the release machine lacks cargo-auditable.
+#
+# Always returns 0: this is a report, not a gate. release.sh treats
+# cargo-auditable as optional today; only flip this to fatal together with
+# that policy. Skips quietly (single stderr line) when cargo-audit is absent.
+# Each scan refreshes the advisory DB over the network; an offline machine
+# reports UNREADABLE, never stale data.
+report_audit_data_coverage() {
+    if [[ $# -ne 2 ]]; then
+        echo "usage: report_audit_data_coverage <stage-dir> <version>" >&2
+        return 2
+    fi
+    local stage_dir=$1
+    local version=$2
+    if ! command -v cargo-audit >/dev/null 2>&1; then
+        echo "audit-data: skipped (cargo-audit not installed; cargo install cargo-audit --locked)" >&2
+        return 0
+    fi
+    local archive name tmp scan deps
+    for archive in "$stage_dir"/vtcode-"$version"-*.tar.gz "$stage_dir"/vtcode-"$version"-*.zip; do
+        [[ -f "$archive" ]] || continue
+        name=$(basename "$archive")
+        tmp=$(mktemp)
+        if ! create_compatibility_asset "$archive" "$tmp" >/dev/null 2>&1; then
+            echo "audit-data: $name: UNREADABLE (could not extract binary)"
+            rm -f "$tmp"
+            continue
+        fi
+        # `cargo audit bin` exit status reports advisories, not data presence,
+        # so classify on its output text instead (verified signals: "Found
+        # 'cargo auditable' data" vs "was not built with 'cargo auditable'"
+        # vs "exceeds max size limit").
+        scan=$(cargo audit bin "$tmp" 2>&1 || true)
+        rm -f "$tmp"
+        if printf '%s\n' "$scan" | grep -q "exceeds max size limit"; then
+            echo "audit-data: $name: TOO-LARGE (exceeds the cargo-audit binary size cap; cannot verify)"
+        elif printf '%s\n' "$scan" | grep -q "was not built with 'cargo auditable'"; then
+            case "$name" in
+                *musl*|*aarch64-unknown-linux-gnu*)
+                    echo "audit-data: $name: MISSING (expected: cross-built artifacts cannot embed cargo-auditable data)"
+                    ;;
+                *)
+                    echo "audit-data: $name: MISSING (WARNING: expected embedded audit data; check the cargo-auditable build step)"
+                    ;;
+            esac
+        elif printf '%s\n' "$scan" | grep -q "Found 'cargo auditable' data"; then
+            deps=$(printf '%s\n' "$scan" | grep -oE '\([0-9]+ dependencies\)' | head -n1 || true)
+            if [[ -n "$deps" ]]; then
+                echo "audit-data: $name: EMBEDDED $deps"
+            else
+                echo "audit-data: $name: EMBEDDED"
+            fi
+        else
+            echo "audit-data: $name: UNREADABLE (cargo audit bin produced no verdict)"
+        fi
+    done
+    return 0
+}

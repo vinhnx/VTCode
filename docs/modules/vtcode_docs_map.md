@@ -221,9 +221,10 @@ below based on the topic area.
 
 - **File**: `docs/development/DEVELOPMENT_SETUP.md`
   - **Content**: Development Setup
-  - **Topics**: One-Time Setup, Credential identities, Daily Development Loop, Full Quality Gate, Common Commands
-  - **User Questions**: "What can you tell me about Development Setup?", "How does One-Time Setup work?", "How does
-    Credential identities work?"
+  - **Topics**: Dev Container (Optional), One-Time Setup, Credential identities, Daily Development Loop, Full Quality
+    Gate
+  - **User Questions**: "What can you tell me about Development Setup?", "How does Dev Container (Optional) work?", "How
+    does One-Time Setup work?"
 
 - **File**: `docs/development/diff-preview.md`
   - **Content**: Diff Preview Architecture

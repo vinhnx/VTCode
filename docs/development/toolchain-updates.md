@@ -50,6 +50,7 @@ First-party code compiles on the pinned stable channel and nothing else:
 | Workspace floor | `Cargo.toml` (`[package]`, `[workspace.package]`) | pin test |
 | Crate floors | each crate `Cargo.toml` (`rust-version` or `rust-version.workspace = true`) | pin test |
 | Build images | `Dockerfile.build`, `.oss-scanner/Dockerfile` | pin test (build image only); keep both in sync |
+| Dev container | `.devcontainer/devcontainer.json` | manual; keep digest in sync with `Dockerfile.build` |
 | CI | every `dtolnay/rust-toolchain` step in `.github/workflows/*.yml` | pin test (`workflow_toolchain_pins`) |
 | Human report | `scripts/check_compatibility.sh --msrv` | script compares every pin to the channel |
 | Auxiliary analyzer | `scripts/hawk.sh` (`HAWK_TOOLCHAIN`, `HAWK_VERSION`) | manual, see below |
@@ -63,8 +64,11 @@ update them in the same change.
 1. Install the release: `rustup toolchain install X.Y.Z`.
 2. Update the pin map. A version-wide search finds the current value:
    `rg -n '<old version>' --hidden -g '!target' -g '!.git' -g '!.vtcode/**' .`
-   Update the channel, `clippy.toml`, the workspace and crate manifests, both Dockerfiles, every workflow
-   `toolchain:` input, the compatibility script's expected value, and the docs listed above.
+   Update the channel, `clippy.toml`, the workspace and crate manifests, both Dockerfiles, the devcontainer,
+   every workflow `toolchain:` input, the compatibility script's expected value, and the docs listed above.
+   `Dockerfile.build` and `.devcontainer/devcontainer.json` pin base images by digest: refresh each digest with
+   `docker buildx imagetools inspect <new-tag>`, since Docker resolves `tag@digest` by digest while the pin test
+   only reads the tag.
 3. Keep the hawk pin consistent with its upstream release (see [Auxiliary compiler pins](#auxiliary-compiler-pins)).
 4. Reformat: `cargo fmt --all` — a new rustfmt can reflow code that was previously stable.
 5. Run the fast gate: `./scripts/check-dev.sh --lints`.

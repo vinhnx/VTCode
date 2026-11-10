@@ -192,6 +192,8 @@ temp/
 yarn.lock
 package-lock.json
 Pipfile.lock
+# cargo-vet pins its trusted upstream audits here; CI checks it in --locked mode.
+!supply-chain/imports.lock
 
 # IDE Specific
 .vscode/settings.json

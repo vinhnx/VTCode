@@ -247,6 +247,12 @@ run_release_contract_tests() {
         print_error "Homebrew cask contract tests failed."
         failed=1
     fi
+    if bash scripts/tests/test_release_assets.sh; then
+        print_success "Release-assets contract tests passed."
+    else
+        print_error "Release-assets contract tests failed."
+        failed=1
+    fi
     if [ "$failed" -eq 0 ]; then
         print_success "Release contract tests passed."
         return 0
@@ -431,6 +437,7 @@ main() {
     run_markdown_lint_gate || ((failed_checks++))
     run_unsafe_docs_gate || ((failed_checks++))
     run_cargo_deny || ((failed_checks++))
+    run_cargo_vet || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))
     run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
@@ -508,7 +515,7 @@ case "${1:-}" in
         echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
         echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
-        echo "  deny    - Audit dependencies with cargo-deny (RustSec advisories, licenses, bans, sources)"
+        echo "  deny    - Audit dependencies (cargo-deny advisories/licenses/bans/sources + cargo-vet audit provenance)"
         echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
         echo "  help    - Show this help message"
         echo ""
@@ -524,7 +531,10 @@ case "${1:-}" in
         run_unsafe_docs_gate
         ;;
     "deny")
-        run_cargo_deny required
+        deny_failed=0
+        run_cargo_deny required || deny_failed=1
+        run_cargo_vet required || deny_failed=1
+        exit "$deny_failed"
         ;;
     "legibility")
         run_agent_legibility_checks

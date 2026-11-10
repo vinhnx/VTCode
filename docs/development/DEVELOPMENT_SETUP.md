@@ -11,6 +11,12 @@ Canonical local setup for contributing to VT Code.
   `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `STEPFUN_API_KEY`, or `MINIMAX_API_KEY`, (b) an
   OAuth session for an auth-managed provider, or (c) a key stored via `vtcode secret add <provider>`.
 
+## Dev Container (Optional)
+
+Opening an unfamiliar or untrusted checkout? Use the preconfigured [dev container](../../.devcontainer/devcontainer.json)
+(VS Code: "Reopen in Container") instead of your host toolchain. It tracks the same pinned Rust image as
+`Dockerfile.build`, so builds behave identically, while untrusted repo content stays inside the container boundary.
+
 ## One-Time Setup
 
 ```bash

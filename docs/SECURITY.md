@@ -131,6 +131,27 @@ cargo install cargo-audit
 cargo audit
 ```
 
+### Audit Provenance (cargo-vet)
+
+Advisories catch _known_ vulnerabilities; [cargo-vet](https://mozilla.github.io/cargo-vet/) records _who audited what_.
+CI enforces `cargo vet --locked` in `.github/workflows/deny.yml` using the store in `supply-chain/` (Mozilla and
+Google audit imports, project exemptions ratcheted down over time). Any new or bumped dependency must be covered by a
+trusted audit or a recorded exemption, or the build fails. To work with it locally:
+
+```bash
+# Install cargo-vet if you haven't already
+cargo binstall cargo-vet   # or: cargo install cargo-vet --locked
+
+cargo vet --locked   # same deterministic check as CI (reuses imports.lock)
+cargo vet            # refresh upstream audits, then re-check (may update imports.lock)
+cargo vet suggest    # low-hanging fruit to convert exemptions into real audits
+cargo vet certify    # record an audit you performed yourself
+```
+
+House shortcuts (`./scripts/check.sh deny`, `./scripts/check-dev.sh --deny`) run deny and vet together. Never
+hand-edit `supply-chain/` — use `cargo vet` subcommands so the files stay well-formed, and keep the exemptions list
+shrinking: every entry there is unaudited code we ship.
+
 ### Auditing Shipped Binaries
 
 Release artifacts are built with [cargo-auditable](https://github.com/rust-secure-code/cargo-auditable): the exact
@@ -144,7 +165,9 @@ cargo audit bin path/to/vtcode        # RustSec scan of the binary itself
 
 trivy (v0.31+), grype (v0.83+), and osv-scanner (v2.0.1+) read the same section, so container/distro scanners pick it
 up automatically. The GNU Linux, Windows, and macOS release builds embed the data; the `cross`-built musl/aarch64
-artifacts do not (cargo runs inside the cross container, so a custom image would be required).
+artifacts do not (cargo runs inside the cross container, so a custom image would be required). Every release prints a
+per-artifact coverage report during staging (`report_audit_data_coverage` in `scripts/release-assets.sh`), so a silent
+regression in the auditable build step shows up in the release log instead of shipping unnoticed.
 
 Embedded metadata records crate names and versions only (URLs/paths are redacted); it is an SBOM, not a
 supply-chain defense.
