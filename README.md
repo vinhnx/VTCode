@@ -36,22 +36,22 @@
 
 ## Overview
 
-VT Code is a terminal-first coding agent for your repository, in the CLI and its native macOS app.
-It owns context, tool calls, and execution policy so long tasks stay auditable and resumable.
+VT Code is a terminal-first coding agent for your repository, in the CLI and native macOS app.
+It keeps context, tool calls, and execution policy auditable and resumable across long tasks.
 
 | At a glance      | What you get                                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review [turn diffs](./docs/development/diff-preview.md). |
 | **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                      |
-| **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) on mismatch.                                     |
+| **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) revises on mismatch.                             |
 | **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction.                                         |
-| **Integrations** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), plugins, and editor bridges.      |
+| **Integrations** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), plugins, editor bridges.          |
 | **Models**       | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.                                          |
 
 ## Quick start
 
-Runs on macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (edition 2024); the
-[installation guide](./docs/installation/README.md) covers prerequisites and optional search tools.
+Runs on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024); see the
+[installation guide](./docs/installation/README.md) for prerequisites and search tools.
 
 ### 1. Install
 
@@ -60,7 +60,7 @@ Runs on macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (e
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-Or install the CLI with Homebrew or Cargo (the desktop cask lives in [Desktop app](#desktop-app)):
+Or install the CLI with Homebrew or Cargo (desktop cask: [Desktop app](#desktop-app)):
 
 ```bash
 brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
@@ -75,12 +75,12 @@ On Windows (best-effort artifacts; may lag behind macOS/Linux):
 irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
 ```
 
-Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers other install
-methods, desktop flags, and optional search tools.
+Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers the remaining
+methods, desktop flags, and search tools.
 
 ### 2. Configure your project
 
-In your project directory, scaffold configuration and add credentials:
+Scaffold configuration and add credentials in your project directory:
 
 ```bash
 cd path/to/your/project
@@ -88,10 +88,9 @@ vtcode init                # scaffolds config + AGENTS.md; review before committ
 vtcode secret add openai   # stores your OpenAI API key in secure storage
 ```
 
-Replace `openai` with your provider. Keys use secure storage (OS keyring or encrypted file); alternatives are
-environment variables, a workspace `.env` file, or `vtcode login` where supported. See
-[getting started](./docs/user-guide/getting-started.md) and the
-[provider guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
+Replace `openai` with your provider. Keys use secure storage (OS keyring or encrypted file); environment
+variables, a workspace `.env` file, or `vtcode login` work where supported. See
+[getting started](./docs/user-guide/getting-started.md) and the [provider guides](./docs/providers/PROVIDER_GUIDES.md).
 
 > **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow;
 > prefer your own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
@@ -105,8 +104,8 @@ environment variables, a workspace `.env` file, or `vtcode login` where supporte
 vtcode   # open the interactive TUI in your project
 ```
 
-Ask a focused question, then review proposed changes and test results before committing. See [Usage](#usage)
-for automation and session commands.
+Ask a focused question, then review proposed changes and test results before committing. [Usage](#usage) covers
+automation and session commands.
 
 ## Usage
 
