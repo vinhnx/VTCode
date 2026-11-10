@@ -246,6 +246,7 @@ pub(super) async fn run_interaction_loop_impl(
                         .set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
                     ctx.renderer.set_show_message_timestamps(cfg.ui.show_message_timestamps);
                     ctx.renderer.set_tool_display_mode(cfg.ui.tool_display_mode);
+                    ctx.renderer.set_communication_style(cfg.ui.communication_style);
                     vtcode_ui::tui::panic_hook::set_show_diagnostics(cfg.ui.show_diagnostics_in_transcript);
                     ctx.config.reasoning_effort = cfg.agent.reasoning_effort;
                     ctx.config.theme.clone_from(&cfg.agent.theme);
