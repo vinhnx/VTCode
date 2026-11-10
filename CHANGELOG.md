@@ -5,6 +5,36 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.11 - 2026-11-10
+
+### Highlights
+
+#### Bug Fixes
+
+- Remove redundant Dock context menu items that duplicate system Open and Quit (153fcc88)
+- Bake Liquid Glass shading into opaque Dock icons so running tiles carry modern shade (d20cbb4b)
+- Hand the desktop app a forked thread instead of the locked one (60662aab)
+
+#### Documentation
+
+- Refresh allocator RSS table with macOS arm64 trajectories (bc6d5f77)
+
+#### Features
+
+- Add Dock context menu and move Contrast to Accessibility (8623b76d)
+- Defer Dynamic Dock icon on Tahoe+ and share Large radius baseline (e90e10d6)
+- OSC 5522 clipboard fallback for image paste over SSH (ab906d37)
+- Force-cancel Stop with exec kill and repeat-press escalation (eafca389)
+- Strengthen button state ramps and add trigger open-state (423cc2f7)
+- Add Gemini 4 Carbon to Gemini and Merge Gateway (61d0f416)
+
+### Other Changes
+
+#### Performance
+
+- Cut Desktop macOS runtime with release-fast profile (28a8df9a)
+- Sample RSS via vtcode-commons instead of ps/subprocess (4a18ec30)
+
 ## 0.181.10 - 2026-11-10
 
 ### Highlights
