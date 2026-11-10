@@ -2,6 +2,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, InteractiveElementExt, StyledExt};
+use gpui_kit::component::Selectable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
@@ -498,6 +499,7 @@ impl DesktopView {
                     .child(
                         desktop_button("workspace-review-current-file")
                             .label(label.clone())
+                            .open(self.palette_open_for(&[PaletteKind::ReviewFiles]))
                             .icon(IconName::ChevronDown)
                             .tooltip(rust_i18n::t!("app.workspace_review.choose_changed_file").to_string())
                             .ghost()

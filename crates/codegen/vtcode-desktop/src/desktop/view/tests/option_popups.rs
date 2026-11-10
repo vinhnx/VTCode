@@ -890,3 +890,95 @@ fn compact_model_picker_shows_current_options_and_full_search_selects_the_real_r
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
     assert_eq!(params, json!({ "provider": "google", "model": "gemini-3.8-flash" }));
 }
+
+/// A palette trigger stays visibly open while its popup owns the composer.
+/// Kit paints `open` as selected styling but deliberately keeps trigger
+/// presentation out of accessibility metadata (base `Button::selected` sets
+/// paint only — selecting a button never implies `aria_toggled` — so the
+/// snapshot reads `None` either way). Assert the shared predicate through
+/// real open/close transitions instead, plus the predicate-to-Kit handoff
+/// on the helpers that return their `Button`.
+#[gpui_kit::test]
+fn palette_triggers_show_open_state_while_their_popup_is_up(cx: &mut TestAppContext) {
+    use super::super::PaletteKind;
+    use gpui_kit::component::Selectable as _;
+
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(16);
+    settle_fade_animations(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        // Closed rest state: no trigger claims any kind.
+        assert!(
+            !view
+                .read(cx)
+                .palette_open_for(&[PaletteKind::Models, PaletteKind::ModelOptions])
+        );
+        assert!(!view.read(cx).palette_open_for(&[PaletteKind::Modes]));
+        assert!(!view.read(cx).palette_open_for(&[PaletteKind::Permissions]));
+        assert!(!view.read(cx).palette_open_for(&[PaletteKind::ReviewFiles]));
+        assert!(!view.update(cx, |view, cx| view.render_model_button(cx).is_open()));
+        assert!(!view.update(cx, |view, cx| view.render_policy_button(cx).is_open()));
+        assert!(!view.update(cx, |view, cx| view.render_attach_button(cx).is_open()));
+
+        // Each trigger marks exactly its own kinds while its popup is up;
+        // Escape clears the mark with the popup.
+        for (trigger, kinds) in [
+            ("pick-model", [PaletteKind::Models, PaletteKind::ModelOptions]),
+            ("composer-mode", [PaletteKind::Modes, PaletteKind::Modes]),
+            ("composer-policy", [PaletteKind::Permissions, PaletteKind::Permissions]),
+        ] {
+            window.click(trigger, cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_some(), "{trigger} must open its popup");
+            assert!(view.read(cx).palette_open_for(&kinds), "{trigger} must claim its kinds while open");
+            for (name, other) in [
+                ("models", [PaletteKind::Models, PaletteKind::ModelOptions]),
+                ("modes", [PaletteKind::Modes, PaletteKind::Modes]),
+                ("policy", [PaletteKind::Permissions, PaletteKind::Permissions]),
+            ] {
+                if other != kinds {
+                    assert!(!view.read(cx).palette_open_for(&other), "{trigger} must not claim {name} while open");
+                }
+            }
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_none());
+            assert!(!view.read(cx).palette_open_for(&kinds), "{trigger} must release its kinds once closed");
+        }
+
+        // The model and policy helpers hand their predicate to Kit; the mode
+        // helper erases its button into `AnyElement`, so the predicate above
+        // is its whole contract.
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert!(view.update(cx, |view, cx| view.render_model_button(cx).is_open()));
+        assert!(!view.update(cx, |view, cx| view.render_policy_button(cx).is_open()));
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.click("composer-policy", cx);
+        window.render_frame(cx);
+        assert!(view.update(cx, |view, cx| view.render_policy_button(cx).is_open()));
+        assert!(!view.update(cx, |view, cx| view.render_model_button(cx).is_open()));
+        window.press("escape", cx);
+        window.render_frame(cx);
+
+        // The attach picker is palette-independent state behind the same
+        // open styling: marked while up, clear once dismissed.
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_some(), "attach must open its picker");
+        assert!(view.update(cx, |view, cx| view.render_attach_button(cx).is_open()));
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none());
+        assert!(!view.update(cx, |view, cx| view.render_attach_button(cx).is_open()));
+    })
+    .unwrap();
+}

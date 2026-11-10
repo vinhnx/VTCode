@@ -473,6 +473,16 @@ impl DesktopView {
         }
     }
 
+    /// Open-state predicate for palette triggers: the popup is up and belongs
+    /// to one of the trigger's kinds. Kit paints `open` as selected styling,
+    /// so a trigger carrying this stays visibly pressed until its popup
+    /// closes. Triggers whose popup closes their own route (settings rows)
+    /// unmount with it and need no mark; Kit-owned popovers mark their
+    /// trigger themselves.
+    pub(super) fn palette_open_for(&self, kinds: &[PaletteKind]) -> bool {
+        self.palette.is_some() && kinds.contains(&self.palette_kind)
+    }
+
     /// Close the palette when the same kind is already open, so a second
     /// click on its trigger dismisses it. Returns true when it closed.
     pub(super) fn toggle_palette_kind(

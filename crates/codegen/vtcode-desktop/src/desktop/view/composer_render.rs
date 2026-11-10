@@ -521,7 +521,7 @@ impl DesktopView {
     /// width and fade: normal mode animates the button itself, while zen
     /// fades the whole cluster at once. Zen renders the speed as quiet text
     /// instead of the filled badge; effort is quiet in both modes.
-    fn render_model_button(&self, cx: &Context<Self>) -> Button {
+    pub(super) fn render_model_button(&self, cx: &Context<Self>) -> Button {
         let colors = cx.theme().colors;
         let current_model = self
             .configuration
@@ -580,6 +580,7 @@ impl DesktopView {
             .accessibility_label(model_summary)
             .child(model_label)
             .dropdown_caret(true)
+            .open(self.palette_open_for(&[PaletteKind::Models, PaletteKind::ModelOptions]))
             .small()
             .overflow_hidden()
             .tooltip_with_action(
@@ -594,7 +595,7 @@ impl DesktopView {
 
     /// Execution-policy picker button shared by the normal composer and the
     /// zen option cluster.
-    fn render_policy_button(&self, cx: &Context<Self>) -> Button {
+    pub(super) fn render_policy_button(&self, cx: &Context<Self>) -> Button {
         let permission_mode = self.session_options().map(|options| options.permission_mode);
         let sandbox = self.configuration.as_ref().and_then(|config| config.sandbox.as_deref());
         let (policy, policy_label) = match (permission_mode, sandbox) {
@@ -616,6 +617,7 @@ impl DesktopView {
         let (permission_icon, permission_icon_color) =
             composer_controls::permission_indicator(permission_mode, cx.theme().colors);
         desktop_button("composer-policy")
+            .open(self.palette_open_for(&[PaletteKind::Permissions]))
             .accessibility_label(rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string())
             .tooltip_with_action(
                 rust_i18n::t!("app.composer.command_permissions").to_string(),
@@ -641,9 +643,10 @@ impl DesktopView {
 
     /// Attachments entry point shared by the normal composer and the zen
     /// option cluster: same id, enablement, and picker in both modes.
-    fn render_attach_button(&self, cx: &Context<Self>) -> Button {
+    pub(super) fn render_attach_button(&self, cx: &Context<Self>) -> Button {
         desktop_button("attach-files")
             .icon(IconName::Plus)
+            .open(self.attachment_picker.is_some())
             .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())
             .tooltip(rust_i18n::t!("app.composer.attach_files").to_string())
             .ghost()
@@ -659,4 +662,3 @@ impl DesktopView {
 
 // The run cluster shares `desktop_button`'s Large baseline directly; no
 // local radius override, so idle and running states cannot drift.
-
