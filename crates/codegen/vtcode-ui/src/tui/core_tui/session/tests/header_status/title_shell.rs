@@ -43,6 +43,9 @@ fn status_requires_shimmer_for_input_required_states() {
 #[test]
 fn status_requires_shimmer_preserves_case_and_spinner_matching() {
     assert!(status_requires_shimmer("  RUNNING TOOL: cargo check  "));
+    // Verb callouts read as activity through the generic `running ` needle.
+    assert!(status_requires_shimmer("Running Read main.rs"));
+    assert!(status_requires_shimmer("Running Ran cargo check"));
     assert!(status_requires_shimmer("WAITING FOR INPUT"));
     assert!(status_requires_shimmer("- Compiling workspace"));
     assert!(!status_requires_shimmer("Completed successfully"));

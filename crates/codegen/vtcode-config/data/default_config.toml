@@ -385,6 +385,8 @@ command_timeout_ms = 200
 [ui.terminal_title]
 # Ordered terminal title items (empty list disables VT Code-managed titles)
 items = ["spinner", "project"]
+# Show the rotating loading indicator (spinner) in the terminal title
+global_indicator = true
 
 # Enable Vim-style prompt editing in interactive mode
 vim_mode = false

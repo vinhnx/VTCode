@@ -83,6 +83,12 @@ pub(crate) async fn handle_start_terminal_title_setup(mut ctx: SlashCommandConte
 
     let original_items = ctx.vt_cfg.as_ref().and_then(|cfg| cfg.ui.terminal_title.items.clone());
     let mut draft_items = effective_terminal_title_items(original_items.clone());
+    // The global-indicator setting filters the live title on every terminal;
+    // preview the filtered draft so the setup modal never shows a spinner
+    // that will not render. The raw list stays in the saved config.
+    if ctx.vt_cfg.as_ref().is_some_and(|cfg| !cfg.ui.terminal_title.global_indicator) {
+        draft_items.retain(|item| item != "spinner");
+    }
 
     loop {
         let preview = build_terminal_title_preview(

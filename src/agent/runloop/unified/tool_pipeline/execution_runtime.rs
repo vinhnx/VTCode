@@ -188,18 +188,24 @@ pub(super) async fn execute_with_cache_and_streaming(
         set_tool_execution_status(handle, name);
     }
 
+    let verb_callouts = vt_cfg.is_none_or(|config| config.ui.verb_callouts);
     let progress_reporter = if show_loading_ui {
         let progress_reporter = ProgressReporter::new();
         progress_reporter.set_total(100).await;
         progress_reporter.set_progress(0).await;
-        progress_reporter.set_message(format!("Starting {name}...")).await;
+        let progress_headline = if verb_callouts {
+            vtcode_commons::tool_headlines::verb_callout_headline(name, args_val, None)
+        } else {
+            name.to_string()
+        };
+        progress_reporter.set_message(format!("Starting {progress_headline}...")).await;
         Some(progress_reporter)
     } else {
         None
     };
 
     let tool_spinner = if show_loading_ui {
-        let status_message = build_tool_status_message(name, args_val);
+        let status_message = build_tool_status_message(name, args_val, verb_callouts);
         let spinner = PlaceholderSpinner::with_progress(handle, None, None, status_message, progress_reporter.as_ref());
         spinner.set_defer_restore(true);
         Some(spinner)

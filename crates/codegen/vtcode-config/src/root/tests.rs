@@ -236,6 +236,18 @@ fn unknown_tool_display_mode_is_compatible() {
 }
 
 #[test]
+fn verb_callouts_default_on_and_round_trip() {
+    assert!(UiConfig::default().verb_callouts);
+    assert!(toml::from_str::<UiConfig>("").expect("empty parses").verb_callouts);
+    let explicit: UiConfig = toml::from_str("verb_callouts = false").expect("explicit false parses");
+    assert!(!explicit.verb_callouts);
+    let serialized = toml::to_string(&explicit).expect("explicit false serializes");
+    assert!(serialized.contains("verb_callouts = false"));
+    assert!(!toml::from_str::<UiConfig>(&serialized).expect("round trips").verb_callouts);
+    assert!(toml::from_str::<UiConfig>("verb_callouts = 'true'").is_err());
+}
+
+#[test]
 #[serial]
 fn fullscreen_env_overrides_apply_to_defaults() {
     with_env_var("VTCODE_FULLSCREEN_MOUSE_CAPTURE", Some("0"), || {

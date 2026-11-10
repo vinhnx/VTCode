@@ -188,6 +188,12 @@ pub struct UiConfig {
     #[serde(default = "default_tool_display_mode")]
     pub tool_display_mode: ToolDisplayMode,
 
+    /// Phrase live tool callouts with the desktop verb headline (`Read
+    /// main.rs`, `Ran cargo check`) instead of the raw tool name (`Running
+    /// tool: read_file`). Enabled by default; disabling restores raw names.
+    #[serde(default = "default_verb_callouts")]
+    pub verb_callouts: bool,
+
     /// Session action bindings. Each action maps to one or more key specs;
     /// an empty list explicitly unbinds the built-in action.
     #[serde(default, alias = "key_bindings")]
@@ -574,6 +580,7 @@ impl Default for UiConfig {
         Self {
             tool_output_mode: default_tool_output_mode(),
             tool_display_mode: default_tool_display_mode(),
+            verb_callouts: default_verb_callouts(),
             keybindings: HashMap::new(),
             tool_output_max_lines: default_tool_output_max_lines(),
             tool_output_spool_bytes: default_tool_output_spool_bytes(),
@@ -828,6 +835,10 @@ fn default_tool_output_mode() -> ToolOutputMode {
 
 fn default_tool_display_mode() -> ToolDisplayMode {
     ToolDisplayMode::Compact
+}
+
+fn default_verb_callouts() -> bool {
+    true
 }
 
 fn default_tool_output_max_lines() -> usize {

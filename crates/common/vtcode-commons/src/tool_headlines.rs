@@ -565,7 +565,137 @@ pub fn unified_exec_action_label(args: &Value) -> &'static str {
     }
 }
 
-/// Action-aware label for `write_stdin` calls: explicit actions win,
+/// Verb-led running callout for any tool call (`Read main.rs`, `Ran cargo
+/// check`): the surface-neutral form of the headline an already-running
+/// call shows so the live status agrees with the completed summary row.
+///
+/// Falls back to the prettified tool name ([`humanize_tool_name`]) when the
+/// call has no ownable headline — never a raw identifier. `command` preview:
+/// first line, full length, via [`preview_full_command`], matching the
+/// completed-row preview. `workspace_root` relativizes `list_files` and
+/// `grep_file` path headlines exactly as those describers do.
+#[must_use]
+pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Option<&Path>) -> String {
+    let name = strip_mcp_prefix(tool_name);
+    // Session follow-ups take the action-aware label first; a `run` launch
+    // falls through to the argument gist (the command itself).
+    if let Some(label) = session_followup_title(name, args) {
+        return label;
+    }
+    if name == "list_files" {
+        if let Some((title, _)) = describe_list_files(args, workspace_root) {
+            return title;
+        }
+    } else if name == "grep_file" {
+        if let Some((title, _)) = describe_grep_file(args, workspace_root) {
+            return title;
+        }
+    }
+    match name {
+        "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "defuddle_fetch" | "fetch" | "get_errors"
+        | "list_files" => {
+            if let Some(base) = headline_basename(args) {
+                return format!("Read {base}");
+            }
+            if lookup_first_string(args, &["url"]).is_some() {
+                let (title, _) = describe_fetch_action(args);
+                return title;
+            }
+        }
+        "edit_file" | "write_file" | "create_file" | "delete_file" | "apply_patch" | "search_replace" => {
+            if let Some(base) = headline_basename(args) {
+                return format!("Edited {base}");
+            }
+        }
+        "exec_command" | "run_pty_cmd" | "create_pty_session" | "shell" | "bash" => {
+            if let Some(command) = command_text(args) {
+                return format!("Ran {command}");
+            }
+        }
+        "code_search" | "grep" | "grep_file" => {
+            if let Some((title, _)) = search_headline(name, args) {
+                return title;
+            }
+        }
+        "command_session_internal" => {
+            let action = crate::tool_intent::command_session_action(args).unwrap_or("run");
+            if !action.eq_ignore_ascii_case("run") {
+                return unified_exec_action_label(args).to_string();
+            }
+            if let Some(command) = command_text(args) {
+                return format!("Ran {command}");
+            }
+        }
+        "file_operation_internal" => {
+            let action = args.get("action").and_then(Value::as_str).unwrap_or("read");
+            if action.eq_ignore_ascii_case("read") {
+                if let Some(base) = headline_basename(args) {
+                    return format!("Read {base}");
+                }
+            } else if ["write", "edit", "patch", "delete", "move", "copy"]
+                .iter()
+                .any(|known| action.eq_ignore_ascii_case(known))
+                && let Some(base) = headline_basename(args)
+            {
+                return format!("Edited {base}");
+            }
+        }
+        _ => {}
+    }
+    humanize_tool_name(tool_name)
+}
+
+/// Action-aware title for session follow-up calls; `None` falls through to the
+/// argument gist (`run` launches show the command text instead).
+#[must_use]
+pub fn session_followup_title(name: &str, args: &Value) -> Option<String> {
+    match name {
+        "send_pty_input" => Some("Send command input".to_string()),
+        "read_pty_session" => Some("Read command session".to_string()),
+        "write_stdin" => Some(write_stdin_action_label(args).to_string()),
+        "command_session_internal" => {
+            let action = crate::tool_intent::command_session_action(args).unwrap_or("run");
+            (!action.eq_ignore_ascii_case("run")).then(|| unified_exec_action_label(args).to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Search headline per tool: `code_search` takes the shared describer;
+/// anything else phrases a file search over the first of pattern/query.
+#[must_use]
+pub fn search_headline(name: &str, args: &Value) -> Option<(String, &'static [&'static str])> {
+    if name == "code_search" {
+        return describe_code_search(args);
+    }
+    for key in ["pattern", "query"] {
+        if let Some(pattern) = lookup_string(args, key) {
+            let keys: &'static [&'static str] = if key == "pattern" { &["pattern"] } else { &["query"] };
+            return Some((format!("Search files for {}", truncate_middle(&pattern, 40)), keys));
+        }
+    }
+    None
+}
+
+/// Basename of the path argument, in service display order.
+fn headline_basename(args: &Value) -> Option<String> {
+    lookup_first_string(args, &["path", "file_path", "filepath", "target_path"])
+        .as_deref()
+        .and_then(|path| path.split(['/', '\\']).rfind(|segment| !segment.is_empty()))
+        .map(str::to_string)
+}
+
+/// Command text (string or array form) previewed like completed rows.
+fn command_text(args: &Value) -> Option<String> {
+    let text = if let Some(text) = lookup_first_string(args, &["command", "cmd", "raw_command", "bash_command"]) {
+        text
+    } else {
+        let parts: Vec<&str> = args.get("command")?.as_array()?.iter().filter_map(Value::as_str).collect();
+        let joined = parts.join(" ");
+        (!joined.trim().is_empty()).then(|| joined.trim().to_string())?
+    };
+    Some(preview_full_command(&text))
+}
 /// otherwise input sniffing decides send vs read so pure waits never
 /// misrender as sends.
 #[must_use]

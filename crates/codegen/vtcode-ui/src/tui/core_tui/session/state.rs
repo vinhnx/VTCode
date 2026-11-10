@@ -359,8 +359,12 @@ impl Session {
         }
         let shimmer_active = animate_progress
             && (self.is_shimmer_active() || self.background_status_shimmer_active() || self.progress.is_animated());
-        if shimmer_active && self.shimmer_state.update() {
-            animation_updated = true;
+        if shimmer_active {
+            let status_text = self.animation_status_text().to_string();
+            self.shimmer_state.hold_on_text_change(&status_text);
+            if self.shimmer_state.update() {
+                animation_updated = true;
+            }
         }
         if let Some(until) = self.scroll_cursor_steady_until
             && Instant::now() >= until

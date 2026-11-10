@@ -907,6 +907,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.status_line.mode` | `string` | no | `"auto"` | - |
 | `ui.status_line.refresh_interval_ms` | `integer` | no | `1000` | - |
 | `ui.status_line.show_clock` | `boolean` | no | `false` | Show the current system time (`HH:MM:SS`) on the status line (default: false). One per-turn timestamp footer (`ui.show_message_timestamps`) replaced the ticking clock; this remains as an opt-in for the old behavior. |
+| `ui.terminal_title.global_indicator` | `boolean` | no | `true` | Show the rotating loading indicator in the terminal title. Disable to suppress the tab spinner (footer shimmer is unaffected). |
 | `ui.terminal_title.items` | `array \| null` | no | `null` | Ordered title items; `None` resolves to `["spinner", "project"]` (spinner enabled by default), and an empty array disables VT Code-managed titles. |
 | `ui.terminal_title.items[]` | `string` | no | `-` | - |
 | `ui.thinking_display` | `string` | no | `"collapsed"` | Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended") |
@@ -918,6 +919,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.transcript_review.show_close_button` | `boolean` | no | `true` | Show the mouse-clickable close control in the Transcript Review title. |
 | `ui.transcript_review.show_hints` | `boolean` | no | `true` | Show the click/keyboard affordance on compact command rows. |
 | `ui.transcript_review.show_shortcut_guide` | `boolean` | no | `true` | Show the keyboard guide footer inside Transcript Review. |
+| `ui.verb_callouts` | `boolean` | no | `true` | Phrase live tool callouts with the desktop verb headline (`Read main.rs`, `Ran cargo check`) instead of the raw tool name (`Running tool: read_file`). Enabled by default; disabling restores raw names. |
 | `ui.vim_mode` | `boolean` | no | `false` | Enable Vim-style prompt editing in the interactive terminal UI. |
 | `webmcp.allowed_origins` | `array` | no | `[]` | Exact browser origins allowed to pair. |
 | `webmcp.allowed_origins[]` | `string` | no | `-` | - |

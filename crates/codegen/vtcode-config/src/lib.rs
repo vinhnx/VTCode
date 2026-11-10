@@ -151,6 +151,7 @@ pub use subagents::{
     discover_subagents, load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
+pub use terminal_title::effective_title_items;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{

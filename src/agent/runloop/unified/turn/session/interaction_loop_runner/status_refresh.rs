@@ -231,6 +231,13 @@ async fn refresh_balance(ctx: &StatusRefreshContext<'_>, state: &mut Interaction
 }
 
 fn sync_terminal_title(ctx: &StatusRefreshContext<'_>, state: &mut InteractionState<'_>) {
-    let title_items = ctx.vt_cfg.and_then(|cfg| cfg.ui.terminal_title.items.as_deref());
-    status_line::sync_terminal_title(ctx.handle, state.input_status_state, title_items);
+    // One choke point: the global-indicator setting drops the spinner entry
+    // here, so every title update honors it without touching the TUI.
+    let title_items = ctx.vt_cfg.map(|cfg| {
+        vtcode_core::config::effective_title_items(
+            cfg.ui.terminal_title.items.as_deref(),
+            cfg.ui.terminal_title.global_indicator,
+        )
+    });
+    status_line::sync_terminal_title(ctx.handle, state.input_status_state, title_items.as_deref());
 }

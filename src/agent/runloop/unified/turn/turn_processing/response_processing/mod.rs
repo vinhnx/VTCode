@@ -182,7 +182,7 @@ pub(crate) fn process_llm_response(
         && let Some((name, args)) = crate::agent::runloop::text_tools::detect_textual_tool_call(text)
     {
         if let Some(validation_failures) = validate_tool_args_security(&name, &args, validation_cache, tool_registry) {
-            let tool_display = crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
+            let tool_display = vtcode_commons::tool_headlines::verb_callout_headline(&name, &args, None);
             let failures_list = validation_failures.join("; ");
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 renderer,
@@ -197,7 +197,10 @@ pub(crate) fn process_llm_response(
             }
             let (headline, _) = crate::agent::runloop::unified::tool_summary::describe_tool_action(&name, &args, None);
             let notice = if headline.is_empty() {
-                format!("Detected {} request", crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name))
+                format!(
+                    "Detected {} request",
+                    vtcode_commons::tool_headlines::verb_callout_headline(&name, &args, None)
+                )
             } else {
                 format!("Detected {headline}")
             };

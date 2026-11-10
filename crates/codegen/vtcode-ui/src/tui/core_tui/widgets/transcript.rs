@@ -253,6 +253,10 @@ const FILE_OPERATION_STATUS_TOOLS: &[&str] = &[
     tools::UNIFIED_FILE,
 ];
 
+/// File-operation verbs in verb callouts (`Running Read …`, lowercased with
+/// the status line). `Ran` runs never shimmer the transcript row.
+const FILE_OPERATION_VERBS: &[&str] = &["read", "edited"];
+
 const FILE_OPERATION_INDICATORS: &[&str] = &[
     "❋ Writing ",
     "❋ Editing ",
@@ -319,6 +323,13 @@ fn active_indicator_shimmer_phase(session: &Session) -> Option<f32> {
         return FILE_OPERATION_STATUS_TOOLS
             .contains(&tool_name)
             .then(|| session.shimmer_state.phase());
+    }
+    // Verb callouts (`Running Read main.rs`) carry the verb where the raw
+    // name used to: file verbs read like edits, `Ran` never does.
+    if let Some(verb) = left.strip_prefix("running ").and_then(|rest| rest.split_whitespace().next()) {
+        if FILE_OPERATION_VERBS.contains(&verb) {
+            return Some(session.shimmer_state.phase());
+        }
     }
 
     let is_planning_status = left.contains("drafting plan")
@@ -946,6 +957,24 @@ mod tests {
 
         assert_eq!(lines[0].spans, first.spans, "older row must stay static");
         assert_ne!(lines[1].spans, second.spans, "newest row must shimmer");
+    }
+
+    #[test]
+    fn indicator_shimmer_accepts_verb_callouts() {
+        use ratatui::text::Line as RatLine;
+        // File verbs shimmer like their raw-name twins; `Ran` never does.
+        for status in ["Running Read main.rs", "Running Edited main.rs"] {
+            let session = shimmer_session_with_status(status);
+            let original = RatLine::from("❋ Editing vtcode.toml...");
+            let mut lines = vec![original.clone()];
+            apply_active_file_operation_spinner(&session, &mut lines);
+            assert_ne!(lines[0].spans, original.spans, "file verb must shimmer for {status:?}");
+        }
+        let session = shimmer_session_with_status("Running Ran cargo check");
+        let original = RatLine::from("❋ Editing vtcode.toml...");
+        let mut lines = vec![original.clone()];
+        apply_active_file_operation_spinner(&session, &mut lines);
+        assert_eq!(lines[0].spans, original.spans, "runs must not shimmer the row");
     }
 
     #[test]

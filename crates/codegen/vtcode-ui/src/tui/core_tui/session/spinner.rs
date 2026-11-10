@@ -109,6 +109,10 @@ pub(crate) struct ShimmerState {
     phase_step: f32,
     last_update: Instant,
     frame_interval: Duration,
+    /// Status text the sweep currently decorates; a change pauses the sweep
+    /// briefly so redraws do not jump the highlight across new text.
+    held_text: String,
+    hold_until: Option<Instant>,
 }
 
 impl ShimmerState {
@@ -125,11 +129,26 @@ impl ShimmerState {
             phase_step,
             last_update: Instant::now(),
             frame_interval,
+            held_text: String::new(),
+            hold_until: None,
+        }
+    }
+
+    /// Hold the sweep steady while `text` redraws: a changed status text
+    /// pauses advancement for one short settle window instead of letting the
+    /// highlight jump across the new text on the next frame.
+    pub fn hold_on_text_change(&mut self, text: &str) {
+        if self.held_text != text {
+            self.held_text = text.to_string();
+            self.hold_until = Some(Instant::now() + Duration::from_millis(200));
         }
     }
 
     pub fn update(&mut self) -> bool {
-        if self.phase_step == 0.0 || self.last_update.elapsed() < self.frame_interval {
+        if self.phase_step == 0.0
+            || self.hold_until.is_some_and(|until| Instant::now() < until)
+            || self.last_update.elapsed() < self.frame_interval
+        {
             return false;
         }
 
@@ -149,5 +168,33 @@ impl ShimmerState {
 impl Default for ShimmerState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShimmerState;
+
+    #[test]
+    fn sweep_holds_briefly_on_status_text_change() {
+        let mut state = ShimmerState::new();
+        // Seed the first text with its initial hold already expired: `new`
+        // starts at `now`, so sleep past the frame interval only.
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        assert!(state.update(), "fresh state advances once the frame lands");
+        let advanced = state.phase();
+        assert!(advanced > 0.0, "sweep moved, got {advanced}");
+
+        // A redrawn status text freezes the phase for one settle window.
+        state.hold_on_text_change("Running Read main.rs");
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        assert!(!state.update(), "changed text must hold the sweep");
+        assert_eq!(state.phase(), advanced);
+
+        // The same text again does not re-arm the hold: after the window the
+        // sweep resumes.
+        std::thread::sleep(std::time::Duration::from_millis(220));
+        state.hold_on_text_change("Running Read main.rs");
+        assert!(state.update(), "sweep resumes once the settle window passes");
     }
 }

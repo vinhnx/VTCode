@@ -7,13 +7,10 @@
 
 use std::path::Path;
 
-use vtcode_commons::formatting::truncate_middle;
 use vtcode_commons::tool_headlines::{
-    describe_code_search, describe_fetch_action, describe_grep_file, describe_list_files, humanize_tool_name,
-    lookup_first_string, lookup_string, preview_full_command, strip_mcp_prefix, unified_exec_action_label,
-    write_stdin_action_label,
+    describe_grep_file, describe_list_files, search_headline, session_followup_title, strip_mcp_prefix,
+    verb_callout_headline,
 };
-use vtcode_commons::tool_intent::command_session_action;
 use vtcode_exec_events::{ThreadItemDetails, ToolInvocationItem};
 
 use super::super::strings::display;
@@ -169,71 +166,26 @@ fn verb_part(count: usize, verb: &str, singular: &str, plural: &str) -> String {
 
 /// Action-aware title for exec-session follow-up calls ("Wait for command session").
 ///
-/// Session labels come from the shared builders (`vtcode-commons`): `run`
-/// launches return `None` so the caller falls through to the argument gist,
-/// which shows the command text; `code` launches take the `Run code` label
-/// (a code payload has no command text to gist). `Some` also doubles as the
-/// session predicate for detail lines: a titled call renders the one-line
-/// session row.
+/// Delegates to the shared builder (`vtcode_commons::tool_headlines`).
+/// `None` arguments behave like empty args: a bare `write_stdin` polls, while
+/// a bare command-session launch falls through to its argument gist. `Some`
+/// also doubles as the session predicate for detail lines: a titled call
+/// renders the one-line session row.
 pub(super) fn session_tool_title(tool_name: &str, args: Option<&serde_json::Value>) -> Option<String> {
-    match strip_mcp_prefix(tool_name) {
-        "send_pty_input" => Some("Send command input".to_string()),
-        "read_pty_session" => Some("Read command session".to_string()),
-        // An arg-less call polls output, so it reads like an empty-args one.
-        "write_stdin" => Some(match args {
-            Some(args) => write_stdin_action_label(args).to_string(),
-            None => "Read command session".to_string(),
-        }),
-        "command_session_internal" => {
-            let action = args.and_then(command_session_action).unwrap_or("run");
-            if action.eq_ignore_ascii_case("run") {
-                None
-            } else {
-                args.map(|args| unified_exec_action_label(args).to_string())
-            }
-        }
-        _ => None,
-    }
+    let empty = serde_json::Value::Null;
+    session_followup_title(tool_name, args.unwrap_or(&empty))
 }
 
 /// One-line outcome gist for a tool row ("Read Cargo.toml", "Ran cargo check").
 ///
-/// Session follow-ups take their action-aware title first. Tool-specific
-/// headlines use the shared describers (`vtcode_commons::tool_headlines`): `list_files`
-/// phrases its location or pattern, `grep_file` phrases pattern and scope,
-/// runs lead with `Ran`, and searches phrase their query — so a bare command
-/// or filename can never be mistaken for its verb. Read/Edit rows keep the
-/// basename form, matching the reference transcript. Anything without a
-/// usable object (missing, empty, or mistyped args, `Other` tools) takes the
+/// Delegates to the shared verb router (`vtcode_commons::tool_headlines`) so
+/// desktop rows, CLI callouts, and completed summaries cannot drift apart.
+/// An absent argument object behaves like `Null` and falls back to the
 /// prettified tool name, never a raw identifier.
 pub(crate) fn tool_row_gist(tool: &ToolInvocationItem, workspace_root: Option<&Path>) -> String {
-    let args = tool.arguments.as_ref();
-    if let Some(title) = session_tool_title(&tool.tool_name, args) {
-        return title;
-    }
-    if let Some(args) = args {
-        let name = strip_mcp_prefix(&tool.tool_name);
-        if name == "list_files" {
-            if let Some((title, _)) = describe_list_files(args, workspace_root) {
-                return title;
-            }
-        } else if name == "grep_file" {
-            if let Some((title, _)) = describe_grep_file(args, workspace_root) {
-                return title;
-            }
-        }
-    }
-    let category = ToolCategory::from_tool_name(&tool.tool_name, args);
-    let gist = match category {
-        ToolCategory::Read => args.and_then(read_gist),
-        ToolCategory::Edit => args.and_then(file_basename).map(|base| format!("Edited {base}")),
-        ToolCategory::Run => args.and_then(command_text).map(|command| format!("Ran {command}")),
-        ToolCategory::Search => args.and_then(|args| search_gist(&tool.tool_name, args).map(|(title, _)| title)),
-        // Tracker rows keep the tool name; the inline task block below
-        // the title carries the checklist detail.
-        ToolCategory::Tracker | ToolCategory::Other => None,
-    };
-    gist.unwrap_or_else(|| humanize_tool_name(&tool.tool_name))
+    let empty = serde_json::Value::Null;
+    let args = tool.arguments.as_ref().unwrap_or(&empty);
+    verb_callout_headline(&tool.tool_name, args, workspace_root)
 }
 
 /// Argument keys the row title consumes beyond its category's gist keys.
@@ -250,81 +202,9 @@ pub(crate) fn extra_gist_keys(tool: &ToolInvocationItem) -> &'static [&'static s
     match strip_mcp_prefix(&tool.tool_name) {
         "grep_file" => describe_grep_file(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
         "list_files" => describe_list_files(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
-        "code_search" | "grep" => search_gist(&tool.tool_name, args).map(|(_, keys)| keys).unwrap_or(&[]),
+        "code_search" | "grep" => search_headline(&tool.tool_name, args).map(|(_, keys)| keys).unwrap_or(&[]),
         _ => &[],
     }
-}
-
-/// Search headline per tool, plus the exact keys it consumed.
-///
-/// `code_search` takes the shared describer; anything else in the Search
-/// category phrases a file search over the first of pattern/query. One reader
-/// serves the title and `extra_gist_keys` so a key hides if and only if the
-/// title phrased it — a category-wide skip set would over-hide siblings the
-/// title never named (e.g. `pattern` beside a `query` headline).
-fn search_gist(tool_name: &str, args: &serde_json::Value) -> Option<(String, &'static [&'static str])> {
-    if strip_mcp_prefix(tool_name) == "code_search" {
-        return describe_code_search(args);
-    }
-    for key in ["pattern", "query"] {
-        if let Some(pattern) = lookup_string(args, key) {
-            let keys: &'static [&'static str] = if key == "pattern" { &["pattern"] } else { &["query"] };
-            return Some((format!("Search files for {}", truncate_middle(&pattern, 40)), keys));
-        }
-    }
-    None
-}
-
-/// Read headline: a file basename reads, a bare URL fetches.
-///
-/// URLs take the shared fetch phrasing so both surfaces name the exact
-/// target identically. Calls with neither fall through to the tool-name
-/// fallback — never the fetch one, which would mislabel a bare `mcp_fetch`.
-fn read_gist(args: &serde_json::Value) -> Option<String> {
-    if let Some(base) = file_basename(args) {
-        return Some(format!("Read {base}"));
-    }
-    if lookup_first_string(args, &["url"]).is_some() {
-        return Some(describe_fetch_action(args).0);
-    }
-    None
-}
-
-/// Basename of the path argument, scanning keys in service order
-/// (`primary_path_arg` in `vtcode-core/src/tools/safety_gateway/file_targets.rs`).
-fn file_basename(args: &serde_json::Value) -> Option<String> {
-    lookup_first_string(args, &["path", "file_path", "filepath", "target_path"])
-        .as_deref()
-        .and_then(basename)
-        .map(str::to_string)
-}
-
-/// Command text in service display order (`DISPLAY_COMMAND_KEYS` in
-/// `vtcode-core/src/tools/command_args/mod.rs`), plus the `command` array
-/// form joined with spaces. Previewed like the CLI's compact `• Ran` rows —
-/// first line plus script-runner folding — so a multi-line script titles its
-/// row with the meaningful line instead of every line joined.
-fn command_text(args: &serde_json::Value) -> Option<String> {
-    let text = if let Some(text) = lookup_first_string(args, &["command", "cmd", "raw_command", "bash_command"]) {
-        text
-    } else {
-        let parts: Vec<&str> = args
-            .get("command")?
-            .as_array()?
-            .iter()
-            .filter_map(serde_json::Value::as_str)
-            .collect();
-        let joined = parts.join(" ");
-        (!joined.trim().is_empty()).then(|| joined.trim().to_string())?
-    };
-    Some(preview_full_command(&text))
-}
-
-/// Last non-empty `/`- or `\`-separated segment. Plain splitting, not
-/// `Path`: arg values are display strings, and `Path` separators are
-/// platform-bound.
-fn basename(path: &str) -> Option<&str> {
-    path.split(['/', '\\']).rfind(|segment| !segment.is_empty())
 }
 
 #[cfg(test)]

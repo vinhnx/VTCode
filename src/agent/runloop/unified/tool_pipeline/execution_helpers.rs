@@ -24,8 +24,11 @@ pub(super) fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
     }
 }
 
-pub(super) fn build_tool_status_message(tool_name: &str, args: &Value) -> String {
-    if is_command_tool(tool_name, args) {
+pub(super) fn build_tool_status_message(tool_name: &str, args: &Value, verb_callouts: bool) -> String {
+    if verb_callouts {
+        let headline = vtcode_commons::tool_headlines::verb_callout_headline(tool_name, args, None);
+        format!("Running {headline}")
+    } else if is_command_tool(tool_name, args) {
         let command = args.get("command").and_then(|value| value.as_str()).unwrap_or(tool_name);
         format!("Running command: {command}")
     } else {
@@ -201,5 +204,22 @@ mod tests {
             }
             _ => panic!("expected success status"),
         }
+    }
+
+    #[test]
+    fn status_message_verbs_or_falls_back_to_raw_name() {
+        use serde_json::json;
+        // Verb mode mirrors the completed row headlines.
+        assert_eq!(
+            build_tool_status_message("read_file", &json!({"path": "src/main.rs"}), true),
+            "Running Read main.rs"
+        );
+        assert_eq!(build_tool_status_message("exec_command", &json!({"command": "ls"}), true), "Running Ran ls");
+        // Raw mode keeps the historical shapes.
+        assert_eq!(
+            build_tool_status_message("read_file", &json!({"path": "src/main.rs"}), false),
+            "Running tool: read_file"
+        );
+        assert_eq!(build_tool_status_message("exec_command", &json!({"command": "ls"}), false), "Running command: ls");
     }
 }

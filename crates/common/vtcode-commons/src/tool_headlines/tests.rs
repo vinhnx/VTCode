@@ -449,6 +449,42 @@ fn write_stdin_distinguishes_wait_send_and_poll() {
 }
 
 #[test]
+fn verb_callout_headlines_mirror_completed_rows() {
+    use serde_json::json;
+    let call = |name: &str, args: Value| verb_callout_headline(name, &args, None);
+    // Read/Edit verb the basename, runs lead with Ran, searches phrase the query.
+    assert_eq!(call("read_file", json!({"path": "src/main.rs"})), "Read main.rs");
+    assert_eq!(call("edit_file", json!({"path": "/ws/src/main.rs"})), "Edited main.rs");
+    assert_eq!(call("exec_command", json!({"command": "cargo check"})), "Ran cargo check");
+    assert_eq!(call("code_search", json!({"query": "Widget"})), "Search code for Widget");
+    assert_eq!(call("grep_file", json!({"pattern": "TODO", "path": "src"})), "Grep TODO in src");
+    assert_eq!(call("list_files", json!({"path": "checkpoints"})), "List files in checkpoints");
+    assert_eq!(call("web_fetch", json!({"url": "https://x.y/z"})), "Fetch https://x.y/z");
+    // Session follow-ups take the action-aware label; launches show the command.
+    assert_eq!(call("write_stdin", json!({"session_id": "s"})), "Read command session");
+    assert_eq!(call("command_session_internal", json!({"action": "poll"})), "Read command session");
+    assert_eq!(call("command_session_internal", json!({"command": "ls"})), "Ran ls");
+    // MCP-qualified names phrase identically; unknown names prettify.
+    assert_eq!(call("mcp__fs__read_file", json!({"path": "a.rs"})), "Read a.rs");
+    assert_eq!(call("DiagramCommand", json!({})), "Diagram Command");
+    // Multi-line commands preview to the first line like completed rows.
+    assert_eq!(call("exec_command", json!({"command": "ls\npwd"})), "Ran ls");
+    // Workspace-relative list and grep headlines mirror the describers.
+    assert_eq!(
+        verb_callout_headline("list_files", &json!({"path": "/ws/checkpoints"}), Some(Path::new("/ws"))),
+        "List files in checkpoints"
+    );
+    assert_eq!(
+        verb_callout_headline(
+            "grep_file",
+            &json!({"pattern": "TODO", "path": "/ws/src/main.rs"}),
+            Some(Path::new("/ws"))
+        ),
+        "Grep TODO in src/main.rs"
+    );
+}
+
+#[test]
 fn harness_visibility_pins_every_kind() {
     use vtcode_exec_events::HarnessEventKind::*;
     // Routine telemetry stays out of the transcript …
