@@ -233,6 +233,7 @@ New reusable logic belongs in an existing small crate (or a new one) rather than
 | `vtcode-webmcp`             | Authenticated browser editor bridge, pairing, event replay, and bounded workspace adapter.  |
 | `vtcode-commons`            | Shared utilities.                                                                           |
 | `vtcode-macros`             | Procedural macros.                                                                          |
+| `vtcode-threads`            | Thread identifiers and lifecycle types.                                                     |
 | `vtcode-utility-tool-specs` | JSON schemas for utility, file, and collaboration/HITL tools.                               |
 | `vtcode-agent-plugins`      | Agent Plugins manifest parsing, validation, and discovery.                                  |
 | `vtcode-llm`                | LLM provider abstraction, client implementations, streaming.                                |

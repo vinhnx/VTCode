@@ -49,6 +49,7 @@ it.
 | vtcode-acp                | 0.133.21 | 1.99.1 | 2024    | Yes       | Agent Communication Protocol                               |
 | vtcode-auth               | 0.133.21 | 1.99.1 | 2024    | Yes       | OAuth/PKCE                                                 |
 | vtcode-macros             | 0.133.21 | 1.99.1 | 2024    | Yes       | Proc macros                                                |
+| vtcode-threads            | 0.181.9  | 1.99.1 | 2024    | Yes       | Thread identifiers and lifecycle types                     |
 | vtcode-ui                 | 0.133.21 | 1.99.1 | 2024    | Yes       | TUI framework                                              |
 | vtcode-desktop            | 0.180.5  | 1.99.1 | 2024    | No        | macOS GPUI app (publish=false)                             |
 | vtcode-desktop-protocol   | 0.181.0  | 1.99.1 | 2024    | Yes       | Desktop JSON-RPC contract (required by the vtcode binary)  |

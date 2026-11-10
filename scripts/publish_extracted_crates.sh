@@ -20,7 +20,7 @@ Options:
                      VT_RELEASE_DRY_RUN environment variable is set to 1.
   --start-from CRATE Resume publishing from the provided crate name. Valid
                      crates: vtcode-diff, vtcode-exec-events, vtcode-commons, vtcode-desktop-protocol,
-                     vtcode-auth, vtcode-memory, vtcode-macros, vtcode-config,
+                     vtcode-auth, vtcode-memory, vtcode-macros, vtcode-threads, vtcode-config,
                      vtcode-indexer, vtcode-bash-runner, vtcode-utility-tool-specs,
                      vtcode-eval, vtcode-safety, vtcode-webmcp, vtcode-a2a, vtcode-llm,
                      vtcode-skills, vtcode-agent-plugins, vtcode-ui, vtcode-mcp, vtcode-core,
@@ -106,6 +106,7 @@ PUBLISH_CRATES=(
 	vtcode-auth
 	vtcode-memory
 	vtcode-macros
+	vtcode-threads
 	vtcode-config
 	vtcode-indexer
 	vtcode-bash-runner
