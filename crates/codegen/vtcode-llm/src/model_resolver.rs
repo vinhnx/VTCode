@@ -468,7 +468,7 @@ pub fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
     }
 
     let model = trimmed.to_ascii_lowercase();
-    if model.starts_with("muse-spark-") || model.starts_with("muse-wonder") {
+    if model.starts_with("muse-spark-") || model.starts_with("muse-wonder") || model.starts_with("muse-ember-") {
         Some(Provider::Meta)
     } else if model.starts_with("gpt-oss-")
         || model.starts_with("gpt-")
@@ -618,6 +618,15 @@ mod tests {
         let marketplace = ModelResolver::resolve(None, "meta/muse-spark-1.3", &[], None).expect("OpenRouter model");
         assert_eq!(marketplace.provider, Provider::OpenRouter);
         assert!(marketplace.known_model());
+    }
+
+    #[test]
+    fn resolver_routes_muse_ember_to_official_meta() {
+        assert_eq!(heuristic_provider_from_model("muse-ember-1.0"), Some(Provider::Meta));
+        let resolved = ModelResolver::resolve(None, "muse-ember-1.0", &[], None).expect("official Meta Ember model");
+        assert_eq!(resolved.provider, Provider::Meta);
+        assert!(resolved.known_model());
+        assert!(resolved.reasoning_supported());
     }
 
     #[test]

@@ -373,8 +373,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Authentication:** `META_API_KEY` or Meta's documented `MODEL_API_KEY`
 - **Base URL:** `https://api.meta.ai/v1`, override with `META_BASE_URL`
 - **Default model:** `muse-spark-1.3`
-- **Curated models:** Muse Wonder 1.0, Muse Wonder Full 1.0 (Muse Code subscription), Muse Spark 1.3, Muse Spark 1.1,
-  and the opt-in Muse Spark 1.3 Contributor tier
+- **Curated models:** Muse Wonder 1.0, Muse Wonder Full 1.0 (Muse Code subscription), Muse Spark 1.3,
+  the opt-in Muse Spark 1.3 Contributor tier, and the efficient Muse Ember 1.0 execution model
 - **Features:** Streaming, tool calls, structured output, multimodal input, reasoning effort, and 1M-token context
 
 ## NVIDIA NIM

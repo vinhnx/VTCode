@@ -48,9 +48,9 @@ impl ModelId {
             // Official Meta AI models (kept before marketplace entries)
             ModelId::MetaMuseSpark13,
             ModelId::MetaMuseSpark13Contributor,
-            ModelId::MetaMuseSpark11,
             ModelId::MetaMuseWonder10,
             ModelId::MetaMuseWonderFull10,
+            ModelId::MetaMuseEmber10,
             // NVIDIA NIM models
             ModelId::NvidiaNemotron3Ultra550bA55b,
             ModelId::NvidiaNemotron3Super120bA12b,

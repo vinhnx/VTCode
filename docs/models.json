@@ -1927,26 +1927,6 @@
         },
         "context": 1048576
       },
-      "muse-spark-1.2-contributor": {
-        "id": "muse-spark-1.2-contributor",
-        "name": "Muse Spark 1.2 Contributor (OpenCode Go)",
-        "description": "Muse Spark 1.2 Contributor \u2014 Meta long-context reasoning model included with the OpenCode Go subscription (limited regions).",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1048576
-      },
       "glm-5.3": {
         "id": "glm-5.3",
         "name": "GLM-5.3 (OpenCode Go)",
@@ -1982,40 +1962,6 @@
     "doc": "https://dev.meta.ai/docs/models.md",
     "default_model": "muse-spark-1.3",
     "models": {
-      "muse-spark-1.1": {
-        "id": "muse-spark-1.1",
-        "name": "Muse Spark 1.1",
-        "description": "Meta's Standard-tier Muse Spark 1.1 model for reasoning and agentic coding workflows.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1048576,
-        "capabilities": {
-          "streaming": true,
-          "function_calling": true,
-          "structured_output": true,
-          "thinking": true
-        },
-        "reasoning_efforts": [
-          "minimal",
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max"
-        ]
-      },
       "muse-spark-1.3": {
         "id": "muse-spark-1.3",
         "name": "Muse Spark 1.3",
@@ -2042,7 +1988,6 @@
           "thinking": true
         },
         "is_pro": true,
-        "lightweight_model": "muse-spark-1.2",
         "reasoning_efforts": [
           "minimal",
           "low",
@@ -2078,7 +2023,6 @@
           "thinking": true
         },
         "is_pro": true,
-        "lightweight_model": "muse-spark-1.2-contributor",
         "reasoning_efforts": [
           "minimal",
           "low",
@@ -2156,6 +2100,46 @@
         },
         "is_pro": true,
         "lightweight_model": "muse-wonder-1.0",
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "muse-ember-1.0": {
+        "id": "muse-ember-1.0",
+        "name": "Muse Ember 1.0",
+        "description": "Meta's efficient Muse Ember execution model for high-volume sub-agent tasks, tool calls, routing, and long-context multimodal work.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "max_output_tokens": 524288,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true,
+          "thinking": true
+        },
+        "cost": {
+          "input": 1e-07,
+          "output": 5e-07,
+          "cache_read": 4e-09
+        },
         "reasoning_efforts": [
           "minimal",
           "low",

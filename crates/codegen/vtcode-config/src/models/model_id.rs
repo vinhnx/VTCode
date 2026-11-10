@@ -82,8 +82,6 @@ pub enum ModelId {
     DeepSeekFlash,
 
     // Official Meta AI models
-    /// Meta Muse Spark 1.1 - Official Meta AI Standard-tier reasoning model
-    MetaMuseSpark11,
     /// Meta Muse Spark 1.3 - Official Meta AI flagship Standard-tier reasoning model, tuned for agentic workflows
     MetaMuseSpark13,
     /// Meta Muse Spark 1.3 Contributor tier - opt-in variant with Meta's discounted data-contribution terms
@@ -92,6 +90,8 @@ pub enum ModelId {
     MetaMuseWonder10,
     /// Meta Muse Wonder Full 1.0 - Most advanced Meta model for critical workflows (Muse Code subscription)
     MetaMuseWonderFull10,
+    /// Meta Muse Ember 1.0 - Efficient execution model for high-volume sub-agent tasks, tool calls, and routing
+    MetaMuseEmber10,
 
     // NVIDIA NIM models
     /// NVIDIA Nemotron 3 Ultra - NVIDIA's flagship agentic reasoning model via NIM
@@ -241,7 +241,6 @@ pub enum ModelId {
     OpenCodeGoKimiK3,
     /// MiniMax M3 - Frontier multimodal coding model on OpenCode Go
     OpenCodeGoMinimaxM3,
-    /// Muse Spark 1.2 Contributor - Meta long-context reasoning on OpenCode Go (limited regions)
 
     // Qwen models (non-Qwen3 only)
 
@@ -307,7 +306,6 @@ pub enum ModelId {
 
     /// Meta Muse Glimmer 30B via OpenRouter
     OpenRouterMetaMuseGlimmer30b,
-    /// Meta Muse Spark 1.2 via OpenRouter
     /// Meta Muse Spark 1.3 via OpenRouter
     OpenRouterMetaMuseSpark13,
     /// Meta Muse Spark Open 816B-A42B via OpenRouter

@@ -300,7 +300,7 @@ impl ModelId {
                 | ModelId::DeepSeekFlash
                 | ModelId::OllamaDeepSeekV41FlashCloud
                 | ModelId::MergeGatewayDeepseekFlash
-                | ModelId::MetaMuseSpark11
+                | ModelId::MetaMuseEmber10
                 | ModelId::MergeGatewayMinimaxH3
                 | ModelId::MiMoV26Flash
                 | ModelId::ZaiGlm53Flash
@@ -442,12 +442,12 @@ impl ModelId {
             ModelId::MistralLarge4 => "4",
             ModelId::OllamaMistralLarge4Cloud => "4",
             ModelId::MergeGatewayDeepseekFlash => "4.1",
-            ModelId::MetaMuseSpark11 => "Muse-Spark-1.1",
             ModelId::MetaMuseSpark13 | ModelId::MetaMuseSpark13Contributor => "Muse-Spark-1.3",
             ModelId::MergeGatewayMetaMuseSparkOpen | ModelId::HuggingFaceMuseSparkOpenBaseten => "Muse-Spark-Open",
             ModelId::OllamaMuseSparkOpenCloud => "Muse-Spark-Open",
             ModelId::MetaMuseWonder10 => "Muse-Wonder-1.0",
             ModelId::MetaMuseWonderFull10 => "Muse-Wonder-Full-1.0",
+            ModelId::MetaMuseEmber10 => "Muse-Ember-1.0",
             // Z.AI generations
             ModelId::ZaiGlm53
             | ModelId::ZaiGlm53Flash

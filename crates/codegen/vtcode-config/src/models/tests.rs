@@ -15,7 +15,8 @@ fn test_model_string_conversion() {
     // DeepSeek models
     assert_eq!(ModelId::DeepSeekFlash.as_str(), models::deepseek::DEEPSEEK_FLASH);
     // Official Meta AI models
-    assert_eq!(ModelId::MetaMuseSpark11.as_str(), models::meta::MUSE_SPARK_1_1);
+    assert_eq!(ModelId::MetaMuseSpark13.as_str(), models::meta::MUSE_SPARK_1_3);
+    assert_eq!(ModelId::MetaMuseEmber10.as_str(), models::meta::MUSE_EMBER_1_0);
     // Hugging Face models
     assert_eq!(ModelId::HuggingFaceKimiK3Together.as_str(), models::huggingface::KIMI_K3_TOGETHER);
     // xAI models
@@ -44,7 +45,8 @@ fn test_model_from_string() {
     assert_eq!(models::CLAUDE_SONNET_5.parse::<ModelId>().unwrap(), ModelId::ClaudeSonnet5);
     // DeepSeek models
     assert_eq!(models::deepseek::DEEPSEEK_FLASH.parse::<ModelId>().unwrap(), ModelId::DeepSeekFlash);
-    assert_eq!(models::meta::MUSE_SPARK_1_1.parse::<ModelId>().unwrap(), ModelId::MetaMuseSpark11);
+    assert_eq!(models::meta::MUSE_SPARK_1_3.parse::<ModelId>().unwrap(), ModelId::MetaMuseSpark13);
+    assert_eq!(models::meta::MUSE_EMBER_1_0.parse::<ModelId>().unwrap(), ModelId::MetaMuseEmber10);
     // Hugging Face models
     assert_eq!(
         models::huggingface::KIMI_K3_TOGETHER.parse::<ModelId>().unwrap(),
@@ -163,7 +165,7 @@ fn test_model_variants() {
     // Efficient variants
     assert!(ModelId::Gemini38Flash.is_efficient_variant());
     assert!(ModelId::GPT56Luna.is_efficient_variant());
-    assert!(ModelId::MetaMuseSpark11.is_efficient_variant());
+    assert!(ModelId::MetaMuseEmber10.is_efficient_variant());
     assert!(!ModelId::GPT56Sol.is_efficient_variant());
 
     for entry in openrouter_generated::ENTRIES {
@@ -178,6 +180,7 @@ fn test_model_variants() {
     assert!(ModelId::MetaMuseSpark13Contributor.is_top_tier());
     assert!(ModelId::MetaMuseWonder10.is_top_tier());
     assert!(ModelId::MetaMuseWonderFull10.is_top_tier());
+    assert!(!ModelId::MetaMuseEmber10.is_top_tier());
     assert!(ModelId::ZaiGlm53.is_top_tier());
     assert!(ModelId::Gemini38Flash.is_top_tier());
     assert!(ModelId::XaiGrok46.is_top_tier());
@@ -219,7 +222,7 @@ fn test_model_generation() {
 
     // DeepSeek generations
     assert_eq!(ModelId::DeepSeekFlash.generation(), "4");
-    assert_eq!(ModelId::MetaMuseSpark11.generation(), "Muse-Spark-1.1");
+    assert_eq!(ModelId::MetaMuseEmber10.generation(), "Muse-Ember-1.0");
     assert_eq!(ModelId::MetaMuseSpark13.generation(), "Muse-Spark-1.3");
     assert_eq!(ModelId::MetaMuseSpark13Contributor.generation(), "Muse-Spark-1.3");
     assert_eq!(ModelId::MetaMuseWonder10.generation(), "Muse-Wonder-1.0");
@@ -263,9 +266,9 @@ fn test_models_for_provider() {
         &[
             ModelId::MetaMuseSpark13,
             ModelId::MetaMuseSpark13Contributor,
-            ModelId::MetaMuseSpark11,
             ModelId::MetaMuseWonder10,
-            ModelId::MetaMuseWonderFull10
+            ModelId::MetaMuseWonderFull10,
+            ModelId::MetaMuseEmber10
         ]
     );
 
@@ -508,6 +511,15 @@ fn test_generated_model_capability_lookup() {
     assert!(catalog_provider_keys().contains(&"meta"));
     let meta_catalog = model_catalog_entry("meta", models::meta::MUSE_WONDER_1_0).expect("muse-wonder-1.0 metadata");
     assert_eq!(meta_catalog.context_window, 1_048_576);
+    assert!(meta_models.contains(&models::meta::MUSE_EMBER_1_0));
+    let ember_catalog = model_catalog_entry("meta", models::meta::MUSE_EMBER_1_0).expect("muse-ember-1.0 metadata");
+    assert_eq!(ember_catalog.context_window, 1_048_576);
+    assert!(ember_catalog.reasoning);
+    assert!(ember_catalog.tool_call);
+    assert_eq!(ember_catalog.input_modalities, &["text", "image", "video", "audio", "pdf"]);
+    assert_eq!(ember_catalog.pricing.input, Some(1e-7));
+    assert_eq!(ember_catalog.pricing.output, Some(5e-7));
+    assert_eq!(ember_catalog.pricing.cache_read, Some(4e-9));
     let _opencode_zen_models = supported_models_for_provider("opencode-zen");
     let opencode_go_models = supported_models_for_provider("opencode-go").expect("opencode go models");
     assert!(opencode_go_models.contains(&models::opencode_go::MINIMAX_M3));

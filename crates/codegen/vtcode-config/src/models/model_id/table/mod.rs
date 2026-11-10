@@ -264,13 +264,6 @@ model_id_table! {
         description: "Latest flash model with improved reasoning, efficiency, and agent capabilities",
     },
     // Official Meta AI models
-    MetaMuseSpark11 {
-        provider: Meta,
-        id: models::meta::MUSE_SPARK_1_1,
-        parse: [models::meta::MUSE_SPARK_1_1],
-        display: "Muse Spark 1.1 (Meta AI)",
-        description: "Official Meta AI Muse Spark 1.1 Standard-tier model with always-on reasoning and long context",
-    },
     MetaMuseSpark13 {
         provider: Meta,
         id: models::meta::MUSE_SPARK_1_3,
@@ -299,6 +292,7 @@ model_id_table! {
         display: "Muse Wonder Full 1.0 (Meta AI)",
         description: "Meta's most advanced Muse Wonder Full model for critical workflows with SOTA agentic and coding performance",
     },
+    MetaMuseEmber10 { provider: Meta, id: models::meta::MUSE_EMBER_1_0, parse: [models::meta::MUSE_EMBER_1_0], display: "Muse Ember 1.0 (Meta AI)", description: "Official Meta AI Muse Ember efficient execution model for high-volume sub-agent tasks, tool calls, routing, and long-context multimodal work with always-on reasoning" },
     // NVIDIA NIM models
     NvidiaNemotron3Ultra550bA55b {
         provider: NVIDIA,

@@ -679,13 +679,13 @@ fn available_service_tiers_hides_ultrafast_outside_native_openai() {
 
 #[test]
 fn build_result_clears_inherited_reasoning_for_structured_only_route() {
-    let mut picker = base_picker_state("openrouter", "meta/muse-spark-1.2");
+    let mut picker = base_picker_state("openrouter", "meta/muse-spark-1.3");
     picker.selection = Some(SelectionDetail {
         provider_key: "openrouter".to_string(),
         provider_label: "OpenRouter".to_string(),
         provider_enum: Some(Provider::OpenRouter),
-        model_id: "meta/muse-spark-1.2".to_string(),
-        model_display: "Muse Spark 1.2".to_string(),
+        model_id: "meta/muse-spark-1.3".to_string(),
+        model_display: "Muse Spark 1.3".to_string(),
         known_model: true,
         context_window: Some(1_048_576),
         reasoning_supported: true,

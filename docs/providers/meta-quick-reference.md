@@ -19,7 +19,7 @@ Official Meta Muse models:
 - `muse-wonder-1.0`
 - `muse-wonder-full-1.0` (Muse Code subscription)
 - `muse-spark-1.3`
-- `muse-spark-1.1`
 - `muse-spark-1.3-contributor` (opt-in Contributor tier)
+- `muse-ember-1.0` (efficient execution model)
 
 See the [full Meta AI provider guide](./meta.md).

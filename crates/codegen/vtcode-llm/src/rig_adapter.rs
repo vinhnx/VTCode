@@ -121,7 +121,7 @@ mod tests {
             (Provider::ZAI, "glm-5.3", ReasoningEffortLevel::XHigh),
             (Provider::Gemini, "gemini-3.7-flash", ReasoningEffortLevel::Max),
             (Provider::OpenAI, "unknown-model", ReasoningEffortLevel::High),
-            (Provider::OpenRouter, "meta/muse-spark-1.2", ReasoningEffortLevel::High),
+            (Provider::OpenRouter, "meta/muse-spark-1.3", ReasoningEffortLevel::High),
         ] {
             assert!(
                 RigProviderCapabilities::new(provider, model)

@@ -492,6 +492,12 @@ mod tests {
         assert!(presets.iter().any(|preset| preset.model == "muse-spark-1.3-contributor"));
         assert!(presets.iter().any(|preset| preset.model == "muse-wonder-1.0"));
         assert!(presets.iter().any(|preset| preset.model == "muse-wonder-full-1.0"));
+        let ember = presets
+            .iter()
+            .find(|preset| preset.model == "muse-ember-1.0")
+            .expect("Meta Ember preset");
+        assert_eq!(ember.context_window, Some(1_048_576));
+        assert!(!ember.is_default);
         assert!(
             presets
                 .iter()

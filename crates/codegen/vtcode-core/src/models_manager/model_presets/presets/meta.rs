@@ -47,9 +47,9 @@ pub(crate) fn meta_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
-            models::meta::MUSE_SPARK_1_1,
-            "Muse Spark 1.1 (Meta AI)",
-            "Official Meta AI Standard-tier model with always-on reasoning and a 1M-token context window",
+            models::meta::MUSE_EMBER_1_0,
+            "Muse Ember 1.0 (Meta AI)",
+            "Official Meta AI efficient execution model for high-volume sub-agent tasks, tool calls, routing, and long-context multimodal work with always-on reasoning",
             false,
         ),
     ]
