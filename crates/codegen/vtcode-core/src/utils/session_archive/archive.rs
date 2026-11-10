@@ -269,6 +269,22 @@ impl SessionArchive {
         Ok(self.path.clone())
     }
 
+    /// Write a prepared snapshot to this archive's path.
+    ///
+    /// Used when a snapshot is assembled elsewhere and must land verbatim
+    /// (a fork copying a source archive keeps the source's `progress`
+    /// block, which `finalize` would drop).
+    ///
+    /// Fails when history persistence is disabled: the write is skipped
+    /// entirely in that mode, so a caller that hands the archive to another
+    /// process would otherwise advertise a session that does not exist.
+    pub(crate) fn persist_snapshot(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
+        if !history_persistence_enabled() {
+            anyhow::bail!("session history persistence is disabled; the archive was not written");
+        }
+        self.write_snapshot(snapshot)
+    }
+
     fn should_persist_progress(&self, turn_number: usize) -> Result<bool> {
         let min_interval = Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
         let min_turns = defaults::DEFAULT_SESSION_PROGRESS_MIN_TURN_DELTA;

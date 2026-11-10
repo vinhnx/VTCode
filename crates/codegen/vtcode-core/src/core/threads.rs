@@ -374,6 +374,41 @@ pub async fn prepare_archived_session(
     Ok(PreparedArchivedSession { source, workspace, bootstrap, thread_id, archive })
 }
 
+/// Fork a live thread into a standalone archive another process can own.
+///
+/// The canonical event log is single-writer: the CLI holds an exclusive
+/// `flock` on `session.lock` for the whole session, so a second process
+/// cannot resume the same thread id. Forking sidesteps that by giving the
+/// receiver its own archive and its own (new) canonical log, so both sides
+/// keep working independently.
+///
+/// Returns the fork's session id and the archive it was written to.
+pub async fn fork_thread_for_handoff(
+    listing: &SessionListing,
+    workspace: PathBuf,
+    metadata: SessionArchiveMetadata,
+) -> Result<(String, SessionArchive)> {
+    let prepared = prepare_archived_session(
+        listing.clone(),
+        workspace,
+        metadata,
+        ArchivedSessionIntent::ForkNewArchive { custom_suffix: None, summarize: false },
+        None,
+    )
+    .await?;
+    // The fork archive must exist on disk before the receiver looks it up:
+    // `find_session_by_identifier` reads the persisted snapshot, so a fork
+    // that was only prepared in memory would not be discoverable.
+    //
+    // The source snapshot is copied whole rather than rebuilt: `progress`
+    // carries the loaded skills and turn number the receiver restores, and
+    // `finalize` would drop that block in favor of the metadata fallback.
+    let mut snapshot = listing.snapshot.clone();
+    snapshot.metadata = prepared.archive.metadata().clone();
+    prepared.archive.persist_snapshot(snapshot)?;
+    Ok((prepared.thread_id, prepared.archive))
+}
+
 fn preserve_prompt_cache_lineage_if_compatible(
     mut metadata: SessionArchiveMetadata,
     source: &SessionArchiveMetadata,
@@ -444,6 +479,98 @@ mod tests {
 
     static SESSION_DIR_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
+    /// Seed a source archive so the fork has a real listing to copy.
+    async fn seed_source_listing(sessions_dir: &Path, workspace: &Path) -> SessionListing {
+        let metadata = SessionArchiveMetadata::new(
+            "workspace",
+            workspace.display().to_string(),
+            "model",
+            "provider",
+            "theme",
+            "medium",
+        );
+        let messages = vec![SessionMessage::new(MessageRole::User, "hello")];
+        let snapshot = SessionSnapshot {
+            metadata,
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: messages.len(),
+            distinct_tools: Vec::new(),
+            transcript: Vec::new(),
+            messages: messages.clone(),
+            progress: Some(Box::new(SessionProgress {
+                recent_messages: messages,
+                loaded_skills: vec!["repo-skill".to_string()],
+                turn_number: 3,
+                ..Default::default()
+            })),
+            error_logs: Vec::new(),
+        };
+        let path = sessions_dir.join("session-source.json");
+        std::fs::write(&path, serde_json::to_vec(&snapshot).expect("serialize snapshot"))
+            .expect("write source archive");
+        SessionListing { path, snapshot }
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(session_dir_override)]
+    async fn fork_thread_for_handoff_writes_a_discoverable_copy_with_its_own_id() {
+        let sessions_dir = TempDir::new().expect("sessions directory");
+        override_sessions_dir_for_tests(sessions_dir.path());
+        let workspace = sessions_dir.path().join("workspace");
+        let listing = seed_source_listing(sessions_dir.path(), &workspace).await;
+
+        let (fork_id, _archive) =
+            fork_thread_for_handoff(&listing, workspace.clone(), listing.snapshot.metadata.clone())
+                .await
+                .expect("fork thread");
+
+        // The fork must be discoverable by id: the receiver resolves the
+        // handoff through `find_session_by_identifier`, not through the
+        // in-memory archive handle.
+        let found = find_session_by_identifier(&fork_id)
+            .await
+            .expect("find fork")
+            .expect("fork exists");
+        assert_eq!(found.identifier(), fork_id);
+        assert_ne!(fork_id, listing.identifier(), "the fork owns a new id");
+        assert_eq!(found.snapshot.metadata.parent_session_id.as_deref(), Some("session-source"));
+        assert_eq!(found.snapshot.metadata.fork_mode, Some(SessionForkMode::FullCopy));
+        assert_eq!(found.snapshot.messages.len(), 1, "the fork carries the source transcript");
+        // The progress block carries the loaded skills and turn number the
+        // receiver restores; the fork must keep it, not just the metadata
+        // fallback.
+        let progress = found.snapshot.progress.as_ref().expect("the fork keeps the source progress");
+        assert_eq!(progress.loaded_skills, vec!["repo-skill".to_string()]);
+        assert_eq!(progress.turn_number, 3);
+
+        clear_sessions_dir_override_for_tests();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(session_dir_override)]
+    async fn fork_thread_for_handoff_copies_the_source_transcript() {
+        let sessions_dir = TempDir::new().expect("sessions directory");
+        override_sessions_dir_for_tests(sessions_dir.path());
+        let workspace = sessions_dir.path().join("workspace");
+        let listing = seed_source_listing(sessions_dir.path(), &workspace).await;
+
+        let (fork_id, _archive) =
+            fork_thread_for_handoff(&listing, workspace.clone(), listing.snapshot.metadata.clone())
+                .await
+                .expect("fork thread");
+
+        let found = find_session_by_identifier(&fork_id)
+            .await
+            .expect("find fork")
+            .expect("fork exists");
+        let messages = messages_from_session_listing(&found);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content.as_text(), "hello");
+
+        clear_sessions_dir_override_for_tests();
+    }
+
     #[test]
     fn event_store_evicts_old_records() {
         let manager = ThreadManager::with_event_buffer_capacity(2);
@@ -501,6 +628,7 @@ mod tests {
     #[serial_test::serial(session_dir_override)]
     fn list_recent_sessions_in_scope_filters_by_workspace() {
         let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
+
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -549,6 +677,7 @@ mod tests {
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_resume_reuses_source_identifier_and_archive() {
         let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
+
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -616,6 +745,7 @@ mod tests {
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_fork_uses_new_identifier_and_preserves_history() {
         let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
+
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -686,6 +816,7 @@ mod tests {
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_preserves_prompt_cache_lineage_when_compatible() {
         let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
+
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -747,6 +878,7 @@ mod tests {
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_resets_prompt_cache_lineage_on_model_change() {
         let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
+
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 

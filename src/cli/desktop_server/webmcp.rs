@@ -92,7 +92,11 @@ pub(super) async fn ensure_session_not_held_elsewhere(workspace: &Path, session_
     match probe {
         Ok(()) => Ok(()),
         Err(vtcode_memory::SessionStoreError::SessionBusy { session }) => {
-            bail!("session {session} is already open in another process; close it there and reload")
+            // Name the remedy that works from either side: the holder can
+            // release it, and a reader who wants its own copy can fork.
+            bail!(
+                "session {session} is already open in another process; close it there and reload, or open a copy with vtcode --fork-session {session}"
+            )
         }
         Err(error) => Err(error.into()),
     }

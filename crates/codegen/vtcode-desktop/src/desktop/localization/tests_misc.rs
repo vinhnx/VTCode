@@ -130,6 +130,7 @@ fn notifications_copy_is_localized_for_every_language() {
             "app.notifications.update_available",
             "app.notifications.turn_undo_done",
             "app.notifications.turn_undo_failed",
+            "app.notifications.handoff_received",
         ],
         &[],
     );

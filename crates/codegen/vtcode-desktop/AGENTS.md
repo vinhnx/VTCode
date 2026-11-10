@@ -9,7 +9,7 @@
 - `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` tokens (`custom.rs`, `glass.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` projections: row type in `item.rs`, turn grouping in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
-- `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` and `startup.rs` About stamp and argv/URL handoff.
+- `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` About stamp; `startup.rs` argv/URL handoff.
 
 ## Rules
 
@@ -31,7 +31,7 @@
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics, and `on_next_frame` never runs headless.
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
-- Plan rail/edit locking, custom themes, dismiss guards, and login items live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
+- Plan rail/edit locking, custom themes, dismiss guards, login items, and handoff notices live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
 - `components.rs` and `shortcuts.rs` sit exactly at the 1000-line ceiling (menus in `menu_bar.rs`, IDs in `view/ids.rs`), `sessions.rs` is at 994: put new code in a focused module.
 - Plain `Enter` while scrolled detours through `submit_or_jump_to_latest` (jump first, draft kept); the Send button always submits immediately.
 

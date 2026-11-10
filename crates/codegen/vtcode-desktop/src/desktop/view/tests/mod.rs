@@ -719,6 +719,7 @@ mod files_destination;
 mod files_preview;
 mod files_webmcp;
 mod full_access_confirm;
+mod handoff_notification;
 mod heading_tiers;
 mod inspector_appearance;
 mod inspector_chrome;

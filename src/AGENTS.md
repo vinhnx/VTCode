@@ -24,6 +24,7 @@
 ## Gotchas
 
 - Session load probes the exclusive event-log lock first and fails fast when another process holds the session.
+- CLI `/desktop` hands the desktop app a fork, never its live thread id: the session's exclusive lock is held for the whole session, so a resume-in-place handoff always fails with `SessionBusy`.
 - Desktop-server startup is auth-tolerant: missing credentials are recorded in `provider_auth_error`, never fatal.
 - Async checkpointing acknowledges consumed steering intents only after a `Persisted` history result, never after a throttled checkpoint.
 - A turn still active 5s after cancel — or immediately on a forced repeat — escalates to force-stop and restart from history, and unconfirmed termination holds `session_transitioning` instead of reporting a stop.

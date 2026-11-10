@@ -6,6 +6,8 @@ use super::strings::app;
 struct ClipboardCopyNotification;
 struct BackgroundAgentActivityNotification;
 struct UpdateAvailableNotification;
+/// A thread handed off from the CLI into the desktop app.
+struct HandoffNotification;
 /// Replace marker for turn-undo outcome toasts, so rapid undos replace
 /// rather than stack. Shared with the turn-undo notifier.
 pub(super) struct TurnUndoNotification;
@@ -118,6 +120,40 @@ pub(super) fn background_agent_activity(
     } else {
         window.push_notification(notification.placement(Anchor::BottomRight), cx);
     }
+}
+
+/// Announce a thread handed off from the CLI. Focused windows get an in-app
+/// toast so the handoff is never silently dropped; backgrounded windows get
+/// a system banner instead. Clicking either opens the handed-off thread.
+///
+/// The body names no thread: the handoff archive carries a fresh identifier
+/// that the sidebar does not know yet, so any title resolved here would be
+/// either missing or an opaque id. The click target carries the identity.
+pub(super) fn handoff_received(
+    window: &mut Window,
+    system: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) {
+    let message = rust_i18n::t!("app.notifications.handoff_received").to_string();
+    let notification = Notification::info(message)
+        .title(app::NAME)
+        .id::<HandoffNotification>()
+        .on_click(on_click);
+    if system {
+        window.push_notification(notification.system(), cx);
+    } else {
+        window.push_notification(notification.placement(Anchor::BottomRight), cx);
+    }
+}
+
+/// Pure delivery decision for handoff notices, separated from the emitter so
+/// the preference matrix stays unit-testable like [`activity_allowed`].
+///
+/// A handoff is user-initiated, so focus never suppresses it: the master
+/// toggle alone governs it.
+pub(super) fn handoff_allowed(notifications: &super::preferences::NotificationPreferences) -> bool {
+    notifications.enabled()
 }
 
 /// Announce a newer VT Code release. Focused windows get an in-app toast so

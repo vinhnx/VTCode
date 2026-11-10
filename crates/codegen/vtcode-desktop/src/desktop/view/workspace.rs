@@ -313,6 +313,7 @@ impl DesktopView {
             cx.notify();
             return;
         };
+        self.notify_handoff_received(&link.session_id, window, cx);
         if self.workspace.as_ref() == Some(&workspace) {
             // False is normal here: the running-turn confirm opened, or one
             // is already up and the link yields to it.
@@ -320,6 +321,23 @@ impl DesktopView {
         } else {
             self.arm_session_link(workspace, link.session_id, cx);
         }
+    }
+
+    /// Announce an incoming CLI handoff. The notification is the only
+    /// surface that tells the user a thread arrived while the window was in
+    /// the background, and its click opens the handed-off thread.
+    fn notify_handoff_received(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if !super::super::notifications::handoff_allowed(&self.preferences.notifications) {
+            return;
+        }
+        let system = !window.is_window_active();
+        let weak = cx.entity().downgrade();
+        super::super::notifications::handoff_received(
+            window,
+            system,
+            deeplinks::click_handler(deeplinks::NotificationTarget::Thread { session_id: session_id.to_owned() }, weak),
+            cx,
+        );
     }
 
     /// Arm a CLI session handoff (`/desktop` argv or `vtcode://` link):

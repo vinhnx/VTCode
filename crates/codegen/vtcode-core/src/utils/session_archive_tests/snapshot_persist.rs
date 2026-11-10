@@ -108,3 +108,37 @@ async fn session_archive_persists_budget_limit_continuation_metadata() -> Result
     assert_eq!(snapshot.metadata, metadata);
     Ok(())
 }
+
+/// A handoff copy must land on disk: the receiving process resolves the
+/// archive by identifier, so a silently skipped write would advertise a
+/// session that does not exist.
+#[serial_test::serial(session_dir_override)]
+#[tokio::test]
+async fn persisting_a_snapshot_fails_when_history_persistence_is_disabled() -> Result<()> {
+    let _settings_lock = lock_history_test_guard().await;
+    let _history_guard = HistorySettingsGuard::set(HistoryPersistence::None, None);
+    let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+    let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium");
+    let archive = SessionArchive::new(metadata, None).await?;
+    let snapshot = SessionSnapshot {
+        metadata: archive.metadata().clone(),
+        started_at: Utc::now(),
+        ended_at: Utc::now(),
+        total_messages: 0,
+        distinct_tools: Vec::new(),
+        transcript: Vec::new(),
+        messages: Vec::new(),
+        progress: None,
+        error_logs: Vec::new(),
+    };
+
+    let error = archive
+        .persist_snapshot(snapshot)
+        .expect_err("a disabled history must not report a written archive");
+    assert!(error.to_string().contains("persistence is disabled"), "the error names the cause: {error:#}");
+    assert!(!archive.path().exists(), "no archive file may be created");
+    Ok(())
+}
