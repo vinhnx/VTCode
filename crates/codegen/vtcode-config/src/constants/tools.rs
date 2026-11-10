@@ -174,6 +174,29 @@ pub fn is_workflow_coordination_tool(canonical_name: &str) -> bool {
     ALWAYS_AVAILABLE_WORKFLOW_TOOLS.contains(&canonical_name)
 }
 
+/// Canonical command-session tool name for a possibly-aliased tool name.
+///
+/// Maps every exec/PTY alias (plus the `"bash"`, `"exec"`, and
+/// `"container.exec"` spellings transcript layers emit) to [`UNIFIED_EXEC`].
+/// Pure string match living next to the constants so lower layers (e.g.
+/// transcript normalization) can use it without depending on the classifier.
+#[inline]
+pub fn canonical_command_session_tool_name(tool_name: &str) -> Option<&'static str> {
+    match tool_name {
+        UNIFIED_EXEC | RUN_PTY_CMD | SEND_PTY_INPUT | CREATE_PTY_SESSION | READ_PTY_SESSION | LIST_PTY_SESSIONS
+        | CLOSE_PTY_SESSION | EXECUTE_CODE | EXEC_PTY_CMD | EXEC_COMMAND | WRITE_STDIN | SHELL | "bash" | "exec"
+        | "container.exec" => Some(UNIFIED_EXEC),
+        _ => None,
+    }
+}
+
+/// Returns `true` if `tool_name` is any alias of the unified command-session tool.
+#[must_use]
+#[inline]
+pub fn is_command_session_tool(tool_name: &str) -> bool {
+    canonical_command_session_tool_name(tool_name).is_some()
+}
+
 // Special wildcard for full access
 pub const WILDCARD_ALL: &str = "*";
 

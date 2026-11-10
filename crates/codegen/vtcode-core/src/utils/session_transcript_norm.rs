@@ -1,6 +1,6 @@
 //! Transcript normalization helpers for session archives.
 
-use crate::tools::tool_intent::canonical_command_session_tool_name;
+use crate::config::constants::tools::canonical_command_session_tool_name;
 use rustc_hash::FxHashSet;
 use vtcode_commons::formatting::collapse_whitespace as collapse_whitespace_inner;
 

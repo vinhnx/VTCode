@@ -75,32 +75,7 @@ fn is_edited_file_conflict_guarded_file_operation_action(action: &str) -> bool {
     action_matches_any(Some(action), &["write", "create", "edit", "patch"])
 }
 
-pub fn canonical_command_session_tool_name(tool_name: &str) -> Option<&'static str> {
-    match tool_name {
-        tools::UNIFIED_EXEC
-        | tools::RUN_PTY_CMD
-        | tools::SEND_PTY_INPUT
-        | tools::CREATE_PTY_SESSION
-        | tools::READ_PTY_SESSION
-        | tools::LIST_PTY_SESSIONS
-        | tools::CLOSE_PTY_SESSION
-        | tools::EXECUTE_CODE
-        | tools::EXEC_PTY_CMD
-        | tools::EXEC_COMMAND
-        | tools::WRITE_STDIN
-        | tools::SHELL
-        | "bash"
-        | "exec"
-        | "container.exec" => Some(tools::UNIFIED_EXEC),
-        _ => None,
-    }
-}
-
-/// Returns `true` if `tool_name` is any alias of the unified command-session tool.
-#[must_use]
-pub fn is_command_session_tool(tool_name: &str) -> bool {
-    canonical_command_session_tool_name(tool_name).is_some()
-}
+pub use tools::{canonical_command_session_tool_name, is_command_session_tool};
 
 pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) -> bool {
     let Some(obj) = output.as_object() else {
