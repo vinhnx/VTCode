@@ -539,22 +539,18 @@ impl DesktopView {
         let base = rel_path.rsplit('/').next().unwrap_or(rel_path).to_string();
         let title = format!("Delete “{base}”?");
         let detail = "The item moves to the Trash. You can restore it from there.".to_string();
-        let answer = window.prompt(
-            gpui_kit::PromptLevel::Warning,
-            title.as_str(),
-            Some(detail.as_str()),
-            &["Delete", "Cancel"],
-            cx,
-        );
         let rel_path = rel_path.to_owned();
-        cx.spawn_in(window, async move |view, cx| {
-            if matches!(answer.await, Ok(0)) {
-                let _updated = view.update_in(cx, |view, window, cx| {
-                    view.delete_file_after_confirm(workspace, rel_path, window, cx);
-                });
-            }
-        })
-        .detach();
+        prompt_confirm::spawn_destructive_confirm(
+            title,
+            detail,
+            "Delete".to_string(),
+            "Cancel".to_string(),
+            window,
+            cx,
+            move |view, window, cx| {
+                view.delete_file_after_confirm(workspace, rel_path, window, cx);
+            },
+        );
     }
 
     /// Trash one entry after its delete prompt was confirmed. Split from the

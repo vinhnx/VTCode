@@ -150,6 +150,7 @@ mod navigation_history;
 mod overlays;
 mod palette;
 mod palette_render;
+mod prompt_confirm;
 mod queue;
 mod root_render;
 mod running_confirm;

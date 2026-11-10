@@ -438,6 +438,22 @@ codegen-units = 16
 opt-level = 1
 debug = false
 
+# Per-package codegen-units overrides for large first-party crates.
+# Workspace dev sets codegen-units=256 to maximize dependency parallelism,
+# but that fragments the 300k+ line vtcode-core monolith into too many tiny
+# units and inflates link/merge cost. Lower units for the monoliths keeps
+# parallelism without excess scheduling overhead. See rust-performance-principles.
+[profile.dev.package.vtcode-core]
+codegen-units = 32
+[profile.dev.package.vtcode-llm]
+codegen-units = 32
+[profile.dev.package.vtcode-ui]
+codegen-units = 32
+[profile.dev.package.vtcode-desktop]
+codegen-units = 32
+[profile.dev.package.vtcode-acp]
+codegen-units = 16
+
 [profile.dev-optimized]
 inherits = "dev"
 lto = "thin"

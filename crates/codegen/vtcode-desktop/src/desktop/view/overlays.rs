@@ -257,21 +257,17 @@ impl DesktopView {
         let (title, detail) = discard_prompt_text(&intent);
         let discard = rust_i18n::t!("app.navigation.discard").to_string();
         let cancel = rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string();
-        let answer = window.prompt(
-            gpui_kit::PromptLevel::Warning,
-            title.as_str(),
-            Some(detail.as_str()),
-            &[discard.as_str(), cancel.as_str()],
+        prompt_confirm::spawn_destructive_confirm(
+            title,
+            detail,
+            discard,
+            cancel,
+            window,
             cx,
+            move |view, window, cx| {
+                view.discard_after_confirm(intent, window, cx);
+            },
         );
-        cx.spawn_in(window, async move |view, cx| {
-            if matches!(answer.await, Ok(0)) {
-                let _updated = view.update_in(cx, |view, window, cx| {
-                    view.discard_after_confirm(intent, window, cx);
-                });
-            }
-        })
-        .detach();
     }
 
     /// Run a confirmed discard. Verifies the context is unchanged first —

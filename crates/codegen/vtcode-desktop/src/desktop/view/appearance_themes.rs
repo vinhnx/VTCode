@@ -296,19 +296,17 @@ impl DesktopView {
         let detail = rust_i18n::t!("app.appearance.custom_theme_delete_detail").to_string();
         let delete = rust_i18n::t!("app.settings.storage.delete").to_string();
         let cancel = rust_i18n::t!("app.settings.storage.cancel").to_string();
-        let answer = window.prompt(
-            gpui_kit::PromptLevel::Warning,
-            title.as_str(),
-            Some(detail.as_str()),
-            &[delete.as_str(), cancel.as_str()],
+        prompt_confirm::spawn_destructive_confirm(
+            title,
+            detail,
+            delete,
+            cancel,
+            window,
             cx,
+            move |view, _window, cx| {
+                view.remove_custom_theme(&id, None, cx);
+            },
         );
-        cx.spawn(async move |view, cx| {
-            if matches!(answer.await, Ok(0)) {
-                let _updated = view.update(cx, |view, cx| view.remove_custom_theme(&id, None, cx));
-            }
-        })
-        .detach();
     }
 
     /// Removing the active theme falls back to the mode default and clears any

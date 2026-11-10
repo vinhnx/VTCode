@@ -249,23 +249,19 @@ impl DesktopView {
         let detail = rust_i18n::t!("app.settings.storage.delete_detail").to_string();
         let delete = rust_i18n::t!("app.settings.storage.delete").to_string();
         let cancel = rust_i18n::t!("app.settings.storage.cancel").to_string();
-        let answer = window.prompt(
-            gpui_kit::PromptLevel::Warning,
-            title.as_str(),
-            Some(detail.as_str()),
-            &[delete.as_str(), cancel.as_str()],
+        prompt_confirm::spawn_destructive_confirm(
+            title,
+            detail,
+            delete,
+            cancel,
+            window,
             cx,
+            move |view, _window, cx| {
+                view.storage.error = None;
+                let _ = view.request(protocol::method::SESSION_DELETE, json!({ keys::SESSION_ID: session_id }));
+                cx.notify();
+            },
         );
-        cx.spawn(async move |view, cx| {
-            if matches!(answer.await, Ok(0)) {
-                let _updated = view.update(cx, |view, cx| {
-                    view.storage.error = None;
-                    let _ = view.request(protocol::method::SESSION_DELETE, json!({ keys::SESSION_ID: session_id }));
-                    cx.notify();
-                });
-            }
-        })
-        .detach();
     }
 
     fn confirm_remove_worktree(&self, name: String, is_dirty: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -277,23 +273,19 @@ impl DesktopView {
         };
         let remove = rust_i18n::t!("app.settings.storage.remove").to_string();
         let cancel = rust_i18n::t!("app.settings.storage.cancel").to_string();
-        let answer = window.prompt(
-            gpui_kit::PromptLevel::Warning,
-            title.as_str(),
-            Some(detail.as_str()),
-            &[remove.as_str(), cancel.as_str()],
+        prompt_confirm::spawn_destructive_confirm(
+            title,
+            detail,
+            remove,
+            cancel,
+            window,
             cx,
+            move |view, _window, cx| {
+                view.storage.worktrees_error = None;
+                let _ = view.request(protocol::method::WORKTREE_REMOVE, json!({ "name": name }));
+                cx.notify();
+            },
         );
-        cx.spawn(async move |view, cx| {
-            if matches!(answer.await, Ok(0)) {
-                let _updated = view.update(cx, |view, cx| {
-                    view.storage.worktrees_error = None;
-                    let _ = view.request(protocol::method::WORKTREE_REMOVE, json!({ "name": name }));
-                    cx.notify();
-                });
-            }
-        })
-        .detach();
     }
 
     fn render_storage_summary_content(props: &StorageSettingsProps, view: Entity<Self>, cx: &mut App) -> AnyElement {
