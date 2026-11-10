@@ -114,6 +114,7 @@ ansi-to-tui = "8.0.1"
 vtcode-commons = { workspace = true }
 vtcode-diff = { workspace = true, features = ["serde"] }
 vtcode-ui = { workspace = true }
+vtcode-threads = { workspace = true }
 vtcode-macros = { workspace = true }
 vtcode-exec-events = { workspace = true }
 vtcode-memory = { workspace = true }

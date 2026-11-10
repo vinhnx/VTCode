@@ -7,35 +7,13 @@ use crate::utils::session_archive::{
 use crate::utils::session_debug::runtime_archive_session_id;
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use uuid::Uuid;
-use vtcode_macros::StringNewtype;
+
+pub use vtcode_threads::{SubmissionId, ThreadId};
 
 const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 512;
-
-/// Unique identifier for a thread in the runtime.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StringNewtype)]
-pub struct ThreadId(String);
-
-/// Unique identifier for a submission within a thread turn.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StringNewtype)]
-pub struct SubmissionId(String);
-
-impl SubmissionId {
-    /// Generate a new submission identifier with a `sub-` prefix.
-    pub fn generate() -> Self {
-        Self(format!("sub-{}", Uuid::new_v4()))
-    }
-}
-
-impl Default for SubmissionId {
-    fn default() -> Self {
-        Self::generate()
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct ThreadEventRecord {

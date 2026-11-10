@@ -138,6 +138,7 @@ vtcode-webmcp = { path = "crates/codegen/vtcode-webmcp", version = "0.181.8" }
 vtcode-macros = { path = "crates/common/vtcode-macros", version = "0.181.8" }
 vtcode-utility-tool-specs = { path = "crates/common/vtcode-utility-tool-specs", version = "0.181.8" }
 vtcode-agent-plugins = { path = "crates/common/vtcode-agent-plugins", version = "0.181.8" }
+vtcode-threads = { path = "crates/common/vtcode-threads", version = "0.181.8" }
 
 [workspace.package]
 version = "0.181.8"
@@ -160,6 +161,7 @@ members = [
     "crates/common/vtcode-macros",
     "crates/common/vtcode-utility-tool-specs",
     "crates/common/vtcode-agent-plugins",
+    "crates/common/vtcode-threads",
     "crates/codegen/vtcode-acp",
     "crates/codegen/vtcode-a2a",
     "crates/codegen/vtcode-auth",

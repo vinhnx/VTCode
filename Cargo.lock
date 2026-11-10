@@ -12465,6 +12465,7 @@ dependencies = [
  "vtcode-memory",
  "vtcode-safety",
  "vtcode-skills",
+ "vtcode-threads",
  "vtcode-ui",
  "vtcode-utility-tool-specs",
  "webbrowser",
@@ -12747,6 +12748,16 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "zip",
+]
+
+[[package]]
+name = "vtcode-threads"
+version = "0.181.8"
+dependencies = [
+ "serde",
+ "serde_json",
+ "uuid",
+ "vtcode-macros",
 ]
 
 [[package]]
