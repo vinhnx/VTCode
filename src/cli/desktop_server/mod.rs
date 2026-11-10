@@ -50,7 +50,7 @@ use crate::startup::StartupContext;
 mod cancel;
 #[cfg(test)]
 use cancel::{CANCEL_ESCALATION, EscalationWaits};
-use cancel::{escalation_waits_for, spawn_cancel_refire, spawn_cancel_watchdog, spawn_late_stop_signal};
+use cancel::{escalation_waits_for_force, spawn_cancel_refire, spawn_cancel_watchdog, spawn_late_stop_signal};
 mod catalog;
 mod dispatch;
 use dispatch::{

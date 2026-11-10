@@ -26,6 +26,22 @@ fn legacy_session_load_defaults_review_history() {
 }
 
 #[test]
+fn legacy_turn_cancel_defaults_to_cooperative_queue_preserving_stop() {
+    let legacy: TurnCancelParams =
+        serde_json::from_value(serde_json::json!({ "sessionId": "session", "turnId": "turn-1" })).unwrap();
+    assert!(!legacy.clear_queue);
+    assert!(!legacy.force);
+    let forced = TurnCancelParams {
+        session_id: "session".into(),
+        turn_id: "turn-1".into(),
+        clear_queue: true,
+        force: true,
+    };
+    let decoded: TurnCancelParams = serde_json::from_value(serde_json::to_value(&forced).unwrap()).unwrap();
+    assert_eq!(decoded, forced);
+}
+
+#[test]
 fn session_history_page_round_trips_archive_cursor_and_request_identity() {
     let params = SessionHistoryParams {
         session_id: "saved-session".into(),

@@ -63,6 +63,18 @@ fn take_request(requests: &mut tokio::sync::mpsc::Receiver<BackendCommand>) -> (
     (method, params)
 }
 
+/// Take one delivered stop: the turn cancel plus the foreground-exec kill
+/// that rides with every stop. Returns the cancel params for per-test
+/// assertions; the exec kill always names the same session.
+fn take_cancel_pair(requests: &mut tokio::sync::mpsc::Receiver<BackendCommand>, session_id: &str) -> serde_json::Value {
+    let (method, params) = take_request(requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    let (exec_method, exec_params) = take_request(requests);
+    assert_eq!(exec_method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
+    assert_eq!(exec_params, json!({ "sessionId": session_id }), "every stop kills foreground exec sessions");
+    params
+}
+
 #[gpui_kit::test]
 fn running_thread_marks_every_surface_and_keeps_new_thread_enabled(cx: &mut TestAppContext) {
     let (window, view, _) = open_running_desktop(cx);
@@ -117,8 +129,7 @@ fn new_thread_while_running_confirms_then_stops_and_proceeds(cx: &mut TestAppCon
         assert!(window.try_find("running-confirm-queue-warning").is_none(), "empty queue shows no warning");
 
         window.click("running-confirm-stop", cx);
-        let (method, params) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        let params = take_cancel_pair(&mut requests, "thread-b");
         assert_eq!(params["sessionId"].as_str(), Some("thread-b"));
         assert_eq!(params["turnId"].as_str(), Some("turn-1"));
         assert!(requests.try_recv().is_err(), "the close waits for the turn to finish");
@@ -205,8 +216,7 @@ fn switch_thread_while_running_defers_load_until_turn_finishes(cx: &mut TestAppC
         assert!(window.try_find("running-confirm-dialog").is_some());
 
         window.click("running-confirm-stop", cx);
-        let (method, _) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         assert!(requests.try_recv().is_err(), "the load waits for the turn to finish");
 
         view.update(cx, |view, cx| {
@@ -256,7 +266,7 @@ fn armed_switch_dropped_on_service_exit(cx: &mut TestAppContext) {
         window.click("thread-tab-new", cx);
         window.render_frame(cx);
         window.click("running-confirm-stop", cx);
-        assert!(take_request(&mut requests).0 == vtcode_desktop_protocol::method::TURN_CANCEL);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, _| assert!(view.armed_running_switch.is_some()));
 
         view.update(cx, |view, cx| {
@@ -366,8 +376,7 @@ fn slash_new_and_exit_route_through_running_confirm_mid_turn(cx: &mut TestAppCon
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_some(), "/exit opens the modal mid-turn");
         window.click("running-confirm-stop", cx);
-        let (method, _) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
         });
@@ -433,7 +442,7 @@ fn running_switch_funnel_blocks_reentrant_intents(cx: &mut TestAppContext) {
         window.click("thread-tab-new", cx);
         window.render_frame(cx);
         window.click("running-confirm-stop", cx);
-        let _ = take_request(&mut requests);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         window.render_frame(cx);
         assert_eq!(window.find("thread-tab-new").disabled(), Some(true), "armed wait darkens New");
         assert_eq!(window.find("session-thread-a").disabled(), Some(true), "armed wait darkens switches");
@@ -459,7 +468,7 @@ fn running_switch_funnel_blocks_reentrant_intents(cx: &mut TestAppContext) {
             view.open_running_confirm(super::super::RunningSwitchIntent::NewThread, window, cx);
         });
         window.click("running-confirm-stop", cx);
-        let _ = take_request(&mut requests);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
         });
@@ -504,7 +513,7 @@ fn tab_close_mid_turn_confirms_then_untabs_on_drain(cx: &mut TestAppContext) {
         assert!(requests.try_recv().is_err());
         view.update(cx, |view, _| assert_eq!(view.open_tabs.as_slice(), ["thread-a", "thread-b", "thread-c"]));
         window.click("running-confirm-stop", cx);
-        let _ = take_request(&mut requests);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
         });
@@ -542,7 +551,7 @@ fn tab_close_mid_turn_confirms_then_untabs_on_drain(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_some());
         window.click("running-confirm-stop", cx);
-        let _ = take_request(&mut requests);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
         });
@@ -569,8 +578,7 @@ fn close_thread_while_running_confirms_then_closes_on_drain(cx: &mut TestAppCont
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_some());
         window.click("running-confirm-stop", cx);
-        let (method, _) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
         });
@@ -592,7 +600,7 @@ fn armed_switch_fails_loud_when_blocked_at_drain(cx: &mut TestAppContext) {
         window.click("thread-tab-new", cx);
         window.render_frame(cx);
         window.click("running-confirm-stop", cx);
-        let _ = take_request(&mut requests);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         // A decision lands while the turn stops: the deferred send refuses.
         view.update(cx, |view, _| {
             view.interaction = Some(vtcode_desktop_protocol::InteractionRequest {
@@ -701,9 +709,9 @@ fn stop_cancel_flag_follows_armed_wait(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| view.cancel_turn(cx));
-        let (method, params) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        let params = take_cancel_pair(&mut requests, "thread-b");
         assert_eq!(params["clearQueue"].as_bool(), Some(false), "plain stops keep the queue");
+        assert_eq!(params["force"].as_bool(), Some(false), "a first press stays cooperative");
     })
     .unwrap();
 
@@ -712,14 +720,15 @@ fn stop_cancel_flag_follows_armed_wait(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| view.cancel_turn(cx));
-        let (_, plain) = take_request(&mut requests);
+        let plain = take_cancel_pair(&mut requests, "thread-b");
         assert_eq!(plain["clearQueue"].as_bool(), Some(false));
+        assert_eq!(plain["force"].as_bool(), Some(false));
         window.click("thread-tab-new", cx);
         window.render_frame(cx);
         window.click("running-confirm-stop", cx);
-        let (method, flagged) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL, "the flagged cancel re-sends");
+        let flagged = take_cancel_pair(&mut requests, "thread-b");
         assert_eq!(flagged["clearQueue"].as_bool(), Some(true), "the switch discards the queue");
+        assert_eq!(flagged["force"].as_bool(), Some(false), "a switch never escalates");
         assert!(requests.try_recv().is_err());
     })
     .unwrap();
@@ -771,17 +780,18 @@ fn delete_selected_thread_refused_in_every_state_but_idle_other_still_prompts(cx
 fn repeated_cancel_presses_resend_turn_cancel(cx: &mut TestAppContext) {
     // A first stop signal can be lost when the runloop resets its latch
     // while processing the Submit; every press must re-send so repeats
-    // re-assert the out-of-band signal instead of wedging silently.
+    // re-assert the out-of-band signal instead of wedging silently. A
+    // repeat while a cancel is already outstanding escalates to a forced
+    // cancel so a stuck turn stops without waiting out the grace period.
     let (window, view, mut requests) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         for press in 1..=2 {
             view.update(cx, |view, cx| view.cancel_turn(cx));
-            let (method, params) = take_request(&mut requests);
-            assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL, "press {press} sends");
+            let params = take_cancel_pair(&mut requests, "thread-b");
             assert_eq!(
                 params,
-                json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false }),
+                json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false, "force": press == 2 }),
                 "press {press} names the live turn"
             );
         }
@@ -809,8 +819,7 @@ fn stale_cancel_error_reconciles_running_state(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| view.cancel_turn(cx));
-        let (method, _) = take_request(&mut requests);
-        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, _| {
             assert_eq!(view.cancel_sent_turn_id.as_deref(), Some("turn-1"));
         });
@@ -843,7 +852,7 @@ fn late_cancel_error_ignores_newer_turn(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| view.cancel_turn(cx));
-        let _ = take_request(&mut requests);
+        let _ = take_cancel_pair(&mut requests, "thread-b");
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
         });
@@ -879,14 +888,13 @@ fn cancel_button_click_sends_turn_cancel(cx: &mut TestAppContext) {
         window.click("cancel-turn", cx);
     })
     .unwrap();
-    let (method, params) = take_request(&mut requests);
-    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    let params = take_cancel_pair(&mut requests, "thread-b");
     assert_eq!(
         params,
-        json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false }),
+        json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false, "force": false }),
         "the button names the live turn"
     );
-    assert!(requests.try_recv().is_err(), "one click sends once");
+    assert!(requests.try_recv().is_err(), "one click sends the cancel pair");
     cx.update(|cx| {
         assert!(view.read(cx).cancel_requested);
         assert!(view.read(cx).cancel_request_sent);

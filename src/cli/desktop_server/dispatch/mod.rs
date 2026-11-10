@@ -734,13 +734,14 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     }
                     // Bounded escalation: if this exact turn is still active
                     // after the grace period, the watchdog force-stops it and
-                    // rebuilds the session from durable history. Repeat
-                    // presses reuse the first press's watchdog.
+                    // rebuilds the session from durable history. A forced
+                    // first press skips the grace period; plain repeats reuse
+                    // the first press's watchdog.
                     spawn_cancel_watchdog(
                         context,
                         params.session_id.clone(),
                         params.turn_id.clone(),
-                        escalation_waits_for(&state),
+                        escalation_waits_for_force(&state, params.force),
                     );
                 } else if !input.is_closed() {
                     // A repeated press re-asserts the out-of-band signal without
@@ -748,6 +749,18 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     // already, and the turn is still active. Non-blocking: the
                     // first press owned the publish wait, so repeats stay cheap.
                     stop_requests::fire_stop_signal(&stop);
+                    if params.force {
+                        // A forced repeat escalates now instead of waiting out
+                        // the first press's grace period. The escalation claim
+                        // serializes with the sleeping watchdog: exactly one
+                        // of them owns the teardown.
+                        spawn_cancel_watchdog(
+                            context,
+                            params.session_id.clone(),
+                            params.turn_id.clone(),
+                            escalation_waits_for_force(&state, true),
+                        );
+                    }
                 }
                 if params.clear_queue && !state.queue.is_empty() {
                     state.queue.clear();

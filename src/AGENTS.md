@@ -26,7 +26,7 @@
 - Session load probes the exclusive event-log lock first and fails fast when another process holds the session.
 - Desktop-server startup is auth-tolerant: missing credentials are recorded in `provider_auth_error`, never fatal.
 - Async checkpointing acknowledges consumed steering intents only after a `Persisted` history result, never after a throttled checkpoint.
-- A turn still active 5s after cancel escalates to force-stop and restart from history, and unconfirmed termination holds `session_transitioning` instead of reporting a stop.
+- A turn still active 5s after cancel — or immediately on a forced repeat — escalates to force-stop and restart from history, and unconfirmed termination holds `session_transitioning` instead of reporting a stop.
 - `session/recent_prompts` serves Everywhere/Project scopes from archives via `clean_archived_prompts`; Session answers empty since the client's live thread owns it.
 
 Details: [maintainer notes](../docs/development/maintainer-notes/vtcode-binary.md) — read the section for the subsystem you change before editing it.

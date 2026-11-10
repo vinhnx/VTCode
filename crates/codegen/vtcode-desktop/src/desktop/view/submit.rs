@@ -201,13 +201,18 @@ impl DesktopView {
         // runloop resets its latch while processing the Submit, and the
         // service re-fires the out-of-band signal on repeats while deduping
         // the queued event. Swallowing repeats here would wedge the turn.
+        // A repeat while a cancel is already outstanding escalates: the
+        // service skips the cooperative grace period and starts the
+        // teardown immediately. Every terminal path clears the sent flag,
+        // so a fresh turn's first press is always cooperative.
+        let force = self.cancel_request_sent;
         self.cancel_request_sent = false;
         self.status = rust_i18n::t!("app.composer.cancelling_turn").to_string();
-        self.try_send_pending_cancel();
+        self.try_send_pending_cancel(force);
         cx.notify();
     }
 
-    pub(super) fn try_send_pending_cancel(&mut self) {
+    pub(super) fn try_send_pending_cancel(&mut self, force: bool) {
         if !self.cancel_requested || self.cancel_request_sent || !self.running {
             return;
         }
@@ -222,10 +227,16 @@ impl DesktopView {
         let clear_queue = self.armed_running_switch.is_some();
         if self.request(
             protocol::method::TURN_CANCEL,
-            json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id.clone(), keys::CLEAR_QUEUE: clear_queue }),
+            json!({ keys::SESSION_ID: session_id.clone(), keys::TURN_ID: turn_id.clone(), keys::CLEAR_QUEUE: clear_queue, keys::FORCE: force }),
         ) {
             self.cancel_request_sent = true;
             self.cancel_sent_turn_id = Some(turn_id);
+            // Stop means stop: a stuck foreground process holds the turn
+            // past cooperative cancellation, so every delivered stop also
+            // kills foreground exec sessions. Best-effort — a full queue
+            // here is near-impossible after the send above just succeeded,
+            // and the cancel watchdog re-sends the kill before tearing down.
+            let _ = self.request(protocol::method::EXEC_FORCE_CANCEL, json!({ keys::SESSION_ID: session_id }));
         } else {
             self.error = Some(rust_i18n::t!("app.composer.cancellation_not_queued").to_string());
         }
@@ -234,7 +245,8 @@ impl DesktopView {
     /// Stop the turn for a confirmed running switch: like [`Self::cancel_turn`],
     /// but the cancel also discards queued turns (the modal promised it), so
     /// it re-sends even when a plain stop already went out — the service
-    /// dedups the stop signal and still processes the discard.
+    /// dedups the stop signal and still processes the discard. Always
+    /// cooperative: a thread switch must not restart the runtime.
     pub(super) fn cancel_turn_for_running_switch(&mut self, cx: &mut Context<Self>) {
         if !self.running {
             return;
@@ -242,7 +254,7 @@ impl DesktopView {
         self.cancel_requested = true;
         self.cancel_request_sent = false;
         self.status = rust_i18n::t!("app.session.running_switch_stopping").to_string();
-        self.try_send_pending_cancel();
+        self.try_send_pending_cancel(false);
         cx.notify();
     }
 
@@ -252,7 +264,7 @@ impl DesktopView {
             self.cancel_request_sent = false;
             return;
         }
-        self.try_send_pending_cancel();
+        self.try_send_pending_cancel(false);
     }
 
     pub(super) fn clear_pending_interaction(&mut self) {

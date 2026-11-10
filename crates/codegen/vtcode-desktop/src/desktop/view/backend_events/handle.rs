@@ -539,7 +539,7 @@ impl DesktopView {
                                     self.prune_attachment_thumbnails();
                                 }
                             }
-                            self.try_send_pending_cancel();
+                            self.try_send_pending_cancel(false);
                             return;
                         }
                         // Immediate ack: the pending submit, or a queued entry
@@ -560,7 +560,7 @@ impl DesktopView {
                         self.active_turn_id = Some(accepted.turn_id);
                         self.running = true;
                         self.status = rust_i18n::t!("app.service.running").to_string();
-                        self.try_send_pending_cancel();
+                        self.try_send_pending_cancel(false);
                     }
                     protocol::method::TURN_QUEUE_TAKE_LATEST => {
                         self.take_latest_pending = false;

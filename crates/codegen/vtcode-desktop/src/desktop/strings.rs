@@ -32,6 +32,7 @@ pub(super) mod keys {
     pub const BATCHABLE: &str = "batchable";
     pub const ENTRY_ID: &str = "entryId";
     pub const CLEAR_QUEUE: &str = "clearQueue";
+    pub const FORCE: &str = "force";
     pub const BEFORE_INDEX: &str = "beforeIndex";
     pub const LIMIT: &str = "limit";
     pub const ITEM_ID: &str = "itemId";

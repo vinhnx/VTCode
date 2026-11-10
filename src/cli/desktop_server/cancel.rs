@@ -76,6 +76,19 @@ pub(super) fn escalation_waits_for(_state: &ServerState) -> EscalationWaits {
     CANCEL_ESCALATION
 }
 
+/// Escalation bounds for one cancel: a forced cancel skips the grace
+/// period and starts the endgame immediately, while a cooperative one
+/// keeps the configured grace backstop. Later waits are unchanged: the
+/// endgame still lets a turn that clears under the re-asserted signals
+/// keep its healthy runtime instead of restarting it.
+pub(super) fn escalation_waits_for_force(state: &ServerState, force: bool) -> EscalationWaits {
+    let waits = escalation_waits_for(state);
+    EscalationWaits {
+        grace: if force { Duration::ZERO } else { waits.grace },
+        ..waits
+    }
+}
+
 /// Owned escalation inputs: everything `start_session` needs, cloned out of
 /// the request context so the watchdog task is `'static`.
 struct EscalationContext {
@@ -303,5 +316,21 @@ async fn wait_for_turn_to_clear(
             return;
         }
         notified.await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn force_skips_grace_while_cooperative_keeps_it() {
+        let state = ServerState::default();
+        let forced = escalation_waits_for_force(&state, true);
+        assert_eq!(forced.grace, Duration::ZERO);
+        let cooperative = escalation_waits_for_force(&state, false);
+        assert_eq!(cooperative.grace, CANCEL_ESCALATION.grace);
+        assert_eq!(forced.turn_wait, cooperative.turn_wait);
+        assert_eq!(forced.exit_wait, cooperative.exit_wait);
     }
 }

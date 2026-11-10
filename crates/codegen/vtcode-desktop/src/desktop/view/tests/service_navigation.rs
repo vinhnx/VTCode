@@ -399,13 +399,17 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
         vtcode_desktop_protocol::method::SESSION_CLOSE,
         vtcode_desktop_protocol::method::SESSION_CLOSE,
         vtcode_desktop_protocol::method::TURN_CANCEL,
+        vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL,
     ] {
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
             panic!("request")
         };
         assert_eq!(method, expected);
         if method == vtcode_desktop_protocol::method::TURN_CANCEL {
-            assert_eq!(params, json!({ "sessionId": "session", "turnId": "turn", "clearQueue": false }));
+            assert_eq!(
+                params,
+                json!({ "sessionId": "session", "turnId": "turn", "clearQueue": false, "force": false })
+            );
         }
     }
     assert!(requests.try_recv().is_err(), "active work blocks session changes for shortcuts too");

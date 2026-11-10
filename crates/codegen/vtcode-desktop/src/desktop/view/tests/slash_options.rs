@@ -623,6 +623,11 @@ fn slash_new_and_stop_use_desktop_session_lifecycle(cx: &mut TestAppContext) {
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
     assert_eq!(params["sessionId"], "existing-session");
     assert_eq!(params["turnId"], "active-turn");
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("/stop kills foreground exec sessions with the cancel");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
+    assert_eq!(params["sessionId"], "existing-session");
     assert!(requests.try_recv().is_err());
 }
 

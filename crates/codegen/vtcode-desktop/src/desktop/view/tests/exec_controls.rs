@@ -245,3 +245,34 @@ fn run_control_stays_operable_under_reduced_motion(cx: &mut TestAppContext) {
     let (method, _) = take_request(&mut requests);
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
 }
+
+/// Stop delivers the cancel pair: the turn cancel plus the foreground-exec
+/// kill, so a stuck process cannot hold the turn past the stop. A repeat
+/// press while the cancel is outstanding escalates to a forced cancel.
+#[gpui_kit::test]
+fn stop_sends_cancel_pair_and_escalates_on_repeat(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("cancel-turn", cx);
+    })
+    .unwrap();
+    let (method, params) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    assert_eq!(params["force"].as_bool(), Some(false), "a first press stays cooperative");
+    let (exec_method, exec_params) = take_request(&mut requests);
+    assert_eq!(exec_method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
+    assert_eq!(exec_params["sessionId"], "thread-a");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    let (method, params) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    assert_eq!(params["force"].as_bool(), Some(true), "a repeat press escalates");
+    let (exec_method, _) = take_request(&mut requests);
+    assert_eq!(exec_method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
+    assert!(requests.try_recv().is_err(), "two presses send two pairs");
+}

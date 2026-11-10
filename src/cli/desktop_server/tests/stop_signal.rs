@@ -76,6 +76,15 @@ impl StopHarness {
         }
     }
 
+    fn force_cancel_request(&self, session_id: &str, turn_id: &str) -> Request {
+        Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::Number(3),
+            method: protocol::method::TURN_CANCEL.into(),
+            params: json!({ "sessionId": session_id, "turnId": turn_id, "force": true }),
+        }
+    }
+
     fn queue_depths(&mut self) -> Vec<usize> {
         let mut depths = Vec::new();
         while let Ok(notification) = self.notifications.try_recv() {
@@ -323,6 +332,50 @@ async fn duplicate_turn_cancel_refires_stop_signal() {
         harness.ctrl_c.is_cancel_requested(),
         "a repeated stop must re-assert the stop signal while the turn is active"
     );
+}
+
+#[tokio::test]
+async fn forced_repeat_cancel_escalates_without_waiting_for_grace() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let accepted = enqueue_turn(
+        &harness.context.state,
+        &harness.context.notifications,
+        "session",
+        "queued prompt".into(),
+        Vec::new(),
+        EnqueueMode::Queueable { batchable: false },
+    )
+    .await
+    .expect("queued submit accepted");
+    assert!(accepted.queued);
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("first cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // The cooperative watchdog sleeps its 5s grace: nothing more arrives
+    // promptly after a plain cancel.
+    assert!(
+        timeout(Duration::from_millis(100), harness.input.recv()).await.is_err(),
+        "a plain cancel waits out the grace period"
+    );
+    // A forced repeat skips the grace period and starts the endgame now:
+    // foreground execution is force-stopped and the stop is re-asserted.
+    // The escalation task is dropped with the test runtime before its
+    // turn-wait elapses, so no teardown or restart runs here.
+    let force = harness.force_cancel_request("session", "turn-1");
+    let (result, _) = handle_request(&harness.context, &force).await.expect("forced repeat accepted");
+    assert_eq!(result["cancelRequested"], true);
+    assert!(
+        matches!(
+            timeout(Duration::from_secs(5), harness.input.recv()).await,
+            Ok(Some(InlineEvent::ForceCancelPtySession))
+        ),
+        "forced escalation force-stops foreground execution immediately"
+    );
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // Force is orthogonal to the queue: only an explicit clear discards.
+    assert_eq!(harness.context.state.lock().await.queue.len(), 1, "a forced stop keeps the queue (TUI parity)");
+    assert_eq!(harness.queue_depths(), [1], "no discard snapshot on a forced stop");
 }
 
 #[tokio::test]

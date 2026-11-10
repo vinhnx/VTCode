@@ -76,6 +76,16 @@ impl WatchdogHarness {
         handle_request(&self.context, &request).await.expect("cancel accepted");
     }
 
+    async fn force_cancel_turn(&self, session_id: &str, turn_id: &str) {
+        let request = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::Number(2),
+            method: protocol::method::TURN_CANCEL.into(),
+            params: json!({ "sessionId": session_id, "turnId": turn_id, "force": true }),
+        };
+        handle_request(&self.context, &request).await.expect("forced cancel accepted");
+    }
+
     async fn recv_input(&mut self) -> InlineEvent {
         timeout(Duration::from_secs(5), self.input.as_mut().expect("input open").recv())
             .await
@@ -361,6 +371,111 @@ async fn duplicate_cancel_escalates_exactly_once_without_restart_on_corrupt_hist
         timeout(Duration::from_millis(500), harness.input_sender.closed()).await.is_ok(),
         "the torn-down input stays closed without a restart"
     );
+    harness.runtime_task.abort();
+}
+
+#[tokio::test]
+async fn forced_first_press_skips_grace_but_keeps_a_healthy_runtime() {
+    use vtcode_core::exec::events::{ThreadEvent, TurnFailedEvent, VersionedThreadEvent};
+
+    let mut harness = WatchdogHarness::install("force-first", "forced-turn").await;
+    {
+        let mut state = harness.context.state.lock().await;
+        state.escalation_waits = Some(EscalationWaits {
+            grace: Duration::from_secs(60),
+            turn_wait: Duration::from_millis(200),
+            exit_wait: Duration::from_millis(200),
+        });
+    }
+    harness.force_cancel_turn("force-first", "forced-turn").await;
+    assert!(matches!(harness.recv_input().await, InlineEvent::Cancel));
+    // Prompt arrival despite the 60s grace proves the forced first press
+    // skipped it; a terminal event racing the endgame must still win the
+    // turn without any teardown.
+    assert!(matches!(harness.recv_input().await, InlineEvent::ForceCancelPtySession));
+    publish_thread_event(
+        "force-first",
+        VersionedThreadEvent::new(ThreadEvent::TurnFailed(TurnFailedEvent {
+            completed_at: None,
+            message: "stop landed mid-escalation".into(),
+            usage: None,
+        })),
+        &harness.context.state,
+        &harness.context.notifications,
+        &harness.context.turn_finished,
+    )
+    .await
+    .expect("terminal event publishes");
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let mut rest = Vec::new();
+    while let Ok(event) = harness.input.as_mut().expect("input open").try_recv() {
+        rest.push(event);
+    }
+    assert!(matches!(rest.as_slice(), [InlineEvent::Cancel]), "only the re-asserted cancel survives");
+    {
+        let state = harness.context.state.lock().await;
+        let runtime = state.runtime.as_ref().expect("healthy runtime is kept, not restarted");
+        assert!(harness.input_sender.same_channel(&runtime.input));
+        assert!(!state.session_transitioning);
+        assert!(state.active_turn_id.is_none());
+    }
+    assert_eq!(harness.drain_failed_markers(), vec![false], "the cooperative outcome stands alone");
+    harness.runtime_task.abort();
+}
+
+#[tokio::test]
+#[serial]
+async fn forced_repeat_skips_a_long_grace_and_tears_down_exactly_once() {
+    let sessions = IsolatedSessionStore::new();
+    std::fs::write(sessions.path().join("watchdog-session.json"), b"{not-json")
+        .expect("corrupt archive fails the history reload");
+    let mut harness = WatchdogHarness::install("watchdog-session", "stalled-turn").await;
+    {
+        let mut state = harness.context.state.lock().await;
+        state.escalation_waits = Some(EscalationWaits {
+            grace: Duration::from_secs(60),
+            turn_wait: Duration::from_millis(200),
+            exit_wait: Duration::from_millis(200),
+        });
+    }
+    harness.cancel_turn("watchdog-session", "stalled-turn").await;
+    // One queued Cancel across both presses; the forced repeat — not the
+    // 60s-grace watchdog — owns the single teardown below. Every receive
+    // below times out in 5s, so prompt arrival proves the grace was skipped.
+    assert!(matches!(harness.recv_input().await, InlineEvent::Cancel));
+    harness.force_cancel_turn("watchdog-session", "stalled-turn").await;
+    assert!(matches!(harness.recv_input().await, InlineEvent::ForceCancelPtySession));
+    assert!(matches!(harness.recv_input().await, InlineEvent::Cancel));
+    assert!(matches!(harness.recv_input().await, InlineEvent::Exit));
+    harness.finish_exit();
+
+    let failed = timeout(Duration::from_secs(5), async {
+        loop {
+            let notification = harness.notifications.recv().await.expect("service remains connected");
+            if notification.method == protocol::method::TURN_STATUS && notification.params["status"] == "failed" {
+                break notification;
+            }
+        }
+    })
+    .await
+    .expect("stopped turn emits its terminal outcome");
+    assert_eq!(failed.params["turnId"], "stalled-turn");
+    assert_eq!(failed.params["restarted"], false, "corrupt history skips the restart");
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if !harness.context.state.lock().await.session_transitioning {
+            break;
+        }
+        assert!(Instant::now() < deadline, "transition gate releases after escalation");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    {
+        let state = harness.context.state.lock().await;
+        assert!(state.active_turn_id.is_none());
+        assert!(state.runtime.is_none(), "torn-down runtime is not replaced without history");
+        assert_eq!(state.session_id.as_deref(), Some("watchdog-session"), "recovery keeps the thread");
+    }
+    assert!(harness.drain_failed_markers().is_empty(), "one escalation emits one terminal outcome");
     harness.runtime_task.abort();
 }
 

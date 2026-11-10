@@ -152,7 +152,15 @@ fn native_session_menu_uses_live_action_availability_and_existing_requests(cx: &
         panic!("cancel request")
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
-    assert_eq!(params, json!({ "sessionId": "menu-session", "turnId": "menu-turn", "clearQueue": false }));
+    assert_eq!(
+        params,
+        json!({ "sessionId": "menu-session", "turnId": "menu-turn", "clearQueue": false, "force": false })
+    );
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("menu cancel kills foreground exec sessions with the cancel")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
+    assert_eq!(params, json!({ "sessionId": "menu-session" }));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.running = false;

@@ -104,6 +104,14 @@ pub struct TurnCancelParams {
     /// afterwards (TUI parity).
     #[serde(default)]
     pub clear_queue: bool,
+    /// Skip the cooperative-cancellation grace period and start the
+    /// teardown escalation immediately. The desktop client sets this on a
+    /// repeat Stop press while a cancel is already outstanding; the first
+    /// press stays cooperative so a healthy turn stops without a runtime
+    /// restart. Absent (legacy clients) means cooperative with the
+    /// standard grace backstop.
+    #[serde(default)]
+    pub force: bool,
 }
 
 /// Parameters for reversing one turn's exact file changes.
