@@ -5,6 +5,60 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.9 - 2026-11-10
+
+### Highlights
+
+#### Bug Fixes
+
+- Bump rmcp to 3.9.0 for RUSTSEC-2026-0462 (c5bfbe1b) (@vinhnx)
+- Surface Gatekeeper step, sanitize failures, bound live check (b49971c7)
+- Show unconsumed search aliases in details (98774913)
+- Hide style-hidden tool diagnostics at the paint path (1c725a5e)
+- Sync renderer communication style on live config reload (f28fc463)
+
+#### Documentation
+
+- Document OpenLLM custom provider setup (aa91541a) (@apewithllm)
+- Address PR #804 review comments on OpenLLM guide (d8f9fce9)
+- Center contributors grid and sort by latest contribution (96899b2a)
+- Strip avatar inline styles and simplify contributors script (58a1b899)
+- Repair stale links and instruction budget (02f566b8)
+- Prefer Muse Spark Contributor for test runs (8690fdec)
+
+#### Features
+
+- Check for and install updates from Settings About (82476aed)
+- Pause rendering while terminal view is hidden via visibility reports (64a900b7)
+- Silence routine tool failures via communication style (29f7be32)
+- Add offline headless Mermaid rendering via vtcode-diagram (304168cf)
+- Render PNG output via resvg rasterizer (62c9c178)
+- Add Communication style row to Configuration overview (a280cf49)
+- Gate harness loop notices behind communication style (cf7c6ef3)
+- Remove Pele rendering stack, diagram CLI, and desktop previews (33df2bb6)
+- Humanize transcript tool rows, headlines, and output (0c3c0863)
+- Share verb callouts and smooth status shimmer (2a0de6dc)
+- Add Meta Muse Ember, drop Muse Spark 1.1/1.2 (ee3c55e7)
+- Add Claude Fable 5.2 to Anthropic and Merge Gateway (f5e1a0e1)
+- Extract ThreadId/SubmissionId into vtcode-threads leaf crate (ac6b2de8)
+
+### Other Changes
+
+#### Refactors
+
+- Adopt panic-safety clippy lints and fix fallout (250609d2)
+- Prove stream slices and drop root indexing suppression (0564f42c)
+- Extract desktop-server dispatch lifecycle module (43a5c436)
+- Share headline builders in vtcode-commons (b556a331)
+- Share destructive-confirm helper and tune build concurrency (1b63f0d5)
+- Gate TUI stack behind default-on tui feature (81d0b599)
+- Home command-session tool-name fns with their constants (db97cef0)
+
+#### Tests
+
+- Pin the live-check timeout path (a6e540d9)
+- Pin degenerate-input contracts on command parsing (36302726)
+
 ## 0.181.8 - 2026-11-09
 
 ### Highlights
