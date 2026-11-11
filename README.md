@@ -4,7 +4,7 @@
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
 <p>
-  <sub>Terminal-first. Desktop-ready.</sub><br />
+  <sub>Terminal-first coding agent. Desktop-ready on macOS.</sub><br />
   <sub>Explore, plan, edit, and verify with your model of choice.</sub>
 </p>
 
@@ -22,13 +22,13 @@
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
 
 <p>
-  <img src="./resources/gif/demo-desktop.gif" alt="VT Code Desktop" />
+  <img src="./resources/gif/demo-desktop.gif" width="100%" alt="VT Code Desktop app demo" />
   <sub>Desktop app</sub>
 </p>
 
 <p>
   <img src="./resources/screenshots/vtcode-cli-tui.gif" width="100%"
-    alt="Terminal TUI demo" /><br />
+    alt="VT Code terminal TUI demo" /><br />
   <sub>Terminal TUI</sub>
 </p>
 
@@ -36,8 +36,8 @@
 
 ## Overview
 
-VT Code is a terminal-first coding agent for your repository, in the CLI and native macOS app.
-It keeps context, tool calls, and execution policy auditable and resumable across long tasks.
+VT Code is a terminal-first coding agent for your repo, in the CLI and native macOS app.
+Context, tool calls, and execution policy stay auditable and resumable across long tasks.
 
 | At a glance      | What you get                                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -50,7 +50,7 @@ It keeps context, tool calls, and execution policy auditable and resumable acros
 
 ## Quick start
 
-Runs on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024); see the
+Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024); see the
 [installation guide](./docs/installation/README.md) for prerequisites and search tools.
 
 ### 1. Install
@@ -60,7 +60,7 @@ Runs on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-Or install the CLI with Homebrew or Cargo (desktop cask: [Desktop app](#desktop-app)):
+Or install with Homebrew or Cargo (desktop cask: [Desktop app](#desktop-app)):
 
 ```bash
 brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
@@ -75,12 +75,12 @@ On Windows (best-effort artifacts; may lag behind macOS/Linux):
 irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
 ```
 
-Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers the remaining
+Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers remaining
 methods, desktop flags, and search tools.
 
 ### 2. Configure your project
 
-Scaffold configuration and add credentials in your project directory:
+In your project directory, scaffold config and add credentials:
 
 ```bash
 cd path/to/your/project
@@ -101,15 +101,15 @@ variables, a workspace `.env` file, or `vtcode login` work where supported. See
 ### 3. Run your first task
 
 ```bash
-vtcode   # open the interactive TUI in your project
+vtcode   # open the interactive TUI
 ```
 
-Ask a focused question, then review proposed changes and test results before committing. [Usage](#usage) covers
-automation and session commands.
+Ask one focused question, review the proposed changes and test results, then commit.
+[Usage](#usage) covers automation and session commands.
 
 ## Usage
 
-Common commands (see the [command reference](./docs/user-guide/commands.md)):
+Common commands (full list in the [command reference](./docs/user-guide/commands.md)):
 
 | Goal                    | Command                                            |
 | ----------------------- | -------------------------------------------------- |
@@ -121,18 +121,18 @@ Common commands (see the [command reference](./docs/user-guide/commands.md)):
 | Resume the last session | `vtcode continue`                                  |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-For larger tasks, start read-only, review the turn diff before committing, and use `/explain` for a summary
-without another model call. See the [interactive guide](./docs/user-guide/interactive-mode.md).
+For larger tasks, start read-only, review the turn diff before committing, and use `/explain` for a
+summary without another model call. See the [interactive guide](./docs/user-guide/interactive-mode.md).
 
 ### Modes
 
 - **`ask`** is tool-free: it prints one reply and exits.
-- **`exec`** runs the full tool loop under explicit workspace trust (`full_auto` plus `[automation.full_auto]`).
-  Terminals prompt for trust; non-TTY runs need `VTCODE_TRUST_WORKSPACE=full-auto`. Allow-lists, denies, and
-  execution policy still apply.
+- **`exec`** runs the full tool loop and needs explicit workspace trust: approve the TTY prompt or set
+  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (plus `[automation.full_auto]` where configured).
+  Allow-lists, denies, and execution policy still apply.
 - **`review`** inspects uncommitted changes.
 
-Schedule recurring work on the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
+Scheduled work reuses the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
 resume headless runs with `vtcode exec resume --last`, and inspect logs with `vtcode trajectory`. See
 [exec mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md).
 
@@ -162,17 +162,16 @@ troubleshooting.
 
 ## Documentation
 
-Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/VTCode/wiki);
-integrations below are optional.
+Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/VTCode/wiki).
+Curated entry points by task:
 
-### Get started
+### Start
 
 - [Installation](./docs/installation/README.md) and [getting started](./docs/user-guide/getting-started.md)
-- [Desktop app](./docs/development/desktop-workspace.md) for the native macOS GUI
 - [Providers](./docs/providers/PROVIDER_GUIDES.md) and [OAuth login](./docs/guides/oauth-authentication.md)
 - [FAQ](./docs/FAQ.md) and [compatibility](./docs/COMPATIBILITY.md)
 
-### Work in the TUI
+### Use
 
 - [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
 - [Read-only planning](./docs/guides/planning-workflow.md) and [turn diffs](./docs/development/diff-preview.md)
@@ -183,20 +182,20 @@ integrations below are optional.
 - [Full automation](./docs/guides/full-automation.md) and [decisions probe](./docs/guides/decisions-probe.md)
 - [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) and [hooks](./docs/guides/hooks-guide.md)
 
-### Extend and integrate
+### Extend
 
 - [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [MCP](./docs/guides/mcp-integration.md)
-- [MCP interop](./docs/guides/mcp-interop.md) for client and server maintainers
-- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md) ([deployment](./docs/reference/webmcp.md)),
-  [Companion](./docs/user-guide/vtcode-companion.md), and [Memcode](./docs/guides/memcode-mcp.md)
+- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and [MCP interop](./docs/guides/mcp-interop.md)
 
-### Develop and evaluate
+### Develop
 
 - [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and [evals](./docs/guides/eval.md)
 - [Architecture](./docs/ARCHITECTURE.md), [HOVER](./docs/development/hypothesis-revision-validation.md), and [protocols](./docs/protocols/OPEN_RESPONSES.md)
-- [Loop engineering](./docs/project/PLAN-loop-engineering.md)
+- [Desktop app](./docs/development/desktop-workspace.md) and [loop engineering](./docs/project/PLAN-loop-engineering.md)
 
 ## Development
+
+Simplified map (the [architecture guide](./docs/ARCHITECTURE.md) covers all 25 crates):
 
 ```mermaid
 graph LR
@@ -208,14 +207,13 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests. The [architecture
-guide](./docs/ARCHITECTURE.md) maps all 25 crates, including the context and compaction design.
+Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests.
 
 ```bash
 git clone https://github.com/vinhnx/VTCode.git
 cd VTCode
 ./scripts/run-debug.sh     # build and launch a debug binary
-./scripts/check-dev.sh     # fast gate: clippy, fmt, check
+./scripts/check-dev.sh     # fast gate: clippy, fmt, check (add --test for tests)
 cargo nextest run          # tests (requires cargo-nextest)
 ```
 
@@ -227,15 +225,13 @@ Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/V
 
 ## Contributing
 
-Contributions are welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
-output). Read the [contribution guide](./docs/CONTRIBUTING.md) before opening a PR; MCP maintainers should also see
-the [interop guide](./docs/guides/mcp-interop.md).
+Contributions welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
+output). Read the [contribution guide](./docs/CONTRIBUTING.md) before opening a PR.
 
 ## Security
 
-Report vulnerabilities privately with [GitHub private vulnerability
-reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See the [security
-policy](./docs/SECURITY.md).
+Report vulnerabilities privately via [GitHub private vulnerability
+reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See the [security policy](./docs/SECURITY.md).
 
 ## Community
 
@@ -244,8 +240,8 @@ policy](./docs/SECURITY.md).
   [Discussions](https://github.com/vinhnx/VTCode/discussions)
 - [Good first issues](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted)
 
-The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive. Contact:
-`vinhnguyen2308 [at] gmail [dot] com`.
+The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
+Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
 ## Thanks to our contributors
 
@@ -318,13 +314,13 @@ figure it out together.
 ## Resources
 
 - [Building VT Code, a year in](https://huggingface.co/blog/vinhnx90/building-vtcode-a-year-in) ·
-  [Podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [Video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
+  [podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
 ## Support VT Code
 
 <div align="center">
 
-**Thanks to current sponsors: [Codemod](https://codemod.com/) and [CodeRabbit](https://www.coderabbit.ai/).**
+**Current sponsors: [Codemod](https://codemod.com/) and [CodeRabbit](https://www.coderabbit.ai/).**
 
 [![@codemod](https://avatars.githubusercontent.com/u/78830094?s=80)](https://github.com/codemod)&nbsp;
 [![@coderabbitai](https://avatars.githubusercontent.com/u/132028505?s=80)](https://github.com/coderabbitai)&nbsp;
