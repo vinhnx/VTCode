@@ -69,6 +69,8 @@ fn non_shell_display_labels_keep_learning_label_stable() {
     });
 
     let labels = tool_display_labels("read_file", Some(&args));
-    assert_eq!(labels.learning_label, "Read file");
+    // Title case follows the shared `humanize_tool_name` contract (pinned in
+    // `vtcode-commons`); the prompt headline keeps its sentence-case verb.
+    assert_eq!(labels.learning_label, "Read File");
     assert_eq!(labels.prompt_label, "Read file src/main.rs");
 }
