@@ -36,7 +36,7 @@ pub mod trace;
 pub mod tracker;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.27.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.28.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.

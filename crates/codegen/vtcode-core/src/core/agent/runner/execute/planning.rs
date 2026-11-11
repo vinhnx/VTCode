@@ -99,7 +99,7 @@ impl AgentRunner {
         if self.tool_registry.is_planning_active() {
             planning_recovery.provider = provider_name.to_owned();
             planning_recovery.model = turn_model.to_owned();
-            planning_recovery.response_class = Some(headless_planning::classify_response(
+            planning_recovery.record_response_class(headless_planning::classify_response(
                 response,
                 effective_tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()),
             ));

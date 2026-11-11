@@ -6,17 +6,32 @@ use vtcode_commons::ui_protocol::ActivityState;
 use vtcode_core::exec::events::planning::PlanningOutcome;
 
 pub(crate) const RETRY_LABEL: &str = "Retry from retained evidence";
+pub(crate) const RETRY_ANYWAY_LABEL: &str = "Retry once anyway";
 pub(crate) const CLARIFY_LABEL: &str = "Add clarification";
 pub(crate) const MODEL_LABEL: &str = "Choose another model";
 
-pub(crate) fn recovery_question() -> serde_json::Value {
+pub(crate) fn recovery_question(repeated: bool) -> serde_json::Value {
+    if !repeated {
+        return serde_json::json!({"questions": [{
+            "id": "planning_recovery", "header": "Planning",
+            "question": "Planning needs your input. Saved progress is available. How should planning continue?",
+            "options": [
+                {"label": RETRY_LABEL, "description": "Start one bounded synthesis cycle using the saved evidence."},
+                {"label": CLARIFY_LABEL, "description": "Add missing facts or revise the retained draft."},
+                {"label": MODEL_LABEL, "description": "Select a model, then resume synthesis with saved evidence."}
+            ]
+        }]});
+    }
+    // Consecutive identical failures: a blind retry has already been shown
+    // not to work. Lead with the options that change the outcome; the first
+    // option also picks up the UI's Recommended decoration.
     serde_json::json!({"questions": [{
         "id": "planning_recovery", "header": "Planning",
-        "question": "Planning needs your input. Saved progress is available. How should planning continue?",
+        "question": "Planning needs your input. Consecutive attempts failed identically, so retrying unchanged is unlikely to help. How should planning continue?",
         "options": [
-            {"label": RETRY_LABEL, "description": "Start one bounded synthesis cycle using the saved evidence."},
             {"label": CLARIFY_LABEL, "description": "Add missing facts or revise the retained draft."},
-            {"label": MODEL_LABEL, "description": "Select a model, then resume synthesis with saved evidence."}
+            {"label": MODEL_LABEL, "description": "Select a model, then resume synthesis with saved evidence."},
+            {"label": RETRY_ANYWAY_LABEL, "description": "Retry once more without changes; likely to fail the same way."}
         ]
     }]})
 }
@@ -71,6 +86,18 @@ impl TurnProcessingContext<'_> {
             if !recovery_state::admit_request(&mut self.plan_session.recovery) {
                 return Ok(false);
             }
+            // An explicit retry otherwise resends an identical request: name
+            // the last classified failure so the correction carries new
+            // information. First request of a retry cycle only; in-cycle
+            // corrections already carry repair-specific directives.
+            if self.plan_session.recovery.cycle > 0
+                && self.plan_session.recovery.requests_used == 1
+                && let Some(class) = self.plan_session.recovery.response_class
+                && recovery_state::is_failure_response_class(class)
+            {
+                let repeated = recovery_state::repeated_identical_failure(&self.plan_session.recovery);
+                self.push_system_message(recovery_state::planning_retry_correction_directive(class, repeated));
+            }
             // Reestablish the tool-free boundary after automatic continuation or resume.
             self.harness_state.switch_to_tool_free_recovery();
             self.persist_planning_recovery().await?;
@@ -90,7 +117,10 @@ impl TurnProcessingContext<'_> {
         let recording_recovery = self.plan_session.recovery.research_closed
             && self.plan_session.recovery.outcome != PlanningOutcome::Researching;
         if recording_recovery {
-            self.plan_session.recovery.response_class = Some(recovery_state::response_class(response));
+            recovery_state::record_response_class(
+                &mut self.plan_session.recovery,
+                recovery_state::response_class(response),
+            );
         }
         if recording_recovery
             || self.plan_session.recovery.best_draft != previous_draft
@@ -146,6 +176,11 @@ impl TurnProcessingContext<'_> {
         self.handle.force_redraw();
         // Persistence failure cannot authorize another provider request or approval.
         self.persist_planning_recovery().await?;
+        // Consecutive identical failures need an honest handoff: a blind retry
+        // has already been shown not to work, so lead with clarification and
+        // model selection instead.
+        let repeated = recovery_state::repeated_identical_failure(&self.plan_session.recovery);
+        let retry_label = if repeated { RETRY_ANYWAY_LABEL } else { RETRY_LABEL };
         let snapshot = &self.plan_session.recovery;
         let diagnostic = redact_diagnostic(&Diagnostic {
             severity: DiagnosticSeverity::Warning,
@@ -159,10 +194,11 @@ impl TurnProcessingContext<'_> {
                 "guard_reason": snapshot.guard_reason,
                 "validator_defects": snapshot.validation_report, "evidence_items": snapshot.evidence.len(),
                 "retained_draft": snapshot.best_draft.is_some(),
+                "repeated_identical_failure": repeated,
                 "recovery": "Wait for explicit retry, clarification, or model selection. Research stays closed. Implementation requires separate validated persisted plan approval."
             }).to_string(),
             correlation_id: format!("{}-planning-{}", self.harness_state.run_id.0, snapshot.cycle),
-            actions: vec![DiagnosticAction { id: "retry".into(), label: RETRY_LABEL.into() },
+            actions: vec![DiagnosticAction { id: "retry".into(), label: retry_label.into() },
                 DiagnosticAction { id: "clarify".into(), label: CLARIFY_LABEL.into() },
                 DiagnosticAction { id: "model".into(), label: MODEL_LABEL.into() }],
         });
@@ -177,7 +213,7 @@ impl TurnProcessingContext<'_> {
             let answer = crate::agent::runloop::unified::request_user_input::execute_request_user_input_tool(
                 self.handle,
                 self.session,
-                &recovery_question(),
+                &recovery_question(repeated),
                 self.ctrl_c_state,
                 self.ctrl_c_notify,
             )
@@ -229,7 +265,10 @@ impl TurnProcessingContext<'_> {
                     if selected == Some(MODEL_LABEL) {
                         self.plan_session.recovery.model_selection_pending = true;
                         self.persist_planning_recovery().await?;
-                    } else if selected == Some(RETRY_LABEL) || clarification.is_some() {
+                    } else if selected == Some(RETRY_LABEL)
+                        || selected == Some(RETRY_ANYWAY_LABEL)
+                        || clarification.is_some()
+                    {
                         self.plan_session.begin_explicit_recovery_cycle();
                         if let Some(text) = clarification {
                             recovery_state::record_clarification(
@@ -253,10 +292,19 @@ impl TurnProcessingContext<'_> {
             }
         }
         self.harness_state.mark_final_response_fallback();
-        let (message, reason) = fallback.unwrap_or((
+        // The blocked reason stays byte-identical: continuation gates match on
+        // it. Only the human-facing message varies.
+        let repeated_fallback = (
+            "Planning needs your input. Saved progress is available. Consecutive attempts failed identically; retrying \
+             unchanged is unlikely to help. Add clarification or use `/model` to switch models; implementation still \
+             requires plan approval.",
+            "planning awaiting input",
+        );
+        let standard_fallback = (
             "Planning needs your input. Saved progress is available. Choose retry, add clarification, or use `/model`; implementation still requires plan approval.",
             "planning awaiting input",
-        ));
+        );
+        let (message, reason) = fallback.unwrap_or(if repeated { repeated_fallback } else { standard_fallback });
         self.handle_assistant_response(
             message.into(),
             Vec::new(),

@@ -182,3 +182,68 @@ fn newest_clarification_survives_a_full_request_context() {
     );
     assert!(snapshot.targeted_research.is_none());
 }
+
+#[test]
+fn recorded_classes_shift_so_repeats_compare_against_the_previous_shape() {
+    let mut snapshot = PlanningRecoverySnapshot::default();
+    assert!(!repeated_identical_failure(&snapshot));
+    record_response_class(&mut snapshot, PlanningResponseClass::NativeToolCalls);
+    assert!(!repeated_identical_failure(&snapshot));
+    assert_eq!(snapshot.previous_response_class, None);
+    record_response_class(&mut snapshot, PlanningResponseClass::NativeToolCalls);
+    assert_eq!(snapshot.previous_response_class, Some(PlanningResponseClass::NativeToolCalls));
+    assert!(repeated_identical_failure(&snapshot));
+    // A differing shape breaks the streak without clearing history.
+    record_response_class(&mut snapshot, PlanningResponseClass::EmptyContent);
+    assert!(!repeated_identical_failure(&snapshot));
+    assert_eq!(snapshot.response_class, Some(PlanningResponseClass::EmptyContent));
+    assert_eq!(snapshot.previous_response_class, Some(PlanningResponseClass::NativeToolCalls));
+    // Only failures repeat: consecutive valid plans are success, while a
+    // clarifying question on a synthesis pass is still not a plan.
+    assert!(is_failure_response_class(PlanningResponseClass::NativeToolCalls));
+    assert!(is_failure_response_class(PlanningResponseClass::ClarifyingQuestion));
+    assert!(!is_failure_response_class(PlanningResponseClass::ValidPlan));
+    let mut valid = PlanningRecoverySnapshot::default();
+    record_response_class(&mut valid, PlanningResponseClass::ValidPlan);
+    record_response_class(&mut valid, PlanningResponseClass::ValidPlan);
+    assert!(!repeated_identical_failure(&valid));
+    let mut clarifying = PlanningRecoverySnapshot::default();
+    record_response_class(&mut clarifying, PlanningResponseClass::ClarifyingQuestion);
+    record_response_class(&mut clarifying, PlanningResponseClass::ClarifyingQuestion);
+    assert!(repeated_identical_failure(&clarifying));
+}
+
+#[test]
+fn clarification_breaks_the_identical_failure_streak() {
+    let mut snapshot = PlanningRecoverySnapshot::default();
+    record_response_class(&mut snapshot, PlanningResponseClass::NativeToolCalls);
+    record_response_class(&mut snapshot, PlanningResponseClass::NativeToolCalls);
+    assert!(repeated_identical_failure(&snapshot));
+    record_clarification(&mut snapshot, "The target file is README.md.", false);
+    assert!(!repeated_identical_failure(&snapshot));
+    assert_eq!(snapshot.response_class, Some(PlanningResponseClass::NativeToolCalls));
+}
+
+#[test]
+fn retry_correction_names_every_failure_shape_without_debug_formatting() {
+    for class in [
+        PlanningResponseClass::EmptyContent,
+        PlanningResponseClass::ReasoningOnly,
+        PlanningResponseClass::NativeToolCalls,
+        PlanningResponseClass::MalformedPlan,
+        PlanningResponseClass::Truncation,
+        PlanningResponseClass::ProviderFailure,
+        PlanningResponseClass::ValidPlan,
+        PlanningResponseClass::ClarifyingQuestion,
+    ] {
+        let first = planning_retry_correction_directive(class, false);
+        assert!(first.starts_with("Planning retry correction: the previous synthesis "));
+        assert!(first.contains("Tools are not available on this pass"));
+        assert!(!first.contains("NativeToolCalls"), "noun prose, not debug names: {first}");
+        let repeated = planning_retry_correction_directive(class, true);
+        assert!(repeated.contains("the last two syntheses each"));
+        assert!(repeated.contains("retrying unchanged is unlikely to help"));
+    }
+    let native = planning_retry_correction_directive(PlanningResponseClass::NativeToolCalls, false);
+    assert!(native.contains("emitted native tool calls on a tool-free pass"));
+}

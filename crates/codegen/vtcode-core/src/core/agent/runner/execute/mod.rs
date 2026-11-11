@@ -522,7 +522,7 @@ impl AgentRunner {
                             break;
                         }
                         super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
-                        planning_recovery.response_class = Some(PlanningResponseClass::ProviderFailure);
+                        planning_recovery.record_response_class(PlanningResponseClass::ProviderFailure);
                         planning_failure_detail = Some(format!("Planning provider request failed: {error:#}"));
                         runtime.state.outcome = TaskOutcome::failed(
                             "Planning needs your input after a provider failure.".to_owned(), vec![], None, None);

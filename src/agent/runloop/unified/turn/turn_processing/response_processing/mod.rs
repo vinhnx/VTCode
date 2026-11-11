@@ -123,8 +123,19 @@ pub(crate) fn process_llm_response(
     // A provider response that includes native tool calls is not a valid
     // tool-free synthesis, even when it also contains a seemingly complete
     // plan. Do not silently accept the plan while dropping the forbidden
-    // calls; the recovery handler must produce the resumable blocked handoff.
+    // calls; the recovery handler repairs salvageable prose within its
+    // bounded budget and otherwise produces the resumable blocked handoff.
+    // Preserve the voided plan/prose for bounded salvage first: the extracted
+    // plan body when one is present, else surrounding prose. Repair still
+    // requires validation, a clean text-only re-emit, and user approval.
+    let mut voided_text: Option<String> = None;
     if planning_active && !allow_tool_calls && response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
+        let non_empty = |text: &str| !text.trim().is_empty();
+        if proposed_plan.as_deref().is_some_and(non_empty) {
+            voided_text = proposed_plan.clone();
+        } else if final_text.as_deref().is_some_and(non_empty) {
+            voided_text = final_text.clone();
+        }
         final_text = None;
         proposed_plan = None;
     }
@@ -295,6 +306,7 @@ pub(crate) fn process_llm_response(
         completion_tokens: response.usage.as_ref().map_or(0, |usage| usage.completion_tokens),
         reasoning_only,
         dropped_tool_calls: dropped_native_tool_calls,
+        voided_text,
     };
 
     tracing::info!(
@@ -632,5 +644,7 @@ fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a s
     Some(line[prefix.len()..line.len() - suffix.len()].trim())
 }
 
+#[cfg(test)]
+mod salvage_tests;
 #[cfg(test)]
 mod tests;

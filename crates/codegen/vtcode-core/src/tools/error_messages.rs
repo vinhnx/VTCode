@@ -29,7 +29,7 @@ pub mod agent_execution {
              - Run recognized commands: cargo check, cargo nextest run, git status, command -v, ls, grep, find, diff\n\
              - Search code: exec_command with rg or other readonly search commands\n\
              - Use task_tracker\n\n\
-             Planning shell shapes: use `&&` chains or separate calls; `;`, `||`, redirections (`>`, `2>`), and `*` globs are not recognized. Prefer `rg --files src | rg '\\.md$'` over `ls */*.md`.\n\n\
+             Planning shell shapes: batch reads with `&&`, `;`, or `||` chains and `|` pipes where every segment is a recognized readonly command; `2>&1` and `2>/dev/null` stderr plumbing is allowed. Output redirections (`>`, `>>`, `<`), background `&`, and unquoted `*` globs or other expansions are not recognized. Prefer `rg --files src | rg '\\.md$'` over `ls */*.md`.\n\n\
              To start implementation:\n\
              1. Wait for the user to review and approve the plan in the UI\n\
              2. After approval, use apply_patch for file edits\n\n\
@@ -128,6 +128,13 @@ mod tests {
         assert!(planning_msg.contains("apply_patch"));
         assert!(planning_msg.contains("Planning shell shapes"));
         assert!(planning_msg.contains("rg --files"));
+        // The shapes line must match the readonly classifier: `;`, `||`,
+        // and `2>&1` are admitted, so the message must teach batching with
+        // them instead of banning them (session-vtcode-20261111T131103Z:
+        // the old wording pushed single-command calls and burned the
+        // 61-loop planning budget on micro-reads).
+        assert!(planning_msg.contains("batch reads with `&&`, `;`, or `||`"));
+        assert!(planning_msg.contains("`2>&1` and `2>/dev/null` stderr plumbing is allowed"));
         assert!(!planning_msg.contains(&internal_unified_tool_name("file")));
         assert!(!planning_msg.contains(&internal_unified_tool_name("exec")));
         assert!(!planning_msg.contains(&internal_unified_tool_name("search")));

@@ -54,6 +54,13 @@ pub struct PlanningRecoverySnapshot {
     pub best_draft_defects: Option<usize>,
     pub validation_report: Option<String>,
     pub response_class: Option<PlanningResponseClass>,
+    /// Class of the previously recorded recovery response; `None` until two
+    /// responses have been classified. Compared against `response_class` to
+    /// detect a repeated identical failure. Cleared by clarification, which
+    /// carries new information; preserved across explicit retries and model
+    /// switches so consecutive identical shapes stay visible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_response_class: Option<PlanningResponseClass>,
     /// Runtime-owned guard cause retained independently of concise human summaries.
     pub guard_reason: Option<String>,
     pub provider: String,
@@ -84,6 +91,15 @@ impl PlanningRecoverySnapshot {
         };
         self.requests_used += 1;
         true
+    }
+
+    /// Shift the latest classified response shape into the previous slot
+    /// before recording the new one, so the handoff can tell a repeated
+    /// identical failure from a new one. All writers must use this instead
+    /// of assigning `response_class` directly.
+    pub fn record_response_class(&mut self, class: PlanningResponseClass) {
+        self.previous_response_class = self.response_class;
+        self.response_class = Some(class);
     }
 
     /// Called only after an explicit human retry, clarification, or model selection.

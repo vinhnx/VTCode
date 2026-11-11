@@ -152,8 +152,10 @@ pub(super) async fn handle_llm_request_error(
 
     let planning = turn_processing_ctx.is_planning_active();
     if planning && turn_processing_ctx.plan_session.recovery.research_closed {
-        turn_processing_ctx.plan_session.recovery.response_class =
-            Some(vtcode_core::exec::events::planning::PlanningResponseClass::ProviderFailure);
+        turn_processing_ctx
+            .plan_session
+            .recovery
+            .record_response_class(vtcode_core::exec::events::planning::PlanningResponseClass::ProviderFailure);
         turn_processing_ctx.persist_planning_recovery().await?;
         match turn_processing_ctx
             .recover_planning_failure(&error_message_for_user(err), None)

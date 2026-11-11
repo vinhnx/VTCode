@@ -853,6 +853,16 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 }
 
                 if params.ctx.is_planning_active() && matches!(recovery_mode, RecoveryMode::ToolFreeSynthesis) {
+                    // A violated synthesis that still carried plan-like prose
+                    // gets the same bounded validation-repair as tagged
+                    // drafts instead of an immediate handoff. Junk prose
+                    // falls through to the handoff below.
+                    if facts.dropped_tool_calls
+                        && let Some(voided) = facts.voided_text.as_deref()
+                        && params.ctx.try_planning_violation_repair(voided)?
+                    {
+                        return Ok(TurnHandlerOutcome::Continue);
+                    }
                     // Every response failure uses the same persisted admission
                     // allowance; private reasoning never becomes a draft.
                     if params.ctx.try_planning_empty_output_salvage(&facts)? {

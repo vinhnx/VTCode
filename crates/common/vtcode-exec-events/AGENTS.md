@@ -20,6 +20,7 @@
 - Bounded failures use `ReasoningItem` stage `"diagnosis"`, never a parallel variant.
 - Matrix runtime identities and cleanup confirmations belong to the scheduler, never to worker-selected report fields.
 - Only explicit human input may call `PlanningRecoverySnapshot::begin_explicit_cycle`, and `PlanApprovalDecision` stays stable for headless/Open Responses clients.
+- Record recovery response shapes only through `PlanningRecoverySnapshot::record_response_class` so previous/current stay exact.
 
 ## Gotchas
 

@@ -425,6 +425,12 @@ impl TestTurnProcessingBacking {
             .is_some_and(|message| message.content.as_text().contains(needle))
     }
 
+    pub(crate) fn history_contains(&self, needle: &str) -> bool {
+        self.working_history
+            .iter()
+            .any(|message| message.content.as_text().contains(needle))
+    }
+
     pub(crate) fn turn_loop_context(&mut self) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
         crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext::new(
             &mut self.renderer,

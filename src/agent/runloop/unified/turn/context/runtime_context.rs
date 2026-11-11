@@ -45,6 +45,12 @@ pub(crate) struct NoOutputFacts {
     /// The response carried native tool calls that were dropped because the
     /// recovery pass forbids executing tools.
     pub(crate) dropped_tool_calls: bool,
+    /// Prose the strict tool-free rule voided alongside dropped native tool
+    /// calls: the extracted plan body when one was present, else surrounding
+    /// prose. `None` unless planning voided non-empty text. Carried so the
+    /// violation-repair path can salvage plan-like prose instead of parking
+    /// in an immediate handoff; junk still falls through to the handoff.
+    pub(crate) voided_text: Option<String>,
 }
 
 impl NoOutputFacts {

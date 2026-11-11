@@ -121,6 +121,69 @@ pub(crate) fn admit_request(snapshot: &mut PlanningRecoverySnapshot) -> bool {
     snapshot.admit_request()
 }
 
+/// Shift the latest classified response shape into the previous slot before
+/// recording the new one, so the handoff can tell a repeated identical
+/// failure from a new one. Only recovery-phase responses are classified, so
+/// research traffic never pollutes the comparison.
+pub(crate) fn record_response_class(snapshot: &mut PlanningRecoverySnapshot, class: PlanningResponseClass) {
+    snapshot.record_response_class(class);
+}
+
+/// Whether a classified response failed to advance synthesis. Everything
+/// short of a valid plan counts: a clarifying question on a synthesis pass
+/// is still not a plan.
+#[must_use]
+pub(crate) fn is_failure_response_class(class: PlanningResponseClass) -> bool {
+    !matches!(class, PlanningResponseClass::ValidPlan)
+}
+
+/// True when the last two classified recovery responses share a failure
+/// shape: a retry that changes nothing has already been shown not to work.
+#[must_use]
+pub(crate) fn repeated_identical_failure(snapshot: &PlanningRecoverySnapshot) -> bool {
+    snapshot
+        .response_class
+        .filter(|class| is_failure_response_class(*class))
+        .is_some_and(|class| snapshot.previous_response_class == Some(class))
+}
+
+/// Short verb phrase naming a classified synthesis failure for retry
+/// corrections. Total over [`PlanningResponseClass`] so a new class cannot
+/// silently fall back to debug formatting.
+#[must_use]
+pub(crate) fn response_class_noun(class: PlanningResponseClass) -> &'static str {
+    match class {
+        PlanningResponseClass::EmptyContent => "returned no content",
+        PlanningResponseClass::ReasoningOnly => "returned private reasoning without final content",
+        PlanningResponseClass::NativeToolCalls => "emitted native tool calls on a tool-free pass",
+        PlanningResponseClass::MalformedPlan => "returned a malformed plan",
+        PlanningResponseClass::Truncation => "was truncated before producing a plan",
+        PlanningResponseClass::ProviderFailure => "failed at the provider",
+        PlanningResponseClass::ValidPlan => "returned a valid plan",
+        PlanningResponseClass::ClarifyingQuestion => "asked a clarifying question",
+    }
+}
+
+/// Retry correction for an explicit planning retry: names the last
+/// classified failure so the request carries new information instead of
+/// resending an identical synthesis. `repeated` marks consecutive identical
+/// failures, where retrying unchanged has already been shown not to work.
+#[must_use]
+pub(crate) fn planning_retry_correction_directive(class: PlanningResponseClass, repeated: bool) -> String {
+    let shape = response_class_noun(class);
+    let prefix = if repeated {
+        format!(
+            "Planning retry correction: the last two syntheses each {shape}, so retrying unchanged is unlikely to help."
+        )
+    } else {
+        format!("Planning retry correction: the previous synthesis {shape}.")
+    };
+    format!(
+        "{prefix} Tools are not available on this pass. Emit the complete plan as final text now using the retained \
+         evidence and draft and any new clarification; do not emit tool calls, approval prose, or private reasoning."
+    )
+}
+
 pub(crate) fn retain_draft(snapshot: &mut PlanningRecoverySnapshot, text: &str) {
     let candidate = extract_any_plan(text).plan_text.unwrap_or_else(|| text.trim().to_owned());
     vtcode_core::tools::handlers::planning_workflow::retain_plan_recovery_draft(snapshot, &candidate);
@@ -153,6 +216,9 @@ pub(crate) fn record_clarification(snapshot: &mut PlanningRecoverySnapshot, text
     if text.is_empty() {
         return;
     }
+    // New user information breaks the identical-failure streak: the next
+    // attempt genuinely differs, so a same-shape failure is new evidence.
+    snapshot.previous_response_class = None;
     begin_user_revision(snapshot);
     let clarification = format!("\nClarification: {text}");
     let previous = redact_bounded(&snapshot.latest_request, 8192usize.saturating_sub(clarification.len()));
