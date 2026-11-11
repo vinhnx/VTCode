@@ -42,8 +42,8 @@ VT Code is a terminal-first coding agent for your repo, in the CLI and native ma
 Context, tool calls, and execution policy stay auditable and resumable across long tasks.
 
 VT Code is open source under **MIT OR Apache-2.0**. You are welcome to fork it, use it, copy it, modify it,
-and build on it for personal or commercial work, and to contribute improvements back upstream. See
-[Contributing](#contributing) and [License](#license) below.
+and build on it, and contribute improvements back upstream. See [Contributing](#contributing) and
+[License](#license).
 
 | At a glance      | What you get                                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -98,9 +98,8 @@ Replace `openai` with your provider. Keys use secure storage (OS keyring or encr
 variables, a workspace `.env` file, or `vtcode login` work where supported. See
 [getting started](./docs/user-guide/getting-started.md) and the [provider guides](./docs/providers/PROVIDER_GUIDES.md).
 
-> **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow;
-> prefer your own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
-> [OAuth authentication](./docs/guides/oauth-authentication.md).
+> **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity (unofficial flow); prefer your own API
+> key. GitHub Copilot uses the official `copilot` CLI. See [OAuth authentication](./docs/guides/oauth-authentication.md).
 >
 > **Caution:** Keep API keys out of Git and `vtcode.toml`; never commit a workspace `.env` file.
 
@@ -139,8 +138,8 @@ summary without another model call. See the [interactive guide](./docs/user-guid
 - **`review`** inspects uncommitted changes.
 
 Scheduled work reuses the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
-resume headless runs with `vtcode exec resume --last`, and inspect logs with `vtcode trajectory`. See
-[exec mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md).
+and resume headless runs with `vtcode exec resume --last`. See [exec mode](./docs/user-guide/exec-mode.md) and
+[full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
@@ -149,9 +148,10 @@ credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
-On Apple Silicon, install it with Homebrew (update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
+On Apple Silicon macOS 15+, install it with Homebrew (update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
 
 ```bash
+brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
@@ -159,9 +159,9 @@ Without Homebrew, download it from the [latest release](https://github.com/vinhn
 `vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Intel Macs build from source.
 
 > [!WARNING]
-> **First launch needs a one-time macOS security approval.** Builds are ad hoc signed, not notarized, so macOS
-> blocks the first launch (Homebrew cask installs included). Open the app once, click **Open Anyway** in
-> **System Settings › Privacy & Security**, then open it again. The button shows for about an hour after a block.
+> **First launch needs a one-time macOS security approval.** Ad hoc-signed builds are blocked on first launch
+> (Homebrew cask installs included): open the app once, click **Open Anyway** in **System Settings › Privacy &
+> Security**, then open it again. The button shows for about an hour after a block. Notarized releases skip this step.
 
 See the [desktop workspace guide](./docs/development/desktop-workspace.md) for requirements, source builds, and
 troubleshooting.
@@ -244,9 +244,6 @@ VT Code is open source and community-driven. Forking, modifying, and contributin
 
 If you fork and ship your own variant, keep the license and third-party notices intact (see [License](#license)).
 
-If VT Code helps you, please star the repo and share it with others who might like it. Stars help new users
-find the project, and shares bring in more contributors, feedback, and sponsors.
-
 ## Security
 
 Report vulnerabilities privately via [GitHub private vulnerability
@@ -258,7 +255,7 @@ reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See the [s
   [Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
   [Discussions](https://github.com/vinhnx/VTCode/discussions)
 - [Good first issues](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted)
-- [Star the repo](https://github.com/vinhnx/VTCode) · [Fork the repo](https://github.com/vinhnx/VTCode/forks)
+- [Fork the repo](https://github.com/vinhnx/VTCode/forks)
 
 The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
 Contact: `vinhnguyen2308 [at] gmail [dot] com`.
