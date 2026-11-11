@@ -8,11 +8,11 @@
   <sub>Explore, plan, edit, and verify with your model of choice.</sub>
 </p>
 
-[![Rust](https://img.shields.io/badge/rust-1.99.1%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
+[![Rust](https://img.shields.io/badge/rust-1.99.1%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-BFB38F?style=flat-square)](#license)
-[![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
-[![GitHub stars](https://img.shields.io/github/stars/vinhnx/VTCode)](https://github.com/vinhnx/VTCode)
-[![GitHub forks](https://img.shields.io/github/forks/vinhnx/VTCode)](https://github.com/vinhnx/VTCode/forks)
+[![GitHub release](https://img.shields.io/github/release/vinhnx/vtcode.svg)](https://github.com/vinhnx/vtcode/releases)
+[![GitHub stars](https://img.shields.io/github/stars/vinhnx/vtcode)](https://github.com/vinhnx/vtcode)
+[![GitHub forks](https://img.shields.io/github/forks/vinhnx/vtcode)](https://github.com/vinhnx/vtcode/forks)
 
 <!-- NB: not https://deepwiki.com/badge.svg — that route is behind a Vercel bot
   challenge, so GitHub's camo proxy gets 429 and renders the alt text instead.
@@ -50,21 +50,25 @@ and build on it, and contribute improvements back upstream. See [Contributing](#
 | **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review [turn diffs](./docs/development/diff-preview.md). |
 | **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                      |
 | **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) revises on mismatch.                             |
-| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction.                                         |
-| **Integrations** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), plugins, editor bridges.          |
+| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md) roll back workspace state. |
+| **Subagents**    | Spawn [subagents](./docs/user-guide/subagents.md) for parallel exploration and delegated work.                       |
+| **Integrations** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges. |
+| **Protocols**    | [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and [Companion](./docs/user-guide/vtcode-companion.md). |
+| **Quality**      | [Evals](./docs/guides/eval.md) measure agent behavior before release.                                               |
 | **Models**       | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.                                          |
 
 ## Quick start
 
 Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024). VT Code is
-self-contained: it ships its own search engine and needs no external search binaries; see the
-[installation guide](./docs/installation/README.md) for prerequisites.
+self-contained: it ships its own search engine and needs no external search binaries. (The legacy
+`vtcode dependencies install search-tools` step is deprecated — native search has replaced it; see the
+[installation guide](./docs/installation/README.md) for prerequisites.)
 
 ### 1. Install
 
 ```bash
-# Review the installer script before running it: https://github.com/vinhnx/VTCode/blob/main/scripts/install.sh
-curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
+# Review the installer script before running it: https://github.com/vinhnx/vtcode/blob/main/scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
 ```
 
 Or install with Homebrew or Cargo (desktop cask: [Desktop app](#desktop-app)):
@@ -72,17 +76,14 @@ Or install with Homebrew or Cargo (desktop cask: [Desktop app](#desktop-app)):
 ```bash
 brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
 
-# Or install from crates.io
+# Or install from crates.io (published; see the installation guide)
 cargo install vtcode
-
-# Optional after any install method
-vtcode dependencies install search-tools
 ```
 
 On Windows (best-effort artifacts; may lag behind macOS/Linux):
 
 ```powershell
-irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
 Verify with `vtcode --version`. Windows artifacts are best-effort and may not appear in every release. The
@@ -129,6 +130,8 @@ Common commands (full list in the [command reference](./docs/user-guide/commands
 | Review pending changes  | `vtcode review`                                    |
 | Schedule recurring work | `vtcode schedule create --prompt "..." --every 1h` |
 | Resume the last session | `vtcode continue`                                  |
+| Resume a headless run   | `vtcode exec resume --last "prompt"`               |
+| Roll back a snapshot    | `vtcode snapshots` / `vtcode revert`               |
 | Inspect a run log       | `vtcode trajectory`                                |
 
 For larger tasks, start read-only, review the turn diff before committing, and use `/explain` for a
@@ -160,7 +163,7 @@ brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
-Without Homebrew, download it from the [latest release](https://github.com/vinhnx/VTCode/releases/latest) or run
+Without Homebrew, download it from the [latest release](https://github.com/vinhnx/vtcode/releases/latest) or run
 `vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Hosts without a published asset
 build from source.
 
@@ -174,7 +177,7 @@ troubleshooting.
 
 ## Documentation
 
-Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/VTCode/wiki).
+Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/vtcode/wiki).
 Curated entry points by task:
 
 ### Start
@@ -188,6 +191,7 @@ Curated entry points by task:
 - [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
 - [Read-only planning](./docs/guides/planning-workflow.md) and [turn diffs](./docs/development/diff-preview.md)
 - [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) and [security model](./docs/security/SECURITY_MODEL.md)
+- [Subagents](./docs/user-guide/subagents.md) and [snapshots](./docs/user-guide/commands.md#snapshots--revert)
 
 ### Automate
 
@@ -200,6 +204,8 @@ Curated entry points by task:
   [MCP](./docs/guides/mcp-integration.md)
 - [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and
   [MCP interop](./docs/guides/mcp-interop.md)
+- [A2A protocol](./docs/a2a/README.md), [WebMCP deployment](./docs/reference/webmcp.md), and
+  [Companion](./docs/user-guide/vtcode-companion.md)
 
 ### Develop
 
@@ -226,8 +232,8 @@ graph LR
 Build with Rust 1.99.1+ (edition 2024).
 
 ```bash
-git clone https://github.com/vinhnx/VTCode.git
-cd VTCode
+git clone https://github.com/vinhnx/vtcode.git
+cd vtcode
 ./scripts/run-debug.sh     # build and launch a debug binary
 ./scripts/check-dev.sh     # fast gate: clippy, fmt, check (add --test for tests)
 cargo nextest run          # tests via nextest (see testing guide)
@@ -237,7 +243,7 @@ CI builds with `--locked` and `RUSTFLAGS="-D warnings"`; match locally with
 `RUSTFLAGS="-D warnings" cargo check --locked`. See the [development overview](./docs/development/README.md) and
 [testing guide](./docs/development/testing.md).
 
-Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/VTCode/releases).
+Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/vtcode/releases).
 
 ## Contributing
 
@@ -247,8 +253,8 @@ VT Code is open source and community-driven. Forking, modifying, and contributin
   product. You can keep changes in your fork or send them back as a pull request, both are encouraged.
 - **Contribute upstream:** code, docs, [evals](./docs/guides/eval.md), bug fixes, and feature work are
   welcome. Bug reports should include `vtcode trajectory` output where possible.
-- **Start small:** pick a [good first issue](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) or
-  [help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted) item, or open a discussion with your idea.
+- **Start small:** pick a [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) or
+  [help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item, or open a discussion with your idea.
 - **Before you open a PR:** read the [contribution guide](./docs/CONTRIBUTING.md) and keep changes focused,
   tested, and documented.
 
@@ -257,15 +263,15 @@ If you fork and ship your own variant, keep the license and third-party notices 
 ## Security
 
 Report vulnerabilities privately via [GitHub private vulnerability
-reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See the [security policy](./docs/SECURITY.md).
+reporting](https://github.com/vinhnx/vtcode/security/advisories/new). See the [security policy](./docs/SECURITY.md).
 
 ## Community
 
-- [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) ·
-  [Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
-  [Discussions](https://github.com/vinhnx/VTCode/discussions)
-- [Good first issues](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted)
-- [Fork the repo](https://github.com/vinhnx/VTCode/forks)
+- [Report a bug](https://github.com/vinhnx/vtcode/issues/new?template=bug_report.md) ·
+  [Request a feature](https://github.com/vinhnx/vtcode/issues/new?template=feature_request.md) ·
+  [Discussions](https://github.com/vinhnx/vtcode/discussions)
+- [Good first issues](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted)
+- [Fork the repo](https://github.com/vinhnx/vtcode/forks)
 
 The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
 Contact: `vinhnguyen2308 [at] gmail [dot] com`.
@@ -335,7 +341,7 @@ Thank you to everyone below. You are the reason this project keeps moving.
 </details>
 
 Want to see your avatar here? Every bit counts: a one-line fix, a bug report, or a thoughtful comment. Not sure where
-to begin? Say hello on a [good first issue](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) and we will
+to begin? Say hello on a [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) and we will
 figure it out together.
 
 ## Resources
@@ -360,15 +366,15 @@ and sharing brings in new users, contributors, and sponsors. Thank you for growi
 ## Thank you
 
 <a
-  href="https://www.star-history.com/?repos=vinhnx%2FVTCode&type=timeline&legend=top-left">
+  href="https://www.star-history.com/?repos=vinhnx%2Fvtcode&type=timeline&legend=top-left">
 <picture>
 
    <source media="(prefers-color-scheme: dark)"
-     srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&theme=dark&legend=top-left" />
+     srcset="https://api.star-history.com/chart?repos=vinhnx/vtcode&type=timeline&theme=dark&legend=top-left" />
    <source media="(prefers-color-scheme: light)"
-     srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
+     srcset="https://api.star-history.com/chart?repos=vinhnx/vtcode&type=timeline&legend=top-left" />
    <img alt="Star History Chart"
-     src="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
+     src="https://api.star-history.com/chart?repos=vinhnx/vtcode&type=timeline&legend=top-left" />
  </picture>
 </a>
 
