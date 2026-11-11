@@ -60,6 +60,23 @@ fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mu
             ] {
                 assert!(contrast_ratio(foreground, background) >= 4.5, "{}: unreadable component surface", palette.id);
             }
+            // 0.9.1 accent rows (list, searchable options, toggle hover) pair
+            // accent_foreground text on solid accent and on the 0.7-opacity
+            // hover composite; the composite holds AA on every seat those
+            // rows can sit on.
+            for seat in [
+                kit.colors.background,
+                kit.colors.secondary,
+                kit.colors.popover,
+                kit.colors.group_box,
+            ] {
+                let hover = composite_status_surface(seat, kit.colors.accent, 0.7);
+                assert!(
+                    contrast_ratio(kit.colors.accent_foreground, hover) >= 4.5,
+                    "{}: unreadable accent hover composite",
+                    palette.id
+                );
+            }
             for background in [
                 kit.colors.background,
                 kit.colors.secondary,

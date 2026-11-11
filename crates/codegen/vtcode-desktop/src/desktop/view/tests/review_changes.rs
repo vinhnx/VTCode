@@ -716,3 +716,74 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn changes_inspector_fails_closed_on_invalid_hunk_prefixes_but_keeps_valid_unicode_previews(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(std::env::temp_dir());
+            view.inspector_open = true;
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
+            // Asymmetric pair: an invalid hunk prefix must fail closed (path
+            // listed, no preview, no counts) while a valid unicode patch on
+            // the sibling card must still parse and attach its preview.
+            view.upsert_diff_card(
+                "change-invalid-prefix".into(),
+                &vtcode_exec_events::FileChangeItem {
+                    diff_incomplete: Some(false),
+                    changes: vec![vtcode_exec_events::FileUpdateChange {
+                        path: "src/broken.rs".into(),
+                        kind: vtcode_exec_events::PatchChangeKind::Update,
+                        terminators_normalized: None,
+                    }],
+                    status: vtcode_exec_events::PatchApplyStatus::Completed,
+                    unified_diff: Some("--- a/src/broken.rs\n+++ b/src/broken.rs\n@@ -1 +1 @@\n😀invalid\n".into()),
+                    additions: None,
+                    deletions: None,
+                },
+            );
+            view.upsert_diff_card(
+                "change-valid-unicode".into(),
+                &vtcode_exec_events::FileChangeItem {
+                    diff_incomplete: Some(false),
+                    changes: vec![vtcode_exec_events::FileUpdateChange {
+                        path: "src/unicode.rs".into(),
+                        kind: vtcode_exec_events::PatchChangeKind::Update,
+                        terminators_normalized: None,
+                    }],
+                    status: vtcode_exec_events::PatchApplyStatus::Completed,
+                    unified_diff: Some("--- a/src/unicode.rs\n+++ b/src/unicode.rs\n@@ -1 +1 @@\n-é\n+中\n".into()),
+                    additions: Some(1),
+                    deletions: Some(1),
+                },
+            );
+            assert_eq!(view.changes.entries().len(), 2);
+            assert!(!view.changes.has_preview("src/broken.rs"));
+            assert!(view.changes.has_preview("src/unicode.rs"));
+            let valid = view
+                .changes
+                .entries()
+                .iter()
+                .find(|entry| entry.path == "src/unicode.rs")
+                .expect("valid card keeps its entry");
+            assert_eq!((valid.additions, valid.deletions), (Some(1), Some(1)));
+            assert_eq!(view.changes.totals(), None);
+            cx.notify();
+        });
+        window.render_frame(cx);
+        let broken_row = window.find(opaque_path_element_id("change-row", "src/broken.rs"));
+        assert_eq!(broken_row.disabled(), Some(true));
+        assert_eq!(broken_row.label(), Some("Diff preview unavailable for src/broken.rs"));
+        // Complete-but-unparseable takes the unavailable summary branch, not
+        // the partial-diff branch (no other test covers this combination).
+        let broken_item = window.find(opaque_path_element_id("change-list-item", "src/broken.rs"));
+        assert_eq!(broken_item.label(), Some("Modified src/broken.rs, Preview unavailable"));
+        assert!(
+            window
+                .try_find(opaque_path_element_id("change-row", "src/unicode.rs"))
+                .is_some()
+        );
+    })
+    .unwrap();
+}

@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # vtcode-desktop
 
-[Root AGENTS.md](../../../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.9.0`) desktop app.
+[Root AGENTS.md](../../../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.9.1`) desktop app.
 
 ## Modules
 

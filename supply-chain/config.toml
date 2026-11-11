@@ -1450,107 +1450,107 @@ version = "0.6.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-base]]
-version = "0.9.0"
+version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-component]]
-version = "0.9.0"
+version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-component-macros]]
-version = "0.9.0"
+version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-apple]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-linux]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-macos]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-macros]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-platform]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-web]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-wgpu]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-fast-windows]]
-version = "0.1.13"
+version = "0.1.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-kit]]
-version = "0.9.0"
+version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-kit-assets]]
-version = "0.9.0"
+version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-apple]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-bench-metrics]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-collections]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-derive-refineable]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-http-client]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-ios]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-linux]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-macos]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-macros]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-platform]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-refineable]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-reqwest]]
@@ -1558,39 +1558,39 @@ version = "0.12.15"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-scheduler]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-shared-string]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-sum-tree]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-util]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-web]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-wgpu]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-windows]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-ztracing]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.gpui-pre-ztracing-macro]]
-version = "0.3.11"
+version = "0.3.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.granit-parser]]
@@ -4158,7 +4158,7 @@ version = "1.2.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.webpki-root-certs]]
-version = "1.0.11"
+version = "1.0.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.webpki-roots]]

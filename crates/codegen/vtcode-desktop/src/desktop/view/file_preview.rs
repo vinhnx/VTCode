@@ -10,8 +10,9 @@ use super::*;
 /// a compact panel, long ones get a tall viewport and scroll within it.
 pub(super) const PREVIEW_SOURCE_MIN_ROWS: usize = 3;
 pub(super) const PREVIEW_SOURCE_MAX_ROWS: usize = 24;
-/// Mirrors kit's private `EDITOR_LINE_HEIGHT`: the editor scales code rows
-/// from the mono font size, so the preview derives the same row height.
+/// Matches the kit editor's row advance: input rows lay out at the window
+/// line height for the configured mono size, so the preview derives the
+/// same height (verified against pinned 0.9.1 `input/base/element.rs`).
 pub(super) const PREVIEW_SOURCE_LINE_HEIGHT: f32 = 1.5;
 
 impl DesktopView {

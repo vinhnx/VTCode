@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "gpui-pre-macos"
-version = "0.3.11"
+version = "0.3.12"
 build = false
 publish = true
 autolib = false
@@ -20,7 +20,7 @@ autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Zed's `gpui_macos` crate (gpui-pre snapshot of zed@f816e1f)"
+description = "Zed's `gpui_macos` crate (gpui-pre snapshot of zed@d2a4fb6)"
 readme = false
 license = "Apache-2.0"
 repository = "https://github.com/zed-industries/zed"
@@ -29,7 +29,7 @@ resolver = "2"
 [package.metadata.gpui-pre]
 zed-crate = "gpui_macos"
 zed-version = "0.1.0"
-zed-rev = "f816e1f9263e3a8ef63c4baaa02e1441ce1c6038"
+zed-rev = "d2a4fb6ded7c470be25d1541281da3882495b65b"
 
 [features]
 bench-support = [
@@ -55,7 +55,7 @@ path = "src/gpui_macos.rs"
 doctest = false
 
 [dependencies.gpui]
-version = "=0.3.11"
+version = "=0.3.12"
 default-features = false
 package = "gpui-pre"
 
@@ -73,7 +73,7 @@ version = "1.0.86"
 version = "0.6"
 
 [target.'cfg(target_os = "macos")'.dependencies.collections]
-version = "=0.3.11"
+version = "=0.3.12"
 package = "gpui-pre-collections"
 
 [target.'cfg(target_os = "macos")'.dependencies.core-foundation]
@@ -104,11 +104,11 @@ version = "0.5"
 version = "0.3.34"
 
 [target.'cfg(target_os = "macos")'.dependencies.gpui_apple]
-version = "=0.3.11"
+version = "=0.3.12"
 package = "gpui-pre-apple"
 
 [target.'cfg(target_os = "macos")'.dependencies.gpui_util]
-version = "=0.3.11"
+version = "=0.3.12"
 package = "gpui-pre-util"
 
 [target.'cfg(target_os = "macos")'.dependencies.image]
@@ -293,7 +293,7 @@ version = "0.12.1"
 version = "0.6"
 
 [target.'cfg(target_os = "macos")'.dependencies.scheduler]
-version = "=0.3.11"
+version = "=0.3.12"
 package = "gpui-pre-scheduler"
 
 [target.'cfg(target_os = "macos")'.dependencies.semver]

@@ -1,10 +1,12 @@
 # GPUI macOS cursor refresh
 
-Vendored `gpui-pre-macos` 0.3.11 (Apache-2.0), based on Zed commit
-`f816e1f`. Original copyright notices and `LICENSE-APACHE` are retained.
-Changes are in `src/window.rs`. The 0.3.11 re-vendor re-applies the same fix
-unchanged (upstream cursor regions are identical; 0.3.10 to 0.3.11 drift is
-Metal frame pacing, display link, keyboard, and platform code). The 0.3.10
+Vendored `gpui-pre-macos` 0.3.12 (Apache-2.0), based on Zed commit
+`d2a4fb6`. Original copyright notices and `LICENSE-APACHE` are retained.
+Changes are in `src/window.rs`. The 0.3.12 re-vendor re-applies the same fix
+unchanged (upstream `window.rs` is byte-identical; 0.3.11 to 0.3.12 drift is
+`events.rs` and `platform.rs` only). The 0.3.11 re-vendor likewise re-applied
+it unchanged (0.3.10 to 0.3.11 drift was Metal frame pacing, display link,
+keyboard, and platform code). The 0.3.10
 re-vendor ported the fix to the objc2-migrated backend; the 0.3.9
 `#![allow(deprecated)]` shim in `src/gpui_macos.rs` is obsolete (the upstream
 objc2 migration it awaited has landed) and was dropped.

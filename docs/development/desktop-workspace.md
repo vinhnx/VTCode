@@ -147,7 +147,7 @@ live thread into a new archive (new id, source recorded as its parent) and hands
 while the CLI keeps its own copy. The arrival raises a notice whose click opens that thread. It names no thread: a
 fork's id is new and the sidebar does not know it yet.
 
-The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.9.0 setup](https://gpui-kit.com/docs/installation/).
+The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.9.1 setup](https://gpui-kit.com/docs/installation/).
 
 ## Runtime and session behavior
 
