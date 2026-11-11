@@ -56,8 +56,9 @@ and build on it, and contribute improvements back upstream. See [Contributing](#
 
 ## Quick start
 
-Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024); see the
-[installation guide](./docs/installation/README.md) for prerequisites and search tools.
+Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024). VT Code is
+self-contained: it ships its own search engine and needs no external search binaries; see the
+[installation guide](./docs/installation/README.md) for prerequisites.
 
 ### 1. Install
 
@@ -73,6 +74,9 @@ brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
 
 # Or install from crates.io
 cargo install vtcode
+
+# Optional after any install method
+vtcode dependencies install search-tools
 ```
 
 On Windows (best-effort artifacts; may lag behind macOS/Linux):
@@ -81,8 +85,8 @@ On Windows (best-effort artifacts; may lag behind macOS/Linux):
 irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
 ```
 
-Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers remaining
-methods, desktop flags, and search tools.
+Verify with `vtcode --version`. Windows artifacts are best-effort and may not appear in every release. The
+[installation guide](./docs/installation/README.md) covers remaining methods and desktop flags.
 
 ### 2. Configure your project
 
@@ -98,8 +102,9 @@ Replace `openai` with your provider. Keys use secure storage (OS keyring or encr
 variables, a workspace `.env` file, or `vtcode login` work where supported. See
 [getting started](./docs/user-guide/getting-started.md) and the [provider guides](./docs/providers/PROVIDER_GUIDES.md).
 
-> **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity (unofficial flow); prefer your own API
-> key. GitHub Copilot uses the official `copilot` CLI. See [OAuth authentication](./docs/guides/oauth-authentication.md).
+> **Note:** ChatGPT users can also run `vtcode login openai` for in-process OAuth (or reuse the Codex CLI
+> login with `vtcode login openai --from-codex`); GitHub Copilot uses the official `copilot` CLI. See
+> [OAuth authentication](./docs/guides/oauth-authentication.md).
 >
 > **Caution:** Keep API keys out of Git and `vtcode.toml`; never commit a workspace `.env` file.
 
@@ -138,8 +143,8 @@ summary without another model call. See the [interactive guide](./docs/user-guid
 - **`review`** inspects uncommitted changes.
 
 Scheduled work reuses the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
-and resume headless runs with `vtcode exec resume --last`. See [exec mode](./docs/user-guide/exec-mode.md) and
-[full automation](./docs/guides/full-automation.md).
+and resume headless runs with `vtcode exec resume --last "<prompt>"`. See [exec
+mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
@@ -156,7 +161,8 @@ brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
 Without Homebrew, download it from the [latest release](https://github.com/vinhnx/VTCode/releases/latest) or run
-`vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Intel Macs build from source.
+`vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Hosts without a published asset
+build from source.
 
 > [!WARNING]
 > **First launch needs a one-time macOS security approval.** Ad hoc-signed builds are blocked on first launch
@@ -190,18 +196,22 @@ Curated entry points by task:
 
 ### Extend
 
-- [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [MCP](./docs/guides/mcp-integration.md)
-- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and [MCP interop](./docs/guides/mcp-interop.md)
+- [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md),
+  [MCP](./docs/guides/mcp-integration.md)
+- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and
+  [MCP interop](./docs/guides/mcp-interop.md)
 
 ### Develop
 
-- [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and [evals](./docs/guides/eval.md)
-- [Architecture](./docs/ARCHITECTURE.md), [HOVER](./docs/development/hypothesis-revision-validation.md), and [protocols](./docs/protocols/OPEN_RESPONSES.md)
+- [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and
+  [evals](./docs/guides/eval.md)
+- [Architecture](./docs/ARCHITECTURE.md), [HOVER](./docs/development/hypothesis-revision-validation.md),
+  and [protocols](./docs/protocols/OPEN_RESPONSES.md)
 - [Desktop app](./docs/development/desktop-workspace.md) and [loop engineering](./docs/project/PLAN-loop-engineering.md)
 
 ## Development
 
-Simplified map (the [architecture guide](./docs/ARCHITECTURE.md) covers all 25 crates):
+Simplified map (the [architecture guide](./docs/ARCHITECTURE.md) covers the full workspace crate list):
 
 ```mermaid
 graph LR
@@ -213,14 +223,14 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests.
+Build with Rust 1.99.1+ (edition 2024).
 
 ```bash
 git clone https://github.com/vinhnx/VTCode.git
 cd VTCode
 ./scripts/run-debug.sh     # build and launch a debug binary
 ./scripts/check-dev.sh     # fast gate: clippy, fmt, check (add --test for tests)
-cargo nextest run          # tests (requires cargo-nextest)
+cargo nextest run          # tests via nextest (see testing guide)
 ```
 
 CI builds with `--locked` and `RUSTFLAGS="-D warnings"`; match locally with
@@ -342,7 +352,7 @@ figure it out together.
 [![@codemod](https://avatars.githubusercontent.com/u/78830094?s=80)](https://github.com/codemod)&nbsp;
 [![@coderabbitai](https://avatars.githubusercontent.com/u/132028505?s=80)](https://github.com/coderabbitai)&nbsp;
 
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnz?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnx?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
 
 If you like VT Code, please star the repo and share it with others. Starring helps the project get discovered,
 and sharing brings in new users, contributors, and sponsors. Thank you for growing the community.
