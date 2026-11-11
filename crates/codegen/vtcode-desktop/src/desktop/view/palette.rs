@@ -66,6 +66,7 @@ pub(super) enum PaletteAction {
     NewSession,
     CloseSession,
     CopyThreadTitle,
+    CopyFilePath,
     CloseOtherTabs,
     OpenInCli,
     OpenConversationSearch {
@@ -129,6 +130,7 @@ impl DesktopView {
                 // user-visible strings stay untranslated until full
                 // native-quality translations ship for every locale.
                 command("Copy thread title".to_string(), PaletteAction::CopyThreadTitle),
+                command("Copy file path".to_string(), PaletteAction::CopyFilePath),
                 command("Close other tabs".to_string(), PaletteAction::CloseOtherTabs),
                 command(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(), PaletteAction::OpenInCli),
                 command(
@@ -584,7 +586,7 @@ impl DesktopView {
     }
 
     pub(super) fn run_palette_action(&mut self, action: PaletteAction, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.palette_action_available(&action) {
+        if !self.palette_action_available(&action, cx) {
             cx.notify();
             return;
         }
@@ -615,6 +617,7 @@ impl DesktopView {
                     self.copy_thread_title(&session_id, cx);
                 }
             }
+            PaletteAction::CopyFilePath => self.copy_selected_file_path(cx),
             PaletteAction::CloseOtherTabs => {
                 if let Some(session_id) = self.selected_session_id.clone() {
                     self.close_other_tabs(&session_id, window, cx);
@@ -736,7 +739,7 @@ impl DesktopView {
         }
     }
 
-    pub(super) fn palette_action_available(&self, action: &PaletteAction) -> bool {
+    pub(super) fn palette_action_available(&self, action: &PaletteAction, cx: &App) -> bool {
         match action {
             PaletteAction::NewSession => self.new_thread_available(),
             PaletteAction::ChooseModel => self.session_change_allowed(None),
@@ -775,6 +778,7 @@ impl DesktopView {
             | PaletteAction::InsertHistoryPrompt(_) => true,
             PaletteAction::CloseSession => self.selected_session_id.is_some() && self.new_thread_available(),
             PaletteAction::CopyThreadTitle => self.selected_session_id.is_some(),
+            PaletteAction::CopyFilePath => self.file_tree.read(cx).selected_item().is_some(),
             PaletteAction::CloseOtherTabs => {
                 self.selected_session_id
                     .as_deref()
@@ -817,7 +821,7 @@ impl DesktopView {
                 }
                 deeplinks::DeepLink::Palette(deeplinks::PaletteLink::ConfigSettings) => self.can_edit_cli_settings(),
                 deeplinks::DeepLink::Palette(_) | deeplinks::DeepLink::Command(_) => true,
-                deeplinks::DeepLink::Action(action) => self.palette_action_available(action),
+                deeplinks::DeepLink::Action(action) => self.palette_action_available(action, cx),
             },
             PaletteAction::EditConfigSetting(path) => {
                 self.can_edit_cli_settings()

@@ -433,7 +433,7 @@ fn palette_copy_latest_message_copies_newest_raw_text(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             assert!(view.latest_copyable_message().is_none(), "empty transcript has nothing to copy");
-            assert!(!view.palette_action_available(&super::super::PaletteAction::CopyLatestMessage));
+            assert!(!view.palette_action_available(&super::super::PaletteAction::CopyLatestMessage, cx));
             view.run_palette_action(super::super::PaletteAction::CopyLatestMessage, window, cx);
         });
         window.render_frame(cx);
@@ -450,7 +450,7 @@ fn palette_copy_latest_message_copies_newest_raw_text(cx: &mut TestAppContext) {
                 view.transcript
                     .push(TranscriptItem::new(id.into(), role.into(), "Title".into(), text.into()));
             }
-            assert!(view.palette_action_available(&super::super::PaletteAction::CopyLatestMessage));
+            assert!(view.palette_action_available(&super::super::PaletteAction::CopyLatestMessage, cx));
             view.run_palette_action(super::super::PaletteAction::CopyLatestMessage, window, cx);
         });
         window.render_frame(cx);

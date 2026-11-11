@@ -548,7 +548,7 @@ fn palette_copy_thread_title_copies_selected_title_and_gates_on_selection(cx: &m
     assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("Second thread"));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.selected_session_id = None);
-        assert!(!view.read(cx).palette_action_available(&PaletteAction::CopyThreadTitle));
+        assert!(!view.read(cx).palette_action_available(&PaletteAction::CopyThreadTitle, cx));
         view.update(cx, |view, cx| view.run_palette_action(PaletteAction::CopyThreadTitle, window, cx));
     })
     .unwrap();
@@ -567,10 +567,10 @@ fn palette_close_other_tabs_keeps_selected_and_gates_on_tabs(cx: &mut TestAppCon
         view.update(cx, |view, cx| view.open_command_palette(window, cx));
         window.render_frame(cx);
         assert_eq!(window.find(palette_action_id(&PaletteAction::CloseOtherTabs)).label(), Some("Close other tabs"));
-        assert!(view.read(cx).palette_action_available(&PaletteAction::CloseOtherTabs));
+        assert!(view.read(cx).palette_action_available(&PaletteAction::CloseOtherTabs, cx));
         view.update(cx, |view, cx| view.run_palette_action(PaletteAction::CloseOtherTabs, window, cx));
         assert_eq!(view.read(cx).open_tabs, vec!["thread-b".to_string()]);
-        assert!(!view.read(cx).palette_action_available(&PaletteAction::CloseOtherTabs));
+        assert!(!view.read(cx).palette_action_available(&PaletteAction::CloseOtherTabs, cx));
     })
     .unwrap();
 }

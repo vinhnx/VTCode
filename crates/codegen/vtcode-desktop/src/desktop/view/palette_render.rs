@@ -35,7 +35,8 @@ impl DesktopView {
                     entries
                         .iter()
                         .filter(|entry| {
-                            self.palette_kind == PaletteKind::AddContext || self.palette_action_available(&entry.action)
+                            self.palette_kind == PaletteKind::AddContext
+                                || self.palette_action_available(&entry.action, cx)
                         })
                         .cloned()
                         .collect::<Vec<_>>(),
@@ -372,7 +373,7 @@ impl DesktopView {
                 let description = entry.description.clone();
                 let query = palette_query.clone();
                 let selected = self.is_current_palette_action(&entry.action);
-                let enabled = self.palette_action_available(&entry.action);
+                let enabled = self.palette_action_available(&entry.action, cx);
                 let id = palette_entry_element_id(&entry.action);
                 let shortcut = self.palette_action_keystroke(&entry.action);
                 let accessible_label = description
@@ -685,6 +686,7 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         PaletteAction::NewSession
         | PaletteAction::CloseSession
         | PaletteAction::CopyThreadTitle
+        | PaletteAction::CopyFilePath
         | PaletteAction::CloseOtherTabs
         | PaletteAction::OpenInCli
         | PaletteAction::CopyLatestMessage

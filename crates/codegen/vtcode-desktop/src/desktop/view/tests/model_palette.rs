@@ -128,9 +128,9 @@ fn model_palette_route_availability_resolves_provider_alias(cx: &mut TestAppCont
         };
         // Deeplink-style codes must resolve through the catalog alias and
         // model-id casing instead of presenting a disabled row.
-        assert!(view.read(cx).palette_action_available(&route("google", "GEMINI-3.8-FLASH")));
+        assert!(view.read(cx).palette_action_available(&route("google", "GEMINI-3.8-FLASH"), cx));
         assert!(
-            !view.read(cx).palette_action_available(&route("google", "gemini-9-none")),
+            !view.read(cx).palette_action_available(&route("google", "gemini-9-none"), cx),
             "an uncatalogued route stays unavailable"
         );
     })

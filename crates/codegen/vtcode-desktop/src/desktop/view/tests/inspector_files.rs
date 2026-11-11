@@ -859,3 +859,65 @@ fn clicking_outside_closes_the_file_preview(cx: &mut TestAppContext) {
         assert!(view.read(cx).file_preview.is_none(), "preview state must be closed");
     });
 }
+
+#[gpui_kit::test]
+fn palette_copy_file_path_copies_selected_and_gates_on_selection(cx: &mut TestAppContext) {
+    use super::super::OpenWorkspaceFiles;
+    use super::super::PaletteAction;
+
+    let workspace = tempfile::TempDir::new().expect("temp workspace");
+    std::fs::write(workspace.path().join("README.md"), "# Notes").expect("write file");
+
+    let (window, view) = open_desktop(cx);
+    // Fresh view, Files never opened: no selection, command unavailable.
+    cx.update_window(window, |_, _, cx| {
+        assert!(!view.read(cx).palette_action_available(&PaletteAction::CopyFilePath, cx));
+    })
+    .unwrap();
+
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.refresh_files(cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        // The ⌘⇧E flow (not a bare tab click) auto-selects the first row.
+        window.dispatch_action(Box::new(OpenWorkspaceFiles), cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        // Single-file workspace: opening Files auto-selects README.md.
+        assert_eq!(file_tree_paths(&view, cx), vec!["README.md"]);
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert_eq!(window.find(palette_action_id(&PaletteAction::CopyFilePath)).label(), Some("Copy file path"));
+        assert!(view.read(cx).palette_action_available(&PaletteAction::CopyFilePath, cx));
+        view.update(cx, |view, cx| view.run_palette_action(PaletteAction::CopyFilePath, window, cx));
+    })
+    .unwrap();
+    let expected = workspace.path().join("README.md").display().to_string();
+    assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(expected.as_str()));
+
+    // A filter with no hits clears the selection: gated runs no-op.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.file_filter_input
+                .update(cx, |input, cx| input.set_value("zzz-no-match", window, cx));
+            view.rebuild_file_tree(cx);
+        });
+        window.render_frame(cx);
+        assert!(!view.read(cx).palette_action_available(&PaletteAction::CopyFilePath, cx));
+        view.update(cx, |view, cx| view.run_palette_action(PaletteAction::CopyFilePath, window, cx));
+    })
+    .unwrap();
+    assert_eq!(
+        cx.read_from_clipboard().unwrap().text().as_deref(),
+        Some(expected.as_str()),
+        "gated runs leave the clipboard alone"
+    );
+}

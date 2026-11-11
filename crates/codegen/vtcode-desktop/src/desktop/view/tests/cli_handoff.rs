@@ -322,9 +322,9 @@ fn cli_palette_entry_opens_the_handoff_card(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            assert!(!view.palette_action_available(&super::super::PaletteAction::OpenInCli));
+            assert!(!view.palette_action_available(&super::super::PaletteAction::OpenInCli, cx));
             view.selected_session_id = Some("sess-1".to_string());
-            assert!(view.palette_action_available(&super::super::PaletteAction::OpenInCli));
+            assert!(view.palette_action_available(&super::super::PaletteAction::OpenInCli, cx));
             view.run_palette_action(super::super::PaletteAction::OpenInCli, window, cx);
             let handoff = view.cli_handoff.as_ref().expect("palette entry opens the card");
             assert_eq!(handoff.command, "vtcode --fork-session sess-1");

@@ -368,7 +368,7 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
         view.update(cx, |view, cx| {
             view.running = true;
             assert!(
-                view.palette_action_available(&super::super::PaletteAction::CloseSession),
+                view.palette_action_available(&super::super::PaletteAction::CloseSession, cx),
                 "active work keeps session changes reachable through the confirm"
             );
             view.run_palette_action(super::super::PaletteAction::CloseSession, window, cx);

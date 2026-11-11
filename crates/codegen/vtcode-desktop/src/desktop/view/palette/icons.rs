@@ -12,7 +12,9 @@ pub(in crate::desktop::view) fn palette_action_icon(action: &PaletteAction) -> O
     let icon = match action {
         PaletteAction::NewSession => IconName::Plus,
         PaletteAction::CloseSession => IconName::X,
-        PaletteAction::CopyThreadTitle | PaletteAction::CopyLatestMessage => IconName::Copy,
+        PaletteAction::CopyThreadTitle | PaletteAction::CopyLatestMessage | PaletteAction::CopyFilePath => {
+            IconName::Copy
+        }
         PaletteAction::CloseOtherTabs => IconName::CopyX,
         PaletteAction::OpenInCli | PaletteAction::ShowActivityOutput { .. } => IconName::Terminal,
         PaletteAction::OpenConversationSearch { .. } | PaletteAction::OpenGoTo => IconName::Search,
@@ -53,6 +55,7 @@ mod tests {
             (PaletteAction::NewSession, Some(IconName::Plus)),
             (PaletteAction::CloseSession, Some(IconName::X)),
             (PaletteAction::CopyThreadTitle, Some(IconName::Copy)),
+            (PaletteAction::CopyFilePath, Some(IconName::Copy)),
             (PaletteAction::CloseOtherTabs, Some(IconName::CopyX)),
             (PaletteAction::OpenInCli, Some(IconName::Terminal)),
             (
@@ -143,6 +146,7 @@ mod tests {
             PaletteAction::NewSession,
             PaletteAction::CloseSession,
             PaletteAction::CopyThreadTitle,
+            PaletteAction::CopyFilePath,
             PaletteAction::CloseOtherTabs,
             PaletteAction::OpenInCli,
             PaletteAction::ChooseWorkspace,

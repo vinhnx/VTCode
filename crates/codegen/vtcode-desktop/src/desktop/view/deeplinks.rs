@@ -207,6 +207,7 @@ fn action_path(action: &PaletteAction) -> Option<String> {
         PaletteAction::NewSession => Some("action/new-session".to_string()),
         PaletteAction::CloseSession => Some("action/close-session".to_string()),
         PaletteAction::CopyThreadTitle => Some("action/copy-thread-title".to_string()),
+        PaletteAction::CopyFilePath => Some("action/copy-file-path".to_string()),
         PaletteAction::CloseOtherTabs => Some("action/close-other-tabs".to_string()),
         PaletteAction::OpenInCli => Some("action/open-in-cli".to_string()),
         PaletteAction::CopyLatestMessage => Some("action/copy-latest".to_string()),
@@ -385,6 +386,7 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
         "new-session" => exact(rest, PaletteAction::NewSession)?,
         "close-session" => exact(rest, PaletteAction::CloseSession)?,
         "copy-thread-title" => exact(rest, PaletteAction::CopyThreadTitle)?,
+        "copy-file-path" => exact(rest, PaletteAction::CopyFilePath)?,
         "close-other-tabs" => exact(rest, PaletteAction::CloseOtherTabs)?,
         "open-in-cli" => exact(rest, PaletteAction::OpenInCli)?,
         "copy-latest" => exact(rest, PaletteAction::CopyLatestMessage)?,
@@ -475,7 +477,7 @@ impl DesktopView {
                 // `run_palette_action` re-checks availability and no-ops when
                 // unreachable, so refused links leave state untouched; report
                 // reachability so `/go` surfaces the unavailable status error.
-                let reachable = self.palette_action_available(&action);
+                let reachable = self.palette_action_available(&action, cx);
                 self.run_palette_action(action, window, cx);
                 reachable
             }
@@ -867,6 +869,7 @@ mod tests {
             DeepLink::Action(PaletteAction::ToggleInspector),
             DeepLink::Action(PaletteAction::PreviewFile("src/main.rs".into())),
             DeepLink::Action(PaletteAction::CopyThreadTitle),
+            DeepLink::Action(PaletteAction::CopyFilePath),
             DeepLink::Action(PaletteAction::CloseOtherTabs),
             DeepLink::Changelog,
         ];

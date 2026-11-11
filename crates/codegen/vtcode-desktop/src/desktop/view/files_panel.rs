@@ -361,6 +361,13 @@ impl DesktopView {
         self.confirm_delete_file(&path, window, cx);
     }
 
+    pub(super) fn copy_selected_file_path(&self, cx: &mut App) {
+        let Some(path) = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()) else {
+            return;
+        };
+        self.copy_file_path(&path, cx);
+    }
+
     pub(super) fn open_file_preview(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(editor) = self.preferences.file_open_destination().external_editor() {
             // External mode never shows the overlay: cancel an in-flight viewer
