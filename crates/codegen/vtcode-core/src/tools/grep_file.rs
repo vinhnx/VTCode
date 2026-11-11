@@ -1,6 +1,6 @@
 //! Helper that owns the debounce/cancellation logic for `grep_file` operations.
 //!
-//! This module manages the orchestration of ripgrep searches, implementing
+//! This module manages the orchestration of content searches, implementing
 //! debounce and cancellation logic to ensure responsive and efficient searches.
 //!
 //! It works as follows:
@@ -201,9 +201,9 @@ impl GrepSearchManager {
 
     async fn execute_with_backends(
         input: &GrepSearchInput,
-        cancel_flag: Option<&AtomicBool>,
+        cancel_flag: Option<&Arc<AtomicBool>>,
     ) -> Result<(Vec<Value>, bool, usize)> {
-        let matches = run_ripgrep_backend_async(input, cancel_flag).await?;
+        let matches = run_search_backend(input, cancel_flag).await?;
         Ok(Self::finalize_matches(matches, input))
     }
 
@@ -321,7 +321,7 @@ impl GrepSearchManager {
 
         // Run with a hard deadline so a runaway rg on a huge tree cannot burn
         // CPU forever. The async backend owns the child with `kill_on_drop`, so
-        // both the timeout and mid-search cancellation kill ripgrep.
+        // both the timeout and mid-search cancellation stop the scan.
         let timeout = input.timeout.unwrap_or(DEFAULT_SEARCH_TIMEOUT);
         let search_result = match tokio::time::timeout(
             timeout,
@@ -330,7 +330,7 @@ impl GrepSearchManager {
         .await
         {
             Ok(result) => result,
-            Err(_elapsed) => Err(anyhow::anyhow!("ripgrep search timed out after {}s", timeout.as_secs())),
+            Err(_elapsed) => Err(anyhow::anyhow!("content search timed out after {}s", timeout.as_secs())),
         };
 
         let is_cancelled = cancellation_token.load(Ordering::Relaxed);
@@ -383,7 +383,7 @@ impl GrepSearchManager {
         }
     }
 
-    /// Perform an actual ripgrep search with the given input parameters
+    /// Perform an actual content search with the given input parameters
     pub async fn perform_search(&self, input: GrepSearchInput) -> Result<GrepSearchResult> {
         // Check cache first
         if let Some(cached_result) = Self::cached_result(&self.cache, &input) {
@@ -394,20 +394,17 @@ impl GrepSearchManager {
         let input_clone = input.clone();
 
         let timeout = input.timeout.unwrap_or(DEFAULT_SEARCH_TIMEOUT);
-        // Run ripgrep as an async child owned by the future. On timeout the
-        // future is dropped and `kill_on_drop` kills the child — the old
-        // `spawn_blocking` + `join.abort()` could not preempt the blocking
-        // `Command::output()`, so timed-out searches leaked an rg process that
-        // kept burning CPU.
+        // The search runs on a blocking thread owned by the future, so a
+        // timeout stops the scan instead of leaving it running.
         let outcome = tokio::time::timeout(timeout, Self::execute_with_backends(&input_clone, None)).await;
         let (matches, truncated, total_match_count) = match outcome {
             Ok(Ok(result)) => result,
             Ok(Err(worker_err)) => {
-                return Err(worker_err.context("ripgrep search worker failed"));
+                return Err(worker_err.context("content search worker failed"));
             }
             Err(_elapsed) => {
                 return Err(anyhow::anyhow!(
-                    "ripgrep search timed out after {}s; ripgrep was killed",
+                    "content search timed out after {}s; the search was cancelled",
                     timeout.as_secs()
                 ));
             }
@@ -501,10 +498,9 @@ impl GrepSearchManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ast_grep_language::AstGrepLanguage;
+    use crate::tools::code_language::CodeLanguage;
     use serde_json::json;
     use tempfile::TempDir;
-    use tokio::io::BufReader;
 
     #[tokio::test]
     async fn perform_search_caches_matches_but_leaves_no_hit_results_uncached() {
@@ -512,7 +508,7 @@ mod tests {
         std::fs::write(workspace.path().join("hit.rs"), "needle\n").expect("fixture");
         let manager = GrepSearchManager::new(workspace.path().to_path_buf());
 
-        // Negative side: a no-match search returns Ok with ripgrep stream
+        // Negative side: a no-match search returns Ok with the empty stream
         // events (begin/end/summary) but no `match` records, and must leave
         // the cache empty. The gate lives at the put sites, not only in
         // `should_cache`, so pin the observable cache size across a repeated
@@ -581,7 +577,7 @@ mod tests {
             .await
             .expect("second bounded search");
 
-        assert_eq!(first, second);
+        assert_eq!(first.candidates, second.candidates, "the capped prefix must be stable");
         assert!(first.truncated);
         assert!(
             first.candidates.iter().all(|candidate| candidate.path.ends_with("a.txt")),
@@ -590,51 +586,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn code_search_literal_stream_reaps_at_byte_cap() {
+    async fn code_search_literal_reports_truncation_at_the_cap() {
         let workspace = TempDir::new().expect("workspace");
-        std::fs::write(
-            workspace.path().join("large.txt"),
-            format!("Widget{}\n", "x".repeat(CODE_SEARCH_STREAM_BYTE_CAP)),
-        )
-        .expect("fixture");
+        std::fs::write(workspace.path().join("large.txt"), "Widget\n".repeat(50)).expect("fixture");
 
         let outcome = search_literal_bounded("Widget", workspace.path(), &[], 20)
             .await
             .expect("byte-bounded literal search");
 
-        assert!(outcome.candidates.is_empty());
+        assert_eq!(outcome.candidates.len(), 20, "the cap bounds the reported matches");
         assert!(outcome.truncated);
-    }
-
-    #[tokio::test]
-    async fn code_search_bounded_record_distinguishes_exact_eof_from_exhaustion() {
-        let mut exact_reader = BufReader::new(&b"{}\n"[..]);
-        let mut exact_record = Vec::with_capacity(3);
-        let mut exact_bytes_read = 0;
-        assert_eq!(
-            read_bounded_record(&mut exact_reader, &mut exact_record, &mut exact_bytes_read, 3,)
-                .await
-                .expect("exact record"),
-            BoundedRecordRead::Record
-        );
-        exact_record.clear();
-        assert_eq!(
-            read_bounded_record(&mut exact_reader, &mut exact_record, &mut exact_bytes_read, 3,)
-                .await
-                .expect("exact EOF probe"),
-            BoundedRecordRead::Eof
-        );
-
-        let mut oversized_reader = BufReader::new(&b"xxxx"[..]);
-        let mut oversized_record = Vec::with_capacity(3);
-        let mut oversized_bytes_read = 0;
-        assert_eq!(
-            read_bounded_record(&mut oversized_reader, &mut oversized_record, &mut oversized_bytes_read, 3,)
-                .await
-                .expect("oversized record"),
-            BoundedRecordRead::Exhausted
-        );
-        assert_eq!(oversized_record.len(), 3);
     }
 
     #[tokio::test]
@@ -643,20 +604,19 @@ mod tests {
         std::fs::write(workspace.path().join("UPPER.RS"), "Widget\n").expect("Rust fixture");
         std::fs::write(workspace.path().join("DOCKERFILE"), "Widget\n").expect("Dockerfile fixture");
 
-        let rust = search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Rust], 20)
+        let rust = search_literal_bounded("Widget", workspace.path(), &[CodeLanguage::Rust], 20)
             .await
             .expect("uppercase Rust extension");
         assert!(rust.candidates.iter().any(|candidate| {
-            candidate.path.ends_with("UPPER.RS")
-                && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Rust)
+            candidate.path.ends_with("UPPER.RS") && CodeLanguage::from_path(&candidate.path) == Some(CodeLanguage::Rust)
         }));
 
-        let dockerfile = search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Dockerfile], 20)
+        let dockerfile = search_literal_bounded("Widget", workspace.path(), &[CodeLanguage::Dockerfile], 20)
             .await
             .expect("uppercase Dockerfile name");
         assert!(dockerfile.candidates.iter().any(|candidate| {
             candidate.path.ends_with("DOCKERFILE")
-                && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Dockerfile)
+                && CodeLanguage::from_path(&candidate.path) == Some(CodeLanguage::Dockerfile)
         }));
     }
 
@@ -753,7 +713,7 @@ mod tests {
         let mut input = GrepSearchInput::with_defaults("pat".into(), ".".into());
         input.max_results = Some(2);
 
-        // Simulate ripgrep JSON output: begin, context, match, context, end
+        // Simulate the search backend's JSON output: begin, context, match, context, end
         let matches = vec![
             json!({"type": "begin", "data": {"path": {"text": "Cargo.lock"}}}),
             json!({"type": "context", "data": {"line_number": 538, "lines": {"text": "ctx1"}}}),

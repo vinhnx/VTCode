@@ -21,15 +21,19 @@ it has complete declaration information for the searched file. Bash usage classi
 without supported usage classification can still produce text, path, and available definition results, while the model
 can reason about their source text directly.
 
+Declarations are recognised with per-language patterns rather than a full parse, so a declaration is a line that
+*declares* a name (a `fn`, `class`, `struct`, or `def` form) rather than any mention of it. Text search itself is a
+plain literal or regular-expression scan over the workspace.
+
 ## Tree-sitter Security Parsing (Bash)
 
 While general code analysis is text-based, **Bash/Shell scripts** are explicitly parsed using
 [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to ensure security.
 
-| Language               | Extensions     | Analysis Method                                                    | Safety Level                             |
-| ---------------------- | -------------- | ------------------------------------------------------------------ | ---------------------------------------- |
-| Bash/Shell             | `.sh`, `.bash` | Tree-sitter AST                                                    | **High** (Parsed for command validation) |
-| Other source languages | Any            | Focused search, bundled parsers where supported, and LLM reasoning | **Standard**                             |
+| Language               | Extensions     | Analysis Method                                          | Safety Level                             |
+| ---------------------- | -------------- | -------------------------------------------------------- | ---------------------------------------- |
+| Bash/Shell             | `.sh`, `.bash` | Tree-sitter AST                                          | **High** (Parsed for command validation) |
+| Other source languages | Any            | Native text search, declaration patterns, and LLM reasoning | **Standard**                             |
 
 ### Why use Tree-sitter for Bash?
 

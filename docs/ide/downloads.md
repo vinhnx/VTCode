@@ -6,7 +6,7 @@ VT Code is distributed as a CLI. Install the CLI and run it from your terminal.
 
 VT Code is a Rust-based AI coding assistant that provides:
 
-- **Semantic Code Understanding**: LLM-native code understanding and ripgrep integration
+- **Semantic Code Understanding**: LLM-native code understanding and a built-in search engine
 - **Multi-Provider AI**: Support for OpenAI, Anthropic, Google, xAI, DeepSeek, and more
 - **Security First**: Built-in safeguards with human-in-the-loop controls
 - **Offline Analysis**: Analyze your codebase without sending code to external services

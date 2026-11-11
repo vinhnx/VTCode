@@ -150,74 +150,19 @@ python3 scripts/check_unsafe_docs.py --mode enforce
 
 ### Structural Rule Checks
 
-VT Code bundles a generic `ast-grep` project scaffold and materializes it into the current workspace when you run
-`vtcode init`.
+The repository carries its own `ast-grep` project scaffold (`sgconfig.yml`, `rules/`, `rule-tests/`). The `ast-grep`
+CLI is a developer tool invoked directly; it is not a VT Code runtime dependency and VT Code never installs it.
 
 ```bash
-# Install ast-grep if needed
-vtcode dependencies install ast-grep
-
-# Materialize sgconfig.yml, rules/, and rule-tests/ in the current workspace
-vtcode init
-
-# Run the VT Code check entrypoint
-vtcode check ast-grep
+# Run the rule tests and the repository scan through the repo wrapper
+./scripts/check.sh ast-grep
 
 # Or run the underlying ast-grep commands directly
 ast-grep test --config sgconfig.yml
-
-# Scan the repository with the configured rules
 ast-grep scan --config sgconfig.yml
-
-# Legacy repo wrapper around `vtcode check ast-grep`
-./scripts/check.sh ast-grep
 ```
 
-If `ast-grep` is not installed yet, run `vtcode dependencies install ast-grep`. If the workspace does not have
-`sgconfig.yml` yet, run `vtcode init` before invoking the check command. If a user asks for ast-grep installation or
-first-use help, route them to the bundled `ast-grep` skill before falling back to external package-manager instructions.
-
-For ast-grep rule authoring guidance, use the bundled `ast-grep` skill. It now covers the atomic / relational /
-composite / utility rule cheat sheet, the YAML config cheat sheet, and CLI iteration with `scan --rule` and
-`scan --inline-rules`. That skill also covers project bootstrapping with `ast-grep new` / `ast-grep new rule`, though
-this repository already includes the required scaffold. Rewrite workflows such as `ast-grep run --rewrite`, YAML string
-`fix`, `FixConfig`, and `expandStart` or `expandEnd` are intentionally routed through that skill, including comma and
-list-item cleanup cases where the rewritten range must grow beyond the matched node. CLI-only topics such as `--stdin`,
-raw `--json`, `scan -r`, `lsp`, shell completions, and GitHub Action setup are also documented there. When ast-grep rule
-syntax is not expressive enough, that skill now also documents when to switch to ast-grep’s JavaScript/Python/Rust API
-instead of piling more complexity into YAML. It also covers ast-grep pattern syntax itself, including `$VAR`, `$$$ARGS`,
-`$_`, `$$VAR`, object-style patterns when fragments are ambiguous, rule-object features such as positive root-rule
-requirements, limited `kind` ESQuery syntax, `nthChild` formulas / `reverse` / `ofRule`, `range`, relational `field`,
-`stopBy`, and local/global utility rules, plus config keys and semantics such as `url`, `metadata`, `constraints`,
-`severity`, `message`, `note`, `labels`, `files`, `ignores`, `transform`, `fix`, `rewriters`, `caseInsensitive` glob
-objects, YAML `---` rule separators, `severity: off`, `--include-metadata`, `./` glob pitfalls, and `files` / `ignores`
-precedence. It also covers FAQ-style troubleshooting such as Playground and CLI differences, using
-`ast-grep run --debug-query`, incomplete fragments that need `context` plus `selector`, `kind` plus `pattern` pitfalls,
-rule-order sensitivity, multi-language guidance, naming-convention matching via `constraints.regex`, and ast-grep’s
-static-analysis limits. It also covers the high-level ast-grep workflow: pattern / YAML / API inputs, Tree-Sitter
-parsing, Rust tree matching, search/rewrite/lint/analyze scenarios, and why ast-grep scales well across CPU cores. It
-also covers pattern core concepts such as textual vs structural matching, CST vs AST, named vs unnamed nodes, `kind` vs
-`field`, and significant vs trivial syntax. It also covers pattern parsing details such as invalid / incomplete /
-ambiguous snippets, effective-node selection via `selector`, meta-variable detection rules, unnamed-node capture, lazy
-`$$$ARGS`, and when `expandoChar` matters. It also covers the match algorithm and strictness levels used by ast-grep
-commands. It also covers Find & Patch style rewrites such as `rewriters`, `transform.rewrite`, `joinBy`, and one-to-many
-rewrites like splitting barrel imports. It also covers transformation-object details such as `replace`, `substring`,
-`convert`, `toCase`, `separatedBy`, `CaseChange`, string-form transforms, and the experimental matching-order behavior
-of `transform.rewrite`. It also covers rewriter-specific rules such as required `id` / `rule` / `fix`, rewriter-local
-capture scope, rewriter-local `utils` / `transform`, and using sibling rewriters from the same list. It also covers
-`sgconfig.yml` itself in more detail: `ruleDirs`, `testConfigs`, `testDir`, `snapshotDir`, `utilDirs`, `languageGlobs`
-precedence, target-triple `libraryPath`, `languageSymbol`, and dynamic `injected` language selection through `$LANG`. It
-also covers custom language setup, including `customLanguages`, parser compilation with `tree-sitter build`, the
-`TREE_SITTER_LIBDIR` fallback, `expandoChar`, and parser inspection with `tree-sitter parse`. It also covers
-multi-language documents and language injection, including built-in HTML `<script>` / `<style>` extraction,
-`languageInjections`, `hostLanguage`, `injected`, `$CONTENT` captures, styled-components CSS, and GraphQL template
-literals. It also covers ast-grep’s built-in language catalog, alias selection for `--lang` / YAML `language`, built-in
-extension mapping, and when VT Code’s local inference subset differs from ast-grep’s full built-in list. It also covers
-the programmatic API surface in more concrete terms: Node NAPI `parse` / `kind` / `pattern`, `Lang`, `SgRoot`, `SgNode`,
-`NapiConfig`, Python `SgRoot` / `SgNode`, edit objects, and the deprecation of language-specific JS objects like
-`js.parse(...)`. Quick-start guidance there also covers shell quoting for metavariables, Linux `ast-grep` vs `sg`, and
-the optional-chaining rewrite example. Catalog-style example discovery and adaptation are also routed there, especially
-when examples depend on `constraints`, `utils`, `transform`, `rewriters`, or built-in fixes.
+The wrapper skips the scan when `ast-grep` is not on `PATH`; the release gate (`./scripts/check.sh`) requires it.
 
 ### Integration Tests
 

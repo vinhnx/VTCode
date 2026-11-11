@@ -25,8 +25,6 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BIN_NAME="vtcode"
 GITHUB_API="https://api.github.com/repos/$REPO/releases?per_page=10"
 GITHUB_RELEASES="https://github.com/$REPO/releases/download"
-WITH_AST_GREP=0
-WITH_SEARCH_TOOLS=1
 WITH_COMPLETIONS=0
 WITH_DESKTOP=1
 WITH_DESKTOP_EXPLICIT=0
@@ -60,18 +58,6 @@ log_error() {
 
 log_warning() {
     printf '%b\n' "${YELLOW}⚠${NC} $1" >&2
-}
-
-install_optional_dependency() {
-    local target_path="$1"
-    local dependency="$2"
-    local label="$3"
-
-    if "$target_path" dependencies install "$dependency"; then
-        log_success "$label installed"
-    else
-        log_warning "Failed to install $label. You can retry later with: $target_path dependencies install $dependency"
-    fi
 }
 
 # Spinner for long running tasks
@@ -865,16 +851,6 @@ main() {
         log_warning "Could not verify installation, but binary appears to be installed"
     fi
 
-    if [[ "$WITH_SEARCH_TOOLS" -eq 1 ]]; then
-        echo ""
-        log_info "Installing search tools (ripgrep + ast-grep)..."
-        install_optional_dependency "$target_path" "search-tools" "search tools"
-    elif [[ "$WITH_AST_GREP" -eq 1 ]]; then
-        echo ""
-        log_info "Installing ast-grep..."
-        install_optional_dependency "$target_path" "ast-grep" "ast-grep"
-    fi
-
     local desktop_choice=0; resolve_desktop_choice || desktop_choice=$?
     if (( desktop_choice == 1 )); then
         WITH_DESKTOP=0
@@ -910,9 +886,6 @@ Usage: ./install.sh [options]
 
 Options:
   -d, --dir DIR      Installation directory (default: ~/.local/bin)
-  --with-search-tools Install ripgrep and ast-grep after VT Code is installed (default)
-  --without-search-tools Skip ripgrep and ast-grep during install
-  --with-ast-grep    Install VT Code-managed ast-grep after VT Code is installed
   --with-completions Install man page and shell completions (bash/zsh/fish)
   --with-desktop     Install the macOS desktop app without prompting (fails if unavailable)
   --without-desktop  Skip the macOS desktop app without prompting
@@ -923,9 +896,7 @@ install). The app installs from a prebuilt release asset (no toolchain);
 releases without one fall back to a from-source build.
 
 Examples:
-  ./install.sh                           # Install VT Code, ripgrep, ast-grep (asks about the desktop app on macOS)
-  ./install.sh --without-search-tools    # Install VT Code only
-  ./install.sh --with-ast-grep           # Install VT Code and managed ast-grep only
+  ./install.sh                           # Install VT Code (asks about the desktop app on macOS)
   ./install.sh --with-completions        # Install with man page and shell completions
   ./install.sh --with-desktop            # Require the macOS desktop app (fail if unavailable)
   ./install.sh --without-desktop         # Skip the macOS desktop app
@@ -951,20 +922,6 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_usage
             exit 0
-            ;;
-        --with-ast-grep)
-            WITH_AST_GREP=1
-            shift
-            ;;
-        --with-search-tools)
-            WITH_SEARCH_TOOLS=1
-            WITH_AST_GREP=1
-            shift
-            ;;
-        --without-search-tools)
-            WITH_SEARCH_TOOLS=0
-            WITH_AST_GREP=0
-            shift
             ;;
         --with-completions)
             WITH_COMPLETIONS=1

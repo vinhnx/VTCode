@@ -5,8 +5,6 @@ use super::*;
 #[serial]
 async fn code_search_fixture_composes_exact_classifications_deterministically() {
     let fixture = code_search_fixture();
-    let _keep_fake_outline_alive = &fixture.fake_outline;
-    let _override = set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
     let payload = json!({
         "query": "Widget",
         "path": "src",
@@ -231,7 +229,7 @@ async fn code_search_direct_file_path_search_never_returns_siblings() {
 async fn code_search_leading_dash_text_query_succeeds_on_single_file() {
     // Session session-vtcode-20261015T083154Z_961005-54191: text-only
     // `path=README.md` queries starting with `- ` failed with "all
-    // requested categories unavailable" because ripgrep parsed the leading
+    // requested categories unavailable" because the search backend parsed the leading
     // dash as flags. Asymmetric pair: dash-prefixed vs plain query must
     // both succeed on the same single file.
     let workspace = TempDir::new().expect("workspace");
@@ -288,8 +286,6 @@ async fn code_search_bash_usage_is_successfully_unsupported() {
 #[serial]
 async fn code_search_bash_definition_remains_available() {
     let fixture = code_search_fixture();
-    let _fake_outline_dir = &fixture.fake_outline;
-    let _override = set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
     let response = execute(
         fixture.workspace.path(),
         request(json!({

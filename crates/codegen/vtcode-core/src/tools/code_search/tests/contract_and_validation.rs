@@ -7,7 +7,6 @@ fn code_search_unavailable_error_retains_bounded_backend_context() {
     let Err(error) = aggregate_search_results(SearchAggregationInputs {
         scope,
         languages: vec![],
-        query: "Widget".into(),
         result_types: vec![CodeSearchResultType::Text],
         max_results: 5,
         definition_enabled: false,
@@ -174,7 +173,7 @@ fn complete_stream_does_not_override_explicitly_incomplete_inventory() {
     let inventories =
         HashMap::from([(canonical_source, DeclarationInventory { complete: false, exact_name_ranges: Vec::new() })]);
 
-    assert!(!scope::has_complete_supported_inventory(&scope, &[AstGrepLanguage::Rust], true, &inventories,));
+    assert!(!scope::has_complete_supported_inventory(&scope, &[CodeLanguage::Rust], true, &inventories,));
 }
 #[test]
 fn code_search_semantic_validation_rejects_invalid_values() {

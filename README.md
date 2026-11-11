@@ -11,6 +11,8 @@
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-BFB38F?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
+[![GitHub stars](https://img.shields.io/github/stars/vinhnx/VTCode)](https://github.com/vinhnx/VTCode)
+[![GitHub forks](https://img.shields.io/github/forks/vinhnx/VTCode)](https://github.com/vinhnx/VTCode/forks)
 
 <!-- NB: not https://deepwiki.com/badge.svg — that route is behind a Vercel bot
   challenge, so GitHub's camo proxy gets 429 and renders the alt text instead.
@@ -38,6 +40,10 @@
 
 VT Code is a terminal-first coding agent for your repo, in the CLI and native macOS app.
 Context, tool calls, and execution policy stay auditable and resumable across long tasks.
+
+VT Code is open source under **MIT OR Apache-2.0**. You are welcome to fork it, use it, copy it, modify it,
+and build on it for personal or commercial work, and to contribute improvements back upstream. See
+[Contributing](#contributing) and [License](#license) below.
 
 | At a glance      | What you get                                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -225,8 +231,21 @@ Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/V
 
 ## Contributing
 
-Contributions welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
-output). Read the [contribution guide](./docs/CONTRIBUTING.md) before opening a PR.
+VT Code is open source and community-driven. Forking, modifying, and contributing are all welcome.
+
+- **Fork and modify:** fork the repo, copy or use the code, and adapt it to your own workflow, stack, or
+  product. You can keep changes in your fork or send them back as a pull request, both are encouraged.
+- **Contribute upstream:** code, docs, [evals](./docs/guides/eval.md), bug fixes, and feature work are
+  welcome. Bug reports should include `vtcode trajectory` output where possible.
+- **Start small:** pick a [good first issue](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) or
+  [help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted) item, or open a discussion with your idea.
+- **Before you open a PR:** read the [contribution guide](./docs/CONTRIBUTING.md) and keep changes focused,
+  tested, and documented.
+
+If you fork and ship your own variant, keep the license and third-party notices intact (see [License](#license)).
+
+If VT Code helps you, please star the repo and share it with others who might like it. Stars help new users
+find the project, and shares bring in more contributors, feedback, and sponsors.
 
 ## Security
 
@@ -239,6 +258,7 @@ reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See the [s
   [Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
   [Discussions](https://github.com/vinhnx/VTCode/discussions)
 - [Good first issues](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted)
+- [Star the repo](https://github.com/vinhnx/VTCode) · [Fork the repo](https://github.com/vinhnx/VTCode/forks)
 
 The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
 Contact: `vinhnguyen2308 [at] gmail [dot] com`.
@@ -327,6 +347,9 @@ figure it out together.
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnz?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
 
+If you like VT Code, please star the repo and share it with others. Starring helps the project get discovered,
+and sharing brings in new users, contributors, and sponsors. Thank you for growing the community.
+
 ## Thank you
 
 <a
@@ -347,5 +370,7 @@ figure it out together.
 ## License
 
 First-party code is **MIT OR Apache-2.0**, available under either [LICENSE-MIT](LICENSE-MIT) or
-[LICENSE](LICENSE) (Apache-2.0). Third-party code keeps its original licenses, listed in
-[THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
+[LICENSE](LICENSE) (Apache-2.0). You are welcome to fork, use, copy, modify, merge, publish, distribute,
+sublicense, and sell copies of the code, for personal or commercial use, under either license. Keep the
+license and copyright notices when you distribute copies. Third-party code keeps its original licenses,
+listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).

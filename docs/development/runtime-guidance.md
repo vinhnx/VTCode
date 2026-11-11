@@ -76,17 +76,15 @@ Headless evaluator tracker updates address only unmet requirements from the user
 contract and identify the missing observable check. Optional improvements and out-of-scope observations remain
 advisory residual risks or generalization notes; they cannot independently fail the run or expand its acceptance criteria.
 
-The literal ripgrep and declaration-outline backends own their children across cancellation (`kill_on_drop`) and
-explicitly kill and wait on stream errors or truncation, sharing the same stream-error cleanup helper. Nonzero backend
-exits retain their exit status in bounded unavailable-category context. Pattern `-e` and path `--` separators remain
-required for ripgrep. Declaration discovery resolves the installed binary directly and uses outline execution as its
-availability check, avoiding a blocking per-query version subprocess. Explicit installer and readiness version checks
-share a private probe with a two-second deadline for execution and pipe collection, and a 64 KiB limit per stdout/stderr
-stream. Timeouts and overflows return errors after stopping and reaping the direct child. A joined worker with its own
-Tokio runtime keeps the existing synchronous status APIs usable from both ordinary and Tokio callers; these APIs still
-wait synchronously, now within the probe's deadline plus cleanup. Empty output, nonzero exits, and missing executables
-retain their existing status categories. Ast-grep error messages preserve the cause chain, including timeout/output caps.
-No probe installs tools. This independently applies the deadline/reap pattern verified in
+The literal-search and declaration backends run natively: the content-search engine walks the tree with the `ignore`
+crate and matches lines with the `regex` crate, and the declaration scanner recognises per-language declaration
+patterns. Both run on a blocking thread owned by the future, so a timeout or mid-search cancellation stops the scan
+rather than leaving it running. A failed or unavailable backend reports its category as unavailable rather than
+fabricating results, and the same bounded unavailable-category context applies to both backends.
+
+The search runtime snapshot reports the readiness of the native backends and of the bash safety parser, so the
+startup surface stays a single place to check whether search is usable. This independently applies the
+deadline/reap pattern verified in
 [Codex's synchronous probe](https://github.com/openai/codex/blob/5fff6378d6ab9730bc7cfbd5eb58f1867a5f14c0/codex-rs/tui/src/tui/tmux.rs)
 and its [cleanup regression](https://github.com/openai/codex/blob/5fff6378d6ab9730bc7cfbd5eb58f1867a5f14c0/codex-rs/tui/src/tui/tmux_tests.rs);
 VT Code uses bounded asynchronous pipes to avoid temporary output files or detached pipe-reader threads.

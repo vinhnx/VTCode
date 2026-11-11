@@ -5,7 +5,7 @@ use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use super::super::matcher::{PatchContextMatcher, redacted_context_matches, seek_segment};
-use super::super::semantic::{resolve_semantic_match, semantic_anchor_term};
+use super::super::semantic::{resolve_semantic_match, semantic_anchor_terms};
 use super::io::AtomicWriter;
 use super::{PatchChunk, PatchError};
 
@@ -171,25 +171,34 @@ async fn compute_replacements_with_inspection(
                 && context_found
                 && redacted_context_matches(original_lines, &old_segment, line_index, chunk.is_end_of_file()));
 
-        if found.is_none() && chunk.change_context().and_then(semantic_anchor_term).is_some() {
+        // The semantic path is a fallback: it runs only when the literal
+        // context search failed and the anchor names a symbol. Computing the
+        // anchor terms compiles the language's declaration patterns, so it is
+        // left to the path that needs it.
+        if found.is_none()
+            && let Some(anchor_terms) = chunk
+                .change_context()
+                .map(|context| semantic_anchor_terms(source_path, context))
+                .filter(|terms| !terms.is_empty())
+        {
             match resolve_semantic_match(
                 source_path,
                 path,
                 original_lines,
                 chunk,
+                &anchor_terms,
                 old_segment.clone(),
                 new_segment.clone(),
-            )
-            .await
-            {
+            ) {
                 Ok(semantic) => {
                     found = Some(semantic.start_idx);
                     old_segment = semantic.old_segment;
                     new_segment = semantic.new_segment;
                 }
                 Err(PatchError::SemanticResolutionFailed { reason, .. }) if reason.contains("unsupported language") => {
-                    // Language not supported by ast-grep (e.g. markdown, yaml).
-                    // Fall back to exact text search from the beginning of the file.
+                    // The language has no declaration support (e.g. markdown,
+                    // yaml). Fall back to exact text search from the beginning
+                    // of the file.
                     found = seek_segment(&matcher, &mut old_segment, &mut new_segment, 0, chunk.is_end_of_file());
                     redacted_match |= found.is_none()
                         && redacted_context_matches(original_lines, &old_segment, 0, chunk.is_end_of_file());

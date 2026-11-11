@@ -43,7 +43,7 @@
 //!
 //! #### File Operations
 //! - **File Operations**: Read, write, create, delete files
-//! - **Search Tools**: grep_file with ripgrep for fast regex-based pattern matching, glob patterns, type filtering
+//! - **Search Tools**: native content search for fast regex-based pattern matching, glob patterns, type filtering
 //! - **Cache Management**: File caching and performance optimization
 //!
 //! #### Terminal Integration
@@ -120,10 +120,8 @@
 
 pub mod apply_patch;
 pub use apply_patch::mutation_target_paths;
-pub mod ast_grep_binary;
-pub mod ast_grep_installer;
-pub(crate) mod ast_grep_language;
 pub mod builder;
+pub(crate) mod code_language;
 pub mod constants;
 pub mod error_messages;
 pub(crate) mod rate_limit_config;
@@ -176,8 +174,6 @@ pub mod registry;
 pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
-pub mod ripgrep_binary;
-pub mod ripgrep_installer;
 pub mod safety_gateway;
 pub mod search_metrics;
 pub(crate) mod search_runtime;
@@ -190,7 +186,6 @@ pub mod terminal_app;
 pub mod tool_effectiveness;
 pub mod tool_intent;
 pub mod traits;
-pub(crate) mod tree_sitter_runtime;
 pub mod types;
 pub mod validation;
 pub mod validation_cache;
@@ -212,7 +207,6 @@ pub mod improvement_algorithms;
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
-mod install_support;
 pub mod optimized_registry;
 pub mod output_spooler;
 pub mod pattern_engine;
@@ -221,7 +215,6 @@ pub mod unified_error;
 pub mod untrusted_data;
 
 // Re-export main types and traits for backward compatibility
-pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus, ast_grep_manual_install_guide};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use command_cache::PermissionCache;
@@ -254,7 +247,6 @@ pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as SplitToolResult};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry};
-pub use ripgrep_installer::{RipgrepStatus, ripgrep_manual_install_guide};
 pub use safety_gateway::{
     SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
     SafetyTrustLevel,

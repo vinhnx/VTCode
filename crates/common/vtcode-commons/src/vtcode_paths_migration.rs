@@ -298,18 +298,6 @@ fn legacy_mappings(paths: &VtCodePaths) -> Vec<LegacyMapping> {
     ] {
         add_mapping(&mut mappings, legacy, name, paths.state_dir().join(name));
     }
-    add_mapping(
-        &mut mappings,
-        legacy,
-        "ast_grep_install_cache.json",
-        paths.cache_dir().join("ast-grep/install.json"),
-    );
-    add_mapping(
-        &mut mappings,
-        legacy,
-        "ripgrep_install_cache.json",
-        paths.cache_dir().join("ripgrep/ripgrep_install_cache.json"),
-    );
     // Before the centralized path policy, DotManager kept cache, logs,
     // sessions, and backups directly below the configuration directory. On
     // native platforms that directory is still the current config root, so

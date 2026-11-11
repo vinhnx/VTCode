@@ -94,7 +94,7 @@ run_vtcode_command() {
         return $?
     fi
 
-    print_error "VT Code is not available. Install it or build the local binary before running '$0 ast-grep'."
+    print_error "VT Code is not available. Install it or build the local binary before running '$0'."
     return 1
 }
 
@@ -264,21 +264,30 @@ run_release_contract_tests() {
 
 run_ast_grep_scan() {
     local require_binary="${1:-optional}"
-    if [ "$require_binary" != "required" ]; then
-        if ! find_ast_grep > /dev/null 2>&1; then
-            print_warning "ast-grep is not available. Skipping repository scan. Install it with 'vtcode dependencies install ast-grep'."
+    local ast_grep
+    if ! ast_grep="$(find_ast_grep)"; then
+        if [ "$require_binary" != "required" ]; then
+            print_warning "ast-grep is not available. Skipping repository scan."
             return 0
         fi
+        print_error "ast-grep is required but was not found on PATH."
+        return 1
     fi
 
-    print_status "Running ast-grep rule tests and scan via VT Code..."
-    if run_vtcode_command check ast-grep; then
-        print_success "ast-grep rules passed!"
-        return 0
+    print_status "Running ast-grep rule tests..."
+    if ! "$ast_grep" test --config sgconfig.yml; then
+        print_error "ast-grep rule tests failed."
+        return 1
     fi
 
-    print_error "VT Code ast-grep check failed."
-    return 1
+    print_status "Running ast-grep repository scan..."
+    if ! "$ast_grep" scan --config sgconfig.yml; then
+        print_error "ast-grep scan found issues."
+        return 1
+    fi
+
+    print_success "ast-grep rules passed!"
+    return 0
 }
 
 # Run focused harness regression tests called out in docs/harness/QUALITY_SCORE.md.

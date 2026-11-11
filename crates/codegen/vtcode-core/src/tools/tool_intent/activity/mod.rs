@@ -304,15 +304,11 @@ pub fn exec_mutation_should_incur_debt(command: &str, output: &Value) -> bool {
     if exec_output_has_changes(output) {
         return true;
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&tree_sitter_bash::LANGUAGE.into()).is_err() {
-        return true;
-    }
-    let Some(tree) = parser.parse(command, None) else {
+    let Ok(tree) = crate::command_safety::shell_parser::BashTree::parse(command) else {
         return true;
     };
-    let root = tree.root_node();
-    root.has_error() || root.named_child_count() == 0 || !nonmutating_shell_node(root, command)
+    let root = tree.root();
+    tree.has_error() || root.named_children().is_empty() || !nonmutating_shell_node(root)
 }
 
 pub(crate) fn exec_output_has_changes(output: &Value) -> bool {
@@ -376,33 +372,26 @@ fn is_quoted_variable_file_test(text: &str) -> bool {
 
 /// Walk every supported node, including commands nested in substitutions.
 /// Unlike command extraction, this proof must never discard unknown syntax.
-fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
+fn nonmutating_shell_node(node: crate::command_safety::shell_parser::BashNode<'_>) -> bool {
     use crate::command_safety::shell_parser::contains_dynamic_shell_syntax;
-    let Ok(text) = node.utf8_text(source.as_bytes()) else {
-        return false;
-    };
+    let text = node.text();
     match node.kind() {
         "test_command" => return is_quoted_variable_file_test(text),
         "command" => {
-            let Some(name) = node.child_by_field_name("name") else {
+            let Some(name) = node.field("name") else {
                 return false;
             };
-            let Ok(name_text) = name.utf8_text(source.as_bytes()) else {
-                return false;
-            };
+            let name_text = name.text();
             if contains_dynamic_shell_syntax(name_text) {
                 return false;
             }
             let mut words = Vec::new();
-            let mut cursor = node.walk();
-            for child in node.named_children(&mut cursor) {
-                let Ok(word) = child.utf8_text(source.as_bytes()) else {
-                    return false;
-                };
+            for child in node.named_children() {
+                let word = child.text();
                 if child.kind() == "variable_assignment" {
                     return false;
                 }
-                if child != name
+                if child.start_byte() != name.start_byte()
                     && child.kind() == "word"
                     && (is_literal_path_glob(word)
                         || (matches!(name_text, "grep" | "egrep" | "fgrep" | "rg") && is_literal_grep_filter(word)))
@@ -500,8 +489,7 @@ fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
         }
         _ => return false,
     }
-    let mut cursor = node.walk();
-    node.children(&mut cursor).all(|child| nonmutating_shell_node(child, source))
+    node.children().iter().all(|child| nonmutating_shell_node(*child))
 }
 
 #[cfg(test)]

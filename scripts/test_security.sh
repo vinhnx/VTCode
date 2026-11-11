@@ -75,7 +75,7 @@ echo -e "\n・ Testing GrepFileTool Restrictions"
 echo "===================================="
 
 # Test that GrepFileTool operates in read-only mode
-test_allowed_command "grep_file" "GrepFileTool allows ripgrep" "rg"
+test_allowed_command "grep_file" "GrepFileTool allows rg" "rg"
 test_allowed_command "grep_file" "GrepFileTool allows find" "find"
 test_allowed_command "grep_file" "GrepFileTool allows ls" "ls"
 test_blocked_command "grep_file" "GrepFileTool blocks rm" "rm" "Not in allowed commands"

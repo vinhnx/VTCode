@@ -10,13 +10,13 @@ fn code_search_file_type_aliases_share_canonical_mapping() {
     .expect("aliases normalise");
     assert_eq!(request.filters.file_types, ["c", "javascript", "md", "proto", "dockerfile"]);
     for (path, language) in [
-        ("include/widget.h", AstGrepLanguage::C),
-        ("web/widget.jsx", AstGrepLanguage::JavaScript),
-        ("docs/widget.mdx", AstGrepLanguage::Markdown),
-        ("api/widget.proto", AstGrepLanguage::Protobuf),
-        ("Dockerfile", AstGrepLanguage::Dockerfile),
+        ("include/widget.h", CodeLanguage::C),
+        ("web/widget.jsx", CodeLanguage::JavaScript),
+        ("docs/widget.mdx", CodeLanguage::Markdown),
+        ("api/widget.proto", CodeLanguage::Protobuf),
+        ("Dockerfile", CodeLanguage::Dockerfile),
     ] {
-        assert_eq!(AstGrepLanguage::from_path(Path::new(path)), Some(language));
+        assert_eq!(CodeLanguage::from_path(Path::new(path)), Some(language));
     }
 }
 #[cfg(unix)]
@@ -43,10 +43,10 @@ async fn code_search_rejects_symlink_escape() {
 }
 #[tokio::test]
 #[serial]
-async fn code_search_contains_definition_failure_by_requested_category() {
+async fn code_search_reports_definitions_and_usages_for_supported_languages() {
     let fixture = code_search_fixture();
-    let _override = set_ast_grep_binary_override_for_tests(None);
-    let definition_only = execute(
+
+    let definitions = execute(
         fixture.workspace.path(),
         request(json!({
             "query": "Widget",
@@ -54,10 +54,17 @@ async fn code_search_contains_definition_failure_by_requested_category() {
             "result_types": ["definition"]
         })),
     )
-    .await;
-    assert!(definition_only.is_err());
+    .await
+    .expect("definition search succeeds");
+    assert!(
+        definitions
+            .results
+            .iter()
+            .any(|result| result.result_type == CodeSearchResultType::Definition),
+        "the Rust function declaration is reported as a definition"
+    );
 
-    let usage_only = execute(
+    let usages = execute(
         fixture.workspace.path(),
         request(json!({
             "query": "Widget",
@@ -65,26 +72,15 @@ async fn code_search_contains_definition_failure_by_requested_category() {
             "result_types": ["usage"]
         })),
     )
-    .await;
-    assert!(usage_only.is_err());
-
-    let mixed = execute(
-        fixture.workspace.path(),
-        request(json!({
-            "query": "Widget",
-            "path": "src/widget.rs",
-            "result_types": ["definition", "text"]
-        })),
-    )
     .await
-    .expect("text keeps mixed request successful");
+    .expect("usage search succeeds");
     assert!(
-        mixed
+        usages
             .results
             .iter()
-            .all(|result| result.result_type == CodeSearchResultType::Text)
+            .any(|result| result.result_type == CodeSearchResultType::Usage),
+        "the call site is reported as a usage"
     );
-    assert!(mixed.hints.iter().any(|hint| hint.contains("definition")));
 }
 #[test]
 fn code_search_incomplete_declaration_inventory_preserves_text() {
@@ -96,7 +92,7 @@ fn code_search_incomplete_declaration_inventory_preserves_text() {
     let mut candidates = Vec::new();
     backends::classify_literal_candidates(
         &scope,
-        &[AstGrepLanguage::Rust],
+        &[CodeLanguage::Rust],
         vec![LiteralSearchCandidate {
             path: fixture.workspace.path().join("src/widget.rs"),
             line: 1,
@@ -105,6 +101,7 @@ fn code_search_incomplete_declaration_inventory_preserves_text() {
             byte_end: 9,
             matched_text: "Widget".to_string(),
             snippet: "fn Widget() {\n".to_string(),
+            word_bounded: true,
         }],
         true,
         true,
@@ -140,13 +137,14 @@ fn code_search_skips_empty_declaration_file_without_dropping_text() {
             byte_end: call_start + "Widget".len(),
             matched_text: "Widget".to_string(),
             snippet: "    Widget();".to_string(),
+            word_bounded: true,
         }],
         truncated: false,
     };
     let declaration_outcome = DeclarationSearchOutcome {
         files: vec![DeclarationFileRecord {
             path: canonical,
-            language: AstGrepLanguage::Rust,
+            language: CodeLanguage::Rust,
             declarations: Vec::new(),
             complete: true,
         }],
@@ -156,8 +154,7 @@ fn code_search_skips_empty_declaration_file_without_dropping_text() {
 
     let aggregation = aggregate_search_results(SearchAggregationInputs {
         scope,
-        languages: vec![AstGrepLanguage::Rust],
-        query: "Widget".to_string(),
+        languages: vec![CodeLanguage::Rust],
         result_types: vec![CodeSearchResultType::Definition, CodeSearchResultType::Text],
         max_results: 100,
         definition_enabled: true,

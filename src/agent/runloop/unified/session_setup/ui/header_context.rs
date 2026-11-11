@@ -47,9 +47,6 @@ pub(super) async fn initialize_header_context(
     }
     let persistent_memory_status = persistent_memory_status.ok().flatten();
 
-    if let Some(notice) = session_bootstrap.search_tools_notice.as_ref() {
-        notice.render(renderer)?;
-    }
     if let Some(notice) = session_bootstrap.desktop_notice.as_ref() {
         notice.render(renderer)?;
     }

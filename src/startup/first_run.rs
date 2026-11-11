@@ -15,7 +15,6 @@ use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, update_workspace_trust
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use vtcode_core::{initialize_dot_folder, update_model_preference};
 
-use super::dependency_advisories::render_optional_search_tools_notice;
 use super::first_run_prompts::{
     default_model_for_provider, prompt_api_key_interactive, prompt_lightweight_model, prompt_model,
     prompt_persistent_memory, prompt_provider, prompt_reasoning_effort, prompt_trust,
@@ -207,7 +206,6 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
         trust,
         storage_mode,
     )?;
-    render_optional_search_tools_notice(&mut renderer).await?;
     renderer.line(
         MessageStyle::Status,
         "Tip: run `/init` anytime to rerun this setup and refresh other workspace defaults.",

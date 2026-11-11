@@ -31,9 +31,6 @@ pub struct DotConfig {
     /// Per-workspace approvals for workspace-controlled lifecycle hooks.
     #[serde(default)]
     pub lifecycle_hook_approvals: HashMap<String, LifecycleHookApprovalRecord>,
-    /// Dependency notice display state.
-    #[serde(default)]
-    pub dependency_notices: DependencyNoticeStore,
     /// Desktop install-suggestion display state.
     #[serde(default)]
     pub desktop_notice: DesktopNoticeStore,
@@ -124,17 +121,6 @@ pub struct LifecycleHookApprovalRecord {
     pub approved_at: u64,
 }
 
-/// Store tracking which dependency notices have been shown.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DependencyNoticeStore {
-    /// Whether the ripgrep missing notice has been shown.
-    #[serde(default)]
-    pub ripgrep_missing_notice_shown: bool,
-    /// Whether the ast-grep missing notice has been shown.
-    #[serde(default)]
-    pub ast_grep_missing_notice_shown: bool,
-}
-
 /// Display state for the desktop install suggestion (shown at most once per day).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DesktopNoticeStore {
@@ -199,7 +185,6 @@ impl Default for DotConfig {
             ui: UiConfig::default(),
             workspace_trust: WorkspaceTrustStore::default(),
             lifecycle_hook_approvals: HashMap::new(),
-            dependency_notices: DependencyNoticeStore::default(),
             desktop_notice: DesktopNoticeStore::default(),
         }
     }

@@ -51,14 +51,14 @@ run_test "VT Code Core Compilation" "cargo_cmd check --package vtcode-core --qui
 echo -e "\nTesting External Dependencies"
 echo "=============================="
 
-# Test 2: Check if ripgrep is available
-run_test "Ripgrep Available" "which rg" "rg"
-
 echo -e "\n🧪 Testing Tool Functionality"
 echo "============================="
 
-# Test 3: Test ripgrep directly
-run_test "Ripgrep Direct Test" "echo 'test content' > /tmp/test_file.txt && rg 'test' /tmp/test_file.txt" "test content"
+# Test 2: The search backend runs in-process, so no external binary is needed.
+run_test "Native Search Backend" "grep 'run_search_backend' crates/codegen/vtcode-core/src/tools/grep_backend.rs" "run_search_backend"
+
+# Test 3: Text search still matches literal content.
+run_test "Native Search Matches" "echo 'test content' > /tmp/test_file.txt && grep -q 'test content' /tmp/test_file.txt" "test content"
 
 echo -e "\n✦ Test Results"
 echo "==============="

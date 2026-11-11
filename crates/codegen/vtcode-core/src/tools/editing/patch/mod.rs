@@ -3,18 +3,15 @@ use std::path::Path;
 use anyhow::anyhow;
 
 mod applicator;
+mod semantic;
 pub(crate) use applicator::inspection_replacements;
 mod error;
 mod matcher;
 mod parser;
 mod path;
-mod semantic;
 
 #[doc(hidden)]
-pub(crate) use crate::tools::ast_grep_binary::is_binary_override_missing;
-pub use crate::tools::ast_grep_binary::{AstGrepBinaryOverrideGuard, set_ast_grep_binary_override_for_tests};
 pub use error::PatchError;
-pub(crate) use semantic::resolve_ast_grep_binary_path;
 
 /// Represents a single diff line inside a patch hunk.
 #[derive(Debug, Clone, PartialEq, Eq)]

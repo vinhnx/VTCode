@@ -1,83 +1,100 @@
+//! Native semantic `@@` anchor resolution for `apply_patch`.
+//!
+//! A patch hunk may carry a semantic anchor (`@@ fn deploy`) instead of
+//! literal context lines. The anchor names a symbol, and the hunk is applied
+//! relative to where that symbol is declared.
+//!
+//! This replaces the external `ast-grep` binary that VT Code used to
+//! download and spawn for the same purpose. The declarations come from the
+//! same scanner that backs `code_search`, so the two features agree on what a
+//! declaration is and where it sits.
+
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::path::Path;
+use std::sync::LazyLock;
 
-use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::Deserialize;
-use tokio::process::Command;
 
-use super::matcher::{PatchContextMatcher, normalise_text, redacted_context_matches, seek_segment};
-use super::{PatchChunk, PatchError};
-use crate::tools::ast_grep_binary::{
-    AST_GREP_INSTALL_COMMAND, AST_GREP_OVERRIDE, AstGrepBinaryOverride, missing_ast_grep_message,
-    resolve_ast_grep_binary_from_env_and_fs,
-};
-use crate::tools::ast_grep_language::AstGrepLanguage;
+use crate::tools::code_language::CodeLanguage;
+use crate::tools::editing::patch::error::PatchError;
+use crate::tools::outline_search;
 
-static IDENTIFIER_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("semantic identifier regex must compile"));
+use super::PatchChunk;
+use super::matcher::{PatchContextMatcher, redacted_context_matches, seek_segment};
 
+/// A resolved semantic match.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SemanticMatch {
-    pub(crate) start_idx: usize,
-    pub(crate) old_segment: Vec<String>,
-    pub(crate) new_segment: Vec<String>,
+    /// Zero-based index of the first replaced line.
+    pub start_idx: usize,
+    /// The lines being replaced.
+    pub old_segment: Vec<String>,
+    /// The lines replacing them.
+    pub new_segment: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct AstGrepJsonMatch {
-    text: String,
-    range: AstGrepRange,
+static IDENTIFIER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("identifier pattern"));
+
+/// The declaration names a semantic anchor may refer to.
+///
+/// An anchor that reads like a declaration header (`@@ fn deploy`,
+/// `@@ impl Trait for Type`) is read with the *same* grammar that recognises
+/// declarations in source, so the anchor names exactly what the file-side
+/// scanner records — no keyword list has to be kept in sync by hand.
+///
+/// Any other anchor (`@@ deploy`) falls back to the identifiers it contains.
+/// A keyword such as `fn` is therefore only a candidate when the file really
+/// declares something by that name, which keeps a keyword-only anchor from
+/// resolving.
+///
+/// The names are lowercased because declarations are matched
+/// case-insensitively.
+pub(crate) fn semantic_anchor_terms(source_path: &Path, anchor: &str) -> Vec<String> {
+    let terms = match declaration_language(source_path) {
+        Some(language) => outline_search::declaration_names_in_anchor(anchor, language),
+        None => Vec::new(),
+    };
+    let terms = if terms.is_empty() {
+        identifier_terms(anchor)
+    } else {
+        terms
+    };
+    terms.into_iter().map(|term| term.to_ascii_lowercase()).collect()
 }
 
-#[derive(Debug, Deserialize)]
-struct AstGrepRange {
-    start: AstGrepPoint,
-    end: AstGrepPoint,
+/// The identifiers an anchor contains, in sorted order.
+fn identifier_terms(anchor: &str) -> Vec<String> {
+    let mut terms: Vec<String> = IDENTIFIER_RE
+        .find_iter(anchor)
+        .map(|matched| matched.as_str().to_ascii_lowercase())
+        .collect();
+    terms.sort();
+    terms.dedup();
+    terms
 }
 
-#[derive(Debug, Deserialize)]
-struct AstGrepPoint {
-    line: usize,
+/// The language a semantic anchor can be resolved in.
+///
+/// A language without declaration support (markdown, yaml, plain text) has no
+/// structural anchors, so the caller falls back to exact text search.
+fn declaration_language(source_path: &Path) -> Option<CodeLanguage> {
+    let language = CodeLanguage::from_path(source_path)?;
+    outline_search::supports_declarations(language).then_some(language)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct StructuralCandidate {
-    start_line: usize,
-    end_line: usize,
-}
-
-impl StructuralCandidate {
-    fn from_match(entry: AstGrepJsonMatch, file_lines: &[String], primary_term: &str) -> Option<Self> {
-        if file_lines.is_empty() {
-            return None;
-        }
-
-        let normalized_text = normalise_text(&entry.text).to_lowercase();
-        if !normalized_text.contains(primary_term) {
-            return None;
-        }
-
-        let start_line = entry.range.start.line.min(file_lines.len().saturating_sub(1));
-        let end_line = entry.range.end.line.min(file_lines.len().saturating_sub(1));
-        if start_line > end_line {
-            return None;
-        }
-
-        Some(Self { start_line, end_line })
-    }
-
-    fn end_exclusive(self, file_len: usize) -> usize {
-        self.end_line.saturating_add(1).min(file_len)
-    }
-}
-
-pub(crate) async fn resolve_semantic_match(
+/// Resolves a semantic anchor and locates the hunk relative to it.
+///
+/// The anchor names the symbol the hunk belongs to. The declaration of that
+/// symbol gives the position the hunk is applied from, exactly like the
+/// numeric `@@ -12` hunk header gives a starting line. A hunk that matches
+/// once resolves; a hunk that matches in several places is ambiguous.
+pub(crate) fn resolve_semantic_match(
     source_path: &Path,
     display_path: &str,
     original_lines: &[String],
     chunk: &PatchChunk,
+    terms: &[String],
     old_segment: Vec<String>,
     new_segment: Vec<String>,
 ) -> Result<SemanticMatch, PatchError> {
@@ -85,29 +102,28 @@ pub(crate) async fn resolve_semantic_match(
         .change_context()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| PatchError::SemanticResolutionFailed {
+        .unwrap_or_default();
+
+    let Some(language) = declaration_language(source_path) else {
+        return Err(PatchError::SemanticResolutionFailed {
             path: display_path.to_string(),
-            anchor: String::new(),
-            reason: "missing semantic @@ anchor".to_string(),
-        })?;
+            anchor: anchor.to_string(),
+            reason: "unsupported language for semantic fallback".to_string(),
+        });
+    };
 
-    let language = AstGrepLanguage::from_path(source_path).ok_or_else(|| PatchError::SemanticResolutionFailed {
-        path: display_path.to_string(),
-        anchor: anchor.to_string(),
-        reason: "unsupported language for semantic fallback".to_string(),
-    })?;
+    if terms.is_empty() {
+        return Err(PatchError::SemanticResolutionFailed {
+            path: display_path.to_string(),
+            anchor: anchor.to_string(),
+            reason: "anchor does not contain a usable symbol name".to_string(),
+        });
+    }
 
-    let ast_grep = resolve_ast_grep_binary(display_path, anchor)?;
-    let primary_term = semantic_anchor_term(anchor).ok_or_else(|| PatchError::SemanticResolutionFailed {
-        path: display_path.to_string(),
-        anchor: anchor.to_string(),
-        reason: "anchor does not contain a usable symbol name".to_string(),
-    })?;
-
-    let candidates =
-        collect_candidates(&ast_grep, language, source_path, original_lines, &primary_term, display_path, anchor)
-            .await?;
-
+    // The declarations come from the same scanner that backs `code_search`, so
+    // both features agree on what a declaration is and where it sits.
+    let source = original_lines.join("\n");
+    let candidates = outline_search::declarations_named(&source, language, terms);
     if candidates.is_empty() {
         return Err(PatchError::SemanticResolutionFailed {
             path: display_path.to_string(),
@@ -116,30 +132,27 @@ pub(crate) async fn resolve_semantic_match(
         });
     }
 
-    let mut resolved = BTreeMap::new();
+    // The anchor is a *hint*: the hunk is located from the declaration
+    // onwards, exactly like a numeric `@@ -12` hunk header.
+    let matcher = PatchContextMatcher::new(original_lines);
+    let mut resolved: BTreeMap<usize, SemanticMatch> = BTreeMap::new();
     let mut redacted_match = false;
-
-    for candidate in candidates {
-        let end_exclusive = candidate.end_exclusive(original_lines.len());
-        if candidate.start_line >= end_exclusive {
-            continue;
-        }
-
+    for candidate in &candidates {
+        let start = candidate.line.saturating_sub(1);
         let mut candidate_old = old_segment.clone();
         let mut candidate_new = new_segment.clone();
-        let candidate_lines = &original_lines[candidate.start_line..end_exclusive];
-
-        let candidate_matcher = PatchContextMatcher::new(candidate_lines);
-        if let Some(local_start) =
-            seek_segment(&candidate_matcher, &mut candidate_old, &mut candidate_new, 0, chunk.is_end_of_file())
-        {
-            resolved.entry(candidate.start_line + local_start).or_insert(SemanticMatch {
-                start_idx: candidate.start_line + local_start,
-                old_segment: candidate_old,
-                new_segment: candidate_new,
-            });
-        } else {
-            redacted_match |= redacted_context_matches(candidate_lines, &candidate_old, 0, chunk.is_end_of_file());
+        match seek_segment(&matcher, &mut candidate_old, &mut candidate_new, start, chunk.is_end_of_file()) {
+            Some(start_idx) => {
+                resolved.entry(start_idx).or_insert(SemanticMatch {
+                    start_idx,
+                    old_segment: candidate_old,
+                    new_segment: candidate_new,
+                });
+            }
+            None => {
+                redacted_match |=
+                    redacted_context_matches(original_lines, &candidate_old, start, chunk.is_end_of_file());
+            }
         }
     }
 
@@ -168,145 +181,64 @@ pub(crate) async fn resolve_semantic_match(
     }
 }
 
-fn resolve_ast_grep_binary(display_path: &str, anchor: &str) -> Result<PathBuf, PatchError> {
-    resolve_ast_grep_binary_path().map_err(|reason| PatchError::SemanticResolutionFailed {
-        path: display_path.to_string(),
-        anchor: anchor.to_string(),
-        reason,
-    })
-}
-
-pub(crate) fn resolve_ast_grep_binary_path() -> Result<PathBuf, String> {
-    match AST_GREP_OVERRIDE
-        .lock()
-        .map_err(|error| format!("ast-grep override mutex must not be poisoned: {error}"))?
-        .clone()
-    {
-        AstGrepBinaryOverride::System => {}
-        AstGrepBinaryOverride::Missing => {
-            return Err(missing_ast_grep_message("Use exact context lines if you cannot install it."));
-        }
-        AstGrepBinaryOverride::Path(path) => return Ok(path),
-    }
-
-    if let Some(path) = resolve_ast_grep_binary_from_env_and_fs() {
-        return Ok(path);
-    }
-
-    Err(missing_ast_grep_message(&format!(
-        "Use exact context lines if you cannot install it with `{AST_GREP_INSTALL_COMMAND}`."
-    )))
-}
-
-async fn collect_candidates(
-    ast_grep: &Path,
-    language: AstGrepLanguage,
-    source_path: &Path,
-    original_lines: &[String],
-    primary_term: &str,
-    display_path: &str,
-    anchor: &str,
-) -> Result<Vec<StructuralCandidate>, PatchError> {
-    let output = Command::new(ast_grep)
-        .arg("run")
-        .arg("--pattern=$A")
-        .arg("--lang")
-        .arg(language.as_str())
-        .arg("--json=stream")
-        .arg(source_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|err| PatchError::SemanticResolutionFailed {
-            path: display_path.to_string(),
-            anchor: anchor.to_string(),
-            reason: format!("failed to run ast-grep: {err}"),
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail = stderr.trim();
-        return Err(PatchError::SemanticResolutionFailed {
-            path: display_path.to_string(),
-            anchor: anchor.to_string(),
-            reason: if detail.is_empty() {
-                "ast-grep failed to analyze the file".to_string()
-            } else {
-                format!("ast-grep failed to analyze the file: {detail}")
-            },
-        });
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut candidates = Vec::new();
-
-    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        let parsed =
-            serde_json::from_str::<AstGrepJsonMatch>(line).map_err(|err| PatchError::SemanticResolutionFailed {
-                path: display_path.to_string(),
-                anchor: anchor.to_string(),
-                reason: format!("failed to parse ast-grep output: {err}"),
-            })?;
-
-        if let Some(candidate) = StructuralCandidate::from_match(parsed, original_lines, primary_term) {
-            candidates.push(candidate);
-        }
-    }
-
-    candidates.sort_unstable();
-    candidates.dedup();
-    Ok(candidates)
-}
-
-pub(crate) fn semantic_anchor_term(anchor: &str) -> Option<String> {
-    const STOPWORDS: &[&str] = &[
-        "async",
-        "class",
-        "const",
-        "crate",
-        "def",
-        "enum",
-        "export",
-        "fn",
-        "for",
-        "function",
-        "impl",
-        "interface",
-        "let",
-        "mod",
-        "module",
-        "private",
-        "protected",
-        "pub",
-        "public",
-        "self",
-        "super",
-        "static",
-        "struct",
-        "trait",
-        "type",
-        "void",
-        "where",
-    ];
-
-    IDENTIFIER_RE
-        .find_iter(anchor)
-        .map(|m| m.as_str().to_ascii_lowercase())
-        .find(|term| !STOPWORDS.iter().any(|stopword| term == stopword))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::semantic_anchor_term;
+    use super::{identifier_terms, semantic_anchor_terms};
+    use crate::tools::code_language::CodeLanguage;
+    use crate::tools::outline_search;
+    use std::path::Path;
 
-    #[test]
-    fn semantic_anchor_term_skips_rust_visibility_noise() {
-        assert_eq!(semantic_anchor_term("pub(crate) fn second() -> usize"), Some("second".to_string()));
+    fn terms(anchor: &str) -> Vec<String> {
+        semantic_anchor_terms(Path::new("lib.rs"), anchor)
     }
 
     #[test]
-    fn semantic_anchor_term_prefers_symbol_name_after_keywords() {
-        assert_eq!(semantic_anchor_term("impl ToolDefinition for ProviderTool"), Some("tooldefinition".to_string()));
+    fn anchor_terms_read_a_rust_function_header() {
+        assert_eq!(
+            terms("pub(crate) fn second() -> usize"),
+            vec!["second".to_string()],
+            "the return type must not be mistaken for the declared name"
+        );
+    }
+
+    #[test]
+    fn anchor_terms_read_a_rust_impl_header() {
+        assert_eq!(
+            terms("impl ToolDefinition for ProviderTool"),
+            vec!["providertool".to_string()],
+            "the impl names the type it implements, like the file-side scanner"
+        );
+    }
+
+    #[test]
+    fn anchor_terms_read_a_python_class_header() {
+        assert_eq!(semantic_anchor_terms(Path::new("lib.py"), "class Widget"), vec!["widget".to_string()]);
+    }
+
+    #[test]
+    fn anchor_terms_fall_back_to_the_identifiers_of_a_bare_anchor() {
+        assert_eq!(terms("deploy"), vec!["deploy".to_string()]);
+    }
+
+    #[test]
+    fn a_keyword_only_anchor_matches_no_declaration() {
+        let candidates = outline_search::declarations_named("fn deploy() {}\n", CodeLanguage::Rust, &terms("fn"));
+        assert!(candidates.is_empty(), "a keyword names no declaration");
+    }
+
+    #[test]
+    fn anchor_terms_are_stable_across_repeated_resolution() {
+        // The declaration patterns are memoized per language, so a second
+        // resolution must not observe a poisoned or empty cache entry.
+        assert_eq!(terms("impl ToolDefinition for ProviderTool"), terms("impl ToolDefinition for ProviderTool"));
+        assert_eq!(
+            semantic_anchor_terms(Path::new("lib.py"), "class Widget"),
+            semantic_anchor_terms(Path::new("lib.py"), "class Widget")
+        );
+    }
+
+    #[test]
+    fn identifier_terms_split_on_non_identifier_characters() {
+        assert_eq!(identifier_terms("ProviderTool::run"), vec!["providertool".to_string(), "run".to_string()]);
     }
 }

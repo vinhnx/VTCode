@@ -77,10 +77,9 @@ Session-independent knowledge lives in `.vtcode/memory/` (gitignored, repo-local
 | Harness PTY/TUI | `./scripts/check.sh harness` |
 | Release/PR | `./scripts/check.sh` |
 | Unsafe-docs gate | `./scripts/check.sh unsafe-docs` |
-| Ast-grep rules | `vtcode check ast-grep` |
 | Hawk dead-code/visibility | `./scripts/hawk.sh` |
 | Hawk (deny warnings) | `./scripts/hawk.sh --deny` |
-| Ast-grep scan | `ast-grep scan` (requires `sgconfig.yml` + `rules/`) |
+| Ast-grep rules | `./scripts/check.sh ast-grep` (requires `sgconfig.yml` + `rules/`) |
 
 ## Testing
 
@@ -97,5 +96,5 @@ Session-independent knowledge lives in `.vtcode/memory/` (gitignored, repo-local
 - Project skills live in `.agents/skills/<name>/SKILL.md`; only `rust-skills` is linked into `.claude/skills/`. Where an agent does not load `.agents/skills/`, read the named `SKILL.md` directly.
 - LLM providers: use the `adding-llm-providers` skill. The `/model` picker uses `ModelId::all_models()`; `builtin_model_presets()` is used by `ModelsManager`. Both may need updates.
 - New workspace crates: use the `adding-workspace-crate` skill. This affects more than `Cargo.toml`; all workspace path dependencies need `version` fields.
-- Structural code work: `ast-grep` (never the `sg` alias) for code shape and codemods, `rg` for prose and config. GitHub: prefer `gh` over webfetch; on 403 run `unset GITHUB_TOKEN && gh auth switch -u vinhnx` ([root notes](docs/development/maintainer-notes/root.md#skills--special-workflows)).
+- Structural code work: `ast-grep` (never `sg`) for code shape and codemods, `rg` for prose and config; both are developer tools, not runtime deps. GitHub: prefer `gh` over webfetch; on 403 run `unset GITHUB_TOKEN && gh auth switch -u vinhnx` ([root notes](docs/development/maintainer-notes/root.md#skills--special-workflows)).
 - Cap large output with `| head -c 4000`, but never pipe verifier commands (it masks their exit status); in VT Code pass `max_output_tokens`.

@@ -4,53 +4,49 @@
     reason = "Intentional compatibility, platform, test, or API-shape suppression."
 )]
 #![cfg(unix)]
-use assert_cmd::Command;
 use std::fs;
-use std::path::PathBuf;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+
 use tempfile::TempDir;
 
-fn create_fake_vtcode(temp_dir: &TempDir) -> PathBuf {
-    let fake_vtcode = temp_dir.path().join("vtcode");
+/// Writes an executable stub that records the arguments it was called with.
+fn create_fake_ast_grep(temp_dir: &Path, name: &str, args_log: &Path) -> PathBuf {
+    let binary = temp_dir.join(name);
+    // The log is appended to so every invocation is recorded, not just the last.
     let body = format!(
         "#!/bin/sh\n\
-printf '%s\\n' \"$@\" > '{args_log}'\n\
-pwd > '{cwd_log}'\n",
-        args_log = temp_dir.path().join("vtcode-args.log").display(),
-        cwd_log = temp_dir.path().join("vtcode-cwd.log").display(),
+printf '%s\\n' \"$@\" >> '{}'\n\
+exit 0\n",
+        args_log.display(),
     );
-    fs::write(&fake_vtcode, body).expect("write fake vtcode");
+    fs::write(&binary, body).expect("write fake ast-grep");
 
-    use std::os::unix::fs::PermissionsExt;
-
-    let mut permissions = fs::metadata(&fake_vtcode).expect("metadata").permissions();
+    let mut permissions = fs::metadata(&binary).expect("metadata").permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(&fake_vtcode, permissions).expect("chmod");
+    fs::set_permissions(&binary, permissions).expect("chmod");
 
-    fake_vtcode
+    binary
 }
 
 #[test]
-fn check_script_delegates_ast_grep_to_vtcode_command() {
+fn check_script_runs_ast_grep_test_and_scan_directly() {
     let fake_bin = TempDir::new().expect("fake bin");
-    let _fake_vtcode = create_fake_vtcode(&fake_bin);
-    let current_path = std::env::var_os("PATH").unwrap_or_default();
+    let args_log = fake_bin.path().join("ast-grep-args.log");
+    let _fake_ast_grep = create_fake_ast_grep(fake_bin.path(), "ast-grep", &args_log);
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    let mut command = Command::new("bash");
-    let _configured_command = command
-        .current_dir(&workspace)
-        .arg("scripts/check.sh")
-        .arg("ast-grep")
-        .env("PATH", current_path)
-        .env("VTCODE_CHECK_SCRIPT_VTCODE_BIN", fake_bin.path().join("vtcode"));
+    let mut command = std::process::Command::new("bash");
+    let _configured_command = command.current_dir(&workspace).arg("scripts/check.sh").arg("ast-grep").env(
+        "PATH",
+        format!("{}:{}", fake_bin.path().display(), std::env::var_os("PATH").unwrap_or_default().to_string_lossy()),
+    );
 
-    let _assertion = command.assert().success();
+    let status = command.status().expect("run check.sh ast-grep");
+    assert!(status.success(), "the ast-grep gate must succeed when the stub passes");
 
-    let args = fs::read_to_string(fake_bin.path().join("vtcode-args.log")).expect("read args log");
-    assert_eq!(args.lines().collect::<Vec<_>>(), ["check", "ast-grep"]);
-
-    let cwd = fs::read_to_string(fake_bin.path().join("vtcode-cwd.log")).expect("read cwd log");
-    // `getcwd` may report a different path case than `CARGO_MANIFEST_DIR` on a
-    // case-insensitive filesystem (e.g. macOS APFS), so compare case-insensitively.
-    assert_eq!(cwd.trim().to_lowercase(), workspace.display().to_string().to_lowercase());
+    let args = fs::read_to_string(&args_log).expect("read args log");
+    let calls: Vec<&str> = args.lines().collect();
+    let subcommands: Vec<&str> = calls.iter().copied().filter(|arg| *arg == "test" || *arg == "scan").collect();
+    assert_eq!(subcommands, ["test", "scan"], "the rule tests run first, then the repository scan");
 }

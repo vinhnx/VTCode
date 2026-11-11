@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::tools::ast_grep_language::AstGrepLanguage;
+use crate::tools::code_language::CodeLanguage;
 use crate::tools::code_search::CodeSearchFilters;
-use crate::tools::tree_sitter_runtime::usage_node_kind_allowlist;
 use crate::types::CompactStr;
 use vtcode_commons::canonicalize;
 use vtcode_commons::exclusions::is_sensitive_file;
@@ -26,29 +25,27 @@ pub struct UsageScopeSupport {
     pub requested_unsupported_file_types: bool,
 }
 
-pub fn requested_languages(filters: &CodeSearchFilters) -> Vec<AstGrepLanguage> {
+pub fn requested_languages(filters: &CodeSearchFilters) -> Vec<CodeLanguage> {
     filters
         .file_types
         .iter()
-        .filter_map(|value| AstGrepLanguage::from_user_value(value))
+        .filter_map(|value| CodeLanguage::from_user_value(value))
         .collect()
 }
 
-pub fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[AstGrepLanguage]) -> UsageScopeSupport {
+pub fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[CodeLanguage]) -> UsageScopeSupport {
     let mut support = UsageScopeSupport {
-        requested_unsupported_file_types: languages
-            .iter()
-            .any(|language| usage_node_kind_allowlist(*language).is_none()),
+        requested_unsupported_file_types: languages.iter().any(|language| !language.supports_usage_classification()),
         ..UsageScopeSupport::default()
     };
     for path in &scope.allowed_files {
-        let Some(language) = AstGrepLanguage::from_path(path) else {
+        let Some(language) = CodeLanguage::from_path(path) else {
             continue;
         };
         if !languages.is_empty() && !languages.contains(&language) {
             continue;
         }
-        if usage_node_kind_allowlist(language).is_some() {
+        if language.supports_usage_classification() {
             support.has_supported_files = true;
         } else {
             support.has_unsupported_files = true;
@@ -59,15 +56,15 @@ pub fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[AstGrepLang
 
 pub fn has_complete_supported_inventory(
     scope: &ResolvedSearchScope,
-    languages: &[AstGrepLanguage],
+    languages: &[CodeLanguage],
     stream_complete: bool,
     inventories: &HashMap<PathBuf, super::DeclarationInventory>,
 ) -> bool {
     scope.allowed_files.iter().any(|path| {
-        let Some(language) = AstGrepLanguage::from_path(path) else {
+        let Some(language) = CodeLanguage::from_path(path) else {
             return false;
         };
-        if (!languages.is_empty() && !languages.contains(&language)) || usage_node_kind_allowlist(language).is_none() {
+        if (!languages.is_empty() && !languages.contains(&language)) || !language.supports_usage_classification() {
             return false;
         }
         inventories.get(path).map_or(stream_complete, |inventory| inventory.complete)
@@ -164,7 +161,7 @@ pub fn accepted_candidate_path(
     scope: &ResolvedSearchScope,
     base: &Path,
     candidate: &Path,
-    languages: &[AstGrepLanguage],
+    languages: &[CodeLanguage],
 ) -> Option<(PathBuf, CompactStr)> {
     let path = if candidate.is_absolute() {
         candidate.to_path_buf()
@@ -184,7 +181,7 @@ pub fn accepted_candidate_path(
         return None;
     }
     let language_matches = languages.is_empty()
-        || AstGrepLanguage::from_path(&canonical).is_some_and(|language| languages.contains(&language));
+        || CodeLanguage::from_path(&canonical).is_some_and(|language| languages.contains(&language));
     if !language_matches {
         return None;
     }

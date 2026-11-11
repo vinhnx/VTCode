@@ -269,30 +269,6 @@ fn migration_copies_pre_xdg_config_root_cache_and_state() {
 }
 
 #[test]
-fn migration_copies_legacy_installer_backoff_caches() {
-    let temp = tempdir().expect("tempdir");
-    let paths = migration_paths(&temp);
-    let old_ast_cache = paths.legacy_home_dir().join("ast_grep_install_cache.json");
-    let old_ripgrep_cache = paths.legacy_home_dir().join("ripgrep_install_cache.json");
-    fs::create_dir_all(paths.legacy_home_dir()).expect("legacy home directory");
-    for path in [&old_ast_cache, &old_ripgrep_cache] {
-        fs::write(path, path.file_name().expect("file name").to_string_lossy().as_bytes())
-            .expect("write legacy installer cache");
-    }
-
-    let report = paths.migrate_legacy().expect("migrate installer caches");
-
-    for (source, destination) in [
-        (old_ast_cache, paths.cache_dir().join("ast-grep/install.json")),
-        (old_ripgrep_cache, paths.cache_dir().join("ripgrep/ripgrep_install_cache.json")),
-    ] {
-        assert!(source.is_file());
-        assert_eq!(fs::read(&source).expect("read source"), fs::read(destination).expect("read destination"));
-    }
-    assert!(report.migrated.len() >= 2);
-}
-
-#[test]
 fn migration_reports_conflicts_and_excludes_tmp() {
     let temp = tempdir().expect("tempdir");
     let paths = migration_paths(&temp);

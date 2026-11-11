@@ -118,7 +118,7 @@ Example from our default prompt:
 
 ```text
 ## Context Strategy
-- Use search tools (rg, grep, ripgrep) to find relevant code before reading files
+- Use the search tools (grep_file, code_search) to find relevant code before reading files
 - Load file metadata (paths, sizes) as references; read content only when necessary
 - Summarize tool outputs; avoid echoing large results
 - Preserve recent decisions and errors in your working memory

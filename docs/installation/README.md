@@ -4,15 +4,12 @@ VT Code supports multiple installation methods. Choose the one that works best f
 
 ## Quick Install
 
-The default macOS/Linux native installer also attempts the recommended `ripgrep` + `ast-grep` bundle.
+VT Code is self-contained: it ships its own search engine and needs no external search binaries.
 
 ### macOS & Linux
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
-
-# Skip ripgrep + ast-grep if you only want VT Code
-curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s -- --without-search-tools
 ```
 
 ### Windows (PowerShell)

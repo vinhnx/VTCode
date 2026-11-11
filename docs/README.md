@@ -60,6 +60,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
   MiMo, Z.AI, Moonshot, MiniMax, HuggingFace
 - **LLM-Native Code Understanding** - Precise semantic analysis across all modern languages
 - **Bash Safety Parsing** - Accurate shell command validation via tree-sitter-bash
+- **Self-Contained Search** - Native content search and declaration lookup; no external search binaries to install
 - **Enterprise-Grade Safety** - Comprehensive security controls and path validation
 - **Flexible Configuration** - TOML-based configuration with granular policies
 - **Workspace-First Execution** - Full read/write/command capabilities anchored to `WORKSPACE_DIR` with built-in
@@ -174,7 +175,7 @@ Contributing to VT Code? Understand the architecture and development processes:
   Codex-style default tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
 - **[Defuddle Fetch](./tools/defuddle_fetch.md)** - Markdown extraction fallback for complex pages
-- **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
+- **[Code Standards](../AGENTS.md)** - Coding guidelines and best practices
 - **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and
   per-repository persistent memory
 
@@ -389,7 +390,7 @@ cargo clippy && cargo fmt
 ### Development Resources
 
 - **[Contributing Guide](./CONTRIBUTING.md)** - How to contribute
-- **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines
+- **[Code Standards](../AGENTS.md)** - Coding guidelines
 - **[Architecture Decisions](./ARCHITECTURE.md)** - Design rationale
 
 ## Support & Community

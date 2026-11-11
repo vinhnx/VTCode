@@ -38,14 +38,14 @@ fn description_keywords_drive_implicit_matches() {
 
 #[test]
 fn metadata_keywords_drive_implicit_matches() {
-    let mut ast_grep = manifest("ast-grep", "Structural search workflows");
-    ast_grep.metadata = Some(HashMap::from([
+    let mut refactor = manifest("refactor", "Structural search workflows");
+    refactor.metadata = Some(HashMap::from([
         ("keywords".to_string(), serde_json::json!(["tree-sitter parser"])),
         ("tags".to_string(), serde_json::json!(["optional chaining"])),
     ]));
 
-    let mentions = detect_skill_mentions("Debug an optional chaining rewrite", &[ast_grep]);
-    assert_eq!(mentions, vec!["ast-grep".to_string()]);
+    let mentions = detect_skill_mentions("Debug an optional chaining rewrite", &[refactor]);
+    assert_eq!(mentions, vec!["refactor".to_string()]);
 }
 
 #[test]

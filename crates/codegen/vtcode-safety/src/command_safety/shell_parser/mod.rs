@@ -19,75 +19,42 @@
 //! **Phase 4 Implementation**: Uses tree-sitter for accurate bash AST parsing.
 //! Falls back to basic tokenization for minimal shell syntax.
 
-use std::num::NonZeroUsize;
-use std::sync::Mutex;
-use std::sync::OnceLock;
+mod ast;
 
 use anyhow::Result;
-use lru::LruCache;
 
-/// Lazy-initialized tree-sitter bash parser (wrapped in Mutex for mutation)
-static BASH_PARSER: OnceLock<Result<Mutex<tree_sitter::Parser>, String>> = OnceLock::new();
+use ast::parse_bash_tree;
+pub use ast::{BashNode, BashTree, prewarm_bash_parser};
 
-/// Upper bound on cached parsed bash trees.
-const SHELL_TREE_CACHE_CAPACITY: usize = 256;
-
-/// Process-wide LRU of parsed bash trees keyed by source text.
+/// Parses a shell script into individual commands using tree-sitter bash grammar
 ///
-/// Command classification parses the *same* static script several times per
-/// validation: `contains_dynamic_find_syntax` (command extraction),
-/// `validate_redirection_paths` (AST walk), and `parse_shell_commands`
-/// (command extraction again) each run the grammar independently. A single
-/// `tree_sitter::Tree` is a cheap refcounted handle (`Clone` bumps a refcount,
-/// not a re-parse), so parsing once and sharing the tree across every pass
-/// removes N-1 tree-sitter runs per command — the same "compute the
-/// representation once" shape that unblocked the symbol-interner storm in the
-/// clippy `nonstandard_macro_braces` fix. The tree is a pure function of the
-/// source text, so caching cannot change any safety verdict; the cache only
-/// ever returns the exact grammar output for the exact input.
-static SHELL_TREE_CACHE: OnceLock<Mutex<LruCache<String, tree_sitter::Tree, rustc_hash::FxBuildHasher>>> =
-    OnceLock::new();
-
-/// Returns the shared parsed-tree cache, initializing it on first use.
+/// # Example
+/// ```text
+/// Input:  "git status && cargo check"
+/// Output: Ok([["git", "status"], ["cargo", "check"]])
+/// ```
 ///
-/// A poisoned lock is recovered rather than propagated: a stale cache entry is
-/// a pure performance concern and must never turn into a fail-open safety path
-/// or a hard error on an otherwise classifiable command.
-fn shell_tree_cache() -> &'static Mutex<LruCache<String, tree_sitter::Tree, rustc_hash::FxBuildHasher>> {
-    SHELL_TREE_CACHE.get_or_init(|| {
-        let capacity = NonZeroUsize::new(SHELL_TREE_CACHE_CAPACITY).unwrap_or(NonZeroUsize::MIN);
-        Mutex::new(LruCache::with_hasher(capacity, rustc_hash::FxBuildHasher))
-    })
-}
-
-/// Parses `script` into a tree-sitter bash tree, reusing the cached tree when
-/// the exact source text was parsed before.
-///
-/// Returns the tree together with whether the grammar reported a syntax error,
-/// so callers keep their original `has_error` semantics. Tree-sitter applies
-/// error recovery instead of returning `None`, so the split between "did not
-/// parse at all" (`Err`) and "parsed with errors" (`Ok((.., true))`) is
-/// preserved for callers that must fail closed on malformed input.
-fn parse_bash_tree(script: &str) -> Result<(tree_sitter::Tree, bool), String> {
-    if let Some(tree) = {
-        let mut cache = shell_tree_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        cache.get(script).cloned()
-    } {
-        let has_error = tree.root_node().has_error();
-        return Ok((tree, has_error));
+/// # Fallback
+/// If tree-sitter parsing fails, falls back to simple tokenization
+pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
+    // Try tree-sitter parsing first
+    match parse_with_tree_sitter(script, false) {
+        Ok(commands) if !commands.is_empty() => return Ok(commands),
+        Ok(_) => {} // Empty result, fall through to basic parsing
+        Err(e) => {
+            tracing::debug!("Tree-sitter bash parsing failed: {}, falling back to basic tokenization", e);
+        }
     }
 
-    let (tree, has_error) = {
-        let parser_guard = get_bash_parser()?;
-        let mut parser = parser_guard.lock().map_err(|e| format!("Failed to lock parser: {e}"))?;
-        let tree = parser.parse(script, None).ok_or_else(|| "Failed to parse script".to_string())?;
-        let has_error = tree.root_node().has_error();
-        (tree, has_error)
-    };
+    // Fallback to simple tokenization
+    parse_with_basic_tokenization(script)
+}
 
-    let mut cache = shell_tree_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    drop(cache.put(script.to_string(), tree.clone()));
-    Ok((tree, has_error))
+/// Parses a shell script using tree-sitter bash grammar only (no fallback tokenization).
+///
+/// Use this when caller behavior must be strictly gated on bash grammar validity.
+pub fn parse_shell_commands_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
+    parse_with_tree_sitter(script, true)
 }
 
 /// Returns whether a shell command contains syntax whose meaning depends on
@@ -166,58 +133,6 @@ pub fn contains_dynamic_find_syntax(script: &str) -> bool {
     has_find_word && contains_dynamic_shell_syntax(script)
 }
 
-/// Gets or initializes the bash parser
-fn get_bash_parser() -> Result<&'static Mutex<tree_sitter::Parser>, String> {
-    BASH_PARSER
-        .get_or_init(|| {
-            let mut parser = tree_sitter::Parser::new();
-            let lang: tree_sitter::Language = tree_sitter_bash::LANGUAGE.into();
-            parser
-                .set_language(&lang)
-                .map_err(|e| format!("Failed to load bash grammar: {e}"))?;
-            Ok(Mutex::new(parser))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
-}
-
-/// Ensures the bash tree-sitter parser is initialized.
-pub fn prewarm_bash_parser() -> Result<(), String> {
-    let _ = get_bash_parser()?;
-    Ok(())
-}
-
-/// Parses a shell script into individual commands using tree-sitter bash grammar
-///
-/// # Example
-/// ```text
-/// Input:  "git status && cargo check"
-/// Output: Ok([["git", "status"], ["cargo", "check"]])
-/// ```
-///
-/// # Fallback
-/// If tree-sitter parsing fails, falls back to simple tokenization
-pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
-    // Try tree-sitter parsing first
-    match parse_with_tree_sitter(script, false) {
-        Ok(commands) if !commands.is_empty() => return Ok(commands),
-        Ok(_) => {} // Empty result, fall through to basic parsing
-        Err(e) => {
-            tracing::debug!("Tree-sitter bash parsing failed: {}, falling back to basic tokenization", e);
-        }
-    }
-
-    // Fallback to simple tokenization
-    parse_with_basic_tokenization(script)
-}
-
-/// Parses a shell script using tree-sitter bash grammar only (no fallback tokenization).
-///
-/// Use this when caller behavior must be strictly gated on bash grammar validity.
-pub fn parse_shell_commands_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
-    parse_with_tree_sitter(script, true)
-}
-
 /// Returns whether every redirection in a static shell script only routes
 /// command output. Input, heredoc, and descriptor-closing redirections remain
 /// unsupported so progress classification can fail closed.
@@ -229,15 +144,15 @@ pub fn has_only_output_redirections(script: &str) -> bool {
         return false;
     }
 
-    let Ok((tree, has_error)) = parse_bash_tree(script) else {
+    let Ok(tree) = BashTree::parse(script) else {
         return false;
     };
-    if has_error {
+    if tree.has_error() {
         return false;
     }
 
     let mut saw_redirection = false;
-    if !collect_output_redirections(tree.root_node(), script, &mut saw_redirection) {
+    if !collect_output_redirections(tree.root(), &mut saw_redirection) {
         return false;
     }
     saw_redirection
@@ -250,21 +165,16 @@ pub(crate) fn validate_redirection_paths(script: &str) -> Result<()> {
     if !script.contains(['<', '>']) {
         return Ok(());
     }
-    let (tree, has_error) =
-        parse_bash_tree(script).map_err(|error| anyhow!("failed to parse shell redirections: {error}"))?;
-    ensure!(!has_error, "cannot validate malformed shell redirections");
-    let mut pending = vec![tree.root_node()];
+    let tree = BashTree::parse(script).map_err(|error| anyhow!("failed to parse shell redirections: {error}"))?;
+    ensure!(!tree.has_error(), "cannot validate malformed shell redirections");
+    let mut pending = vec![tree.root()];
     while let Some(node) = pending.pop() {
         if node.kind() == "file_redirect" {
-            let text = node.utf8_text(script.as_bytes()).context("invalid shell redirection text")?;
+            let text = node.text();
             let operator = text.trim_start_matches(|character: char| character.is_ascii_digit());
             let descriptor_route = operator.starts_with(">&") || operator.starts_with("<&");
-            let mut cursor = node.walk();
-            let destinations = node.children_by_field_name("destination", &mut cursor);
-            for destination in destinations {
-                let raw = destination
-                    .utf8_text(script.as_bytes())
-                    .context("invalid redirection destination")?;
+            for destination in node.field_children("destination") {
+                let raw = destination.text();
                 ensure!(!contains_dynamic_shell_syntax(raw), "dynamic redirection destination is not allowed");
                 let words = shell_words::split(raw).context("invalid quoted redirection destination")?;
                 ensure!(words.len() == 1, "redirection destination must be one literal path");
@@ -285,8 +195,7 @@ pub(crate) fn validate_redirection_paths(script: &str) -> Result<()> {
                     .with_context(|| format!("unsafe shell redirection destination: {path}"))?;
             }
         }
-        let mut cursor = node.walk();
-        pending.extend(node.named_children(&mut cursor));
+        pending.extend(node.named_children());
     }
     Ok(())
 }
@@ -336,14 +245,11 @@ fn contains_background_operator(script: &str) -> bool {
     false
 }
 
-fn collect_output_redirections(node: tree_sitter::Node, source: &str, saw_redirection: &mut bool) -> bool {
+fn collect_output_redirections(node: BashNode<'_>, saw_redirection: &mut bool) -> bool {
     match node.kind() {
         "file_redirect" => {
             *saw_redirection = true;
-            let Ok(text) = node.utf8_text(source.as_bytes()) else {
-                return false;
-            };
-            if !is_output_redirection(text) {
+            if !is_output_redirection(node.text()) {
                 return false;
             }
         }
@@ -351,9 +257,9 @@ fn collect_output_redirections(node: tree_sitter::Node, source: &str, saw_redire
         _ => {}
     }
 
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .all(|child| collect_output_redirections(child, source, saw_redirection))
+    node.children()
+        .iter()
+        .all(|child| collect_output_redirections(*child, saw_redirection))
 }
 
 fn is_output_redirection(text: &str) -> bool {
@@ -370,62 +276,57 @@ fn is_output_redirection(text: &str) -> bool {
 
 /// Parses shell script using tree-sitter bash grammar.
 fn parse_with_tree_sitter(script: &str, reject_syntax_errors: bool) -> Result<Vec<Vec<String>>, String> {
-    let (tree, has_error) = parse_bash_tree(script)?;
+    let tree = BashTree::parse(script)?;
 
     let mut commands = Vec::new();
-    let root = tree.root_node();
-    if reject_syntax_errors && has_error {
+    if reject_syntax_errors && tree.has_error() {
         return Err("Shell script contains syntax errors".to_string());
     }
 
     // Walk the full tree so commands inside loops/conditionals are remembered
     // for approval and checked for safety.  Top-level-only extraction misses
     // common read loops such as `for f in ...; do grep ...; done`.
-    collect_commands_from_node(root, script, &mut commands);
+    collect_commands_from_node(tree.root(), &mut commands);
 
     Ok(commands)
 }
 
-fn collect_commands_from_node(node: tree_sitter::Node, source: &str, commands: &mut Vec<Vec<String>>) {
+fn collect_commands_from_node(node: BashNode<'_>, commands: &mut Vec<Vec<String>>) {
     match node.kind() {
         "command" | "simple_command" => {
-            if let Some(cmd) = extract_command_from_node(node, source)
+            if let Some(cmd) = extract_command_from_node(node)
                 && !cmd.is_empty()
             {
                 commands.push(cmd);
             }
         }
         _ => {
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                collect_commands_from_node(child, source, commands);
+            for child in node.children() {
+                collect_commands_from_node(child, commands);
             }
         }
     }
 }
 
-/// Extracts a command vector from a tree-sitter node
-fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Vec<String>> {
+/// Extracts a command vector from a bash AST node
+fn extract_command_from_node(node: BashNode<'_>) -> Option<Vec<String>> {
     let mut command = Vec::new();
-    let mut cursor = node.walk();
 
     // For pipeline nodes, extract the first command in the pipeline
     if node.kind() == "pipeline" {
-        for child in node.children(&mut cursor) {
+        for child in node.children() {
             if child.kind() == "command" || child.kind() == "simple_command" {
-                return extract_command_from_node(child, source);
+                return extract_command_from_node(child);
             }
         }
     }
 
     // Extract arguments from command node
-    for child in node.children(&mut cursor) {
+    for child in node.children() {
         if child.kind() == "command_name" {
-            if let Ok(arg) = child.utf8_text(source.as_bytes()) {
-                let trimmed = arg.trim();
-                if !trimmed.is_empty() {
-                    command.push(trimmed.to_string());
-                }
+            let trimmed = child.text().trim();
+            if !trimmed.is_empty() {
+                command.push(trimmed.to_string());
             }
             continue;
         }
@@ -438,11 +339,9 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
         // locating the executable. `concatenation` must use the full span
         // text — its children are only the `NAME=` and quoted value pieces.
         if matches!(child.kind(), "variable_assignment" | "concatenation") {
-            if let Ok(arg) = child.utf8_text(source.as_bytes()) {
-                let trimmed = arg.trim();
-                if !trimmed.is_empty() {
-                    command.push(trimmed.to_string());
-                }
+            let trimmed = child.text().trim();
+            if !trimmed.is_empty() {
+                command.push(trimmed.to_string());
             }
             continue;
         }
@@ -451,12 +350,9 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
             child.kind(),
             "word" | "string" | "raw_string" | "ansi_c_string" | "simple_expansion" | "variable_expansion"
         ) {
-            let text = child.utf8_text(source.as_bytes());
-            if let Ok(arg) = text {
-                let trimmed = arg.trim();
-                if !trimmed.is_empty() {
-                    command.push(trimmed.to_string());
-                }
+            let trimmed = child.text().trim();
+            if !trimmed.is_empty() {
+                command.push(trimmed.to_string());
             }
         }
     }

@@ -10,7 +10,7 @@ pub(super) const DEFAULT_LOOP_DETECT_WINDOW: usize = 8;
 ///
 /// Read/search calls are cheap to reuse but can become stale across unrelated
 /// turns. The threshold must be high enough to allow one legitimate retry
-/// (e.g. after an ast-grep parse error or a transient network failure) before
+/// (e.g. after a search parse error or a transient network failure) before
 /// the loop detector fires.  A limit of 2 means the same identical call must
 /// appear 2 times in the detection window before it is flagged.
 const MIN_READONLY_IDENTICAL_LIMIT: usize = 2;

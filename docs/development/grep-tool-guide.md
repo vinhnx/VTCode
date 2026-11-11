@@ -16,7 +16,7 @@ definitions, syntactic usages, text, and paths.
 
 ## Architecture
 
-- **Backend**: `rg` on PATH, or `grep` as a fallback
+- **Backend**: `rg` on PATH, or `grep` as a fallback (developer-invoked through `exec_command`)
 - **Search type**: regex by default, literal string matching with `rg -F`
 - **File filtering**: `rg --glob`, `rg -t`, path arguments, and size limits
 - **Performance**: `rg` respects `.gitignore` and `.ignore` files by default
@@ -258,18 +258,6 @@ rg -n -C 2 --glob "**/*.ts" "eval\\(|exec\\(|innerHTML|dangerouslySetInnerHTML" 
 rg -n -i -C 1 "hardcoded.*password|api.*key.*=|token.*=" .
 ```
 
-## Comparison with ast-grep
-
-| Feature              | `rg`                               | ast-grep                        |
-| -------------------- | ---------------------------------- | ------------------------------- |
-| **Speed**            | Very fast                          | Fast                            |
-| **Pattern type**     | Regex and literal text             | AST queries                     |
-| **File filtering**   | Glob, type, size                   | Language-aware source files     |
-| **Language support** | All text files                     | Supported programming languages |
-| **Installation**     | Usually pre-installed              | Requires binary                 |
-| **Learning curve**   | Regex knowledge                    | AST query knowledge             |
-| **Use cases**        | General code search, prose, config | Syntax-aware code queries       |
-
 ## Advanced `code_search`
 
 `code_search` is visible only in the advanced profile. It accepts required `query` and optional `path`, `file_types`,
@@ -278,7 +266,7 @@ rg -n -i -C 1 "hardcoded.*password|api.*key.*=|token.*=" .
 | Result type  | Meaning                                                                                             |
 | ------------ | --------------------------------------------------------------------------------------------------- |
 | `definition` | A recognised declaration whose name exactly matches the query.                                      |
-| `usage`      | An exact syntactic identifier outside recognised declaration names. It is not a resolved reference. |
+| `usage`      | An exact identifier occurrence in code, outside recognised declaration names. It is not a resolved reference. |
 | `text`       | A literal match in prose, configuration, comments, strings, or otherwise unclassified content.      |
 | `path`       | A matching existing filename or path.                                                               |
 
@@ -292,8 +280,11 @@ terms are dropped), so `tokio|async-std|runtime` matches any of the three terms;
 ```
 
 Each search component is bounded. `truncated: true` means further candidates may exist, without claiming an exact
-repository-wide total. Narrow `path`, `file_types`, or `result_types` in another independent call. Use `exec_command` or
-the specialised ast-grep skill for arbitrary structural patterns.
+repository-wide total. Narrow `path`, `file_types`, or `result_types` in another independent call. Use `exec_command`
+with `rg` for arbitrary text patterns.
+
+Result positions are one-based: `line` counts lines, and `column` counts **bytes** from the start of the line, matching
+`rg --column`. A column therefore indexes directly into the reported line text.
 
 ## Troubleshooting
 

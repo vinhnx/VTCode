@@ -5,7 +5,7 @@
 
 //! Fast fuzzy file search library for VT Code.
 //!
-//! Uses the `ignore` crate (same as ripgrep) for parallel directory traversal
+//! Uses the `ignore` crate for parallel directory traversal
 //! and `nucleo-matcher` for fuzzy matching.
 //!
 //! # Example

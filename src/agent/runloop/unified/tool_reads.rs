@@ -126,17 +126,11 @@ pub(crate) fn spool_content_looks_like_error(content: &str) -> bool {
     if trimmed.starts_with("{\"error\"") {
         return true;
     }
-    if trimmed.starts_with("{\"output\":\"Outline requires ast-grep") {
-        return true;
-    }
     if trimmed.starts_with("{\"output\":\"Error") {
         return true;
     }
     let lower = trimmed.to_ascii_lowercase();
-    lower.starts_with("error:")
-        || lower.starts_with("tool error:")
-        || lower.starts_with("ast-grep")
-        || lower.contains("outline requires ast-grep")
+    lower.starts_with("error:") || lower.starts_with("tool error:")
 }
 
 #[cfg(test)]
@@ -218,14 +212,14 @@ mod tests {
 
     #[test]
     fn spool_content_looks_like_error_detects_outline_ast_grep_failure() {
-        let payload = r#"{"output":"Outline requires ast-grep (`sg`). not installed"}"#;
+        let payload = r#"{"output":"Error: search backend unavailable"}"#;
         assert!(spool_content_looks_like_error(payload));
     }
 
     #[test]
     fn spool_content_looks_like_error_detects_plain_error_prefix() {
         assert!(spool_content_looks_like_error("Error: file not found"));
-        assert!(spool_content_looks_like_error("ast-grep: command not found"));
+        assert!(spool_content_looks_like_error("error: search backend unavailable"));
     }
 
     #[test]

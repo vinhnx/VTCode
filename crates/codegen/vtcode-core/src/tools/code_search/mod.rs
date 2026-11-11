@@ -12,7 +12,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use tokio::task::spawn_blocking;
 
-use crate::tools::ast_grep_language::AstGrepLanguage;
+use crate::tools::code_language::CodeLanguage;
 use crate::tools::file_search_bridge::BoundedPathSearch;
 use crate::tools::grep_backend::{LiteralSearchOutcome, search_literal_bounded};
 use crate::tools::outline_search::{DeclarationSearchOutcome, search_declarations_bounded};
@@ -147,8 +147,8 @@ fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<Compa
         if without_dot.is_empty() {
             bail!("code_search file_types entries must not be empty");
         }
-        let language = AstGrepLanguage::from_user_value(without_dot)
-            .or_else(|| AstGrepLanguage::from_extension(without_dot))
+        let language = CodeLanguage::from_user_value(without_dot)
+            .or_else(|| CodeLanguage::from_extension(without_dot))
             .ok_or_else(|| anyhow!("unknown code_search file type '{trimmed}'"))?;
         let canonical = CompactStr::from(language.as_str());
         if !normalised.contains(&canonical) {
@@ -264,13 +264,11 @@ pub async fn execute(workspace_root: &Path, request: CodeSearchRequest) -> Resul
     let (literal_outcome, declaration_outcome, path_outcome) =
         tokio::join!(literal_future, declaration_future, path_future);
     let result_types = request.filters.result_types.clone();
-    let query = request.query.to_string();
     let max_results = request.filters.max_results;
     let aggregation = spawn_blocking(move || {
         aggregate_search_results(SearchAggregationInputs {
             scope,
             languages,
-            query,
             result_types,
             max_results,
             definition_enabled,
@@ -328,8 +326,7 @@ struct AggregatedCodeSearch {
 
 struct SearchAggregationInputs {
     scope: ResolvedSearchScope,
-    languages: Vec<AstGrepLanguage>,
-    query: String,
+    languages: Vec<CodeLanguage>,
     result_types: Vec<CodeSearchResultType>,
     max_results: usize,
     definition_enabled: bool,
@@ -347,7 +344,6 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
     let SearchAggregationInputs {
         scope,
         languages,
-        query,
         result_types,
         max_results,
         definition_enabled,
@@ -389,7 +385,6 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
                 backends::process_declaration_file(
                     &scope,
                     &languages,
-                    &query,
                     file,
                     definition_enabled,
                     &mut caches.sources,
@@ -496,14 +491,6 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
 fn normalised_snippet(text: &str) -> CompactStr {
     let compact = collapse_whitespace(text);
     CompactStr::from(truncate_byte_budget(&compact, SNIPPET_BYTE_CAP, ""))
-}
-
-fn byte_position(source: &str, offset: usize) -> (usize, usize) {
-    let bounded = offset.min(source.len());
-    let before = &source[..bounded];
-    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = before.rsplit_once('\n').map_or(before.len(), |(_, tail)| tail.len()) + 1;
-    (line, column)
 }
 
 fn source_line(source: &str, line: usize) -> &str {

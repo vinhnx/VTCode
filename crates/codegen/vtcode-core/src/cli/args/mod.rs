@@ -9,10 +9,8 @@ mod acp;
 mod ask;
 mod background;
 mod bench;
-mod check;
 mod companion;
 mod config;
-mod dependencies;
 mod exec;
 mod models;
 mod plugins;
@@ -31,13 +29,11 @@ pub use acp::AgentClientProtocolTarget;
 pub use ask::{AskCommandOptions, AskOutputFormat};
 pub use background::BackgroundSubagentArgs;
 pub use bench::BenchAllocatorArgs;
-pub use check::CheckSubcommand;
 pub use companion::{CompanionCommand, CompanionSetupArgs};
 pub use config::{
     ConfigCommand, ConfigFile, ConfigResetArgs, ContextConfig, LoggingConfig, PerformanceConfig, SecurityConfig,
     ToolConfig,
 };
-pub use dependencies::{DependenciesSubcommand, ManagedDependency};
 pub use exec::{EvalOutputFormat, ExecEvalArgs, ExecResumeArgs, ExecSubcommand};
 pub use models::ModelCommands;
 pub use plugins::PluginsSubcommand;
@@ -789,18 +785,6 @@ pub enum Commands {
     #[command(name = "list-skills", hide = true)]
     ListSkills {},
 
-    /// Manage optional VT Code dependencies
-    ///
-    /// Install, update, or check the status of optional tools that VT Code
-    /// can use (ripgrep, ast-grep, search-tools bundle).
-    ///
-    /// Examples:
-    ///   vtcode dependencies status
-    ///   vtcode dependencies install search-tools
-    ///   vtcode deps install ripgrep
-    #[command(name = "dependencies", visible_alias = "deps", subcommand)]
-    Dependencies(DependenciesSubcommand),
-
     /// Manage API keys in secure storage (OS keyring or encrypted file)
     ///
     /// Store, inspect, and delete provider API keys without exposing them
@@ -813,17 +797,6 @@ pub enum Commands {
     ///   vtcode secret add openai
     ///   vtcode secret delete openai
     Secret(SecretArgs),
-
-    /// Run built-in repository checks
-    ///
-    /// Execute repository-level checks such as ast-grep rule tests and scans.
-    ///
-    /// Examples:
-    ///   vtcode check ast-grep
-    Check {
-        #[command(subcommand)]
-        command: CheckSubcommand,
-    },
 
     /// Check for and install binary updates from GitHub Releases
     ///

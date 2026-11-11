@@ -1,41 +1,75 @@
 use super::*;
 
+#[tokio::test]
+#[serial]
+async fn code_search_columns_count_bytes_for_definitions_and_usages() {
+    let workspace = TempDir::new().expect("workspace");
+    fs::create_dir_all(workspace.path().join("src")).expect("src directory");
+    fs::create_dir_all(workspace.path().join(".git")).expect("git marker");
+    // The usage line carries a multi-byte character before the symbol, so a
+    // character count and a byte count disagree.
+    let source = "fn Widget() {}\nfn main() {\n    let x = \"こ\"; let Widget = 1;\n}\n";
+    fs::write(workspace.path().join("src/uni.rs"), source).expect("fixture");
+
+    let response = execute(
+        workspace.path(),
+        request(json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust"],
+            "max_results": 100
+        })),
+    )
+    .await
+    .expect("search runs");
+
+    let definition = response
+        .results
+        .iter()
+        .find(|result| result.result_type == CodeSearchResultType::Definition)
+        .expect("a definition result");
+    assert_eq!(definition.line, Some(1));
+    assert_eq!(definition.column, Some(4), "the declaration name starts at byte 4");
+
+    let usage = response
+        .results
+        .iter()
+        .find(|result| result.result_type == CodeSearchResultType::Usage)
+        .expect("a usage result");
+    let line = source.lines().nth(usage.line.expect("line") - 1).expect("line text");
+    let offset = line.find("Widget").expect("usage position");
+    let byte_column = offset + 1;
+    let char_column = line[..offset].chars().count() + 1;
+    assert_ne!(byte_column, char_column, "the fixture must tell bytes and characters apart");
+    assert_eq!(usage.column, Some(byte_column), "the column counts bytes");
+}
+
 #[test]
 fn code_search_definitions_require_exact_name_ranges() {
     let fixture = code_search_fixture();
     let scope = scope::resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
     let canonical = identity::canonicalize_existing_prefix(&fixture.workspace.path().join("src/widget.rs"));
     let source = fs::read_to_string(&canonical).expect("fixture source");
-    let exact_end = source.find("}\n").expect("exact declaration end") + 1;
-    let missing_name_start = source.find("Widget();").expect("body call");
+    // The declaration name starts after `fn `, so the exact name range covers
+    // only the identifier, not the whole declaration.
+    let name_start = source.find("Widget").expect("declaration name");
+    let name_end = name_start + "Widget".len();
     let file = DeclarationFileRecord {
         path: PathBuf::from("src/widget.rs"),
-        language: AstGrepLanguage::Rust,
+        language: CodeLanguage::Rust,
         complete: true,
-        declarations: vec![
-            DeclarationRecord {
-                name: "Widget".to_string(),
-                range: DeclarationRange { byte_start: 0, byte_end: exact_end },
-            },
-            DeclarationRecord {
-                name: "Different".to_string(),
-                range: DeclarationRange { byte_start: 0, byte_end: exact_end },
-            },
-            DeclarationRecord {
-                name: "Widget".to_string(),
-                range: DeclarationRange {
-                    byte_start: missing_name_start,
-                    byte_end: missing_name_start + "Widget()".len(),
-                },
-            },
-        ],
+        declarations: vec![DeclarationRecord {
+            name: "Widget".to_string(),
+            range: DeclarationRange { byte_start: name_start, byte_end: name_end },
+            line: 1,
+            column: 4,
+        }],
     };
     let mut inventories = HashMap::new();
     let mut candidates = Vec::new();
     backends::process_declaration_file(
         &scope,
-        &[AstGrepLanguage::Rust],
-        "Widget",
+        &[CodeLanguage::Rust],
         &file,
         true,
         &mut HashMap::new(),
@@ -43,35 +77,36 @@ fn code_search_definitions_require_exact_name_ranges() {
         &mut candidates,
     );
 
-    assert_eq!(candidates.len(), 1, "only the exact definition is emitted");
+    assert_eq!(candidates.len(), 1, "the declaration of the queried symbol is emitted");
     assert_eq!(candidates[0].result.line, Some(1));
     assert_eq!(candidates[0].result.column, Some(4));
     let inventory = inventories.get(&canonical).expect("inventory");
-    assert!(!inventory.complete, "any failed exact range suppresses usage");
-    assert_eq!(inventory.exact_name_ranges.len(), 1);
+    assert_eq!(inventory.exact_name_ranges.len(), 1, "the exact name range is recorded once");
 
     let mut mixed = candidates;
     backends::classify_literal_candidates(
         &scope,
-        &[AstGrepLanguage::Rust],
+        &[CodeLanguage::Rust],
         vec![
             LiteralSearchCandidate {
                 path: canonical.clone(),
                 line: 1,
                 column: 4,
-                byte_start: 3,
-                byte_end: 9,
+                byte_start: name_start,
+                byte_end: name_end,
                 matched_text: "Widget".to_string(),
                 snippet: "fn Widget() {".to_string(),
+                word_bounded: true,
             },
             LiteralSearchCandidate {
                 path: canonical,
                 line: 2,
                 column: 5,
-                byte_start: missing_name_start,
-                byte_end: missing_name_start + 6,
+                byte_start: source.find("Widget();").expect("body call"),
+                byte_end: source.find("Widget();").expect("body call") + 6,
                 matched_text: "Widget".to_string(),
                 snippet: "Widget();".to_string(),
+                word_bounded: true,
             },
         ],
         true,
@@ -92,7 +127,8 @@ fn code_search_definitions_require_exact_name_ranges() {
     assert!(
         results
             .iter()
-            .any(|result| { result.result_type == CodeSearchResultType::Text && result.line == Some(2) })
+            .any(|result| { result.result_type == CodeSearchResultType::Usage && result.line == Some(2) }),
+        "a word-bounded occurrence outside the declaration is a usage"
     );
 }
 #[test]
@@ -147,7 +183,7 @@ fn code_search_path_candidates_deduplicate_canonical_aliases_before_merge() {
         &scope,
         &scope.requested_path,
         [PathBuf::from("WidgetConfig.rs"), PathBuf::from("./WidgetConfig.rs")],
-        &[AstGrepLanguage::Rust],
+        &[CodeLanguage::Rust],
         &mut candidates,
     );
 

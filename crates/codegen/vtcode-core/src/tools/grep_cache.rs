@@ -5,6 +5,7 @@
 //!
 //! Uses `UnifiedCache` from `crate::cache` for LRU eviction, TTL, and stats.
 
+use super::grep_backend::MAX_SEARCH_RESULTS;
 use super::grep_file::{GrepSearchInput, GrepSearchResult};
 use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache, estimate_json_size};
 use std::sync::Arc;
@@ -14,15 +15,16 @@ use std::sync::Arc;
 struct SearchCacheKey {
     pattern: String,
     path: String,
-    case_sensitive: bool,
-    max_results: usize,
-    glob_pattern: Option<String>,
-    type_pattern: Option<String>,
-    max_result_bytes: Option<usize>,
-    respect_ignore_files: bool,
-    search_hidden: bool,
-    search_binary: bool,
+    case_sensitive: Option<bool>,
     literal: bool,
+    glob_pattern: Option<String>,
+    include_hidden: bool,
+    max_results: usize,
+    respect_ignore_files: bool,
+    max_file_size: Option<usize>,
+    files_with_matches: bool,
+    max_result_bytes: Option<usize>,
+    extra_ignore_globs: Option<Vec<String>>,
 }
 
 impl CacheKey for SearchCacheKey {
@@ -31,20 +33,22 @@ impl CacheKey for SearchCacheKey {
         // contains invalidation buckets entries correctly. The previous key
         // omitted 7 fields, so invalidation could drop or retain the wrong
         // entries for queries that differed only in those fields.
-        format!(
-            "grep\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{:?}\u{1f}{:?}\u{1f}{:?}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
-            self.pattern,
-            self.path,
-            self.case_sensitive,
-            self.max_results,
-            self.glob_pattern,
-            self.type_pattern,
-            self.max_result_bytes,
-            self.respect_ignore_files,
-            self.search_hidden,
-            self.search_binary,
-            self.literal,
-        )
+        [
+            "grep",
+            self.pattern.as_str(),
+            self.path.as_str(),
+            &format!("{:?}", self.case_sensitive),
+            &self.literal.to_string(),
+            &format!("{:?}", self.glob_pattern),
+            &self.include_hidden.to_string(),
+            &self.max_results.to_string(),
+            &self.respect_ignore_files.to_string(),
+            &format!("{:?}", self.max_file_size),
+            &self.files_with_matches.to_string(),
+            &format!("{:?}", self.max_result_bytes),
+            &format!("{:?}", self.extra_ignore_globs),
+        ]
+        .join("\u{1f}")
     }
 }
 
@@ -53,15 +57,18 @@ impl From<&GrepSearchInput> for SearchCacheKey {
         Self {
             pattern: input.pattern.clone(),
             path: input.path.clone(),
-            case_sensitive: input.case_sensitive.unwrap_or(false),
-            max_results: input.max_results.unwrap_or(5), // AGENTS.md requires max 5 results
-            glob_pattern: input.glob_pattern.clone(),
-            type_pattern: input.type_pattern.clone(),
-            max_result_bytes: input.max_result_bytes,
-            respect_ignore_files: input.respect_ignore_files.unwrap_or(true),
-            search_hidden: input.search_hidden.unwrap_or(false),
-            search_binary: input.search_binary.unwrap_or(false),
+            // The case mode distinguishes smart-case from always-insensitive,
+            // so the raw option is kept rather than collapsed to a bool.
+            case_sensitive: input.case_sensitive,
             literal: input.literal.unwrap_or(false),
+            glob_pattern: input.glob_pattern.clone(),
+            include_hidden: input.include_hidden.unwrap_or(false),
+            max_results: input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get()),
+            respect_ignore_files: input.respect_ignore_files.unwrap_or(true),
+            max_file_size: input.max_file_size,
+            files_with_matches: input.files_with_matches.unwrap_or(false),
+            max_result_bytes: input.max_result_bytes,
+            extra_ignore_globs: input.extra_ignore_globs.clone(),
         }
     }
 }
@@ -96,7 +103,7 @@ impl GrepSearchCache {
 
     /// Check if this search should be cached (only results with real hits).
     ///
-    /// `GrepSearchResult::matches` holds raw ripgrep JSON stream events, so
+    /// `GrepSearchResult::matches` holds raw search-backend JSON stream events, so
     /// a no-hit search is still non-empty: it carries the per-file
     /// `begin`/`end` records and the final `summary`. Caching those would
     /// turn every miss into a stale silent negative — the cache has no
@@ -105,7 +112,7 @@ impl GrepSearchCache {
     /// at least one `match`-type event are cached: a stale positive at least
     /// surfaces old hits the agent can notice when opening the file, while a
     /// stale negative hides new ones with no signal. Repeated no-match
-    /// queries therefore re-run ripgrep — the accepted cost until the cache
+    /// queries therefore re-run the search — the accepted cost until the cache
     /// gains a write-path invalidation hook.
     pub fn should_cache(result: &GrepSearchResult) -> bool {
         result
@@ -143,21 +150,11 @@ mod tests {
             case_sensitive: Some(true),
             literal: None,
             glob_pattern: Some("*.rs".to_string()),
-            context_lines: None,
             include_hidden: None,
             max_results: Some(5), // AGENTS.md requires max 5 results
             respect_ignore_files: None,
             max_file_size: None,
-            search_hidden: None,
-            search_binary: None,
             files_with_matches: None,
-            type_pattern: None,
-            invert_match: None,
-            word_boundaries: None,
-            line_number: None,
-            column: None,
-            only_matching: None,
-            trim: None,
             max_result_bytes: None,
             timeout: None,
             extra_ignore_globs: None,
@@ -216,7 +213,7 @@ mod tests {
         // window. A bare empty result must fail the caching gate.
         assert!(!GrepSearchCache::should_cache(&result));
 
-        // A no-hit search is NOT empty: the backend keeps ripgrep's
+        // A no-hit search is NOT empty: the backend keeps the
         // per-file begin/end (and summary) stream events in `matches`.
         // Those alone must also fail the gate — this is the shape a real
         // miss actually arrives in.

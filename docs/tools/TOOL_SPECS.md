@@ -147,7 +147,7 @@ Example:
 {"query":"ToolProfile","path":"vtcode-core","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
 ```
 
-Use `exec_command` or the specialised ast-grep skill for arbitrary structural patterns.
+Use `code_search` for symbol definitions and usages, and `exec_command` with `rg` for arbitrary text patterns.
 
 ## File Inspection
 

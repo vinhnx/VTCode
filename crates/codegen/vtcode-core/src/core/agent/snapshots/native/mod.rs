@@ -178,22 +178,19 @@ fn shell_redirect_paths(args: &serde_json::Value) -> BTreeSet<PathBuf> {
         if !script.contains('>') {
             return None;
         }
-        let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&tree_sitter_bash::LANGUAGE.into()).ok()?;
-        let tree = parser.parse(&script, None)?;
-        if tree.root_node().has_error() {
+        let tree = crate::command_safety::shell_parser::BashTree::parse(&script).ok()?;
+        if tree.has_error() {
             return None;
         }
         let mut paths = BTreeSet::new();
-        let mut pending = vec![tree.root_node()];
+        let mut pending = vec![tree.root()];
         while let Some(node) = pending.pop() {
             match node.kind() {
                 "program" | "list" | "pipeline" | "redirected_statement" => {
-                    let mut cursor = node.walk();
-                    pending.extend(node.named_children(&mut cursor));
+                    pending.extend(node.named_children());
                 }
                 "command" => {
-                    let name = node.child_by_field_name("name")?.utf8_text(script.as_bytes()).ok()?;
+                    let name = node.field("name")?.text();
                     if contains_dynamic_shell_syntax(name) {
                         return None;
                     }
@@ -218,21 +215,20 @@ fn shell_redirect_paths(args: &serde_json::Value) -> BTreeSet<PathBuf> {
                     {
                         return None;
                     }
-                    let mut cursor = node.walk();
                     pending.extend(
-                        node.named_children(&mut cursor)
+                        node.named_children()
+                            .into_iter()
                             .filter(|child| matches!(child.kind(), "file_redirect" | "heredoc_redirect")),
                     );
                 }
                 "file_redirect" => {
-                    let text = node.utf8_text(script.as_bytes()).ok()?;
+                    let text = node.text();
                     let operator = text.trim_start_matches(|c: char| c.is_ascii_digit());
                     if !operator.starts_with('>') && !operator.starts_with("&>") {
                         continue;
                     }
-                    let mut cursor = node.walk();
-                    for destination in node.children_by_field_name("destination", &mut cursor) {
-                        let raw = destination.utf8_text(script.as_bytes()).ok()?;
+                    for destination in node.field_children("destination") {
+                        let raw = destination.text();
                         if contains_dynamic_shell_syntax(raw) {
                             return None;
                         }

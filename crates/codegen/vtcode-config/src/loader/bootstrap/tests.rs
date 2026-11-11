@@ -45,7 +45,6 @@ fn bootstrap_home_selection_uses_canonical_path_and_keeps_project_scaffolds_loca
         assert_eq!(workspace.path().join("custom.toml").exists(), !home_available);
         assert_eq!(workspace.path().join(".vtcodegitignore").exists(), !home_available);
         assert!(workspace.path().join(".vtcode/README.md").exists());
-        assert!(workspace.path().join("sgconfig.yml").exists());
 
         if home_available {
             assert!(home.path().join("canonical/.vtcodegitignore").exists());
@@ -62,15 +61,7 @@ fn bootstrap_home_selection_uses_canonical_path_and_keeps_project_scaffolds_loca
 #[test]
 fn bootstrap_preserves_all_existing_files_without_force_and_replaces_them_with_force() {
     let workspace = tempdir().expect("workspace");
-    let paths = [
-        "vtcode.toml",
-        ".vtcodegitignore",
-        ".vtcode/README.md",
-        "sgconfig.yml",
-        "rules/examples/no-console-log.yml",
-        "rule-tests/examples/no-console-log-test.yml",
-        "rule-tests/__snapshots__/no-console-log-snapshot.yml",
-    ];
+    let paths = ["vtcode.toml", ".vtcodegitignore", ".vtcode/README.md"];
     for (index, relative) in paths.iter().enumerate() {
         let path = workspace.path().join(relative);
         std::fs::create_dir_all(path.parent().expect("parent")).expect("create parent");
@@ -146,54 +137,4 @@ fn bootstrap_project_creates_vtcode_readme() {
 
     assert!(created.iter().any(|entry| entry == ".vtcode/README.md"), "created files: {created:?}");
     assert!(workspace.path().join(".vtcode/README.md").exists());
-}
-
-#[test]
-fn bootstrap_project_creates_ast_grep_scaffold() {
-    let workspace = tempdir().expect("workspace");
-    let created = VTCodeConfig::bootstrap_project(workspace.path(), false).expect("bootstrap project should succeed");
-
-    assert!(created.iter().any(|entry| entry == "sgconfig.yml"));
-    assert!(created.iter().any(|entry| entry == "rules/examples/no-console-log.yml"));
-    assert!(
-        created
-            .iter()
-            .any(|entry| entry == "rule-tests/examples/no-console-log-test.yml")
-    );
-    assert!(
-        created
-            .iter()
-            .any(|entry| entry == "rule-tests/__snapshots__/no-console-log-snapshot.yml")
-    );
-
-    assert!(workspace.path().join("sgconfig.yml").exists());
-    assert!(workspace.path().join("rules/examples/no-console-log.yml").exists());
-    assert!(workspace.path().join("rule-tests/examples/no-console-log-test.yml").exists());
-    assert!(
-        workspace
-            .path()
-            .join("rule-tests/__snapshots__/no-console-log-snapshot.yml")
-            .exists()
-    );
-}
-
-#[test]
-fn bootstrap_project_preserves_existing_ast_grep_files_without_force() {
-    let workspace = tempdir().expect("workspace");
-    let sgconfig_path = workspace.path().join("sgconfig.yml");
-    let rule_path = workspace.path().join("rules/examples/no-console-log.yml");
-
-    std::fs::create_dir_all(workspace.path().join("rules/examples")).expect("create rules dir");
-    std::fs::write(&sgconfig_path, "ruleDirs:\n  - custom-rules\n").expect("write sgconfig");
-    std::fs::write(&rule_path, "id: custom-rule\n").expect("write rule");
-
-    let created = VTCodeConfig::bootstrap_project(workspace.path(), false).expect("bootstrap project should succeed");
-
-    assert!(!created.iter().any(|entry| entry == "sgconfig.yml"), "created files: {created:?}");
-    assert!(
-        !created.iter().any(|entry| entry == "rules/examples/no-console-log.yml"),
-        "created files: {created:?}"
-    );
-    assert_eq!(std::fs::read_to_string(&sgconfig_path).expect("read sgconfig"), "ruleDirs:\n  - custom-rules\n");
-    assert_eq!(std::fs::read_to_string(&rule_path).expect("read rule"), "id: custom-rule\n");
 }

@@ -1,7 +1,7 @@
 //! Bridge module integrating vtcode-indexer::file_search with grep_file.rs
 //!
 //! This module provides a clean interface to use the file-search module
-//! for file discovery operations, replacing direct ripgrep subprocess
+//! for file discovery operations, replacing direct search subprocesses
 //! calls for file enumeration.
 //!
 //! It handles:

@@ -97,14 +97,6 @@ impl VTCodeConfig {
         let (config_path, gitignore_path) =
             determine_bootstrap_targets(workspace, use_home_dir, &config_file_name, defaults_provider)?;
         let vtcode_readme_path = workspace.join(".vtcode").join("README.md");
-        let ast_grep_config_path = workspace.join("sgconfig.yml");
-        let ast_grep_rule_path = workspace.join("rules").join("examples").join("no-console-log.yml");
-        let ast_grep_test_path = workspace.join("rule-tests").join("examples").join("no-console-log-test.yml");
-        let ast_grep_snapshot_path = workspace
-            .join("rule-tests")
-            .join("__snapshots__")
-            .join("no-console-log-snapshot.yml");
-
         let home_targets = use_home_dir && config_path != workspace.join(&config_file_name);
         if home_targets {
             ensure_private_parent_dir(&config_path)?;
@@ -114,10 +106,6 @@ impl VTCodeConfig {
             ensure_parent_dir(&gitignore_path)?;
         }
         ensure_parent_dir(&vtcode_readme_path)?;
-        ensure_parent_dir(&ast_grep_config_path)?;
-        ensure_parent_dir(&ast_grep_rule_path)?;
-        ensure_parent_dir(&ast_grep_test_path)?;
-        ensure_parent_dir(&ast_grep_snapshot_path)?;
 
         let mut created_files = Vec::new();
 
@@ -149,33 +137,6 @@ impl VTCodeConfig {
             created_files.push(".vtcode/README.md".to_string());
         }
 
-        let ast_grep_files = [
-            (&ast_grep_config_path, Self::default_ast_grep_config_template(), "sgconfig.yml"),
-            (
-                &ast_grep_rule_path,
-                Self::default_ast_grep_example_rule_template(),
-                "rules/examples/no-console-log.yml",
-            ),
-            (
-                &ast_grep_test_path,
-                Self::default_ast_grep_example_test_template(),
-                "rule-tests/examples/no-console-log-test.yml",
-            ),
-            (
-                &ast_grep_snapshot_path,
-                Self::default_ast_grep_example_snapshot_template(),
-                "rule-tests/__snapshots__/no-console-log-snapshot.yml",
-            ),
-        ];
-
-        for (path, contents, label) in ast_grep_files {
-            if !path.exists() || force {
-                fs::write(path, contents)
-                    .with_context(|| format!("Failed to write ast-grep scaffold file: {}", path.display()))?;
-                created_files.push(label.to_string());
-            }
-        }
-
         Ok(created_files)
     }
 
@@ -205,22 +166,6 @@ target/, build/, dist/, node_modules/, vendor/
 
     fn default_vtcode_readme_template() -> &'static str {
         "# VT Code Workspace Files\n\n- Put always-on repository guidance in `AGENTS.md`.\n- Put path-scoped prompt rules in `.vtcode/rules/*.md` using YAML frontmatter.\n- Keep authoring notes and other workspace docs outside `.vtcode/rules/` so they are not loaded into prompt memory.\n"
-    }
-
-    fn default_ast_grep_config_template() -> &'static str {
-        "ruleDirs:\n  - rules\nutilDirs:\n  - utils\ntestConfigs:\n  - testDir: rule-tests\n    snapshotDir: __snapshots__\n"
-    }
-
-    fn default_ast_grep_example_rule_template() -> &'static str {
-        "id: no-console-log\nlanguage: JavaScript\nseverity: error\nmessage: Avoid `console.log` in checked JavaScript files.\nnote: |\n  Avoid `console.log` in checked JavaScript files.\nrule:\n  pattern: console.log($$$ARGS)\nfiles:\n  - '**/*.js'\n"
-    }
-
-    fn default_ast_grep_example_test_template() -> &'static str {
-        "id: no-console-log\nvalid:\n  - |\n    const logger = {\n      info(message) {\n        return message;\n      },\n    };\ninvalid:\n  - |\n    function greet(name) {\n      console.log(name);\n    }\n"
-    }
-
-    fn default_ast_grep_example_snapshot_template() -> &'static str {
-        "id: no-console-log\nsnapshots:\n  ? |\n    function greet(name) {\n      console.log(name);\n    }\n  : labels:\n    - source: console.log(name)\n      style: primary\n      start: 25\n      end: 42\n"
     }
 
     /// Create sample configuration file

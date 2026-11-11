@@ -2,9 +2,11 @@
 
 ## Overview
 
-VT Code uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for robust, syntax-aware parsing of shell
-commands. This is a critical security feature that ensures shell commands are correctly decomposed and validated before
-execution.
+VT Code uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for one thing only: robust, syntax-aware parsing of
+shell commands. Shell commands are a security boundary, so they get a real grammar rather than heuristic text matching.
+
+Everything else — code search, declaration lookup, usage classification — runs on VT Code's own native search engine.
+There are no other tree-sitter grammars in the binary.
 
 ## Shell Safety Parsing
 
@@ -25,7 +27,12 @@ The integration is centered around the following components:
 
 - **`tree-sitter` core**: The underlying incremental parsing library.
 - **`tree-sitter-bash`**: The grammar used for parsing shell commands.
-- **`shell_parser.rs`**: The implementation that walks the bash AST to extract command vectors for safety checking.
+- **`command_safety/shell_parser`**: The implementation that walks the bash AST to extract command vectors for safety
+  checking.
+
+The grammar lives in the `vtcode-safety` crate and is the only place tree-sitter is used. Callers outside that crate
+receive parsed results through the `BashTree` / `BashNode` wrappers rather than raw tree-sitter types, so the grammar
+dependency cannot leak into the rest of the workspace.
 
 ## Technical Details
 
@@ -35,6 +42,9 @@ text, making AST-level parsing for general coding tasks largely redundant for th
 
 By focusing tree-sitter usage exclusively on shell safety, we maintain high security standards while keeping the
 application lightweight and efficient.
+
+Code search and declaration lookup are served by the native content-search engine in `vtcode-commons::content_search`,
+which walks the tree with the `ignore` crate and matches lines with the `regex` crate.
 
 ## Configuration
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::tools::ast_grep_language::AstGrepLanguage;
+use crate::tools::code_language::CodeLanguage;
 use crate::tools::code_search::{CodeSearchResult, CodeSearchResultType, ResolvedSearchScope};
 use crate::types::CompactStr;
 use std::path::{Path, PathBuf};
@@ -13,7 +13,7 @@ pub struct RankedCandidate {
 #[derive(Debug, Default)]
 pub struct DeclarationInventory {
     pub complete: bool,
-    pub exact_name_ranges: Vec<crate::tools::tree_sitter_runtime::SourceByteRange>,
+    pub exact_name_ranges: Vec<super::backends::SourceByteRange>,
 }
 
 pub fn deduplicate_and_order(mut candidates: Vec<RankedCandidate>) -> Vec<CodeSearchResult> {
@@ -68,7 +68,7 @@ pub fn append_path_candidates(
     scope: &ResolvedSearchScope,
     base: &Path,
     paths: impl IntoIterator<Item = PathBuf>,
-    languages: &[AstGrepLanguage],
+    languages: &[CodeLanguage],
     candidates: &mut Vec<RankedCandidate>,
 ) {
     use std::collections::HashSet;

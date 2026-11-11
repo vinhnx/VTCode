@@ -114,7 +114,7 @@ get_current_version() {
 # gate) and check-dev.sh (--deny opt-in); print_status/print_success come from
 # this file or the caller's quiet-aware overrides.
 # Pass "required" to fail instead of skipping when cargo-deny is not installed
-# (explicit `deny` subcommand / --deny flag), mirroring run_ast_grep_scan.
+# (explicit `deny` subcommand / --deny flag), mirroring the other gates.
 # Repository governance gates shared by check-dev.sh and check.sh, so the fast
 # gate and the release gate cannot drift apart. Each check is a sub-second
 # Python script that exits non-zero with its own remediation text.

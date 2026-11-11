@@ -5,7 +5,6 @@ use vtcode_core::config::ToolPolicy;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key_with_mode};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
@@ -254,18 +253,6 @@ pub(crate) async fn run_checkup_diagnostics(
         };
         render_doctor_check(renderer, &mut summary, "npm", npm_result)?;
 
-        let ripgrep_result = match detect_command_version("rg", &["--version"]) {
-            Ok(version) => DoctorCheckOutcome::Pass(format!("Ripgrep {}", version.lines().next().unwrap_or(&version))),
-            Err(err) => {
-                if err.contains("not found") {
-                    DoctorCheckOutcome::Warn("Not installed (searches will fall back to built-in grep)".to_string())
-                } else {
-                    DoctorCheckOutcome::Warn(err)
-                }
-            }
-        };
-        render_doctor_check(renderer, &mut summary, "Ripgrep", ripgrep_result)?;
-
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Status, "[External Services]")?;
 
@@ -497,10 +484,6 @@ fn get_suggestion_for_issue(label: &str, detail: &str) -> Option<String> {
         Some("Install Node.js: brew install node (macOS) or see nodejs.org".to_string())
     } else if label_lower == "npm" {
         Some("Install npm with Node.js or update it: npm install -g npm@latest".to_string())
-    } else if label_lower.contains("ripgrep") {
-        Some(format!(
-            "Run `{RIPGREP_INSTALL_COMMAND}` for guided installation, or install `ripgrep` manually with your package manager."
-        ))
     } else if label_lower.contains("mcp") && detail_lower.contains("error") {
         Some("Check MCP configuration in vtcode.toml, server availability, and timeouts.".to_string())
     } else {

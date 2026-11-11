@@ -38,7 +38,7 @@ pub fn is_parallel_safe_call(tool_name: &str, args: &Value) -> bool {
 /// computed on the same args. The non-command branches reuse `intent.mutating`
 /// (identical to re-classifying: `builtin_tool_behavior.classify(args)` IS
 /// `classify_tool_intent`), so preflight paths avoid re-classifying the same
-/// args — a second tree-sitter parse for command payloads. The command-run
+/// args — a second shell parse for command payloads. The command-run
 /// branch still re-parses: parallel safety for command sessions is a separate
 /// predicate from the read-only intent.
 pub fn is_parallel_safe_call_with_intent(tool_name: &str, args: &Value, intent: &ToolIntent) -> bool {

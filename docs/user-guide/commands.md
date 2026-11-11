@@ -16,7 +16,7 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode eval --suite <file>`                                           | Run an evaluation suite with pass@k / pass^k metrics                |
 | `vtcode review`                                                        | Non-interactive review of the current diff, files, or a git target  |
 | `vtcode continue`                                                      | Resume the most recent conversation; `--session-id` forks it        |
-| `vtcode init`                                                          | Scaffold `vtcode.toml`, `AGENTS.md`, and ast-grep starter files     |
+| `vtcode init`                                                          | Scaffold `vtcode.toml` and `AGENTS.md` in the workspace              |
 | `vtcode init-project`                                                  | Register a project entry in the user state directory                |
 | `vtcode config`                                                        | Generate or reset `vtcode.toml` configuration layers                |
 | `vtcode login <provider>` / `vtcode logout <provider>` / `vtcode auth` | OAuth or API-key login, logout, and status                          |
@@ -30,8 +30,6 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode webmcp`                                                        | Authenticated browser editor bridge and local MCP stdio service     |
 | `vtcode skills`                                                        | Manage Agent Skills (list, create, load, validate)                  |
 | `vtcode plugins`                                                       | Manage Agent Plugins (add, list, validate, remove)                  |
-| `vtcode dependencies` (`deps`)                                         | Install or check optional tools (ripgrep, ast-grep)                 |
-| `vtcode check`                                                         | Run built-in repository checks such as ast-grep                     |
 | `vtcode schema`                                                        | Emit built-in tool schemas for automation discovery                 |
 | `vtcode analyze`                                                       | Analyze workspace structure, security, and performance              |
 | `vtcode trajectory`                                                    | Pretty-print run logs for debugging and audits                      |
@@ -149,7 +147,7 @@ and `max_results`. Its four result categories are recognised definitions, exact 
 matching paths. A usage is a same-spelling syntax occurrence, not a resolved reference. Queries use literal smart-case.
 When `truncated` is true, narrow a filter in another call; the response does not claim an exact repository-wide total.
 
-Use `exec_command` or the specialised ast-grep skill for arbitrary structural patterns.
+Use `exec_command` with a text search tool for arbitrary structural patterns.
 
 ## Storage diagnostics
 
@@ -523,74 +521,6 @@ bootstrapped once with the native installer before this replacement flow can upd
   ```bash
   vtcode update
   ```
-
-## dependencies
-
-Manage optional VT Code dependencies such as ripgrep and ast-grep.
-
-### Usage
-
-```bash
-# Install both optional search tools in one step
-vtcode dependencies install search-tools
-
-# Check whether VT Code can resolve the optional search tools
-vtcode dependencies status search-tools
-
-# Install ripgrep using a supported system installer
-vtcode dependencies install ripgrep
-
-# Install the managed ast-grep binary into the canonical executable directory
-vtcode dependencies install ast-grep
-
-# Materialize the bundled ast-grep scaffold in the current workspace
-vtcode init
-
-# Run ast-grep rule tests and scan for the current workspace
-vtcode check ast-grep
-
-# Check whether VT Code can resolve ast-grep
-vtcode dependencies status ast-grep
-```
-
-### Notes
-
-- `vtcode deps ...` is a short alias for `vtcode dependencies ...`
-- `vtcode dependencies install search-tools` bundles the recommended `ripgrep` + `ast-grep` setup after any install
-  method
-- `vtcode dependencies install ripgrep` installs `rg` through a supported system installer and keeps startup
-  non-blocking when you skip it
-- `vtcode init` materializes VT Code's bundled ast-grep starter files into the current workspace: `sgconfig.yml`,
-  `rules/`, and `rule-tests/`
-- `vtcode check ast-grep` is the first-class replacement for the repo-only `./scripts/check.sh ast-grep` flow
-- VT Code does not auto-edit your shell profile; on Linux/BSD, add
-  `export PATH="${XDG_BIN_HOME:-$HOME/.local/bin}:$PATH"` yourself if you want managed binaries available outside VT
-  Code
-- On Linux, prefer `ast-grep` over `sg`
-- The curl installer includes the search-tools bundle by default; use `--without-search-tools` to skip it
-
-## check
-
-Run built-in repository checks from VT Code.
-
-### Usage
-
-```bash
-# Install ast-grep if needed
-vtcode dependencies install ast-grep
-
-# Materialize the bundled ast-grep scaffold in the current workspace
-vtcode init
-
-# Run ast-grep rule tests and scan
-vtcode check ast-grep
-```
-
-### Notes
-
-- `vtcode check ast-grep` runs `ast-grep test --config sgconfig.yml` and then `ast-grep scan --config sgconfig.yml`
-- The command expects `sgconfig.yml` in the workspace root and points you to `vtcode init` when the scaffold has not
-  been materialized yet
 
 ## plugins
 
