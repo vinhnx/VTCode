@@ -44,7 +44,8 @@ pub(super) const MINIMAL_STATIC_PROMPT_MAX_TOKENS_U64: u64 = 1000;
 // Named HOVER guidance measures 1321 tokens.
 // Raised for the partial-commit and conflict-reload runtime guidance (measured 1516).
 // Raised for the name-the-missing-fact inspection guidance (measured 1557).
-pub(super) const DEFAULT_LIVE_PROMPT_WITH_INSTRUCTIONS_MAX_TOKENS_U64: u64 = 1590;
+// Raised for the login-shell dialect guidance (measured 1606).
+pub(super) const DEFAULT_LIVE_PROMPT_WITH_INSTRUCTIONS_MAX_TOKENS_U64: u64 = 1640;
 
 // --- Composed prompts (`estimate_tokens`, usize) ---
 
@@ -52,7 +53,8 @@ pub(super) const DEFAULT_LIVE_PROMPT_WITH_INSTRUCTIONS_MAX_TOKENS_U64: u64 = 159
 // Raised for the partial-commit and conflict-reload runtime guidance
 // (measured 1182 minimal).
 // Raised for the name-the-missing-fact inspection guidance (measured 1223 minimal).
-pub(super) const COORDINATOR_MINIMAL_MAX_TOKENS_USIZE: usize = 1260;
+// Raised for the login-shell dialect guidance (measured 1272 minimal).
+pub(super) const COORDINATOR_MINIMAL_MAX_TOKENS_USIZE: usize = 1310;
 
 // Loose cap for non-minimal coordinator prompts; not yet churned by guidance edits.
 pub(super) const COORDINATOR_OTHER_MODES_MAX_TOKENS_USIZE: usize = 2000;
@@ -75,9 +77,11 @@ pub(super) const COORDINATOR_OTHER_MODES_MAX_TOKENS_USIZE: usize = 2000;
 // 11749 bytes/2503 tokens).
 // Raised for the name-the-missing-fact inspection guidance (measured 11685
 // bytes/2474 tokens Default, 11957 bytes/2544 tokens Minimal).
-pub(super) const PLANNING_FIXTURE_DEFAULT_MAX_BYTES: usize = 11_870;
+// Raised for the login-shell dialect guidance (measured 11916 bytes
+// Default, 12309 bytes Minimal).
+pub(super) const PLANNING_FIXTURE_DEFAULT_MAX_BYTES: usize = 12_100;
 pub(super) const PLANNING_FIXTURE_DEFAULT_MAX_TOKENS_USIZE: usize = 2_550;
-pub(super) const PLANNING_FIXTURE_MINIMAL_MAX_BYTES: usize = 12_140;
+pub(super) const PLANNING_FIXTURE_MINIMAL_MAX_BYTES: usize = 12_500;
 pub(super) const PLANNING_FIXTURE_MINIMAL_MAX_TOKENS_USIZE: usize = 2_620;
 
 // --- Composed prompt byte smoke checks (`len()`, usize; tokens stay authoritative) ---
@@ -88,7 +92,8 @@ pub(super) const PLANNING_FIXTURE_MINIMAL_MAX_TOKENS_USIZE: usize = 2_620;
 // Raised from 4700 for the fold-by-default delegation rule (measured 4719).
 // Raised for the partial-commit and conflict-reload runtime guidance (measured 4948).
 // Raised for the name-the-missing-fact inspection guidance (measured 5156).
-pub(super) const MINIMAL_COMPOSED_MAX_BYTES: usize = 5360;
+// Raised for the login-shell dialect guidance (measured 5387).
+pub(super) const MINIMAL_COMPOSED_MAX_BYTES: usize = 5600;
 
 // Includes fresh completion evidence guidance (+248 bytes, about 45 tokens).
 // Generated verifier success guidance adds 114 bytes (about 25 tokens).
@@ -98,7 +103,8 @@ pub(super) const MINIMAL_COMPOSED_MAX_BYTES: usize = 5360;
 // Raised from 6350 for the fold-by-default delegation rule (measured 6375).
 // Raised for the partial-commit and conflict-reload runtime guidance (measured 6604).
 // Raised for the name-the-missing-fact inspection guidance (measured 6812).
-pub(super) const DEFAULT_COMPOSED_MAX_BYTES: usize = 6990;
+// Raised for the login-shell dialect guidance (measured 7043).
+pub(super) const DEFAULT_COMPOSED_MAX_BYTES: usize = 7230;
 
 // Compared with `<` at the call site.
 // Includes fresh completion evidence guidance (+248 bytes, about 45 tokens).
@@ -107,7 +113,8 @@ pub(super) const DEFAULT_COMPOSED_MAX_BYTES: usize = 6990;
 // Raised from 4800 for the reuse-reads runtime guidance bullet (measured 4862).
 // Raised for the partial-commit and conflict-reload runtime guidance (measured 5970).
 // Raised for the name-the-missing-fact inspection guidance (measured 6178).
-pub(super) const LIGHTWEIGHT_COMPOSED_MAX_BYTES: usize = 6360;
+// Raised for the login-shell dialect guidance (measured 6409).
+pub(super) const LIGHTWEIGHT_COMPOSED_MAX_BYTES: usize = 6600;
 
 // Includes fresh completion evidence guidance (+248 bytes, about 45 tokens).
 // Generated verifier success guidance adds 114 bytes (about 25 tokens).
@@ -115,4 +122,5 @@ pub(super) const LIGHTWEIGHT_COMPOSED_MAX_BYTES: usize = 6360;
 // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5569).
 // Raised for the partial-commit and conflict-reload runtime guidance (measured 6677).
 // Raised for the name-the-missing-fact inspection guidance (measured 6885).
-pub(super) const SPECIALIZED_COMPOSED_MAX_BYTES: usize = 7060;
+// Raised for the login-shell dialect guidance (measured 7116).
+pub(super) const SPECIALIZED_COMPOSED_MAX_BYTES: usize = 7300;

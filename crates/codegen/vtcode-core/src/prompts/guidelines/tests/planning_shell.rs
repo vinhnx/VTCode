@@ -130,6 +130,12 @@ fn shell_profile_prompt_keeps_policy_and_syntax_separate() {
     let unix = render_shell_profile_guidance(ResolvedShellPromptProfile::UnixLike);
     assert!(unix.contains("Active shell profile: `unix_like`"));
     assert!(unix.contains("does not rewrite GNU flags for macOS BSD tools"));
+    // Session-vtcode-20261111T131200Z: `${PIPESTATUS[0]}` expanded empty under
+    // zsh and hid the exit code. The profile must name the login-shell
+    // dialect hazard and the portable alternative.
+    assert!(unix.contains("user's login shell, which may be zsh"));
+    assert!(unix.contains("${PIPESTATUS[...]}"));
+    assert!(unix.contains("harness-reported exit status"));
     assert!(unix.contains("controls prompt examples and expected command syntax only"));
     assert!(unix.contains("does not translate GNU-to-BSD"));
 

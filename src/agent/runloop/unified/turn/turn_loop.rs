@@ -33,7 +33,10 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, turn_started_event};
 use crate::agent::runloop::unified::planning_workflow::maybe_handle_planning_exit_trigger;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
-use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext, TurnPhase};
+use crate::agent::runloop::unified::run_loop_context::{
+    HarnessTurnState, RunLoopContext, TOOL_BUDGET_WARNING_THRESHOLD, TurnPhase, tool_loop_warning_due,
+    tool_loop_warning_message,
+};
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
@@ -218,6 +221,9 @@ pub(crate) async fn run_turn_loop(
     let mut step_count = 0;
     let mut current_max_tool_loops =
         initial_tool_loop_limit(turn_config.max_tool_loops, ctx.harness_state.is_approved_plan_execution());
+    // Turn-scoped loop-warning latch: a local bool resets naturally each
+    // turn, mirroring the one-shot tool-call warning without new state.
+    let mut tool_loop_warning_emitted = false;
     let mut turn_history_start_len = working_history.len();
     // Bounded condense-retry counter for truncated planning syntheses (see
     // the re-prompt block after generation). Prevents an oversized plan from
@@ -354,6 +360,18 @@ pub(crate) async fn run_turn_loop(
             result = loop_result;
             pending_plan_execution_target = target;
             break;
+        }
+
+        // Warn once at 75% of the loop budget so the model batches or
+        // wraps up before the hard limit forces tool-free synthesis.
+        if tool_loop_warning_due(
+            step_count,
+            current_max_tool_loops,
+            TOOL_BUDGET_WARNING_THRESHOLD,
+            tool_loop_warning_emitted,
+        ) {
+            tool_loop_warning_emitted = true;
+            working_history.push(uni::Message::system(tool_loop_warning_message(step_count, current_max_tool_loops)));
         }
 
         match maybe_handle_tool_loop_limit(&mut ctx, step_count, &mut current_max_tool_loops).await? {

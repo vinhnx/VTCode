@@ -623,7 +623,7 @@ fn browse_tool_guidance(
 pub(crate) fn render_shell_profile_guidance(shell_profile: ResolvedShellPromptProfile) -> String {
     let profile_lines = match shell_profile {
         ResolvedShellPromptProfile::UnixLike => {
-            "- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.\n- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools."
+            "- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.\n- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.\n- Commands run under the user's login shell, which may be zsh: avoid bash-only syntax such as `${PIPESTATUS[...]}` (it expands empty outside bash); rely on the harness-reported exit status instead of capturing codes through pipes."
         }
         ResolvedShellPromptProfile::PowerShell => {
             "- Active shell profile: `powershell`. Use native PowerShell syntax in `exec_command.cmd`, for example `Get-ChildItem`, `Select-String`, `Get-Content`, and `Where-Object`.\n- On native Windows, use WSL when you need Unix-like workflows or Unix command examples."

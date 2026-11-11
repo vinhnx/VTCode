@@ -43,6 +43,36 @@ impl ToolBudgetWarning {
     }
 }
 
+/// Whether the turn loop owes the model a loop-budget warning this
+/// iteration: at or past `threshold` of `max_tool_loops`, once per turn.
+/// Unlimited (`usize::MAX`, the `UNLIMITED_TOOL_LOOPS` sentinel) and
+/// disabled (`0`) budgets never warn.
+#[must_use]
+pub(crate) fn tool_loop_warning_due(
+    step_count: usize,
+    max_tool_loops: usize,
+    threshold: f64,
+    already_emitted: bool,
+) -> bool {
+    if already_emitted || max_tool_loops == 0 || max_tool_loops == usize::MAX {
+        return false;
+    }
+    step_count as f64 / max_tool_loops as f64 >= threshold
+}
+
+/// Tool-loop counterpart of [`ToolBudgetWarning::system_message`]: same
+/// shape and advice so loop pressure reads like the call warning the model
+/// already knows.
+#[must_use]
+pub(crate) fn tool_loop_warning_message(used: usize, max: usize) -> String {
+    format!(
+        "Tool-loop budget warning: {}/{} used; {} remaining for this turn. Use targeted extraction/batching before additional tool calls.",
+        used,
+        max,
+        max.saturating_sub(used),
+    )
+}
+
 /// Shared tail of the tool-call and wall-clock budget exhaustion directives.
 pub(crate) const BUDGET_EXHAUSTED_SYNTHESIS_NOTE: &str = "Tools are disabled for the rest of this turn, so further tool calls are \
 skipped. Synthesize your final answer now from the tool outputs already gathered in this conversation.";
@@ -155,5 +185,32 @@ impl ToolWallClockExhaustion {
             "Tool wall-clock budget exhausted for this turn ({}s). {BUDGET_EXHAUSTED_SYNTHESIS_NOTE}",
             self.max_secs
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tool_loop_warning_fires_once_at_threshold() {
+        const THRESHOLD: f64 = 0.75;
+        // Both sides of the 45/60 boundary.
+        assert!(!tool_loop_warning_due(44, 60, THRESHOLD, false));
+        assert!(tool_loop_warning_due(45, 60, THRESHOLD, false));
+        assert!(tool_loop_warning_due(59, 60, THRESHOLD, false));
+        // One-shot latch.
+        assert!(!tool_loop_warning_due(59, 60, THRESHOLD, true));
+        // Unlimited and disabled budgets never warn (and must not divide by zero).
+        assert!(!tool_loop_warning_due(usize::MAX, usize::MAX, THRESHOLD, false));
+        assert!(!tool_loop_warning_due(usize::MAX, 0, THRESHOLD, false));
+        assert!(!tool_loop_warning_due(0, 60, THRESHOLD, false));
+    }
+
+    #[test]
+    fn tool_loop_warning_message_mirrors_call_warning_shape() {
+        let message = tool_loop_warning_message(45, 60);
+        assert!(message.starts_with("Tool-loop budget warning: 45/60 used; 15 remaining for this turn."));
+        assert!(message.contains("Use targeted extraction/batching before additional tool calls."));
     }
 }

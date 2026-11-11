@@ -48,6 +48,7 @@ Work the way a senior engineer on this codebase would: understand the relevant c
 ## Shell Profile
 - Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.
 - On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.
+- Commands run under the user's login shell, which may be zsh: avoid bash-only syntax such as `${PIPESTATUS[...]}` (it expands empty outside bash); rely on the harness-reported exit status instead of capturing codes through pipes.
 - The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.
 - VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags."#,
     ]
@@ -115,6 +116,7 @@ When visible structure helps, tag conclusions and supporting evidence with `<ana
 ## Shell Profile
 - Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.
 - On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.
+- Commands run under the user's login shell, which may be zsh: avoid bash-only syntax such as `${PIPESTATUS[...]}` (it expands empty outside bash); rely on the harness-reported exit status instead of capturing codes through pipes.
 - The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.
 - VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.
 
