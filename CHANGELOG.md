@@ -5,6 +5,33 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.182.0 - 2026-11-11
+
+### Highlights
+
+#### Bug Fixes
+
+- Vary tool-free retries, salvage violated plans (7018756e)
+- Loop-budget warning and login-shell dialect guidance (40254f0a)
+- Update cargo-vet exemptions to 0.181.11 (927af5c5)
+- Align stale learning-label test with shared humanize contract (d39cea7f)
+
+#### Features
+
+- Upgrade pinned gpui-kit from 0.9.0 to 0.9.1 (3820e2f3)
+- Add Copy file path palette command for tree selection (c496a907)
+- Add copy buttons to config editor dialog (bb3b3d22)
+
+### Other Changes
+
+#### Other
+
+- Improve README (b3d6c22a)
+
+#### Refactors
+
+- Replace ast-grep and ripgrep runtimes with native scanners (16dd9fd4)
+
 ## 0.181.11 - 2026-11-10
 
 ### Highlights
