@@ -835,17 +835,89 @@ fn cli_config_enum_editor_contains_tab_focus(cx: &mut TestAppContext) {
         // The closed Kit Select carries an id-less interior stop (the wrap
         // cycle visits it between save and the select), so pin containment
         // like the palette test instead of exact endpoints — and prove the
-        // cycle still reaches both the select and the save action.
+        // cycle still reaches both the select and the save action. The walk
+        // is stop-count-agnostic (bounded full cycles, not a fixed press
+        // list) so footer buttons can come and go without re-pinning it.
         let mut visited_select = false;
         let mut visited_save = false;
-        for key in ["tab", "tab", "tab", "tab", "shift-tab", "shift-tab"] {
+        for _ in 0..12 {
+            if visited_select && visited_save {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).config_editor_focus.contains_focused(window, cx), "tab stays inside the editor");
+            visited_select |= window.find("cli-config-option-select").focused() == Some(true);
+            visited_save |= window.find("save-cli-config-edit").focused() == Some(true);
+        }
+        for key in ["shift-tab", "shift-tab"] {
             window.press(key, cx);
             window.render_frame(cx);
             assert!(view.read(cx).config_editor_focus.contains_focused(window, cx), "{key} stays inside the editor");
-            visited_select |= window.find("cli-config-option-select").focused() == Some(true);
-            visited_save |= window.find("save-cli-config-edit").focused() == Some(true);
         }
         assert!(visited_select && visited_save, "tab cycles the editor stops");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn cli_config_editor_copy_buttons_write_path_and_saved_value(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![vtcode_desktop_protocol::ConfigSetting {
+                    path: "agent.default_model".into(),
+                    value: json!("model-a"),
+                    origin: Some("workspace".into()),
+                    label: Some("Default model".into()),
+                    type_name: Some("string".into()),
+                    default_value: None,
+                    description: Some("Model used for new conversations.".into()),
+                    options: Vec::new(),
+                    group: Some("Model & Provider".into()),
+                    group_description: None,
+                    editable: true,
+                }],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            }));
+            view.open_settings(window, cx);
+            view.open_cli_config_editor("agent.default_model".into(), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(window.simulate_next_frame(cx) > 0);
+        assert_eq!(window.find("copy-config-path").label(), Some("Copy setting path"));
+        assert_eq!(window.find("copy-config-value").label(), Some("Copy value"));
+        // Both buttons join the trap cycle, so Tab reaches each of them.
+        let mut visited_path = false;
+        let mut visited_value = false;
+        for _ in 0..12 {
+            if visited_path && visited_value {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+            visited_path |= window.find("copy-config-path").focused() == Some(true);
+            visited_value |= window.find("copy-config-value").focused() == Some(true);
+        }
+        assert!(visited_path && visited_value, "tab reaches both copy buttons");
+        window.click("copy-config-path", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("agent.default_model"));
+    cx.update_window(window, |_, window, cx| {
+        window.click("copy-config-value", cx);
+        window.render_frame(cx);
+        // Saved-state semantics, like the row menu: the quoted summary of
+        // the stored value, and copying never dismisses the dialog.
+        assert!(view.read(cx).config_editor.is_some());
+    })
+    .unwrap();
+    assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("\"model-a\""));
 }

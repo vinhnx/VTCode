@@ -124,6 +124,7 @@ mod composer_attachments;
 mod composer_controls;
 mod composer_history;
 mod composer_render;
+mod config_editor_copy;
 mod config_search;
 mod configuration;
 mod configuration_render;

@@ -1,4 +1,5 @@
 //! CLI configuration page, setting rows, and editor dialog renders.
+use super::config_editor_copy::config_editor_copy_group;
 use super::config_search::ConfigSearchCorpus;
 use super::configuration::{
     CONFIG_GROUP_PAGE_SIZE, CliConfigurationProps, ConfigCatalogCache, ConfigCatalogGroup, ConfigValueKind,
@@ -917,27 +918,35 @@ impl DesktopView {
                     .child(
                         div()
                             .flex()
-                            .justify_end()
+                            .justify_between()
                             .gap_2()
+                            .child(config_editor_copy_group(&editor.path, cx))
                             .child(
-                                desktop_default_button("cancel-cli-config-edit")
-                                    .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                                    .on_click(
-                                        cx.listener(|view, _, window, cx| view.close_cli_config_editor(window, cx)),
+                                div()
+                                    .flex()
+                                    .gap_2()
+                                    .child(
+                                        desktop_default_button("cancel-cli-config-edit")
+                                            .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
+                                            .on_click(cx.listener(|view, _, window, cx| {
+                                                view.close_cli_config_editor(window, cx)
+                                            })),
+                                    )
+                                    .child(
+                                        desktop_glass_secondary_primary_button(
+                                            "save-cli-config-edit",
+                                            &colors,
+                                            self.config_write_pending || !self.can_edit_cli_settings(),
+                                        )
+                                        .label(if self.config_write_pending {
+                                            rust_i18n::t!("app.configuration.saving").to_string()
+                                        } else {
+                                            rust_i18n::t!("app.configuration.save_reload").to_string()
+                                        })
+                                        .on_click(
+                                            cx.listener(|view, _, window, cx| view.submit_cli_config_edit(window, cx)),
+                                        ),
                                     ),
-                            )
-                            .child(
-                                desktop_glass_secondary_primary_button(
-                                    "save-cli-config-edit",
-                                    &colors,
-                                    self.config_write_pending || !self.can_edit_cli_settings(),
-                                )
-                                .label(if self.config_write_pending {
-                                    rust_i18n::t!("app.configuration.saving").to_string()
-                                } else {
-                                    rust_i18n::t!("app.configuration.save_reload").to_string()
-                                })
-                                .on_click(cx.listener(|view, _, window, cx| view.submit_cli_config_edit(window, cx))),
                             ),
                     )
                     .focus_trap("cli-config-editor-trap", &self.config_editor_focus),
