@@ -393,6 +393,22 @@ fn has_unsafe_readonly_options_flags_injection_without_second_walk() {
     assert!(!has_unsafe_readonly_options(&words("git status")));
 }
 
+/// `bat --pager <command>` names the program bat spawns to page its output.
+/// bat pages only on a terminal, so under the PTY backend (which sets a
+/// controlling terminal) that program runs — turning a read-only inspection
+/// into a command launcher.
+#[test]
+fn has_unsafe_readonly_options_rejects_bat_pager_selection() {
+    let words = |command: &str| -> Vec<String> { shell_words::split(command).expect("split command") };
+    assert!(has_unsafe_readonly_options(&words("bat --pager 'rm -rf /' README.md")));
+    assert!(has_unsafe_readonly_options(&words("bat --pager=rm README.md")));
+    assert!(has_unsafe_readonly_options(&words("bat -p rm README.md")));
+    assert!(has_unsafe_readonly_options(&words("bat --paging=always README.md")));
+    // A plain inspection stays read-only.
+    assert!(!has_unsafe_readonly_options(&words("bat README.md")));
+    assert!(!has_unsafe_readonly_options(&words("bat --style=numbers README.md")));
+}
+
 #[test]
 fn dynamic_shell_syntax_allows_quoted_globs_only() {
     assert!(!contains_dynamic_shell_syntax("find src -name '*.rs'"));

@@ -371,7 +371,7 @@ async fn test_exec_command_rg() {
 ```
 
 Use advanced `code_search` for focused literal queries across definitions, syntactic usages, text, and paths. Use
-`exec_command` or the ast-grep skill for arbitrary structural patterns.
+`exec_command` for arbitrary structural patterns.
 
 ## **Mock Data and Testing Utilities**
 

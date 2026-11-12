@@ -30,5 +30,6 @@ Paths are under `src/`. `core/agent/` runtime, event recording, runner, request 
 - `AgentSessionState.messages` is `Arc<Vec<Message>>`; mutate via `messages_mut()`/`Arc::make_mut` so request and continuation histories stay shared.
 - Async setup paths must use Tokio filesystem APIs or `spawn_blocking` for synchronous scans, persistence, or Git work.
 - Force-cancel retains a session when direct-child termination is unconfirmed, because direct-child exit does not prove descendant cleanup.
+- Read-only intent skips the approval gate, so an allow-listed program name must never be able to write or execute.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-core.md) — read the section for the subsystem you change before editing it.

@@ -185,11 +185,27 @@ mod tests {
             "head -50 src/lib.rs",
             "tail -20 src/lib.rs",
             "sort src/words.txt | uniq",
-            "ast-grep -p 'foo($A)' -l rs",
         ] {
             let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
             assert!(!intent.mutating, "expected '{cmd}' to be read-only");
             assert!(intent.readonly_unified_action, "expected '{cmd}' to be readonly_unified_action");
+        }
+    }
+
+    /// `ast-grep`/`sg` are not shipped by VT Code, `sg` also names the
+    /// shadow-utils group-switch command that runs an arbitrary command, and
+    /// several ast-grep modes rewrite files. They must stay mutating so they
+    /// take the approval path instead of being admitted as read-only.
+    #[test]
+    fn command_session_run_ast_grep_is_mutating() {
+        for cmd in [
+            "ast-grep -p 'foo($A)' -l rs",
+            "ast-grep scan --update-all",
+            "sg wheel -c 'rm -rf /'",
+        ] {
+            let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
+            assert!(intent.mutating, "expected '{cmd}' to be mutating");
+            assert!(!intent.readonly_unified_action, "expected '{cmd}' to not be readonly_unified_action");
         }
     }
 

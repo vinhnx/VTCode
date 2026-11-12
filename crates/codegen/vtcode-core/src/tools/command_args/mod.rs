@@ -669,10 +669,6 @@ pub(crate) fn has_unsafe_readonly_options(words: &[String]) -> bool {
                 || word.starts_with("--pre=")
                 || word.starts_with("--hostname-bin=")
         }),
-        "ast-grep" | "sg" => command_words
-            .iter()
-            .skip(1)
-            .any(|word| word == "-r" || word == "--rewrite" || word.starts_with("--rewrite=")),
         "fd" => command_words
             .iter()
             .skip(1)
@@ -689,6 +685,18 @@ pub(crate) fn has_unsafe_readonly_options(words: &[String]) -> bool {
         // (`-p`). `has_unsafe_awk_options` fails closed on all of those; only
         // data-only options (`-v`, `-F`) and a write-free program pass.
         "awk" => has_unsafe_awk_options(&command_words[1..]),
+        // `bat` stays on the read-only allow-list, but `--pager <command>`
+        // selects the program bat spawns to page its output. bat only pages
+        // on a terminal, so under the PTY backend (which sets a controlling
+        // terminal) that program runs, which turns a read-only inspection
+        // into a command launcher.
+        "bat" => command_words.iter().skip(1).any(|word| {
+            word == "-p"
+                || word == "--pager"
+                || word.starts_with("--pager=")
+                || word == "--paging"
+                || word.starts_with("--paging=")
+        }),
         _ => false,
     }
 }

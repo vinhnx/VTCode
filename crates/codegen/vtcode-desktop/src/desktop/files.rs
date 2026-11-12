@@ -72,7 +72,7 @@ pub(super) fn is_image_path(rel_path: &str) -> bool {
 
 /// Whether a workspace-relative path points at a markdown document the file
 /// preview renders through the shared markdown viewer. Mirrors the
-/// `md | markdown` pair `ast_grep` uses for language detection.
+/// `md | markdown` pair the ast-grep project uses for language detection.
 pub(super) fn is_markdown_path(rel_path: &str) -> bool {
     rel_path
         .rsplit('.')

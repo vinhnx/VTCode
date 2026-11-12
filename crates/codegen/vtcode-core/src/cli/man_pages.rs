@@ -49,7 +49,6 @@ impl ManPageGenerator {
                 "vtcode ask --output-format json \"explain ownership in Rust\"",
             ],
             "benchmark" => &["vtcode benchmark"],
-            "check" => &["vtcode check ast-grep"],
             "chat" => &["vtcode chat"],
             "create-project" => &[
                 "vtcode create-project myapp --feature web --feature auth",
@@ -161,7 +160,6 @@ impl ManPageGenerator {
             ("Ask a question:", "vtcode ask \"Explain Rust ownership\""),
             ("Create a web project:", "vtcode create-project myapp --feature web --feature auth"),
             ("Generate man page:", "vtcode man chat"),
-            ("Run ast-grep checks for the current workspace:", "vtcode check ast-grep"),
         ] {
             roff.text([roman(label)]);
             roff.text([bold(format!("  {example}"))]);

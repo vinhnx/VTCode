@@ -181,6 +181,15 @@ fn source_inspection_shell_exemption_is_exact_and_approval_does_not_grant_it() {
         "python3 -c 'open(\"sample.md\",\"w\").write(\"bad\")'",
         "cat > sample.md <<EOF\nbad\nEOF",
         "cargo fmt --all",
+        // `ast-grep` rewrites files through several modes, and `sg` is the
+        // shadow-utils group-switch command that runs an arbitrary command.
+        // Neither may pass as a read-only shell shape.
+        "ast-grep -r 'bar' src",
+        "ast-grep scan --update-all",
+        "sg wheel -c 'rm -rf /'",
+        // `bat --pager <cmd>` spawns the named program when it pages, and the
+        // PTY backend gives it a controlling terminal.
+        "bat --pager 'rm -rf /' README.md",
     ] {
         assert!(inspection.check_shell(&json!({"cmd":command,"confirm":true}), cwd).is_err(), "{command}");
     }

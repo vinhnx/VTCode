@@ -44,7 +44,7 @@ pub(super) fn is_write_tool_name(tool_name: &str) -> bool {
 ///
 /// Collapses semantically equivalent verification and read commands so the
 /// identical-call detector catches patterns like:
-/// - `command -v ast-grep` / `which ast-grep` / `ast-grep --help` → `__verify__:ast-grep`
+/// - `command -v rg` / `which rg` / `rg --help` → `__verify__:rg`
 /// - `cat file.txt` / `head file.txt` → `__read__:file.txt`
 ///
 /// Returns `None` if the command is not a recognized pattern (pass through unchanged).
@@ -64,7 +64,7 @@ pub(super) fn canonicalize_command_for_detection(command: &str) -> Option<String
     if (tokens[0] == "command" && tokens.len() >= 3 && tokens[1] == "-v") || (tokens[0] == "which" && tokens.len() >= 2)
     {
         let tool = if tokens[0] == "command" { tokens[2] } else { tokens[1] };
-        // Strip path prefix (e.g., /usr/bin/ast-grep → ast-grep)
+        // Strip path prefix (e.g., /usr/bin/rg → rg)
         let basename = tool.rsplit('/').next().unwrap_or(tool);
         return Some(format!("__verify__:{basename}"));
     }
@@ -343,8 +343,8 @@ pub(super) fn normalize_args_for_detection(tool_name: &str, args: &serde_json::V
         }
 
         // For command tools: canonicalize verification and read commands
-        // so `command -v ast-grep` / `which ast-grep` / `ast-grep --help`
-        // all hash to the same `__verify__:ast-grep` token.
+        // so `command -v rg` / `which rg` / `rg --help`
+        // all hash to the same `__verify__:rg` token.
         if is_command_tool_name(base_name) {
             if let Some(cmd) = normalized.get("command").and_then(|v| v.as_str()) {
                 if let Some(canonical) = canonicalize_command_for_detection(cmd) {

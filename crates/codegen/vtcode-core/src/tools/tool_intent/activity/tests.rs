@@ -376,6 +376,9 @@ fn ambiguous_or_mutating_compounds_remain_mutations() {
         "fd --exec sh -c 'touch output'",
         "tree -o output.txt",
         "ast-grep -r 'README.md'",
+        // `sg` also names the shadow-utils group-switch command, which runs an
+        // arbitrary command rather than inspecting anything.
+        "sg wheel -c 'rm -rf /'",
         "sed -n -fmalicious.sed -e '1p' src/main.rs",
         "sed -I '' 's/a/b/' src/main.rs",
         "sed -n '1p\nw leaked.txt' src/main.rs",

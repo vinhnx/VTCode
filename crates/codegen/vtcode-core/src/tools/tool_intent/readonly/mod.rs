@@ -12,11 +12,20 @@ use std::path::Path;
 /// `cd` is included because changing the working directory mutates nothing;
 /// models habitually prefix exploration with `cd <workspace> && …` and plan
 /// mode must not reject that pattern (checkpoint turn_810).
+///
+/// `ast-grep`/`sg` are deliberately absent. VT Code no longer ships the
+/// ast-grep binary, and `sg` also names the shadow-utils group-switch
+/// command, which runs an arbitrary command (`sg <group> -c '<command>'`).
+/// Allow-listing it would classify such an invocation as a read-only
+/// inspection and skip the approval gate.
+///
+/// Programs that stay on the list but can still write or execute need an
+/// option-level guard in `command_args::has_unsafe_readonly_options` — for
+/// example `bat --pager <command>`, which spawns the named program.
 const READONLY_UNIFIED_EXEC_COMMANDS: &[&str] = &[
     "rg", "ls", "cat", "diff", "find", "wc", "grep", "egrep", "fgrep", "head", "tail", "sort", "uniq", "bat", "sed",
-    "awk", "cut", "tr", "ast-grep", "sg", "echo", "pwd", "printf", "true", "false", "test", "cd", "fd", "tree",
-    "which", "stat", "file", "du", "df", "realpath", "basename", "dirname", "nl", "column", "jq", "date", "whoami",
-    "uname",
+    "awk", "cut", "tr", "echo", "pwd", "printf", "true", "false", "test", "cd", "fd", "tree", "which", "stat", "file",
+    "du", "df", "realpath", "basename", "dirname", "nl", "column", "jq", "date", "whoami", "uname",
 ];
 
 pub fn is_readonly_base_command(command: &str) -> bool {

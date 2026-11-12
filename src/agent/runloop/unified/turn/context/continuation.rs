@@ -597,7 +597,6 @@ fn last_user_requested_progressive_work(history: &[uni::Message]) -> bool {
         "scan",
         "search",
         "grep",
-        "ast-grep",
         "find ",
         "use vt code",
         "semantic code understanding",

@@ -4,30 +4,27 @@ use super::*;
 
 #[test]
 fn canonicalize_command_v_to_verify() {
-    assert_eq!(canonicalize_command_for_detection("command -v ast-grep"), Some("__verify__:ast-grep".to_string()));
+    assert_eq!(canonicalize_command_for_detection("command -v rg"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_which_to_verify() {
-    assert_eq!(canonicalize_command_for_detection("which ast-grep"), Some("__verify__:ast-grep".to_string()));
+    assert_eq!(canonicalize_command_for_detection("which rg"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_help_to_verify() {
-    assert_eq!(canonicalize_command_for_detection("ast-grep --help"), Some("__verify__:ast-grep".to_string()));
+    assert_eq!(canonicalize_command_for_detection("rg --help"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_version_to_verify() {
-    assert_eq!(canonicalize_command_for_detection("ast-grep --version"), Some("__verify__:ast-grep".to_string()));
+    assert_eq!(canonicalize_command_for_detection("rg --version"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_short_help_to_verify() {
-    assert_eq!(canonicalize_command_for_detection("ast-grep -h"), Some("__verify__:ast-grep".to_string()));
+    assert_eq!(canonicalize_command_for_detection("rg -h"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_path_prefix_stripped() {
-    assert_eq!(
-        canonicalize_command_for_detection("command -v /usr/bin/ast-grep"),
-        Some("__verify__:ast-grep".to_string())
-    );
+    assert_eq!(canonicalize_command_for_detection("command -v /usr/bin/rg"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_cat_to_read() {
@@ -47,16 +44,13 @@ fn canonicalize_empty_command_returns_none() {
 }
 #[test]
 fn canonicalize_env_prefix_skips_to_real_tool() {
-    assert_eq!(
-        canonicalize_command_for_detection("env VAR=val ast-grep --help"),
-        Some("__verify__:ast-grep".to_string())
-    );
+    assert_eq!(canonicalize_command_for_detection("env VAR=val rg --help"), Some("__verify__:rg".to_string()));
 }
 #[test]
 fn canonicalize_env_prefix_with_path() {
     assert_eq!(
-        canonicalize_command_for_detection("env PATH=/usr/bin ast-grep --version"),
-        Some("__verify__:ast-grep".to_string())
+        canonicalize_command_for_detection("env PATH=/usr/bin rg --version"),
+        Some("__verify__:rg".to_string())
     );
 }
 // --- Command normalization integration tests ---
@@ -66,15 +60,15 @@ fn verification_commands_normalize_to_same_hash() {
     let mut detector = LoopDetector::with_max_repeated_calls(2);
     let tool = tools::UNIFIED_EXEC;
 
-    // These should all normalize to __verify__:ast-grep
-    let args1 = json!({"command": "command -v ast-grep"});
-    let args2 = json!({"command": "which ast-grep"});
-    let _args3 = json!({"command": "ast-grep --help"});
+    // These should all normalize to __verify__:rg
+    let args1 = json!({"command": "command -v rg"});
+    let args2 = json!({"command": "which rg"});
+    let _args3 = json!({"command": "rg --help"});
 
     assert!(detector.record_call(tool, &args1).is_none());
     // Second call with equivalent command should trigger
     let warning = detector.record_call(tool, &args2);
-    assert!(warning.is_some(), "which ast-grep should be detected as duplicate of command -v ast-grep");
+    assert!(warning.is_some(), "which rg should be detected as duplicate of command -v rg");
 }
 #[test]
 fn cat_commands_normalize_to_read_target() {
@@ -95,8 +89,8 @@ fn verification_spiral_detected_across_tools() {
     let tool = tools::UNIFIED_EXEC;
 
     // Verification spiral: different commands checking the same tool
-    let args1 = json!({"command": "command -v ast-grep"});
-    let _args2 = json!({"command": "ast-grep --version 2>&1 | head -5"});
+    let args1 = json!({"command": "command -v rg"});
+    let _args2 = json!({"command": "rg --version 2>&1 | head -5"});
 
     assert!(detector.record_call(tool, &args1).is_none());
     // --version doesn't normalize (has pipe), so this shouldn't trigger
