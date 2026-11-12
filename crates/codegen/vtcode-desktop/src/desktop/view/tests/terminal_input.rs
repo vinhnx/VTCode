@@ -1,21 +1,5 @@
 use super::*;
 
-/// Open the desktop, prepare a real workspace, and toggle the terminal on.
-/// Returns the tempdir so the shell's cwd outlives the test.
-fn open_workspace_terminal(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>, tempfile::TempDir) {
-    let (window, view) = open_desktop(cx);
-    let dir = tempfile::tempdir().unwrap();
-    view.update(cx, |view, cx| {
-        view.prepare_workspace(dir.path(), cx);
-    });
-    cx.update_window(window, |_, window, cx| {
-        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    (window, view, dir)
-}
-
 fn press_keys(window: AnyWindowHandle, keys: &[&str], cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         for key in keys {
@@ -48,14 +32,15 @@ fn pump_until_grid_count(
 ) {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     loop {
-        let found = view.update(cx, |view, cx| {
+        let (found, text) = view.update(cx, |view, cx| {
             assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
-            grid_text(view).match_indices(marker).count() >= count
+            let text = grid_text(view);
+            (text.match_indices(marker).count() >= count, text)
         });
         if found {
             break;
         }
-        assert!(std::time::Instant::now() < deadline, "grid never showed {marker} {count}x");
+        assert!(std::time::Instant::now() < deadline, "grid never showed {marker} {count}x; grid was {text:?}");
         std::thread::sleep(Duration::from_millis(10));
     }
     cx.update_window(window, |_, window, cx| {
@@ -170,7 +155,18 @@ fn terminal_escape_reaches_shell_without_selection(cx: &mut TestAppContext) {
     let (window, view, _dir) = open_workspace_terminal(cx);
     press_keys(window, &["e", "c", "h", "o", "space", "r", "d", "y", "enter"], cx);
     pump_until_grid_count(window, &view, "rdy", 2, cx);
-    press_keys(window, &["c", "a", "t", "space", "-", "v", "enter"], cx);
+    // `command` bypasses user aliases/functions (a `cat=bat` alias turns
+    // `cat -v` into a clap error and the escape never reaches a reader).
+    press_keys(
+        window,
+        &[
+            "c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter",
+        ],
+        cx,
+    );
+    // Let the fork land: an escape pressed while zsh still holds the line
+    // is swallowed by line editing instead of reaching cat.
+    std::thread::sleep(Duration::from_millis(500));
     press_keys(window, &["escape"], cx);
     pump_until_grid_count(window, &view, "^[", 1, cx);
 }

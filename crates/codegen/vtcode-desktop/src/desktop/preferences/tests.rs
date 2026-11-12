@@ -274,6 +274,40 @@ fn terminal_ansi_theme_round_trips_and_invalid_values_fall_back_to_auto() {
 }
 
 #[test]
+fn terminal_position_round_trips_and_invalid_values_fall_back_to_bottom() {
+    assert_eq!(TerminalPosition::default(), TerminalPosition::Bottom);
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.terminal_position(), TerminalPosition::Bottom);
+
+    for position in TerminalPosition::ALL {
+        let mut preferences = Preferences::default();
+        preferences.set_terminal_position(position);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(
+            serialized.contains(&format!("\"terminalPosition\":\"{}\"", position.id())),
+            "saved id is stable for {position:?}: {serialized}"
+        );
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.terminal_position(), position);
+    }
+
+    assert_eq!(TerminalPosition::from_saved(Some("  LEFT ")), TerminalPosition::Left);
+    for saved in ["top", "", "   "] {
+        let content = format!(r#"{{"theme":"ciapre","terminalPosition":{saved:?}}}"#);
+        let loaded: Preferences = serde_json::from_str(&content).unwrap();
+        assert_eq!(loaded.terminal_position(), TerminalPosition::Bottom, "saved {saved:?}");
+        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    }
+
+    let mut preferences = Preferences::default();
+    assert_eq!(preferences.terminal_panel_width(), 360.0);
+    preferences.set_terminal_panel_width(10_000.0);
+    assert!((preferences.terminal_panel_width() - MAX_TERMINAL_PANEL_WIDTH).abs() < 0.001);
+    preferences.set_terminal_panel_width(1.0);
+    assert!((preferences.terminal_panel_width() - MIN_TERMINAL_PANEL_WIDTH).abs() < 0.001);
+}
+
+#[test]
 fn offered_terminals_combine_always_available_detected_and_saved() {
     // Terminal alone when nothing is detected: it ships with macOS.
     assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[]), vec![CliTerminal::Terminal]);

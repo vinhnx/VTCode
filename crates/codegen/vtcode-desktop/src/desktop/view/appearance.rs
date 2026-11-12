@@ -18,6 +18,7 @@ pub(super) struct AppearanceSettingsProps {
     pub(super) code_font_size: u8,
     pub(super) ui_language_select: Entity<UiLanguageSelectState>,
     pub(super) terminal_ansi_select: Entity<preferences::TerminalAnsiThemeSelectState>,
+    pub(super) terminal_position_select: Entity<preferences::TerminalPositionSelectState>,
     pub(super) navigation_visible: bool,
     pub(super) navigation_on_right: bool,
     pub(super) translucent_sidebar: bool,
@@ -44,6 +45,7 @@ impl AppearanceSettingsProps {
             code_font_size: typography.code_font_size,
             ui_language_select: view.ui_language_select.clone(),
             terminal_ansi_select: view.terminal_ansi_select.clone(),
+            terminal_position_select: view.terminal_position_select.clone(),
             navigation_visible: view.preferences.navigation_visible(),
             navigation_on_right: view.preferences.navigation_on_right(),
             translucent_sidebar: view.preferences.translucent_sidebar,
@@ -89,6 +91,15 @@ impl DesktopView {
         self.contrast_slider.update(cx, |slider, cx| slider.set_value(0.0, window, cx));
     }
 
+    pub(super) fn set_terminal_position(&mut self, position: preferences::TerminalPosition, cx: &mut Context<Self>) {
+        if self.preferences.terminal_position() == position {
+            return;
+        }
+        self.preferences.set_terminal_position(position);
+        self.save_preferences();
+        cx.notify();
+    }
+
     pub(super) fn set_terminal_ansi_theme(&mut self, theme: preferences::TerminalAnsiTheme, cx: &mut Context<Self>) {
         if self.preferences.terminal_ansi_theme() == theme {
             return;
@@ -112,6 +123,23 @@ impl DesktopView {
         let subscription = cx.subscribe_in(&select, window, |view, _, event, _, cx| {
             if let SelectEvent::Confirm(Some(theme)) = event {
                 view.set_terminal_ansi_theme(*theme, cx);
+            }
+        });
+        (select, subscription)
+    }
+
+    /// Build the dock-position dropdown state outside `bootstrap.rs`, which
+    /// sits at the file ceiling; the setting, handler, and wiring stay together.
+    pub(super) fn build_terminal_position_select(
+        preferences: &preferences::Preferences,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<preferences::TerminalPositionSelectState>, Subscription) {
+        let select =
+            cx.new(|cx| preferences::TerminalPositionOption::select_state(preferences.terminal_position(), window, cx));
+        let subscription = cx.subscribe_in(&select, window, |view, _, event, _, cx| {
+            if let SelectEvent::Confirm(Some(position)) = event {
+                view.set_terminal_position(*position, cx);
             }
         });
         (select, subscription)
@@ -781,16 +809,27 @@ impl DesktopView {
         content = content.child(accessible_group_box(
             "appearance-terminal-group",
             terminal_group_title.clone(),
-            settings_group_box(terminal_group_title, colors).child(settings_row(
-                rust_i18n::t!("app.settings.appearance.terminal_colors").to_string(),
-                rust_i18n::t!("app.settings.appearance.terminal_colors_description").to_string(),
-                Select::new(&props.terminal_ansi_select)
-                    .id("terminal-ansi-select")
-                    .accessibility_label(rust_i18n::t!("app.settings.appearance.terminal_colors").to_string())
-                    .menu_max_h(px(320.))
-                    .w(px(240.)),
-                colors,
-            )),
+            settings_group_box(terminal_group_title, colors)
+                .child(settings_row(
+                    rust_i18n::t!("app.settings.appearance.terminal_colors").to_string(),
+                    rust_i18n::t!("app.settings.appearance.terminal_colors_description").to_string(),
+                    Select::new(&props.terminal_ansi_select)
+                        .id("terminal-ansi-select")
+                        .accessibility_label(rust_i18n::t!("app.settings.appearance.terminal_colors").to_string())
+                        .menu_max_h(px(320.))
+                        .w(px(240.)),
+                    colors,
+                ))
+                .child(settings_row(
+                    rust_i18n::t!("app.settings.appearance.terminal_position").to_string(),
+                    rust_i18n::t!("app.settings.appearance.terminal_position_description").to_string(),
+                    Select::new(&props.terminal_position_select)
+                        .id("terminal-position-select")
+                        .accessibility_label(rust_i18n::t!("app.settings.appearance.terminal_position").to_string())
+                        .menu_max_h(px(320.))
+                        .w(px(240.)),
+                    colors,
+                )),
         ));
 
         content = content.child(accessible_group_box(

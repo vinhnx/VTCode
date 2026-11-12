@@ -25,10 +25,153 @@ fn terminal_keyboard_resize_adjusts_height_and_grid(cx: &mut TestAppContext) {
     });
     view.update(cx, |view, cx| {
         assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
-        let expected =
-            terminal_rows_for_height(view.terminal_panel_height, terminal_row_height(cx.theme().mono_font_size))
-                .unwrap();
+        let expected = terminal_content_rows(view.terminal_panel_height, cx.theme().mono_font_size).unwrap();
         assert_eq!(view.terminal.as_ref().unwrap().grid_size().rows, expected);
+    });
+    // Rendered pixels must track the preference, not a fixed constant.
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let laid_out = window.find("terminal-panel").bounds().size.height.as_f32();
+        assert_eq!(laid_out, view.read(cx).terminal_panel_height);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn terminal_keyboard_resize_adjusts_side_width_with_sign(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    view.update(cx, |view, cx| {
+        view.prepare_workspace(dir.path(), cx);
+        view.set_terminal_position(crate::desktop::preferences::TerminalPosition::Left, cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.terminal_resize_focus.focus(window, cx);
+        });
+        window.press("right", cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).terminal_panel_width, 370.0);
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.set_terminal_position(crate::desktop::preferences::TerminalPosition::Right, cx);
+            view.terminal_resize_focus.focus(window, cx);
+        });
+        window.press("left", cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).terminal_panel_width, 380.0);
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_drag_resizes_side_panel_width(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    view.update(cx, |view, cx| {
+        view.prepare_workspace(dir.path(), cx);
+        view.set_terminal_position(crate::desktop::preferences::TerminalPosition::Left, cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let before = cx.update(|cx| view.read(cx).terminal_panel_width);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let start = window.find("terminal-resize-left").bounds().center();
+        window.drag(start, point(start.x + px(60.), start.y), cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).terminal_panel_width - before, 60.0);
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.set_terminal_position(crate::desktop::preferences::TerminalPosition::Right, cx);
+        });
+        window.render_frame(cx);
+        let start = window.find("terminal-resize-right").bounds().center();
+        window.drag(start, point(start.x - px(60.), start.y), cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).terminal_panel_width - before, 120.0);
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_pump_syncs_rows_to_measured_height(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    view.update(cx, |view, cx| {
+        view.prepare_workspace(dir.path(), cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.terminal_resize_focus.focus(window, cx);
+        });
+        window.press("up", cx);
+        window.press("up", cx);
+        window.press("up", cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .unwrap();
+    view.update(cx, |view, cx| {
+        assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
+        let measured = view.terminal_grid_bounds.get().unwrap().size.height.as_f32();
+        let expected = terminal_rows_for_height(measured, terminal_row_height(cx.theme().mono_font_size)).unwrap();
+        assert_eq!(view.terminal.as_ref().unwrap().grid_size().rows, expected);
+        // +30px must actually move the row count, or the sync is a no-op.
+        assert_eq!(view.terminal_panel_height, 270.0);
+        assert!(expected > 9, "measured sync must add rows: {expected}");
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_grid_follows_code_font_size_setting(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    view.update(cx, |view, cx| {
+        view.prepare_workspace(dir.path(), cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let rows_before = cx.update(|cx| view.read(cx).terminal.as_ref().unwrap().grid_size().rows);
+    view.update(cx, |view, cx| {
+        view.preferences.code_font_size = Some(20);
+        view.apply_typography(cx);
+        assert_eq!(cx.theme().mono_font_size, px(20.));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .unwrap();
+    view.update(cx, |view, cx| {
+        assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
+        let rows_after = view.terminal.as_ref().unwrap().grid_size().rows;
+        assert!(rows_after < rows_before, "bigger code font must shrink the grid: {rows_before} -> {rows_after}");
     });
 }
 
@@ -44,9 +187,8 @@ fn terminal_pump_syncs_columns_to_laid_out_width(cx: &mut TestAppContext) {
     })
     .unwrap();
     cx.run_until_parked();
-    cx.update(|cx| {
-        assert_eq!(view.read(cx).terminal.as_ref().unwrap().grid_size().cols, 80);
-    });
+    // No spawn-default assert here: the retained pump loop may already have
+    // synced columns during settle. The pump below makes it deterministic.
     let laid_out = cx
         .update_window(window, |_, window, cx| {
             window.render_frame(cx);
@@ -107,6 +249,12 @@ fn terminal_drag_resizes_panel_height(cx: &mut TestAppContext) {
     cx.update(|cx| {
         assert_eq!(view.read(cx).terminal_panel_height - before, 60.0);
     });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let laid_out = window.find("terminal-panel").bounds().size.height.as_f32();
+        assert_eq!(laid_out, view.read(cx).terminal_panel_height);
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

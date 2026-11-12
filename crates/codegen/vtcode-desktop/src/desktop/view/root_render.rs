@@ -113,6 +113,7 @@ impl Render for DesktopView {
             // to edge beneath the title bar, with no chrome rhythm inset.
             .when(self.zen_mode, |pane| pane.p_0())
             .flex_1()
+            .min_w_0()
             .min_h_0()
             .flex()
             .when(!self.preferences.translucent_sidebar || !navigation_visible, |pane| {
@@ -130,6 +131,24 @@ impl Render for DesktopView {
         } else {
             Some(self.render_toolbar(window, cx))
         };
+        let terminal_position = self.preferences.terminal_position();
+        let terminal_bottom = self.terminal_visible && terminal_position == preferences::TerminalPosition::Bottom;
+        let terminal_left = self.terminal_visible && terminal_position == preferences::TerminalPosition::Left;
+        let terminal_right = self.terminal_visible && terminal_position == preferences::TerminalPosition::Right;
+        let content_row = div()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .flex()
+            .when(terminal_left, |row| {
+                row.child(self.render_terminal_panel(cx))
+                    .child(self.render_resize_handle(ResizeEdge::TerminalLeft, cx))
+            })
+            .child(content)
+            .when(terminal_right, |row| {
+                row.child(self.render_terminal_panel(cx))
+                    .child(self.render_resize_handle(ResizeEdge::TerminalRight, cx))
+            });
         let main = div()
             .flex_1()
             .min_w_0()
@@ -138,8 +157,8 @@ impl Render for DesktopView {
             .flex()
             .flex_col()
             .children(top_chrome)
-            .child(content)
-            .when(self.terminal_visible, |main| {
+            .child(content_row)
+            .when(terminal_bottom, |main| {
                 main.child(self.render_resize_handle(ResizeEdge::Terminal, cx))
                     .child(self.render_terminal_panel(cx))
             })

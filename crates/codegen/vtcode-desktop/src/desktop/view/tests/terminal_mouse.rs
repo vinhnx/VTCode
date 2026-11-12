@@ -142,6 +142,170 @@ fn terminal_move_without_button_heals_stuck_drag(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn terminal_double_click_selects_word_through_full_sequence(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_terminal(cx);
+    let at = cx.update(|cx| {
+        let (origin, row_height, char_width) = grid_geometry(&view, cx);
+        cell_center(origin, row_height, char_width, 1, 2)
+    });
+    // Realistic press count sequence: the word must survive both releases.
+    for count in [1_usize, 2] {
+        cx.update_window(window, |_, window, cx| {
+            let _dispatched = window.dispatch_event(
+                gpui_kit::PlatformInput::MouseDown(gpui_kit::MouseDownEvent {
+                    button: MouseButton::Left,
+                    position: at,
+                    modifiers: window.modifiers(),
+                    click_count: count,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            let _dispatched = window.dispatch_event(
+                gpui_kit::PlatformInput::MouseUp(gpui_kit::MouseUpEvent {
+                    button: MouseButton::Left,
+                    position: at,
+                    modifiers: window.modifiers(),
+                    click_count: count,
+                }),
+                cx,
+            );
+        })
+        .unwrap();
+    }
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).terminal.as_ref().unwrap().selected_text().as_deref(), Some("bravo"));
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_triple_click_selects_line(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_terminal(cx);
+    let at = cx.update(|cx| {
+        let (origin, row_height, char_width) = grid_geometry(&view, cx);
+        cell_center(origin, row_height, char_width, 1, 2)
+    });
+    cx.update_window(window, |_, window, cx| {
+        let _dispatched = window.dispatch_event(
+            gpui_kit::PlatformInput::MouseDown(gpui_kit::MouseDownEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: window.modifiers(),
+                click_count: 3,
+                first_mouse: false,
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let selected = view.read(cx).terminal.as_ref().unwrap().selected_text().unwrap();
+        assert!(selected.contains("bravo"), "line select must cover the row: {selected:?}");
+        assert!(
+            !selected.contains("alpha") && !selected.contains("charlie"),
+            "line select must not leak rows: {selected:?}"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_shift_click_extends_forward_from_anchor(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_terminal(cx);
+    let (from, to, extend) = cx.update(|cx| {
+        let (origin, row_height, char_width) = grid_geometry(&view, cx);
+        (
+            cell_center(origin, row_height, char_width, 0, 1),
+            cell_center(origin, row_height, char_width, 1, 3),
+            cell_center(origin, row_height, char_width, 2, 2),
+        )
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.drag(from, to, cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        let _dispatched = window.dispatch_event(
+            gpui_kit::PlatformInput::MouseDown(gpui_kit::MouseDownEvent {
+                button: MouseButton::Left,
+                position: extend,
+                modifiers: gpui_kit::Modifiers { shift: true, ..Default::default() },
+                click_count: 1,
+                first_mouse: false,
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let selected = view.read(cx).terminal.as_ref().unwrap().selected_text().unwrap();
+        assert!(selected.contains("lpha"), "anchor row must stay: {selected:?}");
+        assert!(selected.contains("cha"), "span must reach the shift-click: {selected:?}");
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_shift_click_extends_backward_from_anchor(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_terminal(cx);
+    let (from, to, extend) = cx.update(|cx| {
+        let (origin, row_height, char_width) = grid_geometry(&view, cx);
+        (
+            cell_center(origin, row_height, char_width, 2, 4),
+            cell_center(origin, row_height, char_width, 2, 2),
+            cell_center(origin, row_height, char_width, 0, 1),
+        )
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.drag(from, to, cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        let _dispatched = window.dispatch_event(
+            gpui_kit::PlatformInput::MouseDown(gpui_kit::MouseDownEvent {
+                button: MouseButton::Left,
+                position: extend,
+                modifiers: gpui_kit::Modifiers { shift: true, ..Default::default() },
+                click_count: 1,
+                first_mouse: false,
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let selected = view.read(cx).terminal.as_ref().unwrap().selected_text().unwrap();
+        assert!(selected.contains("lpha"), "span must reach back to row 0: {selected:?}");
+        assert!(selected.contains("charl"), "anchor row must stay: {selected:?}");
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_shift_click_without_selection_acts_as_click(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_terminal(cx);
+    let at = cx.update(|cx| {
+        let (origin, row_height, char_width) = grid_geometry(&view, cx);
+        cell_center(origin, row_height, char_width, 0, 2)
+    });
+    cx.update_window(window, |_, window, cx| {
+        let _dispatched = window.dispatch_event(
+            gpui_kit::PlatformInput::MouseDown(gpui_kit::MouseDownEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: gpui_kit::Modifiers { shift: true, ..Default::default() },
+                click_count: 1,
+                first_mouse: false,
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let state = view.read(cx);
+        assert!(state.terminal_select_drag.is_some(), "shift-click must start a drag");
+        assert_eq!(state.terminal_select_anchor, Some((0, 2)));
+    });
+}
+
+#[gpui_kit::test]
 fn terminal_click_without_drag_clears_selection(cx: &mut TestAppContext) {
     let (window, view, _dir) = open_terminal(cx);
     cx.update_window(window, |_, window, cx| {

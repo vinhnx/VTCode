@@ -279,6 +279,9 @@ const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 /// Terminal-height drag bounds, shared with the preferences clamp.
 const MIN_TERMINAL_PANEL_HEIGHT: f32 = preferences::MIN_TERMINAL_PANEL_HEIGHT;
 const MAX_TERMINAL_PANEL_HEIGHT: f32 = preferences::MAX_TERMINAL_PANEL_HEIGHT;
+/// Terminal-width drag bounds, shared with the preferences clamp.
+const MIN_TERMINAL_PANEL_WIDTH: f32 = preferences::MIN_TERMINAL_PANEL_WIDTH;
+const MAX_TERMINAL_PANEL_WIDTH: f32 = preferences::MAX_TERMINAL_PANEL_WIDTH;
 
 /// Window toolbar height. Left-side navigation content starts below this
 /// line so it clears the macOS traffic lights while the sidebar surface
@@ -455,7 +458,11 @@ struct DesktopView {
     terminal_visible: bool,
     terminal_focus: FocusHandle,
     terminal_pump_generation: u64,
+    /// Retained drain-pump loop. Dropping a GPUI `Task` cancels it, so a
+    /// fire-and-forget spawn would never tick (blank frozen panel).
+    terminal_pump_task: Option<Task<()>>,
     terminal_panel_height: f32,
+    terminal_panel_width: f32,
     terminal_resize_focus: FocusHandle,
     terminal_scroll: ScrollHandle,
     /// Sub-line wheel remainder, in lines. Trackpads emit fractions of a
@@ -467,6 +474,10 @@ struct DesktopView {
     terminal_grid_bounds: Rc<Cell<Option<gpui_kit::Bounds<Pixels>>>>,
     /// Active mouse-drag selection, if the left button went down on a cell.
     terminal_select_drag: Option<terminal_panel::TerminalSelectDrag>,
+    /// Selection anchor cell for shift-click extend. Rio keeps its own
+    /// anchor privately, so the view retains the origin of the current
+    /// selection (drag, click, word, line, or select-all start).
+    terminal_select_anchor: Option<(usize, usize)>,
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,
@@ -629,6 +640,8 @@ struct DesktopView {
     _ui_language_subscription: Subscription,
     terminal_ansi_select: Entity<preferences::TerminalAnsiThemeSelectState>,
     _terminal_ansi_subscription: Subscription,
+    terminal_position_select: Entity<preferences::TerminalPositionSelectState>,
+    _terminal_position_subscription: Subscription,
     file_destination_select: Entity<preferences::FileDestinationSelectState>,
     _file_destination_subscription: Subscription,
     cli_terminal_select: Entity<preferences::CliTerminalSelectState>,

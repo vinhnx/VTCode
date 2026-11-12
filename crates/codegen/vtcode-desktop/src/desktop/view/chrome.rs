@@ -9,6 +9,8 @@ pub(super) enum ResizeEdge {
     Sidebar,
     Inspector,
     Terminal,
+    TerminalLeft,
+    TerminalRight,
 }
 
 #[derive(Clone, Copy)]
@@ -52,19 +54,36 @@ impl DesktopView {
             ResizeEdge::Terminal => {
                 ("terminal-resize", HandleEdge::Leading, "Resize terminal".to_string(), self.terminal_panel_height)
             }
+            ResizeEdge::TerminalLeft => (
+                "terminal-resize-left",
+                HandleEdge::Trailing,
+                "Resize terminal".to_string(),
+                self.terminal_panel_width,
+            ),
+            ResizeEdge::TerminalRight => (
+                "terminal-resize-right",
+                HandleEdge::Leading,
+                "Resize terminal".to_string(),
+                self.terminal_panel_width,
+            ),
         };
         let (min, max) = match edge {
             ResizeEdge::Terminal => (MIN_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_HEIGHT),
+            ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => {
+                (MIN_TERMINAL_PANEL_WIDTH, MAX_TERMINAL_PANEL_WIDTH)
+            }
             ResizeEdge::Sidebar | ResizeEdge::Inspector => (MIN_PANE_WIDTH, MAX_PANE_WIDTH),
         };
         let focus = match edge {
             ResizeEdge::Sidebar => &self.sidebar_resize_focus,
             ResizeEdge::Inspector => &self.inspector_resize_focus,
-            ResizeEdge::Terminal => &self.terminal_resize_focus,
+            ResizeEdge::Terminal | ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => &self.terminal_resize_focus,
         };
         let axis = match edge {
             ResizeEdge::Terminal => Axis::Vertical,
-            ResizeEdge::Sidebar | ResizeEdge::Inspector => Axis::Horizontal,
+            ResizeEdge::Sidebar | ResizeEdge::Inspector | ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => {
+                Axis::Horizontal
+            }
         };
         let handle = resize_handle::<ResizeEdge, ResizeDragPreview>(id, axis);
         // The inspector is a separated card, not a docked pane: its edge
@@ -82,7 +101,10 @@ impl DesktopView {
                 if this.resizing.is_some_and(|drag| drag.edge == edge) {
                     let pointer = match edge {
                         ResizeEdge::Terminal => event.event.position.y,
-                        ResizeEdge::Sidebar | ResizeEdge::Inspector => event.event.position.x,
+                        ResizeEdge::Sidebar
+                        | ResizeEdge::Inspector
+                        | ResizeEdge::TerminalLeft
+                        | ResizeEdge::TerminalRight => event.event.position.x,
                     };
                     let changed = this.resize_from_drag(edge, pointer);
                     cx.stop_propagation();
@@ -120,11 +142,12 @@ impl DesktopView {
                     ResizeEdge::Sidebar => this.sidebar_width,
                     ResizeEdge::Inspector => this.inspector_width,
                     ResizeEdge::Terminal => this.terminal_panel_height,
+                    ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => this.terminal_panel_width,
                 };
                 let delta = match edge {
                     ResizeEdge::Sidebar if this.preferences.navigation_on_right() => -direction * step,
-                    ResizeEdge::Sidebar | ResizeEdge::Terminal => direction * step,
-                    ResizeEdge::Inspector => -direction * step,
+                    ResizeEdge::Sidebar | ResizeEdge::Terminal | ResizeEdge::TerminalLeft => direction * step,
+                    ResizeEdge::Inspector | ResizeEdge::TerminalRight => -direction * step,
                 };
                 if this.resize_pane_to(edge, current_size + delta) {
                     this.save_preferences();
@@ -138,12 +161,17 @@ impl DesktopView {
                     match edge {
                         ResizeEdge::Sidebar => this.sidebar_resize_focus.focus(window, cx),
                         ResizeEdge::Inspector => this.inspector_resize_focus.focus(window, cx),
-                        ResizeEdge::Terminal => this.terminal_resize_focus.focus(window, cx),
+                        ResizeEdge::Terminal | ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => {
+                            this.terminal_resize_focus.focus(window, cx);
+                        }
                     }
                     let (pointer, size) = match edge {
                         ResizeEdge::Terminal => (event.position.y, this.terminal_panel_height),
                         ResizeEdge::Sidebar => (event.position.x, this.sidebar_width),
                         ResizeEdge::Inspector => (event.position.x, this.inspector_width),
+                        ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => {
+                            (event.position.x, this.terminal_panel_width)
+                        }
                     };
                     this.resizing = Some(PaneResize { edge, start_pointer: pointer, start_size: px(size) });
                     cx.notify();
@@ -163,12 +191,16 @@ impl DesktopView {
         }
         let size = match edge {
             ResizeEdge::Terminal => size.clamp(MIN_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_HEIGHT),
+            ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => {
+                size.clamp(MIN_TERMINAL_PANEL_WIDTH, MAX_TERMINAL_PANEL_WIDTH)
+            }
             ResizeEdge::Sidebar | ResizeEdge::Inspector => size.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH),
         };
         let current = match edge {
             ResizeEdge::Sidebar => &mut self.sidebar_width,
             ResizeEdge::Inspector => &mut self.inspector_width,
             ResizeEdge::Terminal => &mut self.terminal_panel_height,
+            ResizeEdge::TerminalLeft | ResizeEdge::TerminalRight => &mut self.terminal_panel_width,
         };
         if (*current - size).abs() < f32::EPSILON {
             return false;
@@ -184,8 +216,10 @@ impl DesktopView {
         let pointer_delta_window = pointer_window - drag.start_pointer;
         let size = match edge {
             ResizeEdge::Sidebar if self.preferences.navigation_on_right() => drag.start_size - pointer_delta_window,
-            ResizeEdge::Sidebar => drag.start_size + pointer_delta_window,
-            ResizeEdge::Inspector | ResizeEdge::Terminal => drag.start_size - pointer_delta_window,
+            ResizeEdge::Sidebar | ResizeEdge::TerminalLeft => drag.start_size + pointer_delta_window,
+            ResizeEdge::Inspector | ResizeEdge::Terminal | ResizeEdge::TerminalRight => {
+                drag.start_size - pointer_delta_window
+            }
         };
         // Preferences keep pane sizes as f32; convert only at that boundary.
         self.resize_pane_to(edge, size.as_f32())

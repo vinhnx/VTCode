@@ -664,6 +664,10 @@ pub(super) struct Preferences {
     pub terminal_panel_height: Option<f32>,
     /// Terminal ANSI palette (`auto`/`dark`/`light`).
     pub terminal_ansi_theme: Option<String>,
+    /// Terminal dock position (`bottom`/`left`/`right`).
+    pub terminal_position: Option<String>,
+    /// Terminal side-panel width in logical pixels.
+    pub terminal_panel_width: Option<f32>,
     /// Inspector width in logical pixels.
     pub inspector_width: Option<f32>,
     /// Open the main window maximized (zoomed). Missing values launch
@@ -978,8 +982,9 @@ pub(super) fn set_test_preferences_path(path: PathBuf) {
 
 mod terminal;
 pub(super) use terminal::{
-    MAX_TERMINAL_PANEL_HEIGHT, MIN_TERMINAL_PANEL_HEIGHT, TerminalAnsiTheme, TerminalAnsiThemeOption,
-    TerminalAnsiThemeSelectState,
+    MAX_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_WIDTH, MIN_TERMINAL_PANEL_HEIGHT, MIN_TERMINAL_PANEL_WIDTH,
+    TerminalAnsiTheme, TerminalAnsiThemeOption, TerminalAnsiThemeSelectState, TerminalPosition, TerminalPositionOption,
+    TerminalPositionSelectState,
 };
 
 #[cfg(test)]

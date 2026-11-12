@@ -15,7 +15,9 @@ pub(super) use serde_json::json;
 
 pub(super) use super::login_items::LoginItemStatus;
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
-pub(super) use super::terminal_panel::{terminal_cols_for_width, terminal_row_height, terminal_rows_for_height};
+pub(super) use super::terminal_panel::{
+    terminal_cols_for_width, terminal_content_rows, terminal_row_height, terminal_rows_for_height,
+};
 pub(super) use super::{
     ActivityState, DesktopButtonExt, DesktopView, DiscardIntent, ExternalLaunchCall, FixedRowSizeCache,
     HandoffScriptCall, MAX_UI_EVENTS_PER_TICK, Route, SESSION_LIST_PAGE_SIZE, TestLaunchIntercept, ThemeMode,
@@ -133,6 +135,24 @@ fn focus_panel(view: &Entity<DesktopView>, window: AnyWindowHandle, cx: &mut Tes
 
 fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
     open_desktop_sized(cx, 1280., 900.)
+}
+
+/// Open the desktop, prepare a real workspace, and toggle the terminal on.
+/// Returns the tempdir so the shell's cwd outlives the test.
+pub(super) fn open_workspace_terminal(
+    cx: &mut TestAppContext,
+) -> (AnyWindowHandle, Entity<DesktopView>, tempfile::TempDir) {
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    view.update(cx, |view, cx| {
+        view.prepare_workspace(dir.path(), cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::ToggleTerminal), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    (window, view, dir)
 }
 
 fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyWindowHandle, Entity<DesktopView>) {
@@ -763,6 +783,7 @@ mod startup_interactions;
 mod storage_settings;
 mod swipe_navigation_debounce;
 mod tasks_viewer;
+mod terminal_chrome;
 mod terminal_input;
 mod terminal_mouse;
 mod terminal_resize;

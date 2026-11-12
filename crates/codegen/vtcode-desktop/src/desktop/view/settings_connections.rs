@@ -141,7 +141,29 @@ impl DesktopView {
                                 .menu_max_h(px(320.))
                                 .w(px(240.)),
                             &colors,
-                        )),
+                        ))
+                        .child({
+                            let run_command = props.terminal_command.clone();
+                            settings_row(
+                                rust_i18n::t!("app.settings.connections.terminal_builtin").to_string(),
+                                run_command.clone(),
+                                {
+                                    let view = view.clone();
+                                    desktop_button("continue-builtin-terminal")
+                                        .label(
+                                            rust_i18n::t!("app.settings.connections.terminal_builtin_run").to_string(),
+                                        )
+                                        .ghost()
+                                        .small()
+                                        .on_click(move |_, window: &mut Window, cx: &mut App| {
+                                            view.update(cx, |view, cx| {
+                                                view.run_command_in_terminal(&run_command, window, cx);
+                                            });
+                                        })
+                                },
+                                &colors,
+                            )
+                        }),
                 )
             })
             .child(accessible_group_box(

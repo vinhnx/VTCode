@@ -580,9 +580,13 @@ impl DesktopView {
     pub(super) fn prepare_workspace(&mut self, workspace: &Path, cx: &mut Context<Self>) {
         // A same-workspace restart reloads CLI configuration without losing draft sources.
         let same_workspace = self.workspace.as_deref() == Some(workspace);
-        if !same_workspace {
+        // Real switches close the terminal for cwd scope, but the first
+        // workspace after a workspaceless terminal keeps the running shell:
+        // killing a command on an unrelated navigation would be data loss.
+        if !same_workspace && self.workspace.is_some() {
             self.terminal = None;
             self.terminal_visible = false;
+            self.terminal_pump_task = None;
         }
         self.reset_webmcp_state(None);
         let draft_sources = same_workspace.then(|| std::mem::take(&mut self.attachments));

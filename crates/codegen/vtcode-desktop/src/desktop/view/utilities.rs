@@ -169,6 +169,23 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.set_inspector_tab(InspectorTab::Files, cx);
                             })),
+                    )
+                    .child(
+                        desktop_button("utilities-terminal")
+                            .label(rust_i18n::t!("app.navigation.terminal").to_string())
+                            .icon(IconName::Terminal)
+                            .ghost()
+                            .w_full()
+                            .justify_start()
+                            .accessibility_label(rust_i18n::t!("app.navigation.terminal").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.navigation.terminal").to_string(),
+                                &ToggleTerminal,
+                                Some(key_context::DESKTOP),
+                            )
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.toggle_terminal(window, cx);
+                            })),
                     ),
             ))
             .into_any_element()

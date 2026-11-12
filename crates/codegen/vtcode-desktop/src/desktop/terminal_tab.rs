@@ -14,6 +14,7 @@ use rio_vt::crosswords::Mode;
 use rio_vt::crosswords::grid::Scroll;
 use rio_vt::crosswords::pos::Side;
 use rio_vt::event::{RioEvent, WindowSize};
+use rio_vt::selection::SelectionType;
 
 use super::terminal_process::{TerminalProcess, TerminalProcessEvent};
 use super::terminal_screen::TerminalScreen;
@@ -92,6 +93,10 @@ impl TerminalTab {
         self.screen.in_alternate_screen()
     }
 
+    pub(super) fn current_directory(&self) -> Option<std::path::PathBuf> {
+        self.screen.current_directory().map(Path::to_path_buf)
+    }
+
     pub(super) fn app_cursor(&self) -> bool {
         self.screen.mode().contains(Mode::APP_CURSOR)
     }
@@ -104,8 +109,8 @@ impl TerminalTab {
         let _events = self.screen.scroll_to(target);
     }
 
-    pub(super) fn start_selection(&mut self, row: usize, column: usize, side: Side) {
-        self.screen.start_selection(row, column, side);
+    pub(super) fn start_selection(&mut self, row: usize, column: usize, side: Side, ty: SelectionType) {
+        self.screen.start_selection(row, column, side, ty);
     }
 
     pub(super) fn update_selection(&mut self, row: usize, column: usize, side: Side) {
@@ -282,31 +287,33 @@ mod tests {
         let size = PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
         let mut tab =
             TerminalTab::spawn(dir.path(), Path::new("/bin/sh"), size, List::from(&Colors::default())).unwrap();
-        // 64KB of BELs: Rio emits one event per bell with no coalescing,
-        // so at least one drain batch overflows the cap.
-        tab.input(b"awk 'BEGIN{for(i=0;i<65536;i++)printf \"\\a\"}'; echo FLOOD_DONE; exit 0\n".to_vec())
+        // 16KB of BELs: Rio emits one event per bell with no coalescing,
+        // so at least one drain batch overflows the cap 64x over.
+        tab.input(b"awk 'BEGIN{for(i=0;i<16384;i++)printf \"\\a\"}'; exit 0\n".to_vec())
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
         let mut max_events = 0;
         let mut bells_seen = 0;
+        // Wait on the property itself, not a grid marker: any marker we type
+        // also appears in the input echo, which broke the wait under load.
         loop {
-            assert!(Instant::now() < deadline, "bell flood did not finish");
+            assert!(Instant::now() < deadline, "bell flood did not overflow the cap");
             let drain = tab.drain();
             max_events = max_events.max(drain.events.len());
             bells_seen += drain.events.iter().filter(|event| matches!(event, RioEvent::Bell(_))).count();
-            let grid: String = tab
-                .display_rows()
-                .into_iter()
-                .flatten()
-                .map(|run| run.text.to_string())
-                .collect();
-            if grid.contains("FLOOD_DONE") {
+            if max_events == MAX_VIEW_EVENTS_PER_DRAIN && bells_seen > 0 {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(bells_seen > 0, "flood must have produced forwarded bells");
         assert_eq!(max_events, MAX_VIEW_EVENTS_PER_DRAIN, "no batch hit the cap: the flood never overflowed it");
+        // Drain to stream end so teardown settles before the tab drops.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !tab.output_closed {
+            assert!(Instant::now() < deadline, "stream did not close after the flood");
+            let _drained = tab.drain();
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]

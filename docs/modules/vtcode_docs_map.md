@@ -203,7 +203,7 @@ below based on the topic area.
 
 - **File**: `docs/development/desktop-terminal.md`
   - **Content**: Desktop Embedded Terminal Guide
-  - **Topics**: Open, close, resize, Input and paste, Selection and copy, Scrollback, Colors
+  - **Topics**: Open, close, resize, Input and paste, Selection and copy, Scrollback, Type
   - **User Questions**: "What can you tell me about Desktop Embedded Terminal Guide?", "How does Open, close, resize
     work?", "How does Input and paste work?"
 

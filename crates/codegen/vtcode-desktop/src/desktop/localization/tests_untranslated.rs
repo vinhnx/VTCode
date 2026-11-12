@@ -141,3 +141,75 @@ fn terminal_colors_copy_resolves_in_every_language() {
         "Terminal colors"
     );
 }
+
+#[test]
+fn navigation_terminal_copy_resolves_in_every_language() {
+    // English literal by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let text = rust_i18n::t!("app.navigation.terminal", locale = locale).to_string();
+        assert!(!text.is_empty(), "{locale}/app.navigation.terminal");
+        assert_ne!(text, "app.navigation.terminal", "{locale} echoed the key instead of resolving");
+    }
+    assert_eq!(rust_i18n::t!("app.navigation.terminal", locale = "en").to_string(), "Terminal");
+}
+
+#[test]
+fn navigation_terminal_hide_copy_resolves_in_every_language() {
+    // English literal by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let text = rust_i18n::t!("app.navigation.terminal_hide", locale = locale).to_string();
+        assert!(!text.is_empty(), "{locale}/app.navigation.terminal_hide");
+        assert_ne!(text, "app.navigation.terminal_hide", "{locale} echoed the key instead of resolving");
+    }
+    assert_eq!(rust_i18n::t!("app.navigation.terminal_hide", locale = "en").to_string(), "Hide terminal");
+}
+
+#[test]
+fn connections_builtin_terminal_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.connections.terminal_builtin",
+            "app.settings.connections.terminal_builtin_run",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(
+        rust_i18n::t!("app.settings.connections.terminal_builtin", locale = "en").to_string(),
+        "Built-in terminal"
+    );
+    assert_eq!(rust_i18n::t!("app.settings.connections.terminal_builtin_run", locale = "en").to_string(), "Run");
+}
+
+#[test]
+fn terminal_position_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.appearance.terminal_position",
+            "app.settings.appearance.terminal_position_description",
+            "app.settings.appearance.terminal_position_bottom",
+            "app.settings.appearance.terminal_position_left",
+            "app.settings.appearance.terminal_position_right",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(
+        rust_i18n::t!("app.settings.appearance.terminal_position", locale = "en").to_string(),
+        "Terminal position"
+    );
+}

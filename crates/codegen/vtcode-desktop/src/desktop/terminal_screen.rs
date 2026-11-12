@@ -85,6 +85,13 @@ impl TerminalScreen {
         self.mode().contains(Mode::ALT_SCREEN)
     }
 
+    /// Working directory last reported by the shell via OSC 7, if any.
+    /// Read at render time; the `CurrentDirectoryChanged` event itself
+    /// stays out of the view-event stream (see the routing policy).
+    pub(super) fn current_directory(&self) -> Option<&std::path::Path> {
+        self.terminal.current_directory.as_deref()
+    }
+
     pub(super) fn mode(&self) -> Mode {
         self.terminal.mode()
     }
@@ -104,11 +111,13 @@ impl TerminalScreen {
         self.terminal.history_size()
     }
 
-    /// Start a selection at a visible grid cell. Invalid coordinates clear it.
-    pub(super) fn start_selection(&mut self, row: usize, column: usize, side: Side) {
+    /// Start a selection at a visible grid cell. Invalid coordinates clear
+    /// it. Single-point `Semantic`/`Lines` selections expand to the word or
+    /// row under the cell (plus bracket matching for semantic).
+    pub(super) fn start_selection(&mut self, row: usize, column: usize, side: Side, ty: SelectionType) {
         self.terminal.selection = self
             .viewport_position(row, column)
-            .map(|position| Selection::new(SelectionType::Simple, position, side));
+            .map(|position| Selection::new(ty, position, side));
     }
 
     /// Extend the current selection to a visible grid cell.
@@ -130,7 +139,7 @@ impl TerminalScreen {
         if rows == 0 || columns == 0 {
             return;
         }
-        self.start_selection(0, 0, Side::Left);
+        self.start_selection(0, 0, Side::Left, SelectionType::Simple);
         self.update_selection(rows - 1, columns - 1, Side::Right);
     }
 
@@ -388,19 +397,19 @@ mod tests {
         let mut screen = TerminalScreen::new(8, 2, 10);
         let _events = screen.process(b"alpha\r\nbeta\r\ngamma");
         let _events = screen.scroll(1);
-        screen.start_selection(0, 1, Side::Left);
+        screen.start_selection(0, 1, Side::Left, SelectionType::Simple);
         screen.update_selection(0, 3, Side::Right);
         assert_eq!(screen.selected_text().as_deref(), Some("lph"));
         let range = screen.selection_range().unwrap();
         assert_eq!(range.start.row.0, -1);
         screen.update_selection(99, 99, Side::Right);
         assert_eq!(screen.selected_text().as_deref(), Some("lph"));
-        screen.start_selection(2, 0, Side::Left);
+        screen.start_selection(2, 0, Side::Left, SelectionType::Simple);
         assert!(screen.selected_text().is_none());
-        screen.start_selection(1, 0, Side::Left);
+        screen.start_selection(1, 0, Side::Left, SelectionType::Simple);
         screen.update_selection(1, 3, Side::Right);
         assert_eq!(screen.selected_text().as_deref(), Some("beta"));
-        screen.start_selection(1, 3, Side::Right);
+        screen.start_selection(1, 3, Side::Right, SelectionType::Simple);
         screen.update_selection(1, 0, Side::Left);
         assert_eq!(screen.selected_text().as_deref(), Some("beta"));
         screen.clear_selection();
@@ -547,10 +556,10 @@ mod tests {
             let mut screen = TerminalScreen::new(8, 3, 10);
             let _events = screen.process(b"aaa\r\nbbb\r\nccc");
             if reverse {
-                screen.start_selection(1, 2, Side::Right);
+                screen.start_selection(1, 2, Side::Right, SelectionType::Simple);
                 screen.update_selection(0, 1, Side::Left);
             } else {
-                screen.start_selection(0, 1, Side::Left);
+                screen.start_selection(0, 1, Side::Left, SelectionType::Simple);
                 screen.update_selection(1, 2, Side::Right);
             }
             screen.display_rows(&palette)
@@ -584,7 +593,7 @@ mod tests {
         let palette = List::from(&Colors::default());
         let _events = screen.process(b"aaa\r\nbbb\r\nccc\r\nddd");
         let _events = screen.scroll(1);
-        screen.start_selection(0, 0, Side::Left);
+        screen.start_selection(0, 0, Side::Left, SelectionType::Simple);
         screen.update_selection(0, 2, Side::Right);
         let rows = screen.display_rows(&palette);
         let plain = rgba_of(&palette, NamedColor::Foreground);
@@ -627,6 +636,37 @@ mod tests {
                 .count(),
             1,
             "terminator completes exactly one store"
+        );
+    }
+
+    #[test]
+    fn terminal_screen_point_selections_expand_word_and_line() {
+        let mut screen = TerminalScreen::new(20, 3, 10);
+        let _events = screen.process(b"alpha beta\r\ngamma");
+        screen.start_selection(0, 7, Side::Left, SelectionType::Semantic);
+        assert_eq!(screen.selected_text().as_deref(), Some("beta"));
+        screen.start_selection(0, 0, Side::Left, SelectionType::Semantic);
+        assert_eq!(screen.selected_text().as_deref(), Some("alpha"));
+        screen.start_selection(1, 2, Side::Left, SelectionType::Lines);
+        let line = screen.selected_text().unwrap();
+        assert!(line.contains("gamma"), "line select must cover the row: {line:?}");
+        assert!(!line.contains("alpha"), "line select must not leak rows: {line:?}");
+    }
+
+    #[test]
+    fn terminal_screen_tracks_osc7_directory() {
+        let mut screen = TerminalScreen::new(20, 3, 10);
+        assert_eq!(screen.current_directory(), None);
+        let _events = screen.process(b"\x1b]7;file://localhost/tmp/osc7dir\x07");
+        assert_eq!(
+            screen.current_directory().map(|dir| dir.to_string_lossy().into_owned()),
+            Some("/tmp/osc7dir".to_string())
+        );
+        // A non-file payload leaves the stored directory untouched.
+        let _events = screen.process(b"\x1b]7;https://example.com/x\x07");
+        assert_eq!(
+            screen.current_directory().map(|dir| dir.to_string_lossy().into_owned()),
+            Some("/tmp/osc7dir".to_string())
         );
     }
 

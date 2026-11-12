@@ -55,7 +55,7 @@ fn terminal_pump_renders_drained_output_rows(cx: &mut TestAppContext) {
     .unwrap();
     let expected = cx.update(|cx| {
         let height = view.read(cx).terminal_panel_height;
-        terminal_rows_for_height(height, terminal_row_height(cx.theme().mono_font_size)).unwrap()
+        terminal_content_rows(height, cx.theme().mono_font_size).unwrap()
     });
     cx.update_window(window, |_, window, cx| {
         assert!(window.try_find("terminal-panel").is_some(), "panel must render");

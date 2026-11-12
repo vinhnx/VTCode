@@ -92,7 +92,7 @@ impl DesktopView {
             )
             .child(
                 desktop_button("nav-browse-threads")
-                    .icon(IconName::Maximize2)
+                    .icon(IconName::Clock)
                     .ghost()
                     .rounded_lg()
                     .accessibility_label(rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string())
@@ -105,6 +105,21 @@ impl DesktopView {
                         button.bg(colors.secondary).text_color(colors.foreground)
                     })
                     .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone()),
+            )
+            .child(
+                desktop_button("nav-terminal")
+                    .icon(IconName::Terminal)
+                    .ghost()
+                    .rounded_lg()
+                    .accessibility_label(rust_i18n::t!("app.navigation.terminal").to_string())
+                    .tooltip_with_action(
+                        rust_i18n::t!("app.navigation.terminal").to_string(),
+                        &ToggleTerminal,
+                        Some(key_context::DESKTOP),
+                    )
+                    .toggled(self.terminal_visible)
+                    .when(self.terminal_visible, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                    .dispatches_desktop_action(ToggleTerminal, self.focus_handle.clone()),
             )
             .into_any_element();
         let navigation = div()

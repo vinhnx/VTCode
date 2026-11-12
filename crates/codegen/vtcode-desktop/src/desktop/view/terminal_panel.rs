@@ -7,14 +7,20 @@
 
 use super::*;
 
-/// Fixed panel height until the region becomes resizable. Pixels are the
-/// sanctioned exception for fixed pane geometry.
-const TERMINAL_PANEL_HEIGHT: f32 = 240.0;
+mod input;
+use input::*;
 
 /// Drain cadence: bounded redraws without a busy loop on floods.
 const TERMINAL_PUMP_INTERVAL: Duration = Duration::from_millis(16);
 /// Fallback grid rows when unmeasurable (xterm standard).
 const DEFAULT_TERMINAL_ROWS: u16 = 24;
+/// Header strip height in px. Fixed pixels, not rem: grid math must match
+/// the laid-out height exactly at any UI scale (fixed pane geometry).
+const TERMINAL_HEADER_HEIGHT: f32 = 32.0;
+/// Grid side padding in px each side (fixed for the same reason).
+const TERMINAL_GRID_PAD_X: f32 = 16.0;
+/// Grid top/bottom padding in px each (fixed for the same reason).
+const TERMINAL_GRID_PAD_Y: f32 = 8.0;
 /// Grid columns at spawn, before the first paint measures the real width
 /// (xterm standard); the pump corrects to measured columns immediately.
 const TERMINAL_GRID_COLUMNS: u16 = 80;
@@ -28,12 +34,9 @@ impl DesktopView {
         }
     }
 
-    /// Show the panel, spawning the workspace shell on first open. Without a
-    /// workspace there is nothing to scope a shell to, so this is a no-op.
+    /// Show the panel, spawning the shell on first open (home directory
+    /// when no workspace is open yet).
     fn show_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.workspace.is_none() {
-            return;
-        }
         if !self.ensure_terminal(cx) {
             return;
         }
@@ -42,7 +45,9 @@ impl DesktopView {
         self.terminal_visible = true;
         self.terminal_focus.focus(window, cx);
         cx.notify();
-        let _pump = cx.spawn(async move |view, cx| {
+        // Retained: dropping the task would cancel the loop before its
+        // first tick and freeze the panel (no drains, ever).
+        self.terminal_pump_task = Some(cx.spawn(async move |view, cx| {
             loop {
                 let keep_going = view
                     .update(cx, |view, cx| view.pump_terminal_once(generation, cx))
@@ -52,27 +57,48 @@ impl DesktopView {
                 }
                 cx.background_executor().timer(TERMINAL_PUMP_INTERVAL).await;
             }
-        });
+        }));
+    }
+
+    /// Show the panel (spawning if needed), focus it, and run one command
+    /// line in the live shell. Powers the "continue in the built-in
+    /// terminal" CTA; callers pass generated commands, never raw user text.
+    pub(super) fn run_command_in_terminal(&mut self, command: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.terminal_visible {
+            self.show_terminal(window, cx);
+            if !self.terminal_visible {
+                return;
+            }
+        }
+        self.terminal_focus.focus(window, cx);
+        if let Some(tab) = self.terminal.as_mut() {
+            let mut bytes = command.as_bytes().to_vec();
+            bytes.push(b'\r');
+            let _sent = tab.input(bytes);
+        }
+        cx.notify();
     }
 
     fn hide_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.terminal_visible = false;
+        self.terminal_pump_task = None;
         self.focus_handle.focus(window, cx);
         cx.notify();
     }
 
-    /// Spawn the workspace shell if none exists. Returns whether a session is
+    /// Spawn the workspace shell if none exists, falling back to the home
+    /// directory when no workspace is open. Returns whether a session is
     /// live afterwards; failures surface through the shared error banner.
     fn ensure_terminal(&mut self, cx: &mut Context<Self>) -> bool {
         if self.terminal.is_some() {
             return true;
         }
-        let Some(workspace) = self.workspace.clone() else {
+        let Some(workspace) = terminal_shell_dir(self.workspace.as_ref()) else {
             return false;
         };
         let dark = terminal_palette_is_dark(self.preferences.terminal_ansi_theme(), self.theme_mode);
         let palette = super::super::terminal_tab::palette_for_theme(&cx.theme().colors, dark);
-        let rows = terminal_rows_for_height(self.terminal_panel_height, terminal_row_height(cx.theme().mono_font_size))
+        let rows = terminal_content_rows(self.terminal_panel_height, cx.theme().mono_font_size)
             .unwrap_or(DEFAULT_TERMINAL_ROWS);
         let size = portable_pty::PtySize {
             rows,
@@ -115,23 +141,23 @@ impl DesktopView {
         true
     }
 
-    /// Recompute grid rows from the stored panel height and columns from
-    /// the laid-out grid width; no-op until measurable. Either dimension
-    /// resizes the PTY only when it actually changed.
+    /// Recompute grid rows and columns from the laid-out grid bounds;
+    /// no-op until the first paint measures them. Either dimension resizes
+    /// the PTY only when it actually changed.
     fn sync_terminal_grid(&mut self, cx: &mut Context<Self>) {
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let Some(rows) = terminal_rows_for_height(self.terminal_panel_height, row_height) else {
+        let Some(grid) = self.terminal_grid_bounds.get() else {
             return;
         };
-        let columns = self.terminal_grid_bounds.get().and_then(|grid| {
-            let char_width =
-                terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
-            terminal_cols_for_width(grid.size.width.as_f32(), char_width)
-        });
+        let row_height = terminal_row_height(cx.theme().mono_font_size);
+        let char_width =
+            terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
+        let rows = terminal_rows_for_height(grid.size.height.as_f32(), row_height);
+        let columns = terminal_cols_for_width(grid.size.width.as_f32(), char_width);
         let Some(tab) = self.terminal.as_mut() else {
             return;
         };
         let size = tab.grid_size();
+        let rows = rows.unwrap_or(size.rows);
         let columns = columns.unwrap_or(size.cols);
         if size.rows != rows || size.cols != columns {
             let _resized = tab.resize(portable_pty::PtySize { rows, cols: columns, ..size });
@@ -164,12 +190,14 @@ impl DesktopView {
         }
         if is_select_all(keystroke) {
             tab.select_all();
+            self.terminal_select_anchor = Some((0, 0));
             cx.notify();
             cx.stop_propagation();
             return;
         }
         // Clearing never swallows the key: the shell still receives Escape below.
         if is_bare_escape(keystroke) && tab.clear_selection() {
+            self.terminal_select_anchor = None;
             cx.notify();
         }
         if is_copy(keystroke) {
@@ -212,8 +240,36 @@ impl DesktopView {
         ) else {
             return;
         };
-        tab.start_selection(anchor.0, anchor.1, rio_vt::crosswords::pos::Side::Left);
-        self.terminal_select_drag = Some(TerminalSelectDrag { anchor, char_width });
+        use rio_vt::{crosswords::pos::Side, selection::SelectionType};
+        // Shift-click extends from the retained anchor instead of
+        // re-anchoring; without a selection it behaves as a plain click.
+        // Multi-clicks ignore shift (word/line select wins).
+        if event.modifiers.shift
+            && event.click_count == 1
+            && let Some(retained) = self.terminal_select_anchor
+        {
+            let (start, end) = if anchor >= retained {
+                (retained, anchor)
+            } else {
+                (anchor, retained)
+            };
+            tab.start_selection(start.0, start.1, Side::Left, SelectionType::Simple);
+            tab.update_selection(end.0, end.1, Side::Right);
+            self.terminal_select_drag = Some(TerminalSelectDrag { anchor: retained, char_width });
+            cx.notify();
+            return;
+        }
+        // Clicks select by count; only single clicks start a drag. Clearing
+        // the drag on multi-clicks keeps a later up from collapsing the
+        // word or line just selected.
+        let (ty, dragging) = match event.click_count {
+            2 => (SelectionType::Semantic, false),
+            3.. => (SelectionType::Lines, false),
+            _ => (SelectionType::Simple, true),
+        };
+        tab.start_selection(anchor.0, anchor.1, Side::Left, ty);
+        self.terminal_select_drag = dragging.then_some(TerminalSelectDrag { anchor, char_width });
+        self.terminal_select_anchor = Some(anchor);
         cx.notify();
     }
 
@@ -250,8 +306,9 @@ impl DesktopView {
         } else {
             (endpoint, drag.anchor)
         };
-        tab.start_selection(start.0, start.1, rio_vt::crosswords::pos::Side::Left);
-        tab.update_selection(end.0, end.1, rio_vt::crosswords::pos::Side::Right);
+        use rio_vt::{crosswords::pos::Side, selection::SelectionType};
+        tab.start_selection(start.0, start.1, Side::Left, SelectionType::Simple);
+        tab.update_selection(end.0, end.1, Side::Right);
         cx.notify();
     }
 
@@ -276,6 +333,7 @@ impl DesktopView {
         if endpoint == Some(drag.anchor) {
             // Plain click: collapse the single-cell selection.
             let _collapsed = tab.clear_selection();
+            self.terminal_select_anchor = None;
         }
         cx.notify();
     }
@@ -312,7 +370,9 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let mono = cx.theme().mono_font_family.clone();
         let mono_size = cx.theme().mono_font_size;
-        let mut rows = div().flex().flex_col().w_full();
+        // flex_1 (not shrink-wrap) so the absolutely-positioned probe
+        // measures available space rather than rendered rows.
+        let mut rows = div().flex().flex_col().w_full().flex_1().min_h_0();
         rows = rows.child(TerminalOriginProbe { sink: self.terminal_grid_bounds.clone() });
         if let Some(tab) = &self.terminal {
             for (index, runs) in tab.display_rows().iter().enumerate() {
@@ -331,6 +391,20 @@ impl DesktopView {
                 rows = rows.child(row);
             }
         }
+        let hide_label = rust_i18n::t!("app.navigation.terminal_hide").to_string();
+        let cwd_label = self
+            .terminal
+            .as_ref()
+            .and_then(|tab| tab.current_directory())
+            .or_else(|| terminal_shell_dir(self.workspace.as_ref()))
+            .map(|dir| terminal_short_dir(&dir))
+            .unwrap_or_default();
+        let position = self.preferences.terminal_position();
+        let collapse_icon = match position {
+            preferences::TerminalPosition::Bottom => IconName::ChevronDown,
+            preferences::TerminalPosition::Left => IconName::ChevronLeft,
+            preferences::TerminalPosition::Right => IconName::ChevronRight,
+        };
         div()
             .id("terminal-panel")
             .test_support()
@@ -355,13 +429,67 @@ impl DesktopView {
                 view.handle_terminal_key(event, cx);
             }))
             .role(gpui_kit::Role::Group)
-            .aria_label("Terminal")
-            .w_full()
-            .h(px(TERMINAL_PANEL_HEIGHT))
+            .aria_label(rust_i18n::t!("app.navigation.terminal").to_string())
+            .when(position == preferences::TerminalPosition::Bottom, |panel| {
+                panel.w_full().h(px(self.terminal_panel_height))
+            })
+            .when(position != preferences::TerminalPosition::Bottom, |panel| {
+                panel
+                    .w(px(self.terminal_panel_width))
+                    .min_w(px(MIN_TERMINAL_PANEL_WIDTH))
+                    .h_full()
+            })
             .flex_shrink_0()
             .flex()
             .flex_col()
             .bg(colors.group_box)
+            .child(
+                div()
+                    .id("terminal-header")
+                    .test_support()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .h(px(TERMINAL_HEADER_HEIGHT))
+                    .flex_shrink_0()
+                    .px(px(8.))
+                    .gap_2()
+                    .border_b_1()
+                    .border_color(colors.border)
+                    .child(
+                        div()
+                            .id("terminal-tab")
+                            .test_support()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .min_w_0()
+                            .child(Icon::new(IconName::Folder).small())
+                            .child(div().text_sm().truncate().min_w_0().child(cwd_label))
+                            .child(
+                                desktop_button("terminal-tab-close")
+                                    .icon(IconName::X)
+                                    .ghost()
+                                    .small()
+                                    .accessibility_label(hide_label.clone())
+                                    .tooltip_with_action(
+                                        hide_label.clone(),
+                                        &ToggleTerminal,
+                                        Some(key_context::DESKTOP),
+                                    )
+                                    .dispatches_desktop_action(ToggleTerminal, self.focus_handle.clone()),
+                            ),
+                    )
+                    .child(
+                        desktop_button("terminal-collapse")
+                            .icon(collapse_icon)
+                            .ghost()
+                            .small()
+                            .accessibility_label(hide_label.clone())
+                            .tooltip_with_action(hide_label, &ToggleTerminal, Some(key_context::DESKTOP))
+                            .dispatches_desktop_action(ToggleTerminal, self.focus_handle.clone()),
+                    ),
+            )
             .child(
                 div()
                     .id("terminal-scroll")
@@ -369,8 +497,13 @@ impl DesktopView {
                     .flex_1()
                     .min_h_0()
                     .w_full()
+                    .flex()
+                    .flex_col()
                     .overflow_y_scroll()
                     .track_scroll(&self.terminal_scroll)
+                    .px(px(TERMINAL_GRID_PAD_X))
+                    .pt(px(TERMINAL_GRID_PAD_Y))
+                    .pb(px(TERMINAL_GRID_PAD_Y))
                     .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
                         view.handle_terminal_scroll(event, cx);
                     }))
@@ -387,10 +520,10 @@ pub(super) struct TerminalSelectDrag {
     char_width: f32,
 }
 
-/// Zero-height geometry probe, mounted as the first grid child at full
-/// content width. Its paint-time bounds give mouse handlers the content
-/// origin for cell mapping and grid sync the content width for columns;
-/// the shared sink carries them back to the view.
+/// Geometry probe, mounted as the first grid child. Absolutely positioned
+/// at full size, it reports the rows area bounds without disturbing layout.
+/// Mouse handlers use the origin for cell mapping; grid sync uses the size
+/// for rows and columns; the shared sink carries them back to the view.
 struct TerminalOriginProbe {
     sink: Rc<Cell<Option<gpui_kit::Bounds<Pixels>>>>,
 }
@@ -414,9 +547,11 @@ impl Element for TerminalOriginProbe {
         window: &mut Window,
         cx: &mut App,
     ) -> (gpui_kit::LayoutId, ()) {
-        let mut style = gpui_kit::Style::default();
-        style.size.width = gpui_kit::relative(1.).into();
-        style.size.height = px(0.).into();
+        let style = gpui_kit::Style {
+            position: gpui_kit::Position::Absolute,
+            size: Size::full(),
+            ..Default::default()
+        };
         (window.request_layout(style, [], cx), ())
     }
 
@@ -503,28 +638,6 @@ fn terminal_cell_for_point(
     Some(cell)
 }
 
-/// Wheel pixels to whole history lines. Sign follows GPUI lists
-/// (`scroll_top - delta.y`): wheel-up is positive `delta.y`, which is also
-/// Rio's `Delta` direction into history, so no flip is needed. Returns the
-/// whole lines plus the kept fractional remainder.
-fn wheel_line_delta(delta: &gpui_kit::ScrollDelta, row_height: f32, remainder: f32) -> (i32, f32) {
-    let dy_px = match delta {
-        gpui_kit::ScrollDelta::Pixels(point) => f32::from(point.y),
-        gpui_kit::ScrollDelta::Lines(point) => point.y * row_height,
-    };
-    if !dy_px.is_finite() || !remainder.is_finite() || row_height <= 0.0 {
-        return (0, 0.0);
-    }
-    let total = (remainder + dy_px / row_height).clamp(-10_000.0, 10_000.0);
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "clamped integral -10000..=10000; conversion is exact"
-    )]
-    let lines = total.trunc() as i32;
-    (lines, total - lines as f32)
-}
-
 /// Effective palette darkness: Auto follows the desktop mode, otherwise
 /// the explicit override wins.
 fn terminal_palette_is_dark(setting: preferences::TerminalAnsiTheme, mode: ThemeMode) -> bool {
@@ -533,125 +646,6 @@ fn terminal_palette_is_dark(setting: preferences::TerminalAnsiTheme, mode: Theme
         preferences::TerminalAnsiTheme::Dark => true,
         preferences::TerminalAnsiTheme::Light => false,
     }
-}
-
-/// Shifted navigation scrolls history instead of reaching the shell.
-fn scroll_target(keystroke: &gpui_kit::Keystroke) -> Option<rio_vt::crosswords::grid::Scroll> {
-    use rio_vt::crosswords::grid::Scroll;
-    let modifiers = &keystroke.modifiers;
-    if !modifiers.shift || modifiers.platform || modifiers.control || modifiers.alt {
-        return None;
-    }
-    match keystroke.key.as_str() {
-        "pageup" => Some(Scroll::PageUp),
-        "pagedown" => Some(Scroll::PageDown),
-        "home" => Some(Scroll::Top),
-        "end" => Some(Scroll::Bottom),
-        _ => None,
-    }
-}
-
-/// Copy chord: plain `cmd-c` only.
-fn is_copy(keystroke: &gpui_kit::Keystroke) -> bool {
-    let modifiers = &keystroke.modifiers;
-    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == "c"
-}
-
-/// Select-all chord: plain `cmd-a` only.
-fn is_select_all(keystroke: &gpui_kit::Keystroke) -> bool {
-    let modifiers = &keystroke.modifiers;
-    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == "a"
-}
-
-/// Clipboard-bound selection text: blank selections never clobber the clipboard.
-fn copyable_text(text: Option<String>) -> Option<String> {
-    text.filter(|text| !text.trim().is_empty())
-}
-
-/// Bare `escape` clears a selection instead of reaching the shell.
-fn is_bare_escape(keystroke: &gpui_kit::Keystroke) -> bool {
-    let modifiers = &keystroke.modifiers;
-    !modifiers.platform && !modifiers.control && !modifiers.alt && !modifiers.function && keystroke.key == "escape"
-}
-
-/// Paste chord: plain `cmd-v` only, so modified variants keep bubbling.
-fn is_paste(keystroke: &gpui_kit::Keystroke) -> bool {
-    let modifiers = &keystroke.modifiers;
-    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == "v"
-}
-
-/// Translate one keystroke to terminal input bytes, or `None` to let it
-/// bubble (menus, reserved chords, keys the shell must never see). Paste is
-/// handled by the caller, which owns the clipboard.
-fn key_bytes(keystroke: &gpui_kit::Keystroke, app_cursor: bool) -> Option<Vec<u8>> {
-    let modifiers = &keystroke.modifiers;
-    if modifiers.platform || (modifiers.control && modifiers.alt) {
-        return None;
-    }
-    if modifiers.control {
-        return control_bytes(&keystroke.key);
-    }
-    match keystroke.key.as_str() {
-        "enter" => Some(b"\r".to_vec()),
-        "backspace" => Some(vec![0x7f]),
-        "delete" => Some(b"\x1b[3~".to_vec()),
-        "tab" => Some(b"\t".to_vec()),
-        "escape" => Some(b"\x1b".to_vec()),
-        "space" => Some(b" ".to_vec()),
-        "left" => Some(cursor_bytes(app_cursor, b'D')),
-        "right" => Some(cursor_bytes(app_cursor, b'C')),
-        "up" => Some(cursor_bytes(app_cursor, b'A')),
-        "down" => Some(cursor_bytes(app_cursor, b'B')),
-        "home" => Some(b"\x1b[H".to_vec()),
-        "end" => Some(b"\x1b[F".to_vec()),
-        "pageup" => Some(b"\x1b[5~".to_vec()),
-        "pagedown" => Some(b"\x1b[6~".to_vec()),
-        "f1" => Some(b"\x1bOP".to_vec()),
-        "f2" => Some(b"\x1bOQ".to_vec()),
-        "f3" => Some(b"\x1bOR".to_vec()),
-        "f4" => Some(b"\x1bOS".to_vec()),
-        "f5" => Some(b"\x1b[15~".to_vec()),
-        "f6" => Some(b"\x1b[17~".to_vec()),
-        "f7" => Some(b"\x1b[18~".to_vec()),
-        "f8" => Some(b"\x1b[19~".to_vec()),
-        "f9" => Some(b"\x1b[20~".to_vec()),
-        "f10" => Some(b"\x1b[21~".to_vec()),
-        "f11" => Some(b"\x1b[23~".to_vec()),
-        "f12" => Some(b"\x1b[24~".to_vec()),
-        _ => {
-            if let Some(text) = keystroke.key_char.as_deref().filter(|text| !text.is_empty()) {
-                return Some(text.as_bytes().to_vec());
-            }
-            let mut chars = keystroke.key.chars();
-            match (chars.next(), chars.next()) {
-                (Some(single), None) => Some(single.to_string().into_bytes()),
-                _ => None,
-            }
-        }
-    }
-}
-
-fn cursor_bytes(app_cursor: bool, final_byte: u8) -> Vec<u8> {
-    if app_cursor {
-        vec![0x1b, b'O', final_byte]
-    } else {
-        vec![0x1b, b'[', final_byte]
-    }
-}
-
-/// Control codes for the allowlisted keys only; anything else bubbles rather
-/// than risk a wrong byte (a wrong control code can kill foreground jobs).
-fn control_bytes(key: &str) -> Option<Vec<u8>> {
-    let key = if key == "space" { " " } else { key };
-    let mut chars = key.chars();
-    let key = chars.next().filter(|_| chars.next().is_none())?;
-    if key == '?' {
-        return Some(vec![0x7f]);
-    }
-    if !matches!(key, 'a'..='z' | 'A'..='Z' | ' ' | '@' | '[' | '\\' | ']' | '^' | '_') {
-        return None;
-    }
-    u8::try_from(key as u32 & 0x1f).ok().map(|code| vec![code])
 }
 
 /// GPUI default text line height as a multiple of font size
@@ -663,6 +657,26 @@ const TERMINAL_LINE_HEIGHT_FACTOR: f32 = 1.618_034;
 /// mirroring style resolution exactly (factor times size, rounded).
 pub(super) fn terminal_row_height(mono_size: Pixels) -> f32 {
     (mono_size.as_f32() * TERMINAL_LINE_HEIGHT_FACTOR).round()
+}
+
+/// Shell working directory: the workspace, or home when none is open.
+fn terminal_shell_dir(workspace: Option<&PathBuf>) -> Option<PathBuf> {
+    workspace.cloned().or_else(dirs::home_dir)
+}
+
+/// Shorten a directory for the tab label: home becomes `~`, anything else
+/// renders whole (the tab truncates). Control characters are stripped:
+/// live directories arrive from shell output, and a newline in the label
+/// would break the single-line tab layout.
+fn terminal_short_dir(path: &Path) -> String {
+    let text = if let Some(home) = dirs::home_dir()
+        && let Ok(stripped) = path.strip_prefix(&home)
+    {
+        format!("~/{}", stripped.display())
+    } else {
+        path.to_string_lossy().into_owned()
+    };
+    text.chars().filter(|cell| !cell.is_control()).collect()
 }
 
 /// Grid rows for a panel height: floor toward fit (a partial row would clip),
@@ -679,6 +693,15 @@ pub(super) fn terminal_rows_for_height(height_px: f32, row_height_px: f32) -> Op
         reason = "clamped integral 1..=512; conversion is exact and positive"
     )]
     Some(rows as u16)
+}
+
+/// Grid rows for the current panel geometry: the panel height minus the
+/// header strip and vertical grid padding, over the measured row height.
+pub(super) fn terminal_content_rows(panel_height_px: f32, mono_size: Pixels) -> Option<u16> {
+    terminal_rows_for_height(
+        panel_height_px - TERMINAL_HEADER_HEIGHT - 2.0 * TERMINAL_GRID_PAD_Y,
+        terminal_row_height(mono_size),
+    )
 }
 
 /// Grid columns for a content width: floor toward fit (a partial column
@@ -701,48 +724,6 @@ pub(super) fn terminal_cols_for_width(width_px: f32, char_width_px: f32) -> Opti
 mod tests {
     use super::*;
 
-    fn translated(chord: &'static str, app_cursor: bool) -> Option<Vec<u8>> {
-        let keystroke = gpui_kit::Keystroke::parse(chord).unwrap().with_simulated_ime();
-        key_bytes(&keystroke, app_cursor)
-    }
-
-    #[test]
-    fn terminal_keys_translate_printables_edits_and_arrows() {
-        assert_eq!(translated("a", false).unwrap(), b"a");
-        assert_eq!(translated("shift-a", false).unwrap(), b"A");
-        assert_eq!(translated("space", false).unwrap(), b" ");
-        assert_eq!(translated("enter", false).unwrap(), b"\r");
-        assert_eq!(translated("backspace", false).unwrap(), [0x7f]);
-        assert_eq!(translated("delete", false).unwrap(), b"\x1b[3~");
-        assert_eq!(translated("tab", false).unwrap(), b"\t");
-        assert_eq!(translated("escape", false).unwrap(), b"\x1b");
-        assert_eq!(translated("left", false).unwrap(), b"\x1b[D");
-        assert_eq!(translated("left", true).unwrap(), b"\x1bOD");
-        assert_eq!(translated("up", true).unwrap(), b"\x1bOA");
-        assert_eq!(translated("home", false).unwrap(), b"\x1b[H");
-        assert_eq!(translated("end", false).unwrap(), b"\x1b[F");
-        assert_eq!(translated("pageup", false).unwrap(), b"\x1b[5~");
-        assert_eq!(translated("pagedown", false).unwrap(), b"\x1b[6~");
-        assert_eq!(translated("f1", false).unwrap(), b"\x1bOP");
-        assert_eq!(translated("f5", false).unwrap(), b"\x1b[15~");
-        assert_eq!(translated("f12", false).unwrap(), b"\x1b[24~");
-    }
-
-    #[test]
-    fn terminal_keys_translate_control_codes_and_reserve_the_rest() {
-        assert_eq!(translated("ctrl-a", false).unwrap(), [0x01]);
-        assert_eq!(translated("ctrl-c", false).unwrap(), [0x03]);
-        assert_eq!(translated("ctrl-h", false).unwrap(), [0x08]);
-        assert_eq!(translated("ctrl-m", false).unwrap(), [0x0d]);
-        assert_eq!(translated("ctrl-space", false).unwrap(), [0x00]);
-        assert_eq!(translated("ctrl-shift-a", false).unwrap(), [0x01]);
-        assert_eq!(translated("ctrl-?", false).unwrap(), [0x7f]);
-        assert_eq!(translated("ctrl-2", false), None);
-        assert_eq!(translated("cmd-v", false), None);
-        assert_eq!(translated("cmd-c", false), None);
-        assert_eq!(translated("cmd-a", false), None);
-    }
-
     #[test]
     fn terminal_rows_for_height_floors_and_guards() {
         assert_eq!(terminal_rows_for_height(240.0, 18.0), Some(13));
@@ -759,28 +740,6 @@ mod tests {
     fn terminal_row_height_scales_mono_size() {
         assert_eq!(terminal_row_height(px(13.)), 21.0);
         assert_eq!(terminal_row_height(px(16.)), 26.0);
-    }
-
-    #[test]
-    fn terminal_copy_skips_blank_text() {
-        assert_eq!(copyable_text(None), None);
-        assert_eq!(copyable_text(Some(String::new())), None);
-        assert_eq!(copyable_text(Some("  \n  ".into())), None);
-        assert_eq!(copyable_text(Some("x".into())), Some("x".into()));
-    }
-
-    #[test]
-    fn terminal_scroll_chords_need_plain_shift() {
-        use rio_vt::crosswords::grid::Scroll;
-        let target =
-            |chord: &'static str| scroll_target(&gpui_kit::Keystroke::parse(chord).unwrap().with_simulated_ime());
-        assert!(matches!(target("shift-pageup"), Some(Scroll::PageUp)));
-        assert!(matches!(target("shift-pagedown"), Some(Scroll::PageDown)));
-        assert!(matches!(target("shift-home"), Some(Scroll::Top)));
-        assert!(matches!(target("shift-end"), Some(Scroll::Bottom)));
-        assert!(target("pageup").is_none());
-        assert!(target("cmd-shift-pageup").is_none());
-        assert!(target("shift-a").is_none());
     }
 
     #[test]
@@ -818,6 +777,23 @@ mod tests {
     }
 
     #[test]
+    fn terminal_content_rows_subtracts_header_and_padding() {
+        // 240px panel - 32px header - 16px vertical padding = 192px of rows.
+        assert_eq!(terminal_content_rows(240.0, px(13.)), Some(9));
+        assert_eq!(terminal_content_rows(48.0, px(13.)), None);
+        assert_eq!(terminal_content_rows(240.0, px(0.)), None);
+    }
+
+    #[test]
+    fn terminal_short_dir_collapses_home_prefix() {
+        let home = dirs::home_dir().expect("test env must have a home");
+        assert_eq!(terminal_short_dir(&home), "~/");
+        assert_eq!(terminal_short_dir(&home.join("code/vtcode")), "~/code/vtcode");
+        assert_eq!(terminal_short_dir(Path::new("/tmp/x")), "/tmp/x");
+        assert_eq!(terminal_short_dir(Path::new("/tmp/a\nb\tc")), "/tmp/abc");
+    }
+
+    #[test]
     fn terminal_palette_auto_follows_mode_and_overrides_win() {
         use gpui_kit::component::theme::ThemeMode;
         use preferences::TerminalAnsiTheme;
@@ -825,29 +801,5 @@ mod tests {
         assert!(!terminal_palette_is_dark(TerminalAnsiTheme::Auto, ThemeMode::Light));
         assert!(terminal_palette_is_dark(TerminalAnsiTheme::Dark, ThemeMode::Light));
         assert!(!terminal_palette_is_dark(TerminalAnsiTheme::Light, ThemeMode::Dark));
-    }
-
-    #[test]
-    fn terminal_wheel_delta_accumulates_fractional_rows() {
-        use gpui_kit::{ScrollDelta, point, px};
-        // Wheel-up is positive delta.y and scrolls into history (positive lines).
-        let pixels = |dy: f32| ScrollDelta::Pixels(point(px(0.), px(dy)));
-        assert_eq!(wheel_line_delta(&pixels(42.), 21.0, 0.0), (2, 0.0));
-        assert_eq!(wheel_line_delta(&pixels(-21.), 21.0, 0.0), (-1, 0.0));
-        // Sub-line events accumulate instead of dying: 0.4 + 0.4 + 0.4 rows.
-        let (lines, rem) = wheel_line_delta(&pixels(8.4), 21.0, 0.0);
-        assert_eq!(lines, 0);
-        assert!((rem - 0.4).abs() < 0.001);
-        let (lines, rem) = wheel_line_delta(&pixels(8.4), 21.0, rem);
-        assert_eq!(lines, 0);
-        let (lines, rem) = wheel_line_delta(&pixels(8.4), 21.0, rem);
-        assert_eq!(lines, 1);
-        assert!(rem < 0.21 && rem > 0.19);
-        // Inexact line deltas scale by the terminal row height, not the UI's.
-        assert_eq!(wheel_line_delta(&ScrollDelta::Lines(point(0.0, 3.0)), 21.0, 0.0), (3, 0.0));
-        // Poison in, zero out: no NaN remainder, no jump.
-        assert_eq!(wheel_line_delta(&pixels(f32::NAN), 21.0, 0.0), (0, 0.0));
-        assert_eq!(wheel_line_delta(&pixels(42.), 21.0, f32::INFINITY), (0, 0.0));
-        assert_eq!(wheel_line_delta(&pixels(42.), 0.0, 0.0), (0, 0.0));
     }
 }
