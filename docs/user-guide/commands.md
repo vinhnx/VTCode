@@ -16,7 +16,7 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode eval --suite <file>`                                           | Run an evaluation suite with pass@k / pass^k metrics                |
 | `vtcode review`                                                        | Non-interactive review of the current diff, files, or a git target  |
 | `vtcode continue`                                                      | Resume the most recent conversation; `--session-id` forks it        |
-| `vtcode init`                                                          | Scaffold `vtcode.toml` and `AGENTS.md` in the workspace              |
+| `vtcode init`                                                          | Scaffold `vtcode.toml` and `AGENTS.md` in the workspace             |
 | `vtcode init-project`                                                  | Register a project entry in the user state directory                |
 | `vtcode config`                                                        | Generate or reset `vtcode.toml` configuration layers                |
 | `vtcode login <provider>` / `vtcode logout <provider>` / `vtcode auth` | OAuth or API-key login, logout, and status                          |

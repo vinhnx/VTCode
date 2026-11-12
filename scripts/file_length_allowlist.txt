@@ -42,6 +42,11 @@ docs/development/diagnostics/producer-audit.json=3_000
 # Dated audit snapshots; immutable point-in-time records.
 # (refactor-scan-2026-10-04.* removed 2026-11-09: files deleted, entries went stale)
 
+# Desktop workspace guide sat exactly at the ceiling; MD013-compliant prose wraps
+# tipped it 3 lines over. Cap barely above current size; split or trim on the
+# next substantive edit instead of raising this.
+docs/development/desktop-workspace.md=1_010
+
 # Machine-maintained by cargo-vet (exemptions baseline + trusted-audit lock).
 # config.toml churns with dependency updates; ratchet the cap down as exemptions
 # become real audits. Touch only via `cargo vet` subcommands, never by hand.

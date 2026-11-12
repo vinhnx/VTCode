@@ -19,7 +19,8 @@ Reports go to the interactive TUI's stderr terminal stream, only when stdin, std
 Headless exec runs emit a single-shot owned record on the same stream — `working` at start, then `done`, `error`,
 or `idle` on cancellation — gated on stderr alone being a terminal, since exec only appends there. The switch is
 read once from the invoking workspace's config at startup, so a resume that re-resolves into another workspace keeps
-the startup value. ACP, JSON, quiet, and redirected-stderr runs stay silent, as do terminals whose `VTE_VERSION` predates the parser
+the startup value. ACP, JSON, quiet, and redirected-stderr runs stay silent, as do terminals
+whose `VTE_VERSION` predates the parser
 that safely ignores unknown OSC sequences (pre-0.54, mirroring Codex). No terminal feature query or additional
 input reader is used.
 
@@ -156,7 +157,8 @@ and idempotent. An unfinished parent with finished children is retired to idle s
 `vtcode-commons::program_status` owns the bounded encoder and typed projection commands. `vtcode-ui` owns records,
 deduplication, terminal writes, and restoration cleanup. Headless exec reporting is a single-shot projection in
 `src/cli/exec/status.rs` reusing the same encoder: one owned record, no children, no progress, and never `blocked`
-(exec always runs `full_auto`, so there is no approval wait to report). Runtime turn outcomes and registry snapshots supply status;
+(exec always runs `full_auto`, so there is no approval wait to report). Runtime turn outcomes
+and registry snapshots supply status;
 `ActivityState` and `ThreadEvent` retain their existing authority. The adapter does not enable input or execution.
 
 Reports contain `app=vtcode` and generic phase/task labels. They exclude prompts, commands, paths, summaries,

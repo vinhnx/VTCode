@@ -263,12 +263,12 @@ rg -n -i -C 1 "hardcoded.*password|api.*key.*=|token.*=" .
 `code_search` is visible only in the advanced profile. It accepts required `query` and optional `path`, `file_types`,
 `result_types`, and `max_results`. Omitting `result_types` enables all four categories:
 
-| Result type  | Meaning                                                                                             |
-| ------------ | --------------------------------------------------------------------------------------------------- |
-| `definition` | A recognised declaration whose name exactly matches the query.                                      |
+| Result type  | Meaning                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `definition` | A recognised declaration whose name exactly matches the query.                                                |
 | `usage`      | An exact identifier occurrence in code, outside recognised declaration names. It is not a resolved reference. |
-| `text`       | A literal match in prose, configuration, comments, strings, or otherwise unclassified content.      |
-| `path`       | A matching existing filename or path.                                                               |
+| `text`       | A literal match in prose, configuration, comments, strings, or otherwise unclassified content.                |
+| `path`       | A matching existing filename or path.                                                                         |
 
 A wholly lower-case query matches without case sensitivity. A query containing an upper-case character is
 case-sensitive. Query punctuation is literal. A query containing `|` is split into trimmed literal alternatives (empty

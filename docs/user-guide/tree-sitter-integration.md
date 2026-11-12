@@ -2,7 +2,8 @@
 
 ## Overview
 
-VT Code uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for one thing only: robust, syntax-aware parsing of
+VT Code uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for one thing only:
+robust, syntax-aware parsing of
 shell commands. Shell commands are a security boundary, so they get a real grammar rather than heuristic text matching.
 
 Everything else — code search, declaration lookup, usage classification — runs on VT Code's own native search engine.

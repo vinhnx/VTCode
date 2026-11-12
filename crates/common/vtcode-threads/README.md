@@ -2,7 +2,8 @@
 
 Thread identifiers extracted from `vtcode-core` for independent builds.
 
-Owns `ThreadId` and `SubmissionId` (StringNewtype identifiers) previously defined in `vtcode_core::core::threads`. `vtcode-core` re-exports these via `pub use vtcode_threads::{ThreadId, SubmissionId}`.
+Owns `ThreadId` and `SubmissionId` (StringNewtype identifiers) previously defined in
+`vtcode_core::core::threads`. `vtcode-core` re-exports these via `pub use vtcode_threads::{ThreadId, SubmissionId}`.
 
 ## Usage
 

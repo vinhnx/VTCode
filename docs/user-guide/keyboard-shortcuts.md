@@ -98,14 +98,14 @@ Overlay bindings still take precedence.
 
 ## Transcript Review and fullscreen
 
-| Shortcut                                                                | Action                                            |
-| :---------------------------------------------------------------------- | :------------------------------------------------ |
-| `Ctrl+T` (default) / `Alt+O`                                            | Open/close Transcript Review.                     |
-| `r`                                                                     | Toggle rich/raw.                                  |
+| Shortcut                                                                | Action                                                                                            |
+| :---------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ |
+| `Ctrl+T` (default) / `Alt+O`                                            | Open/close Transcript Review.                                                                     |
+| `r`                                                                     | Toggle rich/raw.                                                                                  |
 | `/`, `Enter`, `Esc`, `n`/`N`                                            | Search start/commit/cancel, next/previous match; commits jump to and briefly highlight the match. |
-| `j`/`k`, `Up`/`Down`, `Ctrl+U`/`D`, `Ctrl+B`/`F`, `g`/`G`, `Home`/`End` | Scroll line, half-page, full-page, top/bottom.    |
-| `v`, `[`, `q`                                                           | Open in editor, hand to native scrollback, close. |
-| `PgUp`/`PgDn`, wheel, `Ctrl+Home`/`End`                                 | Fullscreen transcript scroll.                     |
+| `j`/`k`, `Up`/`Down`, `Ctrl+U`/`D`, `Ctrl+B`/`F`, `g`/`G`, `Home`/`End` | Scroll line, half-page, full-page, top/bottom.                                                    |
+| `v`, `[`, `q`                                                           | Open in editor, hand to native scrollback, close.                                                 |
+| `PgUp`/`PgDn`, wheel, `Ctrl+Home`/`End`                                 | Fullscreen transcript scroll.                                                                     |
 
 Screen-reader mode opens review in raw mode and switches an open review to raw when enabled. Manual rich/raw toggling
 remains available; disabling the setting leaves the current mode unchanged.

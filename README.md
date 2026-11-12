@@ -45,13 +45,13 @@ VT Code is open source under **MIT OR Apache-2.0**. You are welcome to fork it, 
 and build on it, and contribute improvements back upstream. See [Contributing](#contributing) and
 [License](#license).
 
-| At a glance     | What you get                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------- |
-| **Planning**    | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md); [HOVER](./docs/development/hypothesis-revision-validation.md) revises on mismatch. |
-| **Safety**      | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                        |
-| **Long runs**   | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md#snapshots--revert) roll back state; [subagents](./docs/user-guide/subagents.md) for parallel work. |
-| **Extensions**  | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges; [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), [Companion](./docs/user-guide/vtcode-companion.md). |
-| **Models**      | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task; [evals](./docs/guides/eval.md) measure behavior before release. |
+| At a glance    | What you get                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Planning**   | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md); [HOVER](./docs/development/hypothesis-revision-validation.md) revises on mismatch.                                                                                                                                            |
+| **Safety**     | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                                                                                                                                                                                                                                               |
+| **Long runs**  | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md#snapshots--revert) roll back state; [subagents](./docs/user-guide/subagents.md) for parallel work.                                                                                                                     |
+| **Extensions** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges; [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), [Companion](./docs/user-guide/vtcode-companion.md). |
+| **Models**     | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task; [evals](./docs/guides/eval.md) measure behavior before release.                                                                                                                                                                                                   |
 
 Details live in [Documentation](#documentation); the table above is the short map.
 

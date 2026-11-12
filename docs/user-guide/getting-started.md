@@ -59,7 +59,8 @@ Choose one of the supported LLM providers:
 
 - **Meta AI**: `export MODEL_API_KEY=your_key_here` or `export META_API_KEY=your_key_here`
   - Get from the [Meta AI developer documentation](https://dev.meta.ai/docs/llms.txt)
-  - Default model: `muse-spark-1.3`; frontier `muse-wonder-1.0` and efficient `muse-ember-1.0` also available; see the [Meta AI provider guide](../providers/meta.md)
+  - Default model: `muse-spark-1.3`; frontier `muse-wonder-1.0` and efficient
+    `muse-ember-1.0` also available; see the [Meta AI provider guide](../providers/meta.md)
 
 - **Z.AI**: `export ZAI_API_KEY=your_key_here`
   - Get from [Z.AI Platform](https://z.ai/docs)

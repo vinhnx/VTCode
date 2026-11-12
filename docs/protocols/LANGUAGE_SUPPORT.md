@@ -30,9 +30,9 @@ plain literal or regular-expression scan over the workspace.
 While general code analysis is text-based, **Bash/Shell scripts** are explicitly parsed using
 [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to ensure security.
 
-| Language               | Extensions     | Analysis Method                                          | Safety Level                             |
-| ---------------------- | -------------- | -------------------------------------------------------- | ---------------------------------------- |
-| Bash/Shell             | `.sh`, `.bash` | Tree-sitter AST                                          | **High** (Parsed for command validation) |
+| Language               | Extensions     | Analysis Method                                             | Safety Level                             |
+| ---------------------- | -------------- | ----------------------------------------------------------- | ---------------------------------------- |
+| Bash/Shell             | `.sh`, `.bash` | Tree-sitter AST                                             | **High** (Parsed for command validation) |
 | Other source languages | Any            | Native text search, declaration patterns, and LLM reasoning | **Standard**                             |
 
 ### Why use Tree-sitter for Bash?
