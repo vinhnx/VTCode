@@ -119,3 +119,25 @@ fn update_install_copy_resolves_in_every_language() {
     }
     assert_eq!(rust_i18n::t!("app.settings.about.install_update", locale = "en").to_string(), "Install update");
 }
+
+#[test]
+fn terminal_colors_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.appearance.terminal_colors",
+            "app.settings.appearance.terminal_colors_description",
+            "app.settings.appearance.terminal_colors_auto",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(
+        rust_i18n::t!("app.settings.appearance.terminal_colors", locale = "en").to_string(),
+        "Terminal colors"
+    );
+}

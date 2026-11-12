@@ -26,6 +26,8 @@ mod glass;
 pub(super) use glass::{
     glass_disabled_wash, glass_primary_rest, glass_primary_rest_on_popover, glass_primary_rest_on_secondary,
 };
+mod terminal;
+pub(super) use terminal::light_ansi_slots;
 
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";

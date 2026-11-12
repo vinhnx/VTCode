@@ -2,7 +2,10 @@
 use super::super::{SharedUrlInbox, UrlInbox};
 use super::*;
 use gpui_kit::WindowBounds;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 /// Documentation and issue tracker opened by the Help menu and About dialog.
 pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
@@ -570,6 +573,8 @@ impl DesktopView {
                 view.set_ui_language(*language, window, cx);
             }
         });
+        let (terminal_ansi_select, terminal_ansi_subscription) =
+            Self::build_terminal_ansi_select(&preferences, window, cx);
         let destination = preferences.file_open_destination();
         // Bounded Info.plist scan; fast enough to run inline so the
         // dropdowns are correct on their first render. One scan feeds both
@@ -752,6 +757,8 @@ impl DesktopView {
             _composer_subscription: composer_subscription,
             ui_language_select,
             _ui_language_subscription: ui_language_subscription,
+            terminal_ansi_select,
+            _terminal_ansi_subscription: terminal_ansi_subscription,
             file_destination_select,
             _file_destination_subscription: file_destination_subscription,
             cli_terminal_select,
@@ -797,6 +804,9 @@ impl DesktopView {
             terminal_panel_height: 240.0,
             terminal_resize_focus: cx.focus_handle().tab_stop(true),
             terminal_scroll: ScrollHandle::default(),
+            terminal_wheel_remainder: 0.0,
+            terminal_grid_bounds: Rc::new(Cell::new(None)),
+            terminal_select_drag: None,
             inspector_open: false,
             inspector_tab: InspectorTab::default(),
             inspector_focus: cx.focus_handle().tab_stop(true),

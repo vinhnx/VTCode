@@ -11,12 +11,19 @@ use rio_vt::config::colors::{
     term::{COUNT, List},
 };
 use rio_vt::crosswords::Mode;
+use rio_vt::crosswords::grid::Scroll;
+use rio_vt::crosswords::pos::Side;
 use rio_vt::event::{RioEvent, WindowSize};
 
 use super::terminal_process::{TerminalProcess, TerminalProcessEvent};
 use super::terminal_screen::TerminalScreen;
 
 const MAX_EVENTS_PER_DRAIN: usize = 64;
+/// View-bound events kept per drain batch. Rio emits one event per BEL
+/// with no coalescing, so a bell flood would otherwise grow this vec by
+/// ~500k entries per pump tick; the pump drops these today and no
+/// legitimate batch nears this ceiling.
+const MAX_VIEW_EVENTS_PER_DRAIN: usize = 256;
 const SCROLLBACK_LINES: usize = 10_000;
 
 pub(super) struct TerminalDrain {
@@ -25,8 +32,13 @@ pub(super) struct TerminalDrain {
     pub(super) events: Vec<RioEvent>,
 }
 
-pub(super) fn palette_for_theme(colors: &ThemeColor) -> List {
+pub(super) fn palette_for_theme(colors: &ThemeColor, dark: bool) -> List {
     let mut palette = List::from(&Colors::default());
+    if !dark {
+        for (slot, color) in super::themes::light_ansi_slots().into_iter().enumerate() {
+            palette[slot] = color;
+        }
+    }
     let rgba = |color: Hsla| {
         let color: Rgba = color.into();
         [color.r, color.g, color.b, color.a]
@@ -76,12 +88,28 @@ impl TerminalTab {
         self.screen.display_rows(&self.palette)
     }
 
+    pub(super) fn in_alternate_screen(&self) -> bool {
+        self.screen.in_alternate_screen()
+    }
+
     pub(super) fn app_cursor(&self) -> bool {
         self.screen.mode().contains(Mode::APP_CURSOR)
     }
 
     pub(super) fn grid_size(&self) -> PtySize {
         self.size
+    }
+
+    pub(super) fn scroll_to(&mut self, target: Scroll) {
+        let _events = self.screen.scroll_to(target);
+    }
+
+    pub(super) fn start_selection(&mut self, row: usize, column: usize, side: Side) {
+        self.screen.start_selection(row, column, side);
+    }
+
+    pub(super) fn update_selection(&mut self, row: usize, column: usize, side: Side) {
+        self.screen.update_selection(row, column, side);
     }
 
     pub(super) fn select_all(&mut self) {
@@ -134,7 +162,9 @@ impl TerminalTab {
                         {
                             self.error = Some(format!("Terminal reply: {error}"));
                         } else if may_forward_to_view(&event) {
-                            view_events.push(event);
+                            if view_events.len() < MAX_VIEW_EVENTS_PER_DRAIN {
+                                view_events.push(event);
+                            }
                         }
                     }
                 }
@@ -209,12 +239,83 @@ mod tests {
     }
 
     #[test]
+    fn terminal_drain_routes_every_probe_exactly_once() {
+        // (hostile bytes, witness that the probe parsed)
+        type ProbeWitness = fn(&RioEvent) -> bool;
+        let probes: &[(&[u8], ProbeWitness)] = &[
+            (b"\x1b]52;c;SGVsbG8=\x07", |event| matches!(event, RioEvent::ClipboardStore(..))),
+            (b"\x1b]52;c;?\x07", |event| matches!(event, RioEvent::ClipboardLoad(..))),
+            (b"\x1b[6n", |event| matches!(event, RioEvent::PtyWrite(..))),
+            (b"\x1b[14t", |event| matches!(event, RioEvent::TextAreaSizeRequest(..))),
+            (b"\x1b]4;1;?\x07", |event| matches!(event, RioEvent::ColorRequest(..))),
+            (b"\x07", |event| matches!(event, RioEvent::Bell(..))),
+            (b"\x1b]2;owned-title\x07", |event| matches!(event, RioEvent::Title(..))),
+            (b"\x1b]7;file:///etc\x07", |event| matches!(event, RioEvent::CurrentDirectoryChanged(..))),
+        ];
+        let palette = List::from(&Colors::default());
+        for (bytes, witness) in probes {
+            let mut screen = TerminalScreen::new(8, 2, 10);
+            let events = screen.process(bytes);
+            assert!(events.iter().any(witness), "probe parsed nothing: {bytes:?}");
+            for event in &events {
+                let replied = terminal_reply(event, PtySize::default(), &screen, &palette).is_some();
+                let forwarded = may_forward_to_view(event);
+                match event {
+                    // Clipboard never touches the view or the PTY: dropped.
+                    RioEvent::ClipboardStore(..) | RioEvent::ClipboardLoad(..) => {
+                        assert!(!replied && !forwarded, "{event:?} must be dropped");
+                    }
+                    // Device/color/size queries answer to the PTY only.
+                    RioEvent::PtyWrite(..) | RioEvent::TextAreaSizeRequest(..) | RioEvent::ColorRequest(..) => {
+                        assert!(replied && !forwarded, "{event:?} must reply without forwarding");
+                    }
+                    // Bells, titles, cwd: view-bound only (the pump drops them today).
+                    _ => assert!(!replied && forwarded, "{event:?} must forward without replying"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_tab_drain_caps_view_events_under_bell_flood() {
+        let dir = tempfile::tempdir().unwrap();
+        let size = PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
+        let mut tab =
+            TerminalTab::spawn(dir.path(), Path::new("/bin/sh"), size, List::from(&Colors::default())).unwrap();
+        // 64KB of BELs: Rio emits one event per bell with no coalescing,
+        // so at least one drain batch overflows the cap.
+        tab.input(b"awk 'BEGIN{for(i=0;i<65536;i++)printf \"\\a\"}'; echo FLOOD_DONE; exit 0\n".to_vec())
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut max_events = 0;
+        let mut bells_seen = 0;
+        loop {
+            assert!(Instant::now() < deadline, "bell flood did not finish");
+            let drain = tab.drain();
+            max_events = max_events.max(drain.events.len());
+            bells_seen += drain.events.iter().filter(|event| matches!(event, RioEvent::Bell(_))).count();
+            let grid: String = tab
+                .display_rows()
+                .into_iter()
+                .flatten()
+                .map(|run| run.text.to_string())
+                .collect();
+            if grid.contains("FLOOD_DONE") {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(bells_seen > 0, "flood must have produced forwarded bells");
+        assert_eq!(max_events, MAX_VIEW_EVENTS_PER_DRAIN, "no batch hit the cap: the flood never overflowed it");
+    }
+
+    #[test]
     fn terminal_palette_tracks_theme_without_replacing_ansi_colors() {
         let mut colors = ThemeColor::default();
         colors.foreground = gpui_kit::rgb(0xf0e0d0).into();
         colors.background = gpui_kit::rgb(0x102030).into();
         colors.caret = gpui_kit::rgb(0x80a0c0).into();
-        let palette = palette_for_theme(&colors);
+        let palette = palette_for_theme(&colors, true);
         let expected = |color: Hsla| {
             let color: Rgba = color.into();
             [color.r, color.g, color.b, color.a]
@@ -223,6 +324,42 @@ mod tests {
         assert_eq!(palette[NamedColor::Background], expected(colors.background));
         assert_eq!(palette[NamedColor::Cursor], expected(colors.caret));
         assert_eq!(palette[NamedColor::Red], List::from(&Colors::default())[NamedColor::Red]);
+    }
+
+    #[test]
+    fn terminal_palette_dark_table_keeps_rio_defaults() {
+        let colors = ThemeColor::default();
+        let palette = palette_for_theme(&colors, true);
+        let rio = List::from(&Colors::default());
+        for slot in 0..16 {
+            assert_eq!(palette[slot], rio[slot], "dark slot {slot} must stay Rio's default");
+        }
+    }
+
+    #[test]
+    fn terminal_palette_light_table_holds_contrast_on_every_light_theme() {
+        use super::super::themes::{all_themes, contrast_ratio};
+        let lights: Vec<_> = all_themes()
+            .iter()
+            .filter(|theme| theme.mode == gpui_kit::component::theme::ThemeMode::Light)
+            .collect();
+        assert!(!lights.is_empty(), "expected at least one built-in light theme");
+        let colors = ThemeColor::default();
+        let palette = palette_for_theme(&colors, false);
+        let rio = List::from(&Colors::default());
+        for slot in 0..16 {
+            assert_ne!(palette[slot], rio[slot], "light slot {slot} must differ from dark");
+            let [r, g, b, _] = palette[slot];
+            let fg = Hsla::from(Rgba { r, g, b, a: 1.0 });
+            for theme in &lights {
+                let ratio = contrast_ratio(fg, theme.background);
+                assert!(ratio >= 4.5, "{} slot {slot} fails AA: {ratio}", theme.id);
+            }
+        }
+        // Theme chrome still wins for the default cells in both modes.
+        let dark = palette_for_theme(&colors, true);
+        assert_eq!(palette[NamedColor::Foreground], dark[NamedColor::Foreground]);
+        assert_eq!(palette[NamedColor::Background], dark[NamedColor::Background]);
     }
 
     #[test]

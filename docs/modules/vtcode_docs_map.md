@@ -201,6 +201,16 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Desire Paths in VT Code?", "How does Philosophy work?", "How does
     Current Paved Paths work?"
 
+- **File**: `docs/development/desktop-terminal.md`
+  - **Content**: Desktop Embedded Terminal Guide
+  - **Topics**: Open, close, resize, Input and paste, Selection and copy, Scrollback, Colors
+  - **User Questions**: "What can you tell me about Desktop Embedded Terminal Guide?", "How does Open, close, resize
+    work?", "How does Input and paste work?"
+
+- **File**: `docs/development/desktop-terminal-quick-reference.md`
+  - **Content**: Desktop Embedded Terminal Quick Reference
+  - **User Questions**: "What can you tell me about Desktop Embedded Terminal Quick Reference?"
+
 - **File**: `docs/development/desktop-component-review.md`
   - **Content**: Desktop component review
   - **User Questions**: "What can you tell me about Desktop component review?"
@@ -1663,7 +1673,7 @@ below based on the topic area.
 
 - **File**: `docs/development/maintainer-notes/vtcode-desktop.md`
   - **Content**: vtcode-desktop maintainer notes
-  - **Topics**: Hard rules, Best practice, Typography & accessibility, Gotchas
+  - **Topics**: Hard rules, Best practice, Typography & accessibility, Gotchas, Embedded terminal
   - **User Questions**: "What can you tell me about vtcode-desktop maintainer notes?", "How does Hard rules work?", "How
     does Best practice work?"
 

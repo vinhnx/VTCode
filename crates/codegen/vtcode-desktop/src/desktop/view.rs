@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 // Re-exported through `use super::*`: several view modules hash element IDs
 // and need these traits in scope for method resolution.
@@ -457,6 +458,15 @@ struct DesktopView {
     terminal_panel_height: f32,
     terminal_resize_focus: FocusHandle,
     terminal_scroll: ScrollHandle,
+    /// Sub-line wheel remainder, in lines. Trackpads emit fractions of a
+    /// row per event; dropping them would make slow scrolling dead.
+    terminal_wheel_remainder: f32,
+    /// Grid content bounds, stashed each paint by the zero-height probe
+    /// element (GPUI exposes no element-bounds lookup for mouse mapping
+    /// and column sync).
+    terminal_grid_bounds: Rc<Cell<Option<gpui_kit::Bounds<Pixels>>>>,
+    /// Active mouse-drag selection, if the left button went down on a cell.
+    terminal_select_drag: Option<terminal_panel::TerminalSelectDrag>,
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,
@@ -617,6 +627,8 @@ struct DesktopView {
     _composer_subscription: Subscription,
     ui_language_select: Entity<UiLanguageSelectState>,
     _ui_language_subscription: Subscription,
+    terminal_ansi_select: Entity<preferences::TerminalAnsiThemeSelectState>,
+    _terminal_ansi_subscription: Subscription,
     file_destination_select: Entity<preferences::FileDestinationSelectState>,
     _file_destination_subscription: Subscription,
     cli_terminal_select: Entity<preferences::CliTerminalSelectState>,

@@ -79,6 +79,12 @@ impl TerminalScreen {
         self.terminal.cursor()
     }
 
+    /// Alternate-screen apps own the viewport: no scrollback, so the wheel
+    /// becomes arrow keys instead of history motion.
+    pub(super) fn in_alternate_screen(&self) -> bool {
+        self.mode().contains(Mode::ALT_SCREEN)
+    }
+
     pub(super) fn mode(&self) -> Mode {
         self.terminal.mode()
     }
@@ -126,6 +132,12 @@ impl TerminalScreen {
         }
         self.start_selection(0, 0, Side::Left);
         self.update_selection(rows - 1, columns - 1, Side::Right);
+    }
+
+    /// Scroll the viewport by a Rio target (page, top, bottom).
+    pub(super) fn scroll_to(&mut self, target: Scroll) -> Vec<RioEvent> {
+        self.terminal.scroll_display(target);
+        std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
     pub(super) fn selection_range(&self) -> Option<SelectionRange> {
@@ -318,10 +330,13 @@ mod tests {
         let mut second = TerminalScreen::new(12, 3, 10);
         let _events = first.process(b"first\x1b[?1049halt");
         let _events = second.process(b"second");
+        assert!(first.in_alternate_screen());
+        assert!(!second.in_alternate_screen());
         assert!(text(&first).contains("alt"));
         assert!(!text(&first).contains("first"));
         assert!(text(&second).contains("second"));
         let _events = first.process(b"\x1b[?1049l");
+        assert!(!first.in_alternate_screen());
         assert!(text(&first).contains("first"));
         assert!(!text(&first).contains("alt"));
         assert!(text(&second).contains("second"));
@@ -579,5 +594,56 @@ mod tests {
         assert_eq!(rows[0][0].bg, plain);
         assert_eq!(rows[0][1].fg, plain);
         assert_eq!(rows[1][0].fg, plain);
+    }
+
+    #[test]
+    fn terminal_screen_output_flood_keeps_scrollback_capped() {
+        let mut screen = TerminalScreen::new(80, 24, 100);
+        for line in 0..500 {
+            let _events = screen.process(format!("flood line {line:04}\n").as_bytes());
+        }
+        assert_eq!(screen.history_size(), 100);
+        // The grid still renders the latest viewport after the flood.
+        let rendered = text(&screen);
+        assert!(rendered.contains("flood line 0499"), "latest output must survive");
+        assert!(!rendered.contains("flood line 0000"), "oldest output must scroll out");
+    }
+
+    #[test]
+    fn terminal_screen_unterminated_osc_parks_until_st_without_hanging() {
+        let mut screen = TerminalScreen::new(8, 2, 10);
+        let mut hostile = b"\x1b]52;c;".to_vec();
+        hostile.extend(std::iter::repeat_n(b'A', 1_000_000));
+        let parked = screen.process(&hostile);
+        assert!(
+            !parked.iter().any(|event| matches!(event, RioEvent::ClipboardStore(..))),
+            "unterminated OSC must not emit"
+        );
+        let completed = screen.process(b"\x07");
+        assert_eq!(
+            completed
+                .iter()
+                .filter(|event| matches!(event, RioEvent::ClipboardStore(..)))
+                .count(),
+            1,
+            "terminator completes exactly one store"
+        );
+    }
+
+    #[test]
+    fn terminal_screen_scroll_to_clamps_targets() {
+        let mut screen = TerminalScreen::new(8, 2, 10);
+        let _events = screen.process(b"l0\r\nl1\r\nl2\r\nl3\r\nl4");
+        assert_eq!(screen.grid().display_offset(), 0);
+        let _events = screen.scroll_to(Scroll::PageUp);
+        assert_eq!(screen.grid().display_offset(), 2);
+        let _events = screen.scroll_to(Scroll::PageUp);
+        assert_eq!(screen.grid().display_offset(), 3);
+        let _events = screen.scroll_to(Scroll::PageDown);
+        assert_eq!(screen.grid().display_offset(), 1);
+        let _events = screen.scroll_to(Scroll::Top);
+        assert_eq!(screen.grid().display_offset(), 3);
+        let _events = screen.scroll_to(Scroll::Bottom);
+        assert_eq!(screen.grid().display_offset(), 0);
     }
 }

@@ -669,7 +669,7 @@ fn workspace_change_resets_thread_paging_while_restart_keeps_depth(cx: &mut Test
                     terminal_dir.path(),
                     Path::new("/bin/sh"),
                     size,
-                    super::super::super::terminal_tab::palette_for_theme(&cx.theme().colors),
+                    super::super::super::terminal_tab::palette_for_theme(&cx.theme().colors, true),
                 )
                 .unwrap(),
             );

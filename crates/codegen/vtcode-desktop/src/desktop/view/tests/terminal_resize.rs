@@ -33,6 +33,37 @@ fn terminal_keyboard_resize_adjusts_height_and_grid(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn terminal_pump_syncs_columns_to_laid_out_width(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    view.update(cx, |view, cx| {
+        view.prepare_workspace(dir.path(), cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).terminal.as_ref().unwrap().grid_size().cols, 80);
+    });
+    let laid_out = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find(("terminal-row", 0usize)).bounds().size.width.as_f32()
+        })
+        .unwrap();
+    view.update(cx, |view, cx| {
+        assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
+        let char_width = cx.theme().mono_font_size.as_f32() * 0.6;
+        let expected = terminal_cols_for_width(laid_out, char_width).unwrap();
+        let cols = view.terminal.as_ref().unwrap().grid_size().cols;
+        assert_ne!(cols, 80, "pump must leave the spawn default");
+        assert_eq!(cols, expected);
+    });
+}
+
+#[gpui_kit::test]
 fn terminal_measured_row_matches_laid_out_height(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let dir = tempfile::tempdir().unwrap();
