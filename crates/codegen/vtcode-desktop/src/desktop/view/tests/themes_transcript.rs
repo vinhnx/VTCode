@@ -221,8 +221,8 @@ fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext)
         // Press on the divider, drag right by 60px, release.
         dispatch_mouse(window, start, MousePhase::Down, cx);
         let resize = view.read(cx).resizing.expect("splitter press begins a resize");
-        assert_eq!(resize.start_pointer_x_window, start.x, "drag start uses window-space pointer coordinates");
-        assert_eq!(resize.start_width, px(initial_sidebar_width), "drag start retains pixel units for pane width");
+        assert_eq!(resize.start_pointer, start.x, "drag start uses window-space pointer coordinates");
+        assert_eq!(resize.start_size, px(initial_sidebar_width), "drag start retains pixel units for pane width");
         dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
         assert!(cx.has_active_drag(), "GPUI starts a typed resize drag");
         dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Move, cx);

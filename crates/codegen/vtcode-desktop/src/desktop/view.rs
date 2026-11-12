@@ -174,6 +174,7 @@ mod storage;
 mod submit;
 mod swipe_navigation_overlay;
 mod tabs;
+mod terminal_panel;
 mod transcript_activity;
 mod transcript_diff;
 mod transcript_nav;
@@ -274,6 +275,9 @@ fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
 /// Pane-width drag bounds, shared with the preferences clamp.
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
 const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
+/// Terminal-height drag bounds, shared with the preferences clamp.
+const MIN_TERMINAL_PANEL_HEIGHT: f32 = preferences::MIN_TERMINAL_PANEL_HEIGHT;
+const MAX_TERMINAL_PANEL_HEIGHT: f32 = preferences::MAX_TERMINAL_PANEL_HEIGHT;
 
 /// Window toolbar height. Left-side navigation content starts below this
 /// line so it clears the macOS traffic lights while the sidebar surface
@@ -350,6 +354,7 @@ actions!(
         ToggleZenMode,
         ToggleStatusBar,
         ToggleFullScreen,
+        ToggleTerminal,
         ReloadCliSettings,
         SyncCliTheme,
         NextInspectorTab,
@@ -446,6 +451,12 @@ struct DesktopView {
     welcome_copy_index: usize,
     workspace: Option<PathBuf>,
     terminal: Option<super::terminal_tab::TerminalTab>,
+    terminal_visible: bool,
+    terminal_focus: FocusHandle,
+    terminal_pump_generation: u64,
+    terminal_panel_height: f32,
+    terminal_resize_focus: FocusHandle,
+    terminal_scroll: ScrollHandle,
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,

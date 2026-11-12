@@ -32,6 +32,7 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
     "ctrl-s",
     "ctrl-g",
     "cmd-s",
+    "cmd-j",
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
@@ -40,6 +41,7 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("cmd-w", CloseWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-m", MinimizeWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, Some(key_context::DESKTOP)),
+        KeyBinding::new("cmd-j", ToggleTerminal, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-shift-n", ShowMainWindow, None),
         KeyBinding::new("cmd-q", QuitApplication, None),
         KeyBinding::new("cmd-h", HideApplication, None),
@@ -656,6 +658,7 @@ impl DesktopView {
             welcome_copy_index: rand::random_range(0..WELCOME_COPY_COUNT),
             workspace: None,
             terminal: None,
+            terminal_visible: false,
             pending_workspace: None,
             navigation_history: NavigationHistory::default(),
             pending_navigation: None,
@@ -789,6 +792,11 @@ impl DesktopView {
             palette_focus: cx.focus_handle(),
             sidebar_resize_focus: cx.focus_handle().tab_stop(true),
             inspector_resize_focus: cx.focus_handle().tab_stop(true),
+            terminal_focus: cx.focus_handle().tab_stop(true),
+            terminal_pump_generation: 0,
+            terminal_panel_height: 240.0,
+            terminal_resize_focus: cx.focus_handle().tab_stop(true),
+            terminal_scroll: ScrollHandle::default(),
             inspector_open: false,
             inspector_tab: InspectorTab::default(),
             inspector_focus: cx.focus_handle().tab_stop(true),
@@ -960,6 +968,8 @@ impl DesktopView {
         self.apply_typography(cx);
         self.refresh_dock_icon();
         self.sidebar_width = preferences.sidebar_width();
+        self.terminal_panel_height = preferences.terminal_panel_height();
+        self.terminal_panel_height = preferences.terminal_panel_height();
         self.inspector_width = preferences.inspector_width();
         self.inspector_open = false;
         cx.notify();
@@ -971,6 +981,7 @@ impl DesktopView {
         self.preferences.inspector_open = Some(self.inspector_open);
         self.preferences.zen_mode = Some(self.zen_mode);
         self.preferences.set_widths(self.sidebar_width, self.inspector_width);
+        self.preferences.set_terminal_panel_height(self.terminal_panel_height);
         self.preferences.save();
     }
 }

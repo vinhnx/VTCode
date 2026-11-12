@@ -15,6 +15,7 @@ pub(super) use serde_json::json;
 
 pub(super) use super::login_items::LoginItemStatus;
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
+pub(super) use super::terminal_panel::{terminal_row_height, terminal_rows_for_height};
 pub(super) use super::{
     ActivityState, DesktopButtonExt, DesktopView, DiscardIntent, ExternalLaunchCall, FixedRowSizeCache,
     HandoffScriptCall, MAX_UI_EVENTS_PER_TICK, Route, SESSION_LIST_PAGE_SIZE, TestLaunchIntercept, ThemeMode,
@@ -762,6 +763,10 @@ mod startup_interactions;
 mod storage_settings;
 mod swipe_navigation_debounce;
 mod tasks_viewer;
+mod terminal_input;
+mod terminal_resize;
+mod terminal_rows;
+mod terminal_toggle;
 mod theme_picker;
 mod themes_transcript;
 mod thread_tabs;

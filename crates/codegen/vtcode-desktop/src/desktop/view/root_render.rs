@@ -139,6 +139,10 @@ impl Render for DesktopView {
             .flex_col()
             .children(top_chrome)
             .child(content)
+            .when(self.terminal_visible, |main| {
+                main.child(self.render_resize_handle(ResizeEdge::Terminal, cx))
+                    .child(self.render_terminal_panel(cx))
+            })
             .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)))
             .when(self.zen_mode, |main| main.child(self.render_zen_toggle_floating(cx)));
         let mut body = div()
@@ -202,6 +206,9 @@ impl Render for DesktopView {
                 }
                 view.navigation_peek = false;
                 cx.notify();
+            }))
+            .on_action(cx.listener(|view, _: &ToggleTerminal, window, cx| {
+                view.toggle_terminal(window, cx);
             }))
             .on_action(cx.listener(|view, _: &NavigateBack, window, cx| {
                 // Route steps win while a panel owns the content slot; session

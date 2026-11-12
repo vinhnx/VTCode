@@ -10,6 +10,7 @@ use rio_vt::config::colors::{
     ColorRgb, Colors, NamedColor,
     term::{COUNT, List},
 };
+use rio_vt::crosswords::Mode;
 use rio_vt::event::{RioEvent, WindowSize};
 
 use super::terminal_process::{TerminalProcess, TerminalProcessEvent};
@@ -48,8 +49,16 @@ pub(super) struct TerminalTab {
 
 impl TerminalTab {
     pub(super) fn spawn(workspace: &Path, shell: &Path, size: PtySize, palette: List) -> Result<Self> {
+        Self::with_process(TerminalProcess::spawn(workspace, shell, size)?, size, palette)
+    }
+
+    pub(super) fn spawn_login(workspace: &Path, shell: &Path, size: PtySize, palette: List) -> Result<Self> {
+        Self::with_process(TerminalProcess::spawn_login(workspace, shell, size)?, size, palette)
+    }
+
+    fn with_process(process: TerminalProcess, size: PtySize, palette: List) -> Result<Self> {
         Ok(Self {
-            process: TerminalProcess::spawn(workspace, shell, size)?,
+            process,
             size,
             palette,
             screen: TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES),
@@ -61,6 +70,33 @@ impl TerminalTab {
 
     pub(super) fn set_palette(&mut self, palette: List) {
         self.palette = palette;
+    }
+
+    pub(super) fn display_rows(&self) -> Vec<Vec<super::terminal_screen::TerminalRowRun>> {
+        self.screen.display_rows(&self.palette)
+    }
+
+    pub(super) fn app_cursor(&self) -> bool {
+        self.screen.mode().contains(Mode::APP_CURSOR)
+    }
+
+    pub(super) fn grid_size(&self) -> PtySize {
+        self.size
+    }
+
+    pub(super) fn select_all(&mut self) {
+        self.screen.select_all();
+    }
+
+    pub(super) fn selected_text(&self) -> Option<String> {
+        self.screen.selected_text()
+    }
+
+    /// Clear any selection, returning whether one existed.
+    pub(super) fn clear_selection(&mut self) -> bool {
+        let had_selection = self.screen.selection_range().is_some();
+        self.screen.clear_selection();
+        had_selection
     }
 
     pub(super) fn input(&self, bytes: Vec<u8>) -> Result<()> {
@@ -264,5 +300,18 @@ mod tests {
         assert!(!tab.drain().changed);
         assert!(tab.exit_status.as_deref().unwrap().contains('7'));
         assert!(tab.error.is_none(), "{:?}", tab.error);
+    }
+
+    #[test]
+    fn terminal_tab_tracks_application_cursor_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let size = PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
+        let mut tab =
+            TerminalTab::spawn(dir.path(), Path::new("/bin/sh"), size, List::from(&Colors::default())).unwrap();
+        assert!(!tab.app_cursor());
+        let _events = tab.screen.process(b"\x1b[?1h");
+        assert!(tab.app_cursor());
+        let _events = tab.screen.process(b"\x1b[?1l");
+        assert!(!tab.app_cursor());
     }
 }

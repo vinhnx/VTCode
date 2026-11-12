@@ -9,7 +9,7 @@
 - `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` tokens (`custom.rs`, `glass.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` projections: row type in `item.rs`, turn grouping in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
-- `src/desktop/terminal_{process,screen,tab}.rs` embedded user-shell PTY (process/group lifecycle, Rio grid, single session); creation is test-only until the desktop panel wires it.
+- `src/desktop/terminal_{process,screen,tab}.rs` + `view/terminal_panel.rs`: embedded user-shell PTY (single session, `cmd-j` toggle, login shell, drain pump, grid rows, input, paste, select-all/copy, drag resize, paced writer); mouse selection and scrollback UI are not yet wired.
 - `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` About stamp; `startup.rs` argv/URL handoff.
 
 ## Rules

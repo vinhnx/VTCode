@@ -33,6 +33,11 @@ const DEFAULT_SIDEBAR_WIDTH: f32 = 270.0;
 pub(super) const DEFAULT_INSPECTOR_WIDTH: f32 = 474.0;
 pub(super) const MIN_PANE_WIDTH: f32 = 180.0;
 pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
+/// Smallest terminal panel height.
+pub(super) const MIN_TERMINAL_PANEL_HEIGHT: f32 = 72.0;
+/// Largest terminal panel height, so the panel cannot swallow the workspace.
+pub(super) const MAX_TERMINAL_PANEL_HEIGHT: f32 = 600.0;
+const DEFAULT_TERMINAL_PANEL_HEIGHT: f32 = 240.0;
 /// Smallest UI base size: keeps the tiniest labels (`text_xs` = 0.75rem) at
 /// 10.5px, the smallest functional size on macOS.
 pub(super) const MIN_UI_FONT_SIZE: u8 = 14;
@@ -661,6 +666,7 @@ pub(super) struct Preferences {
     pub contrast: u8,
     /// Sidebar width in logical pixels.
     pub sidebar_width: Option<f32>,
+    pub terminal_panel_height: Option<f32>,
     /// Inspector width in logical pixels.
     pub inspector_width: Option<f32>,
     /// Open the main window maximized (zoomed). Missing values launch
@@ -845,6 +851,10 @@ impl Preferences {
         clamp_width(self.inspector_width.unwrap_or(DEFAULT_INSPECTOR_WIDTH))
     }
 
+    pub(super) fn terminal_panel_height(&self) -> f32 {
+        clamp_terminal_height(self.terminal_panel_height.unwrap_or(DEFAULT_TERMINAL_PANEL_HEIGHT))
+    }
+
     pub(super) fn window_maximized(&self) -> bool {
         self.window_maximized.unwrap_or(true)
     }
@@ -880,6 +890,10 @@ impl Preferences {
     pub(super) fn set_widths(&mut self, sidebar: f32, inspector: f32) {
         self.sidebar_width = Some(clamp_width(sidebar));
         self.inspector_width = Some(clamp_width(inspector));
+    }
+
+    pub(super) fn set_terminal_panel_height(&mut self, height: f32) {
+        self.terminal_panel_height = Some(clamp_terminal_height(height));
     }
 
     fn preferences_path() -> Option<PathBuf> {
@@ -941,6 +955,10 @@ impl Preferences {
 
 fn clamp_width(width: f32) -> f32 {
     width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH)
+}
+
+fn clamp_terminal_height(height: f32) -> f32 {
+    height.clamp(MIN_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_HEIGHT)
 }
 
 #[cfg(test)]

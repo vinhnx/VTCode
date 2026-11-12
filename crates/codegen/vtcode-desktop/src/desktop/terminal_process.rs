@@ -1,9 +1,9 @@
 //! Desktop-owned shell process and PTY I/O.
 
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::sync::mpsc::{self, Receiver, SendError, Sender, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -12,7 +12,6 @@ use anyhow::{Context as _, Result};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 const OUTPUT_QUEUE_CAPACITY: usize = 32;
-const INPUT_QUEUE_CAPACITY: usize = 64;
 const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 #[derive(Debug)]
@@ -27,17 +26,39 @@ pub(super) struct TerminalProcess {
     wake: SyncSender<()>,
     resize: Arc<Mutex<Option<PtySize>>>,
     closing: Arc<AtomicBool>,
-    input: SyncSender<Vec<u8>>,
+    /// Unbounded: the UI thread is the single producer and must never block or
+    /// drop keystrokes; the writer drains continuously.
+    input: Sender<Vec<u8>>,
     output: Receiver<TerminalProcessEvent>,
     events: Receiver<TerminalProcessEvent>,
 }
 
+/// Interactive shell for production sessions, honoring the user's `$SHELL`.
+pub(super) fn default_shell() -> PathBuf {
+    std::env::var_os("SHELL")
+        .filter(|shell| !shell.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/bin/sh"))
+}
+
 impl TerminalProcess {
     pub(super) fn spawn(workspace: &Path, shell: &Path, size: PtySize) -> Result<Self> {
+        Self::spawn_command(Self::base_command(workspace, shell), size)
+    }
+
+    /// Production sessions: a login shell so GUI-spawned terminals load the
+    /// user's profile (PATH, prompt). Tests use [`Self::spawn`] to stay hermetic.
+    pub(super) fn spawn_login(workspace: &Path, shell: &Path, size: PtySize) -> Result<Self> {
+        let mut command = Self::base_command(workspace, shell);
+        command.arg("-l");
+        Self::spawn_command(command, size)
+    }
+
+    fn base_command(workspace: &Path, shell: &Path) -> CommandBuilder {
         let mut command = CommandBuilder::new(shell);
         command.cwd(workspace);
         command.env("TERM", "xterm-256color");
-        Self::spawn_command(command, size)
+        command
     }
 
     fn spawn_command(command: CommandBuilder, size: PtySize) -> Result<Self> {
@@ -49,7 +70,7 @@ impl TerminalProcess {
 
         let (output_tx, output) = mpsc::sync_channel(OUTPUT_QUEUE_CAPACITY);
         let (events_tx, events) = mpsc::channel();
-        let (input, input_rx) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE_CAPACITY);
+        let (input, input_rx) = mpsc::channel::<Vec<u8>>();
         let (wake, wake_rx) = mpsc::sync_channel(1);
         let resize = Arc::new(Mutex::new(None::<PtySize>));
         let closing = Arc::new(AtomicBool::new(false));
@@ -79,9 +100,18 @@ impl TerminalProcess {
         let writer_events = events_tx.clone();
         let _writer_thread = thread::spawn(move || {
             while let Ok(bytes) = input_rx.recv() {
-                if let Err(error) = writer.write_all(&bytes) {
-                    let _sent = writer_events.send(TerminalProcessEvent::Error(format!("Terminal input: {error}")));
-                    break;
+                // Pace large writes: instant multi-KB blasts overrun the kernel
+                // TTY input queue and get silently discarded. Single-chunk
+                // writes (typing, small pastes) never sleep.
+                let mut chunks = bytes.chunks(1024).peekable();
+                while let Some(chunk) = chunks.next() {
+                    if let Err(error) = writer.write_all(chunk) {
+                        let _sent = writer_events.send(TerminalProcessEvent::Error(format!("Terminal input: {error}")));
+                        return;
+                    }
+                    if chunks.peek().is_some() {
+                        thread::sleep(Duration::from_millis(2));
+                    }
                 }
             }
         });
@@ -161,13 +191,13 @@ impl TerminalProcess {
         Ok(Self { wake, resize, closing, input, output, events })
     }
 
-    pub(super) fn input(&self, bytes: Vec<u8>) -> Result<(), TrySendError<Vec<u8>>> {
-        self.input.try_send(bytes)
+    pub(super) fn input(&self, bytes: Vec<u8>) -> Result<(), SendError<Vec<u8>>> {
+        self.input.send(bytes)
     }
 
-    pub(super) fn resize(&self, size: PtySize) -> Result<(), mpsc::SendError<()>> {
+    pub(super) fn resize(&self, size: PtySize) -> Result<(), SendError<()>> {
         if self.closing.load(Ordering::Acquire) {
-            return Err(mpsc::SendError(()));
+            return Err(SendError(()));
         }
         match self.resize.lock() {
             Ok(mut pending) => *pending = Some(size),
@@ -175,7 +205,7 @@ impl TerminalProcess {
         }
         match self.wake.try_send(()) {
             Ok(()) | Err(TrySendError::Full(())) => Ok(()),
-            Err(TrySendError::Disconnected(())) => Err(mpsc::SendError(())),
+            Err(TrySendError::Disconnected(())) => Err(SendError(())),
         }
     }
 
@@ -236,7 +266,7 @@ mod tests {
     #[test]
     fn terminal_process_reports_exit_and_drains_later_output() {
         let (wake, _wake_rx) = mpsc::sync_channel(1);
-        let (input, _input_rx) = mpsc::sync_channel(1);
+        let (input, _input_rx) = mpsc::channel();
         let (output_tx, output) = mpsc::sync_channel(1);
         let (events_tx, events) = mpsc::channel();
         let process = TerminalProcess {
@@ -478,5 +508,77 @@ mod tests {
         assert_eq!(parse_marker("BG_PID:$!\nBG_PID:12345\r\n", "BG_PID:"), Some(12345));
         assert_eq!(parse_marker("noise BG_PID:123", "BG_PID:"), None);
         assert_eq!(parse_marker("BG_PID:", "BG_PID:"), None);
+    }
+
+    #[test]
+    fn default_shell_never_returns_empty() {
+        assert!(!default_shell().as_os_str().is_empty());
+    }
+
+    /// Accumulate output until one line shows the shell's own argv (`sh` plus
+    /// `-l`). The input echo contains neither, so only real `ps` output
+    /// completes; chunk splits resolve by accumulation, not timing.
+    #[cfg(unix)]
+    fn collect_shell_argv(process: &mut TerminalProcess) -> String {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut output = String::new();
+        loop {
+            assert!(Instant::now() < deadline, "shell argv not observed: {output}");
+            match process.try_recv() {
+                Ok(TerminalProcessEvent::Output(bytes)) => output.push_str(&String::from_utf8_lossy(&bytes)),
+                Ok(TerminalProcessEvent::OutputClosed | TerminalProcessEvent::Exited(_)) => {
+                    panic!("terminal ended before argv observed: {output}")
+                }
+                Ok(TerminalProcessEvent::Error(error)) => panic!("unexpected terminal error: {error}"),
+                Err(mpsc::TryRecvError::Empty) => thread::sleep(Duration::from_millis(10)),
+                Err(error) => panic!("terminal events unavailable: {error}"),
+            }
+            if output.split('\n').any(|line| line.contains("sh") && line.contains("-l")) {
+                return output;
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn terminal_process_login_shell_passes_profile_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut process = TerminalProcess::spawn_login(dir.path(), Path::new("/bin/sh"), dimensions(10, 40)).unwrap();
+        process.input(b"ps -o args= -p $$; echo ARGS_DONE\n".to_vec()).unwrap();
+        let output = collect_shell_argv(&mut process);
+        assert!(output.contains("-l"), "login flag missing from shell argv: {output}");
+    }
+
+    /// Paced volume delivery: batched input with progress sync arrives complete
+    /// and ordered, mirroring how paced pastes stay under kernel TTY limits.
+    #[test]
+    fn terminal_process_paced_volume_arrives_complete_and_ordered() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("flood.log");
+        let process = TerminalProcess::spawn(dir.path(), Path::new("/bin/sh"), dimensions(10, 40)).unwrap();
+        const LINES: usize = 1000;
+        const BATCH: usize = 20;
+        let expected: String = (0..LINES).map(|index| format!("LINE{index:04}\n")).collect();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        for batch in 0..LINES / BATCH {
+            for index in batch * BATCH..(batch + 1) * BATCH {
+                process
+                    .input(format!("echo LINE{index:04} >> flood.log\n").into_bytes())
+                    .unwrap();
+            }
+            let want = expected.len() * (batch + 1) * BATCH / LINES;
+            loop {
+                // Drain output like the UI pump does; an undrained reader would
+                // backpressure the PTY echo path and stall the flood.
+                while process.try_recv().is_ok() {}
+                let content = std::fs::read_to_string(&log).unwrap_or_default();
+                if content.len() >= want {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "shell stalled at batch {batch}");
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), expected);
     }
 }

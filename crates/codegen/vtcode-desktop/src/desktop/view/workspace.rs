@@ -582,6 +582,7 @@ impl DesktopView {
         let same_workspace = self.workspace.as_deref() == Some(workspace);
         if !same_workspace {
             self.terminal = None;
+            self.terminal_visible = false;
         }
         self.reset_webmcp_state(None);
         let draft_sources = same_workspace.then(|| std::mem::take(&mut self.attachments));
