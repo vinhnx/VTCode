@@ -14,6 +14,7 @@ use fills::{
 };
 use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
 use gpui_kit::{App, Hsla, Window, px, rgb};
+use std::collections::HashMap;
 use vtcode_ui::theme::{self, UiThemeColors};
 
 mod custom;
@@ -320,6 +321,33 @@ pub(super) fn picker_swatches_for(mode: ThemeMode) -> impl Iterator<Item = Swatc
 /// swatch. The settings picker renders the two groups as separate rows.
 pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
     picker_swatches_for(ThemeMode::Light).chain(picker_swatches_for(ThemeMode::Dark))
+}
+
+/// Indexable snapshot of one mode's picker row. The registry is static and
+/// custom themes render in their own section, so the snapshot never goes
+/// stale; the virtualized rows index it by visible position.
+pub(super) fn picker_entries_for(mode: ThemeMode) -> &'static [SwatchEntry] {
+    static LIGHT: std::sync::LazyLock<Vec<SwatchEntry>> =
+        std::sync::LazyLock::new(|| picker_swatches_for(ThemeMode::Light).collect());
+    static DARK: std::sync::LazyLock<Vec<SwatchEntry>> =
+        std::sync::LazyLock::new(|| picker_swatches_for(ThemeMode::Dark).collect());
+    match mode {
+        ThemeMode::Light => &LIGHT,
+        ThemeMode::Dark => &DARK,
+    }
+}
+
+/// Label frequencies across both picker rows, so duplicate labels keep
+/// their disambiguating id prefix no matter which row is visible.
+pub(super) fn picker_label_counts() -> &'static HashMap<&'static str, usize> {
+    static COUNTS: std::sync::LazyLock<HashMap<&'static str, usize>> = std::sync::LazyLock::new(|| {
+        let mut counts = HashMap::new();
+        for entry in picker_swatches() {
+            *counts.entry(entry.label()).or_insert(0_usize) += 1;
+        }
+        counts
+    });
+    &COUNTS
 }
 
 /// Apply a theme by id: install the kit base for its mode, then override the

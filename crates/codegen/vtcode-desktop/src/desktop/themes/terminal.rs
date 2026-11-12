@@ -33,24 +33,32 @@ const CIAPRE_ANSI_HEX: [&str; 16] = [
     "#7FD694", "#D9B13B", "#8AB4E0", "#C4A5DB", "#84C6D1", "#E8E4D8",
 ];
 
-/// Parse the light ANSI table. The hex constants are valid; a parse
-/// failure falls back to black, which stays readable on light grounds.
+/// Parse the light ANSI table once: each `from_hex` compiles two regexes
+/// with no cache, so the per-frame scheme previews share one static copy.
+/// The hex constants are valid; a parse failure falls back to black, which
+/// stays readable on light grounds.
 pub(crate) fn light_ansi_slots() -> [ColorArray; 16] {
-    LIGHT_ANSI_HEX.map(|hex| {
-        ColorBuilder::from_hex(hex.to_owned(), Format::SRGB0_1)
-            .map(|built| built.to_arr())
-            .unwrap_or([0.0, 0.0, 0.0, 1.0])
-    })
+    static SLOTS: std::sync::LazyLock<[ColorArray; 16]> = std::sync::LazyLock::new(|| {
+        LIGHT_ANSI_HEX.map(|hex| {
+            ColorBuilder::from_hex(hex.to_owned(), Format::SRGB0_1)
+                .map(|built| built.to_arr())
+                .unwrap_or([0.0, 0.0, 0.0, 1.0])
+        })
+    });
+    *SLOTS
 }
 
-/// Parse the Ciapre ANSI table. The hex constants are valid; a parse
+/// Parse the Ciapre ANSI table once (see [`light_ansi_slots`]). A parse
 /// failure falls back to white, which stays readable on dark grounds.
 pub(crate) fn ciapre_ansi_slots() -> [ColorArray; 16] {
-    CIAPRE_ANSI_HEX.map(|hex| {
-        ColorBuilder::from_hex(hex.to_owned(), Format::SRGB0_1)
-            .map(|built| built.to_arr())
-            .unwrap_or([1.0, 1.0, 1.0, 1.0])
-    })
+    static SLOTS: std::sync::LazyLock<[ColorArray; 16]> = std::sync::LazyLock::new(|| {
+        CIAPRE_ANSI_HEX.map(|hex| {
+            ColorBuilder::from_hex(hex.to_owned(), Format::SRGB0_1)
+                .map(|built| built.to_arr())
+                .unwrap_or([1.0, 1.0, 1.0, 1.0])
+        })
+    });
+    *SLOTS
 }
 
 /// Latte-scheme ANSI slots 0-15 as sRGB hex: a fixed light-ground
@@ -62,12 +70,15 @@ const LATTE_ANSI_HEX: [&str; 16] = [
     "#2E7A23", "#836200", "#2063DE", "#8040DE", "#0D767E", "#616161",
 ];
 
-/// Parse the Latte ANSI table. The hex constants are valid; a parse
+/// Parse the Latte ANSI table once (see [`light_ansi_slots`]). A parse
 /// failure falls back to black, which stays readable on light grounds.
 pub(crate) fn latte_ansi_slots() -> [ColorArray; 16] {
-    LATTE_ANSI_HEX.map(|hex| {
-        ColorBuilder::from_hex(hex.to_owned(), Format::SRGB0_1)
-            .map(|built| built.to_arr())
-            .unwrap_or([0.0, 0.0, 0.0, 1.0])
-    })
+    static SLOTS: std::sync::LazyLock<[ColorArray; 16]> = std::sync::LazyLock::new(|| {
+        LATTE_ANSI_HEX.map(|hex| {
+            ColorBuilder::from_hex(hex.to_owned(), Format::SRGB0_1)
+                .map(|built| built.to_arr())
+                .unwrap_or([0.0, 0.0, 0.0, 1.0])
+        })
+    });
+    *SLOTS
 }

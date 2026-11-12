@@ -658,38 +658,90 @@ fn terminal_palette_is_dark(setting: preferences::TerminalAnsiTheme, mode: Theme
     }
 }
 
-/// Preview data for one terminal scheme swatch: the ground the scheme is
-/// tuned for plus its red/green/blue dots. Auto resolves live (what the
-/// terminal renders right now); Dark/Light preview on the flagship ground
-/// of their mode, since the shared tables assume a mode, not a theme.
+/// Preview data for one terminal scheme swatch: the tuned ground plus the
+/// scheme's red/green/blue dots. `Auto` carries both flagship grounds: it
+/// follows the desktop mode, so one live ground would duplicate whichever
+/// of Dark/Light the current mode resolves to. Dark/Light preview on the
+/// flagship ground of their mode, since the shared tables assume a mode,
+/// not a theme.
+pub(super) struct TerminalSchemePreview {
+    pub ground: gpui_kit::Hsla,
+    pub ground_alt: Option<gpui_kit::Hsla>,
+    pub dots: [gpui_kit::Hsla; 3],
+}
+
 pub(super) fn terminal_scheme_preview(
     setting: preferences::TerminalAnsiTheme,
     mode: ThemeMode,
     colors: &gpui_kit::component::theme::ThemeColor,
-) -> (gpui_kit::Hsla, [gpui_kit::Hsla; 3]) {
-    let ground = match setting {
-        preferences::TerminalAnsiTheme::Ciapre | preferences::TerminalAnsiTheme::Dark => {
-            themes::find("ciapre").map(|theme| theme.background)
-        }
-        preferences::TerminalAnsiTheme::Latte | preferences::TerminalAnsiTheme::Light => {
-            themes::find("catppuccin-latte").map(|theme| theme.background)
-        }
-        preferences::TerminalAnsiTheme::Auto => None,
+) -> TerminalSchemePreview {
+    /// Flagship ground with a live fallback, so a renamed theme id degrades
+    /// to today's single-ground preview instead of a missing swatch.
+    fn flagship(id: &str, live: gpui_kit::Hsla) -> gpui_kit::Hsla {
+        themes::find(id).map(|theme| theme.background).unwrap_or(live)
     }
-    .unwrap_or(colors.background);
+    let dark_ground = flagship("ciapre", colors.background);
+    let light_ground = flagship("catppuccin-latte", colors.background);
+    let (ground, ground_alt) = match setting {
+        preferences::TerminalAnsiTheme::Auto => (dark_ground, Some(light_ground)),
+        preferences::TerminalAnsiTheme::Ciapre | preferences::TerminalAnsiTheme::Dark => (dark_ground, None),
+        preferences::TerminalAnsiTheme::Latte | preferences::TerminalAnsiTheme::Light => (light_ground, None),
+    };
     let palette = terminal_palette_for_setting(setting, mode, colors);
     let dot = |slot: rio_vt::config::colors::NamedColor| {
         let [r, g, b, a] = palette[slot];
         gpui_kit::Hsla::from(gpui_kit::Rgba { r, g, b, a })
     };
-    (
+    TerminalSchemePreview {
         ground,
-        [
+        ground_alt,
+        dots: [
             dot(rio_vt::config::colors::NamedColor::Red),
             dot(rio_vt::config::colors::NamedColor::Green),
             dot(rio_vt::config::colors::NamedColor::Blue),
         ],
-    )
+    }
+}
+
+/// Preview chip for one terminal scheme: the tuned ground with the scheme's
+/// dots, or Auto's dark/light split (halves clipped to the rounded chip,
+/// dots centered over the seam). One hairline cannot contrast both halves
+/// of a split, so those use the theme border instead of a computed ring.
+pub(super) fn terminal_preview_chip(
+    preview: &TerminalSchemePreview,
+    foreground: gpui_kit::Hsla,
+    border: gpui_kit::Hsla,
+) -> AnyElement {
+    let dots = preview.dots;
+    let chip = div().h(px(32.)).rounded_md().border_1();
+    match preview.ground_alt {
+        None => chip
+            .bg(preview.ground)
+            .border_color(themes::hairline(preview.ground, foreground))
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap_1()
+            .children(dots.into_iter().map(|dot| div().size(px(10.)).rounded_full().bg(dot)))
+            .into_any_element(),
+        Some(alt) => chip
+            .relative()
+            .overflow_hidden()
+            .border_color(border)
+            .child(div().absolute().left_0().top_0().bottom_0().w_1_2().bg(preview.ground))
+            .child(div().absolute().right_0().top_0().bottom_0().w_1_2().bg(alt))
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap_1()
+                    .children(dots.into_iter().map(|dot| div().size(px(10.)).rounded_full().bg(dot))),
+            )
+            .into_any_element(),
+    }
 }
 
 /// Resolve the ANSI setting to a palette. The named schemes are fixed and
@@ -895,5 +947,31 @@ mod tests {
         let auto_light = terminal_palette_for_setting(TerminalAnsiTheme::Auto, ThemeMode::Light, &colors);
         assert_ne!(latte_dark[NamedColor::Red], auto_dark[NamedColor::Red]);
         assert_ne!(latte_dark[NamedColor::Red], auto_light[NamedColor::Red]);
+    }
+
+    /// The swatch previews stay distinguishable in both modes: Auto shows
+    /// both flagship grounds instead of duplicating whichever of
+    /// Dark/Light the live mode resolves to, and the fixed schemes carry
+    /// dots distinct from their mode's shared table.
+    #[test]
+    fn terminal_scheme_preview_auto_splits_and_schemes_differ() {
+        use gpui_kit::component::theme::{ThemeColor, ThemeMode};
+        use preferences::TerminalAnsiTheme;
+        let colors = ThemeColor::default();
+        for mode in [ThemeMode::Light, ThemeMode::Dark] {
+            let auto = terminal_scheme_preview(TerminalAnsiTheme::Auto, mode, &colors);
+            let dark = terminal_scheme_preview(TerminalAnsiTheme::Dark, mode, &colors);
+            let light = terminal_scheme_preview(TerminalAnsiTheme::Light, mode, &colors);
+            let ciapre = terminal_scheme_preview(TerminalAnsiTheme::Ciapre, mode, &colors);
+            let latte = terminal_scheme_preview(TerminalAnsiTheme::Latte, mode, &colors);
+            assert_eq!(auto.ground, dark.ground, "auto opens on the dark flagship in {mode:?}");
+            assert_eq!(auto.ground_alt, Some(light.ground), "auto closes on the light flagship in {mode:?}");
+            assert!(dark.ground_alt.is_none(), "dark keeps one ground in {mode:?}");
+            assert!(light.ground_alt.is_none(), "light keeps one ground in {mode:?}");
+            assert!(ciapre.ground_alt.is_none(), "ciapre keeps one ground in {mode:?}");
+            assert!(latte.ground_alt.is_none(), "latte keeps one ground in {mode:?}");
+            assert_ne!(dark.dots, ciapre.dots, "dark and ciapre dots differ in {mode:?}");
+            assert_ne!(light.dots, latte.dots, "light and latte dots differ in {mode:?}");
+        }
     }
 }

@@ -56,6 +56,29 @@ fn terminal_scheme_grid_marks_active_swatch(cx: &mut TestAppContext) {
     .unwrap();
 }
 
+/// The scheme buttons fix their height like the theme swatches: the 32px
+/// preview chip plus the label must fit inside the Kit button, whose
+/// content row clips overflow. Regression: the grid inherited the 32px
+/// button height and clipped every label.
+#[gpui_kit::test]
+fn terminal_scheme_buttons_fit_preview_and_label(cx: &mut TestAppContext) {
+    let (window, _view, _dir) = open_workspace_terminal(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        for id in ["auto", "dark", "light", "ciapre", "latte"] {
+            let bounds = window.find(format!("terminal-scheme-{id}")).bounds();
+            assert_eq!(
+                bounds.size.height,
+                px(80.),
+                "scheme button {id} must fit the 32px preview plus label, got {:?}",
+                bounds.size.height
+            );
+        }
+    })
+    .unwrap();
+}
+
 /// Clicking a scheme swatch applies it live: red renders the authored
 /// latte value, and the choice persists to preferences.
 #[gpui_kit::test]

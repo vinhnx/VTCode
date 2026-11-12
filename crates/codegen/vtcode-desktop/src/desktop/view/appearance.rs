@@ -9,11 +9,8 @@ use super::*;
 pub(super) struct AppearanceSettingsProps {
     pub(super) separate_theme_profiles: bool,
     pub(super) theme_mode: ThemeMode,
-    pub(super) theme_id: String,
-    pub(super) light_theme: Option<String>,
-    pub(super) dark_theme: Option<String>,
-    pub(super) theme_scroll_light: ScrollHandle,
-    pub(super) theme_scroll_dark: ScrollHandle,
+    pub(super) theme_scroll_light: VirtualListScrollHandle,
+    pub(super) theme_scroll_dark: VirtualListScrollHandle,
     pub(super) ui_font_size: u8,
     pub(super) code_font_size: u8,
     pub(super) ui_language_select: Entity<UiLanguageSelectState>,
@@ -36,9 +33,6 @@ impl AppearanceSettingsProps {
         Self {
             separate_theme_profiles: view.preferences.separate_theme_profiles,
             theme_mode: view.theme_mode,
-            theme_id: view.theme_id.clone(),
-            light_theme: view.preferences.light_theme.clone(),
-            dark_theme: view.preferences.dark_theme.clone(),
             theme_scroll_light: view.theme_scroll_light.clone(),
             theme_scroll_dark: view.theme_scroll_dark.clone(),
             ui_font_size: typography.ui_font_size,
@@ -111,8 +105,9 @@ impl DesktopView {
     }
 
     /// One terminal scheme in the settings picker: a small preview chip
-    /// (tuned ground plus the scheme's red/green/blue dots) that applies
-    /// live on click. Simpler than the theme grid: no profiles, no scroller.
+    /// (tuned ground plus the scheme's red/green/blue dots; Auto shows the
+    /// dark/light split) that applies live on click. Simpler than the theme
+    /// grid: no profiles, no scroller.
     pub(super) fn render_terminal_scheme_content(
         scheme: preferences::TerminalAnsiTheme,
         active: bool,
@@ -120,7 +115,8 @@ impl DesktopView {
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
-        let (ground, dots) = terminal_panel::terminal_scheme_preview(scheme, mode, &cx.theme().colors);
+        let colors = cx.theme().colors;
+        let preview = terminal_panel::terminal_scheme_preview(scheme, mode, &colors);
         let label = scheme.label();
         desktop_button(format!("terminal-scheme-{}", scheme.id()))
             .accessibility_label(label.clone())
@@ -128,8 +124,13 @@ impl DesktopView {
             .ghost()
             .w(px(88.))
             .flex_shrink_0()
+            // Fixed height like the theme swatches: the button's content row
+            // clips overflow, so auto height (32px) cut the label off. Content
+            // is p_2 (16) + preview (32) + gap (4) + label (~16) = ~68px; the
+            // 12px slack absorbs UI font scaling.
+            .h(px(80.))
             .p_2()
-            .when(active, |button| button.bg(cx.theme().colors.popover))
+            .when(active, |button| button.bg(colors.popover))
             .rounded_lg()
             .on_click({
                 let view = view.clone();
@@ -145,19 +146,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(
-                        div()
-                            .h(px(32.))
-                            .rounded_md()
-                            .bg(ground)
-                            .border_1()
-                            .border_color(themes::hairline(ground, cx.theme().colors.foreground))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap_1()
-                            .children(dots.into_iter().map(|dot| div().size(px(10.)).rounded_full().bg(dot))),
-                    )
+                    .child(terminal_panel::terminal_preview_chip(&preview, colors.foreground, colors.border))
                     .child(
                         div()
                             .text_xs()
@@ -634,12 +623,6 @@ impl DesktopView {
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
-        // Count every swatch in both modes so labels never rename when the
-        // visible grid changes.
-        let mut counts = HashMap::new();
-        for entry in themes::picker_swatches() {
-            *counts.entry(entry.label()).or_insert(0_usize) += 1;
-        }
         // With separate profiles only the editing profile's grid renders, so
         // the picker never shows the mode the user is not editing. Without
         // separate profiles both grids stay visible: there is no mode
@@ -650,10 +633,10 @@ impl DesktopView {
         let editing = props.theme_mode;
         let show_light = !separate || editing == ThemeMode::Light;
         let show_dark = !separate || editing == ThemeMode::Dark;
-        let light_group =
-            show_light.then(|| Self::render_theme_group_content(ThemeMode::Light, &counts, &props, view.clone(), cx));
-        let dark_group =
-            show_dark.then(|| Self::render_theme_group_content(ThemeMode::Dark, &counts, &props, view.clone(), cx));
+        let light_group = show_light
+            .then(|| Self::render_theme_group_content(ThemeMode::Light, &props.theme_scroll_light, view.clone(), cx));
+        let dark_group = show_dark
+            .then(|| Self::render_theme_group_content(ThemeMode::Dark, &props.theme_scroll_dark, view.clone(), cx));
         // Own the theme: `cx.theme()` borrows `cx`, but the content
         // builders below take `cx` mutably in later chain links.
         let theme = cx.theme().clone();
@@ -777,12 +760,15 @@ impl DesktopView {
                                     .on_click({
                                         let view = view.clone();
                                         move |_, _: &mut Window, cx: &mut App| {
+                                            // Three swatches per page, in row-stride pixels shared
+                                            // with the virtual size table.
+                                            let step = 3.0 * appearance_theme_picker::THEME_SWATCH_STRIDE;
                                             for (shown, scroll) in visible.into_iter().zip([&light, &dark]) {
                                                 if !shown {
                                                     continue;
                                                 }
                                                 let mut offset = scroll.offset();
-                                                offset.x += px(if forward { -336. } else { 336. });
+                                                offset.x += px(if forward { -step } else { step });
                                                 scroll.set_offset(offset);
                                             }
                                             cx.notify(view.entity_id());

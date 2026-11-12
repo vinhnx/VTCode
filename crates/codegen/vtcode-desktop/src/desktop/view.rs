@@ -56,7 +56,7 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::component::toolbar::{Toolbar, ToolbarGroup};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{Icon, Selectable, Sizable, VirtualListScrollHandle, v_virtual_list};
+use gpui_kit::component::{Icon, Selectable, Sizable, VirtualListScrollHandle, h_virtual_list, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
@@ -738,8 +738,8 @@ struct DesktopView {
     palette_groups: PaletteGroups,
     config_page_open: bool,
     config_page_group: Option<String>,
-    theme_scroll_light: ScrollHandle,
-    theme_scroll_dark: ScrollHandle,
+    theme_scroll_light: VirtualListScrollHandle,
+    theme_scroll_dark: VirtualListScrollHandle,
     theme_editor: appearance_themes::CustomThemeState,
     settings_scroll: ScrollHandle,
     settings_nav_scroll: ScrollHandle,

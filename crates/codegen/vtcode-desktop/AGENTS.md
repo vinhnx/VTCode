@@ -5,7 +5,7 @@
 
 ## Modules
 
-- `src/desktop/view/` screens, overlays, and routing (`components.rs` + `glass_buttons.rs` shared builders, plus per-dialog modules); `appearance_themes.rs` owns custom-theme editing; Kit host: `settings_kit.rs`.
+- `src/desktop/view/` screens, overlays, and routing (`components.rs` + `glass_buttons.rs` shared builders, plus per-dialog modules); `appearance_themes.rs` owns custom-theme editing, `appearance_theme_picker.rs` the virtualized swatch rows; Kit host: `settings_kit.rs`.
 - `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` tokens (`custom.rs`, `glass.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` projections: row type in `item.rs`, turn grouping in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
@@ -31,6 +31,7 @@
 - `app_owns_titlebar_drag` disables all native drag, so zen mode needs its own drag strip, and headless `start_window_move` is unimplemented (guard with `#[cfg(not(test))]`).
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics, and `on_next_frame` never runs headless.
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
+- Never rebuild rio-vt palettes per frame (uncached regex compiles); tables are statics, rows virtualize, custom buttons fix height.
 - Plan rail/edit locking, custom themes, dismiss guards, login items, handoff notices, file ceilings, submit detours, and the slash catalog live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.

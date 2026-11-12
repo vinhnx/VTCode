@@ -33,8 +33,19 @@ pub(super) struct TerminalDrain {
     pub(super) events: Vec<RioEvent>,
 }
 
+/// Rio's compiled-in default table, parsed once: `Colors::default()` runs
+/// `ColorBuilder::from_hex` per slot, and each parse compiles two regexes
+/// with no cache, so rebuilding it per settings frame cost ~50ms (samply:
+/// hundreds of NFA builds per frame across the five scheme previews). Rio
+/// defaults never change within a binary; every palette below starts here
+/// and overwrites its slots.
+fn default_list() -> List {
+    static DEFAULT: std::sync::LazyLock<List> = std::sync::LazyLock::new(|| List::from(&Colors::default()));
+    *DEFAULT
+}
+
 pub(super) fn palette_for_theme(colors: &ThemeColor, dark: bool) -> List {
-    let mut palette = List::from(&Colors::default());
+    let mut palette = default_list();
     if !dark {
         for (slot, color) in super::themes::light_ansi_slots().into_iter().enumerate() {
             palette[slot] = color;
@@ -47,7 +58,7 @@ pub(super) fn palette_for_theme(colors: &ThemeColor, dark: bool) -> List {
 /// Fixed Ciapre colorscheme: the authored 16 slots regardless of mode,
 /// with the default cells still tracking the active theme chrome.
 pub(super) fn ciapre_palette(colors: &ThemeColor) -> List {
-    let mut palette = List::from(&Colors::default());
+    let mut palette = default_list();
     for (slot, color) in super::themes::ciapre_ansi_slots().into_iter().enumerate() {
         palette[slot] = color;
     }
@@ -58,7 +69,7 @@ pub(super) fn ciapre_palette(colors: &ThemeColor) -> List {
 /// Fixed Latte colorscheme: the authored 16 slots regardless of mode,
 /// with the default cells still tracking the active theme chrome.
 pub(super) fn latte_palette(colors: &ThemeColor) -> List {
-    let mut palette = List::from(&Colors::default());
+    let mut palette = default_list();
     for (slot, color) in super::themes::latte_ansi_slots().into_iter().enumerate() {
         palette[slot] = color;
     }

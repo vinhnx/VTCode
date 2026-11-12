@@ -474,6 +474,9 @@ fn scroll_settings_by(window: &mut gpui_kit::Window, dy: gpui_kit::Pixels, cx: &
     window.scroll(anchor, gpui_kit::ScrollDelta::Pixels(point(px(0.), dy)), cx);
 }
 
+/// Scroll a theme row until `id` sits fully inside its viewport. The rows
+/// virtualize, so an off-screen swatch is not mounted: resolve its index
+/// from the static row order and jump the retained handle there.
 fn scroll_theme_into_view(
     window: &mut gpui_kit::Window,
     view: &Entity<DesktopView>,
@@ -482,34 +485,36 @@ fn scroll_theme_into_view(
 ) {
     let theme_id = id.strip_prefix("theme-").unwrap_or(id);
     let light = super::themes::mode_for_id(theme_id) != Some(ThemeMode::Dark);
+    let mode = if light { ThemeMode::Light } else { ThemeMode::Dark };
     let viewport_id = if light { "theme-list-light" } else { "theme-list-dark" };
-    for _ in 0..120 {
+    if let Some(item) = window.try_find(id) {
         let viewport = window.find(viewport_id).bounds();
-        let item = window.find(id).bounds();
-        if item.left() >= viewport.left() - px(1.) && item.right() <= viewport.right() + px(1.) {
+        let bounds = item.bounds();
+        if bounds.left() >= viewport.left() - px(1.) && bounds.right() <= viewport.right() + px(1.) {
             return;
         }
-        let delta = if item.right() > viewport.right() {
-            -px(112.)
-        } else {
-            px(112.)
-        };
-        view.update(cx, |view, cx| {
-            let scroll = if light {
-                &view.theme_scroll_light
-            } else {
-                &view.theme_scroll_dark
-            };
-            let mut offset = scroll.offset();
-            offset.x += delta;
-            scroll.set_offset(offset);
-            cx.notify();
-        });
-        window.render_frame(cx);
     }
+    let entries = super::themes::picker_entries_for(mode);
+    let index = entries
+        .iter()
+        .position(|entry| entry.id() == theme_id)
+        .unwrap_or_else(|| panic!("theme swatch {id} is not in the {mode:?} row"));
+    view.update(cx, |view, cx| {
+        let scroll = if light {
+            &view.theme_scroll_light
+        } else {
+            &view.theme_scroll_dark
+        };
+        scroll.scroll_to_item(index, gpui_kit::ScrollStrategy::Center);
+        cx.notify();
+    });
+    window.render_frame(cx);
     let viewport = window.find(viewport_id).bounds();
     let item = window.find(id).bounds();
-    panic!("theme swatch {id} did not scroll into view: viewport={viewport:?}, item={item:?}");
+    assert!(
+        item.left() >= viewport.left() - px(1.) && item.right() <= viewport.right() + px(1.),
+        "theme swatch {id} did not scroll into view: viewport={viewport:?}, item={item:?}"
+    );
 }
 
 fn horizontal_scroll_item_is_visible(scroll: &gpui_kit::ScrollHandle, index: usize) -> bool {

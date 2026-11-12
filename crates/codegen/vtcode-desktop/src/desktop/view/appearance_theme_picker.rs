@@ -1,16 +1,49 @@
 //! Theme picker sections for the appearance settings: swatch buttons and
-//! per-mode groups with their own scrollers.
+//! per-mode groups with their own virtualized scrollers.
 
-use super::appearance::AppearanceSettingsProps;
 use super::*;
+
+/// Swatch button box: matches the fixed button below. Cells add the
+/// inter-item gap so consecutive swatches land exactly as the previous
+/// flex `gap_2` row laid them (112px steps at the default scale); buttons
+/// are fixed px, so the table is static.
+const SWATCH_CELL_WIDTH: f32 = 104.0;
+const SWATCH_CELL_GAP: f32 = 8.0;
+const SWATCH_CELL_HEIGHT: f32 = 112.0;
+/// One swatch plus its trailing gap: the row's uniform step. Chevron paging
+/// and scroll-into-view math share it so the pixels cannot drift.
+pub(super) const THEME_SWATCH_STRIDE: f32 = SWATCH_CELL_WIDTH + SWATCH_CELL_GAP;
+
+/// Size table for one mode's row: uniform cells, so only the visible
+/// window builds per frame. Lengths match [`themes::picker_entries_for`]
+/// by construction (same count source), and the item closure still indexes
+/// defensively. Rebuilt per render: uniform math over a static count is
+/// noise next to one swatch build, and `Rc` is not `Sync` for a static.
+fn swatch_sizes(mode: ThemeMode) -> Rc<Vec<Size<Pixels>>> {
+    let count = themes::picker_entries_for(mode).len();
+    Rc::new(
+        (0..count)
+            .map(|ix| {
+                let width = if ix + 1 == count {
+                    SWATCH_CELL_WIDTH
+                } else {
+                    THEME_SWATCH_STRIDE
+                };
+                size(px(width), px(SWATCH_CELL_HEIGHT))
+            })
+            .collect(),
+    )
+}
 
 impl DesktopView {
     /// One theme entry in the settings picker: a color preview chip that
-    /// applies live on click.
+    /// applies live on click. Reads the live view (not captured props) so
+    /// the virtualized row's item closure stays a pure function of the
+    /// visible index.
     pub(super) fn render_theme_swatch_content(
         entry: themes::SwatchEntry,
         duplicate: bool,
-        props: &AppearanceSettingsProps,
+        view_state: &DesktopView,
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
@@ -21,9 +54,10 @@ impl DesktopView {
         } else {
             entry.label().to_owned()
         };
-        let active = props.theme_id == entry_id;
-        let light_profile = props.separate_theme_profiles && props.light_theme.as_deref() == Some(entry_id.as_str());
-        let dark_profile = props.separate_theme_profiles && props.dark_theme.as_deref() == Some(entry_id.as_str());
+        let active = view_state.theme_id == entry_id;
+        let separate = view_state.preferences.separate_theme_profiles;
+        let light_profile = separate && view_state.preferences.light_theme.as_deref() == Some(entry_id.as_str());
+        let dark_profile = separate && view_state.preferences.dark_theme.as_deref() == Some(entry_id.as_str());
         let badge = if active {
             "active"
         } else if light_profile && dark_profile {
@@ -92,9 +126,9 @@ impl DesktopView {
             .accessibility_label(if badged { format!("{label} ({badge})") } else { label })
             .toggled(active)
             .ghost()
-            .w(px(104.))
+            .w(px(SWATCH_CELL_WIDTH))
             .flex_shrink_0()
-            .h(px(112.))
+            .h(px(SWATCH_CELL_HEIGHT))
             .p_2()
             .when(active, |button| button.bg(cx.theme().colors.popover))
             .rounded_lg()
@@ -111,12 +145,15 @@ impl DesktopView {
     }
 
     /// One mode group inside the theme picker: a subordinate header plus its
-    /// own horizontal swatch scroller. Headers sit one type step below the
-    /// section title so Light/Dark read as groups under Themes.
+    /// own virtualized swatch row. Headers sit one type step below the
+    /// section title so Light/Dark read as groups under Themes. Only the
+    /// visible window builds per frame; the retained handle keeps chevron
+    /// paging, the scrollbar, and the wheel mask on one scroll position.
+    /// The handle arrives as a parameter: this runs during the view's own
+    /// render, when reading the entity back would panic.
     pub(super) fn render_theme_group_content(
         mode: ThemeMode,
-        counts: &HashMap<&'static str, usize>,
-        props: &AppearanceSettingsProps,
+        scroll: &VirtualListScrollHandle,
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
@@ -126,22 +163,8 @@ impl DesktopView {
         } else {
             rust_i18n::t!("app.settings.appearance.dark").to_string()
         };
-        let swatches = themes::picker_swatches_for(mode)
-            .map(|entry| {
-                Self::render_theme_swatch_content(
-                    entry,
-                    counts.get(entry.label()).copied().unwrap_or_default() > 1,
-                    props,
-                    view.clone(),
-                    cx,
-                )
-            })
-            .collect::<Vec<_>>();
-        let scroll = if light {
-            &props.theme_scroll_light
-        } else {
-            &props.theme_scroll_dark
-        };
+        let entries = themes::picker_entries_for(mode);
+        let counts = themes::picker_label_counts();
         let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
         let scroller_id = if light {
             "theme-scroller-light"
@@ -171,17 +194,16 @@ impl DesktopView {
                     .h(px(128.))
                     .relative()
                     .child(
-                        div()
-                            .id(scroller_id)
-                            .lock_scroll_axis()
-                            .size_full()
-                            .overflow_x_scroll()
-                            .track_scroll(scroll)
-                            .flex()
-                            .items_start()
-                            .gap_2()
-                            .children(swatches)
-                            .test_support(),
+                        h_virtual_list(view, scroller_id, swatch_sizes(mode), move |view, range, _, cx| {
+                            range
+                                .filter_map(|ix| {
+                                    let entry = entries.get(ix).copied()?;
+                                    let duplicate = counts.get(entry.label()).copied().unwrap_or_default() > 1;
+                                    Some(Self::render_theme_swatch_content(entry, duplicate, view, cx.entity(), cx))
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .track_scroll(scroll),
                     )
                     .child(ScrollableMask::vertical_wheel(scroll))
                     .child(Scrollbar::horizontal(scroll)),

@@ -76,6 +76,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
         assert!(window.try_find("theme-list-dark").is_none(), "dark grid hides while editing light");
         assert_eq!(window.find("theme-list-light").label(), Some("Light"));
+        scroll_theme_into_view(window, &view, "theme-catppuccin-latte", cx);
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (active)"));
         // The grouped picker pushes typography below the fold; scroll down
         // for the font row, then back up for the profile buttons above.
@@ -160,7 +161,9 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
             "light caption hides while editing dark"
         );
         assert_eq!(window.find("theme-ciapre-profile").label(), Some("Dark"));
+        scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         assert_eq!(window.find("theme-github-dark-profile").label(), None);
+        scroll_theme_into_view(window, &view, "theme-ciapre", cx);
         let strip = window.find("theme-list-dark").bounds();
         let swatch = window.find("theme-ciapre").bounds();
         assert!(
@@ -169,6 +172,7 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
         );
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
+        scroll_theme_into_view(window, &view, "theme-catppuccin-latte", cx);
         assert_eq!(window.find("theme-catppuccin-latte-profile").label(), Some("Light"));
         assert!(window.try_find("theme-ciapre-profile").is_none(), "dark caption hides while editing light");
         let strip = window.find("theme-list-light").bounds();
@@ -210,21 +214,29 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         let first_light = window.find("theme-system-light").bounds();
         let first_dark = window.find("theme-ciapre").bounds();
         let typography_top = window.find("choose-ui-font").bounds().top();
-        assert!(
-            window.find("theme-solarized-light").bounds().left() > light_strip.right(),
-            "the light group must overflow horizontally"
-        );
-        assert!(
-            ["theme-github-dark", "theme-catppuccin-mocha"]
-                .into_iter()
-                .any(|id| window.find(id).bounds().left() > dark_strip.right()),
-            "the dark group must overflow horizontally"
-        );
+        // Overflow precondition in row-stride pixels: both rows hold more
+        // swatches than the narrow viewport fits, so paging has somewhere
+        // to go. Off-screen swatches stay unmounted (see
+        // `theme_rows_mount_only_the_visible_window`), hence no find here.
+        for (mode, strip) in [(ThemeMode::Light, light_strip), (ThemeMode::Dark, dark_strip)] {
+            let count = super::super::themes::picker_entries_for(mode).len();
+            let stride = super::super::appearance_theme_picker::THEME_SWATCH_STRIDE;
+            assert!(px(count as f32 * stride) > strip.size.width, "the {mode:?} group must overflow horizontally");
+        }
         assert_eq!(first_light.size.width, px(104.), "swatches must not shrink to fit");
         window.click("next-themes", cx);
         window.render_frame(cx);
-        assert!(window.find("theme-system-light").bounds().left() < first_light.left());
-        assert!(window.find("theme-ciapre").bounds().left() < first_dark.left());
+        // One page is three strides: the fourth swatch of each row lands
+        // exactly where the first sat, proving the items moved with the
+        // handle (the paged-out first swatches unmount).
+        for (mode, edge) in [
+            (ThemeMode::Light, first_light.left()),
+            (ThemeMode::Dark, first_dark.left()),
+        ] {
+            let entries = super::super::themes::picker_entries_for(mode);
+            let third = format!("theme-{}", entries[3].id());
+            assert_eq!(window.find(third).bounds().left(), edge);
+        }
         window.click("previous-themes", cx);
         window.render_frame(cx);
         assert_eq!(window.find("theme-system-light").bounds().left(), first_light.left());
@@ -261,7 +273,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
 
 #[gpui_kit::test]
 fn theme_picker_groups_swatches_by_mode(cx: &mut TestAppContext) {
-    let (window, _view) = open_desktop(cx);
+    let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
@@ -274,7 +286,10 @@ fn theme_picker_groups_swatches_by_mode(cx: &mut TestAppContext) {
         assert!(light.bottom() <= dark.top(), "the light group sits above the dark group");
         // Asymmetric fixtures on both sides: system bases plus a light and a
         // dark palette theme each must land in their own vertical lane.
+        // Deep swatches scroll into view first: horizontal paging never
+        // changes the vertical lane, and off-screen swatches stay unmounted.
         for id in ["theme-system-light", "theme-solarized-light", "theme-catppuccin-latte"] {
+            scroll_theme_into_view(window, &view, id, cx);
             let item = window.find(id).bounds();
             let middle = item.center().y;
             assert!(
@@ -288,6 +303,7 @@ fn theme_picker_groups_swatches_by_mode(cx: &mut TestAppContext) {
             "theme-catppuccin-mocha",
             "theme-github-dark",
         ] {
+            scroll_theme_into_view(window, &view, id, cx);
             let item = window.find(id).bounds();
             let middle = item.center().y;
             assert!(
@@ -318,13 +334,36 @@ fn theme_chevrons_scroll_only_the_visible_profile_grid(cx: &mut TestAppContext) 
         let light_offset = view.read(cx).theme_scroll_light.offset();
         window.click("next-themes", cx);
         window.render_frame(cx);
-        assert!(window.find("theme-ciapre").bounds().left() < first_dark.left());
+        // One page is three strides: the fourth swatch lands where the
+        // first sat (the paged-out first swatch unmounts).
+        let entries = super::super::themes::picker_entries_for(ThemeMode::Dark);
+        let third = format!("theme-{}", entries[3].id());
+        assert_eq!(window.find(third).bounds().left(), first_dark.left());
         assert_ne!(view.read(cx).theme_scroll_dark.offset().x, dark_offset.x);
         assert_eq!(view.read(cx).theme_scroll_light.offset(), light_offset, "the hidden grid keeps its scroll offset");
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
         assert!(window.try_find("theme-list-dark").is_none());
         assert_eq!(window.find("theme-list-light").label(), Some("Light"));
+    })
+    .unwrap();
+}
+
+/// The theme rows virtualize: only the visible window mounts, so the 60+
+/// dark swatches never build on one frame. Deep swatches mount on demand.
+#[gpui_kit::test]
+fn theme_rows_mount_only_the_visible_window(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("theme-ciapre").is_some(), "the first dark swatch mounts");
+        assert!(
+            window.try_find("theme-catppuccin-mocha").is_none(),
+            "deep swatches stay unmounted until scrolled into view"
+        );
+        scroll_theme_into_view(window, &view, "theme-catppuccin-mocha", cx);
+        assert!(window.try_find("theme-catppuccin-mocha").is_some(), "scrolling mounts the deep swatch");
     })
     .unwrap();
 }
@@ -338,12 +377,16 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
         assert_eq!(window.find("theme-ciapre").checked(), Some(true));
+        scroll_theme_into_view(window, &view, "theme-ayu", cx);
         assert_eq!(window.find("theme-ayu").label(), Some("ayu · Ayu Dark"));
+        scroll_theme_into_view(window, &view, "theme-ayu-dark", cx);
         assert_eq!(window.find("theme-ayu-dark").label(), Some("ayu-dark · Ayu Dark"));
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         window.click("theme-github-dark", cx);
         window.render_frame(cx);
+        scroll_theme_into_view(window, &view, "theme-ciapre", cx);
         assert_eq!(window.find("theme-ciapre").checked(), Some(false));
+        scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         assert_eq!(window.find("theme-github-dark").checked(), Some(true));
         {
             let view = view.read(cx);
@@ -353,7 +396,9 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
         window.click("theme-solarized-light", cx);
         window.render_frame(cx);
+        scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         assert_eq!(window.find("theme-github-dark").checked(), Some(false));
+        scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
         assert_eq!(window.find("theme-solarized-light").checked(), Some(true));
         {
             let view = view.read(cx);
