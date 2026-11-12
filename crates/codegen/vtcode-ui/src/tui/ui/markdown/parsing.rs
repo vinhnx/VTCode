@@ -255,19 +255,24 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
                 ctx.refresh_list_continuation_prefix();
                 if ctx.list_stack.is_empty() {
                     ctx.pending_list_prefix.take();
+                    // Only a top-level list end separates from following
+                    // content. Nested lists stay compact inside their item:
+                    // the outer item's own end/paragraph handling provides
+                    // any needed separation.
+                    push_blank_line(ctx.lines);
                 } else {
                     ctx.set_pending_list_continuation();
                 }
             }
-            push_blank_line(ctx.lines);
         }
         TagEnd::Item => {
             ctx.flush_line();
             ctx.set_pending_list_continuation();
-            // Loose-by-default: sibling items are separated by exactly one
-            // blank row so long wrapped items stay distinct. `push_blank_line`
-            // dedupes, so loose lists and nested boundaries keep a single row.
-            push_blank_line(ctx.lines);
+            // Tight lists stay compact: no blank row between sibling items.
+            // Loose lists already separate items via `TagEnd::Paragraph`
+            // (`flush_paragraph` pushes the single blank row), and
+            // `push_blank_line` dedupes, so nested/code-block boundaries keep
+            // a single row without stacking here.
         }
         TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Superscript | TagEnd::Subscript => {
             ctx.pop_style();

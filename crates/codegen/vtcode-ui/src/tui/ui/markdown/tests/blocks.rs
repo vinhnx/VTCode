@@ -92,30 +92,24 @@ fn test_markdown_unordered_list_bullets() {
     );
 }
 #[test]
-fn tight_unordered_list_separates_items_with_single_blank() {
+fn tight_unordered_list_renders_items_without_interior_blanks() {
     let lines = render_markdown("- Alpha\n- Beta\n- Gamma\n");
     let text_lines = lines_to_text(&lines);
     assert_eq!(
         text_lines,
-        vec![
-            "• Alpha".to_string(),
-            String::new(),
-            "• Beta".to_string(),
-            String::new(),
-            "• Gamma".to_string()
-        ],
-        "tight items must be separated by exactly one blank row, got {text_lines:?}"
+        vec!["• Alpha".to_string(), "• Beta".to_string(), "• Gamma".to_string()],
+        "tight items must render on consecutive rows with no blank gap, got {text_lines:?}"
     );
 }
 
 #[test]
-fn tight_ordered_list_separates_items_with_single_blank() {
+fn tight_ordered_list_renders_items_without_interior_blanks() {
     let lines = render_markdown("1. First\n2. Second\n");
     let text_lines = lines_to_text(&lines);
     assert_eq!(
         text_lines,
-        vec!["1. First".to_string(), String::new(), "2. Second".to_string()],
-        "ordered items must be separated by exactly one blank row, got {text_lines:?}"
+        vec!["1. First".to_string(), "2. Second".to_string()],
+        "ordered items must render on consecutive rows with no blank gap, got {text_lines:?}"
     );
 }
 
@@ -143,14 +137,14 @@ fn empty_items_keep_bullet_row() {
     let lines = render_markdown("- \n- Beta\n");
     assert_eq!(
         lines_to_text(&lines),
-        vec!["• ".to_string(), String::new(), "• Beta".to_string()],
+        vec!["• ".to_string(), "• Beta".to_string()],
         "got {:?}",
         lines_to_text(&lines)
     );
     let lines = render_markdown("- Alpha\n-\n");
     assert_eq!(
         lines_to_text(&lines),
-        vec!["• Alpha".to_string(), String::new(), "• ".to_string()],
+        vec!["• Alpha".to_string(), "• ".to_string()],
         "got {:?}",
         lines_to_text(&lines)
     );
@@ -176,12 +170,10 @@ fn nested_list_separators_do_not_stack() {
         vec![
             "• Outer one".to_string(),
             "  ◦ Inner one".to_string(),
-            String::new(),
             "  ◦ Inner two".to_string(),
-            String::new(),
             "• Outer two".to_string(),
         ],
-        "nested separators must not stack, got {text_lines:?}"
+        "tight nested items must render on consecutive rows, got {text_lines:?}"
     );
 }
 
@@ -213,7 +205,6 @@ fn paragraph_list_paragraph_keeps_single_blank_rhythm() {
             "Intro".to_string(),
             String::new(),
             "• Alpha".to_string(),
-            String::new(),
             "• Beta".to_string(),
             String::new(),
             "Outro".to_string(),
