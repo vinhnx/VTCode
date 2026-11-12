@@ -29,5 +29,6 @@
 - Async checkpointing acknowledges consumed steering intents only after a `Persisted` history result, never after a throttled checkpoint.
 - A turn still active 5s after cancel — or immediately on a forced repeat — escalates to force-stop and restart from history, and unconfirmed termination holds `session_transitioning` instead of reporting a stop.
 - `session/recent_prompts` serves Everywhere/Project scopes from archives via `clean_archived_prompts`; Session answers empty since the client's live thread owns it.
+- A hard per-turn budget stop is a handoff, never an auto-continue trigger: tracker and planning continuation gates stay shut and only explicit user input resumes the work.
 
 Details: [maintainer notes](../docs/development/maintainer-notes/vtcode-binary.md) — read the section for the subsystem you change before editing it.

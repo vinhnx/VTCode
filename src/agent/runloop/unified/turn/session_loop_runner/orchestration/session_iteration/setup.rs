@@ -513,18 +513,20 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed(&runtime.state.messages),
     );
     tool_registry.restore_completion_verification_from_history(&runtime.state.messages);
-    resume::restore_session_follow_ups(
-        &mut runtime,
-        &tool_registry,
-        resume::FollowUpRestoreContext {
-            workspace_root: config.workspace.as_path(),
-            vt_cfg: vt_cfg.as_ref(),
-            resumed: resume_ref.is_some(),
-            ctrl_c_state: &ctrl_c_state,
-            renderer: &mut renderer,
-        },
-    )
-    .await;
+    harness_try!(
+        resume::restore_session_follow_ups(
+            &mut runtime,
+            &tool_registry,
+            resume::FollowUpRestoreContext {
+                workspace_root: config.workspace.as_path(),
+                vt_cfg: vt_cfg.as_ref(),
+                resumed: resume_ref.is_some(),
+                ctrl_c_state: &ctrl_c_state,
+                renderer: &mut renderer,
+            },
+        )
+        .await
+    );
     let tool_result_cache = execution.tool_result_cache;
     let tool_permission_cache = execution.tool_permission_cache;
     let permissions_state = execution.permissions_state;

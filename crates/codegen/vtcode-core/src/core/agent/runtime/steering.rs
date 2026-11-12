@@ -8,6 +8,7 @@ pub struct RuntimeSteering {
     /// full. Drained FIFO into the primary queue as space frees so a rapid
     /// influx is never silently dropped.
     overflow_follow_up_inputs: VecDeque<QueuedFollowUpIntent>,
+    recovered_follow_up: Option<QueuedFollowUpIntent>,
     pub(super) in_flight_follow_up_intents: VecDeque<QueuedFollowUpIntent>,
     applied_follow_up_intent_ids: VecDeque<String>,
 }
@@ -24,6 +25,7 @@ impl RuntimeSteering {
             steering_receiver,
             queued_follow_up_inputs: VecDeque::new(),
             overflow_follow_up_inputs: VecDeque::new(),
+            recovered_follow_up: None,
             in_flight_follow_up_intents: VecDeque::new(),
             applied_follow_up_intent_ids: VecDeque::new(),
         }
@@ -41,7 +43,9 @@ impl RuntimeSteering {
 
     #[must_use]
     pub fn has_pending_follow_up_inputs(&self) -> bool {
-        !self.queued_follow_up_inputs.is_empty() || !self.overflow_follow_up_inputs.is_empty()
+        !self.queued_follow_up_inputs.is_empty()
+            || !self.overflow_follow_up_inputs.is_empty()
+            || self.recovered_follow_up.is_some()
     }
 
     /// Dequeue the next follow-up user input, if any are pending.
@@ -56,13 +60,21 @@ impl RuntimeSteering {
     /// true must not race a `None` pop).
     pub fn pop_follow_up_intent(&mut self) -> Option<QueuedFollowUpIntent> {
         self.drain_overflow_into_primary();
-        self.queued_follow_up_inputs.pop_front()
+        self.queued_follow_up_inputs
+            .pop_front()
+            .or_else(|| self.recovered_follow_up.take())
     }
 
     /// Move overflow-parked intents into free primary-FIFO slots.
     fn drain_overflow_into_primary(&mut self) {
         while self.queued_follow_up_inputs.len() < MAX_QUEUED_FOLLOW_UP_INTENTS
             && let Some(intent) = self.overflow_follow_up_inputs.pop_front()
+        {
+            self.queued_follow_up_inputs.push_back(intent);
+        }
+        if self.overflow_follow_up_inputs.is_empty()
+            && self.queued_follow_up_inputs.len() < MAX_QUEUED_FOLLOW_UP_INTENTS
+            && let Some(intent) = self.recovered_follow_up.take()
         {
             self.queued_follow_up_inputs.push_back(intent);
         }
@@ -96,6 +108,27 @@ impl RuntimeSteering {
     /// overflow buffer so rapid influx is preserved rather than dropped.
     /// Only when both buffers are full does the call fail.
     pub fn try_queue_follow_up_intent(&mut self, intent: QueuedFollowUpIntent) -> Result<(), FollowUpQueueFull> {
+        while self.queued_follow_up_inputs.len() + self.in_flight_follow_up_intents.len() < MAX_QUEUED_FOLLOW_UP_INTENTS
+            && let Some(older) = self.overflow_follow_up_inputs.pop_front()
+        {
+            self.queued_follow_up_inputs.push_back(older);
+        }
+        if self.overflow_follow_up_inputs.is_empty()
+            && self.queued_follow_up_inputs.len() + self.in_flight_follow_up_intents.len()
+                < MAX_QUEUED_FOLLOW_UP_INTENTS
+            && let Some(recovered) = self.recovered_follow_up.take()
+        {
+            self.queued_follow_up_inputs.push_back(recovered);
+        } else if self.overflow_follow_up_inputs.len() < MAX_OVERFLOW_FOLLOW_UP_INTENTS
+            && let Some(recovered) = self.recovered_follow_up.take()
+        {
+            self.overflow_follow_up_inputs.push_back(recovered);
+        }
+        if self.recovered_follow_up.is_some() {
+            return Err(FollowUpQueueFull {
+                capacity: MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS,
+            });
+        }
         if self.queued_follow_up_inputs.len() + self.in_flight_follow_up_intents.len() < MAX_QUEUED_FOLLOW_UP_INTENTS {
             self.queued_follow_up_inputs.push_back(intent);
             return Ok(());
@@ -107,6 +140,20 @@ impl RuntimeSteering {
         Err(FollowUpQueueFull {
             capacity: MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS,
         })
+    }
+
+    /// Reserve one additional slot for an interrupted, already accepted input.
+    pub fn try_queue_recovered_follow_up(&mut self, intent: QueuedFollowUpIntent) -> Result<(), FollowUpQueueFull> {
+        if self.recovered_follow_up.is_some() {
+            return Err(FollowUpQueueFull { capacity: MAX_PENDING_FOLLOW_UP_INTENTS });
+        }
+        match self.try_queue_follow_up_intent(intent.clone()) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                self.recovered_follow_up = Some(intent);
+                Ok(())
+            }
+        }
     }
 
     /// Mark an intent as applied after its tagged user message is stored.
@@ -135,10 +182,11 @@ impl RuntimeSteering {
     /// any parked in the overflow buffer.
     #[must_use]
     pub fn pending_follow_up_intents_snapshot(&self) -> Vec<QueuedFollowUpIntent> {
-        self.queued_follow_up_inputs
+        self.in_flight_follow_up_intents
             .iter()
+            .chain(self.queued_follow_up_inputs.iter())
             .chain(self.overflow_follow_up_inputs.iter())
-            .chain(self.in_flight_follow_up_intents.iter())
+            .chain(self.recovered_follow_up.iter())
             .cloned()
             .collect()
     }
@@ -175,6 +223,7 @@ impl RuntimeSteering {
     pub fn clear_pending_follow_up_inputs(&mut self) {
         self.queued_follow_up_inputs.clear();
         self.overflow_follow_up_inputs.clear();
+        self.recovered_follow_up = None;
         self.in_flight_follow_up_intents.clear();
     }
 

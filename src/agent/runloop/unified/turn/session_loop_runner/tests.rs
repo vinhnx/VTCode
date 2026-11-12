@@ -54,6 +54,19 @@ fn resume_session(intent: ArchivedSessionIntent) -> ResumeSession {
 }
 
 #[test]
+fn untagged_resume_ids_distinguish_repeated_user_turns() {
+    let mut first = vec![vtcode_core::llm::provider::Message::user("repeat".into())];
+    let mut second = vec![
+        vtcode_core::llm::provider::Message::user("repeat".into()),
+        vtcode_core::llm::provider::Message::assistant("done".into()),
+        vtcode_core::llm::provider::Message::user("repeat".into()),
+    ];
+    let first = take_pending_resumed_user_prompt(&mut first).unwrap();
+    let second = take_pending_resumed_user_prompt(&mut second).unwrap();
+    assert_ne!(first.id(), second.id());
+}
+
+#[test]
 fn take_pending_resumed_user_prompt_removes_trailing_user_message() {
     let mut history = vec![
         vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),

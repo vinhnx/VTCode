@@ -15,6 +15,57 @@ fn envelope(summary: &str) -> SessionMemoryEnvelope {
     }
 }
 
+#[test]
+fn full_follow_up_queue_survives_envelope_write_and_restore() {
+    use crate::core::agent::runtime::AgentRuntime;
+    use crate::core::agent::session::AgentSessionState;
+    use crate::core::agent::steering::{MAX_OVERFLOW_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS};
+
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.memory.json");
+    let state = AgentSessionState::new("session".into(), 8, 8, 16_000);
+    let mut original = AgentRuntime::new(state, None, None);
+    let capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
+    for index in 0..capacity {
+        original.try_queue_follow_up_input(format!("input-{index}")).unwrap();
+    }
+    original
+        .split_mut()
+        .1
+        .try_queue_recovered_follow_up(crate::core::agent::steering::QueuedFollowUpIntent::from_parts(
+            "recovered-id",
+            "interrupted",
+        ))
+        .unwrap();
+    let update = super::SessionMemoryEnvelopeUpdate {
+        pending_intents: Some(original.split_mut().1.pending_follow_up_intents_snapshot()),
+        ..Default::default()
+    };
+    let snapshot = super::build_session_memory_envelope(
+        "session",
+        temp.path(),
+        &[],
+        &[],
+        String::new(),
+        None,
+        None,
+        &super::TaskTrackerSnapshot::default(),
+        Some(&update),
+    );
+    write_memory_envelope_to_path(&path, &snapshot).unwrap();
+    let saved: SessionMemoryEnvelope = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let state = AgentSessionState::new("restored".into(), 8, 8, 16_000);
+    let mut restored = AgentRuntime::new(state, None, None);
+    restored
+        .restore_follow_up_state(saved.pending_intents, saved.applied_intent_ids)
+        .unwrap();
+    for index in 0..capacity {
+        assert_eq!(restored.split_mut().1.pop_follow_up_input().as_deref(), Some(format!("input-{index}").as_str()));
+    }
+    assert_eq!(restored.split_mut().1.pop_follow_up_input().as_deref(), Some("interrupted"));
+    assert!(!restored.has_pending_follow_up_inputs());
+}
+
 fn assert_stored_envelope(path: &Path, expected: &SessionMemoryEnvelope) {
     let bytes = fs::read(path).expect("read envelope");
     let stored: SessionMemoryEnvelope = serde_json::from_slice(&bytes).expect("parse complete envelope");

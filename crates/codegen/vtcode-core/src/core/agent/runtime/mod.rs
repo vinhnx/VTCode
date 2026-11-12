@@ -2,7 +2,7 @@ use crate::core::agent::events::{EventSink, SharedLifecycleEmitter};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::{
     FollowUpProvenance, FollowUpQueueFull, MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_OVERFLOW_FOLLOW_UP_INTENTS,
-    MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent, SteeringMessage,
+    MAX_PENDING_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent, SteeringMessage,
 };
 use crate::exec::events::{ThreadEvent, ToolCallStatus, ToolOutcome};
 use crate::llm::provider::{
@@ -561,25 +561,31 @@ impl AgentRuntime {
         pending_intents: impl IntoIterator<Item = QueuedFollowUpIntent>,
         applied_intent_ids: impl IntoIterator<Item = String>,
     ) -> Result<(), FollowUpQueueFull> {
-        let mut applied = HashSet::new();
+        let mut applied: HashSet<String> = self.steering.applied_follow_up_intent_ids().iter().cloned().collect();
         for intent_id in applied_intent_ids {
             if applied.insert(intent_id.clone()) {
                 self.steering.acknowledge_follow_up_intent(intent_id);
             }
         }
-        let represented: HashSet<String> = self
+        let mut represented: HashSet<String> = self
             .state
             .messages
             .iter()
             .filter_map(|message| message.metadata.as_ref().and_then(|metadata| metadata.intent_id()))
             .map(ToOwned::to_owned)
             .collect();
+        represented.extend(
+            self.steering
+                .pending_follow_up_intents_snapshot()
+                .into_iter()
+                .map(|intent| intent.id().to_owned()),
+        );
 
         for intent in pending_intents {
-            if applied.contains(intent.id()) || represented.contains(intent.id()) {
+            if applied.contains(intent.id()) || !represented.insert(intent.id().to_owned()) {
                 continue;
             }
-            self.steering.try_queue_follow_up_intent(intent)?;
+            self.steering.try_queue_recovered_follow_up(intent)?;
         }
         Ok(())
     }

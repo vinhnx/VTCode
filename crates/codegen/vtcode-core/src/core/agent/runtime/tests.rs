@@ -210,6 +210,79 @@ fn pop_yields_overflow_when_primary_is_empty() {
 }
 
 #[test]
+fn new_follow_up_does_not_overtake_parked_overflow() {
+    let mut steering = RuntimeSteering::default();
+    for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
+        steering.try_queue_follow_up_input(format!("primary-{index}")).unwrap();
+    }
+    steering.try_queue_follow_up_input("older overflow".into()).unwrap();
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("primary-0"));
+    steering.try_queue_follow_up_input("new input".into()).unwrap();
+    for index in 1..MAX_QUEUED_FOLLOW_UP_INTENTS {
+        assert_eq!(steering.pop_follow_up_input().as_deref(), Some(format!("primary-{index}").as_str()));
+    }
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("older overflow"));
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("new input"));
+}
+
+#[test]
+fn recovered_follow_up_releases_capacity_without_overtaking() {
+    let mut steering = RuntimeSteering::default();
+    let capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
+    for index in 0..capacity {
+        steering.try_queue_follow_up_input(format!("queued-{index}")).unwrap();
+    }
+    steering
+        .try_queue_recovered_follow_up(QueuedFollowUpIntent::from_parts("id", "recovered"))
+        .unwrap();
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("queued-0"));
+    assert!(steering.try_queue_follow_up_input("too-soon".into()).is_err());
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("queued-1"));
+    steering.try_queue_follow_up_input("newer".into()).unwrap();
+    for index in 2..capacity {
+        assert_eq!(steering.pop_follow_up_input().as_deref(), Some(format!("queued-{index}").as_str()));
+    }
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("recovered"));
+    assert_eq!(steering.pop_follow_up_input().as_deref(), Some("newer"));
+}
+
+#[test]
+fn recovered_follow_up_stays_ordered_and_drains_mid_turn() {
+    let mut steering = RuntimeSteering::default();
+    let capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
+    for index in 0..capacity {
+        steering.try_queue_follow_up_input(format!("queued-{index}")).unwrap();
+    }
+    steering
+        .try_queue_recovered_follow_up(QueuedFollowUpIntent::from_parts("recovered-id", "interrupted"))
+        .unwrap();
+    assert!(steering.try_queue_follow_up_input("newer".into()).is_err());
+    let mut delivered = Vec::new();
+    while steering.has_pending_follow_up_inputs() {
+        delivered.extend(steering.drain_follow_up_intents_to_in_flight());
+    }
+    assert_eq!(delivered.len(), capacity + 1);
+    for (index, intent) in delivered[..capacity].iter().enumerate() {
+        assert_eq!(intent.text(), format!("queued-{index}"));
+    }
+    assert_eq!(delivered.last().unwrap().id(), "recovered-id");
+}
+
+#[test]
+fn pending_snapshot_restores_in_flight_before_queued_intents() {
+    let state = AgentSessionState::new("session".into(), 16, 4, 128_000);
+    let mut runtime = AgentRuntime::new(state, None, None);
+    runtime.try_queue_follow_up_input("first".into()).unwrap();
+    runtime.try_queue_follow_up_input("second".into()).unwrap();
+    assert_eq!(runtime.run_until_idle().as_deref(), Some("first"));
+    let snapshot = runtime.steering.pending_follow_up_intents_snapshot();
+    let mut restored = AgentRuntime::new(AgentSessionState::new("restored".into(), 16, 4, 128_000), None, None);
+    restored.restore_follow_up_state(snapshot, Vec::new()).unwrap();
+    assert_eq!(restored.run_until_idle().as_deref(), Some("first"));
+    assert_eq!(restored.run_until_idle().as_deref(), Some("second"));
+}
+
+#[test]
 fn run_until_idle_tags_and_acknowledges_follow_up_intent() {
     let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
     let mut runtime = AgentRuntime::new(state, None, None);
@@ -288,6 +361,24 @@ fn recovery_replays_only_unrepresented_intent_ids() {
     assert_eq!(interrupted.steering.pending_follow_up_intents().len(), 2);
     assert_eq!(interrupted.steering.pending_follow_up_intents()[0], pending);
     assert_eq!(interrupted.steering.pending_follow_up_intents()[1], same_text_different_id);
+    interrupted
+        .restore_follow_up_state([pending.clone(), pending.clone(), same_text_different_id.clone()], Vec::new())
+        .expect("repeated restore should not duplicate queued IDs");
+    assert_eq!(interrupted.steering.pending_follow_up_intents().len(), 2);
+
+    let mut duplicate_envelope = AgentRuntime::new(AgentSessionState::new("other".into(), 16, 4, 128_000), None, None);
+    duplicate_envelope
+        .restore_follow_up_state([pending.clone(), pending.clone(), same_text_different_id.clone()], Vec::new())
+        .unwrap();
+    assert_eq!(duplicate_envelope.steering.pending_follow_up_intents().len(), 2);
+
+    let mut acknowledged = AgentRuntime::new(AgentSessionState::new("acknowledged".into(), 16, 4, 128_000), None, None);
+    acknowledged.steering.acknowledge_follow_up_intent(pending.id());
+    acknowledged
+        .restore_follow_up_state([pending.clone(), same_text_different_id.clone()], Vec::new())
+        .unwrap();
+    assert_eq!(acknowledged.steering.pending_follow_up_intents().len(), 1);
+    assert_eq!(acknowledged.steering.pending_follow_up_intents()[0].id(), "intent-distinct");
 
     let mut restarted_state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
     restarted_state.add_user_message_with_intent(pending.text().to_string(), Some(pending.id().to_string()));

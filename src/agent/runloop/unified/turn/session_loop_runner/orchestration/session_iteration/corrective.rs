@@ -180,7 +180,7 @@ pub(super) async fn run_corrective_gate(gate: CorrectiveGate<'_>) -> Result<Corr
                 turn_completed,
                 verification_blocked: is_verification_block,
                 refused: turn_refused,
-                hard_budget_exhausted: plan_session.is_budget_exhausted(),
+                hard_budget_exhausted: planning_budget_exhausted(plan_session.is_budget_exhausted(), blocked_reason),
                 stop_requested: crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_some(),
                 cross_turn_turns: max_turns,
             },
@@ -327,4 +327,73 @@ pub(super) async fn run_corrective_gate(gate: CorrectiveGate<'_>) -> Result<Corr
         }
     }
     Ok(CorrectiveFlow::Proceed { tracker_auto_continue_exhausted })
+}
+
+fn planning_budget_exhausted(planning_budget_exhausted: bool, blocked_reason: Option<&str>) -> bool {
+    planning_budget_exhausted
+        || blocked_reason.is_some_and(|reason| {
+            crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(reason).is_some()
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::core::agent::session::AgentSessionState;
+
+    #[test]
+    fn planning_budget_stop_includes_runtime_block_reason() {
+        assert!(planning_budget_exhausted(false, Some("Tool-call budget exhausted for this turn (32/32).")));
+        assert!(planning_budget_exhausted(false, Some("Tool wall-clock budget exhausted for this turn (600s).")));
+        assert!(planning_budget_exhausted(true, None));
+        assert!(!planning_budget_exhausted(false, Some("Turn ended with a recovery fallback")));
+        assert!(!planning_budget_exhausted(false, None));
+    }
+
+    #[tokio::test]
+    async fn budget_stop_does_not_queue_a_corrective_follow_up() {
+        let workspace = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+        for (reason, should_queue) in [
+            (
+                "Tool-call budget exhausted for this turn (32/32). Changes remain unverified; no additional verifier was scheduled.",
+                false,
+            ),
+            ("Tool wall-clock budget exhausted for this turn (600s).", false),
+            ("Tool loop budget exhausted before a final response.", false),
+            (
+                "Turn ended with a recovery fallback; the requested work was not confirmed. The current plan and task state were retained.",
+                true,
+            ),
+        ] {
+            let mut stats = SessionStats::default();
+            let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 4, 16_000), None, None);
+            let mut renderer = AnsiRenderer::stdout();
+            let plan = PlanningWorkflowSessionState::default();
+            let outcome = RunLoopTurnLoopResult::Blocked { reason: Some(reason.into()) };
+            let ctrl_c = Arc::new(CtrlCState::new());
+            let flow = run_corrective_gate(CorrectiveGate {
+                session_stats: &mut stats,
+                runtime: &mut runtime,
+                renderer: &mut renderer,
+                tool_registry: &registry,
+                plan_session: &plan,
+                vt_cfg: &None,
+                outcome_result: &outcome,
+                ctrl_c_state: &ctrl_c,
+                next_turn_input: "original request",
+                turn_refused: false,
+                refused_turn_rolled_back: false,
+                session_end_reason: SessionEndReason::Completed,
+            })
+            .await
+            .unwrap();
+            assert_eq!(runtime.has_pending_follow_up_inputs(), should_queue, "{reason}");
+            assert_eq!(matches!(flow, CorrectiveFlow::ContinueLoop), should_queue, "{reason}");
+            if !should_queue {
+                runtime.try_queue_follow_up_input("continue".into()).unwrap();
+                assert_eq!(runtime.run_until_idle().as_deref(), Some("continue"));
+            }
+        }
+    }
 }

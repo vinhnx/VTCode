@@ -820,11 +820,28 @@ pub(super) fn take_pending_resumed_user_prompt(
         .and_then(vtcode_commons::message_metadata::MessageMetadata::intent_id)
         .map(str::to_owned);
 
+    let intent_id = intent_id.unwrap_or_else(|| {
+        use sha2::{Digest, Sha256};
+        let user_position = history[..=user_index]
+            .iter()
+            .filter(|message| message.role == MessageRole::User)
+            .count();
+        let mut digest = Sha256::new();
+        digest.update(u64::try_from(user_position).unwrap_or(u64::MAX).to_be_bytes());
+        for message in &history[..user_index] {
+            if message.role != MessageRole::System {
+                let text = message.content.as_text();
+                digest.update(message.role.as_generic_str().as_bytes());
+                digest.update(u64::try_from(text.len()).unwrap_or(u64::MAX).to_be_bytes());
+                digest.update(text.as_bytes());
+            }
+        }
+        digest.update(prompt.as_bytes());
+        let hash: String = digest.finalize().iter().map(|byte| format!("{byte:02x}")).collect();
+        format!("legacy-resume-{hash}")
+    });
     let _ = history.remove(user_index);
-    Some(match intent_id {
-        Some(intent_id) => QueuedFollowUpIntent::from_parts_with_provenance(intent_id, prompt, provenance),
-        None => QueuedFollowUpIntent::new_with_provenance(prompt, provenance),
-    })
+    Some(QueuedFollowUpIntent::from_parts_with_provenance(intent_id, prompt, provenance))
 }
 
 pub(super) fn prepare_resume_bootstrap_without_archive(

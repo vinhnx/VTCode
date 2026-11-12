@@ -26,7 +26,7 @@ use crate::core::agent::harness_artifacts::{
     read_spec_summary_fresh, session_artifact_cutoff,
 };
 use crate::core::agent::steering::{
-    MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent,
+    MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_PENDING_FOLLOW_UP_INTENTS, QueuedFollowUpIntent,
 };
 use crate::llm::provider::{LLMProvider, Message, MessageRole};
 use crate::llm::utils::truncate_to_token_limit;
@@ -335,7 +335,21 @@ pub fn build_session_memory_envelope(
     let update = envelope_update.cloned().unwrap_or_default();
     let pending_intents = update
         .pending_intents
-        .map(|intents| intents.into_iter().take(MAX_QUEUED_FOLLOW_UP_INTENTS).collect())
+        .map(|intents| {
+            if intents.len() > MAX_PENDING_FOLLOW_UP_INTENTS {
+                // Flood corner: repeated mid-turn drains accumulate in-flight
+                // intents until the post-turn checkpoint acknowledges them, so a
+                // sustained flood can exceed the durable slots. Oldest-first is
+                // kept and the newest tail is dropped; say so loudly instead of
+                // losing accepted input silently.
+                tracing::warn!(
+                    pending = intents.len(),
+                    capacity = MAX_PENDING_FOLLOW_UP_INTENTS,
+                    "pending follow-up intents exceed durable envelope capacity; dropping newest"
+                );
+            }
+            intents.into_iter().take(MAX_PENDING_FOLLOW_UP_INTENTS).collect()
+        })
         .or_else(|| pe.map(|envelope| envelope.pending_intents.clone()))
         .unwrap_or_default();
     let applied_intent_ids = merge_applied_intent_ids(

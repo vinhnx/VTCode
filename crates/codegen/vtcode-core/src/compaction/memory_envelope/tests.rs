@@ -7,6 +7,100 @@ use crate::llm::provider::Message;
 use std::path::Path;
 
 #[test]
+fn envelope_retains_primary_and_overflow_intents_in_order() {
+    use crate::core::agent::steering::{MAX_PENDING_FOLLOW_UP_INTENTS, QueuedFollowUpIntent};
+    let capacity = MAX_PENDING_FOLLOW_UP_INTENTS;
+    let intents: Vec<_> = (0..capacity + 1)
+        .map(|index| QueuedFollowUpIntent::from_parts(format!("id-{index}"), format!("input-{index}")))
+        .collect();
+    let update = super::SessionMemoryEnvelopeUpdate {
+        pending_intents: Some(intents.clone()),
+        ..Default::default()
+    };
+    let envelope = build_session_memory_envelope(
+        "session",
+        Path::new("."),
+        &[],
+        &[],
+        String::new(),
+        None,
+        None,
+        &TaskTrackerSnapshot::default(),
+        Some(&update),
+    );
+    assert_eq!(envelope.pending_intents, intents[..capacity]);
+    // Boundary, both sides: the kept window ends at the oldest slot and the
+    // dropped side is exactly the newest tail, never the head.
+    assert_eq!(envelope.pending_intents.len(), capacity);
+    assert_eq!(envelope.pending_intents[capacity - 1].text(), format!("input-{}", capacity - 1));
+    assert!(
+        envelope
+            .pending_intents
+            .iter()
+            .all(|intent| intent.text() != format!("input-{capacity}")),
+        "newest overflow tail must be the dropped side"
+    );
+    let encoded = serde_json::to_vec(&envelope).unwrap();
+    let restored: SessionMemoryEnvelope = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(restored.pending_intents, intents[..capacity]);
+}
+
+#[test]
+fn envelope_truncation_keeps_delivered_in_flight_head_under_flood() {
+    use crate::core::agent::runtime::RuntimeSteering;
+    use crate::core::agent::steering::{
+        MAX_OVERFLOW_FOLLOW_UP_INTENTS, MAX_PENDING_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS,
+    };
+    // Flood shape: two mid-turn drains in one turn accumulate in-flight past
+    // one primary, then new arrivals refill overflow beyond the durable slots.
+    let mut steering = RuntimeSteering::default();
+    for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS {
+        steering.try_queue_follow_up_input(format!("seed-{index}")).unwrap();
+    }
+    assert_eq!(steering.drain_follow_up_intents_to_in_flight().len(), MAX_QUEUED_FOLLOW_UP_INTENTS);
+    assert_eq!(steering.drain_follow_up_intents_to_in_flight().len(), MAX_QUEUED_FOLLOW_UP_INTENTS);
+    for index in 0..MAX_OVERFLOW_FOLLOW_UP_INTENTS {
+        steering.try_queue_follow_up_input(format!("flood-{index}")).unwrap();
+    }
+    let snapshot = steering.pending_follow_up_intents_snapshot();
+    assert_eq!(
+        snapshot.len(),
+        MAX_QUEUED_FOLLOW_UP_INTENTS * 2 + MAX_OVERFLOW_FOLLOW_UP_INTENTS,
+        "flood snapshot must exceed durable slots to exercise truncation"
+    );
+    assert!(
+        snapshot[MAX_PENDING_FOLLOW_UP_INTENTS..]
+            .iter()
+            .all(|intent| intent.text().starts_with("flood-"))
+    );
+    let update = super::SessionMemoryEnvelopeUpdate {
+        pending_intents: Some(snapshot.clone()),
+        ..Default::default()
+    };
+    let envelope = build_session_memory_envelope(
+        "session",
+        Path::new("."),
+        &[],
+        &[],
+        String::new(),
+        None,
+        None,
+        &TaskTrackerSnapshot::default(),
+        Some(&update),
+    );
+    // Delivered-but-unacked in-flight head survives oldest-first; the dropped
+    // side is exactly the newest overflow tail.
+    assert_eq!(envelope.pending_intents, snapshot[..MAX_PENDING_FOLLOW_UP_INTENTS]);
+    assert!(
+        envelope.pending_intents[..MAX_QUEUED_FOLLOW_UP_INTENTS * 2]
+            .iter()
+            .all(|intent| intent.text().starts_with("seed-")),
+        "all delivered in-flight intents must survive truncation"
+    );
+    assert_eq!(envelope.pending_intents[MAX_PENDING_FOLLOW_UP_INTENTS - 1].text(), "flood-0");
+}
+
+#[test]
 fn default_compaction_trigger_uses_ratio_of_prompt_budget() {
     // 100_000 context, 4_096 reserve → prompt budget 95_904.
     // Default trigger is 75% of the prompt budget, not the full budget.

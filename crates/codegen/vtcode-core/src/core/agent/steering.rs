@@ -11,6 +11,10 @@ pub const MAX_QUEUED_FOLLOW_UP_INTENTS: usize = 64;
 /// primary cap this bounds total retained follow-ups while still absorbing
 /// a burst instead of discarding it.
 pub const MAX_OVERFLOW_FOLLOW_UP_INTENTS: usize = 64;
+/// Total follow-up slots: primary plus overflow plus the one reserved
+/// recovery slot. The memory envelope retains the same count oldest-first
+/// per snapshot.
+pub const MAX_PENDING_FOLLOW_UP_INTENTS: usize = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS + 1;
 /// Maximum number of applied follow-up IDs retained for restart recovery.
 pub const MAX_APPLIED_FOLLOW_UP_INTENT_IDS: usize = 64;
 

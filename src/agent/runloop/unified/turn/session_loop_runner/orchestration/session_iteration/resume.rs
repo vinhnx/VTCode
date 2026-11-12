@@ -24,7 +24,7 @@ pub(super) async fn restore_session_follow_ups(
     runtime: &mut AgentRuntime,
     tool_registry: &ToolRegistry,
     context: FollowUpRestoreContext<'_>,
-) {
+) -> anyhow::Result<()> {
     let FollowUpRestoreContext {
         workspace_root,
         vt_cfg,
@@ -33,18 +33,44 @@ pub(super) async fn restore_session_follow_ups(
         renderer,
     } = context;
     let durable_session_id = tool_registry.harness_context_snapshot().session_id;
-    if let Some(envelope) =
-        vtcode_core::compaction::memory_envelope::load_latest_memory_envelope_async(workspace_root, &durable_session_id)
-            .await
-    {
-        if let Err(error) = runtime.restore_follow_up_state(envelope.pending_intents, envelope.applied_intent_ids) {
-            tracing::warn!(%error, "durable steering queue is full; pending intents were not replayed");
-        }
+    let mut saved_envelope = vtcode_core::compaction::memory_envelope::load_latest_memory_envelope_async(
+        workspace_root,
+        &durable_session_id,
+    )
+    .await;
+    if let Some(envelope) = saved_envelope.as_ref() {
+        runtime.restore_follow_up_state(envelope.pending_intents.clone(), envelope.applied_intent_ids.clone())?;
     }
+    let original_history = resumed.then(|| runtime.state.messages.clone());
     if resumed && let Some(pending_prompt) = take_pending_resumed_user_prompt(runtime.state.messages_mut()) {
         let (_, runtime_steering) = runtime.split_mut();
-        if let Err(error) = runtime_steering.try_queue_follow_up_intent(pending_prompt) {
-            tracing::warn!(%error, "Unable to queue resumed user prompt");
+        let already_queued = runtime_steering
+            .pending_follow_up_intents_snapshot()
+            .iter()
+            .any(|intent| intent.id() == pending_prompt.id());
+        if let Err(error) = if already_queued {
+            Ok(())
+        } else {
+            runtime_steering.try_queue_recovered_follow_up(pending_prompt)
+        } {
+            if let Some(history) = original_history {
+                runtime.state.messages = history;
+            }
+            return Err(error.into());
+        } else if let Some(envelope) = saved_envelope.as_mut() {
+            envelope.pending_intents = runtime.split_mut().1.pending_follow_up_intents_snapshot();
+            let path = vtcode_core::compaction::memory_envelope::latest_memory_envelope_path_for_session_async(
+                workspace_root,
+                &durable_session_id,
+            )
+            .await
+            .unwrap_or_else(|| {
+                vtcode_core::compaction::memory_envelope::default_memory_envelope_path_for_session(
+                    workspace_root,
+                    &durable_session_id,
+                )
+            });
+            vtcode_core::compaction::memory_envelope::write_memory_envelope_to_path_async(&path, envelope).await?;
         }
     } else if resumed {
         use crate::agent::runloop::unified::turn::tool_outcomes::helpers as tracker_continue;
@@ -73,13 +99,11 @@ pub(super) async fn restore_session_follow_ups(
                 tracker_continue::TRACKER_RESUME_DIRECTIVE_LABEL,
                 &incomplete,
             );
-            {
-                let messages = std::sync::Arc::make_mut(&mut runtime.state.messages);
-                messages.push(vtcode_core::llm::provider::Message::system(directive));
-            }
             let (_, runtime_steering) = runtime.split_mut();
             match runtime_steering.try_queue_synthetic_follow_up_input(follow_up) {
                 Ok(()) => {
+                    std::sync::Arc::make_mut(&mut runtime.state.messages)
+                        .push(vtcode_core::llm::provider::Message::system(directive));
                     let _ = renderer.line(
                             MessageStyle::Info,
                             "[i] Resumed session has incomplete task_tracker steps; auto-continuing without manual `continue`.",
@@ -91,6 +115,7 @@ pub(super) async fn restore_session_follow_ups(
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]

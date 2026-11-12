@@ -165,6 +165,36 @@ fn refusal_notices_never_auto_continue() {
 }
 
 #[test]
+fn exhausted_turn_does_not_queue_an_automatic_retry() {
+    let budget_stop = "Tool-call budget exhausted for this turn (32/32). Changes remain unverified; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
+    let transient_stop = "Turn ended with a recovery fallback; the requested work was not confirmed. The current plan and task state were retained.";
+    for (reason, expected) in [(budget_stop, false), (transient_stop, true)] {
+        assert_eq!(
+            should_queue_tracker_auto_continue(true, false, false, Some(reason), false, None, 32, false, false),
+            expected,
+            "{reason}"
+        );
+    }
+    let incomplete = ["unfinished step".to_string()];
+    for reason in [
+        budget_stop,
+        "Tool wall-clock budget exhausted for this turn (600s). Changes remain unverified.",
+    ] {
+        assert!(!should_queue_tracker_auto_continue(
+            true,
+            false,
+            false,
+            Some(reason),
+            false,
+            Some(&incomplete),
+            32,
+            false,
+            false,
+        ));
+    }
+}
+
+#[test]
 fn recoverable_block_classification_allow_list() {
     // Production RECOVERY_CONTRACT_VIOLATION_REASON — must NOT auto-queue
     // despite containing "tool-free".
@@ -206,7 +236,7 @@ fn recoverable_block_classification_allow_list() {
     assert!(tracker_auto_continue_is_recoverable_block(Some("Task 7 blocked by the turn's preview budget")));
     assert!(tracker_auto_continue_is_recoverable_block(Some("tool budget ran out")));
     assert!(tracker_auto_continue_is_recoverable_block(Some("hit the per-file read cap")));
-    assert!(tracker_auto_continue_is_recoverable_block(Some(
+    assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Tool loop budget exhausted before a final response."
     )));
     // True handoffs stay terminal.
@@ -228,7 +258,7 @@ fn recoverable_block_classification_allow_list() {
     assert!(tracker_auto_continue_is_recoverable_block(Some("Task 7 blocked by the turn's preview budget")));
     assert!(tracker_auto_continue_is_recoverable_block(Some("tool budget ran out")));
     assert!(tracker_auto_continue_is_recoverable_block(Some("per-file read cap")));
-    assert!(tracker_auto_continue_is_recoverable_block(Some(
+    assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Tool loop budget exhausted before a final response"
     )));
     assert!(tracker_auto_continue_is_recoverable_block(Some("work budget exhausted")));
@@ -628,7 +658,7 @@ fn tracker_config_defaults() {
 #[test]
 fn recoverable_block_includes_tool_budget_and_plan_fallback_shapes() {
     // Production TOOL_LOOP_LIMIT_RECOVERY_REASON.
-    assert!(tracker_auto_continue_is_recoverable_block(Some(
+    assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Tool loop budget exhausted before a final response. Tools are disabled for one bounded synthesis pass."
     )));
     // Tool-call budget / follow-up recovery constants.

@@ -194,6 +194,13 @@ pub(crate) fn verification_block_allows_auto_recovery(reason: &str, final_text: 
 /// recovery), not paraphrases. Unknown / missing reasons are not auto-queued
 /// when the turn did not complete.
 pub(crate) fn tracker_auto_continue_is_recoverable_block(reason: Option<&str>) -> bool {
+    // A hard per-turn budget stop is a handoff, not permission to start the
+    // same work again with a fresh budget. Explicit user input can resume it.
+    if reason.is_some_and(|reason| {
+        crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(reason).is_some()
+    }) {
+        return false;
+    }
     // A provider refusal is terminal for the refused request: resending it is
     // refused again. Checked before the substring classifiers because the
     // notice may quote provider or response text containing any token.
