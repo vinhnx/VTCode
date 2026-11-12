@@ -152,6 +152,11 @@ House shortcuts (`./scripts/check.sh deny`, `./scripts/check-dev.sh --deny`) run
 hand-edit `supply-chain/` — use `cargo vet` subcommands so the files stay well-formed, and keep the exemptions list
 shrinking: every entry there is unaudited code we ship.
 
+First-party workspace crates are trusted (`audit-as-crates-io = false`): vetting our own code as third-party
+forced exact-version self-exemptions that broke on every release, with no downstream signal, since exemptions
+never propagate to consumers; only `cargo vet certify` audits do. If the project starts publishing real audits
+of its own releases, re-enable the per-crate policies.
+
 ### Auditing Shipped Binaries
 
 Release artifacts are built with [cargo-auditable](https://github.com/rust-secure-code/cargo-auditable): the exact
