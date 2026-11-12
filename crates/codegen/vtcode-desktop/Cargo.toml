@@ -35,7 +35,9 @@ objc2-service-management = { version = "0.3.2", default-features = false, featur
 ] }
 plist = "1"
 pulldown-cmark = "0.13.4"
+portable-pty = { workspace = true }
 rand = { workspace = true }
+rio-vt = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -43,6 +45,7 @@ rust-i18n = "=4.2.4"
 tokio = { workspace = true }
 url = { workspace = true }
 vtcode-commons = { workspace = true }
+vtcode-bash-runner = { workspace = true, default-features = false }
 vtcode-desktop-protocol = { workspace = true }
 vtcode-exec-events = { workspace = true }
 vtcode-ui = { workspace = true }

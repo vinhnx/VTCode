@@ -658,19 +658,32 @@ fn session_list_more_footer_renders_on_both_surfaces_and_requests_next_page(cx: 
 #[gpui_kit::test]
 fn workspace_change_resets_thread_paging_while_restart_keeps_depth(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    let terminal_dir = tempfile::tempdir().unwrap();
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
             let alpha = PathBuf::from("/work/alpha");
             view.prepare_workspace(&alpha, cx);
+            let size = portable_pty::PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
+            view.terminal = Some(
+                super::super::super::terminal_tab::TerminalTab::spawn(
+                    terminal_dir.path(),
+                    Path::new("/bin/sh"),
+                    size,
+                    super::super::super::terminal_tab::palette_for_theme(&cx.theme().colors),
+                )
+                .unwrap(),
+            );
             assert_eq!(view.session_list_limit, SESSION_LIST_PAGE_SIZE, "a fresh workspace starts paged");
             view.session_list_limit = 2 * SESSION_LIST_PAGE_SIZE;
             view.prepare_workspace(&alpha, cx);
+            assert!(view.terminal.is_some(), "a same-workspace restart retains the terminal");
             assert_eq!(
                 view.session_list_limit,
                 2 * SESSION_LIST_PAGE_SIZE,
                 "a same-workspace restart keeps the expanded depth"
             );
             view.prepare_workspace(&PathBuf::from("/work/beta"), cx);
+            assert!(view.terminal.is_none(), "a different workspace closes the terminal");
             assert_eq!(view.session_list_limit, SESSION_LIST_PAGE_SIZE, "a new workspace starts paged");
         });
     })

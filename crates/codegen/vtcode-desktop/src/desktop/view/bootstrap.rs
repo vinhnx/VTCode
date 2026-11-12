@@ -655,6 +655,7 @@ impl DesktopView {
             welcome_period: welcome_period_for_hour(chrono::Local::now().hour()),
             welcome_copy_index: rand::random_range(0..WELCOME_COPY_COUNT),
             workspace: None,
+            terminal: None,
             pending_workspace: None,
             navigation_history: NavigationHistory::default(),
             pending_navigation: None,

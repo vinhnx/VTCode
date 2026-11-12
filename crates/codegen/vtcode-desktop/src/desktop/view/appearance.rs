@@ -75,6 +75,10 @@ impl DesktopView {
             Some(window),
             cx,
         );
+        let palette = super::super::terminal_tab::palette_for_theme(&cx.theme().colors);
+        if let Some(tab) = &mut self.terminal {
+            tab.set_palette(palette);
+        }
         self.apply_typography(cx);
         self.transcript.remeasure();
         self.save_preferences();
@@ -337,6 +341,10 @@ impl DesktopView {
             window,
             cx,
         );
+        let palette = super::super::terminal_tab::palette_for_theme(&cx.theme().colors);
+        if let Some(tab) = &mut self.terminal {
+            tab.set_palette(palette);
+        }
         let mode_changed = mode != self.theme_mode;
         self.theme_mode = mode;
         let id = themes::canonical_selection(&id, mode, &self.preferences.custom_themes);

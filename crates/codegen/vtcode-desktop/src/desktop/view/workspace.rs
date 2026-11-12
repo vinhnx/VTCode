@@ -580,6 +580,9 @@ impl DesktopView {
     pub(super) fn prepare_workspace(&mut self, workspace: &Path, cx: &mut Context<Self>) {
         // A same-workspace restart reloads CLI configuration without losing draft sources.
         let same_workspace = self.workspace.as_deref() == Some(workspace);
+        if !same_workspace {
+            self.terminal = None;
+        }
         self.reset_webmcp_state(None);
         let draft_sources = same_workspace.then(|| std::mem::take(&mut self.attachments));
         self.workspace = Some(workspace.to_path_buf());

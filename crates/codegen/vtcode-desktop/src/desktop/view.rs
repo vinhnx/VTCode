@@ -445,6 +445,7 @@ struct DesktopView {
     welcome_period: WelcomePeriod,
     welcome_copy_index: usize,
     workspace: Option<PathBuf>,
+    terminal: Option<super::terminal_tab::TerminalTab>,
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,
