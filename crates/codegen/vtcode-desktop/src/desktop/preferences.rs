@@ -983,8 +983,7 @@ pub(super) fn set_test_preferences_path(path: PathBuf) {
 mod terminal;
 pub(super) use terminal::{
     MAX_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_WIDTH, MIN_TERMINAL_PANEL_HEIGHT, MIN_TERMINAL_PANEL_WIDTH,
-    TerminalAnsiTheme, TerminalAnsiThemeOption, TerminalAnsiThemeSelectState, TerminalPosition, TerminalPositionOption,
-    TerminalPositionSelectState,
+    TerminalAnsiTheme, TerminalPosition, TerminalPositionOption, TerminalPositionSelectState,
 };
 
 #[cfg(test)]

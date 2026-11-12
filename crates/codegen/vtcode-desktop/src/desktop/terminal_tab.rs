@@ -40,6 +40,35 @@ pub(super) fn palette_for_theme(colors: &ThemeColor, dark: bool) -> List {
             palette[slot] = color;
         }
     }
+    apply_chrome_slots(&mut palette, colors);
+    palette
+}
+
+/// Fixed Ciapre colorscheme: the authored 16 slots regardless of mode,
+/// with the default cells still tracking the active theme chrome.
+pub(super) fn ciapre_palette(colors: &ThemeColor) -> List {
+    let mut palette = List::from(&Colors::default());
+    for (slot, color) in super::themes::ciapre_ansi_slots().into_iter().enumerate() {
+        palette[slot] = color;
+    }
+    apply_chrome_slots(&mut palette, colors);
+    palette
+}
+
+/// Fixed Latte colorscheme: the authored 16 slots regardless of mode,
+/// with the default cells still tracking the active theme chrome.
+pub(super) fn latte_palette(colors: &ThemeColor) -> List {
+    let mut palette = List::from(&Colors::default());
+    for (slot, color) in super::themes::latte_ansi_slots().into_iter().enumerate() {
+        palette[slot] = color;
+    }
+    apply_chrome_slots(&mut palette, colors);
+    palette
+}
+
+/// Default cells track the active theme in every palette: foreground,
+/// background, and caret follow the chrome, never the ANSI table.
+fn apply_chrome_slots(palette: &mut List, colors: &ThemeColor) {
     let rgba = |color: Hsla| {
         let color: Rgba = color.into();
         [color.r, color.g, color.b, color.a]
@@ -47,7 +76,6 @@ pub(super) fn palette_for_theme(colors: &ThemeColor, dark: bool) -> List {
     palette[NamedColor::Foreground] = rgba(colors.foreground);
     palette[NamedColor::Background] = rgba(colors.background);
     palette[NamedColor::Cursor] = rgba(colors.caret);
-    palette
 }
 
 pub(super) struct TerminalTab {
@@ -367,6 +395,123 @@ mod tests {
         let dark = palette_for_theme(&colors, true);
         assert_eq!(palette[NamedColor::Foreground], dark[NamedColor::Foreground]);
         assert_eq!(palette[NamedColor::Background], dark[NamedColor::Background]);
+    }
+
+    #[test]
+    fn terminal_palette_ciapre_table_holds_contrast_on_ciapre_theme() {
+        // Named-pairing proof, deliberately narrower than the light table's
+        // every-theme sweep: a fixed muted scheme cannot hold 4.5 on
+        // mid-dark grounds (zenburn #3F3F3F drags alert red to 4.0), and
+        // chasing that would neon-ize the red past its own bright slot.
+        // Rio's own dark table promises less (its black fails AA on every
+        // dark ground), so the scheme promises AA on Ciapre, where darker
+        // grounds only read better by monotonicity.
+        use super::super::themes::{contrast_ratio, find};
+        let ciapre = find("ciapre").expect("ciapre is the default theme");
+        let colors = ThemeColor::default();
+        let palette = ciapre_palette(&colors);
+        let rio = List::from(&Colors::default());
+        for slot in 0..16 {
+            assert_ne!(palette[slot], rio[slot], "ciapre slot {slot} must differ from Rio dark");
+            let [r, g, b, _] = palette[slot];
+            let fg = Hsla::from(Rgba { r, g, b, a: 1.0 });
+            let ratio = contrast_ratio(fg, ciapre.background);
+            assert!(ratio >= 4.5, "ciapre slot {slot} fails AA: {ratio}");
+        }
+    }
+
+    #[test]
+    fn terminal_palette_ciapre_tracks_chrome_keeps_hue_true_slots() {
+        let mut colors = ThemeColor::default();
+        colors.foreground = gpui_kit::rgb(0xf0e0d0).into();
+        colors.background = gpui_kit::rgb(0x102030).into();
+        colors.caret = gpui_kit::rgb(0x80a0c0).into();
+        let palette = ciapre_palette(&colors);
+        let expected = |color: Hsla| {
+            let color: Rgba = color.into();
+            [color.r, color.g, color.b, color.a]
+        };
+        assert_eq!(palette[NamedColor::Foreground], expected(colors.foreground));
+        assert_eq!(palette[NamedColor::Background], expected(colors.background));
+        assert_eq!(palette[NamedColor::Cursor], expected(colors.caret));
+        // The scheme slots ignore the active theme and stay hue-true: red
+        // pins the authored alert-family hex, the rest prove dominance.
+        let red = rio_vt::config::colors::ColorBuilder::from_hex(
+            "#C16A68".to_owned(),
+            rio_vt::config::colors::Format::SRGB0_1,
+        )
+        .map(|built| built.to_arr())
+        .unwrap();
+        assert_eq!(palette[NamedColor::Red], red);
+        let [r, g, b, _] = palette[NamedColor::Red];
+        assert!(r > g && r > b, "ciapre red must read red");
+        let [r, g, b, _] = palette[NamedColor::Green];
+        assert!(g > r && g > b, "ciapre green must read green");
+        let [r, g, b, _] = palette[NamedColor::Yellow];
+        assert!(r > b && g > b, "ciapre yellow must read yellow");
+        let [r, g, b, _] = palette[NamedColor::Blue];
+        assert!(b > r && b > g, "ciapre blue must read blue");
+        let [r, g, b, _] = palette[NamedColor::Magenta];
+        assert!(r > g && b > g, "ciapre magenta must read magenta");
+        let [r, g, b, _] = palette[NamedColor::Cyan];
+        assert!(g > r && b > r, "ciapre cyan must read cyan");
+    }
+
+    #[test]
+    fn terminal_palette_latte_table_holds_contrast_on_latte_theme() {
+        // Named-pairing proof like the Ciapre table: the fixed scheme
+        // promises AA on its own latte ground, where darker grounds only
+        // read better by monotonicity. The shared light table stays the
+        // universal every-light option.
+        use super::super::themes::{contrast_ratio, find};
+        let latte = find("catppuccin-latte").expect("latte is the default light theme");
+        let colors = ThemeColor::default();
+        let palette = latte_palette(&colors);
+        let rio = List::from(&Colors::default());
+        for slot in 0..16 {
+            assert_ne!(palette[slot], rio[slot], "latte slot {slot} must differ from Rio dark");
+            let [r, g, b, _] = palette[slot];
+            let fg = Hsla::from(Rgba { r, g, b, a: 1.0 });
+            let ratio = contrast_ratio(fg, latte.background);
+            assert!(ratio >= 4.5, "latte slot {slot} fails AA: {ratio}");
+        }
+    }
+
+    #[test]
+    fn terminal_palette_latte_tracks_chrome_keeps_hue_true_slots() {
+        let mut colors = ThemeColor::default();
+        colors.foreground = gpui_kit::rgb(0x202020).into();
+        colors.background = gpui_kit::rgb(0xf0ece2).into();
+        colors.caret = gpui_kit::rgb(0x406060).into();
+        let palette = latte_palette(&colors);
+        let expected = |color: Hsla| {
+            let color: Rgba = color.into();
+            [color.r, color.g, color.b, color.a]
+        };
+        assert_eq!(palette[NamedColor::Foreground], expected(colors.foreground));
+        assert_eq!(palette[NamedColor::Background], expected(colors.background));
+        assert_eq!(palette[NamedColor::Cursor], expected(colors.caret));
+        // The scheme slots ignore the active theme and stay hue-true: red
+        // pins the authored pink hex, the rest prove dominance.
+        let red = rio_vt::config::colors::ColorBuilder::from_hex(
+            "#C20E33".to_owned(),
+            rio_vt::config::colors::Format::SRGB0_1,
+        )
+        .map(|built| built.to_arr())
+        .unwrap();
+        assert_eq!(palette[NamedColor::Red], red);
+        let [r, g, b, _] = palette[NamedColor::Red];
+        assert!(r > g && r > b, "latte red must read red");
+        let [r, g, b, _] = palette[NamedColor::Green];
+        assert!(g > r && g > b, "latte green must read green");
+        let [r, g, b, _] = palette[NamedColor::Yellow];
+        assert!(r > b && g > b, "latte yellow must read yellow");
+        let [r, g, b, _] = palette[NamedColor::Blue];
+        assert!(b > r && b > g, "latte blue must read blue");
+        let [r, g, b, _] = palette[NamedColor::Magenta];
+        assert!(r > g && b > g, "latte magenta must read magenta");
+        let [r, g, b, _] = palette[NamedColor::Cyan];
+        assert!(g > r && b > r, "latte cyan must read cyan");
     }
 
     #[test]

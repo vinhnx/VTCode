@@ -18,9 +18,11 @@ runloop, the harness event stream, or `ThreadEvent`.
   With no workspace open, the shell starts in your home directory. The panel keeps its session while
   the workspace is open; switching between workspaces closes the old session and its process group,
   while opening the first workspace keeps a home shell running.
-- Resize: drag the panel's top edge, or focus the edge and use the arrow keys. Height persists per install
-  (72–600px); grid rows recompute from the measured row height and columns from the laid-out panel
-  width, so the shell always sees the true viewport size.
+- Resize: drag the panel edge (top for bottom, inner for sides), or focus the edge and use the arrow
+  keys. Height persists per install (72–600px); side width persists too (240–640px). Grid rows
+  recompute from the measured row height and columns from the laid-out panel width, so the shell
+  always sees the true viewport size. The panel floats as a card on the window chrome with the
+  workspace rhythm (12px gaps, shared spines); zen mode docks it flush.
 - The header tab shows the shell's directory (`~` for home) with a close button; the chevron at the
   right collapses the panel. Both hide the panel without killing the session. A Terminal row in the
   Utilities pane opens the panel from the inspector.
@@ -57,11 +59,17 @@ runloop, the harness event stream, or `ThreadEvent`.
 
 ## Colors
 
-- Default foreground/background/caret follow the desktop theme; the 16 ANSI colors default to Rio's dark
-  table, or to a desktop-owned light table (WCAG AA 4.5:1 on every built-in light theme) when the desktop
-  theme is light.
-- Settings → Appearance → Terminal colors: `Auto` (follow the desktop mode), `Dark`, or `Light`. The live
-  session re-renders immediately; theme and contrast changes re-sync automatically.
+- Default foreground/background/caret follow the desktop theme; the 16 ANSI colors default to the
+  fixed Ciapre colorscheme (WCAG AA 4.5:1 on the Ciapre ground).
+- Settings → Appearance → Terminal colors is a swatch grid (ground plus red/green/blue dots per
+  scheme): `Ciapre` (default), `Auto` (follow the desktop mode with Rio's dark table or a
+  desktop-owned light table, AA on every built-in light theme), `Dark`, `Light`, or `Latte` (fixed
+  Catppuccin Latte colorscheme, AA on the latte ground). The live session re-renders immediately;
+  theme and contrast changes re-sync automatically. Ciapre is a dark-ground scheme: on light desktop
+  themes the base text stays readable (it tracks the chrome) but SGR-colored output reads dim —
+  switch to `Auto`, `Light`, or `Latte` there, as with `Dark`.
+- Default-background cells render transparent, so the grid always matches the panel surface no matter
+  how stale the palette is; only explicit SGR backgrounds (and inverse/cursor/selection swaps) paint.
 
 ## Security model
 

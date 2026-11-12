@@ -130,6 +130,8 @@ fn terminal_colors_copy_resolves_in_every_language() {
             "app.settings.appearance.terminal_colors",
             "app.settings.appearance.terminal_colors_description",
             "app.settings.appearance.terminal_colors_auto",
+            "app.settings.appearance.terminal_colors_ciapre",
+            "app.settings.appearance.terminal_colors_latte",
         ] {
             let text = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!text.is_empty(), "{locale}/{key}");

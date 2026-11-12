@@ -247,10 +247,10 @@ fn cli_terminal_round_trips_and_invalid_values_fall_back_to_terminal() {
 }
 
 #[test]
-fn terminal_ansi_theme_round_trips_and_invalid_values_fall_back_to_auto() {
-    assert_eq!(TerminalAnsiTheme::default(), TerminalAnsiTheme::Auto);
+fn terminal_ansi_theme_round_trips_and_invalid_values_fall_back_to_ciapre() {
+    assert_eq!(TerminalAnsiTheme::default(), TerminalAnsiTheme::Ciapre);
     let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
-    assert_eq!(legacy.terminal_ansi_theme(), TerminalAnsiTheme::Auto);
+    assert_eq!(legacy.terminal_ansi_theme(), TerminalAnsiTheme::Ciapre);
 
     for theme in TerminalAnsiTheme::ALL {
         let mut preferences = Preferences::default();
@@ -268,7 +268,7 @@ fn terminal_ansi_theme_round_trips_and_invalid_values_fall_back_to_auto() {
     for saved in ["sepia", "", "   "] {
         let content = format!(r#"{{"theme":"ciapre","terminalAnsiTheme":{saved:?}}}"#);
         let loaded: Preferences = serde_json::from_str(&content).unwrap();
-        assert_eq!(loaded.terminal_ansi_theme(), TerminalAnsiTheme::Auto, "saved {saved:?}");
+        assert_eq!(loaded.terminal_ansi_theme(), TerminalAnsiTheme::Ciapre, "saved {saved:?}");
         assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
     }
 }

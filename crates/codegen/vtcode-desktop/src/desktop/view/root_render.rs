@@ -10,6 +10,55 @@ impl DesktopView {
             .and_then(|id| self.session_title(id))
             .unwrap_or(app::NAME)
     }
+
+    /// Chrome dock framing the terminal card. The relative wrapper anchors
+    /// the absolute drag handle (kit `inside()` edges hug the wrapper, like
+    /// the sidebar/inspector docks), and the pads float the card on the
+    /// chrome with the workspace rhythm: the bottom dock leaves its top pad
+    /// to the pane-root, side docks leave the content-side pad to it, so the
+    /// card keeps 12px chrome on every side. Zen drops the pads for a flush
+    /// band. Only one dock mounts at a time, so the shared id stays unique.
+    fn render_terminal_dock(
+        &mut self,
+        position: preferences::TerminalPosition,
+        navigation_visible: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let zen = self.zen_mode;
+        let dock = div()
+            .id("terminal-dock")
+            .test_support()
+            .relative()
+            .when(!self.preferences.translucent_sidebar || !navigation_visible, |dock| {
+                dock.bg(chrome_background(&colors))
+            });
+        match position {
+            preferences::TerminalPosition::Bottom => dock
+                .px_3()
+                .pb_3()
+                .flex_shrink_0()
+                // Handle last in every arm: the absolute edge paints and
+                // hit-tests above the opaque panel, like the other docks.
+                .child(self.render_terminal_panel(cx))
+                .child(self.render_resize_handle(ResizeEdge::Terminal, cx)),
+            preferences::TerminalPosition::Left => dock
+                .pl_3()
+                .py_3()
+                .h_full()
+                .flex_shrink_0()
+                .child(self.render_terminal_panel(cx))
+                .child(self.render_resize_handle(ResizeEdge::TerminalLeft, cx)),
+            preferences::TerminalPosition::Right => dock
+                .pr_3()
+                .py_3()
+                .h_full()
+                .flex_shrink_0()
+                .child(self.render_terminal_panel(cx))
+                .child(self.render_resize_handle(ResizeEdge::TerminalRight, cx)),
+        }
+        .when(zen, |dock| dock.p_0())
+    }
 }
 
 impl Render for DesktopView {
@@ -141,13 +190,11 @@ impl Render for DesktopView {
             .min_h_0()
             .flex()
             .when(terminal_left, |row| {
-                row.child(self.render_terminal_panel(cx))
-                    .child(self.render_resize_handle(ResizeEdge::TerminalLeft, cx))
+                row.child(self.render_terminal_dock(preferences::TerminalPosition::Left, navigation_visible, cx))
             })
             .child(content)
             .when(terminal_right, |row| {
-                row.child(self.render_terminal_panel(cx))
-                    .child(self.render_resize_handle(ResizeEdge::TerminalRight, cx))
+                row.child(self.render_terminal_dock(preferences::TerminalPosition::Right, navigation_visible, cx))
             });
         let main = div()
             .flex_1()
@@ -159,8 +206,7 @@ impl Render for DesktopView {
             .children(top_chrome)
             .child(content_row)
             .when(terminal_bottom, |main| {
-                main.child(self.render_resize_handle(ResizeEdge::Terminal, cx))
-                    .child(self.render_terminal_panel(cx))
+                main.child(self.render_terminal_dock(preferences::TerminalPosition::Bottom, navigation_visible, cx))
             })
             .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)))
             .when(self.zen_mode, |main| main.child(self.render_zen_toggle_floating(cx)));

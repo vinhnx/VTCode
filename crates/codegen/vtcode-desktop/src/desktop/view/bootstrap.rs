@@ -350,8 +350,6 @@ impl DesktopView {
                 view.set_ui_language(*language, window, cx);
             }
         });
-        let (terminal_ansi_select, terminal_ansi_subscription) =
-            Self::build_terminal_ansi_select(&preferences, window, cx);
         let (terminal_position_select, terminal_position_subscription) =
             Self::build_terminal_position_select(&preferences, window, cx);
         let destination = preferences.file_open_destination();
@@ -536,8 +534,6 @@ impl DesktopView {
             _composer_subscription: composer_subscription,
             ui_language_select,
             _ui_language_subscription: ui_language_subscription,
-            terminal_ansi_select,
-            _terminal_ansi_subscription: terminal_ansi_subscription,
             terminal_position_select,
             _terminal_position_subscription: terminal_position_subscription,
             file_destination_select,

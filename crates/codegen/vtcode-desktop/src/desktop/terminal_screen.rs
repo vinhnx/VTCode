@@ -181,6 +181,11 @@ pub(super) struct TerminalRowRun {
     pub(super) fg: Rgba,
     pub(super) bg: Rgba,
     pub(super) bold: bool,
+    /// Default-background cell: the renderer leaves it transparent so the
+    /// grid always matches the panel, no matter how stale the palette is.
+    /// Only explicit SGR backgrounds (and inverse/cursor/selection swaps,
+    /// which repaint the cell) carry `false` and paint `bg`.
+    pub(super) default_bg: bool,
 }
 
 impl TerminalScreen {
@@ -213,7 +218,13 @@ impl TerminalScreen {
                 if runs.is_empty() {
                     let fg = self.resolve_color(AnsiColor::Named(NamedColor::Foreground), palette);
                     let bg = self.resolve_color(AnsiColor::Named(NamedColor::Background), palette);
-                    runs.push(TerminalRowRun { text: " ".into(), fg, bg, bold: false });
+                    runs.push(TerminalRowRun {
+                        text: " ".into(),
+                        fg,
+                        bg,
+                        bold: false,
+                        default_bg: true,
+                    });
                 }
                 runs
             })
@@ -246,10 +257,14 @@ impl TerminalScreen {
         }
         let style = self.terminal.grid.style_of(square);
         let (mut fg, mut bg) = (self.resolve_color(style.fg, palette), self.resolve_color(style.bg, palette));
-        if style.flags.contains(StyleFlags::INVERSE) || Some(cell) == cursor || selected {
+        let swapped = style.flags.contains(StyleFlags::INVERSE) || Some(cell) == cursor || selected;
+        if swapped {
             std::mem::swap(&mut fg, &mut bg);
         }
         let bold = style.flags.contains(StyleFlags::BOLD);
+        // A swap repaints the cell with the foreground color, so even a
+        // default-background cell stops being transparent once swapped.
+        let default_bg = matches!(style.bg, AnsiColor::Named(NamedColor::Background)) && !swapped;
         // Rio blanks cells with NUL; the renderer wants spaces.
         let glyph = match square.c() {
             '\0' => ' ',
@@ -259,10 +274,11 @@ impl TerminalScreen {
             && run.fg == fg
             && run.bg == bg
             && run.bold == bold
+            && run.default_bg == default_bg
         {
             run.text.push(glyph);
         } else {
-            runs.push(TerminalRowRun { text: glyph.to_string(), fg, bg, bold });
+            runs.push(TerminalRowRun { text: glyph.to_string(), fg, bg, bold, default_bg });
         }
     }
 
@@ -475,6 +491,8 @@ mod tests {
         assert_eq!(rows[0][3].text, "    ");
         assert_eq!(rows[1].len(), 1);
         assert_eq!(rows[1][0].text, "        ");
+        assert!(rows[0][0].default_bg, "plain run must stay transparent");
+        assert!(!rows[0][2].default_bg, "cursor swap must paint");
     }
 
     #[test]
@@ -492,6 +510,58 @@ mod tests {
         assert_eq!(rows[0][2].text, " ");
         assert_eq!(rows[0][2].fg, rows[0][1].bg);
         assert_eq!(rows[0][3].text, "    ");
+        // Inverse and cursor swaps repaint: only the plain runs stay transparent.
+        assert!(!rows[0][0].default_bg);
+        assert!(rows[0][1].default_bg);
+        assert!(!rows[0][2].default_bg);
+        assert!(rows[0][3].default_bg);
+    }
+
+    #[test]
+    fn terminal_screen_display_rows_paint_explicit_backgrounds() {
+        let mut screen = TerminalScreen::new(8, 1, 10);
+        let palette = List::from(&Colors::default());
+        let _events = screen.process(b"a\x1b[44mB\x1b[0m");
+        let rows = screen.display_rows(&palette);
+        assert!(rows[0][0].default_bg, "plain cell must stay transparent");
+        assert_eq!(rows[0][1].text, "B");
+        assert!(!rows[0][1].default_bg, "SGR background must paint");
+        assert_eq!(rows[0][1].bg, rgba_of(&palette, NamedColor::Blue));
+    }
+
+    #[test]
+    fn terminal_screen_default_bg_flag_ignores_palette_background() {
+        // Structural sync proof: the flag is derived from the cell style,
+        // so a stale palette changes resolved values without repainting
+        // default cells (the renderer skips their bg fill entirely).
+        let mut screen = TerminalScreen::new(8, 1, 10);
+        let _events = screen.process(b"\x1b[44mB\x1b[0mC");
+        let fresh = List::from(&Colors::default());
+        let mut stale = List::from(&Colors::default());
+        stale[NamedColor::Background] = [1.0, 0.0, 0.0, 1.0];
+        let fresh_rows = screen.display_rows(&fresh);
+        let stale_rows = screen.display_rows(&stale);
+        let flags = |rows: &[Vec<TerminalRowRun>]| rows.iter().flatten().map(|run| run.default_bg).collect::<Vec<_>>();
+        assert_eq!(flags(&fresh_rows), flags(&stale_rows));
+        assert!(flags(&fresh_rows).iter().any(|flag| *flag));
+        assert!(flags(&fresh_rows).iter().any(|flag| !flag));
+        let fresh_default = fresh_rows.iter().flatten().find(|run| run.default_bg).unwrap();
+        let stale_default = stale_rows.iter().flatten().find(|run| run.default_bg).unwrap();
+        assert_ne!(fresh_default.bg, stale_default.bg, "palettes must actually differ");
+    }
+
+    #[test]
+    fn terminal_screen_display_rows_paint_selected_runs() {
+        use rio_vt::crosswords::pos::Side;
+        use rio_vt::selection::SelectionType;
+        let mut screen = TerminalScreen::new(8, 1, 10);
+        let palette = List::from(&Colors::default());
+        let _events = screen.process(b"abcdef");
+        screen.start_selection(0, 1, Side::Left, SelectionType::Simple);
+        screen.update_selection(0, 2, Side::Right);
+        let rows = screen.display_rows(&palette);
+        assert!(rows[0][0].default_bg, "unselected edge must stay transparent");
+        assert!(rows[0].iter().any(|run| !run.default_bg), "selection and cursor swaps must paint");
     }
 
     #[test]

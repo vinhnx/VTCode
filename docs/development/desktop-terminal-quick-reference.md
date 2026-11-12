@@ -18,11 +18,11 @@ One login shell per workspace, bottom panel. See the [full guide](desktop-termin
 | History page up/down | `Shift-PageUp` / `Shift-PageDown` |
 | History top/live | `Shift-Home` / `Shift-End` |
 | Wheel | Scroll history (arrows in full-screen apps) |
-| Resize | Drag top edge; arrows when edge focused |
+| Resize | Drag the panel edge; arrows when edge focused |
 
 | Setting | Location | Values |
 | --- | --- | --- |
-| Terminal colors | Settings → Appearance | `Auto` (default), `Dark`, `Light` |
+| Terminal colors | Settings → Appearance grid | `Ciapre` (default), `Auto`, `Dark`, `Light`, `Latte` |
 | Terminal position | Settings → Appearance | `Bottom` (default), `Left`, `Right` |
 
 | Limit | Value |

@@ -96,8 +96,8 @@ impl DesktopView {
         let Some(workspace) = terminal_shell_dir(self.workspace.as_ref()) else {
             return false;
         };
-        let dark = terminal_palette_is_dark(self.preferences.terminal_ansi_theme(), self.theme_mode);
-        let palette = super::super::terminal_tab::palette_for_theme(&cx.theme().colors, dark);
+        let palette =
+            terminal_palette_for_setting(self.preferences.terminal_ansi_theme(), self.theme_mode, &cx.theme().colors);
         let rows = terminal_content_rows(self.terminal_panel_height, cx.theme().mono_font_size)
             .unwrap_or(DEFAULT_TERMINAL_ROWS);
         let size = portable_pty::PtySize {
@@ -168,8 +168,8 @@ impl DesktopView {
     /// Theme, contrast, and setting changes all funnel through here so the
     /// session never renders a stale table.
     pub(super) fn sync_terminal_palette(&mut self, cx: &mut Context<Self>) {
-        let dark = terminal_palette_is_dark(self.preferences.terminal_ansi_theme(), self.theme_mode);
-        let palette = super::super::terminal_tab::palette_for_theme(&cx.theme().colors, dark);
+        let palette =
+            terminal_palette_for_setting(self.preferences.terminal_ansi_theme(), self.theme_mode, &cx.theme().colors);
         if let Some(tab) = &mut self.terminal {
             tab.set_palette(palette);
         }
@@ -384,7 +384,9 @@ impl DesktopView {
                             .font_family(mono.clone())
                             .when(run.bold, |cell| cell.font_weight(gpui_kit::FontWeight::SEMIBOLD))
                             .text_color(gpui_kit::Hsla::from(run.fg))
-                            .bg(gpui_kit::Hsla::from(run.bg))
+                            // Default-background runs stay transparent so the
+                            // grid can never diverge from the panel surface.
+                            .when(!run.default_bg, |cell| cell.bg(gpui_kit::Hsla::from(run.bg)))
                             .child(run.text.clone()),
                     );
                 }
@@ -442,7 +444,11 @@ impl DesktopView {
             .flex_shrink_0()
             .flex()
             .flex_col()
-            .bg(colors.group_box)
+            // Card recipe shared with the workspace/inspector surfaces: the
+            // dock wrapper behind this panel paints the chrome it floats on.
+            .rounded_lg()
+            .when(self.zen_mode, |panel| panel.rounded_none())
+            .bg(colors.background)
             .child(
                 div()
                     .id("terminal-header")
@@ -645,6 +651,62 @@ fn terminal_palette_is_dark(setting: preferences::TerminalAnsiTheme, mode: Theme
         preferences::TerminalAnsiTheme::Auto => mode == ThemeMode::Dark,
         preferences::TerminalAnsiTheme::Dark => true,
         preferences::TerminalAnsiTheme::Light => false,
+        // Fixed schemes; the selection helper serves their tables before
+        // consulting this, so the arms only document intent.
+        preferences::TerminalAnsiTheme::Ciapre => true,
+        preferences::TerminalAnsiTheme::Latte => false,
+    }
+}
+
+/// Preview data for one terminal scheme swatch: the ground the scheme is
+/// tuned for plus its red/green/blue dots. Auto resolves live (what the
+/// terminal renders right now); Dark/Light preview on the flagship ground
+/// of their mode, since the shared tables assume a mode, not a theme.
+pub(super) fn terminal_scheme_preview(
+    setting: preferences::TerminalAnsiTheme,
+    mode: ThemeMode,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> (gpui_kit::Hsla, [gpui_kit::Hsla; 3]) {
+    let ground = match setting {
+        preferences::TerminalAnsiTheme::Ciapre | preferences::TerminalAnsiTheme::Dark => {
+            themes::find("ciapre").map(|theme| theme.background)
+        }
+        preferences::TerminalAnsiTheme::Latte | preferences::TerminalAnsiTheme::Light => {
+            themes::find("catppuccin-latte").map(|theme| theme.background)
+        }
+        preferences::TerminalAnsiTheme::Auto => None,
+    }
+    .unwrap_or(colors.background);
+    let palette = terminal_palette_for_setting(setting, mode, colors);
+    let dot = |slot: rio_vt::config::colors::NamedColor| {
+        let [r, g, b, a] = palette[slot];
+        gpui_kit::Hsla::from(gpui_kit::Rgba { r, g, b, a })
+    };
+    (
+        ground,
+        [
+            dot(rio_vt::config::colors::NamedColor::Red),
+            dot(rio_vt::config::colors::NamedColor::Green),
+            dot(rio_vt::config::colors::NamedColor::Blue),
+        ],
+    )
+}
+
+/// Resolve the ANSI setting to a palette. The named schemes are fixed and
+/// ignore the desktop mode; every other setting follows it through the
+/// shared dark/light tables.
+fn terminal_palette_for_setting(
+    setting: preferences::TerminalAnsiTheme,
+    mode: ThemeMode,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> rio_vt::config::colors::term::List {
+    match setting {
+        preferences::TerminalAnsiTheme::Ciapre => super::super::terminal_tab::ciapre_palette(colors),
+        preferences::TerminalAnsiTheme::Latte => super::super::terminal_tab::latte_palette(colors),
+        _ => {
+            let dark = terminal_palette_is_dark(setting, mode);
+            super::super::terminal_tab::palette_for_theme(colors, dark)
+        }
     }
 }
 
@@ -801,5 +863,37 @@ mod tests {
         assert!(!terminal_palette_is_dark(TerminalAnsiTheme::Auto, ThemeMode::Light));
         assert!(terminal_palette_is_dark(TerminalAnsiTheme::Dark, ThemeMode::Light));
         assert!(!terminal_palette_is_dark(TerminalAnsiTheme::Light, ThemeMode::Dark));
+        assert!(terminal_palette_is_dark(TerminalAnsiTheme::Ciapre, ThemeMode::Light));
+        assert!(!terminal_palette_is_dark(TerminalAnsiTheme::Latte, ThemeMode::Dark));
+    }
+
+    #[test]
+    fn terminal_palette_ciapre_ignores_mode_and_differs_from_both_tables() {
+        use gpui_kit::component::theme::{ThemeColor, ThemeMode};
+        use preferences::TerminalAnsiTheme;
+        use rio_vt::config::colors::NamedColor;
+        let colors = ThemeColor::default();
+        let ciapre_dark = terminal_palette_for_setting(TerminalAnsiTheme::Ciapre, ThemeMode::Dark, &colors);
+        let ciapre_light = terminal_palette_for_setting(TerminalAnsiTheme::Ciapre, ThemeMode::Light, &colors);
+        assert_eq!(ciapre_dark[NamedColor::Red], ciapre_light[NamedColor::Red]);
+        let auto_dark = terminal_palette_for_setting(TerminalAnsiTheme::Auto, ThemeMode::Dark, &colors);
+        let auto_light = terminal_palette_for_setting(TerminalAnsiTheme::Auto, ThemeMode::Light, &colors);
+        assert_ne!(ciapre_dark[NamedColor::Red], auto_dark[NamedColor::Red]);
+        assert_ne!(ciapre_dark[NamedColor::Red], auto_light[NamedColor::Red]);
+    }
+
+    #[test]
+    fn terminal_palette_latte_ignores_mode_and_differs_from_both_tables() {
+        use gpui_kit::component::theme::{ThemeColor, ThemeMode};
+        use preferences::TerminalAnsiTheme;
+        use rio_vt::config::colors::NamedColor;
+        let colors = ThemeColor::default();
+        let latte_dark = terminal_palette_for_setting(TerminalAnsiTheme::Latte, ThemeMode::Dark, &colors);
+        let latte_light = terminal_palette_for_setting(TerminalAnsiTheme::Latte, ThemeMode::Light, &colors);
+        assert_eq!(latte_dark[NamedColor::Red], latte_light[NamedColor::Red]);
+        let auto_dark = terminal_palette_for_setting(TerminalAnsiTheme::Auto, ThemeMode::Dark, &colors);
+        let auto_light = terminal_palette_for_setting(TerminalAnsiTheme::Auto, ThemeMode::Light, &colors);
+        assert_ne!(latte_dark[NamedColor::Red], auto_dark[NamedColor::Red]);
+        assert_ne!(latte_dark[NamedColor::Red], auto_light[NamedColor::Red]);
     }
 }

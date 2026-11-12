@@ -638,8 +638,6 @@ struct DesktopView {
     _composer_subscription: Subscription,
     ui_language_select: Entity<UiLanguageSelectState>,
     _ui_language_subscription: Subscription,
-    terminal_ansi_select: Entity<preferences::TerminalAnsiThemeSelectState>,
-    _terminal_ansi_subscription: Subscription,
     terminal_position_select: Entity<preferences::TerminalPositionSelectState>,
     _terminal_position_subscription: Subscription,
     file_destination_select: Entity<preferences::FileDestinationSelectState>,

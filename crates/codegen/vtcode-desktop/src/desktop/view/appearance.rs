@@ -17,7 +17,7 @@ pub(super) struct AppearanceSettingsProps {
     pub(super) ui_font_size: u8,
     pub(super) code_font_size: u8,
     pub(super) ui_language_select: Entity<UiLanguageSelectState>,
-    pub(super) terminal_ansi_select: Entity<preferences::TerminalAnsiThemeSelectState>,
+    pub(super) terminal_ansi_theme: preferences::TerminalAnsiTheme,
     pub(super) terminal_position_select: Entity<preferences::TerminalPositionSelectState>,
     pub(super) navigation_visible: bool,
     pub(super) navigation_on_right: bool,
@@ -44,7 +44,7 @@ impl AppearanceSettingsProps {
             ui_font_size: typography.ui_font_size,
             code_font_size: typography.code_font_size,
             ui_language_select: view.ui_language_select.clone(),
-            terminal_ansi_select: view.terminal_ansi_select.clone(),
+            terminal_ansi_theme: view.preferences.terminal_ansi_theme(),
             terminal_position_select: view.terminal_position_select.clone(),
             navigation_visible: view.preferences.navigation_visible(),
             navigation_on_right: view.preferences.navigation_on_right(),
@@ -110,22 +110,63 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Build the ANSI dropdown state outside `bootstrap.rs`, which sits at
-    /// the file ceiling; the setting, handler, and wiring stay together.
-    pub(super) fn build_terminal_ansi_select(
-        preferences: &preferences::Preferences,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> (Entity<preferences::TerminalAnsiThemeSelectState>, Subscription) {
-        let select = cx.new(|cx| {
-            preferences::TerminalAnsiThemeOption::select_state(preferences.terminal_ansi_theme(), window, cx)
-        });
-        let subscription = cx.subscribe_in(&select, window, |view, _, event, _, cx| {
-            if let SelectEvent::Confirm(Some(theme)) = event {
-                view.set_terminal_ansi_theme(*theme, cx);
-            }
-        });
-        (select, subscription)
+    /// One terminal scheme in the settings picker: a small preview chip
+    /// (tuned ground plus the scheme's red/green/blue dots) that applies
+    /// live on click. Simpler than the theme grid: no profiles, no scroller.
+    pub(super) fn render_terminal_scheme_content(
+        scheme: preferences::TerminalAnsiTheme,
+        active: bool,
+        mode: ThemeMode,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        let (ground, dots) = terminal_panel::terminal_scheme_preview(scheme, mode, &cx.theme().colors);
+        let label = scheme.label();
+        desktop_button(format!("terminal-scheme-{}", scheme.id()))
+            .accessibility_label(label.clone())
+            .toggled(active)
+            .ghost()
+            .w(px(88.))
+            .flex_shrink_0()
+            .p_2()
+            .when(active, |button| button.bg(cx.theme().colors.popover))
+            .rounded_lg()
+            .on_click({
+                let view = view.clone();
+                move |_, _: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        view.set_terminal_ansi_theme(scheme, cx);
+                    });
+                }
+            })
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .h(px(32.))
+                            .rounded_md()
+                            .bg(ground)
+                            .border_1()
+                            .border_color(themes::hairline(ground, cx.theme().colors.foreground))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap_1()
+                            .children(dots.into_iter().map(|dot| div().size(px(10.)).rounded_full().bg(dot))),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .truncate()
+                            .when(active, |text| text.font_semibold())
+                            .child(label),
+                    ),
+            )
+            .into_any_element()
     }
 
     /// Build the dock-position dropdown state outside `bootstrap.rs`, which
@@ -806,20 +847,34 @@ impl DesktopView {
         ));
 
         let terminal_group_title = rust_i18n::t!("app.settings.appearance.terminal_colors").to_string();
+        let selected_scheme = props.terminal_ansi_theme;
+        let scheme_mode = props.theme_mode;
         content = content.child(accessible_group_box(
             "appearance-terminal-group",
             terminal_group_title.clone(),
             settings_group_box(terminal_group_title, colors)
-                .child(settings_row(
-                    rust_i18n::t!("app.settings.appearance.terminal_colors").to_string(),
-                    rust_i18n::t!("app.settings.appearance.terminal_colors_description").to_string(),
-                    Select::new(&props.terminal_ansi_select)
-                        .id("terminal-ansi-select")
-                        .accessibility_label(rust_i18n::t!("app.settings.appearance.terminal_colors").to_string())
-                        .menu_max_h(px(320.))
-                        .w(px(240.)),
-                    colors,
-                ))
+                .child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(row_description(
+                            rust_i18n::t!("app.settings.appearance.terminal_colors_description").to_string(),
+                            colors,
+                        ))
+                        .child(div().flex().flex_row().flex_wrap().gap_2().children(
+                            preferences::TerminalAnsiTheme::ALL.map(|scheme| {
+                                Self::render_terminal_scheme_content(
+                                    scheme,
+                                    scheme == selected_scheme,
+                                    scheme_mode,
+                                    view.clone(),
+                                    cx,
+                                )
+                            }),
+                        )),
+                )
                 .child(settings_row(
                     rust_i18n::t!("app.settings.appearance.terminal_position").to_string(),
                     rust_i18n::t!("app.settings.appearance.terminal_position_description").to_string(),
