@@ -45,24 +45,20 @@ VT Code is open source under **MIT OR Apache-2.0**. You are welcome to fork it, 
 and build on it, and contribute improvements back upstream. See [Contributing](#contributing) and
 [License](#license).
 
-| At a glance      | What you get                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review [turn diffs](./docs/development/diff-preview.md). |
-| **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                      |
-| **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) revises on mismatch.                             |
-| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md) roll back workspace state. |
-| **Subagents**    | Spawn [subagents](./docs/user-guide/subagents.md) for parallel exploration and delegated work.                       |
-| **Integrations** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges. |
-| **Protocols**    | [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and [Companion](./docs/user-guide/vtcode-companion.md). |
-| **Quality**      | [Evals](./docs/guides/eval.md) measure agent behavior before release.                                               |
-| **Models**       | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.                                          |
+| At a glance     | What you get                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| **Planning**    | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md); [HOVER](./docs/development/hypothesis-revision-validation.md) revises on mismatch. |
+| **Safety**      | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                        |
+| **Long runs**   | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md#snapshots--revert) roll back state; [subagents](./docs/user-guide/subagents.md) for parallel work. |
+| **Extensions**  | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges; [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), [Companion](./docs/user-guide/vtcode-companion.md). |
+| **Models**      | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task; [evals](./docs/guides/eval.md) measure behavior before release. |
+
+Details live in [Documentation](#documentation); the table above is the short map.
 
 ## Quick start
 
-Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024). VT Code is
-self-contained: it ships its own search engine and needs no external search binaries. (The legacy
-`vtcode dependencies install search-tools` step is deprecated — native search has replaced it; see the
-[installation guide](./docs/installation/README.md) for prerequisites.)
+Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024). VT Code ships
+its own search engine; see the [installation guide](./docs/installation/README.md) for prerequisites.
 
 ### 1. Install
 
@@ -80,14 +76,14 @@ brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
 cargo install vtcode
 ```
 
-On Windows (best-effort artifacts; may lag behind macOS/Linux):
+On Windows (best-effort artifacts; may lag behind macOS/Linux and may not appear in every release):
 
 ```powershell
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
-Verify with `vtcode --version`. Windows artifacts are best-effort and may not appear in every release. The
-[installation guide](./docs/installation/README.md) covers remaining methods and desktop flags.
+Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers remaining
+methods and desktop flags.
 
 ### 2. Configure your project
 
@@ -140,14 +136,14 @@ summary without another model call. See the [interactive guide](./docs/user-guid
 ### Modes
 
 - **`ask`** is tool-free: it prints one reply and exits.
-- **`exec`** runs the full tool loop and needs explicit workspace trust: approve the TTY prompt or set
-  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (plus `[automation.full_auto]` where configured).
-  Allow-lists, denies, and execution policy still apply.
+- **`exec`** runs the full tool loop and needs explicit workspace trust (approve the TTY prompt or set
+  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs). `[automation.full_auto]` allow-lists, denies, and
+  execution policy still apply.
 - **`review`** inspects uncommitted changes.
 
 Scheduled work reuses the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
-and resume headless runs with `vtcode exec resume --last "<prompt>"`. See [exec
-mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md).
+and resume headless runs with `vtcode exec resume --last "<prompt>"`. See [exec mode](./docs/user-guide/exec-mode.md)
+and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
@@ -156,24 +152,20 @@ credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
-On Apple Silicon macOS 15+, install it with Homebrew (update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
+On Apple Silicon macOS 15+ (update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
 
 ```bash
 brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
-Without Homebrew, download it from the [latest release](https://github.com/vinhnx/vtcode/releases/latest) or run
-`vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Hosts without a published asset
-build from source.
+Without Homebrew, use the [latest release](https://github.com/vinhnx/vtcode/releases/latest) or
+`vtcode desktop --install`, then launch with `vtcode desktop` or from Finder.
 
 > [!WARNING]
-> **First launch needs a one-time macOS security approval.** Ad hoc-signed builds are blocked on first launch
-> (Homebrew cask installs included): open the app once, click **Open Anyway** in **System Settings › Privacy &
-> Security**, then open it again. The button shows for about an hour after a block. Notarized releases skip this step.
-
-See the [desktop workspace guide](./docs/development/desktop-workspace.md) for requirements, source builds, and
-troubleshooting.
+> **First launch needs a one-time approval** for ad hoc-signed builds (Homebrew cask included): open once,
+> click **Open Anyway** in **System Settings › Privacy & Security**, then reopen. Notarized releases skip this.
+> See the [desktop workspace guide](./docs/development/desktop-workspace.md) for requirements and troubleshooting.
 
 ## Documentation
 
@@ -189,9 +181,7 @@ Curated entry points by task:
 ### Use
 
 - [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
-- [Read-only planning](./docs/guides/planning-workflow.md) and [turn diffs](./docs/development/diff-preview.md)
 - [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) and [security model](./docs/security/SECURITY_MODEL.md)
-- [Subagents](./docs/user-guide/subagents.md) and [snapshots](./docs/user-guide/commands.md#snapshots--revert)
 
 ### Automate
 
@@ -200,24 +190,22 @@ Curated entry points by task:
 
 ### Extend
 
-- [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md),
-  [MCP](./docs/guides/mcp-integration.md)
-- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and
-  [MCP interop](./docs/guides/mcp-interop.md)
-- [A2A protocol](./docs/a2a/README.md), [WebMCP deployment](./docs/reference/webmcp.md), and
+- [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), and
+  [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md))
+- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md)
+  ([deployment](./docs/reference/webmcp.md)), [A2A](./docs/a2a/README.md), and
   [Companion](./docs/user-guide/vtcode-companion.md)
 
 ### Develop
 
 - [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and
   [evals](./docs/guides/eval.md)
-- [Architecture](./docs/ARCHITECTURE.md), [HOVER](./docs/development/hypothesis-revision-validation.md),
-  and [protocols](./docs/protocols/OPEN_RESPONSES.md)
-- [Desktop app](./docs/development/desktop-workspace.md) and [loop engineering](./docs/project/PLAN-loop-engineering.md)
+- [Architecture](./docs/ARCHITECTURE.md), [desktop app](./docs/development/desktop-workspace.md), and
+  [loop engineering](./docs/project/PLAN-loop-engineering.md), and [protocols](./docs/protocols/OPEN_RESPONSES.md)
 
 ## Development
 
-Simplified map (the [architecture guide](./docs/ARCHITECTURE.md) covers the full workspace crate list):
+Non-exhaustive sketch (the [architecture guide](./docs/ARCHITECTURE.md) covers the full workspace crate list):
 
 ```mermaid
 graph LR
@@ -249,14 +237,12 @@ Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/v
 
 VT Code is open source and community-driven. Forking, modifying, and contributing are all welcome.
 
-- **Fork and modify:** fork the repo, copy or use the code, and adapt it to your own workflow, stack, or
-  product. You can keep changes in your fork or send them back as a pull request, both are encouraged.
-- **Contribute upstream:** code, docs, [evals](./docs/guides/eval.md), bug fixes, and feature work are
-  welcome. Bug reports should include `vtcode trajectory` output where possible.
-- **Start small:** pick a [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) or
-  [help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item, or open a discussion with your idea.
-- **Before you open a PR:** read the [contribution guide](./docs/CONTRIBUTING.md) and keep changes focused,
-  tested, and documented.
+- **Fork and modify:** keep changes in your fork or send them back as a pull request.
+- **Contribute upstream:** code, docs, [evals](./docs/guides/eval.md), bug fixes, and features are welcome;
+  bug reports should include `vtcode trajectory` output where possible.
+- **Before you open a PR:** read the [contribution guide](./docs/CONTRIBUTING.md); start with a
+  [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) or
+  [help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item.
 
 If you fork and ship your own variant, keep the license and third-party notices intact (see [License](#license)).
 
@@ -280,7 +266,7 @@ Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
 Thank you to everyone below. You are the reason this project keeps moving.
 
-<details open>
+<details>
 <!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (31)</summary><!-- CONTRIBUTORS-COUNT:END -->
 
 <!-- CONTRIBUTORS:START -->
@@ -360,10 +346,8 @@ figure it out together.
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnx?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
 
-If you like VT Code, please star the repo and share it with others. Starring helps the project get discovered,
-and sharing brings in new users, contributors, and sponsors. Thank you for growing the community.
-
-## Thank you
+If you like VT Code, please star the repo and share it — starring helps discovery and brings in new users,
+contributors, and sponsors. Thank you for growing the community.
 
 <a
   href="https://www.star-history.com/?repos=vinhnx%2Fvtcode&type=timeline&legend=top-left">
