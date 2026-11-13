@@ -412,9 +412,31 @@ module:
 | `assembly::tests::folded_lifecycle_aliases_resolve_to_their_new_parents` | built `ToolAssembly` from the mirror, so an alias present only there would pass while never resolving at runtime; now reads the shipped inventory |
 | `system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds` | hashed a mirror catalog twice. The shipped inventory stores registrations in an `FxHashMap`, which is exactly where ordering could vary, so the mirror could never exercise the risk it guards |
 
-The mirror is now read only for per-tool metadata: `metadata()` on an
-individual registration (schema, aliases, description). No catalog-level count,
-token metric, ordering hash, or alias-resolution assembly is built from it.
+The mirror is now **deleted**. Once every catalog-level consumer moved to the
+shipped path, the nine remaining readers were per-tool metadata assertions that
+read just as well from `inventory.registrations_snapshot()`, and
+`register_record_decision` was inlined into `pack_impls`. With no consumer left,
+the 496-line `builtins/mod.rs` factory set and its
+`#[distributed_slice(BUILTIN_TOOLS)]` scaffolding went too:
+
+| Removed | Lines |
+| ------- | ----- |
+| `builtins/mod.rs` factory set + decoration helpers | 496 → 11 |
+| `BuiltinToolFactory`, `BUILTIN_TOOLS`, unused `tool_config()` in `distributed.rs` | −41 |
+| `pack::tests::shipped_catalog_contains_every_mirrored_builtin_registration` | −27 (its subject no longer exists) |
+| `builtins::tests::distributed_slice_contains_all_builtin_tools` | −9 (same) |
+
+`builtins/tests.rs` now builds the shipped catalog through a local
+`shipped_registrations()` helper and asserts against it. Net: **−575 lines,
++73**, with the drift class structurally impossible rather than merely detected.
+
+Moved assertions re-verified by injection:
+
+| Injection | Failure |
+| --------- | ------- |
+| Remove `send_input` from the shipped agent aliases | `assertion failed: agent.metadata().aliases().iter().any(...)` |
+| Empty the shipped `web_search` required list | `left: Array []` / `right: Array [String("query")]` |
+| Make `with_native_cgp_factory` a no-op | `expected native CGP factory for request_user_input` |
 
 Verified per consumer, not by assumption. Every `builtin_tool_registrations`
 call site was classified; the nine that remain each read `.metadata()` on one

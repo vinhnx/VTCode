@@ -60,7 +60,19 @@ impl ToolPack for HitlPack {
         _tool_config: &ToolConfigSnapshot,
     ) {
         let registrations = vec![
-            super::builtins::register_record_decision(None),
+            ToolRegistration::new(
+                tools::RECORD_DECISION,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::record_decision_executor,
+            )
+            .with_description(
+                "Use to record consequential choices, rejected approaches, or recovery changes with public rationale. \
+                 Optional evidence IDs must belong to the current session task. Rationale is agent-reported; \
+                 ordinary commands need no record.",
+            )
+            .with_parameter_schema(vtcode_utility_tool_specs::record_decision_parameters())
+            .with_permission(ToolPolicy::Allow),
             ToolRegistration::from_tool_instance(
                 tools::REQUEST_USER_INPUT,
                 CapabilityLevel::Basic,

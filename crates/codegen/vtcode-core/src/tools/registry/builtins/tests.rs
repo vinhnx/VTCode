@@ -1,22 +1,49 @@
-use super::*;
+use std::path::PathBuf;
+
 use serde_json::json;
 
-#[test]
-fn distributed_slice_contains_all_builtin_tools() {
-    use crate::tools::registry::distributed::BUILTIN_TOOLS;
-    // Consolidated action tools keep the factory count bounded.
-    // This catches accidentally missing #[distributed_slice] annotations.
-    assert!(
-        BUILTIN_TOOLS.len() >= 24,
-        "expected at least 24 distributed tool factories, found {}",
-        BUILTIN_TOOLS.len()
+use crate::config::constants::tools;
+use crate::config::types::CapabilityLevel;
+use crate::tools::handlers::PlanningWorkflowState;
+use crate::tools::handlers::task_tracker::task_tracker_description_for_workflow;
+use crate::tools::registry::ToolRegistration;
+use crate::tools::registry::ToolRegistry;
+
+/// The registrations the runtime actually ships, built through the pack path.
+///
+/// Every metadata assertion in this module reads these rather than the old
+/// `#[distributed_slice(BUILTIN_TOOLS)]` mirror, which was a parallel
+/// implementation of the pack set: an alias, schema, or description present
+/// only in the mirror would pass here while never reaching the model.
+fn shipped_registrations(plan_state: Option<&PlanningWorkflowState>) -> Vec<ToolRegistration> {
+    use crate::tools::registry::distributed::ToolConfigSnapshot;
+    use crate::tools::registry::inventory::ToolInventory;
+
+    let temp = tempfile::tempdir().expect("workspace tempdir");
+    let inventory = ToolInventory::new(
+        temp.path().to_path_buf(),
+        std::sync::Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new()),
     );
+    let owned_state;
+    let plan_state = match plan_state {
+        Some(state) => state,
+        None => {
+            owned_state = PlanningWorkflowState::new(temp.path().to_path_buf());
+            &owned_state
+        }
+    };
+    futures::executor::block_on(super::super::pack::register_builtin_packs(
+        &inventory,
+        plan_state,
+        &ToolConfigSnapshot::default(),
+    ));
+    inventory.registrations_snapshot()
 }
 
 #[test]
 fn tool_backed_builtins_register_native_cgp_factories() {
     let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
-    let registrations = builtin_tool_registrations(Some(&plan_state));
+    let registrations = shipped_registrations(Some(&plan_state));
 
     for tool_name in [tools::REQUEST_USER_INPUT, tools::START_PLANNING, tools::TASK_TRACKER] {
         let registration = registrations
@@ -40,7 +67,7 @@ fn tool_backed_builtins_register_native_cgp_factories() {
 fn task_tracker_builtin_registration_matches_workflow_metadata() {
     let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
 
-    let standard = builtin_tool_registrations(Some(&plan_state))
+    let standard = shipped_registrations(Some(&plan_state))
         .into_iter()
         .find(|registration| registration.name() == tools::TASK_TRACKER)
         .expect("standard task_tracker registration should exist");
@@ -51,7 +78,7 @@ fn task_tracker_builtin_registration_matches_workflow_metadata() {
     );
 
     plan_state.enable();
-    let planning = builtin_tool_registrations(Some(&plan_state))
+    let planning = shipped_registrations(Some(&plan_state))
         .into_iter()
         .find(|registration| registration.name() == tools::TASK_TRACKER)
         .expect("planning task_tracker registration should exist");
@@ -65,7 +92,7 @@ fn task_tracker_builtin_registration_matches_workflow_metadata() {
 #[test]
 fn codex_baseline_builtins_are_canonical_public_tools() {
     let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
-    let registrations = builtin_tool_registrations(Some(&plan_state));
+    let registrations = shipped_registrations(Some(&plan_state));
 
     for tool_name in [tools::EXEC_COMMAND, tools::WRITE_STDIN] {
         let registration = registrations
@@ -103,7 +130,7 @@ fn codex_baseline_builtins_are_canonical_public_tools() {
 
 #[test]
 fn web_search_schema_requires_canonical_query() {
-    let registrations = builtin_tool_registrations(None);
+    let registrations = shipped_registrations(None);
     let web_search = registrations
         .iter()
         .find(|registration| registration.name() == tools::WEB_SEARCH)
@@ -127,7 +154,7 @@ fn web_search_schema_requires_canonical_query() {
 #[test]
 fn multi_agent_builtins_expose_updated_descriptions() {
     let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
-    let registrations = builtin_tool_registrations(Some(&plan_state));
+    let registrations = shipped_registrations(Some(&plan_state));
 
     let agent = registrations
         .iter()
@@ -154,7 +181,7 @@ fn multi_agent_builtins_expose_updated_descriptions() {
 
 #[test]
 fn web_fetch_builtin_description_guides_agents_to_try_llms_txt_first() {
-    let registrations = builtin_tool_registrations(None);
+    let registrations = shipped_registrations(None);
     let web_fetch = registrations
         .iter()
         .find(|registration| registration.name() == tools::WEB_FETCH)
@@ -169,7 +196,7 @@ fn web_fetch_builtin_description_guides_agents_to_try_llms_txt_first() {
 
 #[test]
 fn web_fetch_builtin_description_matches_preview_and_temp_file_result() {
-    let registrations = builtin_tool_registrations(None);
+    let registrations = shipped_registrations(None);
     let web_fetch = registrations
         .iter()
         .find(|registration| registration.name() == tools::WEB_FETCH)
@@ -187,7 +214,7 @@ fn web_fetch_builtin_description_matches_preview_and_temp_file_result() {
 
 #[test]
 fn web_fetch_schema_rejects_unknown_output_modes() {
-    let registrations = builtin_tool_registrations(None);
+    let registrations = shipped_registrations(None);
     let web_fetch = registrations
         .iter()
         .find(|registration| registration.name() == tools::WEB_FETCH)

@@ -1,20 +1,13 @@
-//! Distributed slice declaration for builtin tool registrations.
+//! Workspace tool-config snapshot shared with the pack registry.
 //!
-//! Each tool module annotates a factory function with
-//! `#[distributed_slice(BUILTIN_TOOLS)]` to self-register. The linker
-//! collects all annotated functions into a contiguous slice at load time,
-//! eliminating the need for a central enumeration in `builtins.rs`.
-//!
-//! The `TOOL_CONFIG` global is retained only for the legacy distributed
-//! registration compatibility path. The active pack-based registry receives
-//! its workspace snapshot explicitly and must not read this process-global
-//! value.
+//! Builtins register through `pack_impls` -> `register_builtin_packs` ->
+//! `BUILTIN_PACKS`. Packs receive [`ToolConfigSnapshot`] explicitly; the
+//! `TOOL_CONFIG` global below is a compatibility slot for callers that install
+//! a process-wide snapshot, and the active registry must not read it instead of
+//! the snapshot it was given.
 use std::sync::OnceLock;
 
-use crate::tools::handlers::PlanningWorkflowState;
 use vtcode_config::{WebFetchConfig, WebSearchConfig};
-
-use super::registration::ToolRegistration;
 
 /// Snapshot of the user-configurable bits of `ToolsConfig` that built-in
 /// tools care about. A subset is intentional: most tools don't need the
@@ -62,22 +55,6 @@ pub fn install_tool_config(snapshot: ToolConfigSnapshot) -> anyhow::Result<()> {
     }
 }
 
-/// Read the active tool config snapshot. Returns `None` if no snapshot has
-/// been installed (e.g. a test calling a `register_*` function without first
-/// calling `install_tool_config`).
-pub fn tool_config() -> Option<&'static ToolConfigSnapshot> {
-    TOOL_CONFIG.get()
-}
-
-/// Factory function type for builtin tool registrations.
-///
-/// Each tool module defines a function matching this signature and annotates it
-/// with `#[distributed_slice(BUILTIN_TOOLS)]`. The function receives an optional
-/// `PlanningWorkflowState` reference for tools that depend on planning workflow runtime state;
-/// tools that do not need it simply ignore the parameter.
-#[allow(dead_code, reason = "Factory signature of the BUILTIN_TOOLS distributed slice.")]
-pub type BuiltinToolFactory = fn(Option<&PlanningWorkflowState>) -> ToolRegistration;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,10 +92,3 @@ mod tests {
         assert!(result.is_err(), "expected error on diverging snapshot, got: {result:?}");
     }
 }
-
-/// Distributed slice of builtin tool factory functions.
-///
-/// Elements are placed by `#[distributed_slice(BUILTIN_TOOLS)]` annotations
-/// across tool modules. The linker collects them into a contiguous `&'static [BuiltinToolFactory]`.
-#[linkme::distributed_slice]
-pub static BUILTIN_TOOLS: [BuiltinToolFactory] = [..];
