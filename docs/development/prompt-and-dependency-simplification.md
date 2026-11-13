@@ -9,13 +9,13 @@ component is dead, duplicated, or unjustifiable.
 
 ## Summary
 
-| Component           | Verdict  | Reason                                                                     |
-| ------------------- | -------- | -------------------------------------------------------------------------- |
-| System prompt       | REPLACE  | 16 dense run-on bullets in one universal blob; ~2,250 tokens for the base   |
-| Tree-sitter         | KEEP     | Sole structural shell parser; gates the read-only and `rm -rf` safety paths |
+| Component           | Verdict  | Reason                                                                       |
+| ------------------- | -------- | --------------------------------------------------------------------------   |
+| System prompt       | REPLACE  | 16 dense run-on bullets in one universal blob; ~2,250 tokens for the base    |
+| Tree-sitter         | KEEP     | Sole structural shell parser; gates the read-only and `rm -rf` safety paths  |
 | ast-grep            | REPLACE  | Dev-only, not CI-enforced; rules duplicate clippy and cover absent languages |
-| ripgrep (`ignore`)  | KEEP     | Supplies gitignore-aware walking; no stdlib equivalent                    |
-| Third-party search  | REMOVE   | `defuddle.md` is a redundant third-party relay; MCP `search_tools` overlaps |
+| ripgrep (`ignore`)  | KEEP     | Supplies gitignore-aware walking; no stdlib equivalent                       |
+| Third-party search  | REMOVE   | `defuddle.md` is a redundant third-party relay; MCP `search_tools` overlaps  |
 
 ## Result
 
@@ -27,13 +27,13 @@ Composed prompt (static profile plus dynamic sections) and the full runtime-asse
 runtime tool catalog). Measured with six tools, temporal context, working directory, and
 structured reasoning enabled:
 
-| Profile    | Composed before | Composed after | Runtime before | Runtime after |
-| ---------- | --------------- | -------------- | -------------- | ------------- |
-| Minimal    | 67              | 61             | 83             | 71            |
-| Lightweight| 74              | 67             | 90             | 77            |
-| Default    | 78              | 71             | 94             | 81            |
-| Specialized| 79              | 71             | 95             | 81            |
-| Default + planning notice | 78 | 71 | 100 | 88 |
+| Profile                   | Composed before | Composed after | Runtime before | Runtime after |
+| ----------                | --------------- | -------------- | -------------- | ------------- |
+| Minimal                   | 67              | 61             | 83             | 71            |
+| Lightweight               | 74              | 67             | 90             | 77            |
+| Default                   | 78              | 71             | 94             | 81            |
+| Specialized               | 79              | 71             | 95             | 81            |
+| Default + planning notice | 78              | 71             | 100            | 88            |
 
 Every profile is under the 90-line target in every configuration, including the planning-workflow
 path, which is the largest prompt VT Code sends.
@@ -161,17 +161,17 @@ release gate (`./scripts/check.sh`) requires it" is **false**.
 
 Rule coverage against tracked sources:
 
-| Language    | Rules | Tracked files | Verdict                                    |
-| ----------- | ----- | ------------- | ------------------------------------------ |
-| go, java, kotlin | 19  | 0 each        | Dead — no source files exist              |
-| c           | 1     | 0             | Dead                                      |
-| ruby        | 4     | 2 (homebrew) | Dead — patterns target `app/**`, `lib/**` |
-| tsx         | 4     | 0             | Dead                                      |
-| cpp         | 2     | 3 (patches)  | Dead — `ignores: patches/**`              |
-| python      | 14    | 79            | Live                                      |
-| typescript  | 15    | 33            | Live                                      |
-| rust        | 14    | 3574          | Live                                      |
-| css / html  | 2     | 9             | Live                                      |
+| Language         | Rules | Tracked files | Verdict                                    |
+| -----------      | ----- | ------------- | ------------------------------------------ |
+| go, java, kotlin | 19    | 0 each        | Dead — no source files exist               |
+| c                | 1     | 0             | Dead                                       |
+| ruby             | 4     | 2 (homebrew)  | Dead — patterns target `app/**`, `lib/**`  |
+| tsx              | 4     | 0             | Dead                                       |
+| cpp              | 2     | 3 (patches)   | Dead — `ignores: patches/**`               |
+| python           | 14    | 79            | Live                                       |
+| typescript       | 15    | 33            | Live                                       |
+| rust             | 14    | 3574          | Live                                       |
+| css / html       | 2     | 9             | Live                                       |
 
 Measured findings: **501 total, 0 of which are `error` severity.** Both `severity: error` rules
 have zero findings:
