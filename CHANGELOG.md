@@ -5,6 +5,64 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.182.1 - 2026-11-13
+
+### Highlights
+
+#### Bug Fixes
+
+- Trust first-party crates in cargo-vet (3e5123f0) (@vinhnx)
+- Stop read-only allow-listing programs that execute commands (5bbc4598)
+- Cache terminal palettes, virtualize theme rows, fix scheme swatches (0e7cc4d9)
+- Stop budget-exhaustion auto-continue loop and harden follow-up recovery (388b6b05)
+- Render tight markdown lists without interior blank rows (ded8118a)
+- Report phantom edits only when the turn mutated files (2637735b)
+- Stop restating tool schemas in the system prompt (93b894b7)
+- Document code_search |-alternation in the shipped description (aac960fb)
+- Finish gemini-4-hydrogen follow-up for Merge Gateway and docs (ff3bb270)
+- Bound unfinished scrollback lines (e2bd0769)
+- Skip redundant transcript work and cover output bursts (3027d772)
+- Bound TUI diagnostic log queue and truncate fields (be09f316)
+- Fail closed on oversized SSE stream tails (4a6ca6a1)
+
+#### Documentation
+
+- Move niche gotchas to maintainer notes to fit instruction budget (fdc971f0)
+- Record the prompt and dependency simplification audit (4c32149d)
+- Correct references to the deleted builtin registration mirror (a062a363)
+- Re-verify every remaining KEEP claim against the code (0e20f8b6)
+
+#### Features
+
+- Add embedded terminal PTY foundation (28415bf7)
+- Wire embedded terminal panel: toggle, grid, input, resize (c1d83eee)
+- Terminal scrollback, themes, mouse select, columns (c8668f44)
+- Terminal freeze fix, docks, header, selection (6d02b365)
+- Terminal card dock, Ciapre/Latte schemes, swatch grid (dd911d78)
+- Add gemini-4-hydrogen to Gemini and Merge Gateway (345f640f)
+- Wire gemini-4-hydrogen provider support and presets (6cc7c6b1)
+
+### Other Changes
+
+#### Refactors
+
+- Drop the defuddle relay and two dead search modules (ce44b42e)
+- Rebuild the system prompt to one home per rule (bfa26252)
+- Delete the builtin registration mirror (eecdacc2)
+- Remove six dead prompt-surface methods (2f61ac3b)
+- Narrow three stale module-wide dead_code allows (0f3983e6)
+- Delete the unused OptimizedToolRegistry module (33a0cb1f)
+- Remove per-turn tool-call count budget (0fcf1da9)
+
+#### Tests
+
+- Cover the planning tracker schema in the ownership gate (3f9fd651)
+- Pin the shipped catalog as a superset of the test mirror (6600af6f)
+- Measure the schema envelope through the matrix access gate (976b874e)
+- Measure the tool-count caps on the shipped catalog (f0884804)
+- Finish moving the catalog contracts off the test mirror (4ded1ce2)
+- Audit every remaining mirror call site and move the two that were catalog-level (c750a757)
+
 ## 0.182.0 - 2026-11-11
 
 ### Highlights
