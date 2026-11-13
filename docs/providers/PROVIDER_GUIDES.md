@@ -179,10 +179,16 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Official docs:** [Gemini API models](https://ai.google.dev/gemini-api/docs/models) ·
   [Gemini 4 Carbon](https://ai.google.dev/gemini-api/docs/models/gemini-4-carbon) ·
   [Gemini 4 Argon](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon) ·
+  [Gemini 4 Hydrogen](https://ai.google.dev/gemini-api/docs/models/gemini-4-hydrogen) ·
   [Gemini 3.7 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash)
 - **Provider key:** `gemini` (env: `GEMINI_API_KEY` or `GOOGLE_API_KEY`)
 - **Default model:** `gemini-3-flash-preview`
 - **Curated models:**
+  - `gemini-4-hydrogen` — fast and efficient model for everyday coding and agentic workflows, unified 1M context
+    window (input, thinking, and output share one window), 64K sync output, tunable thinking (low/medium/high/xhigh,
+    high default). Explicit `cachedContents` is not supported; implicit caching applies automatically, and VT Code's
+    `[prompt_cache] mode = "explicit"` setting is ignored for this model (requests use the implicit shape). Sampling
+    parameters (`temperature`, `top_p`, `top_k`) are ignored by the API.
   - `gemini-4-carbon` — strongest reasoning model for sustained agentic coding, multimodal knowledge work, scientific
     reasoning, and cybersecurity defense, unified 1M context window (input, thinking, and output share one window),
     64K sync output, tunable thinking (low/medium/high, medium default). Spends more thinking tokens per turn than
@@ -410,7 +416,7 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Default model:** `default_routing`
 - **Curated picker models:** `openai/gpt-5.5`, `anthropic/claude-opus-5`, `anthropic/claude-opus-5-5`,
   `anthropic/claude-sonnet-5`, `anthropic/claude-sonnet-5-5`, `google/gemini-3.6-flash`, `google/gemini-3.7-flash`,
-  `google/gemini-4-argon`, `google/gemini-4-carbon`, `deepseek/deepseek-v4-pro-0813`,
+  `google/gemini-4-argon`, `google/gemini-4-carbon`, `google/gemini-4-hydrogen`, `deepseek/deepseek-v4-pro-0813`,
   `deepseek/deepseek-v4-flash-0731`, `xai/grok-4.6`, `qwen/qwen3.8-max`,
   `minimax/minimax-h3`, `minimax/minimax-m3.1-flash`, `moonshot/kimi-k3`, `moonshot/kimi-k3.1-pro`,
   `thinkingmachines/inkling`, `zai/glm-5.3-flash`,

@@ -290,6 +290,8 @@ impl ModelId {
             self,
             ModelId::Gemini38Flash
                 | ModelId::MergeGatewayGoogleGemini38Flash
+                | ModelId::Gemini4Hydrogen
+                | ModelId::MergeGatewayGoogleGemini4Hydrogen
                 | ModelId::GPT56Luna
                 | ModelId::GPT6Luna
                 | ModelId::MergeGatewayOpenAIGpt56Luna
