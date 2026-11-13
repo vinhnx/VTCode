@@ -923,9 +923,9 @@ mod tests {
         // The real growth shape: small boundary-less chunks accumulating past
         // the cap across loop iterations, tripping on the third chunk.
         let byte_stream = stream::iter(vec![
-            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from("x".repeat(MAX_SSE_TAIL_BYTES / 2))),
-            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from("y".repeat(MAX_SSE_TAIL_BYTES / 2))),
-            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from_static(b"zz")),
+            Ok::<bytes::Bytes, !>(bytes::Bytes::from("x".repeat(MAX_SSE_TAIL_BYTES / 2))),
+            Ok::<bytes::Bytes, !>(bytes::Bytes::from("y".repeat(MAX_SSE_TAIL_BYTES / 2))),
+            Ok::<bytes::Bytes, !>(bytes::Bytes::from_static(b"zz")),
         ]);
         let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |_| Ok(())).await;
         let err = result.expect_err("boundary-less tail over the cap must fail closed");
@@ -944,7 +944,7 @@ mod tests {
         use futures::stream;
 
         let tail = "x".repeat(MAX_SSE_TAIL_BYTES - 1);
-        let byte_stream = stream::iter(vec![Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from(tail))]);
+        let byte_stream = stream::iter(vec![Ok::<bytes::Bytes, !>(bytes::Bytes::from(tail))]);
         let mut calls = 0;
         let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |_| {
             calls += 1;
@@ -965,8 +965,8 @@ mod tests {
         let first = "x".repeat(MAX_SSE_TAIL_BYTES - 100);
         let second = format!("{}\n\n", "y".repeat(200));
         let byte_stream = stream::iter(vec![
-            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from(first)),
-            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from(second)),
+            Ok::<bytes::Bytes, !>(bytes::Bytes::from(first)),
+            Ok::<bytes::Bytes, !>(bytes::Bytes::from(second)),
         ]);
         let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |_| Ok(())).await;
         assert!(result.is_ok(), "drained tail must not trip the bound: {result:?}");
@@ -976,7 +976,7 @@ mod tests {
     async fn process_openai_stream_still_delivers_small_events() {
         use futures::stream;
 
-        let byte_stream = stream::iter(vec![Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from_static(
+        let byte_stream = stream::iter(vec![Ok::<bytes::Bytes, !>(bytes::Bytes::from_static(
             b"data: {\"choices\": [{\"delta\": {\"content\": \"hi\"}}]}\n\n",
         ))]);
         let mut seen = Vec::new();

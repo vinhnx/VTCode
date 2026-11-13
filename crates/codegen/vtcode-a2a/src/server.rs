@@ -32,7 +32,6 @@ use axum::{
     routing::post,
 };
 use serde_json::{Value, json};
-use std::convert::Infallible;
 use std::fmt;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -328,7 +327,7 @@ async fn handle_stream(State(state): State<A2aServerState>, Json(request): Json<
                 let is_final = event.is_final();
                 let json = serde_json::to_string(&SendStreamingMessageResponse { event })
                     .unwrap_or_default();
-                yield Ok::<_, Infallible>(Event::default().data(json));
+                yield Ok::<_, !>(Event::default().data(json));
 
                 if is_final {
                     break;

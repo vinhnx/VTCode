@@ -7,6 +7,7 @@ pub(crate) use runtime::PtyStreamRuntime;
 #[cfg(test)]
 mod tests {
     use anstyle::{AnsiColor, Color as AnsiColorEnum};
+    use std::mem::DropGuard;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
@@ -20,16 +21,6 @@ mod tests {
     use super::state::PtyStreamState;
     use crate::agent::runloop::unified::progress::ProgressReporter;
     use vtcode_ui::tui::ui::shell_syntax::tokenize_preserve_whitespace;
-
-    struct DropNotifier(Option<oneshot::Sender<()>>);
-
-    impl Drop for DropNotifier {
-        fn drop(&mut self) {
-            if let Some(tx) = self.0.take() {
-                let _ = tx.send(());
-            }
-        }
-    }
 
     fn flatten_text(segments: &[InlineSegment]) -> String {
         segments
@@ -455,7 +446,9 @@ mod tests {
     #[tokio::test]
     async fn pty_stream_runtime_drop_aborts_background_task() {
         let (drop_tx, drop_rx) = oneshot::channel();
-        let notifier = DropNotifier(Some(drop_tx));
+        let notifier = DropGuard::new(drop_tx, |tx| {
+            let _ = tx.send(());
+        });
         let task = tokio::spawn(async move {
             let _notifier = notifier;
             std::future::pending::<()>().await;

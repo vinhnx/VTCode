@@ -29,7 +29,6 @@ use rmcp::transport::streamable_http_server::session::local::LocalSessionManager
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{Json, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
 use std::collections::BTreeMap;
-use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::pin::Pin;
@@ -785,7 +784,7 @@ fn legacy_event_stream(
     receiver: mpsc::Receiver<ServerJsonRpcMessage>,
     guard: DropGuard,
     endpoint_event: Event,
-) -> impl Stream<Item = Result<Event, Infallible>> + Send + 'static {
+) -> impl Stream<Item = Result<Event, !>> + Send + 'static {
     let first = stream::once(async move { Ok(endpoint_event) });
     let messages = stream::unfold((receiver, guard), |(mut receiver, guard)| async move {
         let message = receiver.recv().await?;

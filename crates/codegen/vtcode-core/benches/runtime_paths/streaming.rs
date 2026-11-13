@@ -194,7 +194,7 @@ pub(super) fn benchmarks(c: &mut Criterion) {
                     if mode == "malformed_then_recover" { b"data: not-json\n\n".to_vec() }
                     else { b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"sequence_number\":1}\n\n".to_vec() }
                 } else { bytes.to_vec() };
-                let chunks = payload.chunks(7).map(|chunk| Ok::<_, std::convert::Infallible>(axum::body::Bytes::copy_from_slice(chunk))).collect::<Vec<_>>();
+                let chunks = payload.chunks(7).map(|chunk| Ok::<_, !>(axum::body::Bytes::copy_from_slice(chunk))).collect::<Vec<_>>();
                 Response::builder().header("content-type", "text/event-stream")
                     .body(Body::from_stream(futures::stream::iter(chunks))).expect("fragmented fixture response")
             }
