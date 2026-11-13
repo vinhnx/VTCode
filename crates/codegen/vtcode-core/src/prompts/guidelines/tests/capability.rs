@@ -45,7 +45,6 @@ fn test_planning_workflow_guidance_keeps_verification_open() {
         TOOL_CODE_SEARCH.to_string(),
     ];
     let guidelines = generate_runtime_tool_guidelines_for_profile(&tools, true, ResolvedShellPromptProfile::UnixLike);
-    assert!(guidelines.contains("Keep `task_tracker` updated"));
     assert!(guidelines.contains("blockers and verification open"));
 }
 #[test]

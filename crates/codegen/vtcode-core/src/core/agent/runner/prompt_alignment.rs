@@ -151,6 +151,12 @@ pub fn validate_prompt_catalog_alignment(
     Ok(())
 }
 
+/// Parse the `[Runtime Tool Catalog]` payload.
+///
+/// The payload is one `key: value` line whose pairs are separated by `;`, so
+/// the block costs two prompt lines instead of seven. Older prompts that
+/// carried one pair per line still parse, because a line without `;` is a
+/// single pair.
 fn parse_runtime_tool_catalog_metadata(system_instruction: &str) -> Option<RuntimeToolCatalogMetadata> {
     let start = system_instruction.rfind("[Runtime Tool Catalog]")?;
     let mut metadata = RuntimeToolCatalogMetadata::default();
@@ -167,19 +173,21 @@ fn parse_runtime_tool_catalog_metadata(system_instruction: &str) -> Option<Runti
         let Some(entry) = trimmed.strip_prefix("- ") else {
             continue;
         };
-        let Some((key, value)) = entry.split_once(':') else {
-            continue;
-        };
-        let value = value.trim();
+        for pair in entry.split(';') {
+            let Some((key, value)) = pair.split_once(':') else {
+                continue;
+            };
+            let value = value.trim();
 
-        match key.trim() {
-            "version" => metadata.version = value.parse().ok(),
-            "epoch" => metadata.epoch = value.parse().ok(),
-            "available_tools" => metadata.available_tools = value.parse().ok(),
-            "request_user_input_enabled" => {
-                metadata.request_user_input_enabled = value.parse().ok();
+            match key.trim() {
+                "version" => metadata.version = value.parse().ok(),
+                "epoch" => metadata.epoch = value.parse().ok(),
+                "available_tools" => metadata.available_tools = value.parse().ok(),
+                "request_user_input_enabled" => {
+                    metadata.request_user_input_enabled = value.parse().ok();
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 

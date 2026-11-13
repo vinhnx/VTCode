@@ -34,12 +34,11 @@ pub fn upsert_harness_limits_section(
 
     let section = format!(
         "[Harness Limits]\n\
-         - max_tool_calls_per_turn: {max_tool_calls_label}\n\
+         - max_tool_calls_per_turn: {max_tool_calls_label}; exec wait/inspect are exempt from max_tool_calls_per_turn\n\
          - max_tool_wall_clock_secs: {max_tool_wall_clock_label} (per turn; run long builds with exec_command, then call write_stdin next_wait_args with action:\"wait\" verbatim)\n\
          - max_tool_retries: {max_tool_retries}\n\
          - max_readonly_tool_calls: {MAX_TOTAL_READONLY_CALLS} (global budget across all read-only tools; produce output before exhausting)\n\
          - max_same_file_path_reads: {MAX_SAME_FILE_PATH_READS} (per file path per turn; read a file once in full rather than paginating)\n\
-         - exec wait/inspect are exempt from max_tool_calls_per_turn\n\
          - long commands: set yield_time_ms above 10000 on the initial run for a single-call long run (no outer timeout), or reuse next_wait_args in write_stdin to block until exit or deadline"
     );
 

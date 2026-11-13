@@ -75,7 +75,8 @@ fn planning_workflow_runtime_guidance_keeps_exec_read_only() {
     assert!(guidelines.contains("`exec_command` only for read-only verification"));
     assert!(!guidelines.contains("<proposed_plan>"));
     assert!(!guidelines.contains("Every implementation step"));
-    assert!(guidelines.contains("omit unused filters"));
+    // The code_search filter shape is documented by the tool schema.
+    assert!(guidelines.contains("literal and smart-case"));
     assert!(!guidelines.contains("Inspect before edit"));
 }
 #[test]

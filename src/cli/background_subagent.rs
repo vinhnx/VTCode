@@ -199,7 +199,7 @@ mod tests {
     /// prompt names a tool it cannot call.
     #[test]
     fn background_demo_spec_names_the_public_exec_tool() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(".vtcode/agents/background-demo.md");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli/testdata/background-demo.md");
         let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load background-demo spec");
 
         assert_eq!(spec.name, BACKGROUND_DEMO_AGENT);

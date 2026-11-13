@@ -66,9 +66,7 @@ pub(super) const PROMPT_IDENTITY_NAME: &str = "VT Code";
 /// working posture and effort calibration; the concrete rules live in the
 /// sections below it. Omitted from Minimal and Lightweight modes to respect
 /// their compact budgets (see the parent-ratio guard in `subagents/config.rs`).
-pub const PROMPT_ROLE_PARAGRAPH: &str = "Work the way a senior engineer on this codebase would: understand the relevant code before changing it, make the change the task calls for, and report what you actually observed. Scale effort to the ask. A quick question deserves a direct answer, and a multi-file change deserves a plan and real checks.";
-pub const CONTRACT_HEADER: &str = "## Contract";
-
+pub const PROMPT_ROLE_PARAGRAPH: &str = "Work the way a senior engineer on this codebase would: understand the relevant code before changing it, make the change the task calls for, and report what you actually observed. Scale effort to the ask.";
 /// Contract rules shared across all prompt modes that are not universal
 /// user-facing runtime guidance: state the harness must carry across
 /// compaction. Grounding, honesty, and scope rules live in
@@ -78,16 +76,15 @@ pub const SHARED_CONTRACT_LINES: &[&str] = &[
     "Across compaction, preserve the task goal, tracker state, touched files, verification status, and decisions made so far.",
 ];
 
-/// Default/Lightweight/Specialized mode: extended working style beyond the
-/// universal runtime guidance (instruction map, communication detail,
-/// corrections, delegation, code style, and test design). Each rule has exactly one home;
-/// do not restate runtime-guidance rules here.
+/// Default/Lightweight/Specialized mode: working style beyond the universal
+/// runtime guidance (instruction map, communication detail, code style, and
+/// test design). Each rule has exactly one home; do not restate
+/// runtime-guidance rules here.
 pub const DEFAULT_SPECIFIC_LINES: &[&str] = &[
     "Start from the project instruction map (`AGENTS.md`/`CLAUDE.md`) and the code itself, and follow the conventions they show.",
-    "Write updates and summaries for a teammate who is catching up: complete sentences, technical terms spelled out, and no fragments, arrow chains, or labels you invented along the way.",
-    "Answer a simple question directly in prose. Use headers, lists, and tables only when the content has real structure.",
-    "Correct an earlier statement only when the error changes the user's code, conclusions, or decisions, and do it in one plain sentence.",
-    "Brief a subagent fully the first time, and use its findings rather than redoing the work.",
+    "Write for a teammate catching up: complete sentences, no fragments, arrow chains, or invented labels.",
+    "Answer a simple question directly in prose; use headers, lists, and tables only when the content has real structure.",
+    "Correct an earlier statement only when it changes the user's code, conclusions, or decisions, and do it in one plain sentence.",
     "Match the surrounding code's naming, idiom, and comment density, and comment only on constraints the code cannot show.",
     "For tests, start from the risks: check boundaries and asymmetric cases from both sides, derive high-risk expected values without the code's own helpers, and assert observable behavior, not just the absence of a panic.",
 ];
@@ -106,8 +103,8 @@ pub const OPERATING_TASK_TRACKER: &str = "Track multi-step work; use `task_track
 pub const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - The core tools are `exec_command`, `write_stdin`, and `apply_patch`; `code_search` becomes available in Planning workflow.
-- Shell commands go in `exec_command.cmd` and are not separate tools. Follow the active shell profile's syntax.
-- When the user asks for a change, make it with the tools rather than describing it, unless the active agent mode is read-only.
+- Shell commands go in `exec_command.cmd`, not a separate tool; follow the active shell profile's syntax.
+- When the user asks for a change, make it with the tools rather than describing it, unless the mode is read-only.
 - Use Planning workflow for research and spec work, and stay read-only until the user states implementation intent."#;
 
 pub const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
@@ -124,8 +121,7 @@ pub const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - This profile is for complex work: explore the relevant code, settle a plan, then execute it.
 - Use `task_tracker` for multi-step work, and Planning workflow while scope or verification is still open.
-- Stop only when the tracker state, verification results, and resumable state agree.
-- End plan work with one `<proposed_plan>` block. During execution, re-plan only when the approved plan is stale; the runtime persists the new plan and continues.
+- End plan work with one `<proposed_plan>` block. During execution, re-plan only when the approved plan is stale; the runtime persists it and continues.
 - When repo-wide invariants matter, also read the architecture documents the instruction map points to."#;
 
 pub(super) const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"

@@ -164,8 +164,11 @@ async fn test_all_enhancements_combined() {
     assert!(result.contains("Working directory"), "Should have working directory");
     assert!(result.contains("/workspace"), "Should show workspace path");
 
-    // Verify specific guideline for this tool set
-    assert!(result.contains("after inspection"), "Should have read-before-edit guideline");
+    // Verify specific guideline for this tool set. The read-before-edit rule
+    // is documented by the apply_patch description; the guidelines section
+    // keeps only the cross-tool diff-bounding rule.
+    assert!(result.contains("diff stays bounded"), "Should have the diff-bounding guideline");
+    assert!(!result.contains("Use `apply_patch`"), "Should not restate the apply_patch description");
     assert_no_removed_model_facing_tool_names(&result);
 }
 #[tokio::test]

@@ -54,15 +54,12 @@ fn universal_rules_have_one_home_across_composed_prompt_sections() {
     // Each marker names one universal rule that lives in Runtime Guidance
     // or the shared contract and must not be restated by tool sections.
     let markers = [
-        "never claim a check passed",
-        "Diagnose failures; change approach",
-        "Use returned `next_wait_args`",
+        "Never claim a check passed",
+        "Diagnose failures and change approach",
         "Treat empty searches as evidence",
-        "Check optional tools once",
-        "small non-overlapping ranges",
-        "accumulated output never exhausts tool access",
+        "check an optional tool once",
         "additional_permissions",
-        "bypass safeguards",
+        "never bypass safeguards",
         "Prefer skills and tool search",
         "Across compaction",
     ];
@@ -91,6 +88,62 @@ fn universal_rules_have_one_home_across_composed_prompt_sections() {
             let start_planning_mentions = prompt.matches("start_planning").count();
             assert_eq!(start_planning_mentions, usize::from(!*planning), "{mode:?} with {variant} tool guidance");
         }
+    }
+}
+
+/// The `request_user_input` threshold is stated by the planning notice. A
+/// second, weaker threshold in the Active Tools section gives the model two
+/// different rules for the same tool in one prompt.
+#[test]
+fn request_user_input_threshold_has_one_home_in_the_planning_prompt() {
+    use crate::config::types::SystemPromptMode;
+    use crate::prompts::static_prompts::static_profile_prompt;
+    use crate::prompts::{RuntimePromptContract, append_runtime_mode_sections};
+
+    let shell = ResolvedShellPromptProfile::UnixLike;
+    let planning_tools = vec![
+        TOOL_EXEC_COMMAND.to_owned(),
+        TOOL_REQUEST_USER_INPUT.to_owned(),
+        TOOL_TASK_TRACKER.to_owned(),
+    ];
+    let minimal_planning =
+        generate_tool_guidelines_with_capabilities(&planning_tools, None, shell, ToolGuidanceProfile::Minimal, true);
+
+    for (variant, guidance) in [
+        ("default planning", generate_runtime_tool_guidelines_for_profile(&planning_tools, true, shell)),
+        ("minimal planning", minimal_planning),
+    ] {
+        // Compose the real planning prompt: the planning notice carries the
+        // threshold, and the tool section must not restate a competing one.
+        let mut prompt = static_profile_prompt(SystemPromptMode::Default).to_owned();
+        append_runtime_mode_sections(
+            &mut prompt,
+            RuntimePromptContract {
+                full_auto: false,
+                planning_active: true,
+                request_user_input_enabled: true,
+            },
+        );
+        prompt.push_str(&guidance);
+
+        // The tool section must not state a second, competing threshold.
+        assert!(
+            !guidance.contains("only for material blockers remaining after repository exploration"),
+            "{variant} restates the request_user_input threshold"
+        );
+        // The planning notice owns the threshold, so exactly one statement of
+        // it may reach the model. The tool section may narrow it to blockers
+        // that exploration did not resolve, but must not introduce a second
+        // rule.
+        assert_eq!(
+            prompt.matches("`request_user_input` only for a critical blocker").count(),
+            1,
+            "{variant}: the planning notice must own the request_user_input threshold"
+        );
+        assert!(
+            !guidance.contains("`request_user_input` only for a critical blocker"),
+            "{variant} restates the notice threshold"
+        );
     }
 }
 #[test]

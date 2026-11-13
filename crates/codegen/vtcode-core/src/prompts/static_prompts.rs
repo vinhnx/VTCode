@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use crate::config::types::SystemPromptMode;
 use crate::prompts::runtime_guidance::{RUNTIME_GUIDANCE_MAX_ESTIMATED_TOKENS, RUNTIME_GUIDANCE_SECTION};
 use crate::prompts::system::{
-    CONTRACT_HEADER, DEFAULT_OPERATING_PROFILE_DELTA, DEFAULT_SPECIFIC_LINES, LIGHTWEIGHT_OPERATING_PROFILE_DELTA,
+    DEFAULT_OPERATING_PROFILE_DELTA, DEFAULT_SPECIFIC_LINES, LIGHTWEIGHT_OPERATING_PROFILE_DELTA,
     MINIMAL_OPERATING_PROFILE_DELTA, MINIMAL_SPECIFIC_LINES, PROMPT_INTRO, PROMPT_ROLE_PARAGRAPH, PROMPT_TITLE,
     SHARED_CONTRACT_LINES, SPECIALIZED_OPERATING_PROFILE_DELTA,
 };
@@ -35,22 +35,15 @@ static DEFAULT_SPECIALIZED_PROMPT: OnceLock<String> = OnceLock::new();
 fn append_runtime_guidance(prompt: &mut String) {
     assert!(estimate_tokens(RUNTIME_GUIDANCE_SECTION) <= RUNTIME_GUIDANCE_MAX_ESTIMATED_TOKENS);
     prompt.push_str(RUNTIME_GUIDANCE_SECTION);
-    prompt.push('\n');
 }
 
+/// Append the shared and per-mode working-style rules to the open rules list.
 fn append_contract_block(prompt: &mut String, specific_lines: &[&str]) {
-    for line in SHARED_CONTRACT_LINES {
+    for line in SHARED_CONTRACT_LINES.iter().chain(specific_lines) {
         prompt.push_str("- ");
         prompt.push_str(line);
         prompt.push('\n');
     }
-    for line in specific_lines {
-        prompt.push_str("- ");
-        prompt.push_str(line);
-        prompt.push('\n');
-    }
-    prompt.pop();
-    prompt.push('\n');
     prompt.push('\n');
 }
 
@@ -64,9 +57,9 @@ fn build_static_prompt(include_role: bool, specific_lines: &[&str], operating_de
         prompt.push_str(PROMPT_ROLE_PARAGRAPH);
         prompt.push_str("\n\n");
     }
+    // One rules list: universal guidance first, then the per-mode working
+    // style. A separate heading only split the same rules across two sections.
     append_runtime_guidance(&mut prompt);
-    prompt.push_str(CONTRACT_HEADER);
-    prompt.push_str("\n\n");
     append_contract_block(&mut prompt, specific_lines);
     prompt.push_str(operating_delta);
     prompt
@@ -129,7 +122,7 @@ mod tests {
         ];
         for (mode, prompt) in modes {
             assert!(prompt.contains(PROMPT_TITLE), "{mode:?} missing title");
-            assert!(prompt.contains(CONTRACT_HEADER), "{mode:?} missing contract");
+            assert!(prompt.contains("## Rules"), "{mode:?} missing rules section");
             assert!(prompt.contains("AGENTS.md"), "{mode:?} missing AGENTS.md ref");
             assert_eq!(
                 prompt.matches(RUNTIME_GUIDANCE_SECTION).count(),
@@ -137,7 +130,7 @@ mod tests {
                 "{mode:?} should include runtime guidance exactly once"
             );
             assert!(
-                prompt.find(RUNTIME_GUIDANCE_SECTION) < prompt.find(CONTRACT_HEADER),
+                prompt.find(RUNTIME_GUIDANCE_SECTION) < prompt.find("## Operating Profile"),
                 "{mode:?} should place runtime guidance before the contract"
             );
             assert!(

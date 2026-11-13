@@ -14,7 +14,13 @@ pub fn render_environment_addenda(
     if let Some(ctx) = prompt_context
         && !ctx.languages.is_empty()
     {
-        lines.push(format!("- Languages: {}. Match structural-search `lang` when needed.", ctx.languages.join(", ")));
+        // `code_search` filters by language through `file_types` (language
+        // names or file extensions); there is no `lang` parameter and no
+        // separate structural-search tool.
+        lines.push(format!(
+            "- Languages: {}. Narrow `code_search` with `file_types` when needed.",
+            ctx.languages.join(", ")
+        ));
     }
 
     if let Some(cfg) = vtcode_config {

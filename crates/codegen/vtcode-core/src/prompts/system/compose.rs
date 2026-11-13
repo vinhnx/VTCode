@@ -95,9 +95,9 @@ fn system_prompt_budget_settings(vtcode_config: Option<&crate::config::VTCodeCon
 }
 
 /// Build the ordered prompt sections. Each section's text is stored exactly
-/// as the legacy single-string builder would have appended it, so
-/// [`join_prompt_sections`] reproduces byte-identical output when nothing is
-/// trimmed.
+/// as the legacy single-string builder would have appended it; the joiner
+/// trims section edges, so only the inter-section newlines differ from the
+/// legacy builder.
 pub(super) async fn build_prompt_sections(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
@@ -172,9 +172,13 @@ pub(super) async fn build_prompt_sections(
     sections
 }
 
-/// Join ordered prompt sections exactly as the legacy single-string builder
-/// did: the first section verbatim, then each subsequent section separated
-/// by a blank line.
+/// Join ordered prompt sections the way the legacy single-string builder
+/// did: the first section, then each subsequent section separated by a blank
+/// line.
+///
+/// Each section is trimmed first. Section sources carry their own leading or
+/// trailing newlines, and joining those verbatim produced two blank lines
+/// between some sections, which cost prompt lines without carrying meaning.
 pub(super) fn join_prompt_sections(sections: &[PromptSection]) -> String {
     let capacity = sections.iter().map(|section| section.text.len() + 2).sum();
     let mut joined = String::with_capacity(capacity);
@@ -182,7 +186,7 @@ pub(super) fn join_prompt_sections(sections: &[PromptSection]) -> String {
         if index > 0 {
             joined.push_str("\n\n");
         }
-        joined.push_str(&section.text);
+        joined.push_str(section.text.trim());
     }
     joined
 }
@@ -263,7 +267,7 @@ pub(super) fn stable_prompt_sections_digest(sections: &[PromptSection]) -> u64 {
 pub fn apply_coordinator_role_guidance(prompt: &mut String, coordinator_active: bool) {
     use crate::prompts::sections::{SectionBoundaryMode, find_prompt_section_bounds};
 
-    const ORDINARY_DELEGATION: &str = "- Prefer skills and tool search here; delegate only sizeable parallel work, discardable fresh-context tasks, or tool-choice conflicts to subagents, and keep verification here.";
+    const ORDINARY_DELEGATION: &str = crate::prompts::runtime_guidance::DELEGATION_RULE;
     const COORDINATOR_DELEGATION: &str = "- As coordinator, delegate execution and verification to scheduler-owned matrix workers; keep decisions in the main thread.";
 
     if !coordinator_active && !prompt.contains("## Coordinator Role") && !prompt.contains(COORDINATOR_DELEGATION) {

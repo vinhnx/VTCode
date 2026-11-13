@@ -145,17 +145,9 @@ async fn test_generated_prompts_keep_sparse_execution_contract() {
             result.contains(crate::prompts::runtime_guidance::VERIFICATION_OUTCOME_LINE),
             "{mode_name} prompt should include the verification outcome rule"
         );
-        assert_eq!(
-            result
-                .matches("HOVER: On mismatch inspect evidence and revise within limits.")
-                .count(),
-            1,
-            "{mode_name} prompt should include bounded HOVER guidance once"
-        );
-        assert!(result.contains("Stop after required passes."));
         assert!(normalized.contains("do not guess"), "{mode_name} prompt should gate missing context");
         assert!(
-            normalized.contains("do the rest and state plainly what is missing"),
+            normalized.contains("state plainly what is missing"),
             "{mode_name} prompt should require partial progress when part of the task is blocked"
         );
         assert!(
@@ -224,7 +216,9 @@ fn test_prompts_include_compaction_preservation_contract() {
         ("specialized", specialized_system_prompt()),
     ] {
         assert_eq!(
-            prompt.matches("never claim a check passed unless you ran it").count(),
+            prompt
+                .matches(crate::prompts::runtime_guidance::VERIFICATION_OUTCOME_LINE)
+                .count(),
             1,
             "{mode_name} prompt should state the verification outcome rule exactly once"
         );
@@ -234,14 +228,14 @@ fn test_prompts_include_compaction_preservation_contract() {
 fn test_default_prompt_stays_lean_but_complete() {
     let prompt = default_system_prompt();
 
-    assert!(prompt.contains("## Contract"), "Default prompt should include the lean contract section");
-    assert!(prompt.contains("Small tasks: up to four bullets"), "Default prompt should clamp output shape");
+    assert!(prompt.contains("## Rules"), "Default prompt should include the shared rules section");
+    assert!(prompt.contains("omit empty categories"), "Default prompt should clamp output shape");
     assert!(
         prompt.contains(crate::prompts::runtime_guidance::VERIFICATION_OUTCOME_LINE),
         "Default prompt should require honest verification reporting"
     );
     assert!(
-        prompt.contains("for a teammate who is catching up"),
+        prompt.contains("for a teammate catching up"),
         "Default prompt should shape progress updates for a reader"
     );
     assert!(prompt.contains("For tests, start from the risks"));
@@ -283,13 +277,16 @@ async fn test_composed_prompts_render_explicit_shell_profiles() {
     assert!(unix_prompt.contains("Active shell profile: `unix_like`"));
     assert!(unix_prompt.contains("does not rewrite GNU flags for macOS BSD tools"));
     assert!(unix_prompt.contains("does not translate GNU-to-BSD"));
+    // The example command list is documented by the exec_command schema.
+    assert!(!unix_prompt.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
 
     config.agent.shell_prompt_profile = ShellPromptProfile::PowerShell;
     let powershell_prompt = compose_system_instruction_text(&project_root, Some(&config), None).await;
     assert!(powershell_prompt.contains("Active shell profile: `powershell`"));
-    assert!(powershell_prompt.contains("`Get-ChildItem`"));
     assert!(powershell_prompt.contains("use WSL"));
     assert!(powershell_prompt.contains("Unix-to-PowerShell"));
+    // The native command examples are documented by the exec_command schema.
+    assert!(!powershell_prompt.contains("`Get-ChildItem`"));
     assert!(!powershell_prompt.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
 }
 #[test]
@@ -315,7 +312,7 @@ fn test_all_prompt_modes_treat_completion_as_checkpoint_not_proof() {
             "{mode_name} prompt should report completion only after verification"
         );
         assert!(
-            prompt.contains("- Finish the whole task; do the rest and state plainly what is missing if blocked."),
+            prompt.contains("- Finish the whole task; state plainly what is missing when blocked."),
             "{mode_name} prompt should require finishing the whole task"
         );
     }
@@ -335,12 +332,11 @@ fn test_prompts_encode_explicit_delegation_contract() {
         "Default prompt should restrict delegation to parallel, discardable-context, or tool-choice-conflict work"
     );
     assert!(
-        prompt.contains("and keep verification here. Trust task status."),
+        prompt.contains("keep verification here.\n"),
         "Default prompt should keep verification on the main thread"
     );
     assert!(
-        prompt
-            .contains("- Brief a subagent fully the first time, and use its findings rather than redoing the work.\n"),
+        prompt.contains("Brief a subagent fully and reuse its findings"),
         "Default prompt should tell the parent to reuse subagent findings"
     );
     // When to delegate has one home in Runtime Guidance; the Default line
@@ -394,7 +390,7 @@ async fn test_generated_prompts_keep_operating_profiles_bounded() {
 
         let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
-        assert!(result.contains("## Contract"), "{mode_name} prompt should reuse the canonical base prompt");
+        assert!(result.contains("## Rules"), "{mode_name} prompt should reuse the canonical base prompt");
         assert!(
             result.matches("## Operating Profile").count() == 1,
             "{mode_name} prompt should add only one operating profile"
@@ -410,10 +406,10 @@ fn test_search_guidance_prefers_structural_and_rg() {
         true,
     );
     assert!(
-        guidelines.contains("`exec_command.cmd` with `ls`, `rg`"),
+        guidelines.contains("Browse the repository with `exec_command.cmd`"),
         "Tool guidance should browse through shell commands"
     );
-    assert!(guidelines.contains("git diff -- <path>"), "Tool guidance should keep diff guidance explicit");
+    // `git diff -- <path>` is documented by the exec_command schema.
 }
 // ENHANCEMENT TESTS
 
@@ -468,7 +464,7 @@ async fn test_live_prompt_renders_workspace_language_hints() {
 
     assert!(result.contains("## Environment"));
     assert!(result.contains("Rust, TypeScript"));
-    assert!(result.contains("structural-search `lang`"));
+    assert!(result.contains("Narrow `code_search` with `file_types`"));
 }
 #[tokio::test]
 async fn test_live_prompt_omits_workspace_language_hints_without_languages() {

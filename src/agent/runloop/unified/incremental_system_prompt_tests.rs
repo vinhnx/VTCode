@@ -124,8 +124,14 @@ async fn interactive_planning_contract_survives_tool_density_replacements() {
                     ] {
                         assert!(!prompt.contains(duplicate), "repeated planning guidance: {duplicate}");
                     }
-                    assert!(prompt.contains("index 0 is invalid while planning"));
-                    assert!(prompt.contains("omit unused filters"));
+                    // The planning tracker index rule ("index 0 is invalid
+                    // while planning") is documented by the tool description
+                    // and parameter schema, which reach the model with the
+                    // tool definitions; the prompt must not restate it.
+                    assert!(!prompt.contains("index 0 is invalid while planning"));
+                    // The code_search filter shape is documented by the tool
+                    // schema, which reaches the model with the definitions.
+                    assert!(prompt.contains("literal and smart-case"));
                     assert_eq!(prompt.contains("- Planning is read-only."), budget == 1);
                 }
             }

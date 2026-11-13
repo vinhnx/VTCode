@@ -75,16 +75,12 @@ fn test_read_only_capability_detection() {
 fn test_tool_preference_guidance() {
     let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_CODE_SEARCH.to_string()];
     let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
-    assert!(guidelines.contains("Advanced `code_search` takes `query`"));
-    assert!(guidelines.contains("literal smart-case"));
-    assert!(guidelines.contains("exact syntactic usages"));
-    assert!(guidelines.contains("\"result_types\":[\"definition\"]"));
+    assert!(guidelines.contains("literal and smart-case"));
     assert!(guidelines.contains("Do not JSON-encode arrays or integers as strings"));
-    assert!(guidelines.contains("omit unused filters"));
-    assert!(guidelines.contains("path: \"\""));
-    assert!(guidelines.contains("git diff -- <path>"));
-    assert!(guidelines.contains("build tools"));
-    assert!(guidelines.contains("test tools"));
+    // The query/filter shape is documented by the code_search schema.
+    assert!(!guidelines.contains("Advanced `code_search` takes `query`"));
+    assert!(!guidelines.contains("omit unused filters"));
+    assert!(!guidelines.contains("path: \"\""));
     // Search steering: with both tools present the browse line must
     // prefer `code_search` over `rg` for code (session evidence showed
     // `rg`-via-exec crowding out `code_search` 654:15).
@@ -106,8 +102,11 @@ fn edit_guidance_keeps_patch_permissions_without_repeating_universal_inspection(
             false,
         );
         assert!(!guidance.contains("Inspect relevant source, edit a bounded region"));
-        assert!(guidance.contains("`apply_patch`"));
-        assert!(guidance.contains("patches small"));
+        // The apply_patch call shape and "keep patches small" rule are
+        // documented by the tool description.
+        assert!(!guidance.contains("`apply_patch`"));
+        assert!(!guidance.contains("patches small"));
+        assert!(guidance.contains("diff stays bounded"));
         assert!(guidance.contains("terminal permission stays authoritative"));
         assert!(guidance.contains("untrusted"));
         assert!(vtcode_commons::estimate_tokens(&guidance) < 180);
