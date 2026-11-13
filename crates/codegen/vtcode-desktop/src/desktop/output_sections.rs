@@ -73,6 +73,9 @@ const MAX_STRIP_PASSES: usize = 8;
 /// them.
 #[must_use]
 pub(super) fn human_output_text(raw: &str) -> String {
+    if last_marker_offset(raw).is_none() {
+        return raw.to_owned();
+    }
     let mut text = raw.to_string();
     for _ in 0..MAX_STRIP_PASSES {
         let sections = split_output_sections(&text);
@@ -198,6 +201,14 @@ mod tests {
         let sections = split("command output\nsecond line");
         assert_eq!(sections.leading, "command output\nsecond line");
         assert_eq!(sections.structured, None);
+    }
+
+    #[test]
+    fn human_output_preserves_plain_and_midline_marker_text() {
+        for text in ["", "plain 世界\nnext line\n", "prefix Structured output:\n{\"x\":1}"] {
+            assert_eq!(human_output_text(text), text);
+        }
+        assert_eq!(human_output_text("plain\nStructured output:\n{\"x\":1}"), "plain");
     }
 
     #[test]

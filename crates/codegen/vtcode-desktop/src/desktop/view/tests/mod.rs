@@ -761,6 +761,7 @@ mod model_palette;
 mod notifications;
 mod option_popups;
 mod options_misc;
+mod output_load;
 mod output_surfaces;
 mod overlay_toggles;
 mod palette_icons;

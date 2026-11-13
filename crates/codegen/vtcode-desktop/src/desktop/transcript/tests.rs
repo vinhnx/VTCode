@@ -399,7 +399,7 @@ fn revision_bumps_on_item_mutations_but_not_layout_only_changes() {
     transcript.push(item(1, "assistant", "first"));
     assert_eq!(transcript.revision(), 1);
 
-    // New rows via upsert bump (the push path bumps again; only the increase matters).
+    // New rows via upsert bump.
     let before = transcript.revision();
     transcript.upsert(item(2, "tool", "running"));
     transcript.upsert(item(3, "tool", "completed"));
@@ -413,12 +413,21 @@ fn revision_bumps_on_item_mutations_but_not_layout_only_changes() {
     transcript.set_output("2", Some("output".into()));
     assert_eq!(transcript.revision(), before + 1, "output changes must bump");
 
-    // No-op writes do not bump (upsert always bumps; setters check first).
+    // No-op writes do not invalidate revision-keyed projections.
     let before = transcript.revision();
+    transcript.upsert(item(1, "assistant", "first, edited"));
+    transcript.upsert(item(2, "tool", "running"));
     transcript.set_output("2", Some("output".into()));
     transcript.set_output("missing", Some("output".into()));
     transcript.remove("missing");
     assert_eq!(transcript.revision(), before, "no-op writes must not bump");
+
+    let mut changed_output = item(2, "tool", "running");
+    changed_output.output = Some("different output".into());
+    transcript.upsert(changed_output.clone());
+    assert_eq!(transcript.revision(), before + 1, "upserted output changes must bump");
+    transcript.upsert(changed_output);
+    assert_eq!(transcript.revision(), before + 1, "identical upserted output must not bump");
 
     // Expansion toggles mutate rows, so they bump when they hit.
     let before = transcript.revision();

@@ -510,9 +510,6 @@ impl Transcript {
     }
 
     pub fn upsert(&mut self, mut item: TranscriptItem) {
-        // Unconditional: every path below either mutates a row or pushes, and
-        // a spurious bump on a pure no-op only costs one projection recompute.
-        self.bump_revision();
         if let Some(index) = self.position_by_id(&item.id) {
             let Some(existing) = self.items.get(index) else {
                 return;
@@ -547,12 +544,17 @@ impl Transcript {
                 let Some(existing) = self.items.get_mut(index) else {
                     return;
                 };
-                if item.output.is_some() {
+                if item.output.is_some() && existing.output != item.output {
                     existing.output = item.output;
+                    self.bump_revision();
                 }
                 return;
             }
 
+            self.bump_revision();
+            let Some(existing) = self.items.get(index) else {
+                return;
+            };
             let group_head = group_status_changed.then(|| self.activity_group_start_for(index)).flatten();
             if text_changed || role_changed {
                 item.prepare_render_content();
