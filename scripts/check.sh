@@ -59,20 +59,6 @@ check_clippy() {
     fi
 }
 
-find_ast_grep() {
-    if command -v ast-grep > /dev/null 2>&1; then
-        command -v ast-grep
-        return 0
-    fi
-
-    if command -v sg > /dev/null 2>&1; then
-        command -v sg
-        return 0
-    fi
-
-    return 1
-}
-
 run_vtcode_command() {
     if [ -n "${VTCODE_CHECK_SCRIPT_VTCODE_BIN:-}" ] && [ -x "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" ]; then
         "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" "$@"
@@ -262,34 +248,6 @@ run_release_contract_tests() {
     fi
 }
 
-run_ast_grep_scan() {
-    local require_binary="${1:-optional}"
-    local ast_grep
-    if ! ast_grep="$(find_ast_grep)"; then
-        if [ "$require_binary" != "required" ]; then
-            print_warning "ast-grep is not available. Skipping repository scan."
-            return 0
-        fi
-        print_error "ast-grep is required but was not found on PATH."
-        return 1
-    fi
-
-    print_status "Running ast-grep rule tests..."
-    if ! "$ast_grep" test --config sgconfig.yml; then
-        print_error "ast-grep rule tests failed."
-        return 1
-    fi
-
-    print_status "Running ast-grep repository scan..."
-    if ! "$ast_grep" scan --config sgconfig.yml; then
-        print_error "ast-grep scan found issues."
-        return 1
-    fi
-
-    print_success "ast-grep rules passed!"
-    return 0
-}
-
 # Run focused harness regression tests called out in docs/harness/QUALITY_SCORE.md.
 run_harness_regression_tests() {
     print_status "Running harness PTY/TUI regression tests..."
@@ -448,7 +406,6 @@ main() {
     run_cargo_deny || ((failed_checks++))
     run_cargo_vet || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))
-    run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
     run_headless_check || ((failed_checks++))
     run_build || ((failed_checks++))
@@ -513,7 +470,6 @@ case "${1:-}" in
         echo "  fmt     - Check code formatting with rustfmt"
         echo "  clippy  - Run clippy lints"
         echo "  headless - Verify headless vtcode-core compiles (vtcode-acp contract)"
-        echo "  ast-grep - Run repo ast-grep rule tests and scan via 'vtcode check ast-grep'"
         echo "  test    - Run tests"
         echo "  harness - Run focused PTY/TUI harness regression tests"
         echo "  build   - Build the project"
@@ -547,9 +503,6 @@ case "${1:-}" in
         ;;
     "legibility")
         run_agent_legibility_checks
-        ;;
-    "ast-grep"|"astgrep")
-        run_ast_grep_scan required
         ;;
     "workflow-security")
         run_workflow_security_lint

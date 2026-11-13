@@ -28,6 +28,10 @@ pub(crate) fn apply_client_request_id(builder: RequestBuilder, client_request_id
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
+)]
 mod tests {
     use super::apply_turn_metadata;
     use serde_json::{Value, json};

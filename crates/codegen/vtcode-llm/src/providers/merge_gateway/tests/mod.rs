@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
+)]
 pub(super) use super::*;
 pub(super) use crate::provider::{LLMProvider, LLMRequest, Message, NormalizedStreamEvent, ToolCall, ToolChoice};
 pub(super) use futures::StreamExt;

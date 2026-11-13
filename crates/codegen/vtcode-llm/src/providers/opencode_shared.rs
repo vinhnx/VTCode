@@ -233,6 +233,10 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
+)]
 mod tests {
     use super::{OpenCodeCompatibleProvider, OpenCodeGoInnerSpec};
     use crate::provider::{LLMError, LLMProvider, LLMRequest, Message, ToolChoice};

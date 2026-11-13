@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
+)]
 use super::{
     PROVIDER_ERROR_BODY_MAX_BYTES, assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
     extract_reasoning_text_from_serialized_details, float_to_json_number, is_interleaved_thinking_model,

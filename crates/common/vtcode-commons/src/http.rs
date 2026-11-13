@@ -8,6 +8,15 @@
 //! `[timeouts] http_connect_seconds` / `http_request_seconds` /
 //! `http_download_seconds` (or the `VTCODE_HTTP_*_TIMEOUT_SECS` env vars), which
 //! reach this module via [`install_http_timeouts`].
+//!
+//! This module is the home of the timeout policy, so it is the one place that
+//! may build a bare `ClientBuilder`. Every other crate must go through the
+//! helpers below so the installed budgets apply.
+
+#![allow(
+    clippy::disallowed_methods,
+    reason = "This module implements the shared timeout policy; bare builders are the policy's own building blocks."
+)]
 
 use reqwest::{Client, ClientBuilder};
 use std::future::Future;

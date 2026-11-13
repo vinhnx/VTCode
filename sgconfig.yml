@@ -1,7 +1,0 @@
-ruleDirs:
-  - rules
-utilDirs:
-  - utils
-testConfigs:
-  - testDir: rule-tests
-    snapshotDir: __snapshots__

@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
+)]
 use super::*;
 use crate::filesystem::{FilesystemLimits, FilesystemWorkspace};
 use crate::runtime::{FileSnapshot, RuntimeStatus, WorkspaceFile};

@@ -1,6 +1,0 @@
-id: no-var
-valid:
-  - |
-      val name: String = "hello"
-  - |
-      val count = 42

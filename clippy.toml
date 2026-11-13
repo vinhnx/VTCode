@@ -23,6 +23,15 @@ disallowed-methods = [
     { path = "std::fs::canonicalize", reason = "returns \\\\?\\ verbatim paths on Windows; use vtcode_commons::canonicalize (dunce-backed)" },
     { path = "std::path::Path::canonicalize", reason = "returns \\\\?\\ verbatim paths on Windows; use vtcode_commons::canonicalize (dunce-backed)" },
     { path = "tokio::fs::canonicalize", reason = "returns \\\\?\\ verbatim paths on Windows; use vtcode_commons::fs::canonicalize_with_context_async (spawn_blocking + dunce)" },
+    # `Client::new()` installs no timeout: a stalled server hangs the caller
+    # forever. Use `vtcode_commons::http` (`create_default_client`,
+    # `create_client_with_timeout(s)`, `create_default_client_without_redirects`,
+    # `create_download_client`), which apply the installed `[timeouts]` budgets.
+    # Explicit `Client::builder()` chains must set `.timeout(...)` and
+    # `.connect_timeout(...)`; keep them only where the shared helpers
+    # genuinely do not fit.
+    { path = "reqwest::Client::new", reason = "installs no timeout; use vtcode_commons::http so the installed [timeouts] budget applies" },
+    { path = "reqwest::ClientBuilder::new", reason = "installs no timeout; use vtcode_commons::http so the installed [timeouts] budget applies" },
 ]
 
 # Allow absolute paths from specific crates (for project structure)

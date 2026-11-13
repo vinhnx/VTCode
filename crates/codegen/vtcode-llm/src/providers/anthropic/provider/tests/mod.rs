@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
+)]
 pub(super) use super::{AnthropicProvider, capabilities, code_execution_beta_name, headers};
 pub(super) use crate::provider::{
     ContentPart, LLMProvider, LLMRequest, LLMStreamEvent, Message, MessageContent, ToolDefinition,

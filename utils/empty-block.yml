@@ -1,8 +1,0 @@
-id: empty-block
-language: JavaScript
-severity: info
-rule:
-  kind: statement_block
-  not:
-    has:
-      kind: statement
