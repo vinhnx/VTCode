@@ -37,6 +37,30 @@ fn with_current_notes(mut payload: serde_json::Value, highlights: &[&str], url: 
     payload
 }
 
+/// Deliver a launch-path status response through the drain loop (the only
+/// path with a window, so the only one that can auto-open the dialog).
+fn drain_status(
+    window: AnyWindowHandle,
+    view: &Entity<DesktopView>,
+    payload: serde_json::Value,
+    cx: &mut TestAppContext,
+) {
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.event_tx
+                .send(BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::UPDATE_STATUS.into(),
+                    result: Some(payload),
+                    error: None,
+                })
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn about_release_notes_row_opens_viewer_with_highlights(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -441,6 +465,110 @@ fn release_notes_banner_view_opens_current_changelog(cx: &mut TestAppContext) {
         assert!(!view.read(cx).release_notes_banner_visible(), "viewing retires the banner");
         assert!(window.try_find("changelog-subtitle").is_none(), "current mode, not the upgrade view");
         assert!(window.try_find("open-release-notes").is_some(), "current notes link out");
+    })
+    .unwrap();
+}
+
+/// First launch of an updated version announces itself: the launch-time
+/// status carries unseen notes, so the what's-new dialog opens on its own
+/// instead of waiting for the banner's View click.
+#[gpui_kit::test]
+fn launch_status_with_unseen_notes_auto_opens_current_changelog(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    drain_status(window, &view, post_update_payload(), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).changelog_open, "first sight opens the dialog");
+        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Current, "what's new shows current");
+        assert!(window.try_find("changelog-dialog").is_some());
+        assert!(window.try_find("changelog-highlights").is_some(), "highlights render");
+        assert!(!view.read(cx).release_notes_banner_visible(), "auto-open retires the banner");
+        assert!(window.try_find("release-notes-banner").is_none());
+    })
+    .unwrap();
+    let BackendCommand::Request { method, .. } = requests.try_recv().expect("auto-open acknowledges") else {
+        panic!("auto-open must send update/acknowledge");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::UPDATE_ACKNOWLEDGE);
+}
+
+/// Seen notes, notes-less launches, and failed responses all stay quiet: the
+/// dialog opens only for genuinely unseen notes on a successful status.
+#[gpui_kit::test]
+fn launch_status_without_unseen_notes_never_auto_opens(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // The CLI already announced this release: the shared marker is set.
+    let mut seen = post_update_payload();
+    let _ = seen.as_object_mut().unwrap().insert("currentReleaseSeen".into(), json!(true));
+    drain_status(window, &view, seen, cx);
+    cx.update(|cx| assert!(!view.read(cx).changelog_open, "seen notes stay quiet"));
+    // Fresh-install shape: up to date with no notes cached at all.
+    drain_status(window, &view, status_payload("0.182.0", None, false, &[], None), cx);
+    cx.update(|cx| assert!(!view.read(cx).changelog_open, "notes-less launches stay quiet"));
+    // A failing service must not pop the dialog either.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.event_tx
+                .send(BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::UPDATE_STATUS.into(),
+                    result: None,
+                    error: Some("status unavailable".into()),
+                })
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(!view.read(cx).changelog_open, "failed responses stay quiet");
+    })
+    .unwrap();
+}
+
+/// One announcement per launch: after the dialog closes, a refresh still
+/// echoing unseen (a failed acknowledgement) re-arms nothing.
+#[gpui_kit::test]
+fn release_notes_auto_open_fires_once_per_launch(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    drain_status(window, &view, post_update_payload(), cx);
+    cx.update(|cx| assert!(view.read(cx).changelog_open, "first sight opens"));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close_changelog(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    drain_status(window, &view, post_update_payload(), cx);
+    cx.update(|cx| {
+        assert!(!view.read(cx).changelog_open, "a closed announcement never re-opens");
+        assert!(!view.read(cx).release_notes_banner_visible(), "and the banner stays retired");
+    });
+}
+
+/// An already-open viewer keeps its mode: notes arriving mid-read leave the
+/// upgrade view alone and the banner stays as the fallback.
+#[gpui_kit::test]
+fn release_notes_auto_open_yields_to_an_open_viewer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, status_payload("0.182.0", Some("0.183.0"), true, &["Something newer"], None), cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_changelog(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).changelog_open);
+    })
+    .unwrap();
+    let payload = with_current_notes(
+        status_payload("0.182.0", Some("0.183.0"), true, &["Something newer"], None),
+        &["Freshly installed"],
+        None,
+    );
+    drain_status(window, &view, payload, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Latest, "the open view keeps its mode");
+        assert!(window.try_find("changelog-subtitle").is_some(), "the upgrade view stays intact");
+        assert!(view.read(cx).release_notes_banner_visible(), "the banner stays as the fallback");
     })
     .unwrap();
 }

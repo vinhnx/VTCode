@@ -61,14 +61,42 @@ fn background_button_sends_session_exec_background(cx: &mut TestAppContext) {
     cx.update(|cx| assert_eq!(view.read(cx).error, None));
 }
 
+/// The kill stays hidden while the turn runs normally, appears once a stop
+/// is outstanding and the turn still runs (the stuck-process moment), and
+/// retires with the run.
+#[gpui_kit::test]
+fn force_cancel_hides_until_stop_is_outstanding(cx: &mut TestAppContext) {
+    let (window, view, _) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("cancel-turn").is_some(), "stop owns the cluster while running");
+        assert!(window.try_find("force-cancel-exec").is_none(), "kill hides until a stop is outstanding");
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        window.render_frame(cx);
+        assert!(window.try_find("force-cancel-exec").is_some(), "an outstanding stop reveals the kill");
+        view.update(cx, |view, _| view.running = false);
+        window.render_frame(cx);
+        assert!(window.try_find("force-cancel-exec").is_none(), "idle retires the kill");
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn force_cancel_button_sends_session_exec_force_cancel(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        window.click("cancel-turn", cx);
+        window.render_frame(cx);
         window.click("force-cancel-exec", cx);
     })
     .unwrap();
+    // Stop sends the cancel pair first: the turn cancel plus its exec kill.
+    let (method, _) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    let (exec_method, _) = take_request(&mut requests);
+    assert_eq!(exec_method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
+    // The revealed kill then sends on its own, without another turn cancel.
     let (method, params) = take_request(&mut requests);
     assert_eq!(method, vtcode_desktop_protocol::method::EXEC_FORCE_CANCEL);
     assert_eq!(params["sessionId"], "thread-a");
@@ -144,7 +172,10 @@ fn run_cluster_matches_idle_send_size_and_swaps_exclusively(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("send-prompt").is_none(), "send hides while a turn runs");
+        assert!(window.try_find("force-cancel-exec").is_none(), "kill hides until a stop is outstanding");
         let stop = window.find("cancel-turn").bounds();
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        window.render_frame(cx);
         let bounds = window.find("force-cancel-exec").bounds();
         // 1px tolerates subpixel rounding; a size-class drift (medium vs
         // large) differs by an order of magnitude more, so it still fails.

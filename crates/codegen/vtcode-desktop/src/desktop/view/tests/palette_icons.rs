@@ -47,3 +47,21 @@ fn command_palette_rows_render_icon_slots_and_other_palettes_do_not(cx: &mut Tes
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn clicking_outside_dismisses_the_command_palette(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_some(), "palette renders open");
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_none(), "clicking away closes the palette");
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert!(view.read(cx).palette.is_none(), "palette state must be closed");
+    });
+}

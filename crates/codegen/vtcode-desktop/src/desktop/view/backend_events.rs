@@ -99,7 +99,19 @@ impl DesktopView {
         self.notify_agent_activity(&event, window, cx);
         self.notify_turn_undo(&event, window, cx);
         self.maybe_notify_update_available(&event, window, cx);
+        // First sight of unseen release notes auto-opens the what's-new
+        // dialog. Captured before the handler applies the snapshot; only a
+        // successful launch-path status refresh can trigger it, never a
+        // manual check or a failed response.
+        let update_status_refresh = matches!(
+            &event,
+            BackendEvent::Response { method, result: Some(_), error: None }
+                if method == protocol::method::UPDATE_STATUS
+        );
         self.handle_backend_event(event, cx);
+        if update_status_refresh {
+            self.maybe_autoshow_release_notes(window, cx);
+        }
         if let Some(text) = self.pending_composer_restore.take() {
             self.replace_composer_text(text, window, cx);
             self.reset_history_recall();

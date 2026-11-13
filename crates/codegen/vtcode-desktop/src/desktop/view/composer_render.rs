@@ -299,9 +299,14 @@ impl DesktopView {
                         |el, delta| el.opacity(delta),
                     ))
                 });
-        // Running pair: the frequent stop takes the primary fill (no red
-        // anywhere in the cluster) and force-cancel steps down to a
-        // neutral ghost, so one focal action owns the emphasis. The
+        // Running cluster: the frequent stop takes the primary fill (no red
+        // anywhere in the cluster) and owns the emphasis alone while the
+        // turn runs normally. Force-cancel steps down to a neutral ghost
+        // that appears only once a stop is outstanding and the turn still
+        // runs — the stuck-process moment, when hammering the exec kill
+        // without re-sending the turn cancel is actually useful. Every
+        // delivered stop already kills foreground exec sessions, so a
+        // visible-by-default kill would duplicate Stop on every run. The
         // background action stays reachable from the running-session
         // surfaces (sidebar/tab strip) rather than the composer, which
         // keeps the run cluster to its moment-relevant choices. Glyphs
@@ -314,15 +319,17 @@ impl DesktopView {
         // wrapper overwrites any size set on the inner `Icon`.
         if self.running {
             model_actions = model_actions
-                .child(
-                    desktop_button("force-cancel-exec")
-                        .ghost()
-                        .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
-                        .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
-                        .icon(IconName::X)
-                        .desktop_elevated()
-                        .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
-                )
+                .when(self.cancel_requested, |actions| {
+                    actions.child(
+                        desktop_button("force-cancel-exec")
+                            .ghost()
+                            .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
+                            .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
+                            .icon(IconName::X)
+                            .desktop_elevated()
+                            .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
+                    )
+                })
                 .child(
                     desktop_glass_primary_button("cancel-turn", &colors, false)
                         .tooltip_with_action(

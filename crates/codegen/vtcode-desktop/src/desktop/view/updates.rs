@@ -159,6 +159,20 @@ impl DesktopView {
         self.dismiss_release_notes_banner(cx);
     }
 
+    /// Auto-open the running version's notes on first sight. The launch-time
+    /// `update/status` response carries unseen highlights exactly once per
+    /// updated version, and the dialog is the release announcement. Viewing
+    /// retires the banner through the shared acknowledge path, so a later
+    /// refresh — or a failed acknowledgement still echoing unseen — never
+    /// re-opens it. An already-open viewer keeps its mode: the banner stays
+    /// as the fallback instead of yanking what the user is reading.
+    pub(super) fn maybe_autoshow_release_notes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.changelog_open || !self.release_notes_banner_visible_now {
+            return;
+        }
+        self.view_release_notes_from_banner(window, cx);
+    }
+
     /// Announce a newly reported release exactly once per version. Runs ahead
     /// of [`DesktopView::handle_backend_event`] so the system banner has a
     /// window, mirroring [`DesktopView::notify_agent_activity`].
