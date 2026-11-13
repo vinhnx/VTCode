@@ -179,6 +179,49 @@ mod tests {
         }
     }
 
+    /// A default Build session has no matrix access, so the runtime strips
+    /// the `matrix` tool from every catalog projection
+    /// (`catalog_facade::schema_entries`). The harness-tax envelope a model
+    /// receives must therefore be measured through that gate: `matrix` alone
+    /// costs ~911 schema tokens, which is most of the budget.
+    #[tokio::test]
+    async fn shipped_schema_envelope_excludes_tools_the_session_cannot_use() {
+        use crate::config::ToolDocumentationMode;
+        use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+
+        let temp = tempfile::tempdir().unwrap();
+        let registry = crate::tools::registry::ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            crate::config::types::CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Progressive,
+            ToolModelCapabilities::default(),
+        );
+
+        let entries = registry.schema_entries(config).await;
+        assert!(
+            entries.iter().all(|entry| entry.name != "matrix"),
+            "a session without matrix access must not receive the matrix schema"
+        );
+
+        let total_tokens: usize = entries
+            .iter()
+            .map(|entry| {
+                let payload = serde_json::json!({
+                    "name": entry.name,
+                    "description": entry.description,
+                    "parameters": entry.parameters,
+                });
+                payload.to_string().len() / 4
+            })
+            .sum();
+        assert!(
+            total_tokens <= 2_500,
+            "the shipped Progressive schema envelope is {total_tokens} tokens; expected <= 2_500. \
+             This is the harness-tax budget, measured through the runtime's access gate."
+        );
+    }
+
     #[tokio::test]
     async fn planning_pack_task_tracker_registration_matches_planning_metadata() {
         let temp = tempfile::tempdir().unwrap();

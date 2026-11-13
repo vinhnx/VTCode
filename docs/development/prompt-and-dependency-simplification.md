@@ -358,3 +358,20 @@ test enforces. Raising those caps is a policy call, not a cleanup.
 The one safe drift fix shipped: the live `code_search` description omitted
 the `|`-alternation the runtime (`split_alternation`), the legacy mirror,
 and the system prompt all support. The shipped description now names it.
+
+### The cap overruns were a measurement bug, not a budget problem
+
+Repointing the caps at the shipped catalog reported 19 exposed tools against a
+cap of 15 and 3381 schema tokens against a cap of 2500. The catalog was not
+bloated: the measurement skipped the runtime's access gate.
+
+`catalog_facade` strips `matrix` from every projection unless
+`has_matrix_access()` — that is, unless the session is a matrix coordinator or
+worker. A default Build session therefore never receives the 911-token
+`matrix` schema. Measured through the gate, the shipped envelope is **2470
+tokens over 5 entries**, identical to the mirror and inside the existing cap.
+
+`pack::tests::shipped_schema_envelope_excludes_tools_the_session_cannot_use`
+now pins that: it builds a real `ToolRegistry`, asserts `matrix` is absent, and
+checks the token envelope. Verified it fails at 2470 when the cap is tightened
+to 100.
