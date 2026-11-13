@@ -86,9 +86,8 @@ pub static BUILTIN_PACKS: [BuiltinPackFactory] = [..];
 
 /// Iterate all builtin packs and invoke their `register` methods.
 ///
-/// This is the new entry point for builtin tool registration, replacing
-/// the old `builtin_tool_registrations()` loop over individual factories.
-/// Packs use a deterministic model-facing priority for the core execution
+/// This is the only builtin registration path. Packs use a deterministic
+/// model-facing priority for the core execution
 /// surface, then fall back to `pack_id` so catalog projections share one
 /// stable order.
 pub async fn register_builtin_packs(

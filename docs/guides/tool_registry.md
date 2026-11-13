@@ -21,8 +21,9 @@ a native CGP wrapper. Reserve `Arc<dyn Tool>` registrations for tools that alrea
 runtime.
 
 `ToolRegistry::register_tool` accepts a `ToolRegistration` and updates the internal index as well as the policy manager.
-Built-in registrations live in `ToolRegistry::builtin_tool_registrations`, so the registry can initialise its state from
-a single source of truth.
+Built-in registrations live in the packs under `tools/registry/pack_impls.rs`, collected by `register_builtin_packs`, so
+the registry initialises its state from a single source of truth. There is no separate builtin registration list to keep
+in sync: adding a tool means adding one pack registration.
 
 The canonical default public surface is `exec_command`, `write_stdin`, and `apply_patch`. Advanced VT Code profiles may
 also expose `code_search` for one literal query with optional path, file-type, result-type, and result-limit filters. It
@@ -71,8 +72,9 @@ First decide whether this should be a built-in VT Code tool at all.
    .with_llm_visibility(true);
    ```
 
-3. Register the tool. For built-in tooling update `ToolRegistry::builtin_tool_registrations`. For runtime additions
-   invoke `ToolRegistry::register_tool` from your initialisation code.
+3. Register the tool. For built-in tooling add the registration to the matching pack in
+   `tools/registry/pack_impls.rs`, which `register_builtin_packs` collects at startup. For runtime additions invoke
+   `ToolRegistry::register_tool` from your initialisation code.
 4. Verify the tool appears through the session catalog projections (`model_tools`, `schema_entries`, `acp_tools`, or
    `public_tool_names`) rather than adding a second declaration path or sidecar router mapping.
 5. Add tests that cover both registration (`available_tools`/`has_tool`) and execution via `ToolRegistry::execute_tool`.
