@@ -152,6 +152,33 @@ mod tests {
         assert!(inventory.has_tool(tools::RECORD_DECISION), "RECORD_DECISION should be registered");
     }
 
+    /// The test-only `builtin_tool_registrations` mirror must stay a subset
+    /// of the shipped catalog. The mirror exists so per-tool metadata can be
+    /// asserted without booting the inventory; if it drifts from the shipped
+    /// set, a tool it drops silently leaves every per-tool assertion, and a
+    /// tool it alone declares is never asserted against shipped code.
+    #[tokio::test]
+    async fn shipped_catalog_contains_every_mirrored_builtin_registration() {
+        let temp = tempfile::tempdir().unwrap();
+        let inventory = ToolInventory::new(
+            temp.path().to_path_buf(),
+            Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new()),
+        );
+        let plan_state = PlanningWorkflowState::new(temp.path().to_path_buf());
+
+        register_builtin_packs(&inventory, &plan_state, &ToolConfigSnapshot::default()).await;
+
+        let live = inventory.registrations_snapshot();
+        let live_names: Vec<&str> = live.iter().map(ToolRegistration::name).collect();
+        for registration in super::super::builtins::builtin_tool_registrations(Some(&plan_state)) {
+            assert!(
+                live_names.contains(&registration.name()),
+                "the shipped catalog is missing {}; the test-only mirror still declares it",
+                registration.name()
+            );
+        }
+    }
+
     #[tokio::test]
     async fn planning_pack_task_tracker_registration_matches_planning_metadata() {
         let temp = tempfile::tempdir().unwrap();
