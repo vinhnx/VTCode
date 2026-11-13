@@ -873,6 +873,7 @@ plans/
 .vtcode/logs/
 .vtcode/history/
 .vtcode/reports/
+.vtcode/README.md
 .node-version
 .worktrees/
 
