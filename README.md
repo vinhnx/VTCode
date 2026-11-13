@@ -38,16 +38,13 @@
 
 VT Code is a terminal-first coding agent for your repo, in the CLI and native macOS app.
 Context, tool calls, and execution policy stay auditable and resumable across long tasks.
-
-VT Code is open source under **MIT OR Apache-2.0**. You are welcome to fork it, use it, copy it, modify it,
-and build on it, and contribute improvements back upstream. See [Contributing](#contributing) and
-[License](#license).
+It is open source under **MIT OR Apache-2.0**; see [Contributing](#contributing) and [License](#license).
 
 | At a glance    | What you get                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Planning**   | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md); [HOVER](./docs/development/hypothesis-revision-validation.md) revises on mismatch.                                                                                                                                            |
 | **Safety**     | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                                                                                                                                                                                                                                               |
-| **Long runs**  | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md#snapshots--revert) roll back state; [subagents](./docs/user-guide/subagents.md) for parallel work.                                                                                                                     |
+| **Long runs**  | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction; [snapshots](./docs/user-guide/commands.md) roll back state; [subagents](./docs/user-guide/subagents.md) for parallel work.                                                                                                                                       |
 | **Extensions** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges; [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), [Companion](./docs/user-guide/vtcode-companion.md). |
 | **Models**     | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task; [evals](./docs/guides/eval.md) measure behavior before release.                                                                                                                                                                                                   |
 
@@ -65,10 +62,11 @@ its own search engine; see the [installation guide](./docs/installation/README.m
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
 ```
 
-Or install with Homebrew or Cargo (desktop cask: [Desktop app](#desktop-app)):
+Or install with Homebrew or Cargo (desktop cask: see [Desktop app](#desktop-app)):
 
 ```bash
-brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
+brew trust vinhnx/tap
+brew install vinhnx/tap/vtcode
 
 # Or install from crates.io (published; see the installation guide)
 cargo install vtcode
@@ -97,8 +95,8 @@ Replace `openai` with your provider. Keys use secure storage (OS keyring or encr
 variables, a workspace `.env` file, or `vtcode login` work where supported. See
 [getting started](./docs/user-guide/getting-started.md) and the [provider guides](./docs/providers/PROVIDER_GUIDES.md).
 
-> **Note:** ChatGPT users can also run `vtcode login openai` for in-process OAuth (or reuse the Codex CLI
-> login with `vtcode login openai --from-codex`); GitHub Copilot uses the official `copilot` CLI. See
+> **Note:** ChatGPT users can also run `vtcode login openai` for in-process OAuth, or reuse the Codex CLI
+> login with `vtcode login openai --from-codex`; GitHub Copilot uses the official `copilot` CLI. See
 > [OAuth authentication](./docs/guides/oauth-authentication.md).
 >
 > **Caution:** Keep API keys out of Git and `vtcode.toml`; never commit a workspace `.env` file.
@@ -135,9 +133,9 @@ summary without another model call. See the [interactive guide](./docs/user-guid
 
 - **`ask`** is tool-free: it prints one reply and exits.
 - **`exec`** runs the full tool loop and needs explicit workspace trust (approve the TTY prompt or set
-  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs). `[automation.full_auto]` allow-lists, denies, and
-  execution policy still apply.
-- **`review`** inspects uncommitted changes.
+  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs; `deny` refuses trust instead of prompting).
+  `[automation.full_auto]` allow-lists, denies, and execution policy still apply.
+- **`review`** inspects uncommitted changes without running the agent loop.
 
 Scheduled work reuses the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
 and resume headless runs with `vtcode exec resume --last "<prompt>"`. See [exec mode](./docs/user-guide/exec-mode.md)
@@ -203,19 +201,20 @@ Curated entry points by task:
 
 ## Development
 
-Non-exhaustive sketch (the [architecture guide](./docs/ARCHITECTURE.md) covers the full workspace crate list):
+Non-exhaustive sketch of the 25-crate workspace (the [architecture guide](./docs/ARCHITECTURE.md) covers the
+full crate list; `default-members` build only the root binary, `vtcode-core`, and `vtcode-ui`):
 
 ```mermaid
 graph LR
     BIN[vtcode binary] --> CORE[vtcode-core harness]
     CORE --> LLM[vtcode-llm]
     CORE --> SAFETY[vtcode-safety]
-    CORE --> EVENTS[vtcode-exec-events]
+    CORE --> EVENTS[vtcode-exec-events (crates/common)]
     CORE --> MEMORY[vtcode-memory]
     CORE --> UI[vtcode-ui]
 ```
 
-Build with Rust 1.99.1+ (edition 2024).
+Build with Rust 1.99.1+ (edition 2024; workspace version 0.182.0).
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git
