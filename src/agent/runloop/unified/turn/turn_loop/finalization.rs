@@ -13,8 +13,8 @@ use vtcode_core::llm::provider as uni;
 use super::notifications::emit_turn_outcome_notification;
 use super::post_tool_recovery::{PlanRecoveryEventContext, normalize_tool_free_recovery_break_outcome_with_events};
 use super::responses::{
-    COMPLETED_TURN_NO_RESPONSE_REASON, PLAN_RECOVERY_EXHAUSTED_REASON, RECOVERY_TOOL_CALL_RETRY_DIRECTIVE,
-    completed_recovery_fallback_reason, completed_turn_requires_final_response,
+    COMPLETED_TURN_NO_RESPONSE_REASON, PLAN_RECOVERY_EXHAUSTED_REASON, completed_recovery_fallback_reason,
+    completed_turn_requires_final_response, recovery_retry_directive,
 };
 use super::usage_accounting::has_turn_usage;
 use super::{
@@ -292,10 +292,11 @@ pub(super) async fn normalize_recovery_break(
             reason: Some(ref reason)
         } if reason == RECOVERY_CONTRACT_VIOLATION_REASON
     );
+    let recovery_retry_count = ctx.harness_state.recovery_retry_count();
     if tool_free_recovery
         && !ctx.is_planning_active()
         && contract_violation
-        && ctx.harness_state.recovery_retry_count() < MAX_RECOVERY_RETRIES
+        && recovery_retry_count < MAX_RECOVERY_RETRIES
         && ctx.harness_state.retry_recovery_pass()
     {
         tracing::warn!(
@@ -303,9 +304,11 @@ pub(super) async fn normalize_recovery_break(
             max = MAX_RECOVERY_RETRIES,
             "Recovery contract violation; retrying tool-free synthesis pass"
         );
-        // The guard above requires `!is_planning_active()`, so the base
-        // directive always applies here (no plan-mode variant).
-        working_history.push(uni::Message::system(RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string()));
+        // The guard above requires `!is_planning_active()`, so the
+        // non-plan-mode directives always apply here. `recovery_retry_count`
+        // was captured before `retry_recovery_pass` incremented it, so the
+        // first retry reads 0 and carries the base directive.
+        working_history.push(uni::Message::system(recovery_retry_directive(recovery_retry_count).to_string()));
         return ControlFlow::Continue(());
     }
     // Wall-clock-exhausted planning turns must finalize instead of

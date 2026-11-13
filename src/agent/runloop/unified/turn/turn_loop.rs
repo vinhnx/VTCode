@@ -84,8 +84,8 @@ pub(crate) use responses::{
     format_blocked_turn_final_response,
 };
 use responses::{
-    RECOVERY_TOOL_CALL_RETRY_DIRECTIVE, completed_turn_requires_final_response, ensure_blocked_turn_response,
-    ensure_completed_turn_response, is_primary_agent_handoff,
+    completed_turn_requires_final_response, ensure_blocked_turn_response, ensure_completed_turn_response,
+    is_primary_agent_handoff, recovery_retry_directive,
 };
 #[path = "turn_loop/settings.rs"]
 mod settings;
@@ -656,17 +656,20 @@ pub(crate) async fn run_turn_loop(
         // When in tool-free recovery and the model returns no text (e.g. producing
         // tool calls that get discarded), retry with a more explicit directive
         // rather than immediately falling back to the deterministic final answer.
+        let recovery_retry_count = turn_processing_ctx.recovery_retry_count();
         if tool_free_recovery
             && !turn_processing_ctx.is_planning_active()
             && matches!(processing_result, TurnProcessingResult::Empty { .. })
             && response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
-            && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
+            && recovery_retry_count < MAX_RECOVERY_RETRIES
         {
-            // The guard above requires `!is_planning_active()`, so the base
-            // directive always applies here (no plan-mode variant).
+            // The guard above requires `!is_planning_active()`, so the
+            // non-plan-mode directives always apply here. `recovery_retry_count`
+            // was captured before `retry_recovery_pass` increments it below, so
+            // the first retry reads 0 and carries the base directive.
             turn_processing_ctx
                 .working_history
-                .push(uni::Message::system(RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string()));
+                .push(uni::Message::system(recovery_retry_directive(recovery_retry_count).to_string()));
             turn_processing_ctx.retry_recovery_pass();
             continue;
         }

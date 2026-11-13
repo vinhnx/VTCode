@@ -595,6 +595,29 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
         "recovery must retry exactly MAX_RECOVERY_RETRIES times before falling back"
     );
 
+    // Each retry carries a corrective directive, and the request varies once
+    // the same violation has repeated: the first retry names one prior
+    // failure, later retries escalate to the repeated-failure directive
+    // instead of resending an identical request (planning-recovery parity).
+    let base_pushes = history
+        .iter()
+        .filter(|m| m.role == uni::MessageRole::System && m.content.as_text() == RECOVERY_TOOL_CALL_RETRY_DIRECTIVE)
+        .count();
+    let repeat_pushes = history
+        .iter()
+        .filter(|m| m.role == uni::MessageRole::System && m.content.as_text() == RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE)
+        .count();
+    assert_eq!(base_pushes, 1, "first retry must carry the base corrective directive exactly once");
+    assert_eq!(
+        repeat_pushes,
+        MAX_RECOVERY_RETRIES as usize - 1,
+        "every retry after the first must carry the escalated repeat directive"
+    );
+    assert_ne!(
+        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE, RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE,
+        "escalated retries must change the request, not resend it"
+    );
+
     // The turn must conclude with the salvaged prose, not the canned string.
     let final_text = history
         .iter()
@@ -607,6 +630,109 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
         !final_text.contains(RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER),
         "must not emit canned fallback when salvage is available"
     );
+    assert!(backing.recovery_is_tool_free());
+}
+
+/// Retry-directive escalation: the first retry carries the base directive
+/// naming one prior violation; every later retry carries the escalated
+/// repeat directive so the request carries new information instead of
+/// resending an identical synthesis.
+#[test]
+fn recovery_retry_directive_escalates_only_after_repeated_identical_failure() {
+    assert_eq!(recovery_retry_directive(0), RECOVERY_TOOL_CALL_RETRY_DIRECTIVE);
+    assert_eq!(recovery_retry_directive(1), RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE);
+    assert_eq!(recovery_retry_directive(MAX_RECOVERY_RETRIES), RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE);
+}
+
+/// End-to-end regression for the Empty+native-tool-calls retry arm: a
+/// tool-free recovery response carrying native tool calls and no text
+/// classifies as Empty (calls discarded), and the turn must retry with
+/// corrective directives that escalate after the first repeat instead of
+/// resending an identical request. After retries are exhausted, the turn
+/// concludes with the deterministic fallback answer.
+#[tokio::test]
+async fn tool_free_recovery_retries_on_native_tool_calls_then_falls_back() {
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct NativeToolCallsProvider {
+        requests: Arc<Mutex<usize>>,
+    }
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for NativeToolCallsProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+        async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+            *self.requests.lock().expect("requests lock") += 1;
+            Ok(uni::LLMResponse {
+                content: None,
+                model: request.model.clone(),
+                tool_calls: Some(vec![uni::ToolCall::function(
+                    "call_recovery_1".to_string(),
+                    "read_file".to_string(),
+                    "{}".to_string(),
+                )]),
+                usage: None,
+                finish_reason: uni::FinishReason::ToolCalls,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: Vec::new(),
+                compaction: None,
+            })
+        }
+        fn supported_models(&self) -> Vec<String> {
+            vec!["noop-model".to_string()]
+        }
+        fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
+    }
+
+    let mut backing = TestTurnProcessingBacking::new().await;
+    backing.activate_tool_free_recovery_for_test("post-tool follow-up failure");
+    let requests = Arc::new(Mutex::new(0usize));
+    backing.set_provider(Box::new(NativeToolCallsProvider { requests: requests.clone() }));
+
+    let mut history = vec![uni::Message::user("summarize the tool outputs".to_string())];
+    let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
+        .await
+        .expect("turn loop should conclude after recovery retries");
+
+    // Exactly MAX_RECOVERY_RETRIES retries: 1 initial recovery pass + 3 retries.
+    assert_eq!(
+        *requests.lock().expect("requests lock"),
+        MAX_RECOVERY_RETRIES as usize + 1,
+        "recovery must retry exactly MAX_RECOVERY_RETRIES times before falling back"
+    );
+
+    // First retry carries the base directive once; every later retry carries
+    // the escalated repeat directive (planning-recovery parity, same contract
+    // as the textual contract-violation arm above).
+    let base_pushes = history
+        .iter()
+        .filter(|m| m.role == uni::MessageRole::System && m.content.as_text() == RECOVERY_TOOL_CALL_RETRY_DIRECTIVE)
+        .count();
+    let repeat_pushes = history
+        .iter()
+        .filter(|m| m.role == uni::MessageRole::System && m.content.as_text() == RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE)
+        .count();
+    assert_eq!(base_pushes, 1, "first retry must carry the base corrective directive exactly once");
+    assert_eq!(
+        repeat_pushes,
+        MAX_RECOVERY_RETRIES as usize - 1,
+        "every retry after the first must carry the escalated repeat directive"
+    );
+
+    // Exhausted retries conclude with the deterministic fallback, never silence.
+    assert!(matches!(outcome.result, TurnLoopResult::Blocked { .. }));
+    assert!(outcome.final_response_was_fallback);
     assert!(backing.recovery_is_tool_free());
 }
 

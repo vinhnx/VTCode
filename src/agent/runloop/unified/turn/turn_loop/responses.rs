@@ -166,6 +166,29 @@ pub(super) const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "Recovery: tools are
      attempt included tool-call or function-call markup; summarize the findings from \
      the tool outputs already in history as a final answer, without any <tool_call>, \
      <function=...>, or other tool-call syntax.";
+/// Escalated retry directive for a repeated tool-free recovery contract
+/// violation: the base [`RECOVERY_TOOL_CALL_RETRY_DIRECTIVE`] already named the
+/// failure and the model returned markup again, so resending an identical
+/// request is unlikely to help. Mirrors the planning-recovery correction: the
+/// retry names the repeated failure and states the different behavior required
+/// instead of resending the same synthesis.
+pub(super) const RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE: &str = "Recovery retry: consecutive recovery passes each returned tool-call or \
+     function-call markup, so repeating the same response is unlikely to help. Tools remain disabled on this pass, and any \
+     <tool_call>, <function=...>, <invoke>, or similar markup is discarded. Begin the response with the final plain-text \
+     answer immediately: summarize the completed work and results from the tool outputs already in history, and state any \
+     incomplete work explicitly.";
+/// Directive for a tool-free recovery retry: escalates once the same contract
+/// violation has already repeated, so the request carries new information
+/// instead of resending an identical directive. `retry_count` is the count of
+/// already-consumed retries (0 = first retry).
+#[must_use]
+pub(super) fn recovery_retry_directive(retry_count: u8) -> &'static str {
+    if retry_count == 0 {
+        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
+    } else {
+        RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE
+    }
+}
 /// Plan-mode variant of [`POST_TOOL_RECOVERY_REASON`]. In plan mode the agent
 /// must emit the `<proposed_plan>` from the research already gathered, not start
 /// more research — so the recovery reason names the plan format explicitly.

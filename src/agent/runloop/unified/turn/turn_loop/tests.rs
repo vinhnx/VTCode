@@ -43,7 +43,8 @@ use vtcode_ui::tui::app::{
 // Re-exported for `tests/<cluster>.rs` (pure-move split of this file): grandchildren keep
 // addressing these as `super::X`, mirroring the original flat layout.
 pub(super) use super::responses::{
-    completed_recovery_fallback_reason, is_primary_agent_handoff, provider_stop_outcome,
+    RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE, RECOVERY_TOOL_CALL_RETRY_DIRECTIVE, completed_recovery_fallback_reason,
+    is_primary_agent_handoff, provider_stop_outcome, recovery_retry_directive,
 };
 pub(super) use super::{
     ASSISTANT_TEXT_RESPONSE_CAP_REASON, MAX_RECOVERY_RETRIES, RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE,
