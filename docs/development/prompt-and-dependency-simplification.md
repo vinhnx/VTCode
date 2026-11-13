@@ -337,3 +337,24 @@ A second review pass found three more issues in the same area:
 The prompt conventions this change established are recorded in
 `docs/development/maintainer-notes/vtcode-core.md` and summarized in
 `docs/harness/prompt-architecture.md`.
+
+---
+
+## 8. Legacy `builtin_tool_registrations()` mirror — KEEP (for now)
+
+`crates/codegen/vtcode-core/src/tools/registry/builtins/mod.rs` (496 lines)
+still builds the registrations through the old `#[distributed_slice(BUILTIN_TOOLS)]`
+loop, while the runtime ships `pack_impls` -> `register_builtin_packs`.
+Fourteen tests plus one assembly test assert against the mirror, and
+`register_record_decision` is called live from `pack_impls.rs`, so the module
+cannot be deleted outright.
+
+Repointing the mirror at the shipped path was prototyped and then reverted:
+it surfaced real divergences that need product decisions rather than a
+mechanical refactor — the shipped catalog exposes 19 tools against a cap of
+15, and its schema token cost (3381) exceeds the 2500 budget the mirror-based
+test enforces. Raising those caps is a policy call, not a cleanup.
+
+The one safe drift fix shipped: the live `code_search` description omitted
+the `|`-alternation the runtime (`split_alternation`), the legacy mirror,
+and the system prompt all support. The shipped description now names it.
