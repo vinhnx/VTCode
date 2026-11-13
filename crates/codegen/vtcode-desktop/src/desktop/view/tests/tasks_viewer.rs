@@ -216,6 +216,47 @@ fn tracker_rows_render_the_inline_task_block(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn grouped_tracker_rows_keep_the_summary_without_repeating_snapshots(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("session".into());
+            view.tracker_snapshot = Some(snapshot(
+                "Release",
+                1,
+                2,
+                vec![
+                    item("1", "Write code", TrackerItemStatus::Completed),
+                    item("2", "Ship it", TrackerItemStatus::InProgress),
+                ],
+            ));
+            for (id, title, category) in [
+                ("tracker-old", "Task Tracker", ToolCategory::Tracker),
+                ("command", "Run tests", ToolCategory::Run),
+                ("tracker-latest", "Task Tracker", ToolCategory::Tracker),
+            ] {
+                let mut row = TranscriptItem::new(id.into(), "tool".into(), title.into(), "completed".into());
+                row.activity_category = Some(category);
+                view.transcript.push(row);
+            }
+            view.transcript.toggle_activity_group("tracker-old");
+        });
+        window.render_frame(cx);
+
+        assert_eq!(
+            window.find("activity-group-tracker-old").label(),
+            Some("Collapse Ran 1 command · Updated 2 task lists")
+        );
+        assert!(window.try_find("tool-tracker-old").is_some());
+        assert!(window.try_find("tool-tracker-latest").is_some());
+        assert!(window.try_find("tracker-inline-tracker-old").is_none());
+        assert!(window.try_find("tracker-inline-command").is_none());
+        assert!(window.try_find("tracker-inline-tracker-latest").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn expanded_tracker_rows_bound_the_inline_tree_with_overflow(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

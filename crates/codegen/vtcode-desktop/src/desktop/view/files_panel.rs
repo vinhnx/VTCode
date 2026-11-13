@@ -934,10 +934,12 @@ impl DesktopView {
                             .lock_scroll_axis()
                             .overflow_y_scrollbar()
                             .p_3()
-                            .text_xs()
-                            .font_family(mono)
-                            .text_size(theme.mono_font_size)
-                            .child(preview.text.clone())
+                            .child(render_code_preview(
+                                "file-preview-code".to_string(),
+                                &preview.rel_path,
+                                preview.text.clone().into(),
+                                cx,
+                            ))
                             .into_any_element(),
                     })
                     .when(preview.truncated && preview.image.is_none(), |panel| {

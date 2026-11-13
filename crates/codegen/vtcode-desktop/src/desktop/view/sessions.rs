@@ -778,6 +778,7 @@ impl DesktopView {
         self.finished_turn_id = None;
         self.clear_pending_interaction();
         self.active_turn_id = None;
+        self.active_turn_started_at = None;
         self.turn_undos.clear();
         self.cancel_requested = false;
         self.cancel_request_sent = false;

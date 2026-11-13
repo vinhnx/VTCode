@@ -558,7 +558,7 @@ impl DesktopView {
             .flex()
             .items_center()
             .gap_1()
-            .child(div().min_w_0().max_w(px(176.)).truncate().child(current_model))
+            .child(div().min_w_0().max_w(px(176.)).truncate().font_medium().child(current_model))
             .when_some(selected_effort, |row, effort| {
                 row.child(composer_controls::quiet_option_suffix(
                     "composer-model-effort",
@@ -637,6 +637,7 @@ impl DesktopView {
                     .id("composer-policy-label")
                     .test_support()
                     .truncate()
+                    .font_medium()
                     .child(policy_label.to_string()),
             )
             .dropdown_caret(true)

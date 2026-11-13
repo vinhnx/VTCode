@@ -97,6 +97,7 @@ impl DesktopView {
                 self.running = true;
                 self.turn_content_seen = false;
                 self.active_turn_id = notification.turn_id;
+                self.active_turn_started_at = Some(Instant::now());
                 self.set_selected_session_completed(false);
                 self.status = rust_i18n::t!("app.service.running").to_string();
             }
@@ -106,12 +107,17 @@ impl DesktopView {
                 {
                     self.transcript.complete_turn_group(turn_id, final_id);
                 }
+                let elapsed = self
+                    .active_turn_started_at
+                    .take()
+                    .map(|started| humanize_elapsed(started.elapsed().as_secs().cast_signed()));
                 if let (Some(turn_id), Some(id), Some(timestamp)) =
                     (notification.turn_id.as_deref(), &event.final_response_item_id, &event.completed_at)
                     && let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(timestamp)
                 {
                     let local_time = timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string();
-                    self.transcript.set_completion_time(turn_id, id, local_time.into());
+                    self.transcript
+                        .set_completion_time(turn_id, id, local_time.into(), elapsed.map(Into::into));
                 }
                 self.pending_submission = None;
                 self.pending_first_submission = false;

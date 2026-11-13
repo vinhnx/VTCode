@@ -84,6 +84,7 @@ impl Transcript {
         id: &str,
         canonical_id: &str,
         time: SharedString,
+        elapsed: Option<SharedString>,
     ) {
         let Some(index) = self.position_by_id(id) else { return };
         let Some(item) = self.items.get_mut(index).filter(|item| {
@@ -94,6 +95,7 @@ impl Transcript {
             return;
         };
         item.completed_at = Some(time);
+        item.completed_elapsed = elapsed;
         self.bump_revision();
         self.layout_changes
             .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
@@ -150,7 +152,13 @@ impl Transcript {
         }
     }
 
-    pub(in crate::desktop) fn set_completion_time(&mut self, turn_id: &str, id: &str, completed_at: SharedString) {
+    pub(in crate::desktop) fn set_completion_time(
+        &mut self,
+        turn_id: &str,
+        id: &str,
+        completed_at: SharedString,
+        elapsed: Option<SharedString>,
+    ) {
         let Some(index) = self.position_by_id(id) else { return };
         let Some(item) = self
             .items
@@ -160,6 +168,7 @@ impl Transcript {
             return;
         };
         item.completed_at = Some(completed_at);
+        item.completed_elapsed = elapsed;
         self.bump_revision();
         self.layout_changes
             .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
@@ -338,4 +347,38 @@ fn summarize_turn_files<'a>(
         })
         .flatten();
     (files, totals, files_incomplete)
+}
+
+/// Compact duration for the completion footer's elapsed stamp: seconds under
+/// a minute, minutes and seconds under an hour, hours and minutes beyond —
+/// symbol units stay locale-neutral across all shipped translations.
+pub(in crate::desktop) fn humanize_elapsed(seconds: i64) -> String {
+    const MINUTE: i64 = 60;
+    const HOUR: i64 = 3600;
+    let seconds = seconds.max(0);
+    if seconds < MINUTE {
+        return rust_i18n::t!("app.transcript.elapsed_seconds", n = seconds).to_string();
+    }
+    if seconds < HOUR {
+        let minutes = seconds / MINUTE;
+        let rest = seconds % MINUTE;
+        if rest == 0 {
+            return rust_i18n::t!("app.transcript.elapsed_minutes", n = minutes).to_string();
+        }
+        return format!(
+            "{} {}",
+            rust_i18n::t!("app.transcript.elapsed_minutes", n = minutes),
+            rust_i18n::t!("app.transcript.elapsed_seconds", n = rest),
+        );
+    }
+    let hours = seconds / HOUR;
+    let minutes = (seconds % HOUR) / MINUTE;
+    if minutes == 0 {
+        return rust_i18n::t!("app.transcript.elapsed_hours", n = hours).to_string();
+    }
+    format!(
+        "{} {}",
+        rust_i18n::t!("app.transcript.elapsed_hours", n = hours),
+        rust_i18n::t!("app.transcript.elapsed_minutes", n = minutes),
+    )
 }

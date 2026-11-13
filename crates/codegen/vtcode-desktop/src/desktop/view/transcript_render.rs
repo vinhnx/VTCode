@@ -1,6 +1,5 @@
 //! Transcript state and conversation rendering: rows, items, tool and diff cards.
 
-use super::turn_undo::{TurnUndoState, undo_turn_id};
 use super::*;
 
 /// Owned welcome-screen text shared by the default and Zen empty states.
@@ -413,25 +412,47 @@ impl DesktopView {
             item.turn_id.as_ref().map(|turn_id| {
                 let turn_id = turn_id.to_string();
                 let expanded = item.turn_group_expanded;
-                desktop_button(format!("turn-work-{turn_id}"))
-                    .label(InspectorTab::Activity.label())
-                    .accessibility_label(format!(
-                        "{} {}",
-                        if expanded {
-                            rust_i18n::t!("app.transcript.collapse")
-                        } else {
-                            rust_i18n::t!("app.transcript.expand")
-                        },
-                        InspectorTab::Activity.label()
-                    ))
-                    .toggled(expanded)
-                    .child(transcript_chevron_lane(expanded))
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.transcript.set_turn_group_expanded(&turn_id, !expanded);
-                        cx.notify();
-                    }))
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(transcript_icon_slot(div()))
+                    .child(
+                        desktop_button(format!("turn-work-{turn_id}"))
+                            .accessibility_label(format!(
+                                "{} {}",
+                                if expanded {
+                                    rust_i18n::t!("app.transcript.collapse")
+                                } else {
+                                    rust_i18n::t!("app.transcript.expand")
+                                },
+                                InspectorTab::Activity.label()
+                            ))
+                            .toggled(expanded)
+                            .child(
+                                div()
+                                    .id(format!("turn-work-label-{turn_id}"))
+                                    .test_support()
+                                    .w_full()
+                                    .min_w_0()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(div().min_w_0().flex_1().child(InspectorTab::Activity.label()))
+                                    .child(transcript_chevron_lane(expanded)),
+                            )
+                            .ghost()
+                            .small()
+                            .flex_1()
+                            .min_w_0()
+                            .justify_start()
+                            .text_color(themes::muted_text(&colors))
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.transcript.set_turn_group_expanded(&turn_id, !expanded);
+                                cx.notify();
+                            })),
+                    )
                     .into_any_element()
             })
         } else {
@@ -449,137 +470,7 @@ impl DesktopView {
             .when(show_turn_item, |column| column.children(group_header))
             .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)))
             .when(!item.turn_files.is_empty(), |column| {
-                let path = item.turn_files.first().map(|entry| entry.file.path.clone());
-                let undo_control = undo_turn_id(item).map(|turn_id| {
-                    let turn_id = turn_id.to_owned();
-                    if self.turn_undos.get(turn_id.as_str()) == Some(&TurnUndoState::Undone) {
-                        div()
-                            .text_sm()
-                            .text_color(themes::muted_text(&colors))
-                            .child(rust_i18n::t!("app.transcript.turn_undone").to_string())
-                            .into_any_element()
-                    } else {
-                        let pending = self.turn_undos.contains_key(turn_id.as_str());
-                        desktop_button(format!("turn-undo-{turn_id}"))
-                            .label(rust_i18n::t!("app.transcript.turn_undo").to_string())
-                            .accessibility_label(rust_i18n::t!("app.transcript.turn_undo_action").to_string())
-                            .ghost()
-                            .small()
-                            .disabled(pending)
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                let _sent = view.request_turn_undo(&turn_id);
-                                cx.notify();
-                            }))
-                            .into_any_element()
-                    }
-                });
-                let mut card = div()
-                    .w_full()
-                    .rounded_md()
-                    .bg(colors.secondary)
-                    .px_3()
-                    .py_2()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        rust_i18n::t!("app.inspector.files_count", count = item.turn_files.len())
-                                            .to_string(),
-                                    )
-                                    .when(item.turn_files_incomplete, |summary| {
-                                        summary.child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(themes::muted_text(&colors))
-                                                .child(rust_i18n::t!("app.inspector.partial_diff").to_string()),
-                                        )
-                                    })
-                                    .when_some(item.turn_file_totals, |summary, (added, deleted)| {
-                                        summary.child(
-                                            div()
-                                                .flex()
-                                                .gap_2()
-                                                .text_sm()
-                                                .child(div().text_color(colors.success).child(format!("+{added}")))
-                                                .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
-                                        )
-                                    }),
-                            )
-                            .child(
-                                div().flex().items_center().gap_2().children(undo_control).child(
-                                    desktop_button(format!("turn-changes-{}", item.id))
-                                        .label(InspectorTab::Changes.label())
-                                        .ghost()
-                                        .small()
-                                        .on_click(cx.listener(move |view, _, _, cx| {
-                                            if let Some(path) =
-                                                path.as_ref().filter(|path| view.changes.has_preview(path))
-                                            {
-                                                view.select_change(path.clone(), cx);
-                                            } else {
-                                                view.open_inspector_tab(InspectorTab::Changes, cx);
-                                            }
-                                        })),
-                                ),
-                            ),
-                    );
-                let start = item.turn_files_offset.min(item.turn_files.len());
-                let count = if start == 0 { 3 } else { 50 };
-                let end = start.saturating_add(count).min(item.turn_files.len());
-                for file in item.turn_files.iter().skip(start).take(count) {
-                    card = card.child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .min_w_0()
-                            .text_sm()
-                            .text_color(themes::muted_text(&colors))
-                            .child(div().min_w_0().flex_1().truncate().child(file.file.path.clone()))
-                            .when_some(file.counts, |row, (added, deleted)| {
-                                row.child(
-                                    div()
-                                        .flex()
-                                        .flex_shrink_0()
-                                        .gap_1()
-                                        .child(div().text_color(colors.success).child(format!("+{added}")))
-                                        .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
-                                )
-                            }),
-                    );
-                }
-                if item.turn_files.len() > 3 {
-                    let id = item.id.clone();
-                    let label = if end == item.turn_files.len() {
-                        rust_i18n::t!("app.transcript.collapse").to_string()
-                    } else {
-                        rust_i18n::t!("app.configuration.show_more", remaining = item.turn_files.len() - end)
-                            .to_string()
-                    };
-                    card = card.child(
-                        desktop_button(format!("turn-files-toggle-{id}"))
-                            .label(label)
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.transcript.toggle_turn_files(&id);
-                                cx.notify();
-                            })),
-                    );
-                }
-                column.child(card)
+                column.child(transcript_changes_card::render_turn_files_card(self, item, cx))
             });
         let message_id = item.id.clone();
         let clicked_id = item.id.clone();
@@ -797,7 +688,16 @@ impl DesktopView {
                             .flex()
                             .items_center()
                             .children(item.completed_at.as_ref().map(|time| {
-                                div().text_xs().text_color(themes::muted_text(&colors)).child(time.clone())
+                                div()
+                                    .text_xs()
+                                    .text_color(themes::muted_text(&colors))
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(time.clone())
+                                    .when_some(item.completed_elapsed.as_ref(), |slot, elapsed| {
+                                        slot.child(format!("{} {elapsed}", display::MIDDOT))
+                                    })
                             }))
                             .when(copyable, |slot| {
                                 slot.child(
@@ -856,6 +756,9 @@ impl DesktopView {
                 )
                 .tooltip(format!("{} · {status}", item.title))
                 .ghost()
+                // Small keeps the shared title spine: every transcript
+                // disclosure row (tool, activity, notice, turn header) starts
+                // its title at the same inset + icon slot + gap.
                 .small()
                 .w_full()
                 .justify_start()
@@ -910,9 +813,11 @@ impl DesktopView {
         );
         // Grouped rows nest under their shared header; single tool rows stay flush.
         panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
-        // Tracker rows replay the newest checklist snapshot inline: header plus
-        // current task when collapsed, the bounded tree when expanded.
+        // Standalone tracker rows show the current snapshot inline. Grouped
+        // tracker calls stay as compact chronology rows; the Tasks panel owns
+        // the full snapshot for that activity group.
         if item.activity_category == Some(ToolCategory::Tracker)
+            && !item.activity_grouped
             && let Some(block) = self.render_tracker_inline_block(item.id.as_str(), item.expanded, &colors)
         {
             panel = panel.child(div().id(format!("tracker-inline-{}", item.id)).test_support().child(block));

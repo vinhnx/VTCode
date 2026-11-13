@@ -155,11 +155,11 @@ impl DesktopView {
         .into_any_element()
     }
 
-    /// Inline task block for `task_tracker` transcript rows, replaying the
-    /// newest snapshot (derived views never show stale checklists). Collapsed
-    /// rows show the header plus the current task; expanded rows show the
-    /// bounded tree with an overflow line. Inner ids scope under `row_id` so
-    /// sibling tracker rows never collide. Returns `None` without a snapshot.
+    /// Inline task block for a standalone `task_tracker` row. It replays the
+    /// newest snapshot, so derived views never show a stale checklist.
+    /// Collapsed rows show the header plus the current task; expanded rows
+    /// show the bounded tree with an overflow line. Inner ids scope under
+    /// `row_id`. Returns `None` without a snapshot.
     pub(in super::super) fn render_tracker_inline_block(
         &self,
         row_id: &str,
@@ -177,11 +177,15 @@ impl DesktopView {
         );
         let header = format!("{} {}/{}", title, snapshot.completed, snapshot.total);
         let current = tracker_current_index(&snapshot.items);
+        // Indent to the owning row's title spine (button inset + icon slot +
+        // gap), so the checklist reads as that row's detail instead of
+        // starting left of its title.
         let mut block = div()
             .flex()
             .flex_col()
             .gap_1()
-            .px_2()
+            .pl_8()
+            .pr_2()
             .child(div().text_xs().font_medium().text_color(colors.muted_foreground).child(header));
         if expanded {
             let shown = snapshot.items.len().min(TRACKER_INLINE_MAX_ROWS);

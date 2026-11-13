@@ -551,6 +551,17 @@ pub(super) fn readable_indicator_color(background: Hsla, foreground: Hsla, color
     })
 }
 
+/// Tone-tinted pill surface for transcript severity chips: a light wash of
+/// the severity tone over the quiet card fill plus a slightly stronger
+/// border share, so the pill reads as a filled badge without raw hex.
+/// Returns `(surface, border)` for kit `Tag::custom`; pair the title with
+/// [`readable_indicator_color`] so tone text keeps AA against the wash.
+pub(super) fn tone_chip_surface(tone: Hsla, colors: &ThemeColor) -> (Hsla, Hsla) {
+    const WASH: f32 = 0.14;
+    const BORDER: f32 = 0.32;
+    (mix(colors.secondary, tone, WASH), mix(colors.secondary, tone, BORDER))
+}
+
 /// Minimum contrast between chart data colors (and against the canvas).
 /// Data colors carry redundant labels, so they hold the vanish floor rather
 /// than the text floor. Shared by [`distinct_chart_secondary`] and its test

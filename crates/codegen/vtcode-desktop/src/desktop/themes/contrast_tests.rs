@@ -25,6 +25,34 @@ fn contrast_setting_increases_foreground_contrast_for_every_theme(cx: &mut gpui_
     });
 }
 
+/// Transcript severity chips wash the severity tone over the card fill; the
+/// paired title/icon tone must stay AA against that wash in every theme, not
+/// only against the bare canvas it was tuned for.
+#[gpui_kit::test]
+fn severity_chip_tones_stay_readable_on_the_wash_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_with_contrast(id, 0, None, cx);
+            let colors = cx.theme().colors;
+            for (name, tone) in [
+                ("danger", colors.danger),
+                ("warning", colors.warning),
+                ("success", colors.success),
+                ("info", muted_text(&colors)),
+            ] {
+                let (surface, _) = tone_chip_surface(tone, &colors);
+                let title = readable_indicator_color(surface, colors.foreground, tone);
+                let ratio = contrast_ratio(title, surface);
+                assert!(ratio >= 4.5, "{id} {name}: chip title is {ratio:.2}");
+            }
+        }
+    });
+}
+
 /// Custom themes ride the same seed derivation as built-in rows, so their
 /// derived tokens must clear the same floors even when a saved seed was hand
 /// edited into an unreadable value.

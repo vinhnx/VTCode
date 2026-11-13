@@ -1,6 +1,6 @@
 use super::{
     ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, ToolCategory, ToolCategoryCounts, Transcript,
-    TranscriptItem, TranscriptRole, UserAttachment, describe_activity_verbs, tool_row_gist,
+    TranscriptItem, TranscriptRole, UserAttachment, describe_activity_verbs, humanize_elapsed, tool_row_gist,
 };
 use vtcode_exec_events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, ErrorItem, FileChangeItem,

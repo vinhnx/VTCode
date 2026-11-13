@@ -27,6 +27,10 @@ pub(crate) struct TranscriptItem {
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
     pub completed_at: Option<SharedString>,
+    /// Humanized turn duration (e.g. `13m 24s`) rendered next to
+    /// `completed_at`; `None` while the turn runs or when the restored
+    /// timeline lacks a start stamp to diff against.
+    pub completed_elapsed: Option<SharedString>,
     pub turn_id: Option<SharedString>,
     pub canonical_turn_id: Option<SharedString>,
     pub canonical_item_id: Option<SharedString>,
@@ -159,6 +163,7 @@ impl TranscriptItem {
             markdown: SharedString::default(),
             accessibility_text: SharedString::default(),
             completed_at: None,
+            completed_elapsed: None,
             turn_id: None,
             canonical_turn_id: None,
             canonical_item_id: None,

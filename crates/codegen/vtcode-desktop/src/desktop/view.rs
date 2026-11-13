@@ -82,8 +82,8 @@ use super::diff_preferences;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{
-    MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepare_markdown, render_markdown,
-    render_markdown_view, render_markdown_with_style, render_output_text,
+    MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepare_markdown, render_code_preview,
+    render_markdown, render_markdown_view, render_markdown_with_style, render_output_text,
 };
 use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
@@ -91,8 +91,8 @@ use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, EditTotals, NoticeSeverity, ToolCategory, ToolCategoryCounts, Transcript,
     TranscriptItem, TranscriptRole, UserAttachment, activity_details_summary, activity_output_text, activity_payload,
-    activity_text, describe_activity_verbs, harness_is_user_visible, split_tool_title_verb, status as tool_status,
-    tool_row_gist,
+    activity_text, describe_activity_verbs, harness_is_user_visible, humanize_elapsed, split_tool_title_verb,
+    status as tool_status, tool_row_gist,
 };
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,
@@ -178,6 +178,7 @@ mod swipe_navigation_overlay;
 mod tabs;
 mod terminal_panel;
 mod transcript_activity;
+mod transcript_changes_card;
 mod transcript_diff;
 mod transcript_nav;
 mod transcript_notice;
@@ -548,6 +549,9 @@ struct DesktopView {
     restored_activity_history_incomplete: bool,
     restored_timeline: Arc<Vec<vtcode_exec_events::VersionedThreadEvent>>,
     active_turn_id: Option<String>,
+    /// Monotonic start of the running turn for the completion footer's
+    /// elapsed stamp; set on `TurnStarted`, consumed on `TurnCompleted`.
+    active_turn_started_at: Option<Instant>,
     finished_turn_id: Option<String>,
     /// Per-turn file-change undo flight state, keyed by canonical turn id.
     /// Absent means idle; cleared on session switch (see `turn_undo`).

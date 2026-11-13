@@ -16,6 +16,7 @@ pub(super) use activity_verbs::{
 };
 pub(super) use item::{EditTotals, TranscriptItem};
 pub(super) use tool_summary::{activity_details_summary, activity_output_text, activity_payload, activity_text};
+pub(super) use turn::humanize_elapsed;
 pub(super) use user_attachments::UserAttachment;
 pub(super) use vtcode_commons::tool_headlines::harness_is_user_visible;
 

@@ -199,25 +199,43 @@ impl DesktopView {
     }
 
     pub(super) fn restore_completion_times(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
-        let mut times: HashMap<&str, Option<String>> = HashMap::new();
+        // Each final row's wall-clock label plus, when the timeline records a
+        // parseable start stamp, the humanized turn duration beside it.
+        let mut times: HashMap<&str, (Option<String>, Option<String>)> = HashMap::new();
+        let mut turn_started_at: Option<i64> = None;
         for event in events {
-            if let vtcode_exec_events::ThreadEvent::TurnCompleted(completed) = event.event()
-                && let Some(id) = &completed.final_response_item_id
-            {
-                use std::collections::hash_map::Entry;
-                match times.entry(id.as_str()) {
-                    Entry::Vacant(entry) => {
-                        let time = completed
+            match event.event() {
+                vtcode_exec_events::ThreadEvent::TurnStarted(started) => {
+                    turn_started_at = started
+                        .context
+                        .as_ref()
+                        .and_then(|context| chrono::DateTime::parse_from_rfc3339(&context.timestamp).ok())
+                        .map(|timestamp| timestamp.timestamp());
+                }
+                vtcode_exec_events::ThreadEvent::TurnCompleted(completed) => {
+                    if let Some(id) = &completed.final_response_item_id {
+                        use std::collections::hash_map::Entry;
+                        let stamp = completed
                             .completed_at
                             .as_deref()
-                            .and_then(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).ok())
-                            .map(|timestamp| timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string());
-                        let _stored = entry.insert(time);
-                    }
-                    Entry::Occupied(mut entry) => {
-                        let _previous = entry.insert(None);
+                            .and_then(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).ok());
+                        let time =
+                            stamp.map(|timestamp| timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string());
+                        let elapsed = stamp
+                            .zip(turn_started_at)
+                            .map(|(stamp, started)| humanize_elapsed(stamp.timestamp() - started));
+                        turn_started_at = None;
+                        match times.entry(id.as_str()) {
+                            Entry::Vacant(entry) => {
+                                let _stored = entry.insert((time, elapsed));
+                            }
+                            Entry::Occupied(mut entry) => {
+                                let _previous = entry.insert((None, None));
+                            }
+                        }
                     }
                 }
+                _ => {}
             }
         }
         let mut occurrences: HashMap<&str, usize> = HashMap::new();
@@ -231,12 +249,15 @@ impl DesktopView {
             .items()
             .filter_map(|item| {
                 let id = item.canonical_item_id.as_deref()?;
-                let time = times.get(id)?.as_ref()?;
-                (occurrences.get(id) == Some(&1)).then(|| (item.id.clone(), id.to_owned(), time.clone()))
+                let (time, elapsed) = times.get(id)?;
+                let time = time.as_ref()?;
+                (occurrences.get(id) == Some(&1))
+                    .then(|| (item.id.clone(), id.to_owned(), time.clone(), elapsed.clone()))
             })
             .collect();
-        for (row_id, item_id, time) in matches {
-            self.transcript.set_archived_completion_time(&row_id, &item_id, time.into());
+        for (row_id, item_id, time, elapsed) in matches {
+            self.transcript
+                .set_archived_completion_time(&row_id, &item_id, time.into(), elapsed.map(Into::into));
         }
     }
 

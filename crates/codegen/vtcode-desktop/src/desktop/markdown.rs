@@ -213,6 +213,56 @@ pub(super) fn render_markdown_with_style(
     }
 }
 
+/// Read-only code preview for one non-markdown text file: the bounded text
+/// renders as a single fenced code block through the shared Markdown
+/// pipeline, so Kit's syntax highlighter paints it with the app theme while
+/// the transcript hardening keeps links inert. The 8-backtick fence only
+/// closes on a longer run inside the file, so code containing ordinary
+/// ``` fences stays one block.
+pub(super) fn render_code_preview(id: String, rel_path: &str, text: SharedString, cx: &gpui_kit::App) -> TextView {
+    const FENCE: &str = "````````";
+    let source: SharedString = match code_fence_language(rel_path) {
+        Some(language) => format!("{FENCE}{language}\n{text}\n{FENCE}").into(),
+        None => format!("{FENCE}\n{text}\n{FENCE}").into(),
+    };
+    render_markdown_with_style(id, source, false, markdown_style(cx))
+}
+
+/// Fence language token for a file extension. Kit's highlighter resolves
+/// these tokens to grammars; unmapped extensions render unhighlighted
+/// rather than guessing from the path shape.
+fn code_fence_language(rel_path: &str) -> Option<&'static str> {
+    let extension = rel_path.rsplit_once('.')?.1.to_ascii_lowercase();
+    let extension: &str = &extension;
+    Some(match extension {
+        "rs" => "rust",
+        "ts" | "tsx" | "mts" | "cts" => "typescript",
+        "js" | "mjs" | "cjs" | "jsx" => "javascript",
+        "py" | "pyi" => "python",
+        "go" => "go",
+        "c" | "h" => "c",
+        "cc" | "cpp" | "cxx" | "hpp" | "hh" => "cpp",
+        "java" => "java",
+        "kt" | "kts" => "kotlin",
+        "swift" => "swift",
+        "rb" => "ruby",
+        "php" => "php",
+        "sh" | "bash" | "zsh" => "bash",
+        "ps1" => "powershell",
+        "lua" => "lua",
+        "dart" => "dart",
+        "zig" => "zig",
+        "sql" => "sql",
+        "json" => "json",
+        "yaml" | "yml" => "yaml",
+        "toml" => "toml",
+        "html" | "htm" => "html",
+        "xml" => "xml",
+        "css" | "scss" | "less" => "css",
+        _ => return None,
+    })
+}
+
 /// Render server HTML as an inert static preview: no scripts, no fetches.
 ///
 /// Shares the transcript hardening (blocked images, web-only links, themed

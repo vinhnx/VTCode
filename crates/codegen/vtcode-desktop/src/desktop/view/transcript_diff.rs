@@ -1,4 +1,6 @@
+use super::files_panel::file_row_menu;
 use super::*;
+use gpui_kit::component::menu::ContextMenuExt;
 
 impl DesktopView {
     pub(super) fn render_diff_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
@@ -57,8 +59,7 @@ impl DesktopView {
             .justify_between()
             .gap_2()
             .px_3()
-            .py_2()
-            .bg(colors.secondary)
+            .py_1()
             .child(
                 div()
                     .flex()
@@ -82,28 +83,93 @@ impl DesktopView {
             )
             .child(actions);
 
+        // One card surface for header, file rows, and patch: the quiet fill
+        // and hairline border match the turn files card, so every change
+        // summary shares one geometry and the rows never read as orphans.
         let mut panel = div()
             .relative()
             .w_full()
             .max_w(px(self.content_width()))
             .rounded_md()
-            .overflow_hidden()
+            .border_1()
+            .border_color(themes::hairline(colors.secondary, colors.foreground))
+            .bg(colors.secondary)
+            .py_1()
+            .flex()
+            .flex_col()
+            .gap_1()
             .child(header);
 
-        let mut body = div().w_full().flex().flex_col().px_3().py_2().gap_1();
+        let mut body = div().w_full().flex().flex_col().px_3().py_1().gap_1();
         for file in &diff.files {
             let (kind_label, kind_color) = match file.kind {
                 DiffFileKind::Add => ("added", colors.success),
                 DiffFileKind::Delete => ("deleted", colors.danger),
                 DiffFileKind::Update => ("modified", colors.muted_foreground),
             };
+            let path = file.path.clone();
+            let (directory, basename) = match path.rsplit_once('/') {
+                Some((directory, base)) => (Some(format!("{directory}/")), base.to_string()),
+                None => (None, path.clone()),
+            };
+            let menu_path = path.clone();
             body = body.child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_sm().font_family(mono_font.clone()).child(file.path.clone()))
-                    .child(div().text_xs().text_color(kind_color).child(kind_label)),
+                    .id(format!("diff-file-{}-{path}", item.id))
+                    .test_support()
+                    .context_menu(move |menu, _, _| file_row_menu(menu, &menu_path, false))
+                    .child(
+                        desktop_button(format!("diff-file-{}-{path}", item.id))
+                            .accessibility_label(path.clone())
+                            .tooltip(path.clone())
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .justify_start()
+                            .min_w_0()
+                            .on_click({
+                                let path = path.clone();
+                                cx.listener(move |view, _, window, cx| {
+                                    view.open_file_preview_overlay(path.clone(), window, cx)
+                                })
+                            })
+                            .child(
+                                div()
+                                    .w_full()
+                                    .min_w_0()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .text_sm()
+                                    .font_family(mono_font.clone())
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .flex()
+                                            .truncate()
+                                            .when_some(directory, |row, directory| {
+                                                row.child(
+                                                    div()
+                                                        .min_w_0()
+                                                        .truncate()
+                                                        .text_color(themes::muted_text(&colors))
+                                                        .child(directory),
+                                                )
+                                            })
+                                            .child(
+                                                div()
+                                                    .max_w(px(240.))
+                                                    .flex_shrink_0()
+                                                    .truncate()
+                                                    .font_medium()
+                                                    .text_color(colors.foreground)
+                                                    .child(basename.clone()),
+                                            ),
+                                    )
+                                    .child(div().text_xs().flex_shrink_0().text_color(kind_color).child(kind_label)),
+                            ),
+                    ),
             );
         }
         if diff.incomplete {
@@ -149,7 +215,6 @@ impl DesktopView {
                 .w_full()
                 .flex()
                 .flex_col()
-                .mt_2()
                 .rounded_md()
                 .overflow_hidden()
                 .overflow_x_scroll()

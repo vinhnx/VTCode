@@ -115,6 +115,52 @@ fn restored_completion_time_requires_unique_canonical_identity(cx: &mut TestAppC
     });
 }
 
+#[gpui_kit::test]
+fn reset_session_state_clears_the_turn_elapsed_bracket(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.active_turn_id = Some("turn".into());
+        view.active_turn_started_at = Some(std::time::Instant::now());
+        view.reset_session_state();
+        assert!(view.active_turn_id.is_none(), "turn identity must clear on session switch");
+        assert!(view.active_turn_started_at.is_none(), "elapsed bracket must clear on session switch");
+    });
+}
+
+#[gpui_kit::test]
+fn restored_completion_derives_elapsed_from_the_turn_start_stamp(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{
+        ExecutionContext, InputOrigin, ThreadEvent, TurnCompletedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
+    };
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let mut final_item =
+            TranscriptItem::new("archive-row".into(), "assistant".into(), "Agent".into(), "done".into());
+        final_item.archived_phase = Some("final_answer".into());
+        final_item.canonical_item_id = Some("final-item".into());
+        view.load_history(vec![final_item]);
+        let mut started_event = TurnStartedEvent::default();
+        started_event.context = Some(Box::new(ExecutionContext {
+            task_id: "task".into(),
+            turn_id: "turn".into(),
+            actor_id: "actor".into(),
+            parent_actor_id: None,
+            origin: InputOrigin::User,
+            timestamp: "2026-11-05T08:30:00Z".into(),
+            goal: None,
+        }));
+        let started = VersionedThreadEvent::new(ThreadEvent::TurnStarted(started_event));
+        let completed = VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: Some(Box::new("final-item".into())),
+            completed_at: Some(Box::new("2026-11-05T08:31:24Z".into())),
+            usage: Usage::default(),
+            in_progress_exec_sessions: Vec::new(),
+        }));
+        view.restore_completion_times(&[started, completed]);
+        assert_eq!(view.transcript.get(0).unwrap().completed_elapsed.as_deref(), Some("1m 24s"));
+    });
+}
+
 #[test]
 fn restored_final_keeps_archive_row_id_and_canonical_item_id() {
     let rows = super::super::sessions::prepare_session_history(
@@ -356,9 +402,14 @@ fn completed_turn_work_log_expands_without_hiding_final(cx: &mut TestAppContext)
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
-            for (id, text) in [("progress", "Working"), ("final", "Done")] {
+            for (id, role, title, text) in [
+                ("progress", "assistant", "Agent", "Working"),
+                ("read", "tool", "Read Cargo.toml", "completed"),
+                ("run", "tool", "Run tests", "completed"),
+                ("final", "assistant", "Agent", "Done"),
+            ] {
                 view.transcript
-                    .push(TranscriptItem::new(id.into(), "assistant".into(), "Agent".into(), text.into()));
+                    .push(TranscriptItem::new(id.into(), role.into(), title.into(), text.into()));
                 view.transcript.set_item_turn(id, "turn");
             }
         });
@@ -385,6 +436,11 @@ fn completed_turn_work_log_expands_without_hiding_final(cx: &mut TestAppContext)
         assert!(window.try_find("message-body-progress").is_some());
         assert!(window.try_find("message-body-final").is_some());
         assert_eq!(window.find("turn-work-turn").label(), Some("Collapse Activity"));
+        assert_eq!(
+            window.find("turn-work-label-turn").bounds().origin.x,
+            window.find("activity-group-label-read").bounds().origin.x,
+            "turn and tool activity disclosures share a label spine"
+        );
     })
     .unwrap();
 }

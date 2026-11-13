@@ -478,6 +478,7 @@ impl DesktopView {
             restored_activity_history_incomplete: false,
             restored_timeline: Arc::new(Vec::new()),
             active_turn_id: None,
+            active_turn_started_at: None,
             finished_turn_id: None,
             turn_undos: HashMap::new(),
             cancel_requested: false,

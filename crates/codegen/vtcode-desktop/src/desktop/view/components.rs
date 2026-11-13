@@ -703,29 +703,6 @@ pub(super) fn severity_marker_style(
     }
 }
 
-/// Status-marker row for transcript severity notices: one icon/title header
-/// line in severity colors, no message chrome. Callers keep test identity,
-/// roles, and aria labels on their own wrapper: `Marker` is `RenderOnce`
-/// and cannot carry `.test_support()`. Extra trailing children (e.g. the
-/// Show/Hide details toggle) compose as `Marker` siblings; the content
-/// slot holds `flex_1` so they dock at the trailing edge. The leading
-/// inset matches a small button's `px_2`, so notice titles start on the
-/// same spine as group and tool headers (inset + [`transcript_icon_slot`]
-/// + `gap_2`).
-pub(super) fn severity_marker(style: &SeverityMarkerStyle, title: impl Into<gpui_kit::SharedString>) -> Marker {
-    Marker::new()
-        .items_center()
-        .pl_2()
-        .text_color(style.tone)
-        .icon(MarkerIcon::new().child(Icon::new(style.icon).small().text_color(style.tone)))
-        .content(
-            MarkerContent::new()
-                .text(title)
-                .flex_1()
-                .when(style.semibold_title, |content| content.font_semibold()),
-        )
-}
-
 /// Fixed leading slot shared by transcript header rows: the same `size_4`
 /// centered box `MarkerIcon` renders, so group and tool titles start on
 /// the notice spine. Always rendered, even when empty, so optional

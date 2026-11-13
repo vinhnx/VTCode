@@ -7,13 +7,25 @@ fn completion_time_requires_matching_assistant_identity() {
     transcript.push(item(2, "assistant", "answer"));
     transcript.set_item_turn("1", "turn-a");
     transcript.set_item_turn("2", "turn-b");
-    transcript.set_completion_time("turn-a", "1", "10:15".into());
-    transcript.set_completion_time("turn-a", "missing", "10:15".into());
-    transcript.set_completion_time("turn-a", "2", "10:15".into());
+    transcript.set_completion_time("turn-a", "1", "10:15".into(), None);
+    transcript.set_completion_time("turn-a", "missing", "10:15".into(), None);
+    transcript.set_completion_time("turn-a", "2", "10:15".into(), None);
     assert!(transcript.get(0).unwrap().completed_at.is_none());
     assert!(transcript.get(1).unwrap().completed_at.is_none());
-    transcript.set_completion_time("turn-b", "2", "10:15".into());
+    transcript.set_completion_time("turn-b", "2", "10:15".into(), Some("13m 24s".into()));
     assert_eq!(transcript.get(1).unwrap().completed_at.as_deref(), Some("10:15"));
+    assert_eq!(transcript.get(1).unwrap().completed_elapsed.as_deref(), Some("13m 24s"));
+}
+
+#[test]
+fn humanize_elapsed_uses_clock_symbol_tiers() {
+    assert_eq!(humanize_elapsed(0), "0s");
+    assert_eq!(humanize_elapsed(42), "42s");
+    assert_eq!(humanize_elapsed(60), "1m");
+    assert_eq!(humanize_elapsed(804), "13m 24s");
+    assert_eq!(humanize_elapsed(3600), "1h");
+    assert_eq!(humanize_elapsed(3900), "1h 5m");
+    assert_eq!(humanize_elapsed(-5), "0s");
 }
 
 #[test]

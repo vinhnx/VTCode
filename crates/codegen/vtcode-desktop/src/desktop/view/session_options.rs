@@ -215,7 +215,14 @@ impl DesktopView {
             .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string());
         desktop_button("composer-mode")
             .open(self.palette_open_for(&[PaletteKind::Modes]))
-            .child(div().id("composer-mode-label").test_support().truncate().child(mode.clone()))
+            .child(
+                div()
+                    .id("composer-mode-label")
+                    .test_support()
+                    .truncate()
+                    .font_medium()
+                    .child(mode.clone()),
+            )
             .max_w(px(180.))
             .overflow_hidden()
             .accessibility_label(rust_i18n::t!("app.composer.agent_mode_aria", mode = mode.as_str()).to_string())
