@@ -7,17 +7,22 @@ use std::os::unix::fs::PermissionsExt;
 
 /// Locate the shipped `vtcode` binary. `CARGO_BIN_EXE_vtcode` is only set for
 /// integration-test targets; this module runs as unit tests inside the binary
-/// crate, so fall back to the built binary under the target directory. The
-/// caller's `is_file` assert reports the actionable failure when neither
-/// source resolves.
+/// crate, so fall back to the built binary under the target directory,
+/// honoring `CARGO_TARGET_DIR` for relocated target layouts. The caller's
+/// `is_file` assert reports the actionable failure when neither source
+/// resolves; the static fallback can pick a stale binary, which the warm-up
+/// `--version` exec below exercises loudly.
 fn shipped_binary() -> PathBuf {
     if let Some(path) = std::env::var_os("CARGO_BIN_EXE_vtcode") {
         return path.into();
     }
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let target_root = match std::env::var_os("CARGO_TARGET_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target"),
+    };
     ["debug", "release"]
         .into_iter()
-        .map(|profile| manifest.join("target").join(profile).join("vtcode"))
+        .map(|profile| target_root.join(profile).join("vtcode"))
         .find(|path| path.is_file())
         .unwrap_or_default()
 }
