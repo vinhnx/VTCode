@@ -1,6 +1,19 @@
 use super::*;
 
 #[test]
+fn trim_wrapping_quotes_and_punctuation_handles_asymmetric_and_nested_input() {
+    for (input, expected) in [
+        ("  \"'src/đ.rs'\",!  ", "src/đ.rs"),
+        ("'leading", "leading"),
+        ("trailing\"", "trailing"),
+        ("don't/change.rs", "don't/change.rs"),
+        ("'!\"", ""),
+    ] {
+        assert_eq!(trim_wrapping_quotes_and_punctuation(input), expected);
+    }
+}
+
+#[test]
 fn humanize_duration_compact_ladder() {
     assert_eq!(humanize_duration_compact(0), "0s");
     assert_eq!(humanize_duration_compact(42), "42s");

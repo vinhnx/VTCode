@@ -68,7 +68,7 @@ fn should_regenerate_provided_options(
         .iter()
         .filter(|option| is_generic_planning_option_label(&option.label))
         .count();
-    if generic_option_count == options.len()
+    generic_option_count == options.len()
         && contains_any(
             &question_text,
             &[
@@ -82,11 +82,6 @@ fn should_regenerate_provided_options(
                 "proves it is complete",
             ],
         )
-    {
-        return true;
-    }
-
-    false
 }
 
 fn options_signature(options: &[RequestUserInputOption]) -> String {

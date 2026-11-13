@@ -64,7 +64,7 @@ CLI:
 
 Desktop app (macOS only, offered by default): macOS 15+ on Apple Silicon or Intel. It installs from a prebuilt
 release asset (no toolchain needed); only releases without a desktop asset fall back to a from-source build needing
-Xcode command line tools, Rust 1.99.1+, and git (`--without-desktop` skips it). The first launch requires a one-time
+Xcode command line tools, Rust 1.100.0+, and git (`--without-desktop` skips it). The first launch requires a one-time
 macOS security approval (see [First launch](#first-launch-macos-approval)). See
 [desktop system requirements](../development/desktop-workspace.md#system-requirements).
 

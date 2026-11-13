@@ -7,7 +7,7 @@ moving that pin.
 ## Policy
 
 - The workspace targets **one exact stable release**. `channel` is a concrete `x.y.z`, and every `rust-version`
-  matches it, including patch releases (`1.99.1`, not `1.99`).
+  matches it, including patch releases (`1.100.0`, not `1.100`).
 - The MSRV *is* that value. Crates fail closed on older compilers instead of silently compiling with a toolchain CI
   and Docker never test. Do not introduce a second (lower) MSRV floor without replacing the pin guard.
 - Edition 2024 and the dependency floors (ratatui, darling, sysinfo, zip) are documented in
@@ -87,6 +87,8 @@ add blanket crate-level allows unless the intent matches an existing documented 
 
 | Release | Gate change | Action |
 | ------- | ----------- | ------ |
+| 1.100 | Cargo changed its intermediate build artifact layout | Use Cargo JSON messages to locate intermediate artifacts; final binaries remain in the target profile directory |
+| 1.100 | Cargo reports manifest lints, including redundant homepages and unused workspace metadata | Review these separately from rustc and Clippy diagnostics; they do not change package metadata automatically |
 | 1.99 | `Atomic::*::fetch_update` deprecated in favor of `try_update` | Rename call sites; `Result` contract is unchanged |
 | 1.99 | Constant float comparisons lint as `clippy::float_cmp_const`, separate from `clippy::float_cmp` | Allow both where an exact constant is under test; drop expectations that no longer fire |
 | 1.98 | `unnecessary_sort_by`, `manual_checked_ops`, `chunks_exact`, `result_large_err`, and related lints | Run `cargo clippy --fix` for autofixes, then review boxed error paths by hand |
@@ -105,8 +107,8 @@ When investigating a suspected compiler regression without changing the pin, run
 
 - **hawk** links rustc internals and only runs under the exact compiler its build shipped with.
   `scripts/hawk.sh` pins `HAWK_TOOLCHAIN` and `HAWK_VERSION` separately from the workspace. Check the release notes for
-  the rustc it tracks. When the archive lags the workspace pin (for example 0.1.15 tracks rustc 1.99.0 while the
-  workspace moved to 1.99.1), a 1.99.1 floor makes `cargo +1.99.0` refuse the workspace, so use the from-source build
+  the rustc it tracks. Hawk 0.1.15 and 0.1.17 track rustc 1.99.0; the 1.100.0 floor makes that compiler refuse the
+  workspace, so use the from-source build
   in the script's error text and keep the comment accurate until upstream publishes a matching archive.
 - **Nightly checks** are separate channels (`toolchain: nightly` or `nightly-YYYY-MM-DD`). The pin test skips them on
   purpose; never point a nightly step at the stable pin.

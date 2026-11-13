@@ -39,11 +39,7 @@ pub(crate) fn is_private_host(host: &str) -> bool {
     }
 
     // DNS names like "localhost" that will resolve to loopback.
-    if trimmed.eq_ignore_ascii_case("localhost") || trimmed.eq_ignore_ascii_case("localhost.localdomain") {
-        return true;
-    }
-
-    false
+    trimmed.eq_ignore_ascii_case("localhost") || trimmed.eq_ignore_ascii_case("localhost.localdomain")
 }
 
 /// Check if an IPv4 address is private, loopback, link-local, broadcast,

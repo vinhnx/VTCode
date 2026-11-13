@@ -907,15 +907,10 @@ fn core_intent_matches(text: &str) -> bool {
     }
 
     // Standalone expressions that don't fit the verb patterns above
-    if text.starts_with("time to ")
+    text.starts_with("time to ")
         || text.starts_with("next up:")
         || text.starts_with("next step ")
         || text.starts_with("continuing")
-    {
-        return true;
-    }
-
-    false
 }
 
 fn starts_with_present_progress_update(lower: &str) -> bool {

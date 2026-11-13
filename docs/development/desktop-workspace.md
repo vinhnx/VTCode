@@ -38,7 +38,7 @@ To build and install from source (only needed when a release ships no prebuilt d
 
 - A macOS 15+ build host (enforced by the packaging script).
 - Git, when installing through `install.sh` (it clones the release tag); not needed when packaging from a checkout.
-- Rust 1.99.1 or newer (the workspace MSRV).
+- Rust 1.100.0 or newer (the workspace MSRV).
 - Xcode command line tools (`xcode-select --install`) for the linker and macOS SDK; the packaging script also
   requires `codesign`, `ditto`, `sips`, `iconutil`, and `plutil`.
 - Build time: the release build compiles the GUI and its matching CLI helper from source and takes several minutes.

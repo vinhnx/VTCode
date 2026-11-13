@@ -2,7 +2,7 @@
 name = "vtcode"
 version = "0.182.1"
 edition = "2024"
-rust-version = "1.99.1"
+rust-version = "1.100.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers"
 license = "MIT OR Apache-2.0"
@@ -143,7 +143,7 @@ vtcode-threads = { path = "crates/common/vtcode-threads", version = "0.182.1" }
 [workspace.package]
 version = "0.182.1"
 edition = "2024"
-rust-version = "1.99.1"
+rust-version = "1.100.0"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"

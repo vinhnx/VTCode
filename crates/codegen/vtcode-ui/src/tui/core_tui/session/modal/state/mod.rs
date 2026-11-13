@@ -146,10 +146,7 @@ impl ModalSearchState {
     }
 
     fn backspace(&mut self) -> bool {
-        if self.query.pop().is_some() {
-            return true;
-        }
-        false
+        self.query.pop().is_some()
     }
 
     fn clear(&mut self) -> bool {

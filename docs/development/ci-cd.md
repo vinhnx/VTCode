@@ -17,7 +17,7 @@ binaries), `webmcp.yml` (Pages deploy), `hotpath-benchmark.yml` + `hotpath-relay
 
 **Rust toolchain:** all four Rust setup steps (three in this workflow, one in `desktop-macos.yml`) explicitly select
 the version in
-`rust-toolchain.toml`, currently 1.99.1. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
+`rust-toolchain.toml`, currently 1.100.0. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
 otherwise defaults to floating `stable`; pinning its commit alone does not pin the compiler.
 Update the workflow inputs alongside the canonical toolchain version, following
 [Rust Toolchain and MSRV](./toolchain-updates.md).
@@ -482,7 +482,7 @@ cargo clippy -- -W clippy::all
 
 ```bash
 cargo msrv --workspace
-cargo msrv --workspace set 1.99.1  # Set specific version
+cargo msrv --workspace set 1.100.0  # Set specific version
 ```
 
 #### Dependency issues

@@ -26,7 +26,7 @@ jobs:
     # values: job-level `env` cannot read the `runner` context.
     env:
       HOTPATH_BENCHMARK: tui_hotpath
-      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.99.1,profile=x-prod,valgrind=3.26.0
+      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.100.0,profile=x-prod,valgrind=3.26.0
       HOTPATH_OUTPUT_FORMAT: json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: "1.99.1"
+          toolchain: "1.100.0"
       - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
       - name: Install valgrind
         run: |
@@ -75,7 +75,7 @@ jobs:
       contents: read
     env:
       HOTPATH_BENCHMARK: tui_hotpath
-      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.99.1,profile=x-prod,valgrind=3.26.0
+      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.100.0,profile=x-prod,valgrind=3.26.0
       HOTPATH_OUTPUT_FORMAT: json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,7 +85,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: "1.99.1"
+          toolchain: "1.100.0"
       - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
       - name: Install valgrind
         run: |

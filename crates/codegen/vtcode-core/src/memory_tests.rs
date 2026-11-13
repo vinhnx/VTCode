@@ -96,10 +96,6 @@ mod memory_profiling {
             clippy::cast_sign_loss,
             reason = "Intentional compatibility, platform, or test-only suppression."
         )]
-        #[allow(
-            clippy::cast_sign_loss,
-            reason = "Intentional compatibility, platform, or test-only suppression."
-        )]
         cache.insert(key1, value1, test_size_bytes as u64); // safe: positive literal
 
         let stats = cache.stats();

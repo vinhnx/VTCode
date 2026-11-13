@@ -8,7 +8,7 @@
   <sub>Explore, plan, edit, and verify with your model of choice.</sub>
 </p>
 
-[![Rust](https://img.shields.io/badge/rust-1.99.1%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
+[![Rust](https://img.shields.io/badge/rust-1.100.0%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-BFB38F?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/vtcode.svg)](https://github.com/vinhnx/vtcode/releases)
 
@@ -52,7 +52,7 @@ Details live in [Documentation](#documentation); the table above is the short ma
 
 ## Quick start
 
-Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.99.1+ (edition 2024). VT Code ships
+Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.100.0+ (edition 2024). VT Code ships
 its own search engine; see the [installation guide](./docs/installation/README.md) for prerequisites.
 
 ### 1. Install
@@ -214,7 +214,7 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-Build with Rust 1.99.1+ (edition 2024; workspace version 0.182.0).
+Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.0).
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git

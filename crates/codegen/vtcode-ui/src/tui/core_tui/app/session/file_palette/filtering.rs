@@ -14,11 +14,7 @@ impl FilePalette {
             }
         }
 
-        if path.components().any(|c| c.as_os_str() == ".git") {
-            return true;
-        }
-
-        false
+        path.components().any(|c| c.as_os_str() == ".git")
     }
 
     pub(crate) fn load_files(&mut self, files: Vec<String>) {

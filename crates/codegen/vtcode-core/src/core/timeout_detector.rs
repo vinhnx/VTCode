@@ -354,11 +354,7 @@ impl TimeoutDetector {
         }
 
         // Check for timeout-specific retry
-        if config.retry_on_timeout && (contains_ci("timeout") || contains_ci("timed out")) {
-            return true;
-        }
-
-        false
+        config.retry_on_timeout && (contains_ci("timeout") || contains_ci("timed out"))
     }
 
     /// Execute an operation with automatic timeout detection and retries

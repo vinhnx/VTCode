@@ -792,10 +792,8 @@ pub fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
     loop {
         let previous = normalized;
         normalized = normalized.trim();
-        normalized = normalized.strip_prefix('"').unwrap_or(normalized);
-        normalized = normalized.strip_suffix('"').unwrap_or(normalized);
-        normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
-        normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
+        normalized = normalized.trim_prefix('"').trim_suffix('"');
+        normalized = normalized.trim_prefix('\'').trim_suffix('\'');
         normalized = normalized.trim_end_matches(['.', ',', ';', '!', '?']).trim();
         if normalized == previous {
             return normalized;
