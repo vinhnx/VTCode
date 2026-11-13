@@ -7,7 +7,6 @@ authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Core library for VT Code - a Rust-based terminal coding agent"
 license.workspace = true
 readme = "README.md"
-homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-core"
 keywords = ["ai", "coding", "agent", "llm", "rust"]
@@ -75,7 +74,6 @@ serde-saphyr = { workspace = true }
 # Zip support for skill packaging
 zip = { workspace = true }
 flate2 = "1.1"
-tar = "0.4"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 # ANSI styling

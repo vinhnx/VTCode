@@ -171,7 +171,9 @@ global-min-publish-age = "14 days"
 
 Cargo then refuses versions published within the last 14 days (the rust-lang repos' own setting), since freshly
 published malicious crates are typically revoked within days. `--locked` builds and CI consume the existing lockfile
-without re-resolution, so in-window versions already in the lockfile keep building. Known limits: `cargo install`
+without re-resolution, so in-window versions already in the lockfile keep building. `cargo publish --dry-run`
+re-resolves registry deps for the packaged crate, so sibling versions younger than the window need the override
+below locally. Known limits: `cargo install`
 ignores it, it trusts registry publish-time data, and it is not a complete defense — to adopt a deliberately fresh
 version, re-resolve with `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`.
 

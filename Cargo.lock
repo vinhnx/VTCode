@@ -12346,7 +12346,6 @@ dependencies = [
  "shell-words",
  "smallvec",
  "strsim",
- "tar",
  "tempfile",
  "terminal_size",
  "textwrap",

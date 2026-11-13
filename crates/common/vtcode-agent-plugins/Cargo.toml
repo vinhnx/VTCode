@@ -7,7 +7,6 @@ authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Agent Plugins loader for VT Code: portable plugin manifests, skill discovery, and MCP configuration."
 license.workspace = true
 readme = "README.md"
-homepage.workspace = true
 repository.workspace = true
 documentation.workspace = true
 keywords = ["agent", "plugins", "skills", "mcp", "discovery"]

@@ -32,7 +32,6 @@ autoexamples = false
 autotests = false
 autobenches = false
 description = "Thin wrapper around macOS Notifications."
-homepage = "https://github.com/h4llow3En/mac-notification-sys"
 documentation = "https://docs.rs/mac-notification-sys/latest/mac_notification_sys/"
 readme = "README.md"
 keywords = [

@@ -7,7 +7,6 @@ authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Thread identifiers and lifecycle types extracted from vtcode-core for independent builds."
 license.workspace = true
 readme = "README.md"
-homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-threads"
 keywords = ["vtcode", "thread", "session", "agent"]

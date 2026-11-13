@@ -7,7 +7,6 @@ authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Authenticated WebMCP bridge and workspace adapter for VT Code"
 license.workspace = true
 readme = "README.md"
-homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-webmcp"
 keywords = ["vtcode", "webmcp", "websocket", "workspace", "security"]

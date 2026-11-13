@@ -7,7 +7,6 @@ authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Command safety detection, execution policies, and sandboxing for VT Code"
 license.workspace = true
 readme = "README.md"
-homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-safety"
 categories = ["development-tools"]
@@ -18,7 +17,6 @@ anyhow = { workspace = true }
 dirs = { workspace = true }
 hashbrown = { workspace = true }
 lru = "0.19"
-nix = { workspace = true, features = ["user", "signal", "process", "resource"] }
 once_cell = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
@@ -37,6 +35,9 @@ vtcode-commons = { workspace = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4"
 libc = { workspace = true }
+# Sandboxing/process hardening (linux.rs, linux_seccomp.rs, child_spawn.rs);
+# kept in the target table so non-Linux checks don't flag it unused.
+nix = { workspace = true, features = ["user", "signal", "process", "resource"] }
 seccompiler = "0.5"
 
 [dev-dependencies]
