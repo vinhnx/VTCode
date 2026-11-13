@@ -206,12 +206,12 @@ full crate list; `default-members` build only the root binary, `vtcode-core`, an
 
 ```mermaid
 graph LR
-    BIN[vtcode binary] --> CORE[vtcode-core harness]
-    CORE --> LLM[vtcode-llm]
-    CORE --> SAFETY[vtcode-safety]
-    CORE --> EVENTS[vtcode-exec-events (crates/common)]
-    CORE --> MEMORY[vtcode-memory]
-    CORE --> UI[vtcode-ui]
+    BIN["vtcode binary"] --> CORE["vtcode-core harness"]
+    CORE --> LLM["vtcode-llm"]
+    CORE --> SAFETY["vtcode-safety"]
+    CORE --> EVENTS["vtcode-exec-events (crates/common)"]
+    CORE --> MEMORY["vtcode-memory"]
+    CORE --> UI["vtcode-ui"]
 ```
 
 Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.0).
