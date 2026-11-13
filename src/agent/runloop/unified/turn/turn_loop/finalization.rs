@@ -300,7 +300,7 @@ pub(super) async fn normalize_recovery_break(
         && ctx.harness_state.retry_recovery_pass()
     {
         tracing::warn!(
-            retry = ctx.harness_state.recovery_retry_count(),
+            retry = recovery_retry_count,
             max = MAX_RECOVERY_RETRIES,
             "Recovery contract violation; retrying tool-free synthesis pass"
         );

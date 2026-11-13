@@ -180,7 +180,9 @@ pub(super) const RECOVERY_TOOL_CALL_REPEAT_DIRECTIVE: &str = "Recovery retry: co
 /// Directive for a tool-free recovery retry: escalates once the same contract
 /// violation has already repeated, so the request carries new information
 /// instead of resending an identical directive. `retry_count` is the count of
-/// already-consumed retries (0 = first retry).
+/// already-consumed retries (0 = first retry) from the shared recovery
+/// counter; the planning-synthesis and generic arms are mutually exclusive
+/// within a turn, so no family can seed the other's count.
 #[must_use]
 pub(super) fn recovery_retry_directive(retry_count: u8) -> &'static str {
     if retry_count == 0 {
