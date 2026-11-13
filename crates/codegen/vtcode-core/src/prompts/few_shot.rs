@@ -160,11 +160,6 @@ impl FewShotStore {
         self.examples.is_empty()
     }
 
-    /// Iterate over all loaded examples in deterministic id order.
-    pub fn iter(&self) -> impl Iterator<Item = &FewShotExample> {
-        self.examples.iter()
-    }
-
     /// Select examples whose tags overlap with the query, capped at
     /// `budget_tokens`. Returns examples in score-descending order
     /// (ties broken by id ascending).

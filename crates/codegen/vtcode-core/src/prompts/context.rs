@@ -42,21 +42,11 @@ pub struct UserPreferences {
 }
 
 impl PromptContext {
-    /// Create context from workspace
-    pub fn from_workspace(workspace: PathBuf) -> Self {
-        Self { workspace: Some(workspace), ..Default::default() }
-    }
-
     /// Add detected language
     pub fn add_language(&mut self, language: String) {
         if !self.languages.contains(&language) {
             self.languages.push(language);
         }
-    }
-
-    /// Set project type
-    pub fn set_project_type(&mut self, project_type: String) {
-        self.project_type = Some(project_type);
     }
 
     /// Add available tool
@@ -93,11 +83,6 @@ impl PromptContext {
         for (name, description) in skills {
             self.add_skill(name, description);
         }
-    }
-
-    /// Set capability level explicitly
-    pub fn set_capability_level(&mut self, level: CapabilityLevel) {
-        self.capability_level = Some(level);
     }
 
     /// Infer capability level from available tools

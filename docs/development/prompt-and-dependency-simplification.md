@@ -340,6 +340,31 @@ The prompt conventions this change established are recorded in
 
 ---
 
+## 8a. Dead prompt-surface methods — REMOVED
+
+`./scripts/hawk.sh` reports `vtcode-core` dead public items. The first five in
+the `prompts/` module owned by this audit had zero callers anywhere:
+
+| Removed | Why it was dead |
+| ------- | --------------- |
+| `PromptContext::from_workspace` | every caller uses `from_workspace_tools`, which also seeds the tool list `infer_capability_level` reads |
+| `PromptContext::set_project_type` | nothing sets a project type in production; only the cache tests assign the field directly |
+| `PromptContext::set_capability_level` | `infer_capability_level` is the only writer of the field |
+| `FewShotStore::iter` | no caller; the `.iter()` hits nearby are `Vec`/`HashMap` |
+| `OutputStyleApplier::get_available_styles` | no caller |
+| `OutputStyles::list_styles` | second-order: it became dead once `get_available_styles` went, and hawk had not flagged it |
+
+`hawk::dead_public` for `vtcode-core` went 677 → 672; five of the six were in
+hawk's list, and `list_styles` was found by following the orphan rather than
+reading the report.
+
+Deliberately **not** removed: `tools::optimized_registry` (153 lines, no live
+user) and the `PromptContext::project_type` field. Both are reachable from
+`vtcode-core`'s published API surface, and the field feeds the prompt cache
+key. Removing either is the same semver decision as `SimpleIndexer` — a
+breaking change to a published crate — not a cleanup this audit can make
+unilaterally.
+
 ## 8. Legacy `builtin_tool_registrations()` mirror — REMOVED
 
 `crates/codegen/vtcode-core/src/tools/registry/builtins/mod.rs` used to build a
