@@ -375,3 +375,16 @@ tokens over 5 entries**, identical to the mirror and inside the existing cap.
 now pins that: it builds a real `ToolRegistry`, asserts `matrix` is absent, and
 checks the token envelope. Verified it fails at 2470 when the cap is tightened
 to 100.
+
+The two count/token caps in `builtins/tests.rs` had the same defect, so they
+were pointed at the shipped path too:
+
+| Test | Before | After |
+| ---- | ------ | ----- |
+| `default_config_exposed_tool_count_within_cap` | counted raw `expose_in_llm()` on the mirror (15) while the shipped set was 19 | measures `ToolRegistry` model tools across 3 surfaces × 2 planning modes × 2 documentation modes; measured 5 |
+| `emitted_model_tool_schema_fits_within_first_request_budget` | mirror catalog (2470), which only matched by accident because the mirror has no `matrix` | shipped gate-aware registry (2470); verified it fails at 2470 when the cap is tightened to 100 |
+| `emitted_model_tool_count_stays_within_cap_for_default_config` | mirror catalog, one configuration, cap 14 | **removed**; the rewritten `default_config_exposed_tool_count_within_cap` covers 12 configurations, asserts `model_tools.len()` equals `function_declarations.len()`, and uses a cap of 8 |
+
+The count cap is now 8 against a measured 5. It previously read 15 against a
+raw registration count of 15 — a number that described a catalog no session
+receives.

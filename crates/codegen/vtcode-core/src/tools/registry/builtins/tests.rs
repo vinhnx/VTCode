@@ -370,20 +370,60 @@ fn tool_descriptions_satisfy_documented_contract() {
         );
     }
 }
-#[test]
-fn default_config_exposed_tool_count_within_cap() {
-    // Regression guard for the tool-consolidation work: the number of
-    // LLM-exposed built-in tools must stay bounded so the model does not
-    // waste attention choosing between near-duplicates. Any new
-    // registration must either consolidate an existing tool, be deferred
-    // behind the deferred-loading path, or deliberately raise this cap in
-    // review.
-    let registrations = builtin_tool_registrations(None);
-    let exposed: usize = registrations.iter().filter(|registration| registration.expose_in_llm()).count();
-    // The optional canonical public-decision surface is the fifteenth builtin.
+#[tokio::test]
+async fn default_config_exposed_tool_count_within_cap() {
+    // Regression guard for the tool-consolidation work: the number of tools
+    // the model actually receives must stay bounded so it does not waste
+    // attention choosing between near-duplicates. Any new registration must
+    // either consolidate an existing tool, be deferred behind the
+    // deferred-loading path, or deliberately raise this cap in review.
+    //
+    // This measures the shipped catalog through `ToolRegistry`, which applies
+    // the deferred-loading policy and the runtime access gates (`matrix`
+    // is stripped unless the session coordinates or runs a matrix). Counting
+    // raw `expose_in_llm()` registrations instead was a drifted proxy: it
+    // reported 19 against a cap of 15 while the model received 5.
+    use crate::config::ToolDocumentationMode;
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+
+    let temp = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
+
+    let mut worst = 0usize;
+    for surface in [
+        SessionSurface::Interactive,
+        SessionSurface::AgentRunner,
+        SessionSurface::Acp,
+    ] {
+        for planning_active in [false, true] {
+            for documentation_mode in [ToolDocumentationMode::Full, ToolDocumentationMode::Progressive] {
+                let config = SessionToolsConfig {
+                    planning_active,
+                    ..SessionToolsConfig::full_public(
+                        surface,
+                        CapabilityLevel::CodeSearch,
+                        documentation_mode,
+                        ToolModelCapabilities::default(),
+                    )
+                };
+                let tools = registry.model_tools(config.clone()).await;
+                let declarations = registry.function_declarations(config).await;
+                assert_eq!(
+                    tools.len(),
+                    declarations.len(),
+                    "{surface:?} planning={planning_active}: model_tools and function_declarations must agree"
+                );
+                worst = worst.max(tools.len());
+            }
+        }
+    }
+
+    // Measured 5 across every surface, planning mode, and documentation mode.
+    // Headroom admits one more always-eager tool without letting the count
+    // creep back toward the pre-deferral surface.
     assert!(
-        exposed <= 15,
-        "exposed built-in tool count is {exposed}; expected <= 15. \
+        worst <= 8,
+        "the model receives {worst} builtin tools in the widest configuration; expected <= 8. \
          Consolidate, defer, or raise the cap in review."
     );
 }
@@ -411,53 +451,23 @@ fn public_decision_is_available_in_interactive_and_headless_planning_and_executi
     }
 }
 
-/// End-to-end regression for the tool-consolidation work: builds the real
-/// `SessionToolCatalog` from the actual builtin registrations (not a
-/// synthetic subset) and asserts the number of tool definitions/function
-/// declarations the model actually sees, for a default non-native-memory
-/// config, stays within the post-fold cap. This complements
-/// `default_config_exposed_tool_count_within_cap` (which only counts
-/// `expose_in_llm()` registrations) by exercising the full catalog
-/// pipeline, including dedup-by-public-name and deferred-loading
-/// collapsing.
-#[test]
-fn emitted_model_tool_count_stays_within_cap_for_default_config() {
-    use crate::config::ToolDocumentationMode;
-    use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
-
-    let registrations = builtin_tool_registrations(None);
-    let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
-    let config = SessionToolsConfig::full_public(
-        SessionSurface::Interactive,
-        CapabilityLevel::CodeSearch,
-        ToolDocumentationMode::Full,
-        ToolModelCapabilities::default(),
-    );
-
-    let model_tools = catalog.model_tools(config.clone());
-    assert!(
-        model_tools.len() <= 14,
-        "emitted model_tools count is {}; expected <= 14. \
-         Consolidate, defer, or raise the cap in review.",
-        model_tools.len()
-    );
-
-    let function_declarations = catalog.function_declarations(config);
-    assert!(
-        function_declarations.len() <= 14,
-        "emitted function_declarations count is {}; expected <= 14. \
-         Consolidate, defer, or raise the cap in review.",
-        function_declarations.len()
-    );
-}
-
 /// End-to-end regression for the first-request token budget: the actual
 /// builtin tool schemas sent in Progressive mode must fit in a small
 /// token envelope, leaving room for the system prompt and conversation.
-#[test]
-fn emitted_model_tool_schema_fits_within_first_request_budget() {
+///
+/// Measured through `ToolRegistry`, which applies the deferred-loading policy
+/// and the runtime access gates. The earlier version measured a catalog built
+/// straight from the test mirror, which has no access gates: it happened to
+/// land on the same number only because the mirror never declares `matrix`,
+/// the 911-token schema a default session is stripped of anyway.
+#[tokio::test]
+async fn emitted_model_tool_schema_fits_within_first_request_budget() {
     use crate::config::ToolDocumentationMode;
-    use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+
+    let temp = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
+
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -467,8 +477,6 @@ fn emitted_model_tool_schema_fits_within_first_request_budget() {
         parameters: &'a serde_json::Value,
     }
 
-    let registrations = builtin_tool_registrations(None);
-    let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
     let config = SessionToolsConfig::full_public(
         SessionSurface::Interactive,
         CapabilityLevel::CodeSearch,
@@ -476,7 +484,7 @@ fn emitted_model_tool_schema_fits_within_first_request_budget() {
         ToolModelCapabilities::default(),
     );
 
-    let schema_entries = catalog.schema_entries(config);
+    let schema_entries = registry.schema_entries(config).await;
     let total_tokens: usize = schema_entries
         .iter()
         .map(|entry| {
