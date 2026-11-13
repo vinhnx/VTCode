@@ -71,11 +71,12 @@ impl PtyScrollback {
         let text_bytes = cleaned_text.len();
 
         // Early warning at 80% threshold
-        if !self.warning_shown && self.current_bytes + text_bytes > (self.max_bytes * 80 / 100) {
+        let warning_threshold = self.max_bytes / 100 * 80 + self.max_bytes % 100 * 80 / 100;
+        if !self.warning_shown && self.retained_bytes().saturating_add(text_bytes) > warning_threshold {
             self.warning_shown = true;
             let warning = format!(
                 "\n[WARN] Output approaching size limit ({:.1} MB of {} MB). Output may be truncated soon.\n",
-                self.current_bytes as f64 / 1_000_000.0,
+                self.retained_bytes() as f64 / 1_000_000.0,
                 self.max_bytes / 1_000_000
             );
             // Add warning to both buffers
@@ -89,7 +90,7 @@ impl PtyScrollback {
         }
 
         // Check byte limit BEFORE processing to prevent memory explosion
-        if self.current_bytes + text_bytes > self.max_bytes {
+        if self.retained_bytes().saturating_add(text_bytes) > self.max_bytes {
             if !self.overflow_detected {
                 self.overflow_detected = true;
                 let warning = format!(
@@ -175,7 +176,7 @@ impl PtyScrollback {
     }
 
     fn trim_lines_to_limits(&mut self) {
-        while self.lines.len() > self.capacity_lines || self.current_bytes > self.max_bytes {
+        while self.lines.len() > self.capacity_lines || self.retained_bytes() > self.max_bytes {
             if let Some(oldest) = self.lines.pop_front() {
                 self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
             } else {
@@ -187,6 +188,10 @@ impl PtyScrollback {
         while self.pending_lines.len() > self.capacity_lines {
             self.pending_lines.pop_front();
         }
+    }
+
+    fn retained_bytes(&self) -> usize {
+        self.current_bytes.saturating_add(self.partial.len())
     }
 
     pub(super) fn push_utf8(&mut self, buffer: &mut Vec<u8>, eof: bool) {
@@ -283,16 +288,16 @@ impl PtyScrollback {
 
     #[allow(dead_code, reason = "Accessor kept on the live PTY scrollback buffer.")]
     fn current_size_bytes(&self) -> usize {
-        self.current_bytes
+        self.retained_bytes()
     }
 
     fn usage_percent(&self) -> f64 {
-        (self.current_bytes as f64 / self.max_bytes as f64) * 100.0
+        (self.retained_bytes() as f64 / self.max_bytes as f64) * 100.0
     }
 
     pub(super) fn metrics(&self) -> ScrollbackMetrics {
         ScrollbackMetrics {
-            current_bytes: self.current_bytes,
+            current_bytes: self.retained_bytes(),
             max_bytes: self.max_bytes,
             usage_percent: self.usage_percent(),
             overflow_detected: self.overflow_detected,
@@ -349,6 +354,34 @@ pub(super) struct ScrollbackMetrics {
 #[cfg(test)]
 mod unicode_optimization_tests {
     use super::*;
+
+    #[test]
+    fn unfinished_lines_are_bounded_even_when_pending_output_is_drained() {
+        for chunk in ["a".repeat(256), "界".repeat(85)] {
+            let mut scrollback = PtyScrollback::new(100, 4096);
+            for _ in 0..1000 {
+                scrollback.push_text(&chunk);
+                assert!(scrollback.retained_bytes() <= 4096);
+                assert!(scrollback.pending_partial.len() <= 4096);
+                scrollback.take_pending();
+            }
+            assert!(scrollback.output_truncated());
+            assert!(scrollback.metrics().bytes_dropped > 0);
+            assert_eq!(scrollback.current_size_bytes(), scrollback.snapshot().len());
+        }
+    }
+
+    #[test]
+    fn completed_and_unfinished_lines_share_the_byte_budget() {
+        let mut scrollback = PtyScrollback::new(100, 4096);
+        scrollback.push_text(&format!("{}\n", "a".repeat(999)));
+        scrollback.push_text(&"b".repeat(2000));
+        assert_eq!(scrollback.current_size_bytes(), 3000);
+        scrollback.push_text(&"c".repeat(2000));
+        assert!(scrollback.output_truncated());
+        assert!(!scrollback.snapshot().contains(&"c".repeat(2000)));
+        assert!(scrollback.retained_bytes() <= 4096);
+    }
 
     #[test]
     fn test_unicode_metrics_tracking() {
