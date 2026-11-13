@@ -157,6 +157,24 @@ forced exact-version self-exemptions that broke on every release, with no downst
 never propagate to consumers; only `cargo vet certify` audits do. If the project starts publishing real audits
 of its own releases, re-enable the per-crate policies.
 
+### Dependency Cooldown (resolve-time gate)
+
+Advisories and audits only see versions that already made it into `Cargo.lock`. To keep too-new versions out in the
+first place, opt in locally to Cargo's dependency cooldowns (Rust 1.100.0,
+[RFC 3923](https://github.com/rust-lang/rfcs/blob/master/text/3923-cargo-min-publish-age.md)) by adding the
+following to `.cargo/config.toml` (gitignored in this repo, so each contributor sets this up):
+
+```toml
+[registry]
+global-min-publish-age = "14 days"
+```
+
+Cargo then refuses versions published within the last 14 days (the rust-lang repos' own setting), since freshly
+published malicious crates are typically revoked within days. `--locked` builds and CI consume the existing lockfile
+without re-resolution, so in-window versions already in the lockfile keep building. Known limits: `cargo install`
+ignores it, it trusts registry publish-time data, and it is not a complete defense — to adopt a deliberately fresh
+version, re-resolve with `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`.
+
 ### Auditing Shipped Binaries
 
 Release artifacts are built with [cargo-auditable](https://github.com/rust-secure-code/cargo-auditable): the exact
