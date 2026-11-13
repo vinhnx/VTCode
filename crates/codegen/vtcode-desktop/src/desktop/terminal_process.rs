@@ -42,6 +42,7 @@ pub(super) fn default_shell() -> PathBuf {
 }
 
 impl TerminalProcess {
+    #[cfg(test)]
     pub(super) fn spawn(workspace: &Path, shell: &Path, size: PtySize) -> Result<Self> {
         Self::spawn_command(Self::base_command(workspace, shell), size)
     }

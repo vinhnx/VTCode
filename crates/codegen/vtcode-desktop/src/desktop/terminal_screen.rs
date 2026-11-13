@@ -56,11 +56,18 @@ impl TerminalScreen {
         std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
+    #[cfg(test)]
+    pub(super) fn history_size(&self) -> usize {
+        self.terminal.history_size()
+    }
+
+    #[cfg(test)]
     pub(super) fn scroll(&mut self, lines: i32) -> Vec<RioEvent> {
         self.terminal.scroll_display(Scroll::Delta(lines));
         std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
+    #[cfg(test)]
     pub(super) fn grid(&self) -> &Grid<Square> {
         &self.terminal.grid
     }
@@ -105,10 +112,6 @@ impl TerminalScreen {
         } else {
             text.as_bytes().to_vec()
         }
-    }
-
-    pub(super) fn history_size(&self) -> usize {
-        self.terminal.history_size()
     }
 
     /// Start a selection at a visible grid cell. Invalid coordinates clear

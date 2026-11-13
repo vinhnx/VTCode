@@ -365,6 +365,27 @@ key. Removing either is the same semver decision as `SimpleIndexer` — a
 breaking change to a published crate — not a cleanup this audit can make
 unilaterally.
 
+## 8b. Stale module-wide `dead_code` allows — NARROWED
+
+`vtcode-desktop/src/desktop/mod.rs` marked three modules dead with the reason
+"being integrated with the desktop PTY panel". That is no longer true: all
+three are reached from `view/terminal_panel.rs` and `terminal_tab.rs`. The
+module-wide allows were masking six real facts instead of one obsolete note.
+
+| Item | Was | Now |
+| ---- | --- | --- |
+| `terminal_process::spawn`, `terminal_tab::spawn` | allowed by the module attribute | `#[cfg(test)]` — tests are their only caller |
+| `terminal_screen::{history_size, scroll, grid}` | same | `#[cfg(test)]` |
+| `TerminalDrain::more` | same | deleted: written but never read, even by tests |
+| `TerminalDrain::events` | same | item-level `expect`, tests read it |
+
+`vtcode-desktop` is the one workspace binary with `publish = false`, so none of
+this touches a published surface.
+
+Verified load-bearing: reverting the `#[cfg(test)]` on
+`TerminalProcess::spawn` makes the non-test build report
+`warning: associated function 'spawn' is never used` again.
+
 ## 8. Legacy `builtin_tool_registrations()` mirror — REMOVED
 
 `crates/codegen/vtcode-core/src/tools/registry/builtins/mod.rs` used to build a

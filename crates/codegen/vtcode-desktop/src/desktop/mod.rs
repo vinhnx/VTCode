@@ -12,14 +12,8 @@ mod output_tail;
 mod preferences;
 mod startup;
 mod strings;
-#[allow(
-    dead_code,
-    reason = "terminal process is being integrated with the desktop PTY panel"
-)]
 mod terminal_process;
-#[allow(dead_code, reason = "terminal screen is being integrated with the desktop PTY panel")]
 mod terminal_screen;
-#[allow(dead_code, reason = "terminal tab is being integrated with the desktop panel")]
 mod terminal_tab;
 mod themes;
 mod transcript;

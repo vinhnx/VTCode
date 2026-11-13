@@ -29,7 +29,12 @@ const SCROLLBACK_LINES: usize = 10_000;
 
 pub(super) struct TerminalDrain {
     pub(super) changed: bool,
-    pub(super) more: bool,
+    /// Raw view events for this drain. Production routes them through the
+    /// pump's coalescer, so only tests read the vector directly.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "raw event list is consumed by the pump; tests inspect it")
+    )]
     pub(super) events: Vec<RioEvent>,
 }
 
@@ -100,6 +105,7 @@ pub(super) struct TerminalTab {
 }
 
 impl TerminalTab {
+    #[cfg(test)]
     pub(super) fn spawn(workspace: &Path, shell: &Path, size: PtySize, palette: List) -> Result<Self> {
         Self::with_process(TerminalProcess::spawn(workspace, shell, size)?, size, palette)
     }
@@ -216,15 +222,11 @@ impl TerminalTab {
                 Ok(TerminalProcessEvent::Exited(status)) => self.exit_status = Some(status),
                 Ok(TerminalProcessEvent::Error(error)) => self.error = Some(error),
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
-                    return TerminalDrain {
-                        changed: processed > 0,
-                        more: false,
-                        events: view_events,
-                    };
+                    return TerminalDrain { changed: processed > 0, events: view_events };
                 }
             }
         }
-        TerminalDrain { changed: true, more: true, events: view_events }
+        TerminalDrain { changed: true, events: view_events }
     }
 }
 
