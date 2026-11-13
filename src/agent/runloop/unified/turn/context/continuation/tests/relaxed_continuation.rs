@@ -49,7 +49,7 @@ fn relaxed_continuation_does_not_trigger_for_first_turn_handoff_offer() {
 }
 #[tokio::test]
 async fn first_turn_handoff_offer_completes_without_continue_directive() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.push(uni::Message::user("what's in this repo?".to_string()));
     ctx.working_history

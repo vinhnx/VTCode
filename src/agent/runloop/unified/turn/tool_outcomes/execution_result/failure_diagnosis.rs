@@ -299,7 +299,7 @@ mod tests {
         use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
         use vtcode_core::types::CompactStr;
 
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut ctx = backing.turn_processing_context();
         let args = json!({"cmd":"cargo check --locked"});
         let output = json!({"exit_code":1,"stderr":"type mismatch at src/lib.rs:2"});
@@ -471,7 +471,7 @@ mod tests {
         let error = ToolExecutionError::from_anyhow(tool_names::WRITE_STDIN, &source, 0, false, false, None);
         assert!(error.is_exec_session_not_found());
 
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut ctx = backing.turn_processing_context();
         let diagnosis = diagnose_error(&mut ctx, tool_names::WRITE_STDIN, &args, &error, "execution").await;
         assert!(diagnosis.likely_cause.contains("does not establish the command's outcome"));
@@ -495,7 +495,7 @@ mod tests {
     async fn grep_no_match_diagnosis_preserves_model_budget() {
         use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut ctx = backing.turn_processing_context();
         for command in [
             "rg missing src",

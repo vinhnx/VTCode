@@ -18,7 +18,6 @@ fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::Ha
     crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
         crate::agent::runloop::unified::run_loop_context::TurnRunId("test-run".to_string()),
         crate::agent::runloop::unified::run_loop_context::TurnId("test-turn".to_string()),
-        4,
         60,
         0,
     )

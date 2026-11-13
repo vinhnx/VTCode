@@ -44,7 +44,7 @@ async fn exhausted_previews_pending_verification_done_claim_is_blocked() {
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
     backing.set_provider(Box::new(DoneProvider { requests: requests.clone() }));
 
@@ -178,7 +178,7 @@ Synthesize the approval-ready plan from evidence gathered before preview exhaust
 
     let requests = Arc::new(AtomicUsize::new(0));
     let observations = Arc::new(Mutex::new(Vec::new()));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing
         .add_tool_definition(uni::ToolDefinition::function(
@@ -325,7 +325,7 @@ async fn exhausted_previews_pending_verification_completes_after_standalone_veri
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
     let workspace = backing.workspace_path().to_path_buf();
     fs::create_dir_all(workspace.join("src")).expect("create verifier fixture source directory");

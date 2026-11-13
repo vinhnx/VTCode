@@ -759,6 +759,9 @@ pub enum HarnessEventKind {
     SnapshotRestored,
     /// The user granted additional session tool-call capacity and the
     /// pending call will be retried in the same turn.
+    ///
+    /// No longer emitted: the per-turn/session tool-call count budget was
+    /// removed. Retained for wire compatibility with older session logs.
     SessionToolLimitIncreased,
     /// The user granted additional tool-loop capacity for the current turn.
     ToolLoopLimitIncreased,

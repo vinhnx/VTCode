@@ -5,7 +5,7 @@ use super::*;
 /// recovery guard via `contains_pseudo_tool_call_markers`.
 #[tokio::test]
 async fn recovery_non_parseable_tool_call_marker_breaks_turn() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -59,7 +59,7 @@ async fn recovery_non_parseable_tool_call_marker_breaks_turn() {
 /// answer that fabricates completion.
 #[tokio::test]
 async fn recovery_parseable_tool_call_with_preamble_breaks_turn() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -115,7 +115,7 @@ async fn recovery_parseable_tool_call_with_preamble_breaks_turn() {
 /// exception would be echoable from history on the very next pass.
 #[tokio::test]
 async fn recovery_complete_tool_call_with_appended_disclosure_still_breaks() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -158,7 +158,7 @@ async fn recovery_complete_tool_call_with_appended_disclosure_still_breaks() {
 /// repair or resumable handoff), never a normal text completion.
 #[tokio::test]
 async fn recovery_complete_tool_call_in_planning_uses_shared_allowance_before_handoff() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     backing.activate_tool_free_recovery_for_test("loop detector");

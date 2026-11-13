@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn active_primary_agent_runtime_state_is_system_prompt_context() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing
         .add_tool_definition(ToolDefinition::function(
             "code_search".to_string(),
@@ -60,7 +60,7 @@ async fn active_primary_agent_runtime_state_is_system_prompt_context() {
 }
 #[tokio::test]
 async fn active_primary_agent_memory_appendix_uses_canonical_name_for_alias_selection() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let workspace = backing.workspace_path().to_path_buf();
     std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/reviewer")).expect("canonical memory dir");
     std::fs::write(
@@ -100,7 +100,7 @@ async fn active_primary_agent_memory_appendix_uses_canonical_name_for_alias_sele
 }
 #[tokio::test]
 async fn active_primary_agent_missing_memory_is_noop_and_does_not_expand_tools() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("code_search")).await;
     backing.add_tool_definition(named_tool("apply_patch")).await;
     let workspace = backing.workspace_path().to_path_buf();
@@ -129,7 +129,7 @@ async fn active_primary_agent_missing_memory_is_noop_and_does_not_expand_tools()
 }
 #[tokio::test]
 async fn active_primary_agent_memory_appendix_is_replaced_on_switch() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let workspace = backing.workspace_path().to_path_buf();
     for (agent, memory) in [
         ("planner", "Planner-only durable note."),
@@ -175,7 +175,7 @@ async fn active_primary_agent_memory_appendix_is_replaced_on_switch() {
 }
 #[tokio::test]
 async fn active_primary_agent_tool_allow_list_intersects_baseline_tools() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("code_search")).await;
     backing.add_tool_definition(named_tool("apply_patch")).await;
     backing.add_tool_definition(named_tool("exec_command")).await;
@@ -198,7 +198,7 @@ async fn active_primary_agent_tool_allow_list_intersects_baseline_tools() {
 }
 #[tokio::test]
 async fn coordinator_selection_restricts_request_tools_and_restores_build_guidance() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     for name in [
         "matrix",
         "agent",

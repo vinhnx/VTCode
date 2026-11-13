@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn harness_state_tracks_blocked_call_streak() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert_eq!(state.blocked_tool_calls, 0);
     assert_eq!(state.record_blocked_tool_call(), 1);
@@ -13,7 +13,7 @@ fn harness_state_tracks_blocked_call_streak() {
 }
 #[test]
 fn harness_state_tracks_and_resets_preflight_failure_streak() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert_eq!(state.record_preflight_failure(), 1);
     assert_eq!(state.record_preflight_failure(), 2);
@@ -22,7 +22,7 @@ fn harness_state_tracks_and_resets_preflight_failure_streak() {
 }
 #[test]
 fn harness_state_tracks_recovery_state() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert!(!state.is_recovery_active());
     assert!(!state.recovery_pass_used());
@@ -40,7 +40,7 @@ fn harness_state_tracks_recovery_state() {
 }
 #[test]
 fn harness_state_consumes_recovery_pass_once() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert!(!state.consume_recovery_pass());
 
@@ -53,7 +53,7 @@ fn harness_state_consumes_recovery_pass_once() {
 }
 #[test]
 fn harness_state_supports_tool_enabled_recovery_retries() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
 
@@ -65,7 +65,7 @@ fn harness_state_supports_tool_enabled_recovery_retries() {
 }
 #[test]
 fn harness_state_arms_one_post_tool_compaction_retry() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert!(state.arm_post_tool_tool_enabled_retry("transient post-tool failure", false));
     assert!(state.is_recovery_active());
@@ -80,7 +80,7 @@ fn harness_state_arms_one_post_tool_compaction_retry() {
 }
 #[test]
 fn harness_state_marks_context_capacity_recovery() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert!(state.arm_post_tool_tool_enabled_retry("context limit", true));
     assert!(state.post_tool_context_capacity_failure());
@@ -99,7 +99,7 @@ fn harness_state_switch_to_tool_free_recovery_from_inactive() {
     // switch left it there, `consume_recovery_pass()` would return false,
     // `tool_free_recovery` would evaluate to false, and tools would never
     // be disabled at the API level.
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     // Fresh state: recovery is inactive.
     assert!(!state.is_recovery_active());
@@ -123,7 +123,7 @@ fn harness_state_switch_to_tool_free_recovery_from_inactive() {
 fn harness_state_switch_to_tool_free_recovery_from_in_pass_keeps_consumable() {
     // Switching from InPass (a pass already in flight) must still reset to
     // Pending so the next loop iteration can consume it.
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
     assert!(state.consume_recovery_pass()); // -> InPass
@@ -136,7 +136,7 @@ fn harness_state_switch_to_tool_free_recovery_from_in_pass_keeps_consumable() {
 #[test]
 fn harness_state_switch_to_tool_free_recovery_from_completed_keeps_consumable() {
     // No-regression guard: switching from Completed must reset to Pending.
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
     assert!(state.consume_recovery_pass()); // -> InPass
@@ -151,7 +151,7 @@ fn harness_state_switch_to_tool_free_recovery_from_completed_keeps_consumable() 
 fn harness_state_switch_to_tool_free_recovery_idempotent_when_pending() {
     // When already Pending, switching reports no phase change but still
     // forces the mode to ToolFreeSynthesis.
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.activate_recovery("loop detector");
     assert!(state.is_recovery_active()); // Pending
@@ -165,7 +165,7 @@ fn harness_state_switch_to_tool_free_recovery_resets_retry_count_from_inactive()
     // Switching from Inactive resets the retry counter (mirrors
     // activate_recovery_with_mode) so any stale count does not
     // prematurely exhaust the in-pass retry budget on the new pass.
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     // Fresh state: retry_count is 0, phase is Inactive.
     assert_eq!(state.recovery_retry_count(), 0);

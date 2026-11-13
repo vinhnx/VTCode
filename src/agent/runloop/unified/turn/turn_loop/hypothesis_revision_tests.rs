@@ -91,7 +91,7 @@ impl uni::LLMProvider for RevisionProvider {
 async fn run_script(steps: Vec<Step>, final_feedback: &'static str) -> (TestTurnProcessingBacking, Vec<ThreadEvent>) {
     let cursor = Arc::new(Mutex::new(0));
     let expected_calls = steps.len();
-    let mut backing = TestTurnProcessingBacking::new(16).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let workspace = backing.workspace_path();
     fs::write(workspace.join("alpha.txt"), "alpha\n").unwrap();
     fs::write(workspace.join("beta.txt"), "target=7\n").unwrap();

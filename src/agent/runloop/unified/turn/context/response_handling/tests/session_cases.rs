@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn pseudo_reprompt_queues_bounded_cap_allowance() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
     assert!(!ctx.plan_session.bounded_planning_follow_up_allowed());
@@ -19,7 +19,7 @@ async fn pseudo_reprompt_queues_bounded_cap_allowance() {
 }
 #[tokio::test]
 async fn denied_interview_retry_queues_bounded_cap_allowance() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let mut ctx = backing.turn_processing_context();
@@ -56,7 +56,7 @@ async fn explicit_plan_mode_requires_approval_with_full_auto_enabled() {
     event_tx
         .send(InlineEvent::Transient(TransientEvent::Cancelled))
         .expect("cancel approval");
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
@@ -98,7 +98,7 @@ async fn explicit_plan_mode_requires_approval_with_full_auto_enabled() {
 
 #[tokio::test]
 async fn explicit_plan_mode_waits_without_inline_approval_ui() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let events_path = backing.enable_harness_emitter();
     let mut renderer = AnsiRenderer::stdout();
@@ -138,7 +138,7 @@ async fn session_161453_draft_reaches_repair_then_persisted_approval_request() {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     // Dismiss only after the runtime has emitted the approval overlay.
     event_tx.send(InlineEvent::Transient(TransientEvent::Cancelled)).unwrap();
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_skip_confirmations_for_test(false);
     let events_path = backing.enable_harness_emitter();
@@ -209,7 +209,7 @@ async fn session_161453_draft_reaches_repair_then_persisted_approval_request() {
 }
 #[tokio::test]
 async fn session_161453_repeated_invalid_draft_stops_with_validator_feedback() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     ctx.session_stats.record_tool(vtcode_core::config::constants::tools::READ_FILE);

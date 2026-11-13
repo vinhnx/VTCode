@@ -17,7 +17,7 @@ async fn retry_progress_preserves_operation_and_clears_after_completion() {
     let handle = InlineHandle::new_for_tests(sender);
     let guard = handle.begin_progress(ProgressPhase::PreparingContext);
     let operation = guard.operation();
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.handle = &handle;
     *ctx.provider_client = Box::new(ScriptedProvider::new(
@@ -79,7 +79,7 @@ async fn compatible_previous_response_not_found_without_sent_chain_is_not_recove
         })],
     );
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let prior_messages = vec![uni::Message::user("hello".to_string())];
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);

@@ -706,7 +706,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prevalidated_execution_does_not_consume_safety_budget_twice() {
+    async fn prevalidated_execution_admits_safety_once() {
         let temp_dir = TempDir::new().expect("temp dir");
         // Canonicalize so the workspace root and file path share one prefix;
         // on macOS TempDir returns a /var/folders alias of /private/var/folders
@@ -717,7 +717,7 @@ mod tests {
         tokio::fs::write(&read_path, "hello").await.expect("write file");
 
         let gateway = registry.safety_gateway();
-        gateway.set_limits(1, 10);
+        gateway.set_rate_limits(1, Some(1));
         gateway.start_turn();
 
         let safety_result = gateway
@@ -748,7 +748,17 @@ mod tests {
         )
         .await;
 
+        // A double-admitting regression would record a second time inside the
+        // registry and deny this execution; success pins single admission.
         assert!(matches!(status, ToolExecutionStatus::Success { .. }));
-        assert_eq!(gateway.get_stats().turn_count, 1);
+        let second = gateway
+            .check_and_record_with_id(
+                &SafetyContext::new("test-session"),
+                vtcode_core::config::constants::tools::READ_FILE,
+                &json!({ "path": read_path }),
+                Some(ToolInvocationId::new()),
+            )
+            .await;
+        assert!(second.decision.is_denied(), "exactly one recording must exist");
     }
 }

@@ -46,9 +46,6 @@ use crate::agent::runloop::unified::turn::background_completion::PendingBackgrou
 use crate::agent::runloop::unified::turn::context::TurnLoopResult as RunLoopTurnLoopResult;
 use crate::agent::runloop::unified::turn::finalization::finalize_session;
 
-use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    effective_max_tool_calls_for_approved_plan_execution, effective_max_tool_calls_for_turn,
-};
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
 

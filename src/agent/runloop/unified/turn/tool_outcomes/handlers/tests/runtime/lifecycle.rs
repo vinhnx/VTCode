@@ -23,7 +23,7 @@ async fn assert_parallel_read_lifecycle(cancelled: bool) {
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use vtcode_core::core::agent::events::tool_started_event;
 
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().expect("sample workspace").to_path_buf();
     let emitter = HarnessEventEmitter::new_async(&workspace, "parallel-outcomes", None)
@@ -166,7 +166,7 @@ async fn assert_parallel_read_lifecycle(cancelled: bool) {
 }
 
 async fn successful_tool_history_for_display_mode(mode: ToolDisplayMode) -> Vec<(Option<String>, String)> {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.renderer.set_tool_display_mode(mode);
 
@@ -247,7 +247,7 @@ async fn compact_display_keeps_provider_history_identical_to_expanded_display() 
 
 #[tokio::test]
 async fn non_zero_read_result_is_diagnosed_without_successful_readonly_signature() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let args = json!({"path": "missing.rs"});
     let output = json!({
@@ -311,7 +311,7 @@ async fn single_tool_call_dispatch_records_requested_tool_calls() {
     // `admitted_tool_calls: N`: only the full-auto batch path recorded the
     // requested count. Recording moved to the shared dispatch so every path
     // counts identically.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
     cache_tool_permission(&mut backing, tool_names::READ_FILE, &valid_args, PermissionGrant::Permanent).await;

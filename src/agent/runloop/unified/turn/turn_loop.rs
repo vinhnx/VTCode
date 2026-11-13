@@ -34,14 +34,14 @@ use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter
 use crate::agent::runloop::unified::planning_workflow::maybe_handle_planning_exit_trigger;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::{
-    HarnessTurnState, RunLoopContext, TOOL_BUDGET_WARNING_THRESHOLD, TurnPhase, tool_loop_warning_due,
+    HarnessTurnState, RunLoopContext, TOOL_LOOP_WARNING_THRESHOLD, TurnPhase, tool_loop_warning_due,
     tool_loop_warning_message,
 };
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     ToolLoopLimitAction, extract_turn_config, handle_steering_messages, initial_tool_loop_limit,
-    maybe_handle_planning_enter_trigger, maybe_handle_tool_loop_limit, resolve_safety_tool_call_limits,
+    maybe_handle_planning_enter_trigger, maybe_handle_tool_loop_limit,
 };
 
 #[path = "turn_loop/compaction.rs"]
@@ -221,8 +221,7 @@ pub(crate) async fn run_turn_loop(
     let mut step_count = 0;
     let mut current_max_tool_loops =
         initial_tool_loop_limit(turn_config.max_tool_loops, ctx.harness_state.is_approved_plan_execution());
-    // Turn-scoped loop-warning latch: a local bool resets naturally each
-    // turn, mirroring the one-shot tool-call warning without new state.
+    // Turn-scoped loop-warning latch: a local bool resets naturally each turn.
     let mut tool_loop_warning_emitted = false;
     let mut turn_history_start_len = working_history.len();
     // Bounded condense-retry counter for truncated planning syntheses (see
@@ -245,25 +244,13 @@ pub(crate) async fn run_turn_loop(
         }
     }
 
-    // Reset per-turn counters while preserving only the explicit session
-    // headroom granted by the user. The validator reapplies that fuse inside
-    // `set_limits`, while ordinary runtime config changes (including a lower
-    // configured limit) remain authoritative when no grant exists.
-    {
-        let (max_per_turn, max_per_session) = resolve_safety_tool_call_limits(
-            ctx.harness_state.max_tool_calls,
-            turn_config.max_session_turns,
-            ctx.is_planning_active(),
-        );
-        ctx.safety_validator.set_limits(max_per_turn, max_per_session);
-        ctx.safety_validator.start_turn();
-    }
+    // Reset per-turn rate-limiter state on the shared safety gateway.
+    ctx.safety_validator.start_turn();
     // Tracks the planning flag from the previous loop iteration so Build↔Plan
-    // auto-switches mid-turn re-apply budgets in *both* directions. Raising
-    // only `max(limit, floor)` is not enough: the prior mode may have already
-    // consumed that cap, so the new mode needs a full floor of remaining
-    // headroom from now (user report: explicit Plan works, auto-switch hits
-    // the tool-call limit).
+    // auto-switches mid-turn re-apply the tool-loop floor in *both*
+    // directions. Raising only `max(limit, floor)` is not enough: the prior
+    // mode may have already consumed that cap, so the new mode needs a full
+    // floor of remaining headroom from now.
     let mut last_planning_active = ctx.is_planning_active();
 
     loop {
@@ -367,7 +354,7 @@ pub(crate) async fn run_turn_loop(
         if tool_loop_warning_due(
             step_count,
             current_max_tool_loops,
-            TOOL_BUDGET_WARNING_THRESHOLD,
+            TOOL_LOOP_WARNING_THRESHOLD,
             tool_loop_warning_emitted,
         ) {
             tool_loop_warning_emitted = true;

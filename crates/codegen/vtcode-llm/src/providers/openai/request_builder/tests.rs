@@ -573,7 +573,7 @@ fn gpt56_single_turn_still_writes_breakpoint() {
 }
 
 fn system_with_dynamics() -> String {
-    "stable instructions\n\n[Harness Limits]\n- max_tool_calls_per_turn: 5\n\n[Runtime Tool Catalog]\n- epoch: 2"
+    "stable instructions\n\n[Harness Limits]\n- max_tool_wall_clock_secs: 60\n\n[Runtime Tool Catalog]\n- epoch: 2"
         .to_string()
 }
 
@@ -879,7 +879,7 @@ fn responses_all_dynamic_system_prompt_keeps_contract_addendum() {
     // dynamic, the GPT-5.6 contract addendum must still be emitted rather
     // than silently dropped.
     let mut request = gpt56_request(vec![provider::Message::user("hi".to_string())]);
-    request.system_prompt = Some(Arc::from("[Harness Limits]\n- max_tool_calls_per_turn: 5"));
+    request.system_prompt = Some(Arc::from("[Harness Limits]\n- max_tool_wall_clock_secs: 60"));
 
     let payload = build_responses_request(&request, &cache_ctx()).expect("request should build");
     let instructions = payload

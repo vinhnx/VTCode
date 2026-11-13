@@ -13,7 +13,7 @@ async fn unmatched_tool_result_noop_repair_fails_closed_without_repeating_the_re
         })],
     );
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.push(uni::Message::assistant_with_tools(
@@ -53,7 +53,7 @@ async fn duplicate_tool_response_stops_each_user_attempt_without_automatic_retri
         ],
     )
     .with_recorded_messages(Arc::clone(&requests));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     for result in ["running", "exit 0"] {
@@ -141,7 +141,7 @@ async fn duplicate_tool_response_retries_only_once_after_changed_request_repair(
         };
         let provider = ScriptedProvider::new("meta", false, Arc::clone(&calls), outcomes)
             .with_recorded_messages(Arc::clone(&requests));
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         if case == Case::TransientThenRepaired {
             let mut config = vtcode_core::config::loader::VTCodeConfig::default();
             config.agent.max_task_retries = 1;
@@ -237,7 +237,7 @@ async fn misconfiguration_after_tool_result_skips_post_tool_retry() {
         })],
     );
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.push(uni::Message::assistant_with_tools(
@@ -275,7 +275,7 @@ async fn streaming_timeout_falls_back_to_non_streaming_for_supported_models() {
     )
     .with_streaming(true);
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.push(uni::Message::user("continue".to_string()));

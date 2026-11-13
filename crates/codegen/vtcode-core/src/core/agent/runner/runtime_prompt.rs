@@ -69,7 +69,6 @@ impl AgentRunner {
             cfg.agent.max_system_prompt_tokens,
             cfg.agent.harness.max_budget_usd.map(f64::to_bits),
             format!("{:?}", cfg.agent.shell_prompt_profile),
-            cfg.agent.harness.max_tool_calls_per_turn,
             cfg.agent.harness.max_tool_wall_clock_secs,
             cfg.agent.harness.max_tool_retries,
         ))
@@ -122,7 +121,6 @@ impl AgentRunner {
         );
         upsert_harness_limits_section(
             &mut system_prompt,
-            self.config().agent.harness.max_tool_calls_per_turn,
             self.config().agent.harness.max_tool_wall_clock_secs,
             self.config().agent.harness.max_tool_retries,
         );

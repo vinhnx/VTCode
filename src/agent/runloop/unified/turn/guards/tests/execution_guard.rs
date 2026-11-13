@@ -5,7 +5,7 @@ async fn execution_total_low_signal_guard_trips_at_threshold() {
     // Diverse empty searches (a new query each time) never trip the
     // per-family fast-path; the execution-mode total guard converges the
     // turn at 12 low-signal outcomes without productive work.
-    let mut backing = TestTurnProcessingBacking::new(40).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -42,7 +42,7 @@ async fn execution_total_low_signal_guard_trips_at_threshold() {
 }
 #[tokio::test]
 async fn execution_total_low_signal_guard_fires_once_per_turn() {
-    let mut backing = TestTurnProcessingBacking::new(40).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     tracker.execution_total_low_signal_triggered = true;
@@ -70,7 +70,7 @@ async fn execution_total_low_signal_guard_fires_once_per_turn() {
 async fn execution_total_low_signal_window_resets_on_mutation() {
     // A productive mutation resets the low-signal window, so churn
     // interrupted by real work must not accumulate across the reset.
-    let mut backing = TestTurnProcessingBacking::new(40).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {

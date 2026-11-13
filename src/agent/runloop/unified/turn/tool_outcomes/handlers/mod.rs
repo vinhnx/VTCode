@@ -12,14 +12,11 @@ use vtcode_core::utils::ansi::MessageStyle;
 use super::error_handling::tool_denial_diagnostic;
 use super::helpers::{check_is_argument_error, find_tool_response_after_last_assistant, is_tool_call_recorded};
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
-use crate::agent::runloop::unified::run_loop_context::full_auto_loop_grants_enabled;
 use crate::agent::runloop::unified::run_loop_context::{
     BudgetExhaustedMetrics, budget_kind, emit_budget_exhausted_metric,
 };
 use crate::agent::runloop::unified::tool_call_safety::invocation_id_from_call_id;
-use crate::agent::runloop::unified::tool_pipeline::validation::{
-    SafetyValidationFailure, validate_tool_call_with_limit_prompt,
-};
+use crate::agent::runloop::unified::tool_pipeline::validation::{SafetyValidationFailure, validate_tool_call_safety};
 use crate::agent::runloop::unified::tool_routing::{
     PreToolHookPhaseResult, ToolPermissionFlow, ensure_tool_permission_with_call_id,
 };
@@ -41,7 +38,7 @@ mod recovery;
 #[cfg(test)]
 mod tests;
 mod types;
-use budget::record_tool_call_budget_usage;
+use budget::record_tool_call_usage;
 use fallbacks::{
     build_validation_error_content_with_fallback, preflight_validation_fallback, recovery_fallback_for_tool,
     try_recover_preflight_with_fallback,
@@ -516,12 +513,12 @@ pub(crate) fn reconcile_missing_tool_responses(
     }
 }
 
-/// Push the one-time budget-exhaustion synthesis directive (wall-clock or
-/// tool-call budget) if a rejection armed it during validation. Called after
-/// the tool batch (single or grouped) completes so the system message lands
-/// *after* all tool responses of the current assistant message, never
-/// interleaved between them (which some provider adapters reject). No-op
-/// unless a budget tripped this turn.
+/// Push the one-time wall-clock-exhaustion synthesis directive if a
+/// rejection armed it during validation. Called after the tool batch (single
+/// or grouped) completes so the system message lands *after* all tool
+/// responses of the current assistant message, never interleaved between them
+/// (which some provider adapters reject). No-op unless the wall-clock budget
+/// tripped this turn.
 pub(super) fn flush_budget_synthesis_directives(ctx: &mut TurnProcessingContext<'_>) {
     if ctx.harness_state.take_wall_clock_directive_pending()
         && let Some(exhaustion) = ctx.harness_state.wall_clock_budget_exhaustion()
@@ -547,35 +544,6 @@ pub(super) fn flush_budget_synthesis_directives(ctx: &mut TurnProcessingContext<
             ctx.harness_state.recovery_reason = Some("tool wall-clock budget exhausted".to_string());
         }
         ctx.harness_state.switch_to_tool_free_recovery();
-    }
-    if ctx.harness_state.take_tool_budget_directive_pending()
-        && let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion()
-    {
-        ctx.push_system_message(exhaustion.synthesis_directive_message());
-        emit_budget_exhausted_metric(
-            ctx.traj,
-            BudgetExhaustedMetrics {
-                budget: budget_kind::TOOL_CALLS,
-                used: exhaustion.used,
-                max: exhaustion.max,
-                step_count: None,
-                planning_active: ctx.is_planning_active(),
-                tool_calls: ctx.harness_state.tool_calls,
-            },
-        );
-        if ctx.harness_state.recovery_reason.is_none() {
-            ctx.harness_state.recovery_reason = Some("tool-call budget exhausted".to_string());
-        }
-        ctx.harness_state.switch_to_tool_free_recovery();
-    }
-}
-
-/// Push model-facing guidance after a user grants more session tool calls.
-/// This is deliberately flushed after the tool batch, alongside the existing
-/// budget directives, so provider message ordering remains valid.
-pub(super) fn flush_session_limit_grant_directive(ctx: &mut TurnProcessingContext<'_>) {
-    if ctx.harness_state.take_session_limit_grant_directive_pending() {
-        ctx.push_system_message(crate::agent::runloop::unified::run_loop_context::SESSION_LIMIT_GRANT_DIRECTIVE);
     }
 }
 
@@ -678,41 +646,8 @@ async fn run_safety_validation_loop(
     effective_args: &serde_json::Value,
 ) -> Result<Option<(ValidationResult, Option<String>)>> {
     let invocation_id = invocation_id_from_call_id(tool_call_id);
-    // Hoisted: `is_planning_active` borrows all of `ctx`, which would
-    // conflict with the `harness_state` reborrow in the call below.
-    let planning_active = ctx.is_planning_active();
-    match validate_tool_call_with_limit_prompt(
-        ctx.safety_validator,
-        ctx.handle,
-        ctx.session,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        canonical_tool_name,
-        effective_args,
-        invocation_id,
-        Some(ctx.harness_state),
-        ctx.harness_emitter,
-        Some(ctx.active_primary_agent.active().name()),
-        full_auto_loop_grants_enabled(ctx.full_auto, ctx.vt_cfg),
-        ctx.traj,
-        planning_active,
-    )
-    .await
-    {
+    match validate_tool_call_safety(ctx.safety_validator, canonical_tool_name, effective_args, invocation_id).await {
         Ok(()) => Ok(None),
-        Err(SafetyValidationFailure::SessionLimitNotIncreased)
-        | Err(SafetyValidationFailure::SessionLimitPromptFailed(_)) => {
-            ctx.push_rejected_tool_response(
-                tool_call_id,
-                Some(canonical_tool_name),
-                Some(effective_args),
-                build_failure_error_content(
-                    "Session tool limit reached and not increased by user".to_string(),
-                    "safety_limit",
-                ),
-            );
-            Ok(Some((ValidationResult::Blocked, None)))
-        }
         Err(SafetyValidationFailure::NeedsApproval(justification)) => {
             Ok(Some((ValidationResult::Handled, Some(justification))))
         }
@@ -815,7 +750,6 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     reconcile_missing_tool_responses(t_ctx.ctx, std::slice::from_ref(&prepared));
     let outcome = outcome?;
     flush_budget_synthesis_directives(t_ctx.ctx);
-    flush_session_limit_grant_directive(t_ctx.ctx);
     flush_blocked_tool_recovery(t_ctx.ctx);
     Ok(outcome)
 }

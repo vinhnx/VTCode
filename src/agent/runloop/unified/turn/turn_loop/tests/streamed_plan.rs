@@ -27,7 +27,7 @@ async fn explicit_plan_request_requires_approval(already_active: bool) {
     event_tx
         .send(InlineEvent::Transient(TransientEvent::Cancelled))
         .expect("cancel approval");
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     if already_active {
         backing.activate_planning_for_test();
     }
@@ -70,7 +70,7 @@ async fn explicit_plan_request_requires_approval(already_active: bool) {
 #[tokio::test]
 async fn streamed_invalid_plan_uses_one_bounded_repair_without_approval_artifacts() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let harness_path = backing.enable_harness_emitter();
     backing.set_provider(Box::new(StreamedPlanProvider {
@@ -121,7 +121,7 @@ async fn streamed_invalid_plan_uses_one_bounded_repair_without_approval_artifact
 #[tokio::test]
 async fn streamed_invalid_plan_repairs_to_valid_plan_and_persists_it() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(StreamedPlanProvider {
         script: StreamedPlanScript::InvalidThenValid,
@@ -185,7 +185,7 @@ async fn streamed_invalid_plan_repairs_to_valid_plan_and_persists_it() {
 #[tokio::test]
 async fn streamed_invalid_plan_repair_is_admitted_after_prior_plain_response() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     backing.set_provider(Box::new(StreamedPlanProvider {
@@ -223,7 +223,7 @@ async fn streamed_invalid_plan_repair_is_admitted_after_prior_plain_response() {
 #[tokio::test]
 async fn streamed_invalid_plan_gets_a_second_repair_before_terminal_fallback() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(StreamedPlanProvider {
         script: StreamedPlanScript::InvalidThenInvalidThenProse,
@@ -255,7 +255,7 @@ async fn streamed_invalid_plan_gets_a_second_repair_before_terminal_fallback() {
 #[tokio::test]
 async fn streamed_third_invalid_plan_is_terminal_and_retains_each_rejected_draft_in_assistant_history() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(StreamedPlanProvider {
         script: StreamedPlanScript::ThreeInvalid,
@@ -298,7 +298,7 @@ async fn streamed_third_invalid_plan_is_terminal_and_retains_each_rejected_draft
 #[tokio::test]
 async fn streamed_valid_plan_is_persisted_and_publishes_approval_ready_events() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let harness_path = backing.enable_harness_emitter();
     backing.set_provider(Box::new(StreamedPlanProvider {

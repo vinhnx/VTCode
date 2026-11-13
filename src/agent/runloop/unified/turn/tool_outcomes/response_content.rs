@@ -710,7 +710,6 @@ mod tests {
         let mut harness_state = HarnessTurnState::new(
             TurnRunId("response-content-run".to_string()),
             TurnId("response-content-turn".to_string()),
-            4,
             120,
             2,
         );
@@ -751,7 +750,7 @@ mod tests {
             "exit_code": 1,
             "failure_diagnostics": "command completed with status 1"
         });
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
 
         let diagnostics = {
             let mut ctx = backing.turn_processing_context();
@@ -772,7 +771,7 @@ mod tests {
 
     #[tokio::test]
     async fn same_call_tool_response_overwrite_replaces_visible_byte_accounting() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
 
         let diagnostics = {
             let mut ctx = backing.turn_processing_context();
@@ -807,7 +806,7 @@ mod tests {
     async fn raw_tool_response_applies_reduce_tool_result_hard_caps() {
         // Interactive path must share the headless AgentRunner's reduce caps
         // even when raw=true skips summarization (the previous leak).
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let stdout = (0..2200).map(|_| "a").collect::<Vec<_>>().join("\n");
         let output = json!({ "stdout": stdout, "exit_code": 0 });
         let args = json!({ "cmd": "gen", "raw": true });

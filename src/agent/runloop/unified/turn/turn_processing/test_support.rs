@@ -140,7 +140,7 @@ pub(crate) struct TestTurnProcessingBacking {
 }
 
 impl TestTurnProcessingBacking {
-    pub(crate) async fn new(max_tool_calls: usize) -> Self {
+    pub(crate) async fn new() -> Self {
         let temp = tempfile::TempDir::new().expect("temp workspace");
         let workspace = temp.path().to_path_buf();
 
@@ -174,13 +174,8 @@ impl TestTurnProcessingBacking {
         let autonomous_executor = Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
         let error_recovery =
             Arc::new(RwLock::new(vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default()));
-        let harness_state = HarnessTurnState::new(
-            TurnRunId("run-test".to_string()),
-            TurnId("turn-test".to_string()),
-            max_tool_calls,
-            60,
-            0,
-        );
+        let harness_state =
+            HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
         let tool_catalog = Arc::new(ToolCatalogState::new());
         let config = AgentConfig {
             model: "noop-model".to_string(),

@@ -1,10 +1,9 @@
 use super::{
-    ToolLoopGrantSource, UNLIMITED_TOOL_LOOPS, apply_mode_switch_remaining_tool_call_floor,
-    apply_mode_switch_remaining_tool_loop_floor, arm_tool_loop_synthesis_recovery, auto_tool_loop_grant_increment,
-    clamp_tool_loop_increment, effective_max_tool_calls_for_approved_plan_execution, effective_max_tool_calls_for_turn,
-    extract_turn_config, handle_steering_messages, initial_tool_loop_limit, is_internal_harness_follow_up,
-    is_stale_approved_plan_pause_response, resolve_safety_tool_call_limits, resolve_tool_loop_limit,
-    tool_loop_grant_source, tool_loop_hard_cap, tool_loop_limit_recovery_reason,
+    ToolLoopGrantSource, UNLIMITED_TOOL_LOOPS, apply_mode_switch_remaining_tool_loop_floor,
+    arm_tool_loop_synthesis_recovery, auto_tool_loop_grant_increment, clamp_tool_loop_increment, extract_turn_config,
+    handle_steering_messages, initial_tool_loop_limit, is_internal_harness_follow_up,
+    is_stale_approved_plan_pause_response, resolve_tool_loop_limit, tool_loop_grant_source, tool_loop_hard_cap,
+    tool_loop_limit_recovery_reason,
 };
 use crate::agent::runloop::unified::planning_workflow::{
     PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
@@ -249,57 +248,6 @@ fn resolve_tool_loop_limit_allows_unlimited_mode() {
 }
 
 #[test]
-fn resolve_safety_tool_call_limits_maps_zero_turn_budget_to_unbounded_limits() {
-    assert_eq!(resolve_safety_tool_call_limits(0, 50, false), (usize::MAX, usize::MAX));
-}
-
-#[test]
-fn resolve_safety_tool_call_limits_scales_session_limit_from_turn_budget() {
-    assert_eq!(resolve_safety_tool_call_limits(12, 40, false), (12, 480));
-}
-
-#[test]
-fn resolve_safety_tool_call_limits_keeps_planning_workflow_session_unbounded() {
-    assert_eq!(resolve_safety_tool_call_limits(48, 40, true), (48, usize::MAX));
-}
-
-#[test]
-fn planning_workflow_applies_tool_call_floor() {
-    assert_eq!(effective_max_tool_calls_for_turn(32, true), 120);
-    assert_eq!(effective_max_tool_calls_for_turn(64, true), 120);
-    assert_eq!(effective_max_tool_calls_for_turn(120, true), 120);
-    assert_eq!(effective_max_tool_calls_for_turn(200, true), 200);
-}
-
-#[test]
-fn zero_tool_call_limit_stays_unlimited_in_all_modes() {
-    assert_eq!(effective_max_tool_calls_for_turn(0, true), 0);
-    assert_eq!(effective_max_tool_calls_for_turn(0, false), 0);
-}
-
-#[test]
-fn edit_mode_keeps_configured_tool_call_limit() {
-    assert_eq!(effective_max_tool_calls_for_turn(32, false), 32);
-}
-
-#[test]
-fn mode_switch_grants_remaining_tool_call_floor() {
-    // Build already spent most of a 120-cap; Plan entry must not inherit
-    // the leftover 20-call budget.
-    let mut max = 120usize;
-    apply_mode_switch_remaining_tool_call_floor(&mut max, 110, true);
-    assert_eq!(max, 110 + 120);
-    // Cap already larger than used+floor is preserved.
-    let mut max = 400usize;
-    apply_mode_switch_remaining_tool_call_floor(&mut max, 10, true);
-    assert_eq!(max, 400);
-    // Unlimited stays unlimited.
-    let mut max = 0usize;
-    apply_mode_switch_remaining_tool_call_floor(&mut max, 10, true);
-    assert_eq!(max, 0);
-}
-
-#[test]
 fn mode_switch_grants_remaining_tool_loop_floor() {
     let mut loops = 60usize;
     apply_mode_switch_remaining_tool_loop_floor(&mut loops, 55, true);
@@ -310,13 +258,6 @@ fn mode_switch_grants_remaining_tool_loop_floor() {
     let mut loops = usize::MAX;
     apply_mode_switch_remaining_tool_loop_floor(&mut loops, 10, true);
     assert_eq!(loops, usize::MAX);
-}
-
-#[test]
-fn approved_plan_execution_gets_a_fresh_implementation_budget() {
-    assert_eq!(effective_max_tool_calls_for_approved_plan_execution(32), 120);
-    assert_eq!(effective_max_tool_calls_for_approved_plan_execution(160), 160);
-    assert_eq!(effective_max_tool_calls_for_approved_plan_execution(0), 0);
 }
 
 #[test]
@@ -332,7 +273,7 @@ fn approved_plan_execution_gets_one_bounded_loop_allowance() {
 
 #[test]
 fn exhausted_loop_limit_arms_one_tool_free_synthesis_pass() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 40, 0, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 0, 1);
     let mut loop_limit = 40;
 
     assert!(arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
@@ -350,7 +291,7 @@ fn exhausted_loop_limit_arms_one_tool_free_synthesis_pass() {
 
 #[tokio::test]
 async fn planning_loop_exhaustion_retains_limit_and_hard_cap_stays_terminal() {
-    let mut planning = TestTurnProcessingBacking::new(4).await;
+    let mut planning = TestTurnProcessingBacking::new().await;
     planning.activate_planning_for_test();
     let mut limit = 7;
     let mut ctx = planning.turn_loop_context();
@@ -365,7 +306,7 @@ async fn planning_loop_exhaustion_retains_limit_and_hard_cap_stays_terminal() {
     );
     assert!(ctx.harness_state.recovery_is_tool_free());
 
-    let mut build = TestTurnProcessingBacking::new(4).await;
+    let mut build = TestTurnProcessingBacking::new().await;
     let mut cfg = VTCodeConfig::default();
     cfg.tools.max_tool_loops = 5;
     build.set_vt_cfg_for_test(cfg);
@@ -449,7 +390,7 @@ fn fresh_turn_supersedes_expired_recovery_without_changing_history() {
 
 #[test]
 fn fresh_turn_restores_generated_budget_and_post_tool_recovery_directives() {
-    use crate::agent::runloop::unified::run_loop_context::{ToolBudgetExhaustion, ToolWallClockExhaustion};
+    use crate::agent::runloop::unified::run_loop_context::ToolWallClockExhaustion;
     use crate::agent::runloop::unified::turn::turn_loop::{
         POST_TOOL_RECOVERY_REASON, POST_TOOL_RECOVERY_REASON_PLAN_MODE, RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE,
     };
@@ -457,7 +398,6 @@ fn fresh_turn_restores_generated_budget_and_post_tool_recovery_directives() {
 
     for directive in [
         tool_loop_limit_recovery_reason(60),
-        ToolBudgetExhaustion { used: 4, max: 4, remaining: 0 }.synthesis_directive_message(),
         ToolWallClockExhaustion { max_secs: 600 }.synthesis_directive_message(),
         POST_TOOL_RECOVERY_REASON.to_owned(),
         POST_TOOL_RECOVERY_REASON_PLAN_MODE.to_owned(),
@@ -518,7 +458,7 @@ fn extract_turn_config_honors_request_user_input_setting_in_planning_workflow() 
 
 #[tokio::test]
 async fn planning_steering_resets_draft_rank_only_for_user_input() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let events_path = backing.enable_harness_emitter();
     {
@@ -547,7 +487,7 @@ async fn planning_steering_resets_draft_rank_only_for_user_input() {
 
 #[tokio::test]
 async fn steering_follow_up_inputs_apply_mid_turn_in_order() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender
         .send(SteeringMessage::FollowUpInput("first".to_string()))
@@ -606,7 +546,7 @@ async fn steering_follow_up_inputs_apply_mid_turn_in_order() {
 async fn mid_turn_follow_up_provenance_comes_from_the_queued_intent() {
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::TRACKER_CONTINUE_FOLLOW_UP_PREFIX;
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     backing.set_steering_receiver(receiver);
     backing.queue_synthetic_follow_up_input_for_test("continue the plan");
@@ -635,7 +575,7 @@ async fn mid_turn_follow_up_provenance_comes_from_the_queued_intent() {
 
 #[tokio::test]
 async fn leftover_steering_intent_applies_without_channel_messages() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     backing.set_steering_receiver(receiver);
     backing.queue_follow_up_input_for_test("leftover");
@@ -661,7 +601,7 @@ async fn leftover_steering_intent_applies_without_channel_messages() {
 
 #[tokio::test]
 async fn paused_steering_accepts_follow_up_before_resume() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender.send(SteeringMessage::Pause).expect("pause");
     sender
@@ -696,7 +636,7 @@ async fn paused_steering_accepts_follow_up_before_resume() {
 
 #[tokio::test]
 async fn paused_steering_keeps_follow_up_after_resume_in_same_batch() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender.send(SteeringMessage::Pause).expect("pause");
     sender.send(SteeringMessage::Resume).expect("resume");
@@ -726,7 +666,7 @@ async fn paused_steering_keeps_follow_up_after_resume_in_same_batch() {
 
 #[tokio::test]
 async fn steering_stop_beats_queued_follow_up() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender
         .send(SteeringMessage::FollowUpInput("ignore me".to_string()))

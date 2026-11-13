@@ -42,8 +42,8 @@ fn resolve_settings_view_path_maps_model_aliases() {
         assert_eq!(resolve_settings_view_path(group.id), format!("{SETTINGS_GROUP_PREFIX}{}", group.id));
     }
     assert_eq!(
-        resolve_settings_view_path("advanced.agent.harness.max_tool_calls_per_turn"),
-        "advanced.agent.harness.max_tool_calls_per_turn"
+        resolve_settings_view_path("advanced.agent.harness.max_tool_wall_clock_secs"),
+        "advanced.agent.harness.max_tool_wall_clock_secs"
     );
 }
 #[test]
@@ -62,7 +62,7 @@ fn advanced_view_indexes_every_documented_field_for_search() {
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
     let items = build_settings_items(&state, &draft).expect("settings items");
-    assert!(items.iter().any(|item| item.title == "Max Tool Calls Per Turn"));
+    assert!(items.iter().any(|item| item.title == "Max Tool Wall Clock Secs"));
     let provider_search = items
         .iter()
         .find(|item| {
@@ -75,10 +75,10 @@ fn advanced_view_indexes_every_documented_field_for_search() {
     assert!(provider_search.contains(&VTCodeConfig::default().agent.provider.to_ascii_lowercase()));
     let tool_limit_search = items
         .iter()
-        .find(|item| item.title == "Max Tool Calls Per Turn")
+        .find(|item| item.title == "Max Tool Wall Clock Secs")
         .and_then(|item| item.search_value.as_deref())
         .expect("tool limit search entry");
-    assert!(tool_limit_search.contains("maximum number of tool calls allowed per turn"));
+    assert!(tool_limit_search.contains("maximum wall clock time"));
     assert!(items.iter().any(|item| {
         item.search_value
             .as_deref()
@@ -128,7 +128,7 @@ fn advanced_direct_path_opens_the_specific_nested_field() {
         source_path: PathBuf::from("vtcode.toml"),
         source_label: None,
         draft: VTCodeConfig::default(),
-        view_path: Some("advanced.agent.harness.max_tool_calls_per_turn".to_string()),
+        view_path: Some("advanced.agent.harness.max_tool_wall_clock_secs".to_string()),
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
@@ -139,12 +139,12 @@ fn advanced_direct_path_opens_the_specific_nested_field() {
     let items = build_settings_items(&state, &draft).expect("settings items");
     let entry = items
         .iter()
-        .find(|item| item.title == "Max Tool Calls Per Turn")
+        .find(|item| item.title == "Max Tool Wall Clock Secs")
         .expect("advanced direct field");
     assert_eq!(
         entry.selection,
         Some(InlineListSelection::ConfigAction(
-            "settings:set:agent.harness.max_tool_calls_per_turn:inc".to_string()
+            "settings:set:agent.harness.max_tool_wall_clock_secs:inc".to_string()
         ))
     );
 }
@@ -268,12 +268,12 @@ fn curated_group_navigation_preserves_breadcrumb_parent() {
     let items = build_settings_items(&state, &draft).expect("settings items");
     assert!(items.iter().any(|item| item.title == "External Editor"));
     assert_eq!(parent_view_path(&format!("{SETTINGS_GROUP_PREFIX}tools_integrations")), None);
-    assert_eq!(parent_view_path("advanced.agent.harness.max_tool_calls_per_turn"), Some("advanced".to_string()));
+    assert_eq!(parent_view_path("advanced.agent.harness.max_tool_wall_clock_secs"), Some("advanced".to_string()));
     assert_eq!(parent_view_path("advanced:custom_providers[0]"), Some("advanced:custom_providers".to_string()));
 
     apply_settings_action(&mut state, ACTION_BACK).expect("group back action");
     assert_eq!(state.view_path, None);
-    state.view_path = Some("advanced.agent.harness.max_tool_calls_per_turn".to_string());
+    state.view_path = Some("advanced.agent.harness.max_tool_wall_clock_secs".to_string());
     apply_settings_action(&mut state, ACTION_BACK).expect("advanced back action");
     assert_eq!(state.view_path.as_deref(), Some(SETTINGS_ADVANCED_VIEW_PATH));
 }

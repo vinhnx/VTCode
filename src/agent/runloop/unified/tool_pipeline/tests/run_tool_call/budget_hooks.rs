@@ -57,7 +57,7 @@ async fn test_run_tool_call_unknown_tool_failure() {
     assert!(ctx.harness_state.tool_wall_clock_elapsed > Duration::ZERO);
 }
 #[tokio::test]
-async fn test_run_tool_call_respects_max_tool_calls_budget() {
+async fn test_run_tool_call_has_no_call_count_gate() {
     let mut test_ctx = TestContext::new().await;
     test_ctx.session.set_skip_confirmations(false);
     let mut registry = test_ctx.registry;
@@ -73,8 +73,11 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    let mut harness_state = build_harness_state_with(1);
-    harness_state.record_tool_call(); // Exhaust the budget (1/1)
+    let mut harness_state = build_harness_state();
+    // No per-turn call-count budget exists: prior volume must not gate this call.
+    for _ in 0..200 {
+        harness_state.record_tool_call();
+    }
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
         &mut test_ctx.renderer,
         &test_ctx.handle,
@@ -107,14 +110,15 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
         .await
         .expect("run_tool_call must run");
 
-    println!("Outcome status: {:?}", outcome.status);
-
+    // The call reaches argument validation (which rejects the empty args)
+    // instead of a policy budget rejection.
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("Policy violation"));
-            assert!(error.to_string().contains("exceeded max tool calls per turn"));
+            let text = error.to_string();
+            assert!(text.contains("Tool argument validation failed"), "got: {text}");
+            assert!(!text.contains("Policy violation"), "got: {text}");
         }
-        other => panic!("Expected permission denial, got: {other:?}"),
+        other => panic!("Expected validation failure, got: {other:?}"),
     }
 }
 #[tokio::test]

@@ -8,7 +8,7 @@ async fn invalid_and_no_match_required_grep_bound_repeated_completion_summaries(
         ("grep -n '---\\s\\+\\|' fixture.txt", 2),
         ("grep -n missing fixture.txt", 1),
     ] {
-        let mut backing = TestTurnProcessingBacking::new(20).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut cfg = vtcode_core::config::loader::VTCodeConfig::default();
         cfg.agent.harness.verification.in_turn_attempts = 0;
         backing.set_vt_cfg_for_test(cfg);
@@ -77,7 +77,7 @@ async fn invalid_and_no_match_required_grep_bound_repeated_completion_summaries(
 }
 #[tokio::test]
 async fn passing_local_check_accepts_external_limitation_without_another_recovery() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut tracker = LoopTracker::new();
     tracker.mark_verification_pending();
     let mut modified = BTreeSet::new();
@@ -123,7 +123,7 @@ async fn passing_local_check_accepts_external_limitation_without_another_recover
 }
 #[tokio::test]
 async fn failed_optional_check_without_mutations_cannot_create_completion_obligations() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
     drive_model_tool_call(
@@ -158,7 +158,7 @@ async fn failed_optional_check_without_mutations_cannot_create_completion_obliga
 }
 #[tokio::test]
 async fn retained_draft_is_discarded_for_new_steering_without_launching_checks() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
@@ -180,7 +180,7 @@ async fn retained_draft_is_discarded_for_new_steering_without_launching_checks()
 #[tokio::test]
 async fn retained_draft_freshness_rejects_mutation_or_applied_user_input() {
     for mutation in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let ctx = backing.turn_processing_context();
         let draft = super::super::CompletionDraft {
             text: "Original answer".into(),
@@ -204,7 +204,7 @@ async fn retained_draft_freshness_rejects_mutation_or_applied_user_input() {
 #[tokio::test]
 async fn retained_draft_cancellation_publishes_no_answer_or_verifier() {
     for exit in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.set_verification_override_for_test("rustc --version");
         {
             let ctx = backing.turn_processing_context();
@@ -234,7 +234,7 @@ async fn retained_draft_pause_remains_interruptible_by_cancel_and_exit() {
     use vtcode_core::core::agent::steering::SteeringMessage;
 
     for exit in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.set_verification_override_for_test("rustc --version");
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         backing.set_steering_receiver(receiver);
@@ -273,7 +273,7 @@ async fn retained_draft_pause_remains_interruptible_by_cancel_and_exit() {
 async fn yielded_verifier_announces_once_while_preserving_real_waits_and_one_final_answer() {
     use std::os::unix::fs::PermissionsExt;
 
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("./rustc --version");
     let registry = {
         let ctx = backing.turn_processing_context();
@@ -337,7 +337,7 @@ async fn yielded_verifier_announces_once_while_preserving_real_waits_and_one_fin
 async fn retained_draft_yielded_verifier_obeys_execution_limit_and_cleans_up() {
     use std::os::unix::fs::PermissionsExt;
     use std::time::Duration;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("./rustc --version");
     let registry = {
         let ctx = backing.turn_processing_context();
@@ -396,7 +396,7 @@ async fn retained_draft_yielded_verifier_obeys_execution_limit_and_cleans_up() {
 #[tokio::test]
 async fn retained_draft_denied_owned_wait_blocks_without_repeating_admission() {
     use std::os::unix::fs::PermissionsExt;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("./rustc --version");
     let registry = {
         let ctx = backing.turn_processing_context();

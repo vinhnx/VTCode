@@ -56,7 +56,6 @@ fn planning_synthesis_retry_allowed(
         && harness_state.recovery_retry_count() < MAX_PLANNING_SYNTHESIS_RECOVERY_RETRIES
         && !harness_state.wall_clock_exhausted_emitted
         && !harness_state.wall_clock_exhausted()
-        && !harness_state.tool_budget_exhausted_emitted
         && plan_session.is_some_and(|session| !session.is_budget_exhausted() && !session.is_recovery_exhausted())
 }
 
@@ -784,9 +783,7 @@ pub(super) async fn dispatch_post_tool_failure(ctx: PostToolRecoveryContext<'_>)
     // and loop forever across turns (observed in checkpoint turn_647).
     // `wall_clock_exhausted()` (time-based) also covers exhaustion without a
     // rejected tool call, e.g. a provider error right after a long tool batch.
-    if (harness_state.wall_clock_exhausted_emitted
-        || harness_state.wall_clock_exhausted()
-        || harness_state.tool_budget_exhausted_emitted)
+    if (harness_state.wall_clock_exhausted_emitted || harness_state.wall_clock_exhausted())
         && let Some(session) = plan_session.as_deref_mut()
     {
         session.mark_recovery_exhausted();

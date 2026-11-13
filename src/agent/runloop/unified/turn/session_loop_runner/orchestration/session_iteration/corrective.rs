@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn planning_budget_stop_includes_runtime_block_reason() {
-        assert!(planning_budget_exhausted(false, Some("Tool-call budget exhausted for this turn (32/32).")));
+        assert!(planning_budget_exhausted(false, Some("Tool loop budget exhausted (60/60).")));
         assert!(planning_budget_exhausted(false, Some("Tool wall-clock budget exhausted for this turn (600s).")));
         assert!(planning_budget_exhausted(true, None));
         assert!(!planning_budget_exhausted(false, Some("Turn ended with a recovery fallback")));
@@ -356,7 +356,7 @@ mod tests {
         let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
         for (reason, should_queue) in [
             (
-                "Tool-call budget exhausted for this turn (32/32). Changes remain unverified; no additional verifier was scheduled.",
+                "Tool loop budget exhausted (60/60). Changes remain unverified; no additional verifier was scheduled.",
                 false,
             ),
             ("Tool wall-clock budget exhausted for this turn (600s).", false),

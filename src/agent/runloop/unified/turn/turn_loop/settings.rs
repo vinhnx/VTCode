@@ -7,8 +7,7 @@ use super::context::effective_vt_cfg;
 use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
 use crate::agent::runloop::unified::session_settings::SessionSettingsControl;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    PrecomputedTurnConfig, apply_mode_switch_remaining_tool_call_floor, apply_mode_switch_remaining_tool_loop_floor,
-    extract_turn_config, resolve_safety_tool_call_limits,
+    PrecomputedTurnConfig, apply_mode_switch_remaining_tool_loop_floor, extract_turn_config,
 };
 
 /// Consume completed selections just before the next model request is built.
@@ -117,8 +116,8 @@ pub(super) async fn apply_mid_turn_settings(
     Ok(settings_applied)
 }
 
-/// Re-derive turn config and grant a full *remaining* mode floor after a
-/// Build<->Plan auto-switch mid-turn, so the new phase is not starved by
+/// Re-derive turn config and grant a full *remaining* tool-loop floor after
+/// a Build<->Plan auto-switch mid-turn, so the new phase is not starved by
 /// the prior phase's consumption.
 pub(super) fn apply_mid_turn_mode_switch(
     ctx: &mut TurnLoopContext<'_>,
@@ -128,9 +127,8 @@ pub(super) fn apply_mid_turn_mode_switch(
     step_count: usize,
 ) {
     // Build↔Plan auto-switch mid-turn: re-derive turn config and grant a
-    // full *remaining* mode floor so the new phase is not starved by the
-    // prior phase's consumption (checkpoint turn_804 + user Build→Plan
-    // tool-call-limit report).
+    // full *remaining* tool-loop floor so the new phase is not starved by
+    // the prior phase's consumption.
     let planning_now = ctx.is_planning_active();
     if planning_now != *last_planning_active {
         *last_planning_active = planning_now;
@@ -151,18 +149,7 @@ pub(super) fn apply_mid_turn_mode_switch(
         if ctx.plan_session.is_interview_denied() {
             turn_config.request_user_input_enabled = false;
         }
-        apply_mode_switch_remaining_tool_call_floor(
-            &mut ctx.harness_state.max_tool_calls,
-            ctx.harness_state.tool_calls,
-            planning_now,
-        );
         apply_mode_switch_remaining_tool_loop_floor(current_max_tool_loops, step_count, planning_now);
-        let (max_per_turn, max_per_session) = resolve_safety_tool_call_limits(
-            ctx.harness_state.max_tool_calls,
-            turn_config.max_session_turns,
-            planning_now,
-        );
-        ctx.safety_validator.set_limits(max_per_turn, max_per_session);
     }
 }
 
@@ -263,7 +250,7 @@ mod tests {
         use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
         use crate::agent::runloop::welcome::SessionBootstrap;
 
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         for control in controls {
             sender.send(control).expect("queue boundary control");

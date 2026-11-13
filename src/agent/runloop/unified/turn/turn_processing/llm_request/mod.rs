@@ -419,10 +419,8 @@ async fn execute_llm_request_with_options_impl(
                     stream_options.suppress_output_signal.clone(),
                     runtime_tools.as_ref(),
                     ctx.skip_confirmations,
-                    ctx.full_auto,
                     ctx.harness_emitter,
                     format!("{}-step-{}", ctx.harness_state.turn_id.0, step_count),
-                    Some(turn_snapshot.active_primary_agent.name().to_string()),
                 );
                 let exposed_tools = runtime_host.exposed_tools().to_vec();
 

@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn planning_recovery_triggers_at_exact_consecutive_low_signal_threshold() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -24,7 +24,7 @@ async fn planning_recovery_triggers_at_exact_consecutive_low_signal_threshold() 
 }
 #[tokio::test]
 async fn unchanged_tracker_polls_get_one_correction_then_terminal_handoff() {
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     for round in 0..2 {
@@ -63,7 +63,7 @@ async fn unchanged_tracker_polls_get_one_correction_then_terminal_handoff() {
 }
 #[tokio::test]
 async fn planning_recovery_triggers_at_exact_total_low_signal_threshold() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -79,7 +79,7 @@ async fn planning_recovery_triggers_at_exact_total_low_signal_threshold() {
 }
 #[tokio::test]
 async fn adaptive_low_signal_threshold_does_not_change_non_planning_turns() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     tracker.consecutive_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
@@ -92,7 +92,7 @@ async fn adaptive_low_signal_threshold_does_not_change_non_planning_turns() {
 }
 #[tokio::test]
 async fn adaptive_low_signal_synthesis_triggers_only_once_per_turn() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();

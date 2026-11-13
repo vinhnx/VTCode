@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
+async fn test_run_tool_call_has_no_call_count_gate() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -16,7 +16,7 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tool_defs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    let mut harness_state = build_harness_state_with(0);
+    let mut harness_state = build_harness_state();
     for _ in 0..4 {
         harness_state.record_tool_call();
     }
@@ -52,13 +52,16 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
         .await
         .expect("run_tool_call must run");
 
-    assert!(!matches!(
-        outcome.status,
-        ToolExecutionStatus::Failure { ref error }
-            if error
-                .to_string()
-                .contains("exceeded max tool calls per turn")
-    ));
+    // Prior volume never gates: the call reaches argument validation (which
+    // rejects the empty args) instead of a policy budget rejection.
+    match outcome.status {
+        ToolExecutionStatus::Failure { error } => {
+            let text = error.to_string();
+            assert!(text.contains("Tool argument validation failed"), "got: {text}");
+            assert!(!text.contains("Policy violation"), "got: {text}");
+        }
+        other => panic!("Expected validation failure, got: {other:?}"),
+    }
 }
 #[tokio::test]
 async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
@@ -270,7 +273,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflo
     }
 }
 #[tokio::test]
-async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_workflow_and_tracks_budget() {
+async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_workflow_and_counts_call() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -295,7 +298,7 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_wor
     std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
     registry.planning_workflow_state().set_plan_file(Some(plan_file));
 
-    let mut harness_state = build_harness_state_with(2);
+    let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
         &mut test_ctx.renderer,
         &test_ctx.handle,

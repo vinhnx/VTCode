@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use serde_json::Map;
 use serde_json::Value;
 use std::sync::Arc;
+#[cfg(test)]
 use std::sync::Mutex;
 use thiserror::Error;
 #[cfg(test)]
@@ -21,10 +22,6 @@ use vtcode_core::tools::{
 /// Safety violation errors
 #[derive(Debug, Error)]
 pub(crate) enum SafetyError {
-    #[error("Per-turn tool limit reached (max: {max}). Wait or adjust config.")]
-    TurnLimitReached { max: usize },
-    #[error("Session tool limit reached (max: {max}). End turn or reduce tool calls.")]
-    SessionLimitReached { max: usize },
     #[error("Rate limit exceeded: {current} calls/{window} (max: {max})")]
     RateLimitExceeded {
         current: usize,
@@ -47,15 +44,6 @@ pub(crate) struct ToolCallSafetyValidator {
     safety_gateway: Arc<SafetyGateway>,
     /// Validator-scoped execution context
     gateway_ctx: SafetyContext,
-    /// Highest session limit granted by the user. Runtime config refreshes
-    /// call `set_limits`, so retain this fuse separately from the gateway's
-    /// mutable config and reapply it until a fresh execution explicitly
-    /// resets the session.
-    granted_session_limit: Mutex<Option<usize>>,
-    /// Total session headroom granted automatically in this session. Manual
-    /// grants bypass this budget; only the full-auto path claims from it so
-    /// unattended runs stay bounded while interactive approvals stay uncapped.
-    auto_granted_session_headroom: Mutex<usize>,
     #[cfg(test)]
     test_rate_limits: Mutex<TestRateLimits>,
 }
@@ -68,8 +56,8 @@ struct TestRateLimits {
 
 fn configure_runloop_safety_gateway(safety_gateway: &SafetyGateway) {
     // The interactive runloop already applies short-window adaptive throttling.
-    // Keep the shared gateway focused on turn/session budgets so the same tool
-    // call path is not rate-limited twice with competing policies.
+    // Keep the shared gateway focused on policy checks so the same tool call
+    // path is not rate-limited twice with competing policies.
     safety_gateway.set_rate_limit_enforcement(false);
 }
 
@@ -86,8 +74,6 @@ impl ToolCallSafetyValidator {
         Self {
             safety_gateway,
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
-            granted_session_limit: Mutex::new(None),
-            auto_granted_session_headroom: Mutex::new(0),
             #[cfg(test)]
             test_rate_limits: Mutex::new(test_rate_limits),
         }
@@ -103,81 +89,20 @@ impl ToolCallSafetyValidator {
         Self {
             safety_gateway,
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
-            granted_session_limit: Mutex::new(None),
-            auto_granted_session_headroom: Mutex::new(0),
             #[cfg(test)]
             test_rate_limits: Mutex::new(test_rate_limits),
         }
     }
 
-    /// Reset per-turn counters; call at the start of a turn
+    /// Reset per-turn rate-limiter state; call at the start of a turn
     pub(crate) fn start_turn(&self) {
         self.safety_gateway.start_turn();
     }
 
-    /// Rebuild the shared gateway budget for a fresh approved-plan execution
-    /// context. This clears both per-turn and accumulated session counters.
-    pub(crate) fn reset_for_fresh_execution(&self, max_per_turn: usize, max_per_session: usize) {
-        *self
-            .granted_session_limit
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        *self
-            .auto_granted_session_headroom
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
-        self.safety_gateway.reset_for_fresh_execution(max_per_turn, max_per_session);
-    }
-
-    /// Override per-turn and session limits based on runtime config
-    pub(crate) fn set_limits(&self, max_per_turn: usize, max_per_session: usize) {
-        let granted_session_limit = self
-            .granted_session_limit
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .copied();
-        self.safety_gateway.set_limits(
-            max_per_turn,
-            granted_session_limit.map_or(max_per_session, |granted| max_per_session.max(granted)),
-        );
-    }
-
-    /// Increase the session tool limit
-    pub(crate) fn increase_session_limit(&self, increment: usize) {
-        self.safety_gateway.increase_session_limit(increment);
-        *self
-            .granted_session_limit
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(self.safety_gateway.max_per_session());
-    }
-
-    /// Claim headroom for one automatic session-limit grant.
-    ///
-    /// Returns the grantable amount (`0` once the per-session auto budget is
-    /// exhausted) and records it so later grants in the same session see the
-    /// reduced remainder. Manual grants bypass this budget entirely.
-    pub(crate) fn claim_session_auto_grant(&self, requested: usize) -> usize {
-        let mut granted_total = self
-            .auto_granted_session_headroom
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let granted =
-            vtcode_core::config::constants::tool_limits::session_auto_grant_increment(*granted_total, requested);
-        *granted_total = granted_total.saturating_add(granted);
-        granted
-    }
-
-    /// Return the current session tool limit, including any user-granted
-    /// headroom that must survive a turn-boundary limit refresh.
-    pub(crate) fn max_per_session(&self) -> usize {
-        self.safety_gateway.max_per_session()
-    }
-
-    /// Return the number of tool calls counted against the session limit.
-    /// Read alongside [`Self::max_per_session`] for exhaustion telemetry.
-    pub(crate) fn session_count(&self) -> usize {
-        self.safety_gateway.get_stats().session_count
+    /// Reset shared gateway rate-limiter state for a fresh approved-plan
+    /// execution context.
+    pub(crate) fn reset_for_fresh_execution(&self) {
+        self.safety_gateway.reset_for_fresh_execution();
     }
 
     #[cfg(test)]
@@ -236,8 +161,6 @@ pub(crate) fn invocation_id_from_call_id(call_id: &str) -> ToolInvocationId {
 
 fn map_gateway_violation(violation: Option<GatewaySafetyError>, reason: &str) -> SafetyError {
     match violation {
-        Some(GatewaySafetyError::TurnLimitReached { max }) => SafetyError::TurnLimitReached { max },
-        Some(GatewaySafetyError::SessionLimitReached { max }) => SafetyError::SessionLimitReached { max },
         Some(GatewaySafetyError::RateLimitExceeded { current, max, window }) => {
             SafetyError::RateLimitExceeded { current, max, window }
         }
@@ -300,7 +223,6 @@ mod tests {
     #[tokio::test]
     async fn shared_gateway_disables_duplicate_short_window_rate_limits() {
         let gateway = Arc::new(SafetyGateway::default());
-        gateway.set_limits(10, 10);
         gateway.set_rate_limits(1, Some(1));
 
         let validator = ToolCallSafetyValidator::with_gateway(gateway);
@@ -311,72 +233,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_turn_and_session_limits() {
+    async fn validator_admits_many_calls_without_count_caps() {
+        // Regression: with the per-turn/session call-count budgets removed,
+        // the validator must not deny ordinary calls at any volume. Only
+        // rate limits and policy checks can deny.
         let validator = ToolCallSafetyValidator::new();
-        validator.set_limits(2, 3);
-
-        validator.start_turn();
-        validator.validate_call("read_file", &json!({})).await.unwrap();
-        validator.validate_call("read_file", &json!({})).await.unwrap();
-        assert!(validator.validate_call("read_file", &json!({})).await.is_err());
-
-        validator.start_turn();
-        validator.validate_call("read_file", &json!({})).await.unwrap();
-        assert!(validator.validate_call("read_file", &json!({})).await.is_err());
-    }
-
-    #[tokio::test]
-    async fn fresh_execution_resets_turn_and_session_budgets() {
-        let validator = ToolCallSafetyValidator::new();
-        validator.set_limits(1, 1);
         validator.start_turn();
 
-        validator.validate_call("read_file", &json!({})).await.unwrap();
-        assert!(validator.validate_call("read_file", &json!({})).await.is_err());
-
-        validator.reset_for_fresh_execution(1, 1);
-        validator.validate_call("read_file", &json!({})).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn granted_session_limit_survives_runtime_limit_refresh_and_new_turn() {
-        let validator = ToolCallSafetyValidator::new();
-        validator.set_limits(10, 2);
-        assert_eq!(validator.max_per_session(), 2);
-        validator.start_turn();
-        validator.validate_call("read_file", &json!({})).await.unwrap();
-        validator.increase_session_limit(3);
-        assert_eq!(validator.max_per_session(), 5);
-
-        // A config refresh must not discard user-granted session headroom.
-        validator.set_limits(10, 2);
-        validator.start_turn();
-        assert_eq!(validator.max_per_session(), 5);
-        for _ in 0..4 {
+        for _ in 0..200 {
             validator.validate_call("read_file", &json!({})).await.unwrap();
         }
-        assert!(validator.validate_call("read_file", &json!({})).await.is_err());
-    }
 
-    #[test]
-    fn session_auto_grant_headroom_bounds_automatic_growth_only() {
-        let validator = ToolCallSafetyValidator::new();
-        assert_eq!(validator.claim_session_auto_grant(100), 100);
-        assert_eq!(validator.claim_session_auto_grant(100), 100);
-
-        // Manual grants bypass the auto budget: headroom is unchanged.
-        validator.increase_session_limit(1000);
-        assert_eq!(validator.claim_session_auto_grant(100), 100);
-
-        // Exhaust the remaining headroom, then fail closed.
-        let remaining =
-            vtcode_core::config::constants::tool_limits::MAX_SESSION_AUTO_GRANT_TOTAL_HEADROOM.saturating_sub(300);
-        assert_eq!(validator.claim_session_auto_grant(remaining), remaining);
-        assert_eq!(validator.claim_session_auto_grant(100), 0);
-        assert_eq!(validator.claim_session_auto_grant(1), 0);
-
-        // Fresh execution resets the auto budget alongside granted limits.
-        validator.reset_for_fresh_execution(10, 10);
-        assert_eq!(validator.claim_session_auto_grant(100), 100);
+        validator.reset_for_fresh_execution();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
     }
 }

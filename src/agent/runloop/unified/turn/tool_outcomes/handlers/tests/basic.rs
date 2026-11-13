@@ -6,7 +6,7 @@ use super::*;
 
 #[tokio::test]
 async fn build_tool_permissions_context_propagates_skip_confirmations() {
-    let mut backing = TestContextBacking::new(2).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     let permissions = build_tool_permissions_context(&mut ctx);
@@ -227,14 +227,8 @@ fn shell_run_signature_ignores_non_run_command_session_action() {
 fn exhausted_turn_budget_errors_do_not_invite_another_tool_call() {
     use crate::agent::runloop::unified::run_loop_context::ToolWallClockExhaustion;
 
-    let calls = ToolBudgetExhaustion { used: 32, max: 32, remaining: 0 };
     let wall_clock = ToolWallClockExhaustion { max_secs: 60 };
-    for error in [
-        calls.policy_violation_message(),
-        calls.skipped_call_message(),
-        wall_clock.policy_violation_message(),
-        wall_clock.skipped_call_message(),
-    ] {
+    for error in [wall_clock.policy_violation_message(), wall_clock.skipped_call_message()] {
         let payload: serde_json::Value =
             serde_json::from_str(&super::super::build_turn_budget_error_content(error.clone())).unwrap();
         assert_eq!(payload["error"], error);
@@ -253,10 +247,12 @@ fn exhausted_turn_budget_errors_do_not_invite_another_tool_call() {
 }
 
 #[test]
-fn tool_budget_exhausted_directive_demands_synthesis() {
-    let exhaustion = ToolBudgetExhaustion { used: 32, max: 32, remaining: 0 };
+fn wall_clock_exhausted_directive_demands_synthesis() {
+    use crate::agent::runloop::unified::run_loop_context::ToolWallClockExhaustion;
+
+    let exhaustion = ToolWallClockExhaustion { max_secs: 60 };
     let directive = exhaustion.synthesis_directive_message();
-    assert!(directive.contains("32/32"));
+    assert!(directive.contains("60s"));
     assert!(directive.contains("Synthesize your final answer now"));
     assert!(exhaustion.skipped_call_message().contains("call skipped"));
 }

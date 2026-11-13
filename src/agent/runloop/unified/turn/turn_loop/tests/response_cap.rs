@@ -51,7 +51,7 @@ async fn response_cap_preserves_commentary_as_one_completed_final_harness_messag
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(RepeatedCommentaryProvider { requests: requests.clone() }));
     let harness_path = backing.enable_harness_emitter();
 
@@ -186,7 +186,7 @@ async fn successful_tool_round_resets_consecutive_text_response_cap() {
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(CommentaryWithToolProgressProvider { requests: requests.clone() }));
 
     let mut history = vec![uni::Message::user(
@@ -251,7 +251,7 @@ async fn stale_plan_pause_discards_text_without_consuming_response_budget() {
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(RepeatedStalePauseProvider { requests: requests.clone() }));
 
     let mut history = vec![uni::Message::user("continue the approved implementation".to_string())];

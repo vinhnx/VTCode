@@ -11,7 +11,7 @@ async fn preflight_archived_tracker_fixture_stops_after_one_corrective_turn() {
     assert_eq!(fixture["baseline_internal_continuations"], 17);
     let mut config = vtcode_core::config::VTCodeConfig::default();
     config.tools.max_consecutive_blocked_tool_calls_per_turn = 6;
-    let mut backing = TestContextBacking::new(32).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     assert!(backing.session_stats.record_tracker_continuation_turn_with_limit(3));
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -53,7 +53,7 @@ async fn preflight_archived_tracker_fixture_stops_after_one_corrective_turn() {
                 crate::agent::runloop::unified::state::FollowUpPromptAction::None
             );
             *ctx.harness_state =
-                HarnessTurnState::new(TurnRunId("corrective".into()), TurnId("corrective".into()), 32, 60, 0);
+                HarnessTurnState::new(TurnRunId("corrective".into()), TurnId("corrective".into()), 60, 0);
         }
     }
     assert_eq!(
@@ -91,7 +91,7 @@ async fn preflight_archived_tracker_fixture_stops_after_one_corrective_turn() {
 #[tokio::test]
 async fn preflight_corrective_turn_revalidates_live_schema_and_stops_unchanged_calls() {
     for correct in [true, false] {
-        let mut backing = TestContextBacking::new(32).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let args = json!({"action":"list","index":2});
         let mut ctx = backing.turn_processing_context();
@@ -147,7 +147,7 @@ async fn preflight_corrective_turn_revalidates_live_schema_and_stops_unchanged_c
 async fn preflight_batch_closes_every_invocation_and_retains_parsed_arguments() {
     use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
     for cancelled in [false, true] {
-        let mut backing = TestContextBacking::new(32).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let workspace = backing.sample_file.parent().unwrap().to_path_buf();
         let emitter = HarnessEventEmitter::new_async(&workspace, "preflight-batch", None)
@@ -239,7 +239,7 @@ async fn preflight_batch_closes_every_invocation_and_retains_parsed_arguments() 
 
 #[tokio::test]
 async fn preflight_corrective_turn_uses_current_schema_before_identity_check() {
-    let mut backing = TestContextBacking::new(32).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let mut ctx = backing.turn_processing_context();
     let args = json!({"action":"update","index":0,"status":"completed"});
@@ -271,7 +271,7 @@ async fn preflight_corrective_turn_uses_current_schema_before_identity_check() {
 
 #[tokio::test]
 async fn preflight_failed_corrective_execution_does_not_clear_episode() {
-    let mut backing = TestContextBacking::new(32).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     std::fs::create_dir_all(backing.config.workspace.join(".vtcode/tasks/current_task.md")).unwrap();
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -333,7 +333,7 @@ async fn preflight_tracker_corrections_match_live_operations_and_canonical_alias
             clears: true,
         },
     ] {
-        let mut backing = TestContextBacking::new(32).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let mut repeated_tool_attempts = LoopTracker::new();
         let mut turn_modified_files = BTreeSet::new();
@@ -388,7 +388,7 @@ async fn preflight_tracker_corrections_match_live_operations_and_canonical_alias
 
 #[tokio::test]
 async fn preflight_alias_spelling_cannot_bypass_unchanged_call_detection() {
-    let mut backing = TestContextBacking::new(32).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let mut ctx = backing.turn_processing_context();
     let arguments = json!({"action":"list","index":1});
@@ -406,7 +406,7 @@ async fn preflight_alias_spelling_cannot_bypass_unchanged_call_detection() {
 
 #[tokio::test]
 async fn source_inspection_refresh_survives_read_cap_without_replenishing_quota() {
-    let mut backing = TestContextBacking::new(30).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample = backing.sample_file.clone();
     std::fs::write(&sample, "before\nunseen\n").unwrap();
@@ -462,7 +462,7 @@ async fn source_inspection_refresh_survives_read_cap_without_replenishing_quota(
 
 #[tokio::test]
 async fn placeholder_policy_failure_keeps_policy_correction_and_single_prefix() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let args = json!({"cleared":"tool_input"});
     super::super::super::handle_preflight_failure(
@@ -502,7 +502,7 @@ async fn policy_preflight_denials_are_non_retryable_without_poisoning_permitted_
         ("Command security check failed: command injection", true),
         ("tool denied by planning workflow", true),
     ] {
-        let mut backing = TestContextBacking::new(20).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let mut tracker = LoopTracker::new();
         let mut files = BTreeSet::new();
@@ -574,7 +574,7 @@ async fn preflight_failure_deduplicates_nested_kernel_prefixes() {
     // error arrives as "Tool preflight validation failed for 'exec_command':
     // …" and hop rejections re-wrap it, so the payload must strip every
     // existing prefix layer before adding its own exactly once.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let args = json!({"cmd":"`./script.sh --dry-run`"});
     for (index, error) in [
@@ -616,7 +616,7 @@ async fn preflight_placeholder_and_invalid_arguments_allow_schema_correct_execut
         (r#"{"cmd":42}"#, "command"),
         ("{", "cmd"),
     ] {
-        let mut backing = TestContextBacking::new(20).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let mut tracker = LoopTracker::new();
         let mut files = BTreeSet::new();

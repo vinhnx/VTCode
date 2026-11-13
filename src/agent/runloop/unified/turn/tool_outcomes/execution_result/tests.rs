@@ -828,7 +828,7 @@ fn blocked_or_denied_failure_detects_guardable_errors() {
         "task_tracker is only available when planning workflow state is active."
     ));
     assert!(is_blocked_or_denied_failure("Tool permission denied"));
-    assert!(is_blocked_or_denied_failure("Policy violation: exceeded max tool calls per turn (32)"));
+    assert!(is_blocked_or_denied_failure("Policy violation: exceeded tool wall clock budget (600s)"));
     assert!(is_blocked_or_denied_failure("Safety validation failed: command pattern denied"));
 }
 

@@ -238,8 +238,7 @@ pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as S
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry};
 pub use safety_gateway::{
-    SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
-    SafetyTrustLevel,
+    SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyTrustLevel,
 };
 pub use shell_snapshot::{
     FileFingerprint, ShellKind, ShellSnapshot, ShellSnapshotManager, SnapshotStats, apply_snapshot_env,

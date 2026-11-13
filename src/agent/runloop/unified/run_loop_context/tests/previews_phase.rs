@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn repeated_tool_previews_keep_fresh_evidence_visible() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 10, 1);
     for index in 0..40 {
         let evidence = format!("source-{index} {}", "x".repeat(8_000));
         assert_eq!(state.bound_model_visible_tool_preview(Some("read_file"), evidence.clone()), evidence);
@@ -15,7 +15,7 @@ fn repeated_tool_previews_keep_fresh_evidence_visible() {
 }
 #[test]
 fn oversized_result_retains_head_tail_and_does_not_blind_next_call() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 10, 1);
     let oversized = serde_json::json!({
         "output": format!("HEAD{}TAIL", "界".repeat(24_000)),
         "spool_path": ".vtcode/context/tool_outputs/result.txt", "spool_complete": true,
@@ -38,7 +38,7 @@ fn oversized_result_retains_head_tail_and_does_not_blind_next_call() {
 }
 #[test]
 fn oversized_preview_preserves_failure_metadata_without_secrets_and_counts_once() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 10, 1);
     let content = serde_json::json!({
         "output": "x".repeat(80_000), "exit_code": 1, "success": false,
         "spool_line_count": 1,
@@ -72,7 +72,7 @@ fn oversized_preview_preserves_failure_metadata_without_secrets_and_counts_once(
 }
 #[test]
 fn upstream_preview_exhaustion_latches_before_body_checks_and_is_idempotent() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 32, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
     let registry_stub = serde_json::json!({
         "content_type": "git_diff",
         "exit_code": 0,
@@ -99,7 +99,7 @@ fn upstream_preview_exhaustion_latches_before_body_checks_and_is_idempotent() {
 }
 #[test]
 fn upstream_preview_exhaustion_ignores_non_marker_payloads() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 32, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
     let cases = [
         ("plain text is not JSON", "tool output without any marker"),
         ("missing flag defaults to absent", r#"{"tool":"exec_command","exit_code":0}"#),
@@ -123,7 +123,7 @@ fn per_result_limits_differ_by_mode_without_exhausting_tools() {
         (TURN_PREVIEW_BUDGET_BYTES, true),
         (TURN_PREVIEW_BUDGET_BYTES_PLANNING, false),
     ] {
-        let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 10, 1);
         let visible = state.bound_model_visible_tool_preview_with_budget(Some("read_file"), payload.clone(), limit);
         assert_eq!(visible != payload, truncated);
         assert!(visible.len() <= limit);
@@ -135,21 +135,21 @@ fn budget_exhausted_record_carries_exact_ceiling_values() {
     use super::super::{BudgetExhaustedMetrics, budget_exhausted_record, budget_kind};
 
     let value = serde_json::to_value(budget_exhausted_record(BudgetExhaustedMetrics {
-        budget: budget_kind::TOOL_CALLS,
-        used: 32,
-        max: 32,
+        budget: budget_kind::WALL_CLOCK,
+        used: 600,
+        max: 600,
         step_count: None,
         planning_active: false,
-        tool_calls: 32,
+        tool_calls: 41,
     }))
     .unwrap();
     assert_eq!(value["kind"], "budget_exhausted");
-    assert_eq!(value["budget"], "tool_calls");
-    assert_eq!(value["used"], 32);
-    assert_eq!(value["max"], 32);
+    assert_eq!(value["budget"], "wall_clock_secs");
+    assert_eq!(value["used"], 600);
+    assert_eq!(value["max"], 600);
     assert!(value.get("step_count").is_none());
     assert_eq!(value["planning_active"], false);
-    assert_eq!(value["tool_calls"], 32);
+    assert_eq!(value["tool_calls"], 41);
     assert!(value["ts"].is_number());
 
     // Asymmetric counterpart: a planning tool-loop record differs in
@@ -170,7 +170,7 @@ fn budget_exhausted_record_carries_exact_ceiling_values() {
 }
 #[test]
 fn oversized_suppressed_preview_skips_unbounded_json_parse() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
     state.bound_model_visible_tool_preview(Some("exec_command"), "a".repeat(TURN_PREVIEW_BUDGET_BYTES));
 
     let content = format!(
@@ -186,7 +186,7 @@ fn oversized_suppressed_preview_skips_unbounded_json_parse() {
 }
 #[test]
 fn harness_state_tracks_phase_transitions() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     // Verify that run_id and turn_id are accessible
     assert_eq!(state.run_id.0, "run-1");
@@ -202,7 +202,7 @@ fn harness_state_tracks_phase_transitions() {
 }
 #[test]
 fn harness_state_accounts_for_out_of_band_tool_calls() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.record_out_of_band_tool_call();
 
@@ -214,7 +214,7 @@ fn harness_state_accounts_for_out_of_band_tool_calls() {
 }
 #[test]
 fn harness_state_tracks_spool_chunk_read_streak() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert_eq!(state.record_spool_chunk_read(), 1);
     assert_eq!(state.record_spool_chunk_read(), 2);
@@ -222,29 +222,12 @@ fn harness_state_tracks_spool_chunk_read_streak() {
     assert_eq!(state.record_spool_chunk_read(), 1);
 }
 #[test]
-fn harness_state_tracks_budget_warning_threshold_once() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+fn harness_state_counts_tool_calls_without_warning_thresholds() {
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
-    assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
-    state.record_tool_call(); // 1/4
-    assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
-    state.record_tool_call(); // 2/4
-    assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
-    state.record_tool_call(); // 3/4 => 75%
-    assert!(state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
-    state.mark_tool_budget_warning_emitted();
-    assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
-    assert_eq!(state.remaining_tool_calls(), 1);
-}
-#[test]
-fn harness_state_records_budget_warning_once_via_helper() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    for _ in 0..10 {
+        state.record_tool_call();
+    }
 
-    assert_eq!(state.record_tool_call_with_default_warning(), None);
-    assert_eq!(state.record_tool_call_with_default_warning(), None);
-    assert_eq!(
-        state.record_tool_call_with_default_warning(),
-        Some(ToolBudgetWarning { used: 3, max: 4, remaining: 1 })
-    );
-    assert_eq!(state.record_tool_call_with_default_warning(), None);
+    assert_eq!(state.tool_calls, 10);
 }

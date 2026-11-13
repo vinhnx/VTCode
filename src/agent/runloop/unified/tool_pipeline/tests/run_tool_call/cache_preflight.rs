@@ -16,7 +16,7 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    let mut harness_state = build_harness_state_with(1);
+    let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
         &mut test_ctx.renderer,
         &test_ctx.handle,
@@ -206,7 +206,7 @@ async fn successful_apply_patch_invalidates_cached_code_search() {
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-    let mut harness_state = build_harness_state_with(8);
+    let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
         &mut test_ctx.renderer,
         &test_ctx.handle,

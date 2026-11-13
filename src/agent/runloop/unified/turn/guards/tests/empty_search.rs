@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn planning_empty_search_pipelines_schedule_bounded_synthesis() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -36,7 +36,7 @@ async fn planning_listing_triplet_stays_below_early_recovery() {
     // Planning owns dedicated convergence guards (6/10 low-signal, 12-step
     // nav synthesis), so three successful same-base listings are legitimate
     // exploration and must not trip the generic fast-path. The fifth does.
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -83,7 +83,7 @@ async fn planning_listing_triplet_stays_below_early_recovery() {
 }
 #[tokio::test]
 async fn pending_verification_preserves_navigation_loop_recovery() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     tracker.mark_verification_pending();

@@ -217,7 +217,7 @@ async fn approval_input_without_plan_synthesizes_before_approval() {
     }
 
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(PlanProvider { calls: calls.clone() }));
 
@@ -284,7 +284,7 @@ async fn single_tool_free_text_answer_completes_without_fallback() {
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(LongAnswerProvider { requests: requests.clone() }));
 
     let mut history = vec![uni::Message::user("tell me about this project".to_string())];
@@ -321,7 +321,7 @@ async fn ensure_completed_reuses_found_final_without_requiring_prior_render() {
     // COMPLETED_TURN_FALLBACK_REASON: a valid FinalAnswer already in history
     // (e.g. streamed output that missed the render flag) must publish and
     // succeed, not synthesize the generic fallback.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut history = vec![
         uni::Message::user("tell me about this project".to_string()),
         uni::Message::assistant("VT Code stands out as a secure terminal agent.".to_string())
@@ -345,7 +345,7 @@ async fn ensure_completed_reuses_found_final_without_requiring_prior_render() {
 async fn ensure_completed_synthesizes_fallback_when_no_final_exists() {
     // Asymmetric counterpart: with no FinalAnswer in the turn slice, the
     // helper must synthesize COMPLETED_TURN_FALLBACK_RESPONSE and report fallback.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut history = vec![uni::Message::user("do work".to_string())];
     let mut ctx = backing.turn_loop_context();
 
@@ -368,7 +368,7 @@ async fn ensure_completed_synthesizes_planning_fallback_when_planning_active() {
     // Planning counterpart: with no FinalAnswer and planning active, the
     // helper must publish the planning resumable handoff (keep planning +
     // `<proposed_plan>` contract), not the generic retry text.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut history = vec![uni::Message::user("plan the fix".to_string())];
     let mut ctx = backing.turn_loop_context();
@@ -400,7 +400,7 @@ async fn ensure_completed_synthesizes_planning_fallback_when_planning_active() {
 async fn ensure_completed_preserves_explicit_recovery_flag() {
     // Recovery fallbacks mark the flag at creation; a found final with the
     // flag set must stay fallback so the outer loop still blocks resumably.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut history = vec![
         uni::Message::user("summarize".to_string()),
         uni::Message::assistant("recovery synthesis output".to_string())
@@ -464,7 +464,7 @@ async fn plan_mode_auto_continue_directive_reaches_provider_without_early_exit()
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(PlanAnsweringProvider { requests: requests.clone() }));
     let directive = crate::agent::runloop::unified::turn::tool_outcomes::helpers::plan_mode_continue_follow_up();
@@ -602,7 +602,7 @@ async fn session_shaped_external_limit_local_check_and_awaited_timer_finish_once
 
     let requests = Arc::new(AtomicUsize::new(0));
     let fetches = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(16).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let registry = backing.turn_processing_context().tool_registry.clone();
     fs::write(registry.workspace_root().join("README.md"), "# Before\n").unwrap();
     let checker = registry.workspace_root().join("verify.sh");

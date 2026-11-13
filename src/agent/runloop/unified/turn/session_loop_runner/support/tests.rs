@@ -164,7 +164,7 @@ async fn exec_session_resume_note_shape_is_stable_contract() {
         )),
         "stable pre-filled wait shape: {note}"
     );
-    assert!(note.contains("exempt from the per-turn"), "stable budget exemption: {note}");
+    assert!(note.contains("excluded from the per-turn"), "stable budget exclusion: {note}");
     assert!(note.contains("deadline-expired wait"), "stable deadline language: {note}");
     assert!(note.len() < 1_024, "contract stays bounded: {} bytes", note.len());
 

@@ -166,8 +166,8 @@ fn refusal_notices_never_auto_continue() {
 
 #[test]
 fn exhausted_turn_does_not_queue_an_automatic_retry() {
-    let budget_stop = "Tool-call budget exhausted for this turn (32/32). Changes remain unverified; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
-    let budget_stop_without_edits = "Tool-call budget exhausted for this turn (32/32). No edits were made this turn; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
+    let budget_stop = "Tool wall-clock budget exhausted for this turn (600s). Changes remain unverified; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
+    let budget_stop_without_edits = "Tool wall-clock budget exhausted for this turn (600s). No edits were made this turn; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
     let transient_stop = "Turn ended with a recovery fallback; the requested work was not confirmed. The current plan and task state were retained.";
     for (reason, expected) in [
         (budget_stop, false),
@@ -215,11 +215,11 @@ fn recoverable_block_classification_allow_list() {
     // Session-vtcode-20261008T094713Z: budget-exhausted verification block
     // resumes on a fresh turn with fresh execution budget.
     assert!(tracker_auto_continue_is_recoverable_block(Some(
-        "Verification is still pending: the turn tool-call budget is exhausted. No verifier was scheduled; resume with fresh execution budget."
+        "Verification is still pending: the turn wall-clock budget is exhausted. No verifier was scheduled; resume with fresh execution budget."
     )));
     // Budget exception still denies harder handoffs sharing the same wording.
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
-        "Verification is still pending: the turn tool-call budget is exhausted; permission denied by policy."
+        "Verification is still pending: the turn wall-clock budget is exhausted; permission denied by policy."
     )));
     // Production POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON.
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
@@ -239,7 +239,7 @@ fn recoverable_block_classification_allow_list() {
     assert!(tracker_auto_continue_is_recoverable_block(Some("Turn blocked due to repeated failing behavior.")));
     // Session/production budget phrases from residual UX work.
     assert!(tracker_auto_continue_is_recoverable_block(Some("Task 7 blocked by the turn's preview budget")));
-    assert!(tracker_auto_continue_is_recoverable_block(Some("tool budget ran out")));
+    assert!(tracker_auto_continue_is_recoverable_block(Some("wall-clock budget ran out")));
     assert!(tracker_auto_continue_is_recoverable_block(Some("hit the per-file read cap")));
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Tool loop budget exhausted before a final response."
@@ -261,12 +261,12 @@ fn recoverable_block_classification_allow_list() {
     )));
     // Session/production recoverable vocabulary parity.
     assert!(tracker_auto_continue_is_recoverable_block(Some("Task 7 blocked by the turn's preview budget")));
-    assert!(tracker_auto_continue_is_recoverable_block(Some("tool budget ran out")));
+    assert!(tracker_auto_continue_is_recoverable_block(Some("wall-clock budget ran out")));
     assert!(tracker_auto_continue_is_recoverable_block(Some("per-file read cap")));
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Tool loop budget exhausted before a final response"
     )));
-    assert!(tracker_auto_continue_is_recoverable_block(Some("work budget exhausted")));
+    assert!(tracker_auto_continue_is_recoverable_block(Some("wall-clock budget exhausted")));
 }
 
 #[test]
@@ -352,7 +352,7 @@ fn outer_queue_gate_blocks_unknown_and_contract_violation() {
         false,
         false,
         Some(
-            "Verification is still pending: the turn tool-call budget is exhausted. No verifier was scheduled; resume with fresh execution budget."
+            "Verification is still pending: the turn wall-clock budget is exhausted. No verifier was scheduled; resume with fresh execution budget."
         ),
         true,
         Some(&incomplete),
@@ -613,7 +613,7 @@ fn restored_informational_session_does_not_adopt_workspace_tracker() {
 
 #[test]
 fn budget_verification_retry_survives_the_real_final_response_handoff_check() {
-    let reason = "Verification is still pending: the turn tool-call budget is exhausted. No verifier was scheduled; resume with fresh execution budget.";
+    let reason = "Verification is still pending: the turn wall-clock budget is exhausted. No verifier was scheduled; resume with fresh execution budget.";
     let text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(reason);
     // The ordinary classifier must still stop in-turn continuation.
     assert!(vtcode_core::core::agent::completion::tracker_final_text_is_safety_handoff(&text));
@@ -661,12 +661,12 @@ fn tracker_config_defaults() {
 }
 
 #[test]
-fn recoverable_block_includes_tool_budget_and_plan_fallback_shapes() {
+fn recoverable_block_includes_wall_clock_budget_and_plan_fallback_shapes() {
     // Production TOOL_LOOP_LIMIT_RECOVERY_REASON.
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Tool loop budget exhausted before a final response. Tools are disabled for one bounded synthesis pass."
     )));
-    // Tool-call budget / follow-up recovery constants.
+    // Wall-clock budget / follow-up recovery constants.
     assert!(tracker_auto_continue_is_recoverable_block(Some(
         "Tool follow-up failed. Tools disabled; respond with text using context and recent tool outputs."
     )));
@@ -677,7 +677,7 @@ fn recoverable_block_includes_tool_budget_and_plan_fallback_shapes() {
         "Approved-plan execution stopped after recovery was exhausted. The approved plan and task checklist were retained."
     )));
     assert!(tracker_auto_continue_is_recoverable_block(Some(
-        "Per-turn tool limit reached (max: 32). Wait or adjust config."
+        "Verification is still pending: the turn wall-clock budget is exhausted. No verifier was scheduled."
     )));
     // Planning fallback contains "recovery fallback" (recoverable token);
     // outer tracker queue is separately gated by planning_active.

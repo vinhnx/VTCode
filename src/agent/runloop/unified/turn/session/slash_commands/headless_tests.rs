@@ -64,7 +64,7 @@ impl HeadlessHarness {
         let renderer = AnsiRenderer::stdout();
         assert!(!renderer.supports_inline_ui(), "fixture renderer must be headless");
         Self {
-            backing: TestTurnProcessingBacking::new(4).await,
+            backing: TestTurnProcessingBacking::new().await,
             renderer,
             header_context: Box::leak(Box::new(InlineHeaderContext::default())),
             model_picker_state: Box::leak(Box::new(None::<ModelPickerState>)),

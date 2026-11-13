@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn plan_mode_pseudo_tool_call_markup_is_stripped_and_reprompts_once() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
 
@@ -41,7 +41,7 @@ async fn plan_mode_pseudo_tool_call_markup_is_stripped_and_reprompts_once() {
 }
 #[tokio::test]
 async fn plan_mode_pseudo_tool_call_reprompt_is_bounded() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
     for _ in 0..crate::agent::runloop::unified::planning_workflow_state::MAX_PLAN_PSEUDO_TOOL_CALL_REPROMPTS {
@@ -70,7 +70,7 @@ async fn plan_mode_pseudo_tool_call_reprompt_is_bounded() {
 }
 #[tokio::test]
 async fn build_mode_pseudo_tool_call_markup_keeps_existing_behavior() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     let outcome = ctx

@@ -40,7 +40,7 @@ async fn deny_search(backing: &mut TestContextBacking) {
 
 #[tokio::test]
 async fn blocked_call_under_active_recovery_still_answers_abandoned_sibling() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     deny_search(&mut backing).await;
     let (sibling, sibling_args) = sibling_read_call(&backing, "sibling_1");
     cache_tool_permission(&mut backing, tool_names::READ_FILE, &sibling_args, PermissionGrant::Permanent).await;
@@ -87,7 +87,7 @@ async fn blocked_call_under_active_recovery_still_answers_abandoned_sibling() {
 
 #[tokio::test]
 async fn denied_call_without_recovery_keeps_batch_paired() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     deny_search(&mut backing).await;
     let (sibling, sibling_args) = sibling_read_call(&backing, "sibling_1");
     cache_tool_permission(&mut backing, tool_names::READ_FILE, &sibling_args, PermissionGrant::Permanent).await;

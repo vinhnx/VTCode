@@ -41,16 +41,14 @@ use crate::agent::runloop::unified::inline_events::harness::{
     tool_started_event, tool_updated_event,
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
-use crate::agent::runloop::unified::run_loop_context::{
-    HarnessTurnState, RunLoopContext, SESSION_LIMIT_GRANT_DIRECTIVE, full_auto_loop_grants_enabled,
-};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::{ToolCallSafetyValidator, invocation_id_from_call_id};
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
 use crate::agent::runloop::unified::tool_pipeline::{
     ToolExecutionStatus, run_tool_call_with_args,
-    validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt},
+    validation::{SafetyValidationFailure, validate_tool_call_safety},
 };
 use crate::agent::runloop::unified::tool_routing::{
     HitlDecision, PreToolHookPhaseResult, ToolPermissionFlow, ToolPermissionsContext,
@@ -88,7 +86,6 @@ pub(super) struct CopilotRuntimeHost<'a> {
     approval_policy: AskForApproval,
     hitl_notification_bell: bool,
     skip_confirmations: bool,
-    full_auto: bool,
     vt_cfg: Option<&'a vtcode_config::loader::VTCodeConfig>,
     traj: &'a TrajectoryLogger,
     harness_state: &'a mut HarnessTurnState,
@@ -98,7 +95,6 @@ pub(super) struct CopilotRuntimeHost<'a> {
     exposed_tool_names: BTreeSet<String>,
     harness_emitter: Option<&'a HarnessEventEmitter>,
     harness_item_prefix: String,
-    agent_name: Option<String>,
     observed_tool_calls: HashMap<String, ObservedToolCallState>,
     local_terminal_sessions: HashMap<String, LocalTerminalSession>,
     compatibility_notice_shown: bool,
@@ -135,10 +131,8 @@ impl<'a> CopilotRuntimeHost<'a> {
         suppress_output_signal: Option<Arc<AtomicBool>>,
         available_tools: Option<&Arc<Vec<ToolDefinition>>>,
         skip_confirmations: bool,
-        full_auto: bool,
         harness_emitter: Option<&'a HarnessEventEmitter>,
         harness_item_prefix: String,
-        agent_name: Option<String>,
     ) -> Self {
         let allowlist = vt_cfg
             .map(|cfg| cfg.auth.copilot.vtcode_tool_allowlist.clone())
@@ -180,7 +174,6 @@ impl<'a> CopilotRuntimeHost<'a> {
             approval_policy,
             hitl_notification_bell: hitl_bell,
             skip_confirmations,
-            full_auto,
             vt_cfg,
             traj,
             harness_state,
@@ -190,7 +183,6 @@ impl<'a> CopilotRuntimeHost<'a> {
             exposed_tool_names,
             harness_emitter,
             harness_item_prefix,
-            agent_name,
             observed_tool_calls: HashMap::new(),
             local_terminal_sessions: HashMap::new(),
             compatibility_notice_shown: false,
@@ -200,10 +192,6 @@ impl<'a> CopilotRuntimeHost<'a> {
 
     pub(super) fn exposed_tools(&self) -> &[ToolDefinition] {
         &self.exposed_tools
-    }
-
-    fn session_limit_auto_grant(&self) -> bool {
-        full_auto_loop_grants_enabled(self.full_auto, self.vt_cfg)
     }
 
     async fn handle_builtin_permission(
@@ -541,43 +529,14 @@ impl<'a> CopilotRuntimeHost<'a> {
 
         let invocation_id = invocation_id_from_call_id(tool_call_id);
         let safety_args = rewritten_arguments.as_ref().unwrap_or(arguments);
-        let session_limit_auto_grant = self.session_limit_auto_grant();
-        let safety_approval_justification = match validate_tool_call_with_limit_prompt(
-            self.safety_validator,
-            self.handle,
-            self.session,
-            self.ctrl_c_state,
-            self.ctrl_c_notify,
-            tool_name,
-            safety_args,
-            invocation_id,
-            Some(self.harness_state),
-            self.harness_emitter,
-            self.agent_name.as_deref(),
-            session_limit_auto_grant,
-            self.traj,
-            self.tool_registry.is_planning_active(),
-        )
-        .await
-        {
-            Ok(()) => None,
-            Err(SafetyValidationFailure::SessionLimitNotIncreased) => {
-                return Ok(Some(denied_tool_response(
-                    tool_name,
-                    "session tool limit reached and not increased by user",
-                )));
-            }
-            Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => {
-                return Ok(Some(denied_tool_response(
-                    tool_name,
-                    &format!("failed while requesting a session tool-limit increase: {error}"),
-                )));
-            }
-            Err(SafetyValidationFailure::NeedsApproval(justification)) => Some(justification),
-            Err(SafetyValidationFailure::Validation(error)) => {
-                return Ok(Some(denied_tool_response(tool_name, &format!("safety validation failed: {error}"))));
-            }
-        };
+        let safety_approval_justification =
+            match validate_tool_call_safety(self.safety_validator, tool_name, safety_args, invocation_id).await {
+                Ok(()) => None,
+                Err(SafetyValidationFailure::NeedsApproval(justification)) => Some(justification),
+                Err(SafetyValidationFailure::Validation(error)) => {
+                    return Ok(Some(denied_tool_response(tool_name, &format!("safety validation failed: {error}"))));
+                }
+            };
 
         match ensure_tool_permission_with_call_id(
             self.tool_permissions_context_with_safety(renderer, safety_approval_justification.as_deref()),
@@ -604,37 +563,9 @@ impl<'a> CopilotRuntimeHost<'a> {
                     }
                     if safety_args != &updated {
                         let invocation_id = invocation_id_from_call_id(tool_call_id);
-                        match validate_tool_call_with_limit_prompt(
-                            self.safety_validator,
-                            self.handle,
-                            self.session,
-                            self.ctrl_c_state,
-                            self.ctrl_c_notify,
-                            tool_name,
-                            &updated,
-                            invocation_id,
-                            Some(self.harness_state),
-                            self.harness_emitter,
-                            self.agent_name.as_deref(),
-                            session_limit_auto_grant,
-                            self.traj,
-                            self.tool_registry.is_planning_active(),
-                        )
-                        .await
+                        match validate_tool_call_safety(self.safety_validator, tool_name, &updated, invocation_id).await
                         {
                             Ok(()) => {}
-                            Err(SafetyValidationFailure::SessionLimitNotIncreased) => {
-                                return Ok(Some(denied_tool_response(
-                                    tool_name,
-                                    "session tool limit reached and not increased by user",
-                                )));
-                            }
-                            Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => {
-                                return Ok(Some(denied_tool_response(
-                                    tool_name,
-                                    &format!("failed while requesting a session tool-limit increase: {error}"),
-                                )));
-                            }
                             Err(SafetyValidationFailure::NeedsApproval(_)) => {
                                 // The user already approved the final arguments
                                 // in the PermissionRequest prompt; the gateway's
@@ -674,36 +605,13 @@ impl<'a> CopilotRuntimeHost<'a> {
             }
         }
 
-        // Control-plane exec calls (wait/inspect) bypass the per-turn budget
-        // exhaustion rejection so a long build stays observable.
-        if !vtcode_core::tools::tool_intent::is_turn_budget_exempt_call(tool_name, safety_args)
-            && let Some(exhaustion) = self.harness_state.tool_budget_exhaustion()
-        {
-            // Nothing will execute for this call id; drop the pending
-            // rewrite so a later retry with the same id cannot inherit stale
-            // arguments.
-            self.pending_hook_rewritten_args.remove(tool_call_id);
-            self.harness_state.record_tool_budget_rejection();
-            return Ok(Some(tool_exceeded_budget_response(tool_name, exhaustion.max)));
-        }
-
         if let Some(exhaustion) = self.harness_state.wall_clock_budget_exhaustion() {
             self.pending_hook_rewritten_args.remove(tool_call_id);
             return Ok(Some(denied_tool_response(tool_name, &exhaustion.policy_violation_message())));
         }
 
         self.harness_state.record_admitted_tool_call();
-        // Control-plane exec calls (wait/inspect) do not consume the per-turn
-        // tool-call budget; see `record_tool_call_budget_usage` for rationale.
-        // The exemption is judged on `safety_args` — the same arguments the
-        // safety gateway and permission flow evaluated — so a hook rewrite
-        // that changes the action cannot swap the budget treatment after
-        // admission.
-        if !vtcode_core::tools::tool_intent::is_turn_budget_exempt_call(tool_name, safety_args)
-            && let Some(warning) = self.harness_state.record_tool_call_with_default_warning()
-        {
-            warning.log_threshold_reached("Tool-call budget warning threshold reached in copilot ACP path");
-        }
+        self.harness_state.record_tool_call();
 
         Ok(None)
     }
@@ -920,11 +828,11 @@ mod handler;
 mod responses;
 
 use responses::{
-    append_session_limit_grant_guidance, append_tool_reply_guidance, auto_approve_builtin_permission,
-    copilot_failure_response_with_diagnosis, copilot_tool_result_text, denied_tool_response,
-    emit_terminal_finished_event, emit_terminal_output_event, filter_copilot_tools, harness_call_item_id,
-    map_builtin_permission_prompt_decision, map_runtime_error, raw_tool_call_id, summarize_permission_request,
-    tool_cancelled_response, tool_definition_name, tool_exceeded_budget_response, tool_not_exposed_response,
+    append_tool_reply_guidance, auto_approve_builtin_permission, copilot_failure_response_with_diagnosis,
+    copilot_tool_result_text, denied_tool_response, emit_terminal_finished_event, emit_terminal_output_event,
+    filter_copilot_tools, harness_call_item_id, map_builtin_permission_prompt_decision, map_runtime_error,
+    raw_tool_call_id, summarize_permission_request, tool_cancelled_response, tool_definition_name,
+    tool_not_exposed_response,
 };
 
 #[cfg(test)]

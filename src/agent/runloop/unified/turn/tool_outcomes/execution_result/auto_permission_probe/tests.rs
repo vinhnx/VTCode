@@ -59,7 +59,7 @@ impl uni::LLMProvider for CountingProvider {
 async fn decisions_full_auto_keeps_generation_when_disabled_or_unsupported() {
     for (enabled, eligible) in [(false, true), (true, false)] {
         let calls = Arc::new(AtomicUsize::new(0));
-        let mut backing = TestTurnProcessingBacking::new(120).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.set_provider(Box::new(CountingProvider { calls: calls.clone(), eligible }));
         let mut config = vtcode_core::config::loader::VTCodeConfig::default();
         config.permissions.auto_permission.use_decisions_probe = enabled;
@@ -82,7 +82,7 @@ async fn decisions_tui_probe_enabled_preserves_explicit_tool_denial_before_execu
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
     use vtcode_core::tool_policy::ToolPolicy;
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(CountingProvider { calls: calls.clone(), eligible: true }));
     let mut config = vtcode_core::config::loader::VTCodeConfig::default();
     config.permissions.auto_permission.use_decisions_probe = true;
@@ -117,7 +117,7 @@ async fn decisions_tui_probe_enabled_preserves_explicit_tool_denial_before_execu
 #[tokio::test]
 async fn decisions_probe_admission_preserves_empty_planning_and_three_dispatch_budget() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(CountingProvider { calls: calls.clone(), eligible: true }));
     let mut config = vtcode_core::config::loader::VTCodeConfig::default();
     config.permissions.auto_permission.use_decisions_probe = true;
@@ -170,7 +170,7 @@ async fn decisions_probe_admission_preserves_empty_planning_and_three_dispatch_b
 #[tokio::test]
 async fn decisions_probe_cancelled_admission_makes_zero_requests() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(CountingProvider { calls: calls.clone(), eligible: true }));
     let mut config = vtcode_core::config::loader::VTCodeConfig::default();
     config.permissions.auto_permission.use_decisions_probe = true;
@@ -189,7 +189,7 @@ async fn decisions_probe_cancelled_admission_makes_zero_requests() {
 #[tokio::test]
 async fn decisions_tui_probe_reevaluates_provider_and_settings_without_spending_rejected_budget() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut config = vtcode_core::config::loader::VTCodeConfig::default();
     for (enabled, eligible, admitted) in [
         (false, true, false),
@@ -228,7 +228,7 @@ async fn decisions_tui_probe_reevaluates_provider_and_settings_without_spending_
 async fn decisions_tui_probe_headless_planning_and_stopped_paths_do_not_consume_budget() {
     for boundary in ["headless", "planning", "cancelled", "handled", "exit", "missing_config"] {
         let calls = Arc::new(AtomicUsize::new(0));
-        let mut backing = TestTurnProcessingBacking::new(120).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.set_provider(Box::new(CountingProvider { calls: calls.clone(), eligible: true }));
         if boundary != "missing_config" {
             let mut config = vtcode_core::config::loader::VTCodeConfig::default();

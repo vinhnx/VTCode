@@ -27,8 +27,7 @@ Full-auto treats `[automation.full_auto].allowed_tools` as a hard gate: tools ou
 tools inside the allow-list still pass explicit deny and policy checks. Workflow-coordination tools (`task_tracker`,
 `start_planning`, `request_user_input`) stay available in every mode even when omitted from the allow-list. Promptable
 outcomes that remain inside the allow-list are routed through automatic permission review instead of asking. Tool-loop
-limit increases are likewise granted automatically up to the hard cap (per-turn budget starts at the cap), and session
-tool-call limit increases of +100 are granted without prompting; set
+limit increases are likewise granted automatically up to the hard cap; set
 `automation.full_auto.auto_grant_tool_limits = false` to restore the interactive prompts.
 `--dangerously-skip-permissions` similarly auto-approves promptable actions while still respecting explicit denies and
 policy blocks. You can capture the final summary separately with `--last-message-file` or persist the raw JSON stream

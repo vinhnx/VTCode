@@ -391,7 +391,7 @@ Key guarantees:
 - **Shape**: session id, command display, elapsed time, plus a pre-filled `write_stdin` wait
   (`{"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}`).
 - **Never auto-execute**: the hint only suggests the wait call; the runtime never waits on its own.
-- **Budget**: `wait`/`inspect` calls stay exempt from the per-turn tool-call budget, so settling never starves new work.
+- **Budget**: explicit `wait` time is excluded from the per-turn wall-clock budget, so settling never starves new work.
   A deadline-expired wait returns an in-progress session that can be waited on again.
 - **Diagnostics**: turn-end `SnapshotTurnDiagnostics.in_progress_exec_sessions` (bounded to 4) records all live ids,
   including retained background sessions, for ATIF correlation.

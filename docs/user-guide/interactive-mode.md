@@ -419,7 +419,7 @@ When a task is already running, VT Code keeps the active turn alive and queues f
   (`Drafting plan...`, `Validating plan...`, `Persisting plan...`, `Preparing approval...`).
 - Plan approval offers three choices: implement in the current context, clear transient context and implement with a
   fresh thread, or stay in Plan mode. Both implementation choices preserve the session's existing confirmation policy.
-  The fresh path preserves the plan and task tracker while resetting the transcript and tool budget.
+  The fresh path preserves the plan and task tracker while resetting the transcript and turn budgets.
 
 ## Command History
 

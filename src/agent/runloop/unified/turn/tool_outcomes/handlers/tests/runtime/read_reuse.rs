@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn repeated_shell_guard_activates_recovery_without_breaking_turn() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let max_repeated_runs = ctx
         .vt_cfg
@@ -22,7 +22,7 @@ async fn repeated_shell_guard_activates_recovery_without_breaking_turn() {
 
 #[tokio::test]
 async fn duplicate_task_tracker_create_is_blocked_not_breaking() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let args = json!({
         "action": "create",
@@ -40,7 +40,7 @@ async fn duplicate_task_tracker_create_is_blocked_not_breaking() {
 
 #[tokio::test]
 async fn zero_wall_clock_limit_allows_tool_admission_after_elapsed_execution() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.max_tool_wall_clock = Duration::ZERO;
@@ -53,7 +53,7 @@ async fn zero_wall_clock_limit_allows_tool_admission_after_elapsed_execution() {
 
 #[tokio::test]
 async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.tool_wall_clock_elapsed = ctx.harness_state.max_tool_wall_clock + Duration::from_secs(1);
@@ -149,7 +149,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
 
 #[tokio::test]
 async fn start_planning_clears_task_tracker_create_signatures() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let enter_args = json!({});
     cache_tool_permission(&mut backing, tool_names::START_PLANNING, &enter_args, PermissionGrant::Permanent).await;
@@ -184,7 +184,7 @@ async fn start_planning_clears_task_tracker_create_signatures() {
 
 #[tokio::test]
 async fn recovery_skip_step_pushes_structured_tool_message() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     let outcome = recovery::apply_recovery_action(
@@ -209,7 +209,7 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     use crate::agent::runloop::unified::run_loop_context::StreamedToolCallItem;
     use vtcode_core::core::agent::events::tool_started_event;
 
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().unwrap().to_path_buf();
     let emitter = HarnessEventEmitter::new_async(&workspace, "cached-read-lifecycle", None)
@@ -334,7 +334,7 @@ async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
     // tool-free recovery pass that produces a garbage final answer.
     // Reproduces the failure seen in checkpoint turn_613.
     let read_family_cap = 4;
-    let mut backing = TestContextBacking::new(read_family_cap).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, (1..=16).map(|idx| format!("line {idx}\n")).collect::<String>())
@@ -395,7 +395,7 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
     // True retry loop: same path + same slice, repeated verbatim. The cap must
     // trip here — this is the guard's reason for existing.
     let read_family_cap = 4;
-    let mut backing = TestContextBacking::new(read_family_cap).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, (1..=16).map(|idx| format!("line {idx}\n")).collect::<String>())
@@ -456,7 +456,7 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
 #[tokio::test]
 async fn intermittent_path_cap_rejections_allow_progress_but_consecutive_retries_trip_fuse() {
     for productive in [true, false] {
-        let mut backing = TestContextBacking::new(64).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let sample = backing.sample_file.clone();
         let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-hello\n+continued after read cap\n*** End Patch\n"});
@@ -521,7 +521,7 @@ async fn intermittent_path_cap_rejections_allow_progress_but_consecutive_retries
 #[cfg(unix)]
 #[tokio::test]
 async fn concentrated_search_coaching_keeps_distinct_queries_available() {
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().unwrap().to_path_buf();
     let content = ('A'..='G').map(|letter| format!("unique_fact_{letter}\n")).collect::<String>();
@@ -570,7 +570,7 @@ async fn concentrated_search_coaching_keeps_distinct_queries_available() {
 #[cfg(unix)]
 #[tokio::test]
 async fn redundant_sed_coaching_keeps_edits_and_verification_available() {
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().unwrap().to_path_buf();
     std::fs::write(&backing.sample_file, "alpha\nbeta\ngamma\n").unwrap();
@@ -658,7 +658,7 @@ async fn redundant_sed_coaching_keeps_edits_and_verification_available() {
 #[cfg(unix)]
 #[tokio::test]
 async fn masked_checker_feedback_is_bounded_and_standalone_verification_continues_loop() {
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().unwrap().to_path_buf();
     std::fs::create_dir(workspace.join("scripts")).unwrap();
@@ -784,7 +784,7 @@ async fn masked_checker_feedback_is_bounded_and_standalone_verification_continue
 #[cfg(unix)]
 #[tokio::test]
 async fn filtered_verifier_failure_grants_repair_and_success_continues_loop() {
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().unwrap().to_path_buf();
     std::fs::create_dir(workspace.join("scripts")).unwrap();
@@ -854,7 +854,7 @@ async fn repeated_paginated_sed_reads_eventually_trip_per_file_path_cap() {
     // file reads. Different ranges must not trip the identical-slice family
     // cap, but repeated exploration of the same file should still block that
     // path without disabling unrelated reads or edits for the turn.
-    let mut backing = TestContextBacking::new(20).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, (1..=16).map(|idx| format!("line {idx}\n")).collect::<String>())

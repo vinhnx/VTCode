@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn approved_execution_replan_continues_without_second_confirmation() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.persist_approved_plan_for_test(EXECUTION_REVISION_PLAN).await;
     backing.set_approved_plan_execution_for_test(true);
     backing.set_skip_confirmations_for_test(false);
@@ -32,7 +32,7 @@ async fn approved_execution_replan_continues_without_second_confirmation() {
 }
 #[tokio::test]
 async fn full_auto_execution_replan_continues_without_second_confirmation() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.persist_approved_plan_for_test(EXECUTION_REVISION_PLAN).await;
     backing.set_skip_confirmations_for_test(true);
     let mut ctx = backing.turn_processing_context();
@@ -66,7 +66,7 @@ async fn execution_mode_invalid_unapproved_plan_gets_tool_free_repair_and_reache
     const INVALID_README_PLAN: &str = "**Goal:** Improve README density.\n\n1. Fix the broken link in `README.md`.\n\n**Verification:** Check links.\n";
     const REPAIRED_README_PLAN: &str = "## Summary\nImprove README density.\n\n## Implementation Steps\n1. Fix the broken link -> files: [README.md] -> verify: [rg -n 'Loop engineering' README.md]\n\n## Test Cases and Validation\n- Confirm the link with rg -n 'Loop engineering' README.md.\n\n## Assumptions and Defaults\n- Keep unrelated README sections as they are.\n";
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     let first = ctx
@@ -127,7 +127,7 @@ async fn execution_mode_repaired_plan_waits_for_interactive_approval() {
     event_tx
         .send(InlineEvent::Transient(TransientEvent::Cancelled))
         .expect("cancel approval");
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_skip_confirmations_for_test(false);
     let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
@@ -171,7 +171,7 @@ async fn execution_mode_repaired_plan_waits_for_interactive_approval() {
 #[tokio::test]
 async fn execution_mode_invalid_unapproved_plan_repair_is_bounded() {
     const INVALID_PLAN: &str = "**Goal:** Improve README.md.\n\n1. Fix a link in README.md.\n";
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     let first = ctx
@@ -202,7 +202,7 @@ async fn execution_mode_invalid_unapproved_plan_repair_is_bounded() {
 }
 #[tokio::test]
 async fn execution_mode_replan_rejection_surfaces_feedback_without_repair_directive() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_approved_plan_execution_for_test(true);
     let mut ctx = backing.turn_processing_context();
 
@@ -250,7 +250,7 @@ async fn execution_mode_replan_rejection_surfaces_feedback_without_repair_direct
 async fn plan_only_execution_rejection_still_publishes_final_response() {
     use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails, VersionedThreadEvent};
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_approved_plan_execution_for_test(true);
     let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();

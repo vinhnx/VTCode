@@ -276,7 +276,7 @@ mod tests {
     async fn diagnosis_reserves_reasoning_and_rejects_truncated_json() {
         for finish in [FinishReason::Stop, FinishReason::Length] {
             let expected_complete = finish == FinishReason::Stop;
-            let mut backing = TestTurnProcessingBacking::new(4).await;
+            let mut backing = TestTurnProcessingBacking::new().await;
             backing.set_provider(Box::new(DiagnosisProvider { finish }));
             let mut ctx = backing.turn_processing_context();
             let route = vtcode_core::llm::ModelRoute {

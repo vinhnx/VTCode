@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn path_cap_shares_counter_across_spellings_and_resets_on_write() {
-    let mut backing = TestContextBacking::new(30).await;
+    let mut backing = TestContextBacking::new().await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
 

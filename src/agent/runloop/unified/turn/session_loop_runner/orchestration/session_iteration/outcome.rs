@@ -50,15 +50,11 @@ use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult as RunLoopTurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
-use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    effective_max_tool_calls_for_approved_plan_execution, resolve_safety_tool_call_limits,
-};
 
 /// Mutable outcome-gate state threaded through post-turn finalization.
 pub(super) struct OutcomeGate<'a> {
     pub turn_result: Result<TurnLoopOutcome>,
     pub aborted_turn_diagnostics: Option<SnapshotTurnDiagnostics>,
-    pub session_limit_granted: bool,
     pub refused_turn_rollback: &'a RefusedTurnRollback,
     pub transient_system_notes: &'a [String],
     pub cross_turn_read_sigs: &'a Vec<String>,
@@ -73,7 +69,6 @@ pub(super) struct OutcomeGate<'a> {
     pub turn_id: &'a str,
     pub turn_run_id: &'a TurnRunId,
     pub history_snapshot_bytes: usize,
-    pub max_tool_calls_per_turn: usize,
     pub max_tool_wall_clock_secs: u64,
     pub executing_approved_plan: bool,
     pub config: &'a CoreAgentConfig,
@@ -126,7 +121,6 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
     let OutcomeGate {
         turn_result,
         aborted_turn_diagnostics,
-        session_limit_granted,
         refused_turn_rollback,
         transient_system_notes,
         cross_turn_read_sigs,
@@ -141,7 +135,6 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
         turn_id,
         turn_run_id,
         history_snapshot_bytes,
-        max_tool_calls_per_turn,
         max_tool_wall_clock_secs,
         executing_approved_plan,
         config,
@@ -209,14 +202,6 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
             }
         }
     };
-    if session_limit_granted && !matches!(&outcome.result, RunLoopTurnLoopResult::Blocked { .. }) {
-        // A successful grant resumes the pending Build turn. Do
-        // not leave the previous blocked placeholder/state visible
-        // or let a grant-in-flight turn be finalized as no response.
-        input_status_state.is_blocked = false;
-        handle.set_placeholder(default_placeholder.clone());
-        handle.set_activity_state(ActivityState::Idle);
-    }
     // A refused request must not stay in model-visible history:
     // the next request would replay it and be refused again. Roll
     // back before any post-turn history edits, checkpointing, or
@@ -400,14 +385,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
             runtime.state.clear_conversation_history();
             context_manager.reset_for_fresh_execution();
             session_stats.reset_for_fresh_execution();
-            let build_tool_limit = effective_max_tool_calls_for_approved_plan_execution(max_tool_calls_per_turn);
-            let max_session_turns = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.agent.max_conversation_turns)
-                .unwrap_or(vtcode_config::constants::defaults::DEFAULT_MAX_CONVERSATION_TURNS);
-            let (max_per_turn, max_per_session) =
-                resolve_safety_tool_call_limits(build_tool_limit, max_session_turns, false);
-            safety_validator.reset_for_fresh_execution(max_per_turn, max_per_session);
+            safety_validator.reset_for_fresh_execution();
             crate::agent::runloop::unified::planning_workflow::emit_context_reset(
                 harness_emitter.as_ref(),
                 turn_run_id.0.clone(),

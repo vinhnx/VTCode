@@ -50,7 +50,7 @@ async fn interactive_cli_reuses_overlapping_inspections_then_applies_authorized_
         }
     }
 
-    let mut backing = TestTurnProcessingBacking::new(12).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let path = backing.workspace_path().join("sample.md");
     std::fs::write(&path, "first\nsecond\nthird\nfourth\n").unwrap();
     backing.add_tool_definition(named_tool("exec_command")).await;
@@ -117,7 +117,7 @@ async fn session_232419_read_evidence_survives_request_clearing() {
     .unwrap();
     assert_eq!(reads.len(), 15);
     for parallel in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         std::fs::write(backing.workspace_path().join("README.md"), reads[1]["output"].as_str().unwrap()).unwrap();
         let cfg = VTCodeConfig::default();
         backing.set_vt_cfg_for_test(cfg);
@@ -231,7 +231,7 @@ async fn local_clearing_uses_session_budget_and_preserves_recent_batch() {
         (true, 0, true),
         (true, 2, true),
     ] {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut cfg = VTCodeConfig::default();
         cfg.agent.harness.inspection.mode = vtcode_core::config::core::agent::InspectionMode::Enforce;
         cfg.context.max_context_tokens = 16_000;
@@ -292,7 +292,7 @@ async fn local_clearing_uses_session_budget_and_preserves_recent_batch() {
 }
 #[tokio::test]
 async fn anthropic_request_build_combines_clearing_and_compaction_when_enabled() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut cfg = VTCodeConfig::default();
     cfg.agent.provider = "anthropic".to_string();
     cfg.agent.harness.auto_compaction_enabled = true;
@@ -369,7 +369,7 @@ async fn anthropic_request_build_combines_clearing_and_compaction_when_enabled()
 }
 #[tokio::test]
 async fn openai_request_build_keeps_existing_compaction_payload() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut cfg = VTCodeConfig::default();
     cfg.agent.harness.auto_compaction_enabled = true;
     cfg.agent.harness.auto_compaction_threshold_tokens = Some(512);

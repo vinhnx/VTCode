@@ -264,11 +264,12 @@ async fn test_run_tool_call_reuses_streamed_invocation_and_emits_one_terminal_ob
 /// Regression: the interactive runloop validates (safety-admits) each tool
 /// call through the shared SafetyGateway BEFORE invoking the pipeline with
 /// prevalidated = true. The pipeline must not let the registry re-admit the
-/// same call on that shared gateway — the double count halved the effective
-/// per-turn budget (checkpoint turn_942/943: 16 admitted calls then
-/// "Per-turn tool limit reached (max: 32)" with max_tool_calls_per_turn = 32).
+/// same call on that shared gateway (the old double admission halved the
+/// effective per-turn budget at checkpoint turn_942/943). Pinned via the
+/// short-window rate limiter: two calls admit twice, so a limit of 3
+/// succeeds, while a double-admitting regression would record 4 and deny.
 #[tokio::test]
-async fn test_prevalidated_runloop_execution_consumes_safety_budget_once() {
+async fn test_prevalidated_runloop_execution_admits_safety_once() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
     // TestContext drops its TempDir (the workspace directory is deleted), so
@@ -278,7 +279,7 @@ async fn test_prevalidated_runloop_execution_consumes_safety_budget_once() {
     std::fs::write(&read_path, "hello").expect("write fixture");
 
     let gateway = registry.safety_gateway();
-    gateway.set_limits(2, 10);
+    gateway.set_rate_limits(3, Some(3));
     gateway.start_turn();
 
     let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
@@ -349,9 +350,26 @@ async fn test_prevalidated_runloop_execution_consumes_safety_budget_once() {
         );
     }
 
-    // Each call consumed exactly one budget slot (the runloop admission).
-    // Before the fix, the registry re-admitted every call on the shared
-    // gateway, so the second admission was rejected with "Per-turn tool limit
-    // reached (max: 2)" and only one call could execute.
-    assert_eq!(gateway.get_stats().turn_count, 2);
+    // Each call recorded exactly once (the runloop admission). A third
+    // admission still fits the window, but a fourth — which a
+    // double-admitting regression would already have recorded — is denied.
+    let args = json!({ "path": read_path });
+    let third = gateway
+        .check_and_record_with_id(
+            &vtcode_core::tools::SafetyContext::new("runloop-safety-validator"),
+            tools::READ_FILE,
+            &args,
+            Some(vtcode_core::tools::ToolInvocationId::new()),
+        )
+        .await;
+    assert!(third.decision.is_allowed());
+    let fourth = gateway
+        .check_and_record_with_id(
+            &vtcode_core::tools::SafetyContext::new("runloop-safety-validator"),
+            tools::READ_FILE,
+            &args,
+            Some(vtcode_core::tools::ToolInvocationId::new()),
+        )
+        .await;
+    assert!(fourth.decision.is_denied());
 }

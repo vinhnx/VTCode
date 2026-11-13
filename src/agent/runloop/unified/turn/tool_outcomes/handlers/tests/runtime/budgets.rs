@@ -1,8 +1,8 @@
 use super::*;
 
 #[tokio::test]
-async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
-    let mut backing = TestContextBacking::new(2).await;
+async fn denied_tool_permission_emits_policy_response_without_tool_call_count() {
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let denial_args = json!({"path": valid_file.to_string_lossy()});
@@ -33,8 +33,8 @@ async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
 }
 
 #[tokio::test]
-async fn prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
-    let mut backing = TestContextBacking::new(0).await;
+async fn prepared_tool_calls_execute_without_call_count_cap() {
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
@@ -61,41 +61,42 @@ async fn prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
 
     assert!(outcome.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
-    assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
     assert!(
         !outcome_ctx
             .ctx
             .working_history
             .iter()
-            .any(|message| { message.content.as_text().contains("exceeded max tool calls per turn") })
+            .any(|message| { message.content.as_text().contains("Policy violation") })
     );
 }
 
 #[tokio::test]
-async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
-    let mut backing = TestContextBacking::new(0).await;
+async fn many_prepared_tool_calls_execute_without_call_count_cap() {
+    // Regression: the removed per-turn call-count budget must not stop a
+    // research-heavy turn mid-batch. Loop and wall-clock ceilings still bind.
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
-    let second_file = backing.sample_file.parent().expect("temp workspace root").join("other.txt");
-    std::fs::write(&second_file, "world\n").expect("write second sample file");
+    for index in 0..40 {
+        let file = backing
+            .sample_file
+            .parent()
+            .expect("temp workspace root")
+            .join(format!("other-{index}.txt"));
+        std::fs::write(&file, "world\n").expect("write sample file");
+    }
 
-    let tool_calls = vec![
-        PreparedAssistantToolCall::new(uni::ToolCall::function(
-            "prepared_read_1".to_string(),
-            tool_names::READ_FILE.to_string(),
-            serde_json::to_string(&json!({
-                "path": backing.sample_file.to_string_lossy()
-            }))
-            .expect("serialize tool args"),
-        )),
-        PreparedAssistantToolCall::new(uni::ToolCall::function(
-            "prepared_read_2".to_string(),
-            tool_names::READ_FILE.to_string(),
-            serde_json::to_string(&json!({
-                "path": second_file.to_string_lossy()
-            }))
-            .expect("serialize tool args"),
-        )),
-    ];
+    let tool_calls = (0..40)
+        .map(|index| {
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                format!("prepared_read_{index}"),
+                tool_names::READ_FILE.to_string(),
+                serde_json::to_string(&json!({
+                    "path": backing.sample_file.parent().expect("temp workspace root").join(format!("other-{index}.txt")).to_string_lossy()
+                }))
+                .expect("serialize tool args"),
+            ))
+        })
+        .collect::<Vec<_>>();
 
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
@@ -111,24 +112,29 @@ async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled
         .expect("prepared tool calls should execute");
 
     assert!(outcome.is_none());
-    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 2);
-    assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 40);
     assert!(
         !outcome_ctx
             .ctx
             .working_history
             .iter()
-            .any(|message| { message.content.as_text().contains("exceeded max tool calls per turn") })
+            .any(|message| { message.content.as_text().contains("Policy violation") })
     );
 }
 
 #[tokio::test]
-async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
-    let mut backing = TestContextBacking::new(1).await;
+async fn end_to_end_blocked_calls_do_not_count_before_valid_calls() {
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
     cache_tool_permission(&mut backing, tool_names::READ_FILE, &valid_args, PermissionGrant::Permanent).await;
+
+    // Distinct files: an identical repeat would reuse the recent result
+    // instead of executing (and counting) again.
+    let second_file = backing.sample_file.parent().expect("temp workspace root").join("other.txt");
+    std::fs::write(&second_file, "world\n").expect("write second sample file");
+    let second_args = json!({"path": second_file.to_string_lossy()});
 
     let mut turn_modified_files: BTreeSet<std::path::PathBuf> = BTreeSet::new();
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -151,55 +157,26 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
         .expect("second blocked call should not fail hard");
     assert!(second.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 0);
-    assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
 
-    let third = handle_single_tool_call(&mut outcome_ctx, "valid_1", tool_names::READ_FILE, valid_args.clone())
-        .await
-        .expect("valid call should execute");
-    assert!(third.is_none());
-    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
-    assert!(outcome_ctx.ctx.harness_state.tool_budget_exhausted());
-
-    let exhausted = handle_single_tool_call(&mut outcome_ctx, "exhausted", tool_names::READ_FILE, valid_args)
-        .await
-        .expect("exhausted-budget call should return structured outcome");
-    // Tool-call budget exhaustion must NOT break the turn as `Blocked` — that
-    // skips the synthesis pass. It rejects the call with a policy-violation
-    // tool response and lets the post-batch flush push a single synthesis
-    // directive (see `flush_budget_synthesis_directives`). A single rejected
-    // call is below the blocked-streak cap, so the guard returns no outcome.
-    assert!(exhausted.is_none());
-    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
-        message.role == uni::MessageRole::Tool && message.content.as_text().contains("exceeded max tool calls per turn")
-    }));
-    let second_exhausted = validate_tool_call(
-        outcome_ctx.ctx,
-        "exhausted_stub",
-        tool_names::READ_FILE,
-        &json!({"path": valid_file.to_string_lossy()}),
-    )
-    .await
-    .expect("second budget rejection");
-    assert!(matches!(second_exhausted, ValidationResult::Blocked));
-    let stub = outcome_ctx
-        .ctx
-        .working_history
-        .iter()
-        .find(|message| message.tool_call_id.as_deref() == Some("exhausted_stub"))
-        .expect("tool-call budget rejection response");
-    let payload: serde_json::Value = serde_json::from_str(&stub.content.as_text()).unwrap();
+    for (call_id, args) in [("valid_1", valid_args.clone()), ("valid_2", second_args)] {
+        let outcome = handle_single_tool_call(&mut outcome_ctx, call_id, tool_names::READ_FILE, args)
+            .await
+            .expect("valid call should execute");
+        assert!(outcome.is_none());
+    }
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 2);
     assert!(
-        payload["next_action"]
-            .as_str()
-            .unwrap()
-            .contains("Synthesize your final answer now")
+        !outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("Policy violation") })
     );
-    assert!(!stub.content.as_text().contains("narrower scope"));
 }
 
 #[tokio::test]
-async fn control_plane_wait_survives_exhausted_tool_budget() {
-    let mut backing = TestContextBacking::new(1).await;
+async fn control_plane_wait_needs_no_exemption_without_call_count_cap() {
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.to_string_lossy().to_string();
     let mut turn_modified_files: BTreeSet<std::path::PathBuf> = BTreeSet::new();
@@ -212,16 +189,15 @@ async fn control_plane_wait_survives_exhausted_tool_budget() {
         turn_modified_files: &mut turn_modified_files,
     };
 
-    // Exhaust the one-call budget with a real work call.
     let work_args = json!({"path": sample_file});
     let work = handle_single_tool_call(&mut outcome_ctx, "work_1", tool_names::READ_FILE, work_args)
         .await
         .expect("work call should execute");
     assert!(work.is_none());
-    assert!(outcome_ctx.ctx.harness_state.tool_budget_exhausted());
 
-    // A control-plane wait must still be admitted after exhaustion and must
-    // not push a budget-exhaustion rejection into the tool history.
+    // With no per-turn call-count budget there is no exemption to apply and
+    // no exhaustion gate to trip: a wait on a missing session is handled as
+    // an ordinary (unguarded) outcome, never a policy rejection.
     let wait_args = json!({"action": "wait", "session_id": "run-test-1"});
     let wait = handle_single_tool_call(&mut outcome_ctx, "wait_1", tool_names::UNIFIED_EXEC, wait_args)
         .await
@@ -232,46 +208,13 @@ async fn control_plane_wait_survives_exhausted_tool_budget() {
             .ctx
             .working_history
             .iter()
-            .any(|message| message.role == uni::MessageRole::Tool
-                && message.content.as_text().contains("exceeded max tool calls per turn")
-                && message.content.as_text().contains("wait")),
-        "wait must not be rejected by the budget-exhaustion gate"
-    );
-    // The exempt call must not increment the ordinary tool-call counter.
-    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
-
-    // The exempt call must also not consume the one-shot budget-exhaustion
-    // notice: the next real (non-exempt) call still receives the full policy
-    // message rather than the compact "call skipped" stub.
-    let follow_up_args = json!({"path": sample_file});
-    let follow_up = handle_single_tool_call(&mut outcome_ctx, "work_2", tool_names::READ_FILE, follow_up_args)
-        .await
-        .expect("exhausted follow-up should return a structured outcome");
-    assert!(follow_up.is_none());
-    let tool_messages = outcome_ctx
-        .ctx
-        .working_history
-        .iter()
-        .filter(|message| message.role == uni::MessageRole::Tool)
-        .map(|message| message.content.as_text())
-        .collect::<Vec<_>>();
-    assert!(
-        tool_messages
-            .iter()
-            .any(|text| text.contains("Policy violation: exceeded max tool calls per turn")),
-        "the first real rejection must keep the full policy message: {tool_messages:?}"
-    );
-    assert!(
-        !tool_messages
-            .iter()
-            .any(|text| text.contains("Tool-call budget exhausted for this turn; call skipped.")),
-        "an exempt call must not consume the first-notice: {tool_messages:?}"
+            .any(|message| { message.content.as_text().contains("Policy violation") })
     );
 }
 
 #[tokio::test]
 async fn pending_verification_allows_more_than_six_edits_and_repairs() {
-    let mut backing = TestContextBacking::new(30).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let workspace = backing.sample_file.parent().unwrap().to_path_buf();
     let code_path = workspace.join("repair.rs");

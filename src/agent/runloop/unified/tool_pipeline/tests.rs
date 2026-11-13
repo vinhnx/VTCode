@@ -36,16 +36,9 @@ fn create_headless_session() -> InlineSession {
 }
 
 fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
-    build_harness_state_with(4)
-}
-
-fn build_harness_state_with(
-    max_tool_calls: usize,
-) -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
     crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
         crate::agent::runloop::unified::run_loop_context::TurnRunId("test-run".to_string()),
         crate::agent::runloop::unified::run_loop_context::TurnId("test-turn".to_string()),
-        max_tool_calls,
         60,
         0,
     )

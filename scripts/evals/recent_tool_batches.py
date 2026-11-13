@@ -51,7 +51,6 @@ BASE_OVERRIDES = (
     "agent.todo_planning_mode=false",
     "agent.enable_split_tool_results=false",
     "agent.harness.orchestration_mode=single",
-    "agent.harness.max_tool_calls_per_turn=16",
     "agent.harness.max_parallel_tool_calls=1",
     "agent.harness.max_tool_wall_clock_secs=30",
     "agent.harness.max_budget_usd=0.25",

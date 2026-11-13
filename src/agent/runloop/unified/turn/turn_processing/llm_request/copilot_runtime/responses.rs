@@ -105,15 +105,6 @@ pub(super) fn tool_not_exposed_response(tool_name: &str) -> CopilotToolCallRespo
     denied_tool_response(tool_name, "is not allowlisted in VT Code")
 }
 
-pub(super) fn tool_exceeded_budget_response(tool_name: &str, max_tool_calls: usize) -> CopilotToolCallResponse {
-    CopilotToolCallResponse::Failure(CopilotToolCallFailure {
-        text_result_for_llm: format!(
-            "VT Code denied the tool `{tool_name}` because the turn exceeded its tool-call budget."
-        ),
-        error: format!("tool '{tool_name}' exceeded max tool calls per turn ({max_tool_calls})"),
-    })
-}
-
 pub(super) fn copilot_failure_response_with_diagnosis(
     tool_name: &str,
     evidence: &str,
@@ -142,20 +133,6 @@ pub(super) fn copilot_tool_result_text(tool_name: &str, text: String) -> String 
 
 pub(super) fn tool_cancelled_response(tool_name: &str) -> CopilotToolCallResponse {
     denied_tool_response(tool_name, "execution cancelled")
-}
-
-/// Copilot tool calls are answered directly through ACP rather than the normal
-/// turn-processing context, so they cannot receive the shared system-message
-/// flush. Append the same one-shot grant guidance to the tool result instead.
-pub(super) fn append_session_limit_grant_guidance(
-    response: CopilotToolCallResponse,
-    grant_pending: bool,
-) -> CopilotToolCallResponse {
-    if !grant_pending {
-        return response;
-    }
-
-    append_tool_reply_guidance(response, SESSION_LIMIT_GRANT_DIRECTIVE)
 }
 
 pub(super) fn append_tool_reply_guidance(response: CopilotToolCallResponse, guidance: &str) -> CopilotToolCallResponse {

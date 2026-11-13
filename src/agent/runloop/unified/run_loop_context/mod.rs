@@ -53,26 +53,6 @@ pub(crate) enum RecoveryMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ToolBudgetWarning {
-    pub used: usize,
-    pub max: usize,
-    pub remaining: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ToolBudgetExhaustion {
-    pub used: usize,
-    pub max: usize,
-    pub remaining: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ToolBudgetExhaustionNotice {
-    pub exhaustion: ToolBudgetExhaustion,
-    pub first_notice: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ToolWallClockExhaustion {
     pub max_secs: u64,
 }
@@ -83,20 +63,13 @@ pub(crate) struct ToolWallClockExhaustionNotice {
     pub first_notice: bool,
 }
 
-pub(crate) const TOOL_BUDGET_WARNING_THRESHOLD: f64 = 0.75;
+/// Fraction of `max_tool_loops` at which the turn loop warns the model once
+/// to batch or wrap up before the hard limit forces tool-free synthesis.
+pub(crate) const TOOL_LOOP_WARNING_THRESHOLD: f64 = 0.75;
 
-/// Model-facing guidance emitted after a user increases the per-turn tool
-/// budget. Keep this shared by the normal and out-of-band provider paths so a
-/// grant has the same continuation semantics regardless of transport.
-pub(crate) const SESSION_LIMIT_GRANT_DIRECTIVE: &str = "Session tool-call limit increased by the user. Continue this same turn with the current agent, retry the pending call, and reuse existing tool outputs instead of repeating exploration.";
-/// Session tool-call increase applied without prompting while full-auto
-/// auto-grant is active. Matches the overlay default so automatic and manual
-/// grants converge on the same budget.
-pub(crate) const SESSION_LIMIT_AUTO_GRANT_INCREMENT: usize = 100;
-
-/// Whether tool-loop and session tool-call limit increases may be granted
-/// without an interactive prompt. Requires all three: the turn runs under
-/// full-auto policy, `[automation.full_auto]` is enabled, and the opt-out
+/// Whether tool-loop limit increases may be granted without an interactive
+/// prompt. Requires all three: the turn runs under full-auto policy,
+/// `[automation.full_auto]` is enabled, and the opt-out
 /// `auto_grant_tool_limits` flag is still on. Live config reloads can disable
 /// `enabled` mid-session while the runtime bool stays true, so both sides
 /// of the gate are checked.
@@ -123,7 +96,6 @@ pub(crate) struct TurnExecutionSnapshot {
     pub run_id: String,
     pub turn_id: String,
     pub phase: TurnPhase,
-    pub max_tool_calls: usize,
     pub max_tool_wall_clock_secs: u64,
     pub max_tool_retries: u32,
 }
@@ -269,32 +241,15 @@ pub(crate) struct HarnessTurnState {
     pub stop_hook_active: bool,
     pub seen_task_tracker_create_signatures: HashSet<String>,
     pub recently_written_files: HashSet<String>,
-    pub tool_budget_warning_emitted: bool,
-    pub tool_budget_exhausted_emitted: bool,
     /// Whether the first-notice wall-clock-exhaustion policy message has been
-    /// emitted this turn. Mirrors `tool_budget_exhausted_emitted` so the full
-    /// policy-violation message is sent once and subsequent rejected calls in
-    /// the same batch get a compact stub instead of repeating it.
+    /// emitted this turn. The full policy-violation message is sent once and
+    /// subsequent rejected calls in the same batch get a compact stub instead
+    /// of repeating it.
     pub wall_clock_exhausted_emitted: bool,
-    /// Set when the current tool call was rejected specifically because the
-    /// per-turn tool-call budget was exhausted. The Copilot adapter consumes
-    /// this marker so budget rejections are not counted as permission denials.
-    tool_budget_rejection_pending: bool,
     /// Set when the first wall-clock rejection fires; consumed after the tool
     /// batch by the handler to push a single "synthesize now" system directive
     /// *after* all tool responses (never interleaved between them).
     pub wall_clock_directive_pending: bool,
-    /// Set when the first tool-call-budget rejection fires; consumed after the
-    /// tool batch to push a single "synthesize now" system directive, mirroring
-    /// `wall_clock_directive_pending`. Without this, tool-call budget
-    /// exhaustion hard-broke the turn as `Blocked` with no synthesis pass, so
-    /// plan mode never produced a plan (checkpoint turn_647 follow-up).
-    pub tool_budget_directive_pending: bool,
-    /// Set when a user grants additional session tool-call headroom. The
-    /// corresponding model-facing directive is flushed after the current tool
-    /// batch so it never splits an assistant tool-call/result sequence.
-    session_limit_grant_directive_pending: bool,
-    session_limit_granted: bool,
     /// Model-facing prompt-injection warning queued while a tool batch is
     /// executing. It is flushed after every batch result so it cannot split
     /// an assistant tool-call/result sequence on the provider wire.
@@ -357,7 +312,6 @@ pub(crate) struct HarnessTurnState {
     /// Blocked-call telemetry captured when the fuse armed or hard-broke the
     /// turn. Consumed once by `finalize_turn` for `TurnBlockedEvent` fields.
     blocked_tool_recovery_telemetry: Option<BlockedToolRecoveryTelemetry>,
-    pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
     /// Tracks consecutive relaxed continuation decisions. If this exceeds

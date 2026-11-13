@@ -109,7 +109,7 @@ fn cross_turn_tracker_out_of_band_progress_resets_stuck_counter() {
 }
 #[test]
 fn harness_state_separates_guarded_and_admitted_shell_signatures() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.record_shell_command_run("exec_command::blocked".to_string());
     assert_eq!(state.last_admitted_shell_command_signature, None);
@@ -119,7 +119,7 @@ fn harness_state_separates_guarded_and_admitted_shell_signatures() {
 }
 #[test]
 fn harness_state_records_failed_shell_key() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
     assert_eq!(state.last_failed_shell_key(), None);
 
     state.record_failed_shell_command("command_session::cargo check".to_string(), "error: bad manifest".to_string());
@@ -229,8 +229,6 @@ fn cross_turn_tracker_order_independent_fingerprint() {
 }
 #[test]
 fn full_auto_loop_grants_require_runtime_and_config_and_opt_in() {
-    assert_eq!(SESSION_LIMIT_AUTO_GRANT_INCREMENT, 100);
-
     // No config at all: interactive sessions keep prompting.
     assert!(!full_auto_loop_grants_enabled(true, None));
     assert!(!full_auto_loop_grants_enabled(false, None));
@@ -252,7 +250,7 @@ fn full_auto_loop_grants_require_runtime_and_config_and_opt_in() {
 }
 #[test]
 fn failure_diagnosis_memo_round_trips_and_caps_model_calls() {
-    let mut state = HarnessTurnState::new(TurnRunId("r".into()), TurnId("t".into()), 4, 60, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("r".into()), TurnId("t".into()), 60, 1);
     let key = DiagnosisMemoKey {
         tool: CompactStr::from("exec_command"),
         evidence: "exit 1".to_string(),
@@ -279,7 +277,7 @@ fn failure_diagnosis_memo_round_trips_and_caps_model_calls() {
 }
 #[test]
 fn auto_permission_probe_budget_stops_model_calls_per_turn() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 10, 1);
 
     assert!(state.can_spend_auto_permission_probe_model_call());
     for _ in 0..3 {

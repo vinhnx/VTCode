@@ -7,7 +7,7 @@ async fn tool_free_recovery_texts_bypass_verification_accounting() {
     // punished the model for obeying the recovery contract. Recovery
     // budgets govern this path instead; the generic cap still refuses
     // unverified completion (cap_ends_completed requires a clear gate).
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut repeated_tool_attempts = LoopTracker::new();
     repeated_tool_attempts.consecutive_mutations =
@@ -51,7 +51,7 @@ async fn tool_free_recovery_texts_bypass_verification_accounting() {
 }
 #[tokio::test]
 async fn refusal_blocks_turn_with_reason_even_during_recovery() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let reason = "The model declined this request (category: cyber).".to_string();
     let blocked_with_reason = {
         let mut ctx = backing.turn_processing_context();
@@ -85,7 +85,7 @@ async fn refusal_blocks_turn_with_reason_even_during_recovery() {
 }
 #[tokio::test]
 async fn recovery_empty_response_emits_fallback_and_completes_turn() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -116,7 +116,7 @@ async fn recovery_empty_response_emits_fallback_and_completes_turn() {
 }
 #[tokio::test]
 async fn recovery_empty_response_fallback_stays_concise_without_evidence_dump() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.push(uni::Message::user("tell me more".to_string()));
     ctx.working_history
@@ -157,7 +157,7 @@ async fn recovery_empty_response_fallback_stays_concise_without_evidence_dump() 
 }
 #[tokio::test]
 async fn recovery_empty_response_fallback_omits_spool_excerpt() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     ctx.working_history
@@ -202,7 +202,7 @@ async fn recovery_empty_response_fallback_omits_spool_excerpt() {
 }
 #[tokio::test]
 async fn recovery_retry_empty_response_emits_fallback_and_completes_turn() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.push_system_message("prior context");
     ctx.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
@@ -235,7 +235,7 @@ async fn recovery_retry_empty_response_emits_fallback_and_completes_turn() {
 }
 #[tokio::test]
 async fn recovery_textual_tool_markup_breaks_turn_as_blocked() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -277,7 +277,7 @@ async fn recovery_textual_tool_markup_breaks_turn_as_blocked() {
 }
 #[tokio::test]
 async fn empty_response_schedules_tool_enabled_retry_without_prior_tool_activity() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
 
@@ -303,7 +303,7 @@ async fn empty_response_schedules_tool_enabled_retry_without_prior_tool_activity
 }
 #[tokio::test]
 async fn empty_response_after_tool_activity_schedules_tool_free_recovery() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
 
@@ -339,7 +339,7 @@ async fn empty_response_after_tool_activity_schedules_tool_free_recovery() {
 }
 #[tokio::test]
 async fn planning_two_empty_responses_allow_one_synthesis_and_two_corrections() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let mut repeated_tool_attempts = LoopTracker::new();

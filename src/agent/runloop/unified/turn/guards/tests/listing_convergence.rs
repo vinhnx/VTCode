@@ -4,7 +4,7 @@ use super::*;
 async fn oversized_preview_does_not_trigger_synthesis_outside_planning() {
     use vtcode_config::constants::output_limits::TURN_PREVIEW_BUDGET_BYTES;
 
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.push_tool_response("call-blind", Some("exec_command"), "x".repeat(TURN_PREVIEW_BUDGET_BYTES + 1));
     assert!(!ctx.harness_state.model_visible_preview_budget_exhausted());
@@ -19,8 +19,8 @@ async fn build_listing_loop_converges_on_third_same_base_scan() {
     // Rehearsal of the observed build-mode listing loop (`ls src/`,
     // `find …`, `ls src`, `ls -1 src`, …): argument variations keep every
     // exact-request counter quiet, so the third same-base listing must
-    // schedule recovery instead of burning the turn tool-call budget.
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    // schedule recovery instead of burning the turn tool-loop budget.
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -67,7 +67,7 @@ async fn build_search_triplets_do_not_trip_listing_convergence() {
     // of them must not schedule recovery. They carry no coarse inspection
     // family (`rg`/`grep` are excluded from coarse grouping because their
     // first positional is the search pattern, not a path root).
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -98,7 +98,7 @@ async fn same_pattern_search_repeats_do_not_trip_early_recovery() {
     // are legitimate research. With `rg`/`grep` excluded from coarse
     // grouping they must not enter the low-signal ledger and must not
     // schedule early recovery.
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {

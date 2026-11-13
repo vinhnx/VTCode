@@ -163,29 +163,6 @@ async fn exhausted_retry_budget_preserves_last_error_context() -> Result<()> {
 }
 
 #[tokio::test]
-async fn safety_limit_rejects_before_dispatch_and_without_retry() -> Result<()> {
-    let workspace = TempDir::new()?;
-    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-    let calls = register_probe(&registry, 0).await?;
-    registry.safety_gateway().set_limits(0, 100);
-    let outcome = registry
-        .execute_public_tool_request(
-            ToolExecutionRequest::new(PROBE_NAME, json!({"input": "denied"})).with_policy(retry_policy(3)),
-        )
-        .await;
-    assert!(!outcome.is_success());
-    assert_eq!(outcome.attempts, 1);
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
-    assert!(registry.execution_history.get_recent_records(10).is_empty());
-    let error = outcome.error.expect("safety error");
-    assert_eq!(error.category, ErrorCategory::ResourceExhausted);
-    assert!(!error.retryable);
-    assert_eq!(error.attempts_made(), Some(1));
-    assert!(error.message.contains("Per-turn tool limit reached"));
-    Ok(())
-}
-
-#[tokio::test]
 async fn dispatch_failure_remains_terminal_despite_retry_budget() -> Result<()> {
     let workspace = TempDir::new()?;
     let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
@@ -221,18 +198,6 @@ async fn safety_denial_categories_keep_recovery_and_retry_metadata() -> Result<(
             category: ErrorCategory::RateLimit,
             retryable: true,
             recoverable: true,
-        },
-        DenialCase {
-            violation: GatewaySafetyError::TurnLimitReached { max: 1 },
-            category: ErrorCategory::ResourceExhausted,
-            retryable: false,
-            recoverable: false,
-        },
-        DenialCase {
-            violation: GatewaySafetyError::SessionLimitReached { max: 2 },
-            category: ErrorCategory::ResourceExhausted,
-            retryable: false,
-            recoverable: false,
         },
         DenialCase {
             violation: GatewaySafetyError::PlanningPolicyViolation("write blocked".to_string()),

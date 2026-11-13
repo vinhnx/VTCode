@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn planning_mode_allows_request_user_input_blocked_through_to_failure() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     let mut ctx = backing.turn_processing_context();
     let args = json!({"questions": [{"id": "q1", "header": "Q1", "question": "Test?"}]});
@@ -22,7 +22,7 @@ async fn planning_mode_allows_request_user_input_blocked_through_to_failure() {
 
 #[tokio::test]
 async fn permanent_interview_denial_switches_to_tool_free_plan_recovery() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     backing
         .tool_registry
@@ -62,7 +62,7 @@ async fn permanent_interview_denial_switches_to_tool_free_plan_recovery() {
 
 #[tokio::test]
 async fn planning_mode_non_planning_tool_blocked_calls_schedule_recovery() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     let mut ctx = backing.turn_processing_context();
     let args = json!({"path": "src/main.rs"});
@@ -81,7 +81,7 @@ async fn planning_mode_non_planning_tool_blocked_calls_schedule_recovery() {
 
 #[tokio::test]
 async fn blocked_batch_drains_responses_and_schedules_tool_free_recovery() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing
         .tool_registry
         .set_tool_policy(tool_names::READ_FILE, ToolPolicy::Deny)

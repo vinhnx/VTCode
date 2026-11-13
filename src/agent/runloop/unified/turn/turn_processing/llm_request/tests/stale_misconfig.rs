@@ -23,7 +23,7 @@ async fn openai_stale_previous_response_retry_is_disabled() {
         ],
     );
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let prior_messages = vec![uni::Message::user("hello".to_string())];
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
@@ -71,7 +71,7 @@ async fn llm_misconfiguration_does_not_retry_network_category() {
         ],
     );
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.push(uni::Message::user("continue".to_string()));
@@ -107,7 +107,7 @@ async fn llm_metadata_misconfiguration_does_not_retry_generic_provider_failure()
         ],
     );
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.push(uni::Message::user("continue".to_string()));

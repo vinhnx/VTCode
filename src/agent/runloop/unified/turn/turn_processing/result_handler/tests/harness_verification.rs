@@ -4,7 +4,7 @@ use super::*;
 async fn harness_auto_verification_success_publishes_draft_once() {
     // `rustc --version` exits 0 without touching workspace files: a
     // hermetic passing verifier for the harness-executed path.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut repeated_tool_attempts = LoopTracker::new();
     repeated_tool_attempts.consecutive_mutations =
@@ -35,12 +35,12 @@ async fn harness_auto_verification_success_publishes_draft_once() {
 }
 #[tokio::test]
 async fn exhausted_budget_blocks_verification_without_reminder_rounds() {
-    let mut backing = TestTurnProcessingBacking::new(1).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut tracker = LoopTracker::new();
     tracker.mark_verification_pending();
     let mut ctx = backing.turn_processing_context();
-    ctx.harness_state.tool_calls = 1;
+    ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(61);
     // Fresh fixture: no files were modified this turn.
     let turn_modified_files = BTreeSet::new();
     let outcome = ctx
@@ -49,11 +49,11 @@ async fn exhausted_budget_blocks_verification_without_reminder_rounds() {
     let super::super::PendingVerificationTextOutcome::Block { reason } = outcome else {
         panic!("exhausted execution budget must produce a verification block");
     };
-    assert!(reason.contains("Tool-call budget"));
+    assert!(reason.contains("wall-clock budget"));
     let final_text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(&reason);
     assert!(!super::super::helpers::is_pending_verification_block(&reason));
     assert!(!super::super::helpers::verification_block_allows_auto_recovery(&reason, &final_text));
-    assert!(reason.starts_with("Tool-call budget exhausted for this turn (1/1)"));
+    assert!(reason.starts_with("Tool wall-clock budget exhausted for this turn (60s)"));
     assert!(reason.contains("No edits were made this turn"));
     assert!(!reason.contains("Changes remain unverified"));
     assert!(final_text.contains("No edits were made this turn"));
@@ -66,12 +66,12 @@ async fn exhausted_budget_blocks_verification_without_reminder_rounds() {
 
 #[tokio::test]
 async fn exhausted_budget_with_edits_reports_changes_unverified() {
-    let mut backing = TestTurnProcessingBacking::new(1).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut tracker = LoopTracker::new();
     tracker.mark_verification_pending();
     let mut ctx = backing.turn_processing_context();
-    ctx.harness_state.tool_calls = 1;
+    ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(61);
     let turn_modified_files = BTreeSet::from([std::path::PathBuf::from("src/lib.rs")]);
     let super::super::PendingVerificationTextOutcome::Block { reason } = ctx
         .handle_pending_verification_text_response(&mut tracker, "The change is complete.", &turn_modified_files)
@@ -79,7 +79,7 @@ async fn exhausted_budget_with_edits_reports_changes_unverified() {
     else {
         panic!("exhausted execution budget must produce a verification block");
     };
-    assert!(reason.starts_with("Tool-call budget exhausted for this turn (1/1)"));
+    assert!(reason.starts_with("Tool wall-clock budget exhausted for this turn (60s)"));
     assert!(reason.contains("Changes remain unverified"));
     assert!(!reason.contains("No edits were made this turn"));
     let final_text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(&reason);
@@ -88,7 +88,7 @@ async fn exhausted_budget_with_edits_reports_changes_unverified() {
 }
 #[tokio::test]
 async fn wall_clock_exhaustion_has_priority_over_pending_verification_and_tool_calls() {
-    let mut backing = TestTurnProcessingBacking::new(1).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut tracker = LoopTracker::new();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.tool_calls = 1;
@@ -112,7 +112,7 @@ async fn wall_clock_exhaustion_has_priority_over_pending_verification_and_tool_c
 #[tokio::test]
 async fn required_verifier_recovery_advances_checks_instead_of_repeating_the_default() {
     use vtcode_core::config::constants::tools;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut cfg = vtcode_core::config::loader::VTCodeConfig::default();
     cfg.agent.harness.verification.auto_execute = true;
     cfg.agent.harness.verification.default_verifier_override = Some("rustc --version".into());
@@ -150,7 +150,7 @@ async fn required_verifier_recovery_advances_checks_instead_of_repeating_the_def
 #[tokio::test]
 async fn harness_required_verifiers_report_progress_and_finish_without_repeating_checks() {
     use vtcode_core::config::constants::tools;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --invalid-fallback");
     {
         let ctx = backing.turn_processing_context();
@@ -245,7 +245,7 @@ async fn required_custom_verifiers_cross_the_interactive_gate_and_preserve_repai
 
     for harness_issued in [false, true] {
         for exit_code in [0, 7] {
-            let mut backing = TestTurnProcessingBacking::new(8).await;
+            let mut backing = TestTurnProcessingBacking::new().await;
             let marker = {
                 let ctx = backing.turn_processing_context();
                 let script = ctx.tool_registry.workspace_root().join("verify.sh");
@@ -309,7 +309,7 @@ async fn required_custom_verifiers_cross_the_interactive_gate_and_preserve_repai
 #[tokio::test]
 async fn harness_waits_for_a_running_verifier_instead_of_starting_another() {
     use std::os::unix::fs::PermissionsExt;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("./rustc --version");
     {
         let ctx = backing.turn_processing_context();
@@ -443,7 +443,7 @@ fn verification_failure_attribution_requires_an_observed_exit() {
 #[tokio::test]
 async fn harness_auto_verification_failure_blocks_attempt_and_records_episode() {
     // Unrecognized rustc flag: fast deterministic non-zero exit, no files.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --invalid-flag-xyz");
     let mut repeated_tool_attempts = LoopTracker::new();
     repeated_tool_attempts.consecutive_mutations =

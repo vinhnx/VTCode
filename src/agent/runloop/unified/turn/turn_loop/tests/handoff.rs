@@ -55,7 +55,7 @@ async fn interrupted_provider_follow_up_stops_after_completed_tool_without_recov
         }
     }
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
     let stop = backing.turn_loop_context().ctrl_c_state.clone();
     backing.set_provider(Box::new(InterruptedProvider { requests: requests.clone(), stop }));
@@ -126,7 +126,7 @@ async fn cancelled_successful_response_is_not_retained_as_a_plan() {
         }
     }
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let stop = backing.turn_loop_context().ctrl_c_state.clone();
     backing.set_provider(Box::new(CancelledPlanProvider { stop }));
@@ -240,7 +240,7 @@ async fn recovery_clarification_does_not_approve_an_older_plan() {
 async fn recovery_input_does_not_approve_an_older_plan(prepared_user_input: bool) {
     use vtcode_core::exec::events::planning::PlanningOutcome;
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.persist_plan_for_test(STREAMED_VALID_PLAN).await;
     let calls = Arc::new(AtomicUsize::new(0));
@@ -267,7 +267,7 @@ async fn recovery_input_does_not_approve_an_older_plan(prepared_user_input: bool
 
 #[tokio::test]
 async fn recovery_input_allows_explicit_cancel() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     {
         let ctx = backing.turn_loop_context();
@@ -284,7 +284,7 @@ async fn recovery_input_allows_explicit_cancel() {
 
 #[tokio::test]
 async fn approved_plan_handoff_without_assistant_response_stays_completed() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.persist_plan_for_test(STREAMED_VALID_PLAN).await;
     {
@@ -361,7 +361,7 @@ async fn session_164101_provider_cancellation_without_local_stop_can_resume_plan
             Ok(())
         }
     }
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     fs::write(backing.workspace_path().join("README.md"), "# Readme\n").unwrap();
     let calls = Arc::new(AtomicUsize::new(0));

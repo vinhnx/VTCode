@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn incorrect_generated_assertion_requires_explicit_correction_and_fresh_execution() {
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let readme = backing.workspace_path().join("README.md");
     let content = "<summary>View all contributors (<!-- CONTRIBUTORS-COUNT:START -->28<!-- CONTRIBUTORS-COUNT:END -->)</summary>\n";
     std::fs::write(&readme, content).unwrap();
@@ -100,7 +100,7 @@ async fn piped_verifier_executes_standalone_with_truthful_status() {
     // real exit status — not the tail's. `rustc --version | head -c 5`
     // would report exit 0 with 5 chars of output under pipeline semantics;
     // rewritten, the full version surfaces and the gate clears.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     repeated_tool_attempts.consecutive_mutations =
         crate::agent::runloop::unified::turn::tool_outcomes::helpers::BLIND_EDITING_THRESHOLD;
@@ -132,7 +132,7 @@ async fn piped_verifier_failure_surfaces_instead_of_tail_success() {
     // Converse proof: `rustc --invalid-flag-xyz | tail -5` exits 0 as a
     // pipeline (tail's status) while the verifier fails. Rewritten, the
     // failure surfaces: gate stays pending with the fix window granted.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     repeated_tool_attempts.consecutive_mutations =
         crate::agent::runloop::unified::turn::tool_outcomes::helpers::BLIND_EDITING_THRESHOLD;
@@ -180,7 +180,7 @@ fn auto_verification_attribution_ignores_prior_turn_responses() {
 async fn completion_claim_jumps_straight_to_harness_verification() {
     // A "done" assertion on the FIRST pending text must not spend
     // directive rounds: the harness verifies immediately.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut repeated_tool_attempts = LoopTracker::new();
     repeated_tool_attempts.consecutive_mutations =
@@ -222,7 +222,7 @@ async fn completion_claim_jumps_straight_to_harness_verification() {
 }
 #[tokio::test]
 async fn harness_auto_execute_disabled_falls_back_to_block() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut vt_cfg = vtcode_core::config::loader::VTCodeConfig::default();
     vt_cfg.agent.harness.verification.auto_execute = false;
     vt_cfg.agent.harness.verification.default_verifier_override = Some("rustc --version".to_string());
@@ -247,7 +247,7 @@ async fn harness_auto_execute_disabled_falls_back_to_block() {
 }
 #[tokio::test]
 async fn harness_auto_verification_escalated_suite_blocks_without_executing() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     {
         let ctx = backing.turn_processing_context();

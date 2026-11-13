@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn cached_heading_inspection_adopted_as_required_check_executes_fresh() {
     for (required_contents, required_exit) in [("No heading here\n", 1), ("# Actual heading\n", 0)] {
-        let mut backing = TestContextBacking::new(20).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         backing.tool_registry.allow_all_tools().await.unwrap();
         let workspace = backing.sample_file.parent().unwrap().to_path_buf();
@@ -58,7 +58,7 @@ async fn cached_heading_inspection_adopted_as_required_check_executes_fresh() {
 
 #[tokio::test]
 async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
 
     // Create a runtime-owned plan file inside the temporary workspace so the
@@ -141,7 +141,7 @@ async fn tracker_repeated_lists_observe_current_progress_without_replay() {
         args: serde_json::Value,
         expected_completed: usize,
     }
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let calls = [
         TrackerCallCase {
@@ -208,7 +208,7 @@ async fn tracker_repeated_lists_observe_current_progress_without_replay() {
 
 #[tokio::test]
 async fn tracker_repeated_update_targets_replaced_checklist_instead_of_old_history() {
-    let mut backing = TestContextBacking::new(12).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let old_create = json!({"action":"create", "title":"Planning", "items":["Inspect README", "Draft plan"]});
     let finish_second = json!({"action":"update", "index":2, "status":"completed"});
@@ -242,7 +242,7 @@ async fn tracker_repeated_update_targets_replaced_checklist_instead_of_old_histo
 #[tokio::test]
 async fn repeated_registry_results_keep_new_inspections_visible() {
     for planning in [false, true] {
-        let mut backing = TestContextBacking::new(120).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         if planning {
             backing.tool_registry.enable_planning();
@@ -292,7 +292,7 @@ async fn repeated_registry_results_keep_new_inspections_visible() {
 #[tokio::test]
 async fn spool_page_remains_visible_after_large_results() {
     use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::spool_guard::enforce_spool_chunk_read_guard;
-    let mut backing = TestContextBacking::new(8).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.push_tool_response("large", Some(tool_names::EXEC_COMMAND), "x".repeat(100_000));
     let passed = enforce_spool_chunk_read_guard(

@@ -4,7 +4,7 @@ use super::*;
 /// must pass through unmodified — the guard must not fire on clean text.
 #[tokio::test]
 async fn recovery_clean_prose_is_not_intercepted_by_marker_guard() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -38,7 +38,7 @@ async fn recovery_clean_prose_is_not_intercepted_by_marker_guard() {
 }
 #[tokio::test]
 async fn denied_interview_retries_plain_text_once_before_approval() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
 
@@ -68,7 +68,7 @@ async fn denied_interview_retries_plain_text_once_before_approval() {
 }
 #[tokio::test]
 async fn completion_verification_short_edit_arms_gate_without_completion_wording() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_verification_override_for_test("rustc --version");
     let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
@@ -103,7 +103,7 @@ async fn navigation_synthesis_resumes_execution_once_and_second_stall_blocks() {
     use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::EXECUTION_TOTAL_LOW_SIGNAL_THRESHOLD;
 
-    let mut backing = TestTurnProcessingBacking::new(40).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_skip_confirmations_for_test(true);
     let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
@@ -197,8 +197,6 @@ async fn navigation_synthesis_respects_terminal_handoffs_and_existing_limits() {
     use crate::agent::runloop::unified::state::NavigationRecovery;
     for case in [
         "policy",
-        "budget",
-        "call_budget",
         "wallclock",
         "validation",
         "loops",
@@ -206,7 +204,7 @@ async fn navigation_synthesis_respects_terminal_handoffs_and_existing_limits() {
         "approval",
         "informational",
     ] {
-        let mut backing = TestTurnProcessingBacking::new(20).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut cfg = vtcode_core::config::loader::VTCodeConfig::default();
         cfg.agent.harness.continuation.auto_continue_tracker = case != "disabled";
         backing.set_vt_cfg_for_test(cfg);
@@ -224,12 +222,6 @@ async fn navigation_synthesis_respects_terminal_handoffs_and_existing_limits() {
             }
             ctx.activate_recovery("synthesis");
             assert!(ctx.consume_recovery_pass());
-            if case == "budget" {
-                ctx.harness_state.tool_budget_exhausted_emitted = true;
-            }
-            if case == "call_budget" {
-                ctx.harness_state.tool_calls = ctx.harness_state.max_tool_calls;
-            }
             if case == "wallclock" {
                 ctx.harness_state.wall_clock_exhausted_emitted = true;
             }
@@ -278,7 +270,7 @@ async fn navigation_synthesis_uses_only_adopted_tracker_and_nonempty_summary() {
         (false, "Evidence retained.", false),
         (true, "  ", false),
     ] {
-        let mut backing = TestTurnProcessingBacking::new(20).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut tracker = LoopTracker::new();
         let mut modified = BTreeSet::new();
         let outcome = {
@@ -322,7 +314,7 @@ async fn navigation_synthesis_uses_only_adopted_tracker_and_nonempty_summary() {
 #[tokio::test]
 async fn repeated_successes_cannot_refill_recovery_for_a_missing_requirement() {
     use vtcode_core::config::constants::tools;
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut tracker = LoopTracker::new();
     tracker.mark_verification_pending();
     assert!(tracker.record_verification_auto_recovery_with_limit(1));

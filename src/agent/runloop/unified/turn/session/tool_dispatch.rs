@@ -49,7 +49,6 @@ fn begin_direct_tool_turn(harness_config: &vtcode_config::core::agent::AgentHarn
     HarnessTurnState::new(
         TurnRunId(direct_turn_id_str.clone()),
         TurnId(direct_turn_id_str),
-        harness_config.max_tool_calls_per_turn,
         harness_config.max_tool_wall_clock_secs,
         harness_config.max_tool_retries,
     )

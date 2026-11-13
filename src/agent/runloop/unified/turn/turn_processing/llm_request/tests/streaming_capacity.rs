@@ -215,7 +215,7 @@ fn harness_streaming_bridge_tracks_streamed_tool_call_item_ids() {
 }
 #[tokio::test]
 async fn resume_wake_during_non_streaming_request_preserves_fresh_planning() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     ctx.ctrl_c_state.request_local_cancel();
@@ -279,7 +279,7 @@ async fn anthropic_fast_capacity_errors_use_existing_bounded_retries_without_cle
                 },
             ],
         );
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut cfg = vtcode_config::VTCodeConfig::default();
         cfg.provider.anthropic.speed = Some(vtcode_config::AnthropicSpeed::Fast);
         backing.set_vt_cfg_for_test(cfg);

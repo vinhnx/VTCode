@@ -127,7 +127,7 @@ async fn drive_model_tool_call(
 /// `recovery_complete_tool_call_with_appended_disclosure_still_breaks`).
 #[tokio::test]
 async fn recovery_complete_tool_call_with_disclosure_breaks_as_violation() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());

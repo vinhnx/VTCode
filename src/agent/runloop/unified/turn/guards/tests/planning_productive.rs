@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn many_productive_planning_previews_do_not_force_recovery() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     for index in 0..24 {
@@ -30,7 +30,7 @@ async fn many_productive_planning_previews_do_not_force_recovery() {
 }
 #[tokio::test]
 async fn planning_one_repeated_successful_inspection_remains_productive() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -76,7 +76,7 @@ async fn planning_one_repeated_successful_inspection_remains_productive() {
 }
 #[tokio::test]
 async fn planning_diverse_inspection_remains_productive() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -121,7 +121,7 @@ async fn planning_diverse_inspection_remains_productive() {
 }
 #[tokio::test]
 async fn planning_genuine_repeated_navigation_still_recovers() {
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();

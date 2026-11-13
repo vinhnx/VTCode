@@ -268,12 +268,12 @@ turn revalidates the handoff, exits any stale planning gate, and refreshes the s
 before tools are exposed. Mouse-wheel events outside the floating overlay are passed through to the transcript, so the
 full plan can be reviewed without dismissing the approval gate. Approval also distills the plan's numbered and checkbox
 steps into the `task_tracker` checklist; the implementation agent updates that checklist as work progresses.
-Approved-plan execution receives a separate implementation safety budget so planning research does not leave the build
-phase with only the ordinary short-turn allowance.
+Approved-plan execution starts a fresh implementation turn with fresh loop and wall-clock budgets, so planning research
+does not leave the build phase with only the ordinary short-turn allowance.
 
 That implementation turn also receives one internal `+50` tool-loop allowance at initialization. The allowance is
-clamped by the ordinary loop hard cap (for example, the default `40` becomes `90`, while `100` remains capped at `120`),
-does not change the tool-call budget, and does not stack with manual loop extensions. A configured loop value of `0`
+clamped by the ordinary loop hard cap (for example, the default `40` becomes `90`, while `100` remains capped at `120`)
+and does not stack with manual loop extensions. A configured loop value of `0`
 remains unlimited. Current and fresh-context approved-plan handoffs each initialize their own implementation turn, so
 each gets the same one-time allowance.
 
@@ -554,15 +554,15 @@ after exit — the diagnosis-heavy plan maps onto the template section by sectio
 
 ### Research Scope
 
-Research effort should scale with the request. The runtime gives planning a minimum per-turn tool-call budget of 120 and
-a minimum loop budget of 60 when configured nonzero limits are lower; these floors are planning-specific and do not
+Research effort should scale with the request. The runtime gives planning a minimum loop budget of 60 when the
+configured nonzero limit is lower; this floor is planning-specific and does not
 change the conversation-turn retention limit. For a narrow or simple ask, a handful of targeted reads/searches (roughly
 5-10) is usually enough before drafting `<proposed_plan>` — exhaustively enumerating the whole repository for a simple
-request wastes the turn's tool-call and wall-clock budget and can exhaust it before a plan is produced. For a broad or
+request wastes the turn's loop and wall-clock budget and can exhaust it before a plan is produced. For a broad or
 ambiguous ask, research proportionally more, but stop and draft as soon as the scope/decomposition/verification
 decisions are closed.
 
-The 120-call ceiling remains available for complex work; it is not a target. Planning also tracks low-signal navigation
+The loop ceiling remains available for complex work; it is not a target. Planning also tracks low-signal navigation
 separately from the hard ceiling. Six consecutive low-signal reads/searches, or ten total within one turn, schedule one
 tool-free synthesis pass from the evidence already gathered. A productive navigation resets only the consecutive count.
 Verification, mutation, recovery, and a new turn reset both counts. Shell inspection such as `rg`, `find`, `cat`, and
@@ -581,7 +581,7 @@ interrupted by real work does not accumulate. When a recovery pass is armed this
 churn family (for example `exec::inspection::ls::src ×3`) in the injected reason, and a pass that is already pending
 from another guard or the blocked-tool fuse is never re-announced. A planning tool-free violation that still carries
 plan-like salvage consumes one validation-repair budget and retries tool-free before the resumable handoff, and every
-failed-closed turn budget (`tool_calls`, `tool_loop`, `session_calls`) is recorded as a `budget_exhausted` trajectory
+failed-closed turn budget (`tool_loop`, `wall_clock_secs`) is recorded as a `budget_exhausted` trajectory
 event with its used/max counts so post-hoc diagnosis can tell which ceiling fired.
 
 Tool previews shown to the model share a bounded per-turn budget (96 KiB in planning, 64 KiB execution); plan-mode
@@ -655,11 +655,10 @@ Recovery and system directives are appended only after the complete batch, so a 
 between the assistant call and its results. Request assembly may create a repaired, request-only view when older history
 contains split, orphaned, duplicate, or missing results; the durable session history is not rewritten by this repair.
 
-If the session tool-call limit is reached during an active turn, VT Code shows the current primary agent and asks
-whether to grant more calls. A grant retries the pending call in the same turn, emits `session_tool_limit_increased`,
-and preserves the granted session fuse across runtime limit refreshes and the next turn. A denial remains an explicit
-denial. The analogous tool-loop prompt emits `tool_loop_limit_increased` and keeps tools enabled for the current agent;
-it does not enter tool-free recovery. Only the first tool-loop grant in a session prompts: after one manual grant, later
+If the tool-loop limit is reached during an active turn, VT Code shows the current primary agent and asks
+whether to grant more loops. A grant continues the turn with the current agent, emits `tool_loop_limit_increased`,
+and keeps tools enabled; it does not enter tool-free recovery. A denial remains an explicit
+denial. Only the first tool-loop grant in a session prompts: after one manual grant, later
 tool-loop limit hits auto-grant the remaining increment without a prompt (a denial never latches that preauthorization,
 so the prompt returns if you previously denied). Full-auto auto-grants regardless, and the hard cap still applies.
 Transient bridge submissions, including mode-switch input, are deferred or ignored while the prompt owns input and are

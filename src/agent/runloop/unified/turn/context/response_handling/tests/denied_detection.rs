@@ -7,7 +7,7 @@ async fn denied_interview_without_ready_plan_replaces_prose_with_hint() {
     // emits research prose (not a clarifying question), the prose must be
     // replaced with the no-approval-ready-plan hint so the user gets an
     // actionable message instead of rambling text.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.mark_interview_denied();
@@ -43,7 +43,7 @@ async fn denied_interview_exhausted_retry_ends_with_hint_not_prose() {
     // After the bounded retry is exhausted, a second prose response must
     // end the turn with the no-approval-ready-plan hint, not the model's
     // research prose.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.mark_interview_denied();
@@ -80,7 +80,7 @@ async fn denied_interview_preserves_clarifying_question() {
     // equivalent of the unavailable interview modal. It must NOT be
     // replaced with the hint or trigger a synthesis retry — the turn ends
     // so the user can answer it (checkpoint turn_856).
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.mark_interview_denied();
@@ -122,7 +122,7 @@ async fn planless_planning_turn_ends_with_hint_in_history() {
     // model answered with a planless status echo and the turn closed with
     // no visible next step. The assistant's stored answer must carry the
     // no-approval-ready hint so the user knows planning is still active.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.mark_plan_validation_repair_used();
@@ -157,7 +157,7 @@ async fn planless_planning_turn_ends_with_hint_in_history() {
 }
 #[tokio::test]
 async fn planless_planning_clarifying_question_ends_without_hint() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
 
@@ -192,7 +192,7 @@ async fn planless_planning_hint_is_not_stored_when_turn_continues() {
     // `Continue` — storing the hint before that decision would leave stale
     // "no approval-ready plan" guidance in history for a turn that kept
     // going.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.enable_planning();
     let mut ctx = backing.turn_processing_context();
 

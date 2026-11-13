@@ -13,7 +13,7 @@ async fn incident_plan_handoff_executes_bare_verifier_and_publishes_once() {
     use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails, VersionedThreadEvent};
     use vtcode_core::tool_policy::ToolPolicy;
 
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let events_path = backing.enable_harness_emitter();
     backing.activate_planning_for_test();
     let plan = "## Summary\nUpdate the README locally.\n## Implementation Steps\n1. Update documentation -> files: [README.md] -> verify: [`./verify.sh`]\n## Test Cases and Validation\n- The local verifier exits 0 when README contains the new text.\n## Assumptions and Defaults\n- No network access is needed.";
@@ -142,7 +142,7 @@ async fn incident_plan_handoff_executes_bare_verifier_and_publishes_once() {
 #[tokio::test]
 async fn tracker_polling_runs_missing_verifier_then_can_complete_without_more_lists() {
     use vtcode_core::config::constants::tools;
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
     {
@@ -194,7 +194,7 @@ async fn tracker_polling_runs_missing_verifier_then_can_complete_without_more_li
 async fn tracker_polling_stops_when_verification_is_disabled_or_correction_is_ignored() {
     use vtcode_core::config::constants::tools;
     for pending in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(20).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut cfg = vtcode_core::config::loader::VTCodeConfig::default();
         cfg.agent.harness.verification.auto_execute = false;
         backing.set_vt_cfg_for_test(cfg);
@@ -237,7 +237,7 @@ async fn tracker_polling_stops_when_verification_is_disabled_or_correction_is_ig
 #[tokio::test]
 async fn unrelated_passing_verifiers_cannot_starve_the_required_check() {
     use vtcode_core::config::constants::tools;
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
     {
@@ -352,7 +352,7 @@ fn appends_tool_call_message_when_no_assistant_message_was_added() {
 }
 #[tokio::test]
 async fn recovery_tool_calls_break_turn_as_blocked() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());

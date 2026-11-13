@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn turn_loop_preserves_legacy_loop_detector_state() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_loop_limit(tool_names::READ_FILE, 2);
     let seeded_args = json!({"path":"sample.txt"});
     assert!(backing.record_tool_call(tool_names::READ_FILE, &seeded_args).is_none());
@@ -63,7 +63,7 @@ async fn resumed_turn_cannot_complete_while_verification_is_pending() {
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(TextOnlyProvider { requests: requests.clone() }));
 
     let mut history = vec![uni::Message::user("continue the implementation".to_string())];
@@ -146,7 +146,7 @@ async fn harness_auto_verification_completes_text_only_turn_without_manual_conti
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(12).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(TextOnlyProvider { requests: requests.clone() }));
     // Hermetic passing verifier: `rustc --version` exits 0 with no files.
     backing.set_verification_override_for_test("rustc --version");
@@ -259,7 +259,7 @@ async fn anti_blind_guard_stops_outer_loop_after_bounded_pending_stale_plan_paus
 
     let requests = Arc::new(AtomicUsize::new(0));
     let text_responses = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(16).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(RepeatedTextAfterMutationsProvider {
         requests: requests.clone(),
         text_responses: text_responses.clone(),
@@ -432,7 +432,7 @@ async fn blocked_anti_blind_recovery_publishes_one_actionable_handoff() {
 
     let requests = Arc::new(AtomicUsize::new(0));
     let steps = Arc::new(Mutex::new(Vec::new()));
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
     backing.set_provider(Box::new(VerificationRecoveryProvider { requests: requests.clone(), steps: steps.clone() }));
 
@@ -503,7 +503,7 @@ async fn recovery_sequence_keeps_one_draft_and_one_physical_checker() {
     use std::os::unix::fs::PermissionsExt;
     let calls = Arc::new(AtomicUsize::new(0));
     let requests = Arc::new(Mutex::new(Vec::new()));
-    let mut backing = TestTurnProcessingBacking::new(16).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(RetainedCompletionProvider {
         calls: calls.clone(),
         streaming: false,
@@ -685,7 +685,7 @@ impl uni::LLMProvider for RetainedCompletionProvider {
 async fn retained_completion_runs_missing_checks_and_publishes_once_without_model_follow_up() {
     for streaming in [false, true] {
         let calls = Arc::new(AtomicUsize::new(0));
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.set_provider(Box::new(RetainedCompletionProvider {
             calls: calls.clone(),
             streaming,

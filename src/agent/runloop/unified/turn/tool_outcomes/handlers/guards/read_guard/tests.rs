@@ -255,7 +255,7 @@ fn advertised_per_path_read_cap_matches_enforcement() {
     // shared). Render the prompt section and require the advertised line
     // to carry the live enforcement value: drift on either side fails.
     let mut prompt = String::from("Base prompt");
-    vtcode_core::prompts::upsert_harness_limits_section(&mut prompt, 32, 600, 2);
+    vtcode_core::prompts::upsert_harness_limits_section(&mut prompt, 600, 2);
     assert!(
         prompt.contains(&format!("max_same_file_path_reads: {MAX_SAME_FILE_PATH_READ_CALLS}")),
         "advertised per-path cap must match enforcement ({MAX_SAME_FILE_PATH_READ_CALLS}): {prompt}"

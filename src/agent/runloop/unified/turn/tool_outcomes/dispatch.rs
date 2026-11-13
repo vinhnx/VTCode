@@ -130,7 +130,6 @@ async fn handle_tool_calls_inner<'a, 'b>(
 /// armed consistently regardless of which path produced the outcome.
 fn flush_dispatch_recovery(ctx: &mut crate::agent::runloop::unified::turn::context::TurnProcessingContext<'_>) {
     super::execution_result::flush_auto_permission_probe_warning(ctx);
-    super::handlers::flush_session_limit_grant_directive(ctx);
     super::handlers::flush_interview_denial_recovery(ctx);
     super::handlers::flush_preflight_circuit_recovery(ctx);
     super::handlers::flush_blocked_tool_recovery(ctx);

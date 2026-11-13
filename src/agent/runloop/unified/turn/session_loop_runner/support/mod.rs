@@ -594,8 +594,8 @@ pub(super) async fn build_exec_session_resume_note(tool_registry: &ToolRegistry)
          Settle them before starting new work: call `write_stdin` with \
          {{\"session_id\": \"{first_session_id}\", \"action\": \"wait\", \
          \"wait_timeout_seconds\": 600}} verbatim (copy the session_id exactly; never guess the id) — \
-         `wait` blocks until exit or deadline while `poll` returns immediately; wait/inspect calls are exempt from the per-turn \
-         tool-call budget. A deadline-expired wait returns an in-progress session that can be \
+         `wait` blocks until exit or deadline while `poll` returns immediately; explicit wait time is excluded from the per-turn \
+         wall-clock budget. A deadline-expired wait returns an in-progress session that can be \
          waited on again with the same session_id. With several sessions, repeat this wait per id newest-first; \
          use `inspect` only for a bounded snapshot, not to wait."
     ))

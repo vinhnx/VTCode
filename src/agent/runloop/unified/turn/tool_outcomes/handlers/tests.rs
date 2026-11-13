@@ -37,7 +37,7 @@ use super::{
 };
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, ToolBudgetExhaustion, TurnId, TurnRunId};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
@@ -162,7 +162,7 @@ pub(super) struct TestContextBacking {
 }
 
 impl TestContextBacking {
-    pub(super) async fn new(max_tool_calls: usize) -> Self {
+    pub(super) async fn new() -> Self {
         let temp = tempfile::TempDir::new().expect("temp workspace");
         let workspace = vtcode_commons::canonicalize(temp.path()).expect("canonical temp workspace");
         let sample_file = workspace.join("sample.txt");
@@ -198,13 +198,8 @@ impl TestContextBacking {
         let autonomous_executor = Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
         let error_recovery =
             Arc::new(RwLock::new(vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default()));
-        let harness_state = HarnessTurnState::new(
-            TurnRunId("run-test".to_string()),
-            TurnId("turn-test".to_string()),
-            max_tool_calls,
-            60,
-            0,
-        );
+        let harness_state =
+            HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
         let auto_finish_planning_attempted = false;
         let working_history = Vec::new();
         let tool_catalog = Arc::new(ToolCatalogState::new());

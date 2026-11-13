@@ -209,7 +209,7 @@ full_auto = false
 enabled = false
 # List of tools that are allowed in full automation mode
 allowed_tools = ["exec_command", "write_stdin", "apply_patch"]
-# Grant tool-loop and session tool-call limit increases without prompting (same increments and caps as manual approvals)
+# Grant tool-loop limit increases without prompting (same increments and caps as manual approvals)
 auto_grant_tool_limits = true
 
 [automation.scheduled_tasks]

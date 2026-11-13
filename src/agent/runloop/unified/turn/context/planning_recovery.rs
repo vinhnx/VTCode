@@ -66,7 +66,6 @@ impl TurnProcessingContext<'_> {
         let targeted_research = self.plan_session.recovery.targeted_research.take();
         if targeted_research.is_some()
             && self.plan_session.recovery.outcome == PlanningOutcome::Synthesizing
-            && !self.harness_state.tool_budget_exhausted()
             && !self.harness_state.wall_clock_exhausted()
             && !self.plan_session.is_budget_exhausted()
         {

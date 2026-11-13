@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 
 use crate::constants::defaults;
-use crate::constants::tool_limits;
 
 use super::approval::{AsyncApprovalConfig, ConfidenceEscalationConfig, SkepticPanelConfig};
 use super::{ContextResetMode, ContinuationPolicy, HarnessOrchestrationMode};
@@ -14,10 +13,6 @@ pub struct AgentHarnessConfig {
     /// Source exposure policy; advisory by default, independently of verification.
     #[serde(default)]
     pub inspection: InspectionConfig,
-    /// Maximum number of tool calls allowed per turn. Defaults to `120`.
-    /// Set to `0` to disable the cap.
-    #[serde(default = "default_harness_max_tool_calls_per_turn")]
-    pub max_tool_calls_per_turn: usize,
     /// Maximum wall clock time (seconds) for tool execution in a turn
     #[serde(default = "default_harness_max_tool_wall_clock_secs")]
     pub max_tool_wall_clock_secs: u64,
@@ -140,7 +135,6 @@ impl Default for AgentHarnessConfig {
     fn default() -> Self {
         Self {
             inspection: InspectionConfig::default(),
-            max_tool_calls_per_turn: default_harness_max_tool_calls_per_turn(),
             max_tool_wall_clock_secs: default_harness_max_tool_wall_clock_secs(),
             max_tool_retries: default_harness_max_tool_retries(),
             max_parallel_tool_calls: default_harness_max_parallel_tool_calls(),
@@ -333,11 +327,6 @@ impl ToolResultClearingConfig {
         Ok(())
     }
 }
-#[inline]
-const fn default_harness_max_tool_calls_per_turn() -> usize {
-    tool_limits::DEFAULT_MAX_TOOL_CALLS_PER_TURN
-}
-
 #[inline]
 const fn default_harness_max_tool_wall_clock_secs() -> u64 {
     defaults::DEFAULT_MAX_TOOL_WALL_CLOCK_SECS

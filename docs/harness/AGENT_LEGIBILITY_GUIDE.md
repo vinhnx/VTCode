@@ -98,7 +98,7 @@ commands continue asynchronously and are not mandatory to settle before starting
 | ------------ | ----------------------------------------------------------------------------------------------------- |
 | Session line | `- <session_id> (``<command>``, running <secs>s)` — at most 4, newest first                           |
 | Wait shape   | `write_stdin {"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}` verbatim    |
-| Budget       | `wait`/`inspect` are exempt from the per-turn tool-call budget                                        |
+| Budget       | Explicit `wait` time is excluded from the per-turn wall-clock budget                                  |
 | Deadline     | A deadline-expired wait returns in-progress; wait again with the same id                              |
 | Peek vs wait | `wait` blocks until exit/deadline (preferred); `poll` returns immediately; `inspect` is snapshot-only |
 

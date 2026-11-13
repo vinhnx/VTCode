@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn recovery_request_keeps_tools_for_cache_and_disables_tool_choice() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.select_primary_agent_from_specs(&[vtcode_config::builtin_primary_build_agent()], "build");
     backing
         .add_tool_definition(ToolDefinition::function(
@@ -107,7 +107,7 @@ async fn recovery_request_keeps_tools_for_cache_and_disables_tool_choice() {
 }
 #[tokio::test]
 async fn recovery_prompt_reason_is_frozen_across_reason_updates() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.select_primary_agent_from_specs(&[vtcode_config::builtin_primary_build_agent()], "build");
     backing
         .add_tool_definition(ToolDefinition::function(
@@ -134,7 +134,7 @@ async fn recovery_prompt_reason_is_frozen_across_reason_updates() {
 }
 #[tokio::test]
 async fn request_builder_omits_stale_effort_for_unsupported_route() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(vtcode_core::llm::providers::MinimaxProvider::from_config(
         Some("offline-fixture".to_string()),
         Some("MiniMax-M3".to_string()),
@@ -160,7 +160,7 @@ async fn request_builder_omits_stale_effort_for_unsupported_route() {
 }
 #[tokio::test]
 async fn text_only_provider_request_omits_tools_and_tool_choice() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing
         .add_tool_definition(ToolDefinition::function(
             "code_search".to_string(),
@@ -210,7 +210,7 @@ async fn text_only_provider_request_omits_tools_and_tool_choice() {
 }
 #[tokio::test]
 async fn copilot_request_keeps_runtime_tools_out_of_band() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing
         .add_tool_definition(ToolDefinition::function(
             "code_search".to_string(),
@@ -262,7 +262,7 @@ async fn copilot_request_keeps_runtime_tools_out_of_band() {
 }
 #[tokio::test]
 async fn client_local_tool_deferral_omits_deferred_tools_from_wire_payload() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("read_file")).await;
     backing
         .add_tool_definition(
@@ -304,7 +304,7 @@ async fn client_local_tool_deferral_omits_deferred_tools_from_wire_payload() {
 }
 #[tokio::test]
 async fn hosted_tool_search_keeps_deferred_tools_on_the_wire() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("read_file")).await;
     backing
         .add_tool_definition(

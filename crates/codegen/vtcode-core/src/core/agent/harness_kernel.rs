@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn stable_prefix_hash_ignores_runtime_tool_sections() {
-        let base = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 5";
+        let base = "Base prompt\n[Harness Limits]\n- max_tool_wall_clock_secs: 60";
         let with_runtime_sections = format!(
             "{base}\n\n## Active Tools\n- Capabilities: read-only.\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 2\n- available_tools: 3\n- request_user_input_enabled: false\n\n# PLANNING WORKFLOW (READ-ONLY)\nread-only\n\n# FULL-AUTO: Complete task autonomously until done or blocked.\n- autonomous"
         );

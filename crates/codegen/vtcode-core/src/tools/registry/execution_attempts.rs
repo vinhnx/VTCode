@@ -62,13 +62,6 @@ impl ToolRegistry {
                 error.retryable = true;
                 error.is_recoverable = true;
             }
-            Some(GatewaySafetyError::TurnLimitReached { .. })
-            | Some(GatewaySafetyError::SessionLimitReached { .. }) => {
-                error.error_type = ToolErrorType::ExecutionError;
-                error.category = ErrorCategory::ResourceExhausted;
-                error.retryable = false;
-                error.is_recoverable = false;
-            }
             Some(GatewaySafetyError::PlanningPolicyViolation(_)) => {
                 error.error_type = ToolErrorType::PolicyViolation;
                 error.category = ErrorCategory::PlanningPolicyViolation;

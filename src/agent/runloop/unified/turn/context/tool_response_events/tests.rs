@@ -6,7 +6,7 @@ use serde_json::json;
 async fn pre_execution_responses_consume_streamed_identity_without_an_emitter() {
     use crate::agent::runloop::unified::run_loop_context::StreamedToolCallItem;
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.harness_emitter = None;
     ctx.harness_state
@@ -40,7 +40,7 @@ async fn reused_responses_preserve_terminal_evidence_without_streamed_starts() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(path.clone()).unwrap();
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.harness_emitter = Some(&emitter);
     for (id, cmd, output, expected_status, expected_text) in [

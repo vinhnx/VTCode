@@ -13,7 +13,6 @@ impl HarnessTurnState {
 pub(crate) fn budget_exhaustion_cause(reason: &str) -> Option<&str> {
     [
         "Tool loop budget exhausted",
-        "Tool-call budget exhausted for this turn",
         "Tool wall-clock budget exhausted for this turn",
     ]
     .iter()
@@ -28,19 +27,6 @@ pub(crate) fn budget_exhaustion_cause(reason: &str) -> Option<&str> {
 pub(super) struct PreviewBudgetExhaustedProbe {
     #[serde(default)]
     pub(super) preview_budget_exhausted: Option<bool>,
-}
-
-impl ToolBudgetWarning {
-    pub(crate) fn system_message(self) -> String {
-        format!(
-            "Tool-call budget warning: {}/{} used; {} remaining for this turn. Use targeted extraction/batching before additional tool calls.",
-            self.used, self.max, self.remaining
-        )
-    }
-
-    pub(crate) fn log_threshold_reached(self, path: &'static str) {
-        tracing::info!(used = self.used, max = self.max, remaining = self.remaining, "{path}");
-    }
 }
 
 /// Whether the turn loop owes the model a loop-budget warning this
@@ -60,9 +46,8 @@ pub(crate) fn tool_loop_warning_due(
     step_count as f64 / max_tool_loops as f64 >= threshold
 }
 
-/// Tool-loop counterpart of [`ToolBudgetWarning::system_message`]: same
-/// shape and advice so loop pressure reads like the call warning the model
-/// already knows.
+/// Tool-loop pressure warning: same shape and batching advice the model
+/// already knows from the loop-budget contract.
 #[must_use]
 pub(crate) fn tool_loop_warning_message(used: usize, max: usize) -> String {
     format!(
@@ -73,44 +58,16 @@ pub(crate) fn tool_loop_warning_message(used: usize, max: usize) -> String {
     )
 }
 
-/// Shared tail of the tool-call and wall-clock budget exhaustion directives.
+/// Shared tail of the wall-clock budget exhaustion directive.
 pub(crate) const BUDGET_EXHAUSTED_SYNTHESIS_NOTE: &str = "Tools are disabled for the rest of this turn, so further tool calls are \
 skipped. Synthesize your final answer now from the tool outputs already gathered in this conversation.";
-
-impl ToolBudgetExhaustion {
-    pub(crate) fn policy_violation_message(self) -> String {
-        format!("Policy violation: exceeded max tool calls per turn ({})", self.max)
-    }
-
-    /// Compact stub returned for the 2nd+ rejected calls in the same batch so
-    /// the full policy message isn't repeated N times and context stays clean.
-    pub(crate) fn skipped_call_message(self) -> String {
-        "Tool-call budget exhausted for this turn; call skipped.".to_string()
-    }
-
-    /// System directive pushed once (after all tool responses in the batch)
-    /// telling the model that tools are disabled for the rest of the turn and
-    /// it must synthesize a final answer from already-gathered outputs.
-    /// Mirrors `ToolWallClockExhaustion::synthesis_directive_message`.
-    pub(crate) fn synthesis_directive_message(self) -> String {
-        debug_assert!(self.max > 0, "disabled tool-call caps must not emit exhaustion");
-        format!(
-            "Tool-call budget exhausted for this turn ({}/{}). {BUDGET_EXHAUSTED_SYNTHESIS_NOTE}",
-            self.used, self.max
-        )
-    }
-}
 
 /// Budget kinds that can fail a turn closed. Recorded in trajectory telemetry
 /// so post-hoc diagnosis can tell which ceiling fired; the model-facing
 /// recovery directives already cover the live behavior.
 pub(crate) mod budget_kind {
-    /// Per-turn tool-call count (`max_tool_calls_per_turn`).
-    pub(crate) const TOOL_CALLS: &str = "tool_calls";
     /// Per-turn tool-loop iterations (`max_tool_loops` hard cap).
     pub(crate) const TOOL_LOOP: &str = "tool_loop";
-    /// Session-wide tool-call count (safety gateway + auto-grant headroom).
-    pub(crate) const SESSION_CALLS: &str = "session_calls";
     /// Per-turn aggregate tool wall-clock time (`max_tool_wall_clock_secs`).
     pub(crate) const WALL_CLOCK: &str = "wall_clock_secs";
 }

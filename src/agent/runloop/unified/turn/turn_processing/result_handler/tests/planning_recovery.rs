@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn planning_tokens_without_content_salvage_arms_one_final_content_retry() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
@@ -30,7 +30,7 @@ async fn planning_tokens_without_content_salvage_arms_one_final_content_retry() 
 }
 #[tokio::test]
 async fn planning_third_tokens_without_content_handoff_states_captured_facts() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
@@ -74,7 +74,7 @@ async fn planning_third_tokens_without_content_handoff_states_captured_facts() {
 }
 #[tokio::test]
 async fn planning_true_no_output_handoff_never_claims_returned_tokens() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
@@ -115,7 +115,7 @@ async fn planning_true_no_output_handoff_never_claims_returned_tokens() {
 }
 #[tokio::test]
 async fn planning_dropped_tool_calls_report_the_actual_failure_shape() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
@@ -187,7 +187,7 @@ async fn drive_budget_exhausted_planning_cycle(
 
 #[tokio::test]
 async fn planning_repeated_identical_failures_flag_and_vary_the_handoff() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
@@ -257,7 +257,7 @@ async fn planning_repeated_identical_failures_flag_and_vary_the_handoff() {
 
 #[tokio::test]
 async fn planning_differing_failure_class_does_not_flag_repetition() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
@@ -310,7 +310,7 @@ const SALVAGEABLE_PLAN_PROSE: &str = "# Salvaged plan\n\n## Summary\nRestore the
 
 #[tokio::test]
 async fn planning_violated_synthesis_with_ready_plan_salvages_to_repair() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -338,7 +338,7 @@ async fn planning_violated_synthesis_with_ready_plan_salvages_to_repair() {
 
 #[tokio::test]
 async fn planning_violated_synthesis_with_junk_prose_keeps_the_handoff() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     let mut repeated_tool_attempts = LoopTracker::new();

@@ -36,9 +36,6 @@ use crate::tools::tool_intent::{
     ToolIntent, action_qualified_policy_name, classify_tool_intent, command_session_action_in,
     command_session_action_is, file_operation_action_is,
 };
-use vtcode_config::constants::tool_limits::{
-    DEFAULT_MAX_TOOL_CALLS_PER_TURN, DEFAULT_SAFETY_MAX_TOOL_CALLS_PER_SESSION, MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN,
-};
 use vtcode_config::core::DotfileProtectionConfig;
 
 /// Trust level used by the safety gateway for approval bypass decisions.
@@ -127,10 +124,6 @@ pub enum SafetyError {
         max: usize,
         window: &'static str,
     },
-    #[error("Per-turn tool limit reached (max: {max})")]
-    TurnLimitReached { max: usize },
-    #[error("Session tool limit reached (max: {max})")]
-    SessionLimitReached { max: usize },
     #[error("Planning workflow violation: {0}")]
     PlanningPolicyViolation(String),
     #[error("Command policy denied: {0}")]
@@ -153,10 +146,6 @@ pub struct SafetyCheckResult {
 /// Configuration for the safety gateway
 #[derive(Debug, Clone)]
 pub struct SafetyGatewayConfig {
-    /// Maximum tool calls per turn
-    pub max_per_turn: usize,
-    /// Maximum tool calls per session
-    pub max_per_session: usize,
     /// Rate limit: calls per second
     pub rate_limit_per_second: usize,
     /// Rate limit: calls per minute (optional burst protection)
@@ -168,7 +157,6 @@ pub struct SafetyGatewayConfig {
     /// Risk threshold for requiring approval
     pub approval_risk_threshold: RiskLevel,
     /// Enforce short-window rate limiting (per-second/per-minute).
-    /// Turn/session limits are always enforced.
     pub enforce_rate_limits: bool,
 }
 
@@ -177,8 +165,6 @@ impl Default for SafetyGatewayConfig {
         let rate_limit_per_second = tool_calls_per_second_from_env().unwrap_or(5);
 
         Self {
-            max_per_turn: DEFAULT_MAX_TOOL_CALLS_PER_TURN,
-            max_per_session: DEFAULT_SAFETY_MAX_TOOL_CALLS_PER_SESSION,
             rate_limit_per_second,
             rate_limit_per_minute: tool_calls_per_minute_from_env(),
             planning_active: false,
@@ -194,13 +180,6 @@ impl Default for SafetyGatewayConfig {
 struct RateLimiterState {
     calls_per_second: std::collections::VecDeque<Instant>,
     calls_per_minute: std::collections::VecDeque<Instant>,
-    current_turn_count: usize,
-    session_count: usize,
-    /// Count of control-plane calls (`wait`/`inspect`) recorded this turn.
-    /// These are exempt from `current_turn_count` so a long build does not
-    /// consume the budget its follow-up work needs, but they remain bounded
-    /// by their own per-turn cap and the session fuse.
-    control_plane_turn_count: usize,
 }
 
 /// Unified Safety Gateway
@@ -273,13 +252,6 @@ impl SafetyGateway {
         self.config.write().workspace_trust = trust;
     }
 
-    /// Update rate limits
-    pub fn set_limits(&self, max_per_turn: usize, max_per_session: usize) {
-        let mut config = self.config.write();
-        config.max_per_turn = max_per_turn;
-        config.max_per_session = max_per_session;
-    }
-
     /// Update rate-limiter thresholds.
     pub fn set_rate_limits(&self, rate_limit_per_second: usize, rate_limit_per_minute: Option<usize>) {
         let mut config = self.config.write();
@@ -294,37 +266,17 @@ impl SafetyGateway {
         self.config.write().enforce_rate_limits = enabled;
     }
 
-    /// Increase session limit dynamically
-    pub fn increase_session_limit(&self, increment: usize) {
-        let mut config = self.config.write();
-        let new_max = config.max_per_session.saturating_add(increment);
-        config.max_per_session = new_max;
-        tracing::info!("Session tool limit increased to {}", new_max);
-    }
-
-    pub fn max_per_session(&self) -> usize {
-        self.config.read().max_per_session
-    }
-
-    /// Reset turn counters (call at start of new turn)
+    /// Reset rate-limiter windows (call at start of new turn)
     pub fn start_turn(&self) {
         let mut state = self.rate_state.lock();
-        state.current_turn_count = 0;
-        state.control_plane_turn_count = 0;
         state.calls_per_second.clear();
         state.calls_per_minute.clear();
     }
 
-    /// Reset all transient tool-budget state for a newly reconstructed
-    /// execution context and restore the limits supplied by the build mode.
-    pub fn reset_for_fresh_execution(&self, max_per_turn: usize, max_per_session: usize) {
-        self.set_limits(max_per_turn, max_per_session);
-        let mut state = self.rate_state.lock();
-        state.current_turn_count = 0;
-        state.control_plane_turn_count = 0;
-        state.session_count = 0;
-        state.calls_per_second.clear();
-        state.calls_per_minute.clear();
+    /// Reset all transient rate-limiter state for a newly reconstructed
+    /// execution context.
+    pub fn reset_for_fresh_execution(&self) {
+        self.start_turn();
     }
 
     /// Preapprove a tool for this session
@@ -369,8 +321,7 @@ impl SafetyGateway {
             "SafetyGateway: checking safety"
         );
 
-        if let Err(err) = self.check_rate_limits(crate::tools::tool_intent::is_turn_budget_exempt_call(tool_name, args))
-        {
+        if let Err(err) = self.check_rate_limits() {
             tracing::warn!(
                 invocation_id = %inv_id,
                 error = %err,
@@ -411,12 +362,11 @@ impl SafetyGateway {
             return SafetyCheckResult { decision, retry_after: None, violation: None };
         }
 
-        let control_plane = crate::tools::tool_intent::is_turn_budget_exempt_call(tool_name, args);
         let now = Instant::now();
         let mut state = self.rate_state.lock();
-        match self.check_rate_limits_locked(&mut state, now, control_plane) {
+        match self.check_rate_limits_locked(&mut state, now) {
             Ok(()) => {
-                self.record_execution_locked(&mut state, now, control_plane);
+                self.record_execution_locked(&mut state, now);
                 SafetyCheckResult { decision, retry_after: None, violation: None }
             }
             Err(err) => {
@@ -523,21 +473,16 @@ impl SafetyGateway {
     /// Record that a tool call was executed (for rate limiting)
     pub fn record_execution(&self) {
         let mut state = self.rate_state.lock();
-        self.record_execution_locked(&mut state, Instant::now(), false);
+        self.record_execution_locked(&mut state, Instant::now());
     }
 
     /// Check rate limits without recording
-    fn check_rate_limits(&self, control_plane: bool) -> Result<(), SafetyError> {
+    fn check_rate_limits(&self) -> Result<(), SafetyError> {
         let mut state = self.rate_state.lock();
-        self.check_rate_limits_locked(&mut state, Instant::now(), control_plane)
+        self.check_rate_limits_locked(&mut state, Instant::now())
     }
 
-    fn check_rate_limits_locked(
-        &self,
-        state: &mut RateLimiterState,
-        now: Instant,
-        control_plane: bool,
-    ) -> Result<(), SafetyError> {
+    fn check_rate_limits_locked(&self, state: &mut RateLimiterState, now: Instant) -> Result<(), SafetyError> {
         let config = self.config.read();
         self.prune_rate_windows(state, now);
 
@@ -561,33 +506,12 @@ impl SafetyGateway {
             }
         }
 
-        if control_plane {
-            // Control-plane calls bypass the per-turn work budget but keep
-            // their own bounded cap so the exemption cannot become the
-            // dominant spend path.
-            if state.control_plane_turn_count >= MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN {
-                return Err(SafetyError::TurnLimitReached { max: MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN });
-            }
-        } else if state.current_turn_count >= config.max_per_turn {
-            return Err(SafetyError::TurnLimitReached { max: config.max_per_turn });
-        }
-
-        if state.session_count >= config.max_per_session {
-            return Err(SafetyError::SessionLimitReached { max: config.max_per_session });
-        }
-
         Ok(())
     }
 
-    fn record_execution_locked(&self, state: &mut RateLimiterState, now: Instant, control_plane: bool) {
+    fn record_execution_locked(&self, state: &mut RateLimiterState, now: Instant) {
         state.calls_per_second.push_back(now);
         state.calls_per_minute.push_back(now);
-        state.session_count = state.session_count.saturating_add(1);
-        if control_plane {
-            state.control_plane_turn_count = state.control_plane_turn_count.saturating_add(1);
-        } else {
-            state.current_turn_count = state.current_turn_count.saturating_add(1);
-        }
     }
 
     fn prune_rate_windows(&self, state: &mut RateLimiterState, now: Instant) {
@@ -793,39 +717,12 @@ impl SafetyGateway {
 
         parts.join("\n")
     }
-
-    /// Get current session statistics
-    pub fn get_stats(&self) -> SafetyStats {
-        let state = self.rate_state.lock();
-        let preapproved = self.preapproved.lock();
-        let config = self.config.read();
-
-        SafetyStats {
-            turn_count: state.current_turn_count,
-            session_count: state.session_count,
-            max_per_turn: config.max_per_turn,
-            max_per_session: config.max_per_session,
-            planning_active: config.planning_active,
-            preapproved_count: preapproved.len(),
-        }
-    }
 }
 
 impl Default for SafetyGateway {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Statistics from the safety gateway
-#[derive(Debug, Clone)]
-pub struct SafetyStats {
-    pub turn_count: usize,
-    pub session_count: usize,
-    pub max_per_turn: usize,
-    pub max_per_session: usize,
-    pub planning_active: bool,
-    pub preapproved_count: usize,
 }
 
 #[cfg(test)]

@@ -55,7 +55,7 @@ async fn matrix_verification_preserves_full_auto_denials_and_work_budgets() {
         let mut cfg = VTCodeConfig::default();
         cfg.agent.harness.inspection.mode = vtcode_config::core::agent::InspectionMode::Off;
         cfg.automation.full_auto.enabled = true;
-        cfg.agent.harness.max_tool_calls_per_turn = 1;
+        cfg.tools.max_tool_loops = 1;
         cfg.automation.full_auto.allowed_tools = if allow_execution {
             vec!["exec_command".into(), "write_stdin".into()]
         } else {

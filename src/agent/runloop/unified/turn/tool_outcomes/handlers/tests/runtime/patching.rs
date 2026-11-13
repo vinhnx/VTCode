@@ -4,7 +4,7 @@ use super::*;
 async fn redundant_inspection_coaching_preserves_authorized_patch() {
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::update_repetition_tracker;
 
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, "first\nsecond\n").expect("write fixture");
@@ -42,7 +42,7 @@ async fn redundant_inspection_coaching_preserves_authorized_patch() {
 
 #[tokio::test]
 async fn read_after_write_guard_blocks_bare_full_read_of_written_file() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.record_written_file(&sample_path);
@@ -63,7 +63,7 @@ async fn read_after_write_guard_blocks_bare_full_read_of_written_file() {
 
 #[tokio::test]
 async fn read_after_write_guard_admits_bounded_slice_read_of_written_file() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.record_written_file(&sample_path);
@@ -87,7 +87,7 @@ async fn read_after_write_guard_admits_bounded_slice_read_of_written_file() {
 
 #[tokio::test]
 async fn read_after_write_guard_ignores_unwritten_paths_and_non_read_tools() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
 
@@ -111,7 +111,7 @@ async fn successful_apply_patch_arms_read_after_write_guard_for_patch_targets() 
     // (the schema has no `path` field), so arming must come from the parsed
     // patch targets, and the workspace-relative target must match an
     // absolute-path read of the same file.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, (1..=4).map(|idx| format!("line {idx}\n")).collect::<String>())
@@ -178,7 +178,7 @@ async fn successful_apply_patch_arms_read_after_write_guard_for_patch_targets() 
 async fn failed_apply_patch_does_not_arm_read_after_write_guard() {
     // A failed patch wrote nothing, so there is no diff preview to reuse and
     // plain reads must stay available for inspecting the failure.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     let sample_path = sample_file.to_string_lossy().to_string();
@@ -229,7 +229,7 @@ async fn literal_mismatch_gets_one_fresh_read_after_path_cap_then_corrected_edit
 }
 
 async fn assert_mismatch_recovery_at_read_cap(literal: bool) {
-    let mut backing = TestContextBacking::new(30).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, "old evidence\nsecond line\nthird line\n").expect("fixture");
@@ -375,7 +375,7 @@ fn patch_preflight_correction_names_canonical_json_input() {
 
 #[tokio::test]
 async fn patch_context_mismatch_allows_one_uncached_shell_range_after_six_reads() {
-    let mut backing = TestContextBacking::new(30).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(&sample_file, "old shell evidence\nsecond\nthird\nfourth\nfifth\nsixth\n").unwrap();
@@ -462,7 +462,7 @@ async fn patch_context_mismatch_allows_one_uncached_shell_range_after_six_reads(
 #[tokio::test]
 async fn patch_recovery_path_cap_exception_is_reserved_before_batch_execution() {
     for prior_reads in [5, 6] {
-        let mut backing = TestContextBacking::new(30).await;
+        let mut backing = TestContextBacking::new().await;
         backing.select_build_primary_agent();
         let sample_path = backing.sample_file.to_string_lossy().to_string();
         let bad_patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-missing context\n+edited\n*** End Patch\n"});
@@ -509,7 +509,7 @@ async fn patch_recovery_path_cap_exception_is_reserved_before_batch_execution() 
 
 #[tokio::test]
 async fn patch_recovery_rejects_ignored_limit_alias_at_the_path_cap() {
-    let mut backing = TestContextBacking::new(30).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let path = backing.sample_file.to_string_lossy().to_string();
     std::fs::write(&backing.sample_file, (1..=400).map(|line| format!("fixture-{line}\n")).collect::<String>())

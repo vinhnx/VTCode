@@ -363,7 +363,7 @@ mod tests {
             low_signal_family_key(tool_names::EXEC_COMMAND, &first_args),
             low_signal_family_key(tool_names::EXEC_COMMAND, &second_args)
         );
-        let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 10, 1);
         assert_eq!(state.record_shell_command_run(first.clone()), 1);
         assert_eq!(state.record_shell_command_run(first), 2);
         assert_eq!(state.record_shell_command_run(second.clone()), 1);

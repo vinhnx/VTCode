@@ -466,7 +466,6 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                         safety_validator: &safety_validator,
                         harness_emitter: &harness_emitter,
                         next_checkpoint_turn,
-                        max_tool_calls_per_turn: harness_config.max_tool_calls_per_turn,
                         max_tool_wall_clock_secs: harness_config.max_tool_wall_clock_secs,
                         target,
                     })
@@ -546,20 +545,13 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 cross_turn_shell_cmd,
                 cross_turn_failed_shell_key,
                 cross_turn_out_of_band_progress,
-                session_limit_granted,
                 aborted_turn_diagnostics,
             ) = {
                 let mut auto_finish_planning_attempted = false;
-                let max_tool_calls_per_turn = if executing_approved_plan {
-                    effective_max_tool_calls_for_approved_plan_execution(harness_config.max_tool_calls_per_turn)
-                } else {
-                    effective_max_tool_calls_for_turn(harness_config.max_tool_calls_per_turn, planning_active)
-                };
                 tool_registry.begin_patch_recovery_turn();
                 let mut harness_state = HarnessTurnState::new(
                     TurnRunId(turn_run_id.0.clone()),
                     TurnId(turn_id.clone()),
-                    max_tool_calls_per_turn,
                     harness_config.max_tool_wall_clock_secs,
                     harness_config.max_tool_retries,
                 );
@@ -648,7 +640,6 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     harness_state.last_admitted_shell_command_signature.clone(),
                     harness_state.last_failed_shell_key().map(str::to_owned),
                     harness_state.has_out_of_band_tool_progress(),
-                    harness_state.has_session_limit_grant(),
                     aborted_turn_diagnostics,
                 )
             };
@@ -656,7 +647,6 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
             match outcome::run_outcome_gate(outcome::OutcomeGate {
                 turn_result,
                 aborted_turn_diagnostics,
-                session_limit_granted,
                 refused_turn_rollback: &refused_turn_rollback,
                 transient_system_notes: &transient_system_notes,
                 cross_turn_read_sigs: &cross_turn_read_sigs,
@@ -671,7 +661,6 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 turn_id: &turn_id,
                 turn_run_id: &turn_run_id,
                 history_snapshot_bytes,
-                max_tool_calls_per_turn: harness_config.max_tool_calls_per_turn,
                 max_tool_wall_clock_secs: harness_config.max_tool_wall_clock_secs,
                 executing_approved_plan,
                 config: &*config,

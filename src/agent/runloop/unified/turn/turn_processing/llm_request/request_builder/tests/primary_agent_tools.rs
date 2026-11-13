@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn active_primary_agent_deny_list_applies_after_allow_list() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("code_search")).await;
     backing.add_tool_definition(named_tool("apply_patch")).await;
     let mut spec = test_primary_agent_spec("planner", "Use deterministic tools.");
@@ -24,7 +24,7 @@ async fn active_primary_agent_deny_list_applies_after_allow_list() {
 }
 #[tokio::test]
 async fn unconstrained_primary_agent_falls_back_to_baseline_tools() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.select_primary_agent_from_specs(&[vtcode_config::builtin_primary_build_agent()], "build");
     backing.add_tool_definition(named_tool("code_search")).await;
     backing.add_tool_definition(named_tool("apply_patch")).await;
@@ -43,7 +43,7 @@ async fn unconstrained_primary_agent_falls_back_to_baseline_tools() {
 }
 #[tokio::test]
 async fn active_primary_agent_runtime_state_ignores_openai_response_chain() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let spec = test_primary_agent_spec("planner", "Use the active primary agent.");
     backing.select_primary_agent_from_specs(&[spec], "planner");
 
@@ -79,7 +79,7 @@ async fn active_primary_agent_runtime_state_ignores_openai_response_chain() {
 }
 #[tokio::test]
 async fn active_primary_agent_runtime_state_keeps_stable_prompt_cache_friendly() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut cfg = VTCodeConfig::default();
     cfg.agent.include_temporal_context = true;
     cfg.prompt_cache.cache_friendly_prompt_shaping = true;
@@ -123,7 +123,7 @@ async fn active_primary_agent_runtime_state_keeps_stable_prompt_cache_friendly()
 }
 #[tokio::test]
 async fn active_primary_agent_skills_are_request_scoped_on_switch() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut first = test_primary_agent_spec("planner", "Planner instructions.");
     first.skills = vec!["alpha".to_string()];
     let mut second = test_primary_agent_spec("reviewer", "Reviewer instructions.");
@@ -164,7 +164,7 @@ async fn active_primary_agent_skills_are_request_scoped_on_switch() {
 }
 #[tokio::test]
 async fn primary_agent_model_and_reasoning_feed_request_metadata() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut spec = test_primary_agent_spec("planner", "Use agent metadata.");
     spec.model = Some("overlay-model".to_string());
     spec.reasoning_effort = Some(ReasoningEffortLevel::High);

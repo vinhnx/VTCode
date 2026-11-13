@@ -305,7 +305,7 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
     }
 
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(TruncateThenCompactProvider { calls: calls.clone() }));
 

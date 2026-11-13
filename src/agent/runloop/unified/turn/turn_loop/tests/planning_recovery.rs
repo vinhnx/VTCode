@@ -191,7 +191,7 @@ fn assert_tool_free(requests: &Arc<Mutex<Vec<uni::LLMRequest>>>, count: usize) {
 
 #[tokio::test]
 async fn planning_recovery_mixed_failures_share_three_requests_and_one_input_handoff() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("Planning research guard reached.");
     let harness = backing.enable_harness_emitter();
@@ -260,7 +260,7 @@ async fn planning_recovery_mixed_failures_share_three_requests_and_one_input_han
 
 #[tokio::test]
 async fn planning_recovery_repaired_plan_persists_before_approval_publication() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.mark_interview_denied_for_test();
     backing.activate_tool_free_recovery_for_test("Planning research guard reached.");
@@ -323,7 +323,7 @@ async fn planning_recovery_repaired_plan_persists_before_approval_publication() 
 
 #[tokio::test]
 async fn planning_recovery_resume_preserves_consumed_admission_and_cannot_reopen_research() {
-    let mut original = TestTurnProcessingBacking::new(8).await;
+    let mut original = TestTurnProcessingBacking::new().await;
     original.activate_planning_for_test();
     original.activate_tool_free_recovery_for_test("Planning research guard reached.");
     let harness = original.enable_harness_emitter();
@@ -341,7 +341,7 @@ async fn planning_recovery_resume_preserves_consumed_admission_and_cannot_reopen
     let serialized = serde_json::to_string(&saved).expect("serialize resume checkpoint");
     let restored: PlanningRecoverySnapshot = serde_json::from_str(&serialized).expect("rehydrate resume checkpoint");
 
-    let mut resumed = TestTurnProcessingBacking::new(8).await;
+    let mut resumed = TestTurnProcessingBacking::new().await;
     resumed.activate_planning_for_test();
     resumed.mark_interview_denied_for_test();
     resumed.turn_loop_context().plan_session.recovery = restored;
@@ -363,7 +363,7 @@ async fn planning_recovery_resume_preserves_consumed_admission_and_cannot_reopen
     };
     // Restoring an already displayed input handoff cannot create another
     // synthesis request or re-present the same incident without human action.
-    let mut idle = TestTurnProcessingBacking::new(8).await;
+    let mut idle = TestTurnProcessingBacking::new().await;
     idle.activate_planning_for_test();
     idle.turn_loop_context().plan_session.recovery =
         serde_json::from_str(&exhausted).expect("restore exhausted handoff");
@@ -395,7 +395,7 @@ async fn planning_recovery_resume_preserves_consumed_admission_and_cannot_reopen
 #[tokio::test]
 async fn planning_recovery_targeted_clarification_research_is_one_batch_and_cannot_survive_budget_denial() {
     for hard_budget_exhausted in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.activate_planning_for_test();
         backing.activate_tool_free_recovery_for_test("Research guard reached before clarification.");
         let mut ctx = backing.turn_processing_context();
@@ -406,7 +406,7 @@ async fn planning_recovery_targeted_clarification_research_is_one_batch_and_cann
             ..Default::default()
         };
         if hard_budget_exhausted {
-            ctx.harness_state.tool_calls = ctx.harness_state.max_tool_calls;
+            ctx.harness_state.tool_wall_clock_elapsed = Duration::from_secs(3600);
         }
         assert!(
             ctx.admit_planning_recovery_request("noop-model")
@@ -424,7 +424,7 @@ async fn planning_recovery_targeted_clarification_research_is_one_batch_and_cann
             assert!(ctx.harness_state.recovery_is_tool_free());
             // A later turn can have a fresh local budget, but it must not
             // revive the denied research batch after synthesis has begun.
-            ctx.harness_state.tool_calls = 0;
+            ctx.harness_state.tool_wall_clock_elapsed = Duration::ZERO;
         } else {
             assert_eq!(ctx.plan_session.recovery.requests_used, 0);
             assert_eq!(ctx.plan_session.recovery.outcome, PlanningOutcome::Researching);
@@ -447,7 +447,7 @@ async fn planning_recovery_targeted_clarification_research_is_one_batch_and_cann
 #[tokio::test]
 async fn planning_recovery_transport_retries_share_the_three_actual_dispatch_allowance() {
     for repaired_on_last_dispatch in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.activate_planning_for_test();
         backing.mark_interview_denied_for_test();
         backing.activate_tool_free_recovery_for_test("Planning research guard reached.");
@@ -683,7 +683,7 @@ fn exhausted_recovery_snapshot() -> PlanningRecoverySnapshot {
 
 #[tokio::test]
 async fn terminal_plan_validation_cancel_retains_draft_without_approval() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let harness = backing.enable_harness_emitter();
     let mut modal = RecoveryModalFixture::new();
@@ -734,7 +734,7 @@ async fn terminal_plan_validation_cancel_retains_draft_without_approval() {
 
 #[tokio::test]
 async fn terminal_plan_validation_retry_reaches_separate_approval() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.set_skip_confirmations_for_test(false);
     let harness = backing.enable_harness_emitter();
@@ -797,7 +797,7 @@ async fn terminal_plan_validation_retry_reaches_separate_approval() {
 
 #[tokio::test]
 async fn planning_recovery_displayed_retry_reaches_provider_and_persists_plan_before_approval() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("Planning research guard reached.");
     let harness = backing.enable_harness_emitter();
@@ -843,7 +843,7 @@ async fn planning_recovery_displayed_retry_reaches_provider_and_persists_plan_be
 
 #[tokio::test]
 async fn planning_recovery_runtime_retry_answer_starts_one_cycle_without_approval() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let harness = backing.enable_harness_emitter();
     let mut modal = RecoveryModalFixture::new();
@@ -877,7 +877,7 @@ async fn planning_recovery_runtime_retry_answer_starts_one_cycle_without_approva
 #[tokio::test]
 async fn planning_recovery_runtime_clarification_preserves_text_and_requires_explicit_research_choice() {
     for request_research in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.activate_planning_for_test();
         let harness = backing.enable_harness_emitter();
         let mut modal = RecoveryModalFixture::new();
@@ -924,7 +924,7 @@ async fn planning_recovery_runtime_clarification_preserves_text_and_requires_exp
 
 #[tokio::test]
 async fn planning_recovery_runtime_model_answer_waits_for_explicit_picker_selection() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let harness = backing.enable_harness_emitter();
     let mut modal = RecoveryModalFixture::new();
@@ -958,7 +958,7 @@ async fn planning_recovery_runtime_model_answer_waits_for_explicit_picker_select
 #[tokio::test]
 async fn planning_recovery_runtime_cancelled_or_unavailable_modal_stays_idle_without_showing_again() {
     for unavailable in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         backing.activate_planning_for_test();
         let harness = backing.enable_harness_emitter();
         let mut modal = RecoveryModalFixture::new();

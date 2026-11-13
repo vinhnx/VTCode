@@ -70,14 +70,12 @@ pub(crate) const RECOVERABLE_BLOCK_ALLOW_TOKENS: &[&str] = &[
     "safety cap",
     "preview budget",
     "tool preview budget",
-    "turn budget",
-    "tool budget",
     "tool loop budget",
     "tool loop",
-    "tool-call budget",
     "tool follow-up",
     "tool-free recovery",
     "wall clock",
+    "wall-clock",
     "blocked due to repeated",
     "blocked after repeated",
     "without a harness-visible final assistant response",
@@ -86,9 +84,7 @@ pub(crate) const RECOVERABLE_BLOCK_ALLOW_TOKENS: &[&str] = &[
     "consecutive blocked calls",
     "tool-call safety limit",
     "max tool",
-    "per-turn tool",
     "read cap",
-    "work budget",
     "budget exhausted",
     "budget ran out",
 ];
@@ -136,15 +132,13 @@ const TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS: &[&str] = &[
 ];
 
 /// Budget-only verification block: `verification is still pending` caused by
-/// tool-call budget exhaustion (fresh turn gets fresh execution budget, so a
-/// verifier can run). Session `session-vtcode-20261008T094713Z` blocked on
-/// exactly this shape and required manual `continue`; other verification
-/// blocks (failing verifier, safety, permission) stay terminal.
+/// wall-clock or loop budget exhaustion (fresh turn gets fresh execution
+/// budget, so a verifier can run). Other verification blocks (failing
+/// verifier, safety, permission) stay terminal.
 pub(crate) fn is_budget_exhausted_verification_block(lower: &str) -> bool {
     lower.contains("verification is still pending")
-        && (lower.contains("tool-call budget")
-            || lower.contains("tool budget")
-            || lower.contains("turn budget")
+        && (lower.contains("wall-clock budget")
+            || lower.contains("tool loop budget")
             || lower.contains("budget exhausted")
             || lower.contains("budget ran out"))
 }

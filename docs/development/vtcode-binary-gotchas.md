@@ -32,15 +32,14 @@ changing the runloop, update path, allocator, or request assembly.
 
 ## Tool-budget and recovery contracts
 
-- Wall-clock and tool-call budget exhaustion share one contract: emit the full policy message once, compact stubs for
+- Wall-clock budget exhaustion follows one contract: emit the full policy message once, compact stubs for
   later batch calls, then one synthesis directive via `flush_budget_synthesis_directives` after the tool batch. Do not
   break the turn as `Blocked`, because that skips synthesis. The flush arms `switch_to_tool_free_recovery()` so the next
-  request removes tool definitions at the API level. User-approved session-limit grants are a separate same-turn retry
-  path: emit `SessionToolLimitIncreased`, preserve the granted fuse through `set_limits`/`start_turn`, and keep the
-  active primary agent; Copilot appends the shared continuation directive to its ACP tool result because it has no
-  normal turn-processing context. Loop-limit grants emit `ToolLoopLimitIncreased` and leave tools enabled. Exclude
-  explicit `request_user_input` think-time and command-session `wait` time from the wall-clock calculation; neither
-  consumes autonomous execution budget.
+  request removes tool definitions at the API level. (The per-turn/session tool-call count budget was removed; turns are
+  bounded by `max_tool_loops` and `max_tool_wall_clock_secs`. The `SessionToolLimitIncreased` event is retained for
+  wire compatibility but no longer emitted.) Loop-limit grants emit `ToolLoopLimitIncreased` and leave tools enabled.
+  Exclude explicit `request_user_input` think-time and command-session `wait` time from the wall-clock calculation;
+  neither consumes autonomous execution budget.
 - Verification gates successful completion, not edits or inspections. The registry owns required checks,
   mutation generations, owned running sessions, and terminal verdicts. Run only missing checks at completion;
   required checks bypass inspection-result replay. A failed attempt permits at most one corrective pass per genuine
@@ -57,12 +56,12 @@ changing the runloop, update path, allocator, or request assembly.
   request still has tools disabled. The absolute hard cap and its terminal behavior remain unchanged. After the first
   successful interactive tool-loop grant in a process session, later limit hits auto-grant the maximum remaining `+N`
   without another HITL prompt (`SessionStats::tool_loop_grant_preauthorized`); denials do not latch.
-- `tool_budget_exhausted_emitted` participates in the plan-mode `mark_recovery_exhausted` gates. The preflight circuit
+- `wall_clock_exhausted_emitted` participates in the plan-mode `mark_recovery_exhausted` gates. The preflight circuit
   breaker in `turn/tool_outcomes/handlers/mod.rs` follows the same `Continue` plus deferred synthesis path via
   `preflight_circuit_recovery_pending` and `flush_preflight_circuit_recovery`; never return `Break(Blocked)` for an
   approved-plan build.
 - Approved-plan implementation turns receive one internal `+50` loop allowance at initialization, clamped by the
-  ordinary hard cap; `0` remains unlimited and manual extensions/tool-call budgets stay independent.
+  ordinary hard cap; `0` remains unlimited and manual extensions stay independent of the wall-clock budget.
 - Queue model-facing auto-permission probe warnings while a tool batch runs. Flush them after all tool results and
   before recovery directives; keep the UI warning immediate and deduplicated.
 - During tool-free recovery, do not inject `request_user_input`; it violates the recovery contract. Plan-aware fallback
@@ -119,9 +118,8 @@ changing the runloop, update path, allocator, or request assembly.
 - Plans stay compact/spec-like: `PLANNING_WORKFLOW_PLAN_QUALITY_LINE` requires roughly 1500 tokens with
   `Action -> files/symbols -> verify:` steps and file/symbol references. The truncation recovery prompt is bounded by
   `MAX_PLAN_SYNTHESIS_CONDENSE_ATTEMPTS`.
-- Planning research scales to request complexity; the wall-clock budget is the backstop, not a replacement hard
-  tool-count cap. `effective_max_tool_calls_for_turn` and mid-turn config reapplication preserve the shared planning
-  floor.
+- Planning research scales to request complexity; the wall-clock budget and tool-loop floor are the backstops.
+  Mid-turn config reapplication preserves the shared planning loop floor.
 - Approval phrases are classified by `detect_planning_intent` and resolve one typed plan target: ordinary current/fresh
   approval selects Build, while only an explicit Auto choice or configured full-auto policy selects Auto. The target
   carries destination, confirmation policy, context, persisted plan, and tracker through the shared direct/queued

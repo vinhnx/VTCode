@@ -77,7 +77,7 @@ fn universal_rules_have_one_home_across_composed_prompt_sections() {
                 prompt.push_str(PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE);
             }
             prompt.push_str(guidance);
-            upsert_harness_limits_section(&mut prompt, 32, 600, 2);
+            upsert_harness_limits_section(&mut prompt, 600, 2);
             for marker in markers {
                 assert_eq!(
                     prompt.matches(marker).count(),

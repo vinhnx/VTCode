@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn refused_response_does_not_checkpoint_a_plan_draft() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     ctx.record_planning_response(&uni::LLMResponse {
@@ -17,7 +17,7 @@ async fn refused_response_does_not_checkpoint_a_plan_draft() {
 
 #[tokio::test]
 async fn draft_before_clarification_survives_later_recovery() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
@@ -56,7 +56,7 @@ async fn draft_before_clarification_survives_later_recovery() {
 
 #[tokio::test]
 async fn unchanged_draft_after_clarification_checkpoints_its_new_score() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
@@ -79,7 +79,7 @@ async fn unchanged_draft_after_clarification_checkpoints_its_new_score() {
 
 #[tokio::test]
 async fn tool_free_recovery_tolerates_intro_prose_around_valid_plan() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("per-file read cap");
     let mut ctx = backing.turn_processing_context();
@@ -106,7 +106,7 @@ async fn tool_free_recovery_tolerates_intro_prose_around_valid_plan() {
 #[tokio::test]
 async fn tool_free_invalid_plan_uses_two_corrections_then_awaits_input() {
     use vtcode_core::exec::events::planning::PlanningOutcome;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("per-file read cap");
     let mut ctx = backing.turn_processing_context();
@@ -151,7 +151,7 @@ async fn tool_free_invalid_plan_uses_two_corrections_then_awaits_input() {
 }
 #[tokio::test]
 async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corrected_plan() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("preview budget exhausted");
     let events_path = backing.enable_harness_emitter();
@@ -283,7 +283,7 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
 }
 #[tokio::test]
 async fn tool_free_unwrapped_plan_is_repaired_instead_of_blocking_immediately() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("per-file read cap");
     let mut ctx = backing.turn_processing_context();
@@ -309,7 +309,7 @@ async fn tool_free_unwrapped_plan_is_repaired_instead_of_blocking_immediately() 
 }
 #[tokio::test]
 async fn untagged_planlike_text_schedules_bounded_repair_instead_of_generic_hint() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
 
@@ -333,7 +333,7 @@ async fn untagged_planlike_text_schedules_bounded_repair_instead_of_generic_hint
 }
 #[tokio::test]
 async fn untagged_planlike_text_with_exhausted_budget_rejects_with_specific_reasons() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.mark_plan_validation_repair_used();
@@ -357,7 +357,7 @@ async fn terminal_planning_rejection_retains_draft_and_rearms_explicit_retry() {
     // renderer lines only (invisible in desktop), and every `retry` re-hit
     // the exhausted budget and terminally rejected the first invalid draft
     // again with the identical error.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
@@ -440,7 +440,7 @@ async fn untagged_valid_plan_promotes_to_approval_handoff() {
     // A tagless draft that already validates must not end with the generic
     // planless hint; it promotes to a plan candidate and reaches the same
     // persist/approval handoff as a tagged draft.
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
 

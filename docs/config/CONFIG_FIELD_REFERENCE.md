@@ -74,7 +74,6 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.max_budget_usd` | `null \| number` | no | `null` | Optional maximum estimated API cost in USD before VT Code stops the session. |
 | `agent.harness.max_parallel_tool_calls` | `integer` | no | `4` | Maximum number of tool calls that may execute concurrently within a single parallel batch. Set to `0` to disable the cap (unlimited concurrency). Default: 4. |
 | `agent.harness.max_revision_rounds` | `integer` | no | `2` | Maximum generator revision rounds after evaluator rejection. |
-| `agent.harness.max_tool_calls_per_turn` | `integer` | no | `120` | Maximum number of tool calls allowed per turn. Defaults to `120`. Set to `0` to disable the cap. |
 | `agent.harness.max_tool_retries` | `integer` | no | `2` | Maximum retries for retryable tool errors |
 | `agent.harness.max_tool_wall_clock_secs` | `integer` | no | `600` | Maximum wall clock time (seconds) for tool execution in a turn |
 | `agent.harness.orchestration_mode` | `string` | no | `"plan_build_evaluate"` | Select the exec/full-auto harness orchestration path. |
@@ -206,7 +205,7 @@ python3 scripts/generate_config_field_reference.py
 | `auth.openrouter.use_oauth` | `boolean` | no | `false` | Whether to use OAuth instead of API key |
 | `automation.full_auto.allowed_tools` | `array` | no | `["exec_command", "write_stdin", "apply_patch", "code_search", "task_tracker", "start_planning", "request_user_input"]` | Allow-list of tools that may execute automatically. |
 | `automation.full_auto.allowed_tools[]` | `string` | no | `-` | - |
-| `automation.full_auto.auto_grant_tool_limits` | `boolean` | no | `true` | Automatically grant tool-loop and session tool-call limit increases while a full-auto run is active, instead of prompting. Grants reuse the same per-prompt increments and absolute hard caps as manual approvals. Set to `false` to restore the interactive prompts. |
+| `automation.full_auto.auto_grant_tool_limits` | `boolean` | no | `true` | Automatically grant tool-loop limit increases while a full-auto run is active, instead of prompting. Grants reuse the same per-prompt increments and absolute hard caps as manual approvals. Set to `false` to restore the interactive prompts. |
 | `automation.full_auto.enabled` | `boolean` | no | `false` | Enable the runtime flag once the workspace is configured for autonomous runs. |
 | `automation.full_auto.max_turns` | `integer` | no | `100` | Maximum number of autonomous agent turns before the exec runner pauses. |
 | `automation.full_auto.profile_path` | `null \| string` | no | `null` | Optional path to a profile describing acceptable behaviors. |
@@ -495,7 +494,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.181.8"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.182.0"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |

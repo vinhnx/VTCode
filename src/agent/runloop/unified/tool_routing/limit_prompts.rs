@@ -4,72 +4,13 @@ use crate::agent::runloop::ui_list;
 use crate::agent::runloop::ui_list::Tone;
 use anyhow::Result;
 use tokio::sync::Notify;
-use vtcode_commons::modal_hints::{APPROVAL_NAVIGATE_DENY, APPROVAL_NAVIGATE_STOP};
+use vtcode_commons::modal_hints::APPROVAL_NAVIGATE_STOP;
 use vtcode_core::config::constants::tool_limits::MAX_TOOL_LOOP_INCREMENT_PER_PROMPT;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_ui::tui::app::{InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission};
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
-
-pub(super) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
-    handle: &InlineHandle,
-    session: &mut S,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    max_limit: usize,
-    agent_name: Option<&str>,
-) -> Result<Option<usize>> {
-    use vtcode_ui::tui::app::InlineListSelection;
-
-    let description_lines = vec![
-        format!("Session tool limit reached: {}", max_limit),
-        format!("Current agent: {}", agent_name.unwrap_or("unknown")),
-        "Grant an increase to retry the pending tool call in this turn.".to_string(),
-        "Deny stops the call; reuse the outputs already gathered for the next response.".to_string(),
-    ];
-
-    let options = vec![
-        ui_list::action(
-            "+100 tool calls",
-            "Increase the session limit by 100",
-            None,
-            Tone::Neutral,
-            Some(InlineListSelection::SessionLimitIncrease(100)),
-        )
-        .with_search_value("increase 100 hundred plus more".to_string()),
-        ui_list::action(
-            "+50 tool calls",
-            "Increase the session limit by 50",
-            None,
-            Tone::Neutral,
-            Some(InlineListSelection::SessionLimitIncrease(50)),
-        )
-        .with_search_value("increase 50 fifty plus more".to_string()),
-        ui_list::group_divider(),
-        ui_list::action(
-            "Deny",
-            "Do not increase limit (stops tool execution)",
-            None,
-            Tone::Neutral,
-            Some(InlineListSelection::ToolApproval(false)),
-        )
-        .with_search_value("deny no exit stop cancel".to_string()),
-    ];
-
-    prompt_limit_increase_modal(
-        handle,
-        session,
-        ctrl_c_state,
-        ctrl_c_notify,
-        "Session Limit Reached".to_string(),
-        description_lines,
-        options,
-        100,
-        APPROVAL_NAVIGATE_DENY,
-    )
-    .await
-}
 
 /// Standard tool-loop grant candidates, largest first. Bounded by
 /// `MAX_TOOL_LOOP_INCREMENT_PER_PROMPT` (50).
@@ -288,19 +229,26 @@ mod tests {
                 InlineEvent::CyclePrimaryAgent,
                 InlineEvent::WebmcpSubmit("continue".into()),
                 InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
-                    InlineListSelection::SessionLimitIncrease(50),
+                    InlineListSelection::SessionLimitIncrease(40),
                 ))),
             ]),
         };
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
-        let result =
-            prompt_session_limit_increase(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify, 100, Some("build"))
-                .await
-                .expect("limit prompt should remain available after deferred input");
+        let result = prompt_tool_loop_limit_increase(
+            &handle,
+            &mut session,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            20,
+            60,
+            Some("build"),
+        )
+        .await
+        .expect("limit prompt should remain available after deferred input");
 
-        assert_eq!(result, Some(50));
+        assert_eq!(result, Some(40));
         let mut shown = 0;
         while let Ok(command) = command_receiver.try_recv() {
             if matches!(command, InlineCommand::ShowTransient { .. }) {
@@ -321,10 +269,17 @@ mod tests {
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
-        let result =
-            prompt_session_limit_increase(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify, 100, Some("build"))
-                .await
-                .expect("cancel should be handled as a denial");
+        let result = prompt_tool_loop_limit_increase(
+            &handle,
+            &mut session,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            20,
+            60,
+            Some("build"),
+        )
+        .await
+        .expect("cancel should be handled as a denial");
 
         assert_eq!(result, None);
     }
@@ -342,10 +297,17 @@ mod tests {
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
-        let result =
-            prompt_session_limit_increase(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify, 100, Some("build"))
-                .await
-                .expect("deny selection should be handled as a denial");
+        let result = prompt_tool_loop_limit_increase(
+            &handle,
+            &mut session,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            20,
+            60,
+            Some("build"),
+        )
+        .await
+        .expect("deny selection should be handled as a denial");
 
         assert_eq!(result, None);
     }

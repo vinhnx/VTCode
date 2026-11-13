@@ -147,6 +147,6 @@ fn session_cleanup_remains_available_while_verification_is_pending() {
     for action in ["terminate", "close"] {
         let args = json!({"session_id": "run-cleanup", "action": action});
 
-        assert!(vtcode_core::tools::tool_intent::is_turn_budget_exempt_call(tools::WRITE_STDIN, &args));
+        assert!(vtcode_core::tools::tool_intent::is_exec_session_cleanup_call(tools::WRITE_STDIN, &args));
     }
 }

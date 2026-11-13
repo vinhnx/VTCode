@@ -152,7 +152,7 @@ fn tracker_adoption_does_not_match_reused_ids_from_another_batch() {
 }
 #[tokio::test]
 async fn informational_answer_with_tool_activity_does_not_resume_workspace_tracker() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_vt_cfg_for_test(vtcode_core::config::loader::VTCodeConfig::default());
     let mut ctx = backing.turn_processing_context();
     let tracker = ctx.tool_registry.get_tool("task_tracker").expect("tracker");
@@ -191,7 +191,7 @@ async fn informational_answer_with_tool_activity_does_not_resume_workspace_track
 }
 #[tokio::test]
 async fn explicit_continuation_resumes_incomplete_workspace_tracker() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_vt_cfg_for_test(vtcode_core::config::loader::VTCodeConfig::default());
     let mut ctx = backing.turn_processing_context();
     ctx.tool_registry
@@ -214,7 +214,7 @@ async fn explicit_continuation_resumes_incomplete_workspace_tracker() {
 }
 #[tokio::test]
 async fn interactive_tracker_adoption_survives_compaction_and_resets_for_a_fresh_request() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_vt_cfg_for_test(vtcode_core::config::loader::VTCodeConfig::default());
     let mut ctx = backing.turn_processing_context();
     ctx.tool_registry.begin_tracker_request(false);

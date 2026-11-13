@@ -311,9 +311,7 @@ pub(super) async fn normalize_recovery_break(
     // Wall-clock-exhausted planning turns must finalize instead of
     // re-forcing the interview (see `dispatch_post_tool_failure`).
     if tool_free_recovery
-        && (ctx.harness_state.wall_clock_exhausted_emitted
-            || ctx.harness_state.wall_clock_exhausted()
-            || ctx.harness_state.tool_budget_exhausted_emitted)
+        && (ctx.harness_state.wall_clock_exhausted_emitted || ctx.harness_state.wall_clock_exhausted())
         && ctx.is_planning_active()
     {
         ctx.plan_session.mark_recovery_exhausted();

@@ -245,7 +245,7 @@ fn post_tool_follow_up_failure_chain_consumes_tool_free_recovery_pass() {
         uni::Message::tool_response("call_1".to_string(), "{\"critical_note\":\"reuse output\"}".to_string()),
     ];
 
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
     // Fresh turn: recovery is inactive.
     assert!(!state.is_recovery_active());
 
@@ -278,7 +278,7 @@ fn post_tool_follow_up_failure_chain_consumes_tool_free_recovery_pass() {
 
 #[tokio::test]
 async fn empty_model_response_after_recovery_is_visible_and_blocked() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_tool_free_recovery_for_test("post-tool follow-up failure");
     let mut history = vec![uni::Message::user("summarize the tool outputs".to_string())];
 
@@ -299,14 +299,13 @@ async fn empty_model_response_after_recovery_is_visible_and_blocked() {
 
 #[tokio::test]
 async fn exhausted_budget_survives_empty_recovery_and_final_publication() {
-    use crate::agent::runloop::unified::run_loop_context::{ToolBudgetExhaustion, ToolWallClockExhaustion};
+    use crate::agent::runloop::unified::run_loop_context::ToolWallClockExhaustion;
 
     for (directive, cause) in [
         ("Tool loop budget exhausted before a final response (60/60). Tools are disabled for one bounded synthesis pass.".to_string(), "Tool loop budget exhausted before a final response (60/60)"),
-        (ToolBudgetExhaustion { used: 32, max: 32, remaining: 0 }.synthesis_directive_message(), "Tool-call budget exhausted for this turn (32/32)"),
         (ToolWallClockExhaustion { max_secs: 73 }.synthesis_directive_message(), "Tool wall-clock budget exhausted for this turn (73s)"),
     ] {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let harness_path = backing.enable_harness_emitter();
         backing.activate_tool_free_recovery_for_test(&directive);
         let mut history = vec![uni::Message::user("continue the pending change".to_string())];
@@ -326,7 +325,7 @@ async fn exhausted_budget_survives_empty_recovery_and_final_publication() {
 
 #[tokio::test]
 async fn planning_budget_survives_failed_synthesis_on_all_final_surfaces() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let path = backing.enable_harness_emitter();
     let cause = "Tool loop budget exhausted before a final response (7/7)";
@@ -353,12 +352,12 @@ async fn planning_budget_survives_failed_synthesis_on_all_final_surfaces() {
 #[tokio::test]
 async fn budget_fallback_keeps_salvage_and_planning_state_without_duplicate_finals() {
     for planning in [false, true] {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         if planning {
             backing.activate_planning_for_test();
         }
         backing.activate_tool_free_recovery_for_test(
-            "Tool-call budget exhausted for this turn (32/32). Tools are disabled for the rest of this turn.",
+            "Tool wall-clock budget exhausted for this turn (600s). Tools are disabled for the rest of this turn.",
         );
         let mut history = vec![
             uni::Message::user("implement the pending step".to_string()),
@@ -371,20 +370,20 @@ async fn budget_fallback_keeps_salvage_and_planning_state_without_duplicate_fina
         assert!(ensure_completed_turn_response(&mut ctx, &mut history, 1).unwrap());
         assert_eq!(history.len(), 2);
         let text = history[1].content.as_text();
-        assert_eq!(text.matches("tool-call budget exhausted").count(), 1);
+        assert_eq!(text.matches("wall-clock budget exhausted").count(), 1);
         assert!(text.contains("Parser updated; validation remains pending."));
         assert_eq!(text.contains("planning remains active"), planning);
         let reason = completed_recovery_fallback_reason(planning, ctx.harness_state);
-        assert!(reason.starts_with("Tool-call budget exhausted for this turn (32/32)."));
+        assert!(reason.starts_with("Tool wall-clock budget exhausted for this turn (600s)."));
         assert_eq!(reason.contains("planning remains active"), planning);
     }
 }
 
 #[tokio::test]
 async fn genuine_synthesis_after_budget_recovery_is_not_rewritten() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_tool_free_recovery_for_test(
-        "Tool-call budget exhausted for this turn (32/32). Tools are disabled for the rest of this turn.",
+        "Tool wall-clock budget exhausted for this turn (600s). Tools are disabled for the rest of this turn.",
     );
     let answer = "The requested analysis is complete; no edits were needed.";
     let mut history =
@@ -568,7 +567,7 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
         }
     }
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_tool_free_recovery_for_test("post-tool follow-up failure");
 
     // Markup with surrounding prose so the salvage step has non-trivial text.
@@ -615,7 +614,7 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
 async fn navigation_blocked_internal_turn_cannot_reopen_execution() {
     use crate::agent::runloop::unified::state::NAVIGATION_RECOVERY_BLOCK_REASON;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     {
         let ctx = backing.turn_processing_context();
         ctx.session_stats.navigation_recovery.arm();

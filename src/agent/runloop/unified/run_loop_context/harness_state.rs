@@ -5,14 +5,9 @@ use super::*;
 mod tracking;
 
 impl HarnessTurnState {
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "Intentional compatibility, platform, or test-only suppression."
-    )]
     pub(crate) fn new(
         run_id: TurnRunId,
         turn_id: TurnId,
-        max_tool_calls: usize,
         max_tool_wall_clock_secs: u64,
         max_tool_retries: u32,
     ) -> Self {
@@ -65,14 +60,8 @@ impl HarnessTurnState {
             stop_hook_active: false,
             seen_task_tracker_create_signatures: HashSet::new(),
             recently_written_files: HashSet::new(),
-            tool_budget_warning_emitted: false,
-            tool_budget_exhausted_emitted: false,
             wall_clock_exhausted_emitted: false,
-            tool_budget_rejection_pending: false,
             wall_clock_directive_pending: false,
-            tool_budget_directive_pending: false,
-            session_limit_grant_directive_pending: false,
-            session_limit_granted: false,
             pending_auto_permission_probe_warning: None,
             recovery_reason: None,
             recovery_prompt_reason: None,
@@ -92,7 +81,6 @@ impl HarnessTurnState {
             blocked_tool_recovery_pending: false,
             blocked_tool_recovery_reason: None,
             blocked_tool_recovery_telemetry: None,
-            max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
             consecutive_relaxed_continuations: 0,
@@ -108,22 +96,6 @@ impl HarnessTurnState {
             &mut self.incomplete_tracker_items_cache,
             probe,
         )
-    }
-
-    pub(crate) fn has_tool_call_budget(&self) -> bool {
-        self.max_tool_calls > 0
-    }
-
-    pub(crate) fn tool_budget_exhausted(&self) -> bool {
-        self.has_tool_call_budget() && self.tool_calls >= self.max_tool_calls
-    }
-
-    pub(crate) fn tool_budget_exhaustion(&self) -> Option<ToolBudgetExhaustion> {
-        self.tool_budget_exhausted().then_some(ToolBudgetExhaustion {
-            used: self.tool_calls,
-            max: self.max_tool_calls,
-            remaining: self.remaining_tool_calls(),
-        })
     }
 
     pub(crate) fn wall_clock_exhausted(&self) -> bool {
@@ -186,14 +158,6 @@ impl HarnessTurnState {
 
     pub(crate) fn record_denied_tool_call(&mut self) {
         self.denied_tool_calls = self.denied_tool_calls.saturating_add(1);
-    }
-
-    pub(crate) fn record_tool_budget_rejection(&mut self) {
-        self.tool_budget_rejection_pending = true;
-    }
-
-    pub(crate) fn take_tool_budget_rejection(&mut self) -> bool {
-        std::mem::take(&mut self.tool_budget_rejection_pending)
     }
 
     pub(crate) fn record_tool_output_metrics(
@@ -405,25 +369,6 @@ impl HarnessTurnState {
         }
     }
 
-    pub(crate) fn record_tool_call_with_warning(&mut self, threshold: f64) -> Option<ToolBudgetWarning> {
-        self.record_tool_call();
-        if !self.should_emit_tool_budget_warning(threshold) {
-            return None;
-        }
-
-        let warning = ToolBudgetWarning {
-            used: self.tool_calls,
-            max: self.max_tool_calls,
-            remaining: self.remaining_tool_calls(),
-        };
-        self.mark_tool_budget_warning_emitted();
-        Some(warning)
-    }
-
-    pub(crate) fn record_tool_call_with_default_warning(&mut self) -> Option<ToolBudgetWarning> {
-        self.record_tool_call_with_warning(TOOL_BUDGET_WARNING_THRESHOLD)
-    }
-
     /// Record that the agent emitted a text-only response in this turn.
     /// This state is authoritative and survives history compaction, including
     /// inline tool boundaries that are not represented in `working_history`.
@@ -454,39 +399,6 @@ impl HarnessTurnState {
 
     pub(crate) fn has_out_of_band_tool_progress(&self) -> bool {
         self.out_of_band_tool_progress
-    }
-
-    pub(crate) fn record_tool_budget_exhaustion_notice(&mut self) -> Option<ToolBudgetExhaustionNotice> {
-        let exhaustion = self.tool_budget_exhaustion()?;
-        let first_notice = !self.tool_budget_exhausted_emitted;
-        if first_notice {
-            self.mark_tool_budget_exhausted_emitted();
-            self.tool_budget_directive_pending = true;
-        }
-        Some(ToolBudgetExhaustionNotice { exhaustion, first_notice })
-    }
-
-    /// Consume the pending tool-call-budget synthesis-directive flag. Returns
-    /// `true` exactly once per turn (after the batch where exhaustion first
-    /// fired). Mirrors `take_wall_clock_directive_pending`.
-    pub(crate) fn take_tool_budget_directive_pending(&mut self) -> bool {
-        std::mem::take(&mut self.tool_budget_directive_pending)
-    }
-
-    /// Record a user-approved session limit increase for the current turn.
-    pub(crate) fn record_session_limit_grant(&mut self) {
-        self.session_limit_granted = true;
-        self.session_limit_grant_directive_pending = true;
-    }
-
-    pub(crate) fn has_session_limit_grant(&self) -> bool {
-        self.session_limit_granted
-    }
-
-    /// Consume the pending model-facing session-limit guidance after the tool
-    /// batch has appended all of its responses.
-    pub(crate) fn take_session_limit_grant_directive_pending(&mut self) -> bool {
-        std::mem::take(&mut self.session_limit_grant_directive_pending)
     }
 
     /// Record a wall-clock-budget rejection for the current tool call.
@@ -534,30 +446,6 @@ impl HarnessTurnState {
 
     pub(crate) fn reset_preflight_failure_streak(&mut self) {
         self.consecutive_preflight_failures = 0;
-    }
-
-    pub(crate) fn tool_budget_usage_ratio(&self) -> f64 {
-        if !self.has_tool_call_budget() {
-            0.0
-        } else {
-            self.tool_calls as f64 / self.max_tool_calls as f64
-        }
-    }
-
-    pub(crate) fn remaining_tool_calls(&self) -> usize {
-        self.max_tool_calls.saturating_sub(self.tool_calls)
-    }
-
-    pub(crate) fn should_emit_tool_budget_warning(&self, threshold: f64) -> bool {
-        self.has_tool_call_budget() && !self.tool_budget_warning_emitted && self.tool_budget_usage_ratio() >= threshold
-    }
-
-    pub(crate) fn mark_tool_budget_warning_emitted(&mut self) {
-        self.tool_budget_warning_emitted = true;
-    }
-
-    pub(crate) fn mark_tool_budget_exhausted_emitted(&mut self) {
-        self.tool_budget_exhausted_emitted = true;
     }
 
     pub(crate) fn activate_recovery(&mut self, reason: impl Into<String>) -> bool {

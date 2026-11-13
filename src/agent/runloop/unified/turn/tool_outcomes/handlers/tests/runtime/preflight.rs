@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn malformed_tool_calls_trip_preflight_circuit_at_configured_cap() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let malformed_call = || {
@@ -70,7 +70,7 @@ async fn malformed_tool_calls_trip_preflight_circuit_at_configured_cap() {
 
 #[tokio::test]
 async fn unrelated_admitted_tool_call_preserves_preflight_circuit_streak() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let malformed_call = || {
@@ -150,7 +150,7 @@ async fn unrelated_admitted_tool_call_preserves_preflight_circuit_streak() {
 
 #[tokio::test]
 async fn batched_preflight_failures_trip_the_same_circuit() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let malformed_call = |id: &str| {
@@ -191,7 +191,7 @@ async fn batched_preflight_failures_trip_the_same_circuit() {
 
 #[tokio::test]
 async fn preflight_circuit_drains_remaining_batch_tool_responses() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let max_failures = {
@@ -257,7 +257,7 @@ async fn prose_blob_tool_names_do_not_trip_circuit_or_skip_valid_siblings() {
     // text as the tool name. Three of those LLM-mistake rejects tripped the
     // preflight circuit and `drain_preflight_circuit_responses` skipped a
     // valid `exec_command` sibling. Name mistakes must not advance the streak.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
 
@@ -341,7 +341,7 @@ async fn cleared_history_stub_echo_is_bounded_by_preflight_circuit() {
     assert!(!super::super::super::is_cleared_tool_input_echo(None));
     assert!(!super::super::super::is_cleared_tool_input_echo(Some(&json!({"cleared": "other"}))));
 
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let cleared_call = |id: &str| {
@@ -383,7 +383,7 @@ async fn cleared_history_stub_echo_is_bounded_by_preflight_circuit() {
         "exec_command cleared echo must name the public `cmd` contract"
     );
 
-    let mut tracker_backing = TestContextBacking::new(4).await;
+    let mut tracker_backing = TestContextBacking::new().await;
     let mut tracker_attempts = LoopTracker::new();
     let mut tracker_files = BTreeSet::new();
     let mut tracker_ctx = tracker_backing.turn_processing_context();
@@ -421,7 +421,7 @@ async fn exec_command_missing_command_correction_names_cmd_contract() {
     // UNIFIED_EXEC validation reports `command`. The correction must name the
     // public `cmd` contract with `command` as alias, not just repeat the
     // internal name.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let mut ctx = backing.turn_processing_context();
@@ -461,7 +461,7 @@ async fn preflight_circuit_does_not_block_approved_plan_execution() {
     // `plan_approved_execution_pending`, so the session loop silently dropped
     // the approved build and the agent could not continue. The fix arms a
     // bounded tool-free recovery pass instead, returning `Continue`.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let malformed_call = || {
@@ -525,7 +525,7 @@ async fn preflight_circuit_does_not_block_approved_plan_execution() {
 async fn flush_preflight_circuit_recovery_is_idempotent_and_arms_tool_free_mode() {
     // The flush must be safe to call multiple times (dispatch calls it at
     // several exit points) and must arm request-only tool-free recovery once.
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
 
     // Arming without flushing must not push the directive.
@@ -601,7 +601,7 @@ fn policy_preflight_feedback_does_not_recommend_json_repair() {
 
 #[tokio::test]
 async fn planning_preflight_recovery_requires_plan_artifact() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.arm_preflight_circuit_recovery();
@@ -617,7 +617,7 @@ async fn planning_preflight_recovery_requires_plan_artifact() {
 
 #[tokio::test]
 async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
-    let mut backing = TestContextBacking::new(2).await;
+    let mut backing = TestContextBacking::new().await;
     backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
@@ -668,7 +668,7 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
 
 #[tokio::test]
 async fn active_primary_agent_policy_blocks_hallucinated_denied_tool_call() {
-    let mut backing = TestContextBacking::new(2).await;
+    let mut backing = TestContextBacking::new().await;
     let mut spec = test_primary_agent_spec("reader");
     spec.tools = Some(vec![tool_names::READ_FILE.to_string()]);
     spec.disallowed_tools = vec![tool_names::READ_FILE.to_string()];
@@ -693,7 +693,7 @@ async fn active_primary_agent_policy_blocks_hallucinated_denied_tool_call() {
 
 #[tokio::test]
 async fn invalid_preflight_arguments_do_not_trip_blocked_tool_guard() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     let mut ctx = backing.turn_processing_context();
 

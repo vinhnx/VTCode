@@ -44,9 +44,6 @@ use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::turn::primary_agent_runtime::{
     PrimaryAgentRuntimeSyncContext, sync_primary_agent_permissions, sync_primary_agent_runtime,
 };
-use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    effective_max_tool_calls_for_approved_plan_execution, resolve_safety_tool_call_limits,
-};
 
 /// Mutable plan-approval state threaded through the execution handoff.
 pub(super) struct PlanApprovalGate<'a> {
@@ -77,7 +74,6 @@ pub(super) struct PlanApprovalGate<'a> {
     pub safety_validator: &'a Arc<ToolCallSafetyValidator>,
     pub harness_emitter: &'a Option<HarnessEventEmitter>,
     pub next_checkpoint_turn: usize,
-    pub max_tool_calls_per_turn: usize,
     pub max_tool_wall_clock_secs: u64,
     pub target: PlanExecutionTarget,
 }
@@ -124,7 +120,6 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
         safety_validator,
         harness_emitter,
         next_checkpoint_turn,
-        max_tool_calls_per_turn,
         max_tool_wall_clock_secs,
         target,
     } = gate;
@@ -388,14 +383,7 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
         runtime.state.clear_conversation_history();
         context_manager.reset_for_fresh_execution();
         session_stats.reset_for_fresh_execution();
-        let build_tool_limit = effective_max_tool_calls_for_approved_plan_execution(max_tool_calls_per_turn);
-        let max_session_turns = vt_cfg
-            .as_ref()
-            .map(|cfg| cfg.agent.max_conversation_turns)
-            .unwrap_or(vtcode_config::constants::defaults::DEFAULT_MAX_CONVERSATION_TURNS);
-        let (max_per_turn, max_per_session) =
-            resolve_safety_tool_call_limits(build_tool_limit, max_session_turns, false);
-        safety_validator.reset_for_fresh_execution(max_per_turn, max_per_session);
+        safety_validator.reset_for_fresh_execution();
         crate::agent::runloop::unified::planning_workflow::emit_context_reset(
             harness_emitter.as_ref(),
             turn_run_id.0.clone(),

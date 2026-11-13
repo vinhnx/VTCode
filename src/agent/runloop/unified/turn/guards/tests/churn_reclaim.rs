@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_completes() {
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_loop_limit(tool_names::CODE_SEARCH, 2);
     let seeded_args = json!({"query":"Result","path":"src"});
     assert!(backing.record_tool_call(tool_names::CODE_SEARCH, &seeded_args).is_none());
@@ -40,7 +40,7 @@ async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_t
 }
 #[tokio::test]
 async fn early_low_signal_search_churn_schedules_recovery_before_turn_window() {
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -69,7 +69,7 @@ async fn early_low_signal_search_churn_schedules_recovery_before_turn_window() {
 }
 #[tokio::test]
 async fn early_balancer_recovery_is_plan_aware_in_planning_workflow() {
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.activate_planning_for_test();
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -97,7 +97,7 @@ async fn early_balancer_recovery_is_plan_aware_in_planning_workflow() {
 }
 #[tokio::test]
 async fn early_balancer_recovery_stays_generic_outside_planning_workflow() {
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -127,7 +127,7 @@ async fn early_balancer_trips_on_same_root_listings_below_low_signal_limit() {
     // listings stay below the low-signal cap but still trip recovery
     // through the coarse-listing branch once consecutive navigations
     // reach the limit. The armed reason names the looped family.
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -162,7 +162,7 @@ async fn diverse_root_listings_stay_below_early_recovery() {
     // Scans of distinct trees are legitimate exploration: three
     // same-binary listings of different roots must not schedule the early
     // recovery pass, because the coarse family is scoped by search root.
-    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -188,7 +188,7 @@ async fn balancer_does_not_reclaim_an_already_pending_recovery() {
     // state. It must not announce a second "scheduling" pass or overwrite
     // the armed reason — `activate_recovery` reports the no-op and the
     // messaging stays silent.
-    let mut backing = TestTurnProcessingBacking::new(120).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("blocked-tool recovery");
     let mut tracker = LoopTracker::new();
@@ -220,7 +220,7 @@ async fn balancer_does_not_reclaim_an_already_pending_recovery() {
 }
 #[tokio::test]
 async fn retained_search_results_converge_before_the_loop_budget() {
-    let mut backing = TestTurnProcessingBacking::new(32).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
     let hit = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {

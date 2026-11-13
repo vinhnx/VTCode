@@ -163,6 +163,7 @@ impl ConfigManager {
         table.remove("project_doc_fallback_filenames");
         Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
         Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools", "auto_permission"]);
+        Self::remove_path_and_prune_empty_parents(table, &["agent", "harness", "max_tool_calls_per_turn"]);
     }
 
     fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) {

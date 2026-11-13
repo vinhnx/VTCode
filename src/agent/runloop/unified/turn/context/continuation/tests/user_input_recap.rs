@@ -72,7 +72,7 @@ fn verified_recap_with_trailing_offer_does_not_continue() {
 fn tracker_incomplete_override_continues_status_recaps() {
     use super::apply_tracker_continuation_override;
     let history: Vec<uni::Message> = Vec::new();
-    let recap = "## Status\nBlocked by turn budget. Next step on resume: read design/diff.rs.";
+    let recap = "## Status\nBlocked by wall-clock budget. Next step on resume: read design/diff.rs.";
     let base = evaluate_interim_text_continuation(true, false, &history, recap, 0);
     assert!(!base.should_continue);
     let overridden = apply_tracker_continuation_override(base, true, false, recap);
@@ -110,7 +110,7 @@ fn tracker_incomplete_override_continues_status_recaps() {
     }
 
     // Budget-like "blocked by …" still continues when tracker work remains.
-    let budget = "## Status\nBlocked by turn budget. Next step: read design/diff.rs.";
+    let budget = "## Status\nBlocked by wall-clock budget. Next step: read design/diff.rs.";
     let budget_over = apply_tracker_continuation_override(
         evaluate_interim_text_continuation(true, false, &history, budget, 0),
         true,
@@ -120,9 +120,9 @@ fn tracker_incomplete_override_continues_status_recaps() {
     assert!(budget_over.should_continue);
     assert_eq!(budget_over.reason, "tracker_incomplete_continuation");
 
-    // Tool-loop / tool-budget recaps continue even with "blocked by".
+    // Tool-loop / wall-clock recaps continue even with "blocked by".
     for recap in [
-        "## Status\nBlocked by turn tool budget. Next step: patch FileChangeItem.",
+        "## Status\nBlocked by tool loop budget. Next step: patch FileChangeItem.",
         "## Status\nTool loop budget exhausted this turn. Next: run cargo check.",
         "Task 3 mid-flight — hit the per-file read cap before editing. Next: one targeted read then patch.",
     ] {
@@ -181,7 +181,7 @@ fn tracker_incomplete_override_continues_status_recaps() {
     // past the anti-blind gate, even when full-auto already continued.
     for recap in [
         "Turn blocked after repeated unverified assistant responses; verification is still pending.",
-        "## Status\nBlocked by turn budget. Verification is still pending; run cargo check --locked.",
+        "## Status\nBlocked by wall-clock budget. Verification is still pending; run cargo check --locked.",
         "Anti-blind checkpoint: verification is still pending before further edits.",
     ] {
         let base = evaluate_interim_text_continuation(true, false, &history, recap, 0);
@@ -195,7 +195,7 @@ fn tracker_incomplete_override_continues_status_recaps() {
     // when the base classifier would have stopped.
     for recap in [
         "## Status\nTask 7 blocked by the turn's preview budget before I could read docs.",
-        "## Status\nTool budget ran out after evidence gathering; next step is the patch.",
+        "## Status\nWall-clock budget ran out after evidence gathering; next step is the patch.",
         "Task 3 mid-flight — hit the per-file read cap before editing.",
         "Fix 1 partially applied, needs verification; continuing with the remaining checks now.",
     ] {
@@ -223,7 +223,7 @@ fn recoverable_status_recap_vocabulary_matches_outer_classifier() {
     use vtcode_core::core::agent::completion::recoverable_status_recap_phrasing;
     for phrase in [
         "blocked by the turn's preview budget",
-        "tool budget ran out",
+        "wall-clock budget ran out",
         "per-file read cap",
         "preview budget exhausted",
         "tool loop budget exhausted",

@@ -312,7 +312,7 @@ async fn repeated_tool_enabled_retry_failure_returns_blocked_handoff() {
         uni::Message::tool_response("call-1".to_string(), "{\"ok\":true}".to_string()),
     ];
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 4, 600, 0);
+        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 600, 0);
     let err = transient_err();
 
     let first = dispatch_post_tool_failure(PostToolRecoveryContext {
@@ -359,7 +359,7 @@ async fn dispatch_recovers_plan_follow_up_after_inline_copilot_interview() {
     let mut renderer = AnsiRenderer::stdout();
     let mut working_history = vec![uni::Message::user("plan the requested runtime fix".to_string())];
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 4, 600, 0);
+        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 600, 0);
     harness_state.record_out_of_band_tool_progress();
     harness_state.switch_to_tool_free_recovery();
     assert!(harness_state.consume_recovery_pass());
@@ -396,7 +396,7 @@ async fn planning_synthesis_transient_failure_gets_one_outer_retry() {
         uni::Message::tool_response("call-1".to_string(), "{\"evidence\":\"startup path\"}".to_string()),
     ];
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 4, 600, 0);
+        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 600, 0);
     let mut plan_session = PlanningWorkflowSessionState::default();
     let err = transient_err();
 
@@ -500,7 +500,7 @@ async fn dispatch_marks_recovery_exhausted_when_wall_clock_exhausted_in_plan_mod
     let mut renderer = AnsiRenderer::stdout();
     let mut working_history: Vec<uni::Message> = Vec::new();
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 4, 600, 0);
+        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 600, 0);
     harness_state.wall_clock_exhausted_emitted = true;
     let mut plan_session = PlanningWorkflowSessionState::default();
     let err = transient_err();
@@ -910,7 +910,7 @@ async fn recovery_fallback_marks_explicit_fallback_flag() {
 
     let mut working_history = vec![uni::Message::user("summarize".to_string())];
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 4, 600, 0);
+        HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 600, 0);
     assert!(!harness_state.final_response_was_fallback());
 
     let result = complete_turn_after_failed_tool_free_recovery_with_events(

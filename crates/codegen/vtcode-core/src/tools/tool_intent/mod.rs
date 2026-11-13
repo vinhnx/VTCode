@@ -24,8 +24,8 @@ pub use activity::{
 pub use classify::{
     builtin_tool_behavior, canonical_command_session_tool_name, classify_tool_intent, is_command_run_tool,
     is_command_run_tool_call, is_command_session_tool, is_command_tool, is_edited_file_conflict_guarded_call,
-    is_exec_session_cleanup_call, is_parallel_safe_call, is_parallel_safe_call_with_intent, is_turn_budget_exempt_call,
-    planning_allowed_actions, remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
+    is_exec_session_cleanup_call, is_parallel_safe_call, is_parallel_safe_call_with_intent, planning_allowed_actions,
+    remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
 };
 pub use readonly::{is_readonly_command_session_command, is_spool_file_read_command};
 pub use types::{ToolBehavior, ToolIntent, ToolIntentClassifier, ToolMutationModel, ToolSurfaceKind};
@@ -55,40 +55,6 @@ mod tests {
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
-    }
-
-    #[test]
-    fn turn_budget_exempt_covers_wait_and_inspect_only() {
-        use super::is_turn_budget_exempt_call;
-
-        // Exec-family wait/inspect calls are exempt.
-        assert!(is_turn_budget_exempt_call(tools::UNIFIED_EXEC, &json!({"action": "wait", "session_id": "run-1"})));
-        assert!(is_turn_budget_exempt_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "inspect", "spool_path": ".vtcode/context/tool_outputs/run-1.txt"})
-        ));
-        assert!(is_turn_budget_exempt_call(tools::WRITE_STDIN, &json!({"action": "wait", "session_id": "run-1"})));
-        assert!(is_turn_budget_exempt_call(tools::EXEC_COMMAND, &json!({"action": "wait", "session_id": "run-1"})));
-
-        // Work-producing exec calls are NOT exempt.
-        assert!(!is_turn_budget_exempt_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "./scripts/check-dev.sh"})
-        ));
-        assert!(!is_turn_budget_exempt_call(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": "run-1"})));
-        assert!(!is_turn_budget_exempt_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "continue", "session_id": "run-1", "input": "y"})
-        ));
-        assert!(!is_turn_budget_exempt_call(tools::UNIFIED_EXEC, &json!({"action": "list"})));
-
-        // Non-exec tools are never exempt, even with matching action strings.
-        assert!(!is_turn_budget_exempt_call(tools::READ_FILE, &json!({"action": "wait", "path": "x.txt"})));
-        assert!(!is_turn_budget_exempt_call(tools::APPLY_PATCH, &json!({"action": "inspect", "input": "..."})));
-        assert!(!is_turn_budget_exempt_call(tools::UNIFIED_FILE, &json!({"action": "read", "path": "x.txt"})));
-
-        // Alias surface names normalize to the canonical exec surface.
-        assert!(is_turn_budget_exempt_call(tools::RUN_PTY_CMD, &json!({"action": "wait", "session_id": "run-1"})));
     }
 
     #[test]

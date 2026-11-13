@@ -18,7 +18,7 @@ async fn retained_evidence_coaching_reaches_next_request_with_tools() {
         update_repetition_tracker(&mut tracker, &result, tools::EXEC_COMMAND, &args);
     }
     let notice = tracker.take_redundant_navigation_guidance().expect("redundancy notice");
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("apply_patch")).await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.push(uni::Message::user("update README".to_string()));
@@ -40,7 +40,7 @@ async fn retained_evidence_coaching_reaches_next_request_with_tools() {
 
 #[tokio::test]
 async fn parallel_tool_replies_retain_interleaved_coaching() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("apply_patch")).await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.push(uni::Message::user("update README".to_string()));
@@ -86,7 +86,7 @@ async fn parallel_tool_replies_retain_interleaved_coaching() {
 
 #[tokio::test]
 async fn openai_responses_replays_full_structured_history_without_suffixing() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let prior_messages = vec![
         uni::Message::user("hello".to_string()),
         uni::Message::assistant("hi".to_string()),
@@ -114,7 +114,7 @@ async fn openai_responses_replays_full_structured_history_without_suffixing() {
 }
 #[tokio::test]
 async fn compatible_provider_responses_keeps_full_history_without_previous_response_id() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let prior_messages = vec![uni::Message::user("hello".to_string())];
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.extend(prior_messages.clone());
@@ -140,7 +140,7 @@ async fn compatible_provider_responses_keeps_full_history_without_previous_respo
 }
 #[tokio::test]
 async fn clean_request_shares_messages_with_continuation_history() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.push(uni::Message::user("hello".to_string()));
 
@@ -153,7 +153,7 @@ async fn clean_request_shares_messages_with_continuation_history() {
 }
 #[tokio::test]
 async fn first_call_composition_captures_on_first_build_only() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.push(uni::Message::user("hello".to_string()));
 
@@ -186,7 +186,7 @@ async fn first_call_composition_captures_on_first_build_only() {
 }
 #[tokio::test]
 async fn non_openai_responses_chain_keeps_full_history() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let prior_messages = vec![uni::Message::user("hello".to_string())];
     let mut ctx = backing.turn_processing_context();
     ctx.working_history.extend(prior_messages.clone());

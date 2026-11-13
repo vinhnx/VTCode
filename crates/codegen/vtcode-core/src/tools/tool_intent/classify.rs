@@ -150,28 +150,6 @@ pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     }
 }
 
-/// Returns `true` for control-plane exec calls that should be exempt from the
-/// per-turn tool-call budget.
-///
-/// These calls coordinate long-running commands instead of producing new
-/// execution work:
-/// - blocking `wait` on an exec session (no model round-trips while waiting),
-/// - bounded `inspect` of a running session or a spooled output file.
-///
-/// A long build (e.g. `./scripts/check-dev.sh`) must not consume the budget
-/// its follow-up verification work needs, so waiting on it and reading its
-/// results should not charge the same ledger as fresh mutations. The
-/// exemption is still bounded by `MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN` and
-/// ordinary loop/rate guards keep applying.
-pub fn is_turn_budget_exempt_call(tool_name: &str, args: &Value) -> bool {
-    if canonical_command_session_tool_name(tool_name).is_none() {
-        return false;
-    }
-    command_session_action_is(args, "wait")
-        || command_session_action_is(args, "inspect")
-        || is_exec_session_cleanup_call(tool_name, args)
-}
-
 /// Cleanup stops or releases an owned execution session, never starts work.
 pub fn is_exec_session_cleanup_call(tool_name: &str, args: &Value) -> bool {
     tool_name == tools::WRITE_STDIN

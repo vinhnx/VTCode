@@ -163,7 +163,7 @@ fn build_exec_response_steers_still_running_to_wait_action() {
     assert!(hint.contains("write_stdin"));
     assert!(hint.contains("next_wait_args"));
     assert!(hint.contains("no model round-trips"));
-    assert!(hint.contains("exempt from the per-turn tool-call budget"));
+    assert!(hint.contains("excluded from the per-turn wall-clock budget"));
     assert!(hint.contains("next_continue_args"));
     assert_eq!(response["is_exited"], false);
     assert_eq!(response["process_id"], "run-abc");

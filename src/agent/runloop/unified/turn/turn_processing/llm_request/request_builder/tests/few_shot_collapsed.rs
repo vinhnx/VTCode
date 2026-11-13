@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn few_shot_context_is_persisted_once_and_replayed_append_only() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     write_patch_edit_few_shot_example(backing.workspace_path());
     let mut ctx = backing.turn_processing_context();
     ctx.working_history
@@ -65,7 +65,7 @@ async fn few_shot_context_is_persisted_once_and_replayed_append_only() {
 }
 #[tokio::test]
 async fn collapsed_output_notice_is_append_only_across_tool_rounds() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut config = VTCodeConfig::default();
     config.agent.provider = "anthropic".to_string();
     let config = Box::leak(Box::new(config));

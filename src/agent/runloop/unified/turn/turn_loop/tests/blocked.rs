@@ -173,7 +173,7 @@ async fn context_capacity_blocked_recovery_publishes_one_actionable_handoff() {
     }
 
     let requests = Arc::new(AtomicUsize::new(0));
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
     backing.set_provider(Box::new(ContextCapacityProvider { requests: requests.clone() }));
 
@@ -200,7 +200,7 @@ async fn refused_turn_renders_refusal_notice_over_stale_final_answer() {
     let stale_final = "Here is the answer to the earlier part of this turn.";
     let notice = "The model declined this request (category: cyber). \
                   The request was not retried; rephrase it or switch models.";
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
 
     let mut history = vec![
@@ -244,7 +244,7 @@ async fn refused_turn_renders_refusal_notice_over_stale_final_answer() {
 #[tokio::test]
 async fn blocked_recovery_does_not_duplicate_prior_harness_agent_message() {
     let prior_text = "A streamed progress message was already published.";
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
     backing.emit_harness_assistant_message_for_test(prior_text);
 
@@ -308,7 +308,7 @@ async fn blocked_recovery_does_not_duplicate_prior_harness_agent_message() {
 async fn finalize_turn_blocked_event_populates_fuse_telemetry() {
     use crate::agent::runloop::unified::run_loop_context::BlockedToolRecoveryTelemetry;
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
 
     let history = vec![uni::Message::user("resume the request".to_string())];
@@ -357,7 +357,7 @@ async fn finalize_turn_blocked_event_populates_fuse_telemetry() {
 
 #[tokio::test]
 async fn finalize_turn_blocked_event_without_fuse_keeps_legacy_fields() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
 
     let history = vec![uni::Message::user("resume the request".to_string())];
@@ -402,7 +402,7 @@ async fn finalize_turn_blocked_event_without_fuse_keeps_legacy_fields() {
 async fn finalize_turn_closes_streamed_items_that_never_reached_the_pipeline() {
     use crate::agent::runloop::unified::run_loop_context::StreamedToolCallItem;
 
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let harness_path = backing.enable_harness_emitter();
 
     let history = vec![uni::Message::user("resume the request".to_string())];
@@ -467,7 +467,7 @@ async fn completed_and_interrupted_turns_close_unexecuted_calls_without_error_ou
         TurnLoopResult::Completed { plan_approved_execution_pending: false },
         TurnLoopResult::Cancelled,
     ] {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let path = backing.enable_harness_emitter();
         let mut ctx = backing.turn_loop_context();
         ctx.harness_state.remember_streamed_tool_call_items([(

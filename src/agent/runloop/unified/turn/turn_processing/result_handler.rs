@@ -141,7 +141,7 @@ impl TurnProcessingContext<'_> {
         turn_modified_files: &BTreeSet<PathBuf>,
     ) -> Result<PendingVerificationTextOutcome> {
         repeated_tool_attempts.mark_verification_pending();
-        if let Some(reason) = self.verification_execution_blocker(repeated_tool_attempts, turn_modified_files) {
+        if let Some(reason) = self.verification_execution_blocker(turn_modified_files) {
             return Ok(PendingVerificationTextOutcome::Block { reason });
         }
         // A tool-free answer is a completion attempt. Editing and inspection
@@ -154,11 +154,7 @@ impl TurnProcessingContext<'_> {
         })
     }
 
-    fn verification_execution_blocker(
-        &self,
-        tracker: &helpers::LoopTracker,
-        turn_modified_files: &BTreeSet<PathBuf>,
-    ) -> Option<String> {
+    fn verification_execution_blocker(&self, turn_modified_files: &BTreeSet<PathBuf>) -> Option<String> {
         if self.harness_state.recovery_is_tool_free() {
             return Some(
                 "Verification is still pending: tools are disabled for recovery synthesis. No verifier was scheduled."
@@ -168,15 +164,7 @@ impl TurnProcessingContext<'_> {
         let budget_notice = self
             .harness_state
             .wall_clock_budget_exhaustion()
-            .map(|budget| budget.synthesis_directive_message())
-            .or_else(|| {
-                tracker
-                    .pending_verifier_session_id
-                    .is_none()
-                    .then(|| self.harness_state.tool_budget_exhaustion())
-                    .flatten()
-                    .map(|budget| budget.synthesis_directive_message())
-            })?;
+            .map(|budget| budget.synthesis_directive_message())?;
         let cause = crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(&budget_notice)?;
         // Keep `{cause}.` first: budget classifiers match on that prefix.
         // Only claim unverified changes when the turn actually mutated files;
@@ -202,9 +190,7 @@ impl TurnProcessingContext<'_> {
     ) -> Option<String> {
         let max_failures = helpers::verification_max_consecutive_failures(self.vt_cfg);
         if helpers::verification_auto_execute_enabled(self.vt_cfg)
-            && self
-                .verification_execution_blocker(repeated_tool_attempts, turn_modified_files)
-                .is_none()
+            && self.verification_execution_blocker(turn_modified_files).is_none()
             && self.session_stats.verification_consecutive_failures() < max_failures
             && repeated_tool_attempts.should_auto_execute_verifier()
         {
@@ -308,7 +294,7 @@ pub(crate) async fn execute_harness_auto_verification(
         repeated_tool_attempts.reset_verifier_wait_polls();
     }
 
-    if let Some(reason) = ctx.verification_execution_blocker(repeated_tool_attempts, turn_modified_files) {
+    if let Some(reason) = ctx.verification_execution_blocker(turn_modified_files) {
         return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }));
     }
     let pending_session = repeated_tool_attempts.pending_verifier_session_id.clone();

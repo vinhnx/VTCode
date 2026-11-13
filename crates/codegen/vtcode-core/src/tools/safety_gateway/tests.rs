@@ -143,14 +143,6 @@ async fn test_rate_limiting() {
     assert!(decision.reason().unwrap().contains("Rate limit"));
 }
 
-#[test]
-fn safety_gateway_defaults_use_shared_tool_call_budget() {
-    let config = SafetyGatewayConfig::default();
-
-    assert_eq!(config.max_per_turn, DEFAULT_MAX_TOOL_CALLS_PER_TURN);
-    assert_eq!(config.max_per_session, DEFAULT_SAFETY_MAX_TOOL_CALLS_PER_SESSION);
-}
-
 #[tokio::test]
 async fn test_atomic_check_and_record_rate_limited() {
     let config = SafetyGatewayConfig { rate_limit_per_second: 2, ..Default::default() };
@@ -371,164 +363,26 @@ async fn test_apply_patch_patch_field_dotfile_protection_requires_approval() {
 }
 
 #[tokio::test]
-async fn test_stats_tracking() {
-    let gateway = SafetyGateway::new();
-    gateway.preapprove("test_tool");
-    gateway.record_execution();
-    gateway.record_execution();
-
-    let stats = gateway.get_stats();
-    assert_eq!(stats.turn_count, 2);
-    assert_eq!(stats.session_count, 2);
-    assert_eq!(stats.preapproved_count, 1);
-}
-
-#[tokio::test]
-async fn test_start_turn_resets_counters() {
-    let gateway = SafetyGateway::new();
-
-    gateway.record_execution();
-    gateway.record_execution();
-
-    let stats_before = gateway.get_stats();
-    assert_eq!(stats_before.turn_count, 2);
-
-    gateway.start_turn();
-
-    let stats_after = gateway.get_stats();
-    assert_eq!(stats_after.turn_count, 0);
-    assert_eq!(stats_after.session_count, 2); // Session count preserved
-}
-
-#[tokio::test]
-async fn test_increase_session_limit_updates_limit() {
-    let gateway = SafetyGateway::new();
-    gateway.set_limits(10, 1);
-    let ctx = make_ctx();
-
-    let first = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
-    assert!(first.decision.is_allowed());
-
-    let second = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
-    assert!(second.decision.is_denied());
-
-    gateway.increase_session_limit(1);
-
-    let third = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
-    assert!(third.decision.is_allowed());
-}
-
-#[tokio::test]
-async fn control_plane_wait_does_not_consume_per_turn_budget() {
-    let config = SafetyGatewayConfig { max_per_turn: 1, ..Default::default() };
+async fn gateway_admits_many_calls_without_turn_or_session_caps() {
+    // Regression: the removed per-turn/session call-count budgets must not
+    // deny ordinary or control-plane calls. Only short-window rate limits
+    // (disabled here) and policy checks can deny.
+    let config = SafetyGatewayConfig { enforce_rate_limits: false, ..Default::default() };
     let gateway = SafetyGateway::with_config(config);
     let ctx = make_ctx();
 
-    // The one ordinary slot is consumed by a real work call.
-    let work = gateway
-        .check_and_record(&ctx, "read_file", &serde_json::json!({"path": "x.txt"}))
-        .await;
-    assert!(work.decision.is_allowed());
-
-    // A blocking wait is control-plane: it must not be denied by the
-    // per-turn counter even though the budget is exhausted.
+    for _ in 0..200 {
+        let call = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
+        assert!(call.decision.is_allowed());
+    }
     let wait = gateway
         .check_and_record(&ctx, tools::UNIFIED_EXEC, &serde_json::json!({"action": "wait", "session_id": "run-1"}))
         .await;
-    assert!(wait.decision.is_allowed(), "wait must bypass the per-turn work budget");
-
-    // Ordinary calls remain denied while the turn budget stays exhausted.
-    let denied = gateway
-        .check_and_record(&ctx, "read_file", &serde_json::json!({"path": "y.txt"}))
-        .await;
-    assert!(denied.decision.is_denied());
-}
-
-#[tokio::test]
-async fn control_plane_calls_are_bounded_by_their_own_cap() {
-    let config = SafetyGatewayConfig {
-        max_per_turn: 1_000,
-        enforce_rate_limits: false,
-        ..Default::default()
-    };
-    let gateway = SafetyGateway::with_config(config);
-    let ctx = make_ctx();
-
-    for _ in 0..MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN {
-        let call = gateway
-            .check_and_record(&ctx, tools::UNIFIED_EXEC, &serde_json::json!({"action": "wait", "session_id": "run-1"}))
-            .await;
-        assert!(call.decision.is_allowed());
-    }
-
-    // The exempt bucket has its own ceiling; the next wait is denied.
-    let overflow = gateway
-        .check_and_record(&ctx, tools::UNIFIED_EXEC, &serde_json::json!({"action": "wait", "session_id": "run-1"}))
-        .await;
-    assert!(overflow.decision.is_denied());
-    assert!(overflow.decision.reason().is_some_and(|reason| reason.contains("limit")));
-}
-
-#[tokio::test]
-async fn control_plane_calls_still_consume_session_and_rate_budget() {
-    // A tiny session fuse must still trip on control-plane calls.
-    let config = SafetyGatewayConfig {
-        max_per_turn: 1_000,
-        max_per_session: 2,
-        enforce_rate_limits: false,
-        ..Default::default()
-    };
-    let gateway = SafetyGateway::with_config(config);
-    let ctx = make_ctx();
-
-    for _ in 0..2 {
-        let call = gateway
-            .check_and_record(&ctx, tools::UNIFIED_EXEC, &serde_json::json!({"action": "wait", "session_id": "run-1"}))
-            .await;
-        assert!(call.decision.is_allowed());
-    }
-    let third = gateway
-        .check_and_record(&ctx, tools::UNIFIED_EXEC, &serde_json::json!({"action": "wait", "session_id": "run-1"}))
-        .await;
-    assert!(third.decision.is_denied(), "session fuse must bound control-plane calls");
-}
-
-#[tokio::test]
-async fn start_turn_resets_control_plane_counter() {
-    let config = SafetyGatewayConfig {
-        max_per_turn: 1_000,
-        enforce_rate_limits: false,
-        ..Default::default()
-    };
-    let gateway = SafetyGateway::with_config(config);
-    let ctx = make_ctx();
-    let wait_args = serde_json::json!({"action": "wait", "session_id": "run-1"});
-
-    for _ in 0..MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN {
-        assert!(
-            gateway
-                .check_and_record(&ctx, tools::UNIFIED_EXEC, &wait_args)
-                .await
-                .decision
-                .is_allowed()
-        );
-    }
-    assert!(
-        gateway
-            .check_and_record(&ctx, tools::UNIFIED_EXEC, &wait_args)
-            .await
-            .decision
-            .is_denied()
-    );
+    assert!(wait.decision.is_allowed());
 
     gateway.start_turn();
+    gateway.reset_for_fresh_execution();
 
-    assert!(
-        gateway
-            .check_and_record(&ctx, tools::UNIFIED_EXEC, &wait_args)
-            .await
-            .decision
-            .is_allowed(),
-        "a fresh turn must refill the control-plane bucket"
-    );
+    let call = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
+    assert!(call.decision.is_allowed());
 }

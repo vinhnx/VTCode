@@ -1,5 +1,5 @@
 use super::{
-    CopilotRuntimeHost, append_session_limit_grant_guidance, auto_approve_builtin_permission, bounded_output_evidence,
+    CopilotRuntimeHost, auto_approve_builtin_permission, bounded_output_evidence,
     copilot_failure_response_with_diagnosis, copilot_tool_result_text, denied_tool_response, filter_copilot_tools,
     harness_call_item_id, map_builtin_permission_prompt_decision, summarize_permission_request,
 };
@@ -181,41 +181,6 @@ fn interrupted_tool_permission_returns_failure_response() {
 }
 
 #[test]
-fn copilot_grant_guidance_is_appended_once_to_tool_response() {
-    let response = CopilotToolCallResponse::Success(vtcode_core::copilot::CopilotToolCallSuccess {
-        text_result_for_llm: "tool output".to_string(),
-    });
-
-    let guided = append_session_limit_grant_guidance(response, true);
-    let CopilotToolCallResponse::Success(guided) = guided else {
-        panic!("expected a success response");
-    };
-    assert!(guided.text_result_for_llm.starts_with("tool output\n\n"));
-    assert_eq!(
-        guided
-            .text_result_for_llm
-            .matches("Session tool-call limit increased by the user.")
-            .count(),
-        1
-    );
-
-    let unchanged = append_session_limit_grant_guidance(
-        CopilotToolCallResponse::Failure(vtcode_core::copilot::CopilotToolCallFailure {
-            text_result_for_llm: "denied".to_string(),
-            error: "denied".to_string(),
-        }),
-        false,
-    );
-    assert_eq!(
-        unchanged,
-        CopilotToolCallResponse::Failure(vtcode_core::copilot::CopilotToolCallFailure {
-            text_result_for_llm: "denied".to_string(),
-            error: "denied".to_string(),
-        })
-    );
-}
-
-#[test]
 fn copilot_failure_response_uses_bounded_untrusted_evidence() {
     let output = json!({
         "command": "cargo check",
@@ -305,7 +270,7 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
         crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
     let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("harness emitter");
 
     let mut runtime_host = CopilotRuntimeHost::new(
@@ -333,10 +298,8 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
         None,
         None,
         true,
-        false,
         Some(&emitter),
         "turn-test-step-1".to_string(),
-        None,
     );
 
     runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
@@ -417,7 +380,7 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
         crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
 
     let mut runtime_host = CopilotRuntimeHost::new(
         &mut tool_registry,
@@ -444,10 +407,8 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
         None,
         None,
         true,
-        false,
         None,
         "turn-test-step-1".to_string(),
-        None,
     );
 
     runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
@@ -512,7 +473,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
     let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("harness emitter");
 
     let mut runtime_host = CopilotRuntimeHost::new(
@@ -540,10 +501,8 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         None,
         None,
         true,
-        false,
         Some(&emitter),
         "turn-test-step-1".to_string(),
-        None,
     );
     let response = runtime_host
         .handle_terminal_create(CopilotTerminalCreateRequest {
@@ -644,7 +603,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
     safety_validator.start_turn();
     let traj = TrajectoryLogger::new(&workspace);
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
     let tools = Arc::new(vec![ToolDefinition::function(
         "exec_command".to_string(),
         "Run a VT Code command".to_string(),
@@ -677,10 +636,8 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
         None,
         Some(&tools),
         true,
-        false,
         None,
         "turn-test-step-1".to_string(),
-        None,
     );
     let response = runtime_host
         .handle_vtcode_tool_call(
@@ -748,7 +705,7 @@ async fn copilot_allows_mutating_tool_calls_while_completion_verification_is_pen
     safety_validator.start_turn();
     let traj = TrajectoryLogger::new(temp.path());
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 10, 60, 0);
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 60, 0);
     harness_state.record_assistant_text_response();
     harness_state.record_assistant_text_response();
     let tools = Arc::new(vec![
@@ -796,10 +753,8 @@ async fn copilot_allows_mutating_tool_calls_while_completion_verification_is_pen
         Some(suppress_output_signal),
         Some(&tools),
         true,
-        false,
         None,
         "turn-test-step-1".to_string(),
-        None,
     );
     let response = runtime_host
         .handle_vtcode_tool_call(

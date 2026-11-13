@@ -761,7 +761,7 @@ mod tests {
         use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
         use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{LoopTracker, update_repetition_tracker};
 
-        let mut backing = super::super::tests::TestContextBacking::new(4).await;
+        let mut backing = super::super::tests::TestContextBacking::new().await;
         let mut ctx = backing.turn_processing_context();
         let mut tracker = LoopTracker::new();
         let args = serde_json::json!({"cmd":"sed -n '2,3p' README.md"});
@@ -832,7 +832,7 @@ mod tests {
 
     #[tokio::test]
     async fn prevalidated_call_is_rejected_when_prior_group_exhausted_wall_clock() {
-        let mut backing = super::super::tests::TestContextBacking::new(4).await;
+        let mut backing = super::super::tests::TestContextBacking::new().await;
         let mut ctx = backing.turn_processing_context();
         let call = validated_call("later-call", tools::READ_FILE, true, true, serde_json::json!({"path":"sample.txt"}));
         ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(59);

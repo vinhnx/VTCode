@@ -158,8 +158,6 @@ impl<'a> TurnProcessingContext<'a> {
             && proposed_plan.is_none()
             && !self.harness_state.wall_clock_exhausted()
             && !self.harness_state.wall_clock_exhausted_emitted
-            && !self.harness_state.tool_budget_exhausted()
-            && !self.harness_state.tool_budget_exhausted_emitted
             && !self.harness_state.turn_refused()
             && self.session_stats.preflight_recovery.is_clear()
             && crate::agent::runloop::unified::stop_requests::stop_outcome(self.ctrl_c_state).is_none()

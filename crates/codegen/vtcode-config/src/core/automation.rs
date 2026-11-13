@@ -63,10 +63,10 @@ pub struct FullAutoConfig {
     #[serde(default)]
     verify_mutations: bool,
 
-    /// Automatically grant tool-loop and session tool-call limit increases
-    /// while a full-auto run is active, instead of prompting. Grants reuse
-    /// the same per-prompt increments and absolute hard caps as manual
-    /// approvals. Set to `false` to restore the interactive prompts.
+    /// Automatically grant tool-loop limit increases while a full-auto run is
+    /// active, instead of prompting. Grants reuse the same per-prompt
+    /// increments and absolute hard caps as manual approvals. Set to `false`
+    /// to restore the interactive prompts.
     #[serde(default = "default_auto_grant_tool_limits")]
     pub auto_grant_tool_limits: bool,
 }

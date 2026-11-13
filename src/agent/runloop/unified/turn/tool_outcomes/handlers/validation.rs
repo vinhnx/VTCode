@@ -26,35 +26,6 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(outcome.map_or(ValidationResult::Handled, ValidationResult::Outcome));
     }
 
-    if !vtcode_core::tools::tool_intent::is_turn_budget_exempt_call(tool_name, args_val)
-        && let Some(notice) = ctx.harness_state.record_tool_budget_exhaustion_notice()
-    {
-        // Mirror the wall-clock exhaustion contract: reject the call with a
-        // policy error (full message once, compact stub for later calls in
-        // the batch) and let `flush_budget_synthesis_directives` push a single
-        // "synthesize now" directive after the batch and arm the tool-free
-        // recovery pass. The old behavior broke the turn as `Blocked` with no
-        // synthesis pass, so plan mode ended with research but no plan and the
-        // model looped on "I'll synthesize the plan" across continue-turns.
-        //
-        // Control-plane exec calls (blocking `wait`, bounded `inspect`) are
-        // checked first: they must neither consume the one-shot first-notice
-        // nor arm the synthesis directive, since a long build stays observable
-        // through them even after the work budget is exhausted.
-        let error_msg = if notice.first_notice {
-            notice.exhaustion.policy_violation_message()
-        } else {
-            notice.exhaustion.skipped_call_message()
-        };
-        ctx.push_rejected_tool_response(
-            tool_call_id,
-            Some(tool_name),
-            Some(args_val),
-            build_turn_budget_error_content(error_msg),
-        );
-        return Ok(ValidationResult::Blocked);
-    }
-
     if let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() {
         // Emit the full policy message once (first notice); subsequent rejected
         // calls in the same batch get a compact stub to avoid repeating it N
@@ -370,8 +341,8 @@ pub(crate) async fn validate_tool_call<'a>(
             if canonical_tool_name == tool_names::START_PLANNING {
                 ctx.harness_state.clear_task_tracker_create_signatures();
             }
-            // Count budget only for calls that pass all validation/permission gates.
-            record_tool_call_budget_usage(ctx, &canonical_tool_name, &prepared.effective_args);
+            // Count only calls that pass all validation/permission gates.
+            record_tool_call_usage(ctx);
             Ok(ValidationResult::Proceed(prepared))
         }
         Ok(ToolPermissionFlow::Denied) => {

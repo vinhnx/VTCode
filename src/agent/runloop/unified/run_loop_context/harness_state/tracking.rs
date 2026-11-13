@@ -211,7 +211,6 @@ impl HarnessTurnState {
             run_id: self.run_id.0.clone(),
             turn_id: self.turn_id.0.clone(),
             phase: self.phase,
-            max_tool_calls: self.max_tool_calls,
             max_tool_wall_clock_secs: self.max_tool_wall_clock.as_secs(),
             max_tool_retries: self.max_tool_retries,
         }

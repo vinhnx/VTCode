@@ -30,8 +30,8 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   disables cross-turn auto-queue. After a **Completed** turn with incomplete tracker steps it queues the next tracker
   implementation turn. After a **recoverable Blocked** turn — with or without tracker steps — it queues a bounded
   blocked-end resume ("The previous turn ended on a recoverable block: …"). Recoverable means the production
-  blocked-reason constants only (turn / tool / tool-loop budgets, per-result preview limits, safety caps, blocked-tool
-  fuse and tool-call limits, tool-free recovery). Pending verification, including exhaustion of the tool-call budget,
+  blocked-reason constants only (turn / tool-loop budgets, per-result preview limits, safety caps, blocked-tool
+  fuse, tool-free recovery). Pending verification, including exhaustion of the wall-clock budget,
   uses the separate verifier-first recovery path and its verification turn/failure limits, preserving the pending gate.
   A pending-verification recap does not veto that budget-only retry; genuine policy or user-decision handoffs still do.
   Provider refusals, true handoffs, and unknown reasons never auto-queue.
@@ -450,7 +450,7 @@ hint (`Exec session resume:`, at most 4 sessions newest first, per-command displ
 single-session hint under 1 KiB) with a pre-filled
 `write_stdin {"session_id", "action": "wait", "wait_timeout_seconds": 600}`. The hint flows through the same turn loop
 for normal next-turn and session restore/resume, so a compacted session needs zero identity reconstruction.
-`wait`/`inspect` stay exempt from the per-turn tool-call budget. Turn-end
+Explicit `wait` time is excluded from the per-turn wall-clock budget. Turn-end
 `SnapshotTurnDiagnostics.in_progress_exec_sessions` and `turn.completed.in_progress_exec_sessions` (schema 0.16.0,
 bounded to 4) record all live ids, including retained background sessions; the resume hint uses the foreground subset.
 See invariant #22 in `docs/harness/ARCHITECTURAL_INVARIANTS.md` and the agent-facing settle shape in
@@ -495,9 +495,9 @@ aborted, fallback, or cancelled outcome instead of reporting success for unconfi
 summary remains a failure even when its final response is substantive. A thread budget limit takes precedence over both
 the last turn outcome and a clean exit.
 
-After a tool-call or wall-clock budget is exhausted, compact rejection stubs direct the model to synthesize from
+After the wall-clock budget is exhausted, compact rejection stubs direct the model to synthesize from
 existing evidence. They do not suggest another tool or narrower scope; the batch still receives exactly one synthesis
-directive and the existing tool-free recovery pass. Control-plane waits retain their tool-call budget exemption.
+directive and the existing tool-free recovery pass.
 
 Turn-balancer recovery resets navigation/repetition evidence only. It preserves the anti-blind mutation count,
 `verification_pending`, and any failed-verifier fix allowance; only a truthful successful verifier (including a validated

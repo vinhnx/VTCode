@@ -18,7 +18,7 @@ use vtcode_core::tools::tool_intent;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use crate::agent::runloop::unified::run_loop_context::{RunLoopContext, full_auto_loop_grants_enabled};
+use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_call_safety::invocation_id_from_call_id;
 use crate::agent::runloop::unified::tool_routing::{
@@ -33,7 +33,7 @@ use super::execution_events::{
 use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
-use super::validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt};
+use super::validation::{SafetyValidationFailure, validate_tool_call_safety};
 use crate::agent::runloop::unified::planning_workflow::handle_start_planning;
 use vtcode_commons::canonicalize;
 
@@ -206,20 +206,6 @@ async fn run_tool_call_with_args_inner(
     let (safety_invocation_id, fallback_harness_item_id) = resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
-        // Control-plane exec calls (wait/inspect) bypass the per-turn budget
-        // exhaustion rejection so a long build stays observable; the safety
-        // gateway still bounds them via its own control-plane cap.
-        if !tool_intent::is_turn_budget_exempt_call(requested_name, args_val)
-            && let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion()
-        {
-            let mut outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-                error: structured_failure_from_message(requested_name, exhaustion.policy_violation_message()),
-            });
-            outcome.total_duration = invocation_started_at.elapsed();
-            emit_tool_outcome_observation(ctx.harness_emitter, requested_name, &outcome);
-            return Ok(outcome);
-        }
-
         match ctx.tool_registry.admit_public_tool_call(requested_name, args_val) {
             Ok(prepared) => {
                 canonical_name = Some(prepared.canonical_name);
@@ -335,22 +321,13 @@ async fn run_tool_call_with_args_inner(
             }
         };
 
-        let safety_approval_justification = match check_tool_safety(
-            ctx,
-            name,
-            effective_args.as_ref(),
-            safety_invocation_id,
-            ctrl_c_state,
-            ctrl_c_notify,
-            full_auto_loop_grants_enabled(ctx.full_auto, vt_cfg),
-        )
-        .await
-        {
-            Ok(justification) => justification,
-            Err(safety_failure) => {
-                return Ok(finish_with_status(*safety_failure, false, effective_args.as_ref()));
-            }
-        };
+        let safety_approval_justification =
+            match check_tool_safety(ctx, name, effective_args.as_ref(), safety_invocation_id).await {
+                Ok(justification) => justification,
+                Err(safety_failure) => {
+                    return Ok(finish_with_status(*safety_failure, false, effective_args.as_ref()));
+                }
+            };
 
         match check_tool_permission(
             ctx,
@@ -390,16 +367,8 @@ async fn run_tool_call_with_args_inner(
                 let rewritten_differ = effective_args.as_ref() != &updated_args;
                 effective_args = std::borrow::Cow::Owned(updated_args);
                 if rewritten_differ
-                    && let Err(safety_failure) = check_tool_safety(
-                        ctx,
-                        name,
-                        effective_args.as_ref(),
-                        safety_invocation_id,
-                        ctrl_c_state,
-                        ctrl_c_notify,
-                        full_auto_loop_grants_enabled(ctx.full_auto, vt_cfg),
-                    )
-                    .await
+                    && let Err(safety_failure) =
+                        check_tool_safety(ctx, name, effective_args.as_ref(), safety_invocation_id).await
                 {
                     return Ok(finish_with_status(*safety_failure, false, effective_args.as_ref()));
                 }
@@ -410,26 +379,16 @@ async fn run_tool_call_with_args_inner(
             }
         }
 
-        // Control-plane exec calls (wait/inspect) do not consume the per-turn
-        // tool-call budget; see `record_tool_call_budget_usage` for rationale.
-        if !tool_intent::is_turn_budget_exempt_call(name, effective_args.as_ref())
-            && let Some(warning) = ctx.harness_state.record_tool_call_with_default_warning()
-        {
-            warning.log_threshold_reached("Tool-call budget warning threshold reached in tool pipeline path");
-        }
+        ctx.harness_state.record_tool_call();
     }
 
     // Safety gateway admission is always completed before registry execution
     // in the unified runloop: the tool-outcome handlers (validate_tool_call)
     // and the copilot runtime validate every call through the shared gateway
     // before invoking this pipeline with prevalidated == true, and the
-    // non-prevalidated branch above runs check_tool_safety itself. Passing
-    // the negation of prevalidated here made the registry re-admit every
-    // interactive call on the SAME shared gateway, doubling the counter and
-    // halving the effective per-turn tool budget (checkpoint turn_942/943:
-    // 16 admitted calls then "Per-turn tool limit reached (max: 32)" with
-    // max_tool_calls_per_turn = 32). The registry only performs its own
-    // check when neither the caller nor this pipeline has run it.
+    // non-prevalidated branch above runs check_tool_safety itself. The
+    // registry only performs its own check when neither the caller nor this
+    // pipeline has run it.
     let safety_prevalidated = prevalidated || ctx.safety_validator.is_some();
 
     let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
@@ -646,39 +605,13 @@ async fn check_tool_safety(
     name: &str,
     args_val: &Value,
     invocation_id: ToolInvocationId,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    auto_grant: bool,
 ) -> Result<Option<String>, Box<ToolExecutionStatus>> {
     let Some(safety_validator) = ctx.safety_validator else {
         return Ok(None);
     };
 
-    match validate_tool_call_with_limit_prompt(
-        safety_validator,
-        ctx.handle,
-        ctx.session,
-        ctrl_c_state,
-        ctrl_c_notify,
-        name,
-        args_val,
-        invocation_id,
-        Some(ctx.harness_state),
-        ctx.harness_emitter,
-        ctx.agent_name.as_deref(),
-        auto_grant,
-        ctx.traj,
-        ctx.tool_registry.is_planning_active(),
-    )
-    .await
-    {
+    match validate_tool_call_safety(safety_validator, name, args_val, invocation_id).await {
         Ok(()) => Ok(None),
-        Err(SafetyValidationFailure::SessionLimitNotIncreased) => Err(Box::new(ToolExecutionStatus::Failure {
-            error: structured_failure_from_message(name, "Session tool limit reached and not increased by user"),
-        })),
-        Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => Err(Box::new(ToolExecutionStatus::Failure {
-            error: structured_failure(name, &anyhow!("Failed while requesting a session tool-limit increase: {error}")),
-        })),
         Err(SafetyValidationFailure::NeedsApproval(justification)) => Ok(Some(justification)),
         Err(SafetyValidationFailure::Validation(error)) => Err(Box::new(ToolExecutionStatus::Failure {
             error: structured_failure(name, &anyhow!("Safety validation failed: {error}")),

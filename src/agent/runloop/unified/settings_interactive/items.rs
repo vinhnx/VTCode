@@ -149,7 +149,6 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         title: "Performance & Diagnostics",
         description: "Balance runtime limits, caching, timeouts, and diagnostics.",
         paths: &[
-            "agent.harness.max_tool_calls_per_turn",
             "agent.harness.max_tool_wall_clock_secs",
             "agent.harness.max_tool_retries",
             "agent.harness.max_parallel_tool_calls",

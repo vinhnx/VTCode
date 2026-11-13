@@ -159,12 +159,10 @@ pub(super) async fn execute(
                 })
         });
         for (index, command) in task.checks.iter().enumerate() {
-            if (cfg.agent.harness.max_tool_calls_per_turn > 0 && index >= cfg.agent.harness.max_tool_calls_per_turn)
-                || vtcode_config::core::tools::tool_loop_limit_reached(
-                    previous_checks.saturating_add(index),
-                    cfg.tools.max_tool_loops,
-                )
-            {
+            if vtcode_config::core::tools::tool_loop_limit_reached(
+                previous_checks.saturating_add(index),
+                cfg.tools.max_tool_loops,
+            ) {
                 return Ok(MatrixOutcome::BudgetExhausted);
             }
             let value = runner

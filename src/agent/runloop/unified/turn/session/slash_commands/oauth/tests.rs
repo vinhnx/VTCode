@@ -16,7 +16,7 @@ use vtcode_core::skills::types::Skill;
 
 #[tokio::test]
 async fn openrouter_login_returns_continue_when_ctrl_c_is_pending() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let turn = backing.turn_loop_context();
     assert!(matches!(turn.ctrl_c_state.register_signal(), CtrlCSignal::Cancel));
 

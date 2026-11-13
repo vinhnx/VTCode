@@ -11,9 +11,8 @@ use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS;
 use vtcode_core::config::constants::tool_limits::{
-    APPROVED_PLAN_MIN_TOOL_CALLS_PER_TURN, APPROVED_PLAN_TOOL_LOOP_INCREMENT, DEFAULT_MAX_CONVERSATION_TURNS,
-    DEFAULT_MAX_TOOL_LOOPS, MAX_TOOL_LOOP_INCREMENT_PER_PROMPT, PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT,
-    PLANNING_WORKFLOW_MIN_TOOL_CALLS_PER_TURN, PLANNING_WORKFLOW_MIN_TOOL_LOOPS, tool_loop_hard_cap,
+    APPROVED_PLAN_TOOL_LOOP_INCREMENT, DEFAULT_MAX_TOOL_LOOPS, MAX_TOOL_LOOP_INCREMENT_PER_PROMPT,
+    PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT, PLANNING_WORKFLOW_MIN_TOOL_LOOPS, tool_loop_hard_cap,
 };
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -25,7 +24,6 @@ use vtcode_core::llm::provider as uni;
 pub(super) struct PrecomputedTurnConfig {
     pub(super) max_tool_loops: usize,
     pub(super) tool_repeat_limit: usize,
-    pub(super) max_session_turns: usize,
     pub(super) request_user_input_enabled: bool,
 }
 
@@ -68,13 +66,11 @@ pub(super) fn extract_turn_config(
             } else {
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
-            max_session_turns: cfg.agent.max_conversation_turns,
             request_user_input_enabled: features.request_user_input_enabled(planning_active, interactive_session),
         })
         .unwrap_or(PrecomputedTurnConfig {
             max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, planning_active),
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
-            max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
             request_user_input_enabled: features.request_user_input_enabled(planning_active, interactive_session),
         })
 }
@@ -85,86 +81,7 @@ pub(super) enum ToolLoopLimitAction {
     BreakLoop,
 }
 
-#[inline]
-pub(super) fn resolve_safety_tool_call_limits(
-    max_tool_calls_per_turn: usize,
-    max_session_turns: usize,
-    planning_active: bool,
-) -> (usize, usize) {
-    let turn_limit = if max_tool_calls_per_turn == 0 {
-        usize::MAX
-    } else {
-        max_tool_calls_per_turn
-    };
-    let session_limit = if planning_active || max_tool_calls_per_turn == 0 {
-        usize::MAX
-    } else {
-        max_tool_calls_per_turn.saturating_mul(max_session_turns.max(1))
-    };
-
-    (turn_limit, session_limit)
-}
-
-/// Shared `0`-means-unlimited floor helper: `0` stays `0`, otherwise raise to
-/// `floor`. Keeps the planning and approved-plan budget wrappers from each
-/// carrying their own zero-branch.
-#[inline]
-fn max_tool_calls_with_floor(configured_limit: usize, floor: usize) -> usize {
-    if configured_limit == 0 {
-        0
-    } else {
-        configured_limit.max(floor)
-    }
-}
-
-/// Minimum per-turn tool-call budget while the planning workflow is active.
-/// Plan-mode research legitimately needs far more read-only calls than a
-/// build-mode turn; a lower configured `max_tool_calls_per_turn` must not
-/// starve planning (checkpoint turn_804: research died at the build-mode cap).
-/// Planning-aware per-turn tool-call budget. `0` stays `0` (unlimited);
-/// planning raises the configured limit to the planning research floor.
-pub(in crate::agent::runloop::unified::turn) fn effective_max_tool_calls_for_turn(
-    configured_limit: usize,
-    planning_active: bool,
-) -> usize {
-    if planning_active {
-        max_tool_calls_with_floor(configured_limit, PLANNING_WORKFLOW_MIN_TOOL_CALLS_PER_TURN)
-    } else {
-        configured_limit
-    }
-}
-
-/// Approved plans need enough room for implementation and verification after
-/// planning research has already consumed a turn. Keep this floor separate
-/// from ordinary build turns so unrelated requests retain their configured
-/// safety budget.
-pub(super) fn effective_max_tool_calls_for_approved_plan_execution(configured_limit: usize) -> usize {
-    max_tool_calls_with_floor(configured_limit, APPROVED_PLAN_MIN_TOOL_CALLS_PER_TURN)
-}
-
-/// Remaining tool-call / tool-loop floor after a mid-turn Build↔Plan switch.
-///
-/// Mode floors (`max(limit, 120)`) only help when the turn is still empty. If
-/// Build already consumed most of the cap and the workflow auto-switches to
-/// Plan (or back to implementation), the new mode must get a full floor of
-/// *remaining* headroom from now — not a cap that is already nearly spent.
-pub(super) fn apply_mode_switch_remaining_tool_call_floor(
-    max_tool_calls: &mut usize,
-    used_tool_calls: usize,
-    planning_active: bool,
-) {
-    if *max_tool_calls == 0 {
-        return;
-    }
-    let floor = if planning_active {
-        PLANNING_WORKFLOW_MIN_TOOL_CALLS_PER_TURN
-    } else {
-        APPROVED_PLAN_MIN_TOOL_CALLS_PER_TURN
-    };
-    *max_tool_calls = (*max_tool_calls).max(used_tool_calls.saturating_add(floor));
-}
-
-/// Same remaining-headroom rule for tool-loop iterations (`step_count` is
+/// Remaining-headroom rule for tool-loop iterations (`step_count` is
 /// loops already taken this turn).
 pub(super) fn apply_mode_switch_remaining_tool_loop_floor(
     current_max_tool_loops: &mut usize,
@@ -354,34 +271,31 @@ fn apply_tool_loop_grant(
     }
     tracing::info!(
         grant_source = ?grant_source,
-        "Updated tool loop limit: turn={} (was {}), session tool-call limit remains unchanged",
+        "Updated tool loop limit: turn={} (was {})",
         *current_max_tool_loops,
         previous_max_tool_loops,
     );
     let status_message = match grant_source {
         ToolLoopGrantSource::FullAuto => {
             format!(
-                "Full-auto auto-granted +{} tool loops (limit {}, cap {}); per-turn tool-call budget unchanged",
+                "Full-auto auto-granted +{} tool loops (limit {}, cap {})",
                 increment, *current_max_tool_loops, hard_cap,
             )
         }
         ToolLoopGrantSource::SessionPreauthorized => {
             format!(
-                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases; per-turn tool-call budget unchanged",
+                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases",
                 increment, *current_max_tool_loops, hard_cap,
             )
         }
         ToolLoopGrantSource::Manual if requested_increment != increment => {
             format!(
-                "Tool loop limit increased to {} (+{}, requested +{}, cap {}); per-turn tool-call budget unchanged",
+                "Tool loop limit increased to {} (+{}, requested +{}, cap {})",
                 *current_max_tool_loops, increment, requested_increment, hard_cap,
             )
         }
         ToolLoopGrantSource::Manual => {
-            format!(
-                "Tool loop limit increased to {} (+{}, cap {}); per-turn tool-call budget unchanged",
-                *current_max_tool_loops, increment, hard_cap,
-            )
+            format!("Tool loop limit increased to {} (+{}, cap {})", *current_max_tool_loops, increment, hard_cap,)
         }
     };
     display_status(ctx.renderer, &status_message)?;
@@ -659,7 +573,6 @@ pub(crate) fn is_turn_scoped_tool_restriction(text: &str) -> bool {
         "diverse low-signal navigation reached",
         "turn balancer detected repeated low-signal tool churn",
         "tool loop budget exhausted",
-        "tool-call budget exhausted for this turn",
         "tool wall-clock budget exhausted for this turn",
         "tool follow-up failed.",
         "model returned no answer after tool activity.",

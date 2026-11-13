@@ -136,7 +136,7 @@ fn full_auto_stops_for_an_informational_how_to_fix_question() {
 }
 #[tokio::test]
 async fn read_only_summary_is_published_as_final_without_a_follow_up_directive() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.full_auto = true;
     ctx.working_history.push(uni::Message::user(

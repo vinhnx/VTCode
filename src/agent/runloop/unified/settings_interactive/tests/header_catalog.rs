@@ -19,7 +19,7 @@ fn settings_header_shows_target_source_and_breadcrumbs() {
         None,
         Some("group:model_provider"),
         Some(SETTINGS_ADVANCED_VIEW_PATH),
-        Some("advanced.agent.harness.max_tool_calls_per_turn"),
+        Some("advanced.agent.harness.max_tool_wall_clock_secs"),
         Some("permissions"),
         Some(RESET_CONFIRMATION_VIEW),
     ] {

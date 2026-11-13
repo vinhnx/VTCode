@@ -4,9 +4,8 @@ pub(super) use hashbrown::HashSet;
 
 pub(super) use super::{
     CrossTurnTracker, DiagnosisMemoEntry, DiagnosisMemoKey, HarnessTurnState, RecoveryMode,
-    SESSION_LIMIT_AUTO_GRANT_INCREMENT, TOOL_BUDGET_WARNING_THRESHOLD, TOOL_PREVIEW_METADATA_PARSE_LIMIT_BYTES,
-    ToolBudgetExhaustion, ToolBudgetExhaustionNotice, ToolBudgetWarning, ToolWallClockExhaustion,
-    ToolWallClockExhaustionNotice, TurnId, TurnPhase, TurnRunId, full_auto_loop_grants_enabled,
+    TOOL_PREVIEW_METADATA_PARSE_LIMIT_BYTES, ToolWallClockExhaustion, ToolWallClockExhaustionNotice, TurnId, TurnPhase,
+    TurnRunId, full_auto_loop_grants_enabled,
 };
 pub(super) use vtcode_config::constants::output_limits::{
     TURN_PREVIEW_BUDGET_BYTES, TURN_PREVIEW_BUDGET_BYTES_PLANNING,

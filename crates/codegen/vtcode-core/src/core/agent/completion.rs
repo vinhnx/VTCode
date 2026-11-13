@@ -99,8 +99,8 @@ fn tracker_final_text_is_policy_handoff_lowercase(lower: &str) -> bool {
     {
         return true;
     }
-    // Pure budget/recovery recaps ("blocked by turn budget", "tool loop
-    // budget exhausted", …) are not user handoffs.
+    // Pure budget/recovery recaps ("blocked by wall-clock budget", "tool
+    // loop budget exhausted", …) are not user handoffs.
     false
 }
 
@@ -110,23 +110,19 @@ fn tracker_final_text_is_policy_handoff_lowercase(lower: &str) -> bool {
 /// tests so session/production budget phrases cannot drift between surfaces.
 /// Lowercase input expected.
 pub fn recoverable_status_recap_phrasing(lower: &str) -> bool {
-    lower.contains("turn budget")
-        || lower.contains("preview budget")
+    lower.contains("preview budget")
         || lower.contains("tool preview budget")
         || lower.contains("wall clock")
+        || lower.contains("wall-clock")
         || lower.contains("safety cap")
         || lower.contains("recovery fallback")
         || lower.contains("recovery could not confirm")
         || lower.contains("recovery exhausted")
         || lower.contains("recovery was exhausted")
-        || lower.contains("tool budget")
         || lower.contains("tool loop")
-        || lower.contains("tool-call budget")
         || lower.contains("tool follow-up")
         || lower.contains("read cap")
-        || lower.contains("work budget")
         || lower.contains("max tool")
-        || lower.contains("per-turn tool")
         || lower.contains("budget exhausted")
         || lower.contains("budget ran out")
 }
@@ -377,7 +373,7 @@ mod tests {
     #[test]
     fn handoff_classification_preserves_case_and_policy_precedence() {
         for text in [
-            "Permission denied after turn budget exhaustion.",
+            "Permission denied after wall-clock budget exhaustion.",
             "Access denied.",
             "Safety fuse reached.",
             "Tool-call safety fuse stopped verification.",
@@ -398,7 +394,7 @@ mod tests {
             }
         }
         for text in [
-            "Verification is still pending after turn budget exhaustion.",
+            "Verification is still pending after wall-clock budget exhaustion.",
             "Unverified assistant responses remain.",
             "Anti-blind checkpoint reached.",
             "Verification gate remains.",
@@ -410,7 +406,7 @@ mod tests {
         for text in [
             "",
             " \t\n\u{2003}",
-            "TURN BUDGET EXHAUSTED.",
+            "TOOL LOOP BUDGET EXHAUSTED.",
             "REVIEWED TOOL POLICY.",
             "VERIFICATION PASSED.",
         ] {
@@ -422,7 +418,7 @@ mod tests {
     #[test]
     fn policy_handoffs_are_distinct_from_pending_verification_recaps() {
         for text in [
-            "Verification is still pending after the tool-call budget was exhausted.",
+            "Verification is still pending after the wall-clock budget was exhausted.",
             "Repeated unverified assistant responses reached the anti-blind verification gate.",
         ] {
             assert!(tracker_final_text_is_safety_handoff(text));
@@ -430,7 +426,7 @@ mod tests {
         }
         for text in [
             "Verification is still pending; permission denied.",
-            "Tool budget exhausted; blocked by tool policy.",
+            "Tool loop budget exhausted; blocked by tool policy.",
             "Missing credentials for the verifier.",
             "Tool-call safety fuse stopped verification.",
         ] {
@@ -457,10 +453,10 @@ mod tests {
             "Anti-blind checkpoint remains; verification is still pending."
         ));
         assert!(!tracker_final_text_is_safety_handoff(
-            "## Status\nBlocked by turn budget. Next step: read design/diff.rs."
+            "## Status\nBlocked by wall-clock budget. Next step: read design/diff.rs."
         ));
         assert!(!tracker_final_text_is_safety_handoff(
-            "## Status\nBlocked by turn tool budget. Next step: patch the struct."
+            "## Status\nBlocked by tool loop budget. Next step: patch the struct."
         ));
         assert!(!tracker_final_text_is_safety_handoff(
             "Tool loop budget exhausted; continuing next turn with remaining tracker steps."
@@ -476,21 +472,23 @@ mod tests {
         assert!(!tracker_final_text_is_safety_handoff("Implemented patch apply; verification passed."));
         assert!(!tracker_final_text_is_safety_handoff(""));
         // Policy denial wins even when a budget is also mentioned.
-        assert!(tracker_final_text_is_safety_handoff("Tool budget exhausted; denied by policy for exec_command."));
-        assert!(tracker_final_text_is_safety_handoff("Turn budget hit, then permission denied for the write."));
+        assert!(tracker_final_text_is_safety_handoff(
+            "Tool loop budget exhausted; denied by policy for exec_command."
+        ));
+        assert!(tracker_final_text_is_safety_handoff("Wall-clock budget hit, then permission denied for the write."));
     }
 
     #[test]
     fn recoverable_status_recap_phrasing_covers_session_budget_recaps() {
         for phrase in [
             "blocked by the turn's preview budget",
-            "tool budget ran out",
+            "wall-clock budget ran out",
             "hit the per-file read cap",
             "preview budget exhausted",
             "tool loop budget exhausted",
             "recovery fallback",
             "reached the safety cap",
-            "work budget exhausted",
+            "wall-clock budget exhausted",
         ] {
             assert!(
                 recoverable_status_recap_phrasing(&phrase.to_ascii_lowercase()),
@@ -519,7 +517,7 @@ mod tests {
         assert!(!tracker_final_text_requires_user_input(
             "## Status\nNext we need your workspace path in CONFIG; patching the struct now."
         ));
-        assert!(!tracker_final_text_requires_user_input("Blocked by turn budget. Next step: read helpers.rs."));
+        assert!(!tracker_final_text_requires_user_input("Blocked by wall-clock budget. Next step: read helpers.rs."));
         assert!(!tracker_final_text_requires_user_input(""));
     }
 

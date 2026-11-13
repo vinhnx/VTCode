@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn harness_state_tracks_post_tool_recovery_cycles() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert_eq!(state.post_tool_recovery_cycles(), 0);
     assert_eq!(state.increment_post_tool_recovery_cycle(), 1);
@@ -14,7 +14,7 @@ fn harness_state_tracks_post_tool_recovery_cycles() {
 }
 #[test]
 fn harness_state_tracks_task_tracker_create_signatures() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert!(
         state.record_task_tracker_create_signature(
@@ -34,7 +34,7 @@ fn harness_state_tracks_task_tracker_create_signatures() {
 }
 #[test]
 fn harness_state_tracks_successful_readonly_signatures() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert!(!state.has_successful_readonly_signature("file_operation:ro:len10-fnv1234"));
     assert!(state.record_successful_readonly_signature("file_operation:ro:len10-fnv1234".to_string()));
@@ -43,7 +43,7 @@ fn harness_state_tracks_successful_readonly_signatures() {
 }
 #[test]
 fn harness_state_tracks_identical_shell_command_streak() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert_eq!(state.record_shell_command_run("exec_command::cargo check".to_string()), 1);
     assert_eq!(state.record_shell_command_run("exec_command::cargo check".to_string()), 2);
@@ -52,7 +52,7 @@ fn harness_state_tracks_identical_shell_command_streak() {
 }
 #[test]
 fn harness_state_resets_shell_command_streak() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     state.record_shell_command_run("exec_command::cargo check".to_string());
     state.reset_shell_command_run_streak();
@@ -61,7 +61,7 @@ fn harness_state_resets_shell_command_streak() {
 }
 #[test]
 fn harness_state_tracks_file_read_family_streak() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 10, 1);
 
     assert_eq!(state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()), 1);
     assert_eq!(state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()), 2);
@@ -72,8 +72,7 @@ fn harness_state_tracks_file_read_family_streak() {
 }
 #[test]
 fn file_read_path_counts_track_per_path_regardless_of_slice() {
-    let mut state =
-        HarnessTurnState::new(TurnRunId("run-path".to_string()), TurnId("turn-path".to_string()), 20, 600, 3);
+    let mut state = HarnessTurnState::new(TurnRunId("run-path".to_string()), TurnId("turn-path".to_string()), 600, 3);
 
     // Same path, different offsets — each increments the path counter.
     assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
@@ -90,8 +89,7 @@ fn file_read_path_counts_track_per_path_regardless_of_slice() {
 
 #[test]
 fn written_file_resets_only_its_own_read_path_counter() {
-    let mut state =
-        HarnessTurnState::new(TurnRunId("run-reset".to_string()), TurnId("turn-reset".to_string()), 20, 600, 3);
+    let mut state = HarnessTurnState::new(TurnRunId("run-reset".to_string()), TurnId("turn-reset".to_string()), 600, 3);
 
     assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
     assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 2);
@@ -106,41 +104,21 @@ fn written_file_resets_only_its_own_read_path_counter() {
     assert_eq!(state.record_file_read_path_call("src/main.rs".to_string()), 3, "unwritten path keeps counting");
 }
 #[test]
-fn session_limit_grant_is_recorded_once_and_exposed_for_cleanup() {
-    let mut state =
-        HarnessTurnState::new(TurnRunId("run-limit".to_string()), TurnId("turn-limit".to_string()), 20, 600, 3);
-
-    assert!(!state.has_session_limit_grant());
-    assert!(!state.take_session_limit_grant_directive_pending());
-
-    state.record_session_limit_grant();
-
-    assert!(state.has_session_limit_grant());
-    assert!(state.take_session_limit_grant_directive_pending());
-    assert!(!state.take_session_limit_grant_directive_pending());
-}
-#[test]
 fn harness_state_builds_execution_snapshot() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-9".to_string()), TurnId("turn-3".to_string()), 6, 120, 2);
+    let mut state = HarnessTurnState::new(TurnRunId("run-9".to_string()), TurnId("turn-3".to_string()), 120, 2);
     state.set_phase(TurnPhase::ExecutingTools);
 
     let snapshot = state.execution_snapshot();
     assert_eq!(snapshot.run_id, "run-9");
     assert_eq!(snapshot.turn_id, "turn-3");
     assert_eq!(snapshot.phase, TurnPhase::ExecutingTools);
-    assert_eq!(snapshot.max_tool_calls, 6);
     assert_eq!(snapshot.max_tool_wall_clock_secs, 120);
     assert_eq!(snapshot.max_tool_retries, 2);
 }
 #[test]
 fn turn_diagnostic_counters_saturate_and_count_recovery_once() {
-    let mut state = HarnessTurnState::new(
-        TurnRunId("run-diagnostics".to_string()),
-        TurnId("turn-diagnostics".to_string()),
-        4,
-        120,
-        2,
-    );
+    let mut state =
+        HarnessTurnState::new(TurnRunId("run-diagnostics".to_string()), TurnId("turn-diagnostics".to_string()), 120, 2);
     state.requested_tool_calls = u32::MAX - 1;
     state.record_requested_tool_calls(usize::MAX);
     state.raw_spooled_bytes = u64::MAX - 2;

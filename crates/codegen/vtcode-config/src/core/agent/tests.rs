@@ -33,11 +33,12 @@ fn test_harness_config_continuation_policy_deserializes_with_fallback() {
 }
 
 #[test]
-fn test_harness_config_tool_call_budget_defaults_to_120() {
-    assert_eq!(AgentHarnessConfig::default().max_tool_calls_per_turn, tool_limits::DEFAULT_MAX_TOOL_CALLS_PER_TURN);
-
-    let parsed: AgentHarnessConfig = toml::from_str("").expect("default harness config");
-    assert_eq!(parsed.max_tool_calls_per_turn, tool_limits::DEFAULT_MAX_TOOL_CALLS_PER_TURN);
+fn test_harness_config_ignores_removed_tool_call_budget_key() {
+    // `max_tool_calls_per_turn` was removed; stale configs carrying it must
+    // still parse (the key is pruned on the next save with a warning).
+    let parsed: AgentHarnessConfig =
+        toml::from_str("max_tool_calls_per_turn = 32").expect("stale budget key must parse");
+    assert_eq!(parsed.max_tool_wall_clock_secs, defaults::DEFAULT_MAX_TOOL_WALL_CLOCK_SECS);
 }
 
 #[test]

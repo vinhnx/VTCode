@@ -144,7 +144,6 @@ async fn build_prompt_output(
 
         upsert_harness_limits_section(
             &mut system_prompt,
-            input.turn.execution.max_tool_calls,
             input.turn.execution.max_tool_wall_clock_secs,
             input.turn.execution.max_tool_retries,
         );
@@ -289,7 +288,7 @@ mod tests {
 
     #[tokio::test]
     async fn prompt_alignment_detects_stale_runtime_tool_catalog_metadata() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut backing = TestTurnProcessingBacking::new().await;
         let mut ctx = backing.turn_processing_context();
         let turn = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
 

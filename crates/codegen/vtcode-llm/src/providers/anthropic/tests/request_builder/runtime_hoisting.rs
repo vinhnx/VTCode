@@ -75,7 +75,7 @@ fn test_convert_to_anthropic_format_keeps_planning_notices_out_of_cached_prefix(
     let request = LLMRequest {
         model: models::CLAUDE_SONNET_5.to_string(),
         system_prompt: Some(Arc::from(
-            "stable system instructions\n# PLANNING WORKFLOW (READ-ONLY)\nread-only\n[Harness Limits]\n- max_tool_calls_per_turn: 5",
+            "stable system instructions\n# PLANNING WORKFLOW (READ-ONLY)\nread-only\n[Harness Limits]\n- max_tool_wall_clock_secs: 60",
         )),
         messages: vec![Message::user("hello".to_string())].into(),
         ..Default::default()

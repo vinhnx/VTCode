@@ -197,10 +197,6 @@ max_snapshots = 50
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
 
-# Per-turn tool-call budget for the built-in agent harness
-[agent.harness]
-max_tool_calls_per_turn = 120
-
 # Tool security configuration
 [tools]
 # Default policy when no specific policy is defined ("allow", "prompt", "deny")

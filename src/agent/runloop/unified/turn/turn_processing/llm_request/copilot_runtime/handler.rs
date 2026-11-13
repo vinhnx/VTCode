@@ -25,14 +25,8 @@ impl CopilotRuntimeRequestHandler for CopilotRuntimeHost<'_> {
                         self.harness_state.record_failed_tool_call();
                         map_runtime_error(error)
                     })?;
-                let response = append_session_limit_grant_guidance(
-                    response,
-                    self.harness_state.take_session_limit_grant_directive_pending(),
-                );
-                let budget_rejected = self.harness_state.take_tool_budget_rejection();
                 if self.harness_state.admitted_tool_call_count() == admitted_before
                     && matches!(&response, CopilotToolCallResponse::Failure(_))
-                    && !budget_rejected
                 {
                     self.harness_state.record_denied_tool_call();
                 }

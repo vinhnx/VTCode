@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let max_streak = max_consecutive_blocked_tool_calls_per_turn(&ctx);
     let args = json!({"path":"src/main.rs"});
@@ -38,7 +38,7 @@ async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
 
 #[tokio::test]
 async fn blocked_tool_call_guard_allows_configured_consecutive_cap() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let max_streak = max_consecutive_blocked_tool_calls_per_turn(&ctx);
     let args = json!({"path":"src/main.rs"});
@@ -55,7 +55,7 @@ async fn blocked_tool_call_guard_allows_configured_consecutive_cap() {
 
 #[tokio::test]
 async fn blocked_tool_call_guard_caps_non_consecutive_total_churn() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let limits = blocked_tool_call_limits(&ctx);
     let args = json!({"path":"src/main.rs"});
@@ -85,7 +85,7 @@ async fn blocked_tool_call_guard_caps_non_consecutive_total_churn() {
 
 #[tokio::test]
 async fn blocked_tool_call_guard_allows_four_times_total_churn_in_planning_mode() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     let mut ctx = backing.turn_processing_context();
     let limits = blocked_tool_call_limits(&ctx);
@@ -112,7 +112,7 @@ async fn blocked_tool_call_guard_allows_four_times_total_churn_in_planning_mode(
 
 #[tokio::test]
 async fn denied_execution_result_uses_planning_total_fuse() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     backing.tool_registry.enable_planning();
     let mut ctx = backing.turn_processing_context();
     let limits = blocked_tool_call_limits(&ctx);
@@ -163,7 +163,7 @@ async fn denied_execution_result_uses_planning_total_fuse() {
 
 #[tokio::test]
 async fn blocked_tool_call_guard_short_circuits_to_recovery_when_active() {
-    let mut backing = TestContextBacking::new(4).await;
+    let mut backing = TestContextBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let args = json!({"path":"src/main.rs"});
     ctx.activate_recovery("loop detector");

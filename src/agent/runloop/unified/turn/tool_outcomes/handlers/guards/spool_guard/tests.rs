@@ -63,7 +63,7 @@ fn previous_turn_error_preview_bounds_unicode_by_bytes() {
 #[tokio::test]
 async fn spool_guard_cap_preserves_bounded_evidence_in_tool_free_recovery() {
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
-    let mut backing = TestTurnProcessingBacking::new(8).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let content = format!("{}{}", "H".repeat(8192), "T".repeat(8192));
     let path = write_test_spool(backing.workspace_path(), &content);
     let mut config = vtcode_core::config::VTCodeConfig::default();

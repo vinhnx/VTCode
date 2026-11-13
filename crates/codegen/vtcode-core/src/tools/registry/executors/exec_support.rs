@@ -257,7 +257,7 @@ pub(super) fn attach_long_command_wait_steering(response: &mut Value, session_id
          call `write_stdin` with the `next_wait_args` object from this response verbatim as arguments \
          (it already contains action:\"wait\" and the exact session_id; never guess the id) — it blocks \
          until the command exits or the deadline elapses with no model round-trips while waiting, and \
-         `wait`/`inspect` calls are exempt from the per-turn tool-call budget. If the wait returns an \
+         explicit wait time is excluded from the per-turn wall-clock budget. If the wait returns an \
          in-progress session (deadline expired), call `write_stdin` `wait` again with the same session_id. \
          To peek at incremental output mid-run only, call `write_stdin` with `next_continue_args` plus \
          `{{\"action\":\"poll\"}} (bare session_id without action or chars is rejected)."

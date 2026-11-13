@@ -116,7 +116,7 @@ mod capability_tests {
 
     #[test]
     fn stable_prefix_hash_strips_all_runtime_sections() {
-        let base = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 5";
+        let base = "Base prompt\n[Harness Limits]\n- max_tool_wall_clock_secs: 60";
         for suffix in [
             "\n\n## Active Tools\n- Capabilities: read-only.",
             "\n\n[Runtime Tool Catalog]\n- version: 1",
@@ -145,7 +145,7 @@ mod capability_tests {
         // earliest-header truncation). Planning notices themselves stay dynamic.
         let base = "# VT Code\nBase contract";
         let with_planning = format!(
-            "{base}\n\n# PLANNING WORKFLOW (READ-ONLY)\nread-only notice\n\n[Harness Limits]\n- max_tool_calls_per_turn: 5"
+            "{base}\n\n# PLANNING WORKFLOW (READ-ONLY)\nread-only notice\n\n[Harness Limits]\n- max_tool_wall_clock_secs: 60"
         );
         assert_eq!(
             stable_system_prefix_hash(base),
@@ -160,7 +160,7 @@ mod capability_tests {
         // `#comment`) must not end the dynamic section and leak dynamic
         // content into the stable hash.
         let base = "Base prompt";
-        let dynamic = format!("{base}\n\n[Harness Limits]\n- max_tool_calls_per_turn: 5\n#comment body\n- more");
+        let dynamic = format!("{base}\n\n[Harness Limits]\n- max_tool_wall_clock_secs: 60\n#comment body\n- more");
         assert_eq!(
             stable_system_prefix_hash(base),
             stable_system_prefix_hash(&dynamic),

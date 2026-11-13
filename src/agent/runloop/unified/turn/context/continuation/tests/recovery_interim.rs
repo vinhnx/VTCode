@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn recovery_pass_progress_only_text_completes_turn() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("loop detector");
     assert!(ctx.consume_recovery_pass());
@@ -17,7 +17,7 @@ async fn recovery_pass_progress_only_text_completes_turn() {
 }
 #[tokio::test]
 async fn recovery_pass_diagnostic_then_next_step_text_completes_turn() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.activate_recovery("turn balancer");
     assert!(ctx.consume_recovery_pass());
@@ -47,7 +47,7 @@ async fn tool_free_recovery_continuation_intent_text_is_terminal() {
     // text IS the final answer; allowing continuation re-enables tools and
     // re-triggers recovery when the follow-up fails again — an infinite
     // cycle no existing bound catches.
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history
         .push(uni::Message::user("run cargo nextest and summarize".to_string()));
@@ -206,7 +206,7 @@ fn short_completion_after_progressive_request_does_not_continue_via_relaxed_path
 }
 #[tokio::test]
 async fn tool_enabled_recovery_pass_can_continue_after_interim_progress() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history
         .push(uni::Message::user("run cargo fmt and follow up".to_string()));
@@ -231,7 +231,7 @@ async fn tool_enabled_recovery_pass_can_continue_after_interim_progress() {
 }
 #[tokio::test]
 async fn continuing_text_response_is_recorded_as_commentary_phase() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history
         .push(uni::Message::user("fix the parser regression".to_string()));
@@ -258,7 +258,7 @@ async fn continuing_text_response_is_recorded_as_commentary_phase() {
 }
 #[tokio::test]
 async fn completed_text_response_is_recorded_as_final_answer_phase() {
-    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     ctx.working_history
         .push(uni::Message::user("explain the core loop".to_string()));
