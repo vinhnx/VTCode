@@ -28,6 +28,7 @@ pub const OPENAI_GPT_6_LUNA: &str = "openai/gpt-6-luna";
 pub const GOOGLE_GEMINI_3_8_FLASH: &str = "google/gemini-3.8-flash";
 pub const GOOGLE_GEMINI_4_ARGON: &str = "google/gemini-4-argon";
 pub const GOOGLE_GEMINI_4_CARBON: &str = "google/gemini-4-carbon";
+pub const GOOGLE_GEMINI_4_HYDROGEN: &str = "google/gemini-4-hydrogen";
 pub const ANTHROPIC_CLAUDE_HAIKU_4_5_20251001: &str = "anthropic/claude-haiku-4-5-20251001";
 pub const ANTHROPIC_CLAUDE_HAIKU_5_5: &str = "anthropic/claude-haiku-5-5";
 pub const ANTHROPIC_CLAUDE_FABLE_5_1: &str = "anthropic/claude-fable-5-1";
@@ -58,6 +59,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     GOOGLE_GEMINI_3_8_FLASH,
     GOOGLE_GEMINI_4_ARGON,
     GOOGLE_GEMINI_4_CARBON,
+    GOOGLE_GEMINI_4_HYDROGEN,
     DEEPSEEK_FLASH,
     XAI_GROK_4_6,
     XAI_GROK_4_7,
@@ -122,6 +124,7 @@ pub const THINKING_BUDGET_ROUTES: &[&str] = &[
     GOOGLE_GEMINI_3_8_FLASH,
     GOOGLE_GEMINI_4_ARGON,
     GOOGLE_GEMINI_4_CARBON,
+    GOOGLE_GEMINI_4_HYDROGEN,
     DEEPSEEK_FLASH,
     MINIMAX_H3,
     MINIMAX_M3_1_FLASH,

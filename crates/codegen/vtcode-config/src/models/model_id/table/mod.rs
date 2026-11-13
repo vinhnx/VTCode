@@ -115,6 +115,12 @@ model_id_table! {
         display: "Gemini 4 Argon",
         description: "Flagship reasoning model for the hardest coding, agentic, math, and science problems with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high)",
     },
+    Gemini4Hydrogen {
+        provider: Gemini,
+        id: models::GEMINI_4_HYDROGEN,
+        display: "Gemini 4 Hydrogen",
+        description: "Fast and efficient model for everyday coding and agentic workflows with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high, xhigh)",
+    },
     Gemini4Carbon {
         provider: Gemini,
         id: models::GEMINI_4_CARBON,
@@ -471,6 +477,12 @@ model_id_table! {
         id: models::merge_gateway::GOOGLE_GEMINI_4_CARBON,
         display: "Gemini 4 Carbon (Merge Gateway)",
         description: "Google Gemini 4 Carbon strongest reasoning model accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
+    MergeGatewayGoogleGemini4Hydrogen {
+        provider: MergeGateway,
+        id: models::merge_gateway::GOOGLE_GEMINI_4_HYDROGEN,
+        display: "Gemini 4 Hydrogen (Merge Gateway)",
+        description: "Google Gemini 4 Hydrogen fast and efficient coding and agentic model accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
     MergeGatewayAnthropicClaudeHaiku4520251001 {
         provider: MergeGateway,

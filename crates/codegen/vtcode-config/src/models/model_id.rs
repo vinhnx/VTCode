@@ -27,6 +27,8 @@ pub enum ModelId {
     Gemini38Flash,
     /// Gemini 4 Argon - Flagship reasoning model for the hardest coding, agentic, math, and science problems (unified 1M context window, 64K sync output, long decode, low/medium/high thinking)
     Gemini4Argon,
+    /// Gemini 4 Hydrogen - Fast and efficient model for everyday coding and agentic workflows (unified 1M context window, 64K sync output, long decode, low/medium/high/xhigh thinking)
+    Gemini4Hydrogen,
     /// Gemini 4 Carbon - Strongest reasoning model for sustained agentic coding, multimodal knowledge work, scientific reasoning, and cybersecurity defense (unified 1M context window, 64K sync output, long decode, low/medium/high thinking)
     Gemini4Carbon,
 
@@ -150,6 +152,8 @@ pub enum ModelId {
     MergeGatewayGoogleGemini4Argon,
     /// Google Gemini 4 Carbon through Merge Gateway
     MergeGatewayGoogleGemini4Carbon,
+    /// Google Gemini 4 Hydrogen through Merge Gateway
+    MergeGatewayGoogleGemini4Hydrogen,
     /// Anthropic Claude Haiku 4.5 through Merge Gateway
     MergeGatewayAnthropicClaudeHaiku4520251001,
     /// Anthropic Claude Haiku 5.5 through Merge Gateway
