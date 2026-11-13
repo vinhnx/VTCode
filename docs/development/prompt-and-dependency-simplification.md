@@ -404,6 +404,23 @@ contain (`matrix`: "Manage a durable local task matrix.") failed on wording
 rather than behavior. The check now accepts any description that opens with a
 capitalized word followed by lowercase text, keeping the cue list as a fallback.
 
-The mirror is now read only for per-tool metadata (schemas, aliases,
-descriptions of individual registrations), which is what it exists for. No
-catalog-level count or token metric is measured on it.
+Two further catalog-level tests were still reading the mirror in a different
+module:
+
+| Test | Change |
+| ---- | ------ |
+| `assembly::tests::folded_lifecycle_aliases_resolve_to_their_new_parents` | built `ToolAssembly` from the mirror, so an alias present only there would pass while never resolving at runtime; now reads the shipped inventory |
+| `system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds` | hashed a mirror catalog twice. The shipped inventory stores registrations in an `FxHashMap`, which is exactly where ordering could vary, so the mirror could never exercise the risk it guards |
+
+The mirror is now read only for per-tool metadata: `metadata()` on an
+individual registration (schema, aliases, description). No catalog-level count,
+token metric, ordering hash, or alias-resolution assembly is built from it.
+
+Verified per consumer, not by assumption. Every `builtin_tool_registrations`
+call site was classified; the nine that remain each read `.metadata()` on one
+registration. Non-vacuousness was re-checked after the move by injection:
+
+| Injection | Failure |
+| --------- | ------- |
+| Remove `close_agent` alias from the shipped path | `expected close_agent to resolve, got error: Tool error: Unknown tool: close_agent Did you mean: close_subagent?` |
+| Hash a per-call timestamp in the determinism test | `system prompt + tool schema prefix is not byte-stable across rebuilds` |

@@ -640,14 +640,18 @@ async fn first_request_total_token_budget_within_limit() {
 /// tool schema twice must produce byte-identical output. Any non-determinism
 /// (random ordering, uninitialized memory, race) invalidates provider
 /// prompt caches and re-pays full input cost on every turn.
-#[test]
-fn system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds() {
+///
+/// Runs against the shipped catalog. The inventory stores registrations in an
+/// `FxHashMap`, so this is exactly where ordering could vary; a catalog built
+/// from the test mirror would never exercise that iteration.
+#[tokio::test]
+async fn system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds() {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     use crate::config::ToolDocumentationMode;
     use crate::prompts::system::default_system_prompt;
-    use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -657,14 +661,14 @@ fn system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds() {
         parameters: &'a serde_json::Value,
     }
 
-    fn hash_system_prompt_and_tools() -> u64 {
+    async fn hash_system_prompt_and_tools() -> u64 {
         let mut hasher = DefaultHasher::new();
 
         let system_prompt = default_system_prompt();
         system_prompt.hash(&mut hasher);
 
-        let registrations = builtin_tool_registrations(None);
-        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let temp = tempfile::tempdir().expect("workspace tempdir");
+        let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
         let config = SessionToolsConfig::full_public(
             SessionSurface::Interactive,
             CapabilityLevel::CodeSearch,
@@ -672,7 +676,7 @@ fn system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds() {
             ToolModelCapabilities::default(),
         );
 
-        let schema_entries = catalog.schema_entries(config);
+        let schema_entries = registry.schema_entries(config).await;
         for entry in &schema_entries {
             let estimate = ToolSchemaEstimate {
                 name: &entry.name,
@@ -687,8 +691,8 @@ fn system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds() {
         hasher.finish()
     }
 
-    let hash1 = hash_system_prompt_and_tools();
-    let hash2 = hash_system_prompt_and_tools();
+    let hash1 = hash_system_prompt_and_tools().await;
+    let hash2 = hash_system_prompt_and_tools().await;
 
     assert_eq!(hash1, hash2, "system prompt + tool schema prefix is not byte-stable across rebuilds");
 }

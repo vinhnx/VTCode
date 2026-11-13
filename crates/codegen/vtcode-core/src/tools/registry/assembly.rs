@@ -479,18 +479,31 @@ mod tests {
         }
     }
 
-    #[test]
-    fn folded_lifecycle_aliases_resolve_to_their_new_parents() {
+    #[tokio::test]
+    async fn folded_lifecycle_aliases_resolve_to_their_new_parents() {
         // `wait_agent` / `close_agent` were folded into `agent`
         // (action='wait'/'close'), and `mcp_connect_server` /
         // `mcp_disconnect_server` were folded into `mcp`
         // (action='connect'/'disconnect'). The legacy names must keep
         // resolving through the public-route alias table to their new
         // canonical registration so old callers still work.
-        use super::super::builtins::builtin_tool_registrations;
+        //
+        // The aliases are read from the shipped packs, not the test mirror:
+        // the mirror is a parallel implementation, and an alias added only
+        // there would pass this test while never resolving at runtime.
+        use crate::tools::registry::distributed::ToolConfigSnapshot;
+        use crate::tools::registry::inventory::ToolInventory;
+        use std::sync::Arc;
 
-        let registrations = builtin_tool_registrations(None);
-        let assembly = ToolAssembly::from_registrations(registrations);
+        let temp = tempfile::tempdir().expect("workspace tempdir");
+        let inventory = ToolInventory::new(
+            temp.path().to_path_buf(),
+            Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new()),
+        );
+        let plan_state = crate::tools::handlers::PlanningWorkflowState::new(temp.path().to_path_buf());
+        super::super::pack::register_builtin_packs(&inventory, &plan_state, &ToolConfigSnapshot::default()).await;
+
+        let assembly = ToolAssembly::from_registrations(inventory.registrations_snapshot());
 
         for (alias, expected_parent) in [
             (tools::WAIT_AGENT, tools::AGENT),
