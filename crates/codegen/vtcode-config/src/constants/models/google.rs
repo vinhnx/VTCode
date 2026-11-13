@@ -61,8 +61,7 @@ pub const CACHING_MODELS: &[&str] = &[
 /// Reference: <https://ai.google.dev/gemini-api/docs/models/gemini-4-argon>,
 /// <https://ai.google.dev/gemini-api/docs/models/gemini-4-carbon>,
 /// <https://ai.google.dev/gemini-api/docs/models/gemini-4-hydrogen>
-pub const IMPLICIT_CACHING_ONLY_MODELS: &[&str] =
-    &["gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon"];
+pub const IMPLICIT_CACHING_ONLY_MODELS: &[&str] = &["gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon"];
 
 /// Models that support code execution (Python)
 /// Code execution allows models to write and execute Python code

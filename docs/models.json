@@ -10,6 +10,49 @@
     "doc": "https://ai.google.dev/gemini-api/docs/models",
     "default_model": "gemini-3.7-flash",
     "models": {
+      "gemini-4-hydrogen": {
+        "id": "gemini-4-hydrogen",
+        "name": "Gemini 4 Hydrogen",
+        "description": "Fast and efficient model for everyday coding and agentic workflows with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high, xhigh)",
+        "version": "stable",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "caching": true,
+          "code_execution": true,
+          "batch_api": true,
+          "structured_output": true,
+          "search_grounding": true,
+          "url_context": true,
+          "thinking": true
+        },
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "cost": {
+          "input": 1.5e-6,
+          "output": 7.5e-6,
+          "cache_read": 7.5e-8
+        },
+        "is_pro": true
+      },
       "gemini-4-carbon": {
         "id": "gemini-4-carbon",
         "name": "Gemini 4 Carbon",
@@ -4758,6 +4801,38 @@
         "id": "google/gemini-4-carbon",
         "name": "Gemini 4 Carbon (Merge Gateway)",
         "description": "Google Gemini 4 Carbon strongest reasoning model served through Merge Gateway native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
+        "is_pro": true
+      },
+      "google/gemini-4-hydrogen": {
+        "id": "google/gemini-4-hydrogen",
+        "name": "Gemini 4 Hydrogen (Merge Gateway)",
+        "description": "Google Gemini 4 Hydrogen fast and efficient coding and agentic model served through Merge Gateway native Responses API.",
         "reasoning": true,
         "reasoning_efforts": [
           "minimal",

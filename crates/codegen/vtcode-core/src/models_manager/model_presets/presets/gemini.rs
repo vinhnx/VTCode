@@ -1,11 +1,27 @@
 //! gemini_presets — provider preset definitions for gemini.
 
 use super::super::ModelPreset;
-use super::reasoning_ladder_low_medium_high_verbose;
+use super::{reasoning_ladder_low_medium_high_verbose, reasoning_ladder_low_medium_high_xhigh_verbose};
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn gemini_presets() -> Vec<ModelPreset> {
     vec![
+        ModelPreset {
+            id: "gemini-4-hydrogen".to_string(),
+            model: "gemini-4-hydrogen".to_string(),
+            display_name: "Gemini 4 Hydrogen".to_string(),
+            description:
+                "Fast and efficient model for everyday coding and agentic workflows with a unified 1M context window and long decode"
+                    .to_string(),
+            provider: Provider::Gemini,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: reasoning_ladder_low_medium_high_xhigh_verbose(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
+        },
         ModelPreset {
             id: "gemini-4-carbon".to_string(),
             model: "gemini-4-carbon".to_string(),

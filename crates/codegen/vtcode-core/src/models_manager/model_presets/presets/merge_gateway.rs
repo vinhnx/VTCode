@@ -96,6 +96,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::GOOGLE_GEMINI_4_HYDROGEN,
+            "Gemini 4 Hydrogen (Merge Gateway)",
+            "Google Gemini 4 Hydrogen fast and efficient coding and agentic model through Merge Gateway",
+            1_048_576,
+            false,
+        ),
+        (
             models::merge_gateway::DEEPSEEK_FLASH,
             "DeepSeek V4.1 Flash 1017 (Merge Gateway)",
             "DeepSeek V4.1 Flash 1017 through Merge Gateway",

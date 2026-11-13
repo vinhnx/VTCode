@@ -41,6 +41,18 @@ pub(crate) fn reasoning_ladder_low_medium_high_verbose() -> Vec<ReasoningEffortP
     ]
 }
 
+/// Four-tier ladder for Gemini 4 Hydrogen: `Fast responses` (low),
+/// `Balanced reasoning` (medium), `Deep reasoning` (high), and
+/// `Maximum reasoning` (xhigh).
+pub(crate) fn reasoning_ladder_low_medium_high_xhigh_verbose() -> Vec<ReasoningEffortPreset> {
+    vec![
+        reasoning_preset(ReasoningEffortLevel::Low, "Fast responses"),
+        reasoning_preset(ReasoningEffortLevel::Medium, "Balanced reasoning"),
+        reasoning_preset(ReasoningEffortLevel::High, "Deep reasoning"),
+        reasoning_preset(ReasoningEffortLevel::XHigh, "Maximum reasoning"),
+    ]
+}
+
 /// Two-tier ladder from a balanced high tier to maximum thinking: `Balanced`
 /// (high) then `Maximum thinking` (max).
 pub(crate) fn reasoning_ladder_high_max() -> Vec<ReasoningEffortPreset> {

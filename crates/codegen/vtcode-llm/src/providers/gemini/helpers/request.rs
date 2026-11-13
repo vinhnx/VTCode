@@ -624,6 +624,7 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
         let is_gemini3_flash_preview = request.model.contains("gemini-3-flash-preview");
         let is_gemini3_flash = request.model.contains("gemini-3") && request.model.contains("flash");
         let is_gemini4_argon = request.model.contains("gemini-4-argon") || request.model.contains("gemini-4-carbon");
+        let is_gemini4_hydrogen = models::google::XHIGH_THINKING_MODELS.contains(&request.model.as_str());
         let thinking_level = match effort {
             ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => Some("low"),
             ReasoningEffortLevel::Minimal => {
@@ -643,7 +644,15 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
                     Some("high")
                 }
             }
-            ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => Some("high"),
+            ReasoningEffortLevel::High => Some("high"),
+            ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => {
+                if is_gemini4_hydrogen {
+                    // Gemini 4 Hydrogen supports the `xhigh` thinking level
+                    Some("xhigh")
+                } else {
+                    Some("high")
+                }
+            }
         };
 
         if let Some(level) = thinking_level {
