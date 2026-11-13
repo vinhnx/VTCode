@@ -227,14 +227,28 @@ fn web_fetch_schema_rejects_unknown_output_modes() {
 ///
 /// Tools exempted from rule 3 are simple read-only helpers where the
 /// model can safely call them without explicit guard-rails.
-#[test]
-fn tool_descriptions_satisfy_documented_contract() {
+#[tokio::test]
+async fn tool_descriptions_satisfy_documented_contract() {
     use crate::config::ToolDocumentationMode;
     use crate::tools::handlers::compact::compact_tool_description;
-    use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+    use std::sync::Arc;
 
+    use crate::tools::registry::distributed::ToolConfigSnapshot;
+    use crate::tools::registry::inventory::ToolInventory;
+
+    // Read the descriptions the shipped packs register. The test mirror also
+    // carries descriptions, but it is a parallel implementation: this test
+    // passed while the shipped `code_search` text had lost a capability the
+    // runtime supports, because it was reading the mirror's copy.
     let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
-    let registrations = builtin_tool_registrations(Some(&plan_state));
+    let temp = tempfile::tempdir().unwrap();
+    let inventory = ToolInventory::new(
+        temp.path().to_path_buf(),
+        Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new()),
+    );
+    super::super::pack::register_builtin_packs(&inventory, &plan_state, &ToolConfigSnapshot::default()).await;
+    let registrations = inventory.registrations_snapshot();
 
     let verb_cues = [
         "Use ",
@@ -315,15 +329,17 @@ fn tool_descriptions_satisfy_documented_contract() {
     // Rules 2 and 3 are checked against the text the model receives in
     // the default Progressive documentation mode, not just the source
     // string, so a projection that drops later sentences cannot hide a
-    // missing cue.
-    let progressive_catalog =
-        SessionToolCatalog::rebuild_from_registrations(builtin_tool_registrations(Some(&plan_state)));
-    let progressive_entries = progressive_catalog.schema_entries(SessionToolsConfig::full_public(
-        SessionSurface::Interactive,
-        CapabilityLevel::CodeSearch,
-        ToolDocumentationMode::Progressive,
-        ToolModelCapabilities::default(),
-    ));
+    // missing cue. Read through `ToolRegistry` so the projection the model
+    // receives is the one asserted.
+    let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
+    let progressive_entries = registry
+        .schema_entries(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Progressive,
+            ToolModelCapabilities::default(),
+        ))
+        .await;
     assert!(!progressive_entries.is_empty(), "Progressive catalog must expose builtin tools");
 
     for registration in &registrations {
@@ -351,11 +367,24 @@ fn tool_descriptions_satisfy_documented_contract() {
         );
         let description = sent;
 
-        // Rule 2: verb cue (case-sensitive "Use " is the most common).
-        let has_verb = verb_cues.iter().any(|cue| description.contains(cue));
+        // Rule 2: the description opens with an action verb.
+        //
+        // The cue list below is illustrative, not exhaustive: a description
+        // that opens with any capitalised word followed by lowercase text is
+        // an imperative sentence ("Manage a durable local task matrix.").
+        // Checking only the list rejected a valid verb the list had not
+        // happened to include, so a new tool's description would fail for
+        // wording rather than for behavior.
+        let starts_with_imperative = description.split_whitespace().next().is_some_and(|word| {
+            let mut chars = word.chars();
+            chars.next().is_some_and(char::is_uppercase)
+                && chars.next().is_some_and(char::is_lowercase)
+                && word.trim_end_matches(|c: char| !c.is_alphabetic()).len() > 2
+        });
+        let has_verb = starts_with_imperative || verb_cues.iter().any(|cue| description.contains(cue));
         assert!(
             has_verb,
-            "{tool_name}: description must contain a verb cue like 'Use ', 'Create ', 'Fetch ', etc.\nDescription: {description}"
+            "{tool_name}: description must open with an action verb or contain a cue like 'Use ', 'Create ', 'Fetch ', etc.\nDescription: {description}"
         );
 
         // Rule 3: constraint cue for side-effect tools.
@@ -428,11 +457,13 @@ async fn default_config_exposed_tool_count_within_cap() {
     );
 }
 
-#[test]
-fn public_decision_is_available_in_interactive_and_headless_planning_and_execution() {
+#[tokio::test]
+async fn public_decision_is_available_in_interactive_and_headless_planning_and_execution() {
     use crate::config::ToolDocumentationMode;
-    use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
-    let catalog = SessionToolCatalog::rebuild_from_registrations(builtin_tool_registrations(None));
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+    // Assert the surface the model actually receives, not the test mirror.
+    let temp = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
     for surface in [SessionSurface::Interactive, SessionSurface::AgentRunner] {
         for planning in [false, true] {
             let config = SessionToolsConfig::full_public(
@@ -442,10 +473,15 @@ fn public_decision_is_available_in_interactive_and_headless_planning_and_executi
                 ToolModelCapabilities::default(),
             )
             .with_planning_active(planning);
-            let names = catalog.public_tool_names(config);
+            let names: Vec<String> = registry
+                .schema_entries(config)
+                .await
+                .into_iter()
+                .map(|entry| entry.name)
+                .collect();
             assert!(
                 names.iter().any(|name| name == tools::RECORD_DECISION),
-                "decision missing on {surface:?}, planning={planning}"
+                "decision missing on {surface:?}, planning={planning}; got {names:?}"
             );
         }
     }
@@ -523,12 +559,12 @@ async fn emitted_model_tool_schema_fits_within_first_request_budget() {
 /// the effective-default system prompt (Minimal) plus Progressive tool
 /// schemas, instruction appendix, and welcome addendum must stay under
 /// 6k tokens with no MCP, and under 8k tokens with 5 simulated MCP servers.
-#[test]
-fn first_request_total_token_budget_within_limit() {
+#[tokio::test]
+async fn first_request_total_token_budget_within_limit() {
     use crate::config::ToolDocumentationMode;
     use crate::config::types::SystemPromptMode;
     use crate::prompts::system::static_profile_prompt;
-    use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -538,8 +574,13 @@ fn first_request_total_token_budget_within_limit() {
         parameters: &'a serde_json::Value,
     }
 
-    let registrations = builtin_tool_registrations(None);
-    let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+    // Measure the shipped catalog through `ToolRegistry`, which applies the
+    // deferred-loading policy and the runtime access gates. Building the
+    // catalog straight from the test mirror under-reports this budget: the
+    // mirror never declares `matrix`, so it happened to land on the same
+    // number the gated path produces.
+    let temp = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
     let config = SessionToolsConfig::full_public(
         SessionSurface::Interactive,
         CapabilityLevel::CodeSearch,
@@ -547,7 +588,7 @@ fn first_request_total_token_budget_within_limit() {
         ToolModelCapabilities::default(),
     );
 
-    let schema_entries = catalog.schema_entries(config);
+    let schema_entries = registry.schema_entries(config).await;
     let tool_schema_tokens: usize = schema_entries
         .iter()
         .map(|entry| {

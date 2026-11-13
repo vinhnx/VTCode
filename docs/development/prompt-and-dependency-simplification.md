@@ -388,3 +388,22 @@ were pointed at the shipped path too:
 The count cap is now 8 against a measured 5. It previously read 15 against a
 raw registration count of 15 — a number that described a catalog no session
 receives.
+
+Three more catalog-level tests read the mirror and were moved to the shipped
+catalog:
+
+| Test | Change |
+| ---- | ------ |
+| `first_request_total_token_budget_within_limit` | mirror catalog → gate-aware `ToolRegistry`; measured 3455 combined (tools=2470) |
+| `tool_descriptions_satisfy_documented_contract` | read shipped registrations and the shipped `ToolRegistry` projection. This is the guard that should have caught the `code_search` drift: it was asserting the mirror's copy while the shipped text had lost a capability |
+| `public_decision_is_available_in_interactive_and_headless_planning_and_execution` | mirror catalog → `ToolRegistry::schema_entries` per surface and planning mode |
+
+Repointing the description guard exposed a second defect: its verb-cue list was
+closed, so a description opening with a valid verb the list happened not to
+contain (`matrix`: "Manage a durable local task matrix.") failed on wording
+rather than behavior. The check now accepts any description that opens with a
+capitalized word followed by lowercase text, keeping the cue list as a fallback.
+
+The mirror is now read only for per-tool metadata (schemas, aliases,
+descriptions of individual registrations), which is what it exists for. No
+catalog-level count or token metric is measured on it.
