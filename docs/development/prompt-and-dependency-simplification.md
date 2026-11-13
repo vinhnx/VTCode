@@ -414,6 +414,22 @@ module:
 | `assembly::tests::folded_lifecycle_aliases_resolve_to_their_new_parents` | built `ToolAssembly` from the mirror, so an alias present only there would pass while never resolving at runtime; now reads the shipped inventory |
 | `system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds` | hashed a mirror catalog twice. The shipped inventory stores registrations in an `FxHashMap`, which is exactly where ordering could vary, so the mirror could never exercise the risk it guards |
 
+### Verification (re-checked after the deletion)
+
+Every remaining KEEP / "kept" claim in this document was re-checked against
+the code rather than assumed:
+
+| Claim | Evidence |
+| ----- | -------- |
+| Tree-sitter KEEP | `vtcode-safety/Cargo.toml` still depends on `tree-sitter`/`tree-sitter-bash`; `command_safety/shell_parser/mod.rs` calls `parse_with_tree_sitter` |
+| `ignore` KEEP | `vtcode-indexer` and `vtcode-core` still depend on it; `file_search/mod.rs` builds `ignore::WalkBuilder` |
+| `tool_effectiveness` kept | `execution_context.rs` stores an `effectiveness_snapshot` and sets it per call |
+| `mcp action=search_tools` kept | its description still states it searches only MCP-server tools, disjoint from `search_tools` |
+| Section 5 removals | `tools/defuddle/` is gone and no `DEFUDDLE_FETCH` remains |
+| Section 6 removals | `file_search_rpc.rs` and `search_metrics.rs` are gone with no module re-export |
+| `SimpleIndexer` kept | `vtcode-indexer` is still in `publish_extracted_crates.sh`; the three methods are still `pub` |
+| Measured prompt sizes | re-measured: composed 61/67/71/71, runtime 71/77/81/81, static tokens 457/628/734/730 |
+
 The mirror is now **deleted**. Once every catalog-level consumer moved to the
 shipped path, the nine remaining readers were per-tool metadata assertions that
 read just as well from `inventory.registrations_snapshot()`, and
