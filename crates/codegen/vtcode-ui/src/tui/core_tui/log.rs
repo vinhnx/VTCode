@@ -12,7 +12,7 @@ use ratatui::{
 use syntect::easy::HighlightLines;
 use syntect::highlighting::Theme;
 use syntect::parsing::SyntaxReference;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{Sender, error::TrySendError};
 use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
@@ -32,8 +32,12 @@ pub struct LogEntry {
 
 #[derive(Default)]
 struct LogForwarder {
-    sender: Mutex<Option<UnboundedSender<LogEntry>>>,
+    sender: Mutex<Option<Sender<LogEntry>>>,
+    dropped: AtomicBool,
 }
+
+pub(crate) const LOG_QUEUE_CAPACITY: usize = 256;
+const MAX_LOG_FIELD_BYTES: usize = 8 * 1024;
 
 impl LogForwarder {
     fn has_sender(&self) -> bool {
@@ -43,9 +47,10 @@ impl LogForwarder {
         }
     }
 
-    fn set_sender(&self, sender: UnboundedSender<LogEntry>) {
+    fn set_sender(&self, sender: Sender<LogEntry>) {
         match self.sender.lock() {
             Ok(mut guard) => {
+                self.dropped.store(false, Ordering::Relaxed);
                 *guard = Some(sender);
             }
             Err(err) => {
@@ -69,13 +74,19 @@ impl LogForwarder {
         match self.sender.lock() {
             Ok(guard) => {
                 if let Some(sender) = guard.as_ref() {
-                    let _ = sender.send(entry);
+                    if matches!(sender.try_send(entry), Err(TrySendError::Full(_))) {
+                        self.dropped.store(true, Ordering::Relaxed);
+                    }
                 }
             }
             Err(err) => {
                 tracing::warn!("failed to forward TUI log entry; lock poisoned: {err}");
             }
         }
+    }
+
+    fn take_dropped(&self) -> bool {
+        self.dropped.swap(false, Ordering::Relaxed)
     }
 }
 
@@ -127,7 +138,7 @@ impl Default for TuiLogLayer {
 }
 
 impl TuiLogLayer {
-    fn set_sender(sender: UnboundedSender<LogEntry>) {
+    fn set_sender(sender: Sender<LogEntry>) {
         LOG_FORWARDER.set_sender(sender);
     }
 
@@ -179,8 +190,8 @@ where
         let mut visitor = FieldVisitor::default();
         event.record(&mut visitor);
 
-        let message = visitor.message.unwrap_or_else(|| "(no message)".to_string());
-        let extras = if visitor.extras.is_empty() {
+        let mut message = visitor.message.unwrap_or_else(|| "(no message)".to_string());
+        let mut extras = if visitor.extras.is_empty() {
             String::new()
         } else {
             let rendered = visitor
@@ -191,6 +202,8 @@ where
                 .join(" ");
             format!(" {rendered}")
         };
+        truncate_log_field(&mut message);
+        truncate_log_field(&mut extras);
 
         // Filter out redundant system warnings that clutter the UI
         let combined_message = format!("{message}{extras}");
@@ -245,8 +258,20 @@ pub fn make_tui_log_layer() -> TuiLogLayer {
     TuiLogLayer::new()
 }
 
-pub(crate) fn register_tui_log_sender(sender: UnboundedSender<LogEntry>) {
+pub(crate) fn register_tui_log_sender(sender: Sender<LogEntry>) {
     TuiLogLayer::set_sender(sender);
+}
+
+pub(crate) fn take_dropped_tui_logs() -> bool {
+    LOG_FORWARDER.take_dropped()
+}
+
+fn truncate_log_field(field: &mut String) {
+    if field.len() > MAX_LOG_FIELD_BYTES {
+        let end = field.floor_char_boundary(MAX_LOG_FIELD_BYTES - 3);
+        field.truncate(end);
+        field.push_str("...");
+    }
 }
 
 pub(crate) fn clear_tui_log_sender() {
@@ -388,4 +413,75 @@ pub(crate) fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
     let mut highlighted = highlight_lines_to_text(entry.message.lines(), syntax);
     prepend_metadata(&mut highlighted, entry);
     highlighted
+}
+
+#[cfg(test)]
+mod bounded_log_tests {
+    use super::*;
+
+    fn entry(message: &str) -> LogEntry {
+        LogEntry {
+            formatted: Arc::from(message),
+            timestamp: Arc::from("time"),
+            level: Level::INFO,
+            target: Arc::from("test"),
+            message: Arc::from(message),
+        }
+    }
+
+    #[test]
+    fn stalled_log_consumer_is_bounded_and_recovers_after_draining() {
+        let forwarder = LogForwarder::default();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        forwarder.set_sender(sender);
+        forwarder.send(entry("first"));
+        forwarder.send(entry("second"));
+        for _ in 0..10_000 {
+            forwarder.send(entry("overflow"));
+        }
+        assert!(forwarder.take_dropped());
+        assert!(!forwarder.take_dropped());
+        assert_eq!(&*receiver.try_recv().unwrap().message, "first");
+        forwarder.send(entry("after drain"));
+        assert_eq!(&*receiver.try_recv().unwrap().message, "second");
+        assert_eq!(&*receiver.try_recv().unwrap().message, "after drain");
+        assert!(receiver.try_recv().is_err());
+        assert!(!forwarder.take_dropped());
+    }
+
+    #[test]
+    fn log_field_truncation_respects_utf8_and_the_byte_limit() {
+        let mut exact = "a".repeat(MAX_LOG_FIELD_BYTES);
+        truncate_log_field(&mut exact);
+        assert_eq!(exact.len(), MAX_LOG_FIELD_BYTES);
+        assert!(!exact.ends_with("..."));
+        let mut long = "界".repeat(MAX_LOG_FIELD_BYTES);
+        truncate_log_field(&mut long);
+        assert!(long.len() <= MAX_LOG_FIELD_BYTES);
+        assert!(long.ends_with("..."));
+    }
+
+    #[test]
+    fn dropped_logs_are_visible_when_the_panel_next_drains() {
+        use crate::tui::core_tui::{session::Session, types::InlineTheme};
+
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        register_tui_log_sender(sender);
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_log_receiver(receiver);
+        LOG_FORWARDER.send(entry("kept"));
+        LOG_FORWARDER.send(entry("discarded entry"));
+        session.poll_log_entries();
+        let rendered = session
+            .log_text()
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("(some logs dropped)"));
+        assert!(rendered.contains("kept"));
+        assert!(!rendered.contains("discarded entry"));
+        clear_tui_log_sender();
+    }
 }

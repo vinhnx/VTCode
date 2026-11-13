@@ -1,7 +1,7 @@
 use super::*;
 
 impl Session {
-    pub(crate) fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
+    pub(crate) fn set_log_receiver(&mut self, receiver: Receiver<LogEntry>) {
         self.log_receiver = Some(receiver);
     }
 
@@ -23,6 +23,11 @@ impl Session {
             return;
         }
 
+        if crate::tui::core_tui::log::take_dropped_tui_logs() {
+            self.log_evicted = true;
+            self.log_cached_text = None;
+            self.mark_dirty();
+        }
         if let Some(receiver) = self.log_receiver.as_mut() {
             let mut drained = Vec::new();
             while drained.len() < MAX_LOG_DRAIN_PER_TICK {
@@ -52,7 +57,7 @@ impl Session {
 
         let mut text = Text::default();
         if self.log_evicted {
-            text.lines.push(Line::from("(oldest logs dropped)"));
+            text.lines.push(Line::from("(some logs dropped)"));
         }
 
         for entry in self.log_lines.iter() {

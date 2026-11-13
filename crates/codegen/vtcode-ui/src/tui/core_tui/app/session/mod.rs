@@ -897,7 +897,7 @@ impl TuiSessionDriver for AppSession {
         self.core.set_workspace_root(root);
     }
 
-    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>) {
+    fn set_log_receiver(&mut self, receiver: tokio::sync::mpsc::Receiver<crate::tui::core_tui::log::LogEntry>) {
         self.core.set_log_receiver(receiver);
     }
 

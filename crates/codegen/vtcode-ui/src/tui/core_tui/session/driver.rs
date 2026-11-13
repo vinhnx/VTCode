@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, UnboundedSender};
 
 use crate::tui::core_tui::log::LogEntry;
 use crate::tui::core_tui::runner::TuiSessionDriver;
@@ -120,7 +120,7 @@ impl TuiSessionDriver for Session {
         self.set_workspace_root(root);
     }
 
-    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
+    fn set_log_receiver(&mut self, receiver: Receiver<LogEntry>) {
         self.set_log_receiver(receiver);
     }
 

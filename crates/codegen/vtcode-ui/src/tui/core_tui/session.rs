@@ -13,7 +13,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Clear, ListState, Widget},
 };
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, UnboundedSender};
 
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
@@ -322,7 +322,7 @@ pub struct Session {
     held_key_modifiers: KeyModifiers,
 
     // --- Logging ---
-    log_receiver: Option<UnboundedReceiver<LogEntry>>,
+    log_receiver: Option<Receiver<LogEntry>>,
     log_lines: VecDeque<Arc<Text<'static>>>,
     log_cached_text: Option<Arc<Text<'static>>>,
     log_evicted: bool,

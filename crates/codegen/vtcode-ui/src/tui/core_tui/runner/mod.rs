@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use ratatui::{Terminal, backend::CrosstermBackend};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 use tokio_util::sync::CancellationToken;
 
 use crate::tui::config::types::UiSurfacePreference;
 use crate::tui::options::FullscreenInteractionSettings;
-use crate::tui::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
+use crate::tui::ui::tui::log::{LOG_QUEUE_CAPACITY, clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 
 type EventCallback<E> = std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>;
 
@@ -84,7 +84,7 @@ pub trait TuiSessionDriver {
     fn set_show_logs(&mut self, show: bool);
     fn set_active_pty_sessions(&mut self, sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>);
     fn set_workspace_root(&mut self, root: Option<std::path::PathBuf>);
-    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>);
+    fn set_log_receiver(&mut self, receiver: Receiver<crate::tui::core_tui::log::LogEntry>);
     fn set_fullscreen_active(&mut self, active: bool);
     fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings);
     fn set_preview_callback(&mut self, callback: Option<PreviewCallback>);
@@ -295,7 +295,7 @@ where
     session.set_fullscreen_active(surface.use_alternate());
     session.set_fullscreen_interaction(options.fullscreen);
     if options.show_logs {
-        let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (log_tx, log_rx) = tokio::sync::mpsc::channel(LOG_QUEUE_CAPACITY);
         session.set_log_receiver(log_rx);
         register_tui_log_sender(log_tx);
     } else {
