@@ -91,6 +91,13 @@ filter = "test(headless_planning_returns_the_actual_plan_after_distinct_shell_in
 test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
+# Prepared-call budget sweep (~15s standalone) vs the 10s quick ceiling:
+# same isolation and headroom as the runner sweep above.
+[[profile.quick.overrides]]
+filter = "test(many_prepared_tool_calls_execute_without_call_count_cap)"
+test-group = "slow"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
 # ── Changed profile ──────────────────────────────────────────────
 # Run only tests in crates that have changed since a baseline ref.
 # Used via: cargo nextest run --profile changed --changed --since HEAD~1
