@@ -283,7 +283,10 @@ pub(crate) fn generate_tool_guidelines_for_profile(
         // classification (`tool_intent/activity.rs`, spool processing); the
         // prompt keeps only the outcome rule so wording cannot drift from
         // enforcement.
-        lines.push("- Run verifiers standalone with `max_output_tokens`. Pure `head`/`tail` tails run standalone; static read-only filtering pipelines use fail-closed `pipefail`. Only terminal exit 0 clears verification; dynamic syntax, mutating tails, `;`, and `||` do not qualify. Recheck after `--fix`.".to_string());
+        // The schema documents `max_output_tokens` but its 10k default is far
+        // too large for a verifier, and the schema says nothing about
+        // verifiers. Naming the parameter here is the actionable fact.
+        lines.push("- Run verifiers standalone with a small `max_output_tokens`. Pure `head`/`tail` tails run standalone; static read-only filtering pipelines use fail-closed `pipefail`. Only terminal exit 0 clears verification; dynamic syntax, mutating tails, `;`, and `||` do not qualify. Recheck after `--fix`.".to_string());
         // Low-effort models sometimes report a change as done without
         // exercising it: require a real check (tests, type-checker, build,
         // or the changed command itself). A syntax-only check, or a check
@@ -667,8 +670,10 @@ fn shell_task_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static st
 fn background_exec_guidance() -> &'static str {
     // `background`, the three-process cap, `session_id`, `monitor_filter`, and
     // `monitor_digest` are all documented by the `exec_command` schema, which
-    // reaches the model with the tool definitions.
-    "- For long-lived commands, use `background: true` and drive the session with `write_stdin`."
+    // reaches the model with the tool definitions, and the runtime rejects an
+    // over-limit background start with an actionable error. The only fact the
+    // schema cannot state is *when* to reach for it.
+    "- For long-lived commands, start them in the background rather than blocking a turn."
 }
 
 fn read_only_batching_guidance(has_read_file: bool) -> &'static str {
@@ -680,7 +685,14 @@ fn read_only_batching_guidance(has_read_file: bool) -> &'static str {
 }
 
 fn code_search_guidance(has_exec: bool) -> String {
-    const BASE: &str = "- `code_search` queries are literal and smart-case; `|` separates alternatives. On a truncated result, narrow the query; on an unavailable result, do not retry identically, drop `file_types` or broaden `path`. Do not JSON-encode arrays or integers as strings.";
+    // The schema owns the query contract ("Literal code or path query",
+    // smart-case) and the filter names. What it cannot state is that `|`
+    // separates alternatives, that a truncated or unavailable result needs a
+    // different query rather than a retry, and that the runtime coerces a
+    // JSON-encoded array or integer. The runtime also emits per-call hints
+    // when it truncates or drops a result category, so this line carries the
+    // standing rule rather than repeating them.
+    const BASE: &str = "- `code_search` queries are literal and smart-case; `|` separates alternatives. On a truncated or unavailable result, change the query instead of retrying it. Do not JSON-encode arrays or integers as strings.";
     if has_exec {
         format!("{BASE} Use `exec_command` or a skill for syntax patterns.")
     } else {

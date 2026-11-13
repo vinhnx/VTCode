@@ -78,6 +78,9 @@ work unchanged on every provider, including small local models.
   ordering and batching rules, and the verification discipline. Envelope shape, parameter names, session-id handling,
   background-process limits, and example command lists stay in the tool descriptions and schemas. A line that repeats
   a schema is removed rather than shortened, because a duplicated rule drifts.
+  `guidelines::tests::schema_ownership::tool_schemas_own_their_parameter_documentation` enforces this: it derives the
+  forbidden text from the tool schemas themselves and checks every density and shell profile, so a new schema is covered
+  the day it is added.
   `static_prompts::tests::shared_contract_lines_and_runtime_bullets_appear_exactly_once_per_profile` asserts that every
   `SHARED_CONTRACT_LINES` entry, every profile-specific contract line, and every Runtime Guidance bullet appears exactly
   once in each profile, and `guidelines::tests::universal_rules_have_one_home_across_composed_prompt_sections` composes

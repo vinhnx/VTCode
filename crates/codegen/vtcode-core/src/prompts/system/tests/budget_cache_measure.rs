@@ -117,11 +117,11 @@ Use a skill only when the user names it or the task clearly matches. Load detail
 - Browse the repository with `exec_command.cmd`. Prefer `code_search` over `rg`/`grep` for code.
 - Batch independent read-only calls; order dependent reads, and serialize mutations.
 - In one-shot `exec_command` calls, do not use `!!`, `!$`, `!ssh`, or `fc`; write full command arguments explicitly from conversation or tool results. Interactive shells: review-safe history expansion (Bash `histverify`, zsh `HIST_VERIFY`).
-- For long-lived commands, use `background: true` and drive the session with `write_stdin`.
-- Run verifiers standalone with `max_output_tokens`. Pure `head`/`tail` tails run standalone; static read-only filtering pipelines use fail-closed `pipefail`. Only terminal exit 0 clears verification; dynamic syntax, mutating tails, `;`, and `||` do not qualify. Recheck after `--fix`.
+- For long-lived commands, start them in the background rather than blocking a turn.
+- Run verifiers standalone with a small `max_output_tokens`. Pure `head`/`tail` tails run standalone; static read-only filtering pipelines use fail-closed `pipefail`. Only terminal exit 0 clears verification; dynamic syntax, mutating tails, `;`, and `||` do not qualify. Recheck after `--fix`.
 - Run a real check that exercises the change; a syntax-only or failed-to-start check does not count. Install missing deps via the project's package manager, never sudo; if no check can run, say which and why.
 - Run fast checks before full builds.
-- `code_search` queries are literal and smart-case; `|` separates alternatives. On a truncated result, narrow the query; on an unavailable result, do not retry identically, drop `file_types` or broaden `path`. Do not JSON-encode arrays or integers as strings. Use `exec_command` or a skill for syntax patterns.
+- `code_search` queries are literal and smart-case; `|` separates alternatives. On a truncated or unavailable result, change the query instead of retrying it. Do not JSON-encode arrays or integers as strings. Use `exec_command` or a skill for syntax patterns.
 - Build and Auto share tools and safety gates; Auto changes confirmation behavior only after explicit approval or full-auto policy.
 - Run independent tools in parallel when inputs do not depend on each other.
 

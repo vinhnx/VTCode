@@ -326,6 +326,14 @@ confirmed issues. All four are fixed.
 | Planning mode stated two different `request_user_input` thresholds in one prompt: the planning notice's "critical blocker" rule and a weaker Active Tools rule. | Medium | The tool section now only narrows the threshold to blockers exploration did not resolve. `request_user_input_threshold_has_one_home_in_the_planning_prompt` pins it. |
 | `join_prompt_sections` still documented itself as reproducing "byte-identical" output, which stopped being true when the joiner started trimming section edges. | Low | Corrected the doc comment on `build_prompt_sections` and `join_prompt_sections`. |
 
+A second review pass found three more issues in the same area:
+
+| Issue | Severity | Fix |
+| ----- | -------- | --- |
+| Three prompt lines still restated schema documentation: `code_search` named the `path` and `file_types` parameters, the environment line named `file_types`, and the background line repeated `background: true` plus the `write_stdin` handoff. | Medium | Each line now carries only what the schema cannot state. The runtime already emits per-call hints when `code_search` truncates or drops a result category, and it rejects an over-limit background start with an actionable error, so the standing prompt rules no longer repeat them. |
+| The "tool schemas own per-tool mechanics" rule was enforced only by scattered, per-constant assertions, so a schema fact could drift back into any prompt variant unnoticed. | Medium | Added `tool_schemas_own_their_parameter_documentation`, which derives the forbidden text from the tool schemas themselves and checks every density and shell profile. A new schema is covered the day it is added. |
+| The `max_output_tokens` name in the verifier rule looked like a schema restatement, but the schema's 10k default is far too large for a verifier and the schema says nothing about verifiers. | Not a defect | Kept, with a comment recording why the parameter name is the actionable fact. |
+
 The prompt conventions this change established are recorded in
 `docs/development/maintainer-notes/vtcode-core.md` and summarized in
 `docs/harness/prompt-architecture.md`.

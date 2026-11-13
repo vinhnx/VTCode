@@ -464,7 +464,9 @@ async fn test_live_prompt_renders_workspace_language_hints() {
 
     assert!(result.contains("## Environment"));
     assert!(result.contains("Rust, TypeScript"));
-    assert!(result.contains("Narrow `code_search` with `file_types`"));
+    // The language list is model-facing; the `code_search` filter parameter
+    // belongs to the tool schema.
+    assert!(!result.contains("`file_types`"));
 }
 #[tokio::test]
 async fn test_live_prompt_omits_workspace_language_hints_without_languages() {

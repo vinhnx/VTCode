@@ -59,4 +59,5 @@ mod parallel_planning;
 mod planning_shell;
 mod presence_parallel;
 mod runtime_sections;
+mod schema_ownership;
 mod universal_docs;
