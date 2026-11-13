@@ -41,6 +41,50 @@ pub(crate) fn drain_consumed_sse(buf: &mut Vec<u8>, offset: &mut usize) {
     }
 }
 
+/// Maximum bytes retained for one incomplete SSE event.
+///
+/// Draining keeps the wire buffer at the unprocessed tail, but the tail
+/// itself is unbounded when a peer never emits an event boundary. SSE
+/// payloads are per-event JSON deltas (typically well under 64 KiB), so
+/// 1 MiB is generous headroom; anything past it fails closed instead of
+/// growing for the stream lifetime.
+pub(crate) const MAX_SSE_TAIL_BYTES: usize = 1_048_576;
+
+/// The unprocessed SSE tail grew past [`MAX_SSE_TAIL_BYTES`] without
+/// completing an event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SseTailOverflow {
+    /// Retained tail bytes when the bound tripped.
+    pub retained_bytes: usize,
+}
+
+impl std::fmt::Display for SseTailOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "stream event exceeded {MAX_SSE_TAIL_BYTES} bytes without an event boundary (retained {} bytes)",
+            self.retained_bytes
+        )
+    }
+}
+
+/// Fail-closed bound for the unprocessed SSE tail.
+///
+/// Call once per chunk, after draining the consumed prefix, so the
+/// measured length is what the loop actually retains. Takes a length
+/// rather than the buffer so byte and string wire buffers share it.
+///
+/// # Errors
+///
+/// Returns [`SseTailOverflow`] when `retained_bytes` tops
+/// [`MAX_SSE_TAIL_BYTES`]; the caller must abort the stream.
+pub(crate) fn check_sse_tail_bound(retained_bytes: usize) -> Result<(), SseTailOverflow> {
+    if retained_bytes > MAX_SSE_TAIL_BYTES {
+        return Err(SseTailOverflow { retained_bytes });
+    }
+    Ok(())
+}
+
 #[inline]
 pub(crate) fn extract_data_payload<'a>(event: &'a str) -> Option<Cow<'a, str>> {
     // For the common single `data:` line case, return a borrowed slice to
@@ -237,5 +281,28 @@ mod tests {
     fn find_sse_boundary_prefers_newline() {
         let buffer = "data: foo\n\nrest";
         assert_eq!(find_sse_boundary(buffer), Some((9, 2)));
+    }
+
+    #[test]
+    fn sse_tail_bound_accepts_at_most_max_bytes() {
+        use super::{MAX_SSE_TAIL_BYTES, SseTailOverflow, check_sse_tail_bound};
+
+        for accepted in [0, 1, MAX_SSE_TAIL_BYTES - 1, MAX_SSE_TAIL_BYTES] {
+            assert_eq!(check_sse_tail_bound(accepted), Ok(()), "retained {accepted}");
+        }
+        assert_eq!(
+            check_sse_tail_bound(MAX_SSE_TAIL_BYTES + 1),
+            Err(SseTailOverflow { retained_bytes: MAX_SSE_TAIL_BYTES + 1 })
+        );
+    }
+
+    #[test]
+    fn sse_tail_overflow_names_the_bound_and_retained_bytes() {
+        use super::{MAX_SSE_TAIL_BYTES, check_sse_tail_bound};
+
+        let overflow = check_sse_tail_bound(MAX_SSE_TAIL_BYTES + 41).expect_err("must trip over the cap");
+        let message = overflow.to_string();
+        assert!(message.contains(&MAX_SSE_TAIL_BYTES.to_string()), "{message}");
+        assert!(message.contains(&(MAX_SSE_TAIL_BYTES + 41).to_string()), "{message}");
     }
 }

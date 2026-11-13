@@ -19,7 +19,10 @@ pub(crate) use responses_stream::{
 pub(crate) use responses_stream::{
     ResponsesNormalizedStreamOptions, ResponsesNormalizedStreamProcessor, create_responses_normalized_stream,
 };
-pub(crate) use sse::{drain_consumed_sse, extract_data_payload, find_sse_boundary_bytes, next_sse_event};
+pub(crate) use sse::{
+    MAX_SSE_TAIL_BYTES, SseTailOverflow, check_sse_tail_bound, drain_consumed_sse, extract_data_payload,
+    find_sse_boundary_bytes, next_sse_event,
+};
 pub use stream::{
     NoopStreamTelemetry, OpenAiDeltaOrder, StreamAssemblyError, StreamDelta, StreamFragment, StreamTelemetry,
     ToolCallBuilder,

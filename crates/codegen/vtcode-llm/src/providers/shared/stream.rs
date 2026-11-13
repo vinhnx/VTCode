@@ -7,7 +7,10 @@ use crate::providers::split_reasoning_from_text;
 use serde_json::{Map, Value};
 
 use super::sse::find_sse_boundary;
-use super::{ReasoningBuffer, TagStreamSanitizer, Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes};
+use super::{
+    ReasoningBuffer, TagStreamSanitizer, Utf8StreamDecoder, check_sse_tail_bound, extract_data_payload,
+    find_sse_boundary_bytes,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamAssemblyError {
@@ -438,6 +441,14 @@ where
         if offset > 0 {
             buf.drain(..offset);
             offset = 0;
+        }
+
+        // Fail closed: a peer that never emits an event boundary must not
+        // grow the retained tail without bound. Measured after the drain so
+        // one large-but-complete event still parses.
+        if let Err(overflow) = check_sse_tail_bound(buf.len()) {
+            let message = error_display::format_llm_error(provider_name, &overflow.to_string());
+            return Err(LLMError::Provider { message, metadata: None });
         }
     }
 
@@ -902,5 +913,80 @@ mod tests {
         assert_eq!(usage2.prompt_tokens, 100);
         assert_eq!(usage2.cached_prompt_tokens, Some(30));
         assert_eq!(usage2.cache_creation_tokens, Some(70));
+    }
+
+    #[tokio::test]
+    async fn process_openai_stream_fails_closed_on_boundaryless_tail_over_cap() {
+        use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+        use futures::stream;
+
+        // The real growth shape: small boundary-less chunks accumulating past
+        // the cap across loop iterations, tripping on the third chunk.
+        let byte_stream = stream::iter(vec![
+            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from("x".repeat(MAX_SSE_TAIL_BYTES / 2))),
+            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from("y".repeat(MAX_SSE_TAIL_BYTES / 2))),
+            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from_static(b"zz")),
+        ]);
+        let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |_| Ok(())).await;
+        let err = result.expect_err("boundary-less tail over the cap must fail closed");
+        match err {
+            LLMError::Provider { message, .. } => {
+                assert!(message.contains("test-provider"), "{message}");
+                assert!(message.contains("without an event boundary"), "{message}");
+            }
+            other => panic!("expected Provider error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn process_openai_stream_accepts_boundaryless_tail_under_cap() {
+        use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+        use futures::stream;
+
+        let tail = "x".repeat(MAX_SSE_TAIL_BYTES - 1);
+        let byte_stream = stream::iter(vec![Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from(tail))]);
+        let mut calls = 0;
+        let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |_| {
+            calls += 1;
+            Ok(())
+        })
+        .await;
+        assert!(result.is_ok(), "under-cap tail at EOF must not error: {result:?}");
+        assert_eq!(calls, 0, "boundary-less tail carries no complete event");
+    }
+
+    #[tokio::test]
+    async fn process_openai_stream_measures_the_retained_tail_after_drain() {
+        use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+        use futures::stream;
+
+        // Pre-drain peak tops the cap, but the completed event drains and the
+        // retained tail is empty: the bound guards retention, not one event.
+        let first = "x".repeat(MAX_SSE_TAIL_BYTES - 100);
+        let second = format!("{}\n\n", "y".repeat(200));
+        let byte_stream = stream::iter(vec![
+            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from(first)),
+            Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from(second)),
+        ]);
+        let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |_| Ok(())).await;
+        assert!(result.is_ok(), "drained tail must not trip the bound: {result:?}");
+    }
+
+    #[tokio::test]
+    async fn process_openai_stream_still_delivers_small_events() {
+        use futures::stream;
+
+        let byte_stream = stream::iter(vec![Ok::<bytes::Bytes, std::convert::Infallible>(bytes::Bytes::from_static(
+            b"data: {\"choices\": [{\"delta\": {\"content\": \"hi\"}}]}\n\n",
+        ))]);
+        let mut seen = Vec::new();
+        let result = process_openai_stream(byte_stream, "test-provider", "test-model".to_string(), |value| {
+            seen.push(value);
+            Ok(())
+        })
+        .await;
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0]["choices"][0]["delta"]["content"], "hi");
     }
 }
