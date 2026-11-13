@@ -11,7 +11,9 @@ mod item;
 mod output;
 mod tool_summary;
 mod user_attachments;
-pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
+pub(super) use activity_verbs::{
+    ToolCategory, ToolCategoryCounts, describe_activity_verbs, split_tool_title_verb, tool_row_gist,
+};
 pub(super) use item::{EditTotals, TranscriptItem};
 pub(super) use tool_summary::{activity_details_summary, activity_output_text, activity_payload, activity_text};
 pub(super) use user_attachments::UserAttachment;

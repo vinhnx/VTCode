@@ -1,3 +1,5 @@
+use vtcode_commons::tool_headlines::strip_mcp_prefix;
+
 use super::*;
 
 impl DesktopView {
@@ -84,11 +86,7 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(
-                        Spinner::new()
-                            .small()
-                            .color(Self::activity_status_color(ActivityState::Running, colors)),
-                    ),
+                    .child(Spinner::new().small().color(Self::transcript_tool_icon_color(colors))),
             )
             .into_any_element()
         } else {
@@ -145,6 +143,79 @@ impl DesktopView {
             }))
     }
 
+    /// Tool-kind icon for a transcript callout, Codex-style: what ran, not
+    /// whether it worked (book for reads, folder for listings, terminal for
+    /// runs, magnifier for searches, pencil for edits, checklist for tracker
+    /// updates). Icons follow the projected category; only tools whose icon
+    /// differs from their category default are named (listings show a folder,
+    /// PTY session tools show terminal work). Unknown names — including
+    /// future tools — and nameless rows resolve by category, then to the
+    /// neutral activity glyph, so a registry addition can never break the
+    /// icon.
+    pub(super) fn transcript_tool_kind_icon(tool_name: Option<&str>, category: Option<ToolCategory>) -> IconName {
+        if let Some(name) = tool_name {
+            match strip_mcp_prefix(name) {
+                "list_files" => return IconName::Folder,
+                "read_pty_session" | "send_pty_input" | "write_stdin" => return IconName::Terminal,
+                _ => {}
+            }
+        }
+        match category {
+            Some(ToolCategory::Read) => IconName::BookOpen,
+            Some(ToolCategory::Edit) => IconName::Pencil,
+            Some(ToolCategory::Run) => IconName::Terminal,
+            Some(ToolCategory::Search) => IconName::Search,
+            Some(ToolCategory::Tracker) => IconName::ListChecks,
+            Some(ToolCategory::Other) | None => IconName::Activity,
+        }
+    }
+
+    /// Verb-first tool title callout, Codex-style: the action verb in the UI
+    /// font, the command/object in mono, both dim. The verb never truncates;
+    /// the remainder ellipsizes like the old single-span title. Single-word
+    /// titles keep the flat shape. The accessible name stays on the owning
+    /// button (full title plus status), so these spans carry test ids only.
+    pub(super) fn transcript_tool_title(
+        item_id: &str,
+        title: &str,
+        title_color: gpui_kit::Hsla,
+        mono_family: gpui_kit::SharedString,
+    ) -> AnyElement {
+        let (verb, rest) = split_tool_title_verb(title);
+        let title_row = div()
+            .id(format!("tool-title-{item_id}"))
+            .test_support()
+            .min_w_0()
+            .flex_1()
+            .text_color(title_color);
+        if rest.is_empty() {
+            title_row.truncate().child(verb.to_string()).into_any_element()
+        } else {
+            title_row
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .id(format!("tool-title-verb-{item_id}"))
+                        .test_support()
+                        .flex_shrink_0()
+                        .child(verb.to_string()),
+                )
+                .child(
+                    div()
+                        .id(format!("tool-title-rest-{item_id}"))
+                        .test_support()
+                        .min_w_0()
+                        .flex_1()
+                        .truncate()
+                        .font_family(mono_family)
+                        .child(rest.to_string()),
+                )
+                .into_any_element()
+        }
+    }
+
     /// Jump button in a diff card header, opening Changes on the change-set's
     /// first previewable file, or the tab alone when nothing previews. The
     /// target resolves at click time from the live transcript (like the
@@ -175,5 +246,72 @@ impl DesktopView {
                     None => view.open_inspector_tab(InspectorTab::Changes, cx),
                 }
             }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kind_icons_name_the_tool_not_the_outcome() {
+        use ToolCategory as Category;
+        let icon = DesktopView::transcript_tool_kind_icon;
+        // One arm per tool family, each with an MCP-wrapped twin proving the
+        // prefix strip: the twin must icon identically to the bare name.
+        for (name, category, expected) in [
+            ("read_file", Some(Category::Read), IconName::BookOpen),
+            ("mcp__fs__read_file", Some(Category::Read), IconName::BookOpen),
+            ("list_files", Some(Category::Read), IconName::Folder),
+            ("mcp__fs__list_files", Some(Category::Read), IconName::Folder),
+            ("web_fetch", Some(Category::Read), IconName::BookOpen),
+            ("get_errors", Some(Category::Read), IconName::BookOpen),
+            ("edit_file", Some(Category::Edit), IconName::Pencil),
+            ("mcp__fs__edit_file", Some(Category::Edit), IconName::Pencil),
+            ("apply_patch", Some(Category::Edit), IconName::Pencil),
+            ("exec_command", Some(Category::Run), IconName::Terminal),
+            ("mcp__sh__exec_command", Some(Category::Run), IconName::Terminal),
+            ("shell", Some(Category::Run), IconName::Terminal),
+            ("run_pty_cmd", Some(Category::Run), IconName::Terminal),
+            ("create_pty_session", Some(Category::Run), IconName::Terminal),
+            ("code_search", Some(Category::Search), IconName::Search),
+            ("grep_file", Some(Category::Search), IconName::Search),
+            ("task_tracker", Some(Category::Tracker), IconName::ListChecks),
+        ] {
+            assert_eq!(icon(Some(name), category), expected, "{name} icons by name");
+        }
+        // Asymmetric: PTY session tools icon as terminal work even though
+        // `read_pty_session` categorizes as a read.
+        assert_eq!(icon(Some("read_pty_session"), Some(Category::Read)), IconName::Terminal);
+        assert_eq!(icon(Some("send_pty_input"), Some(Category::Other)), IconName::Terminal);
+        assert_eq!(icon(Some("write_stdin"), Some(Category::Other)), IconName::Terminal);
+        // Unknown names — including future tools — fall back to the
+        // projected category, never to a broken or missing icon.
+        assert_eq!(icon(Some("DiagramCommand"), Some(Category::Edit)), IconName::Pencil);
+        assert_eq!(icon(Some("diagram_render"), Some(Category::Run)), IconName::Terminal);
+        assert_eq!(icon(Some("whatever"), Some(Category::Other)), IconName::Activity);
+        // Unified tools carry no name arm: the action-aware projected
+        // category decides, so a read icons as a book and a run as terminal.
+        assert_eq!(icon(Some("file_operation_internal"), Some(Category::Read)), IconName::BookOpen);
+        assert_eq!(icon(Some("file_operation_internal"), Some(Category::Edit)), IconName::Pencil);
+        assert_eq!(icon(Some("command_session_internal"), Some(Category::Run)), IconName::Terminal);
+        // Asymmetric: exceptions are name-driven and need no category, while
+        // ordinary names without a category stay neutral.
+        assert_eq!(icon(Some("list_files"), None), IconName::Folder);
+        assert_eq!(icon(Some("read_pty_session"), None), IconName::Terminal);
+        assert_eq!(icon(Some("read_file"), None), IconName::Activity);
+        assert_eq!(icon(Some("exec_command"), None), IconName::Activity);
+        // Nameless rows (executions, outputs) icon purely by category.
+        for (category, expected) in [
+            (Some(Category::Read), IconName::BookOpen),
+            (Some(Category::Edit), IconName::Pencil),
+            (Some(Category::Run), IconName::Terminal),
+            (Some(Category::Search), IconName::Search),
+            (Some(Category::Tracker), IconName::ListChecks),
+            (Some(Category::Other), IconName::Activity),
+            (None, IconName::Activity),
+        ] {
+            assert_eq!(icon(None, category), expected, "{category:?} icons by category");
+        }
     }
 }

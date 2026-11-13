@@ -706,7 +706,7 @@ fn slash_theme_accepts_capitalized_ids_like_the_cli(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn completed_tool_titles_drop_to_muted_while_live_rows_stay_foreground() {
+fn tool_titles_stay_dim_for_every_state() {
     for palette in super::super::themes::all_themes() {
         let mut colors = gpui_kit::component::theme::ThemeColor::default();
         colors.primary = palette.accent;
@@ -716,22 +716,44 @@ fn completed_tool_titles_drop_to_muted_while_live_rows_stay_foreground() {
         colors.foreground = palette.foreground;
         colors.popover = palette.background;
 
+        // Codex-style callouts: every state renders on the muted ramp so
+        // primary prose keeps the column; state rides the icon shape and
+        // status label instead. The dim tone stays AA-legible on every theme.
         for state in [
             ActivityState::Running,
+            ActivityState::Completed,
             ActivityState::Failed,
             ActivityState::Interrupted,
             ActivityState::Other,
         ] {
-            assert_eq!(
-                DesktopView::tool_row_title_color(state, colors),
-                colors.foreground,
-                "{} keeps {state:?} tool titles at full foreground",
-                palette.id
-            );
+            let tone = DesktopView::tool_row_title_color(state, colors);
+            assert_eq!(tone, super::super::themes::muted_text(&colors), "{} dims {state:?} tool titles", palette.id);
+            let ratio = super::super::themes::contrast_ratio(tone, colors.popover);
+            assert!(ratio >= 4.5, "{}: {state:?} tool title unreadable ({ratio:.2})", palette.id);
         }
-        // Finished work reads quieter but stays AA-legible on every theme.
-        let completed = DesktopView::tool_row_title_color(ActivityState::Completed, colors);
-        let ratio = super::super::themes::contrast_ratio(completed, colors.popover);
-        assert!(ratio >= 4.5, "{}: completed tool title unreadable ({ratio:.2})", palette.id);
+    }
+}
+
+#[test]
+fn transcript_tool_icons_stay_monochrome() {
+    for palette in super::super::themes::all_themes() {
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.primary = palette.accent;
+        colors.success = palette.success;
+        colors.danger = palette.danger;
+        colors.warning = palette.warning;
+        colors.foreground = palette.foreground;
+        colors.popover = palette.background;
+
+        // Transcript callouts never take the semantic status colors: one dim
+        // tone for every state, Codex-style. State rides the icon shape and
+        // the status label instead.
+        let tone = DesktopView::transcript_tool_icon_color(colors);
+        assert_eq!(tone, super::super::themes::muted_text(&colors), "{} dims tool icons", palette.id);
+        for semantic in [colors.primary, colors.success, colors.danger, colors.warning] {
+            assert_ne!(tone, semantic, "{} keeps tool icons off the semantic ramp", palette.id);
+        }
+        let ratio = super::super::themes::contrast_ratio(tone, colors.popover);
+        assert!(ratio >= 4.5, "{}: dimmed tool icon unreadable ({ratio:.2})", palette.id);
     }
 }

@@ -189,6 +189,22 @@ pub(crate) fn tool_row_gist(tool: &ToolInvocationItem, workspace_root: Option<&P
     verb_callout_headline(&tool.tool_name, args, workspace_root)
 }
 
+/// Split a tool-row title into its leading action verb and the remainder
+/// (`"Ran cargo check"` into `("Ran", "cargo check")`).
+///
+/// Titles are single-line verb-first headlines ([`tool_row_gist`]), so the
+/// first whitespace run is the boundary; single-word titles return an empty
+/// remainder. The transcript renders the verb in the UI font and the
+/// command/object in mono, both dim, Codex-style, so the eye can tell the
+/// action from its target without color.
+pub(crate) fn split_tool_title_verb(title: &str) -> (&str, &str) {
+    let title = title.trim();
+    let mut parts = title.splitn(2, char::is_whitespace);
+    let verb = parts.next().unwrap_or("");
+    let rest = parts.next().unwrap_or("").trim_start_matches(char::is_whitespace);
+    (verb, rest)
+}
+
 /// Argument keys the row title consumes beyond its category's gist keys.
 ///
 /// Recomputed from the same shared headline readers the title uses, so a key
@@ -306,6 +322,28 @@ mod tests {
         );
         // Asymmetric: outside the workspace the absolute path survives verbatim.
         assert_eq!(gist_with("list_files", Some(json!({"path": "/elsewhere"})), None), "List files in /elsewhere");
+    }
+
+    #[test]
+    fn title_verb_split_keeps_verb_first_and_rest_verbatim() {
+        // Verb-led headlines from every category split after the first word.
+        for (title, verb, rest) in [
+            ("Ran cargo check --locked", "Ran", "cargo check --locked"),
+            ("Read Cargo.toml", "Read", "Cargo.toml"),
+            ("Search code for Widget", "Search", "code for Widget"),
+            ("List files in src", "List", "files in src"),
+            ("Edited error.rs +10 -4", "Edited", "error.rs +10 -4"),
+            ("MCP · review", "MCP", "· review"),
+        ] {
+            assert_eq!(split_tool_title_verb(title), (verb, rest), "{title:?} splits");
+        }
+        // Single-word titles and empties keep everything in the verb slot.
+        assert_eq!(split_tool_title_verb("Activity"), ("Activity", ""));
+        assert_eq!(split_tool_title_verb("Harness"), ("Harness", ""));
+        assert_eq!(split_tool_title_verb(""), ("", ""));
+        // Ragged whitespace collapses at the boundary but never inside the rest.
+        assert_eq!(split_tool_title_verb("  Ran   cargo  check  "), ("Ran", "cargo  check"));
+        assert_eq!(split_tool_title_verb("   "), ("", ""));
     }
 
     #[test]

@@ -462,14 +462,7 @@ impl DesktopView {
         color: gpui_kit::Hsla,
     ) -> AnyElement {
         if state == ActivityState::Running {
-            div()
-                .id(format!("{id_prefix}-{row_id}-spinner"))
-                .test_support()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(Spinner::new().small().color(color))
-                .into_any_element()
+            Self::render_activity_spinner(id_prefix, row_id, color)
         } else {
             let icon = match state {
                 ActivityState::Completed => IconName::Check,
@@ -478,6 +471,41 @@ impl DesktopView {
             };
             Icon::new(icon).small().text_color(color).into_any_element()
         }
+    }
+
+    /// Transcript callout indicator: the tool-kind icon at rest, with live
+    /// and failed states overriding the kind. Running keeps the spinner
+    /// (motion signals live work in the monochrome transcript); failed and
+    /// interrupted rows keep the cross so failures stay scannable by shape,
+    /// since color no longer carries state. Completed and quiet rows show
+    /// what ran, Codex-style.
+    pub(in super::super) fn render_transcript_tool_indicator(
+        id_prefix: &str,
+        row_id: &str,
+        state: ActivityState,
+        color: gpui_kit::Hsla,
+        kind: IconName,
+    ) -> AnyElement {
+        if state == ActivityState::Running {
+            Self::render_activity_spinner(id_prefix, row_id, color)
+        } else {
+            let icon = match state {
+                ActivityState::Failed | ActivityState::Interrupted => IconName::X,
+                ActivityState::Running | ActivityState::Completed | ActivityState::Other => kind,
+            };
+            Icon::new(icon).small().text_color(color).into_any_element()
+        }
+    }
+
+    fn render_activity_spinner(id_prefix: &str, row_id: &str, color: gpui_kit::Hsla) -> AnyElement {
+        div()
+            .id(format!("{id_prefix}-{row_id}-spinner"))
+            .test_support()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(Spinner::new().small().color(color))
+            .into_any_element()
     }
 
     pub(in super::super) fn activity_status_color(
@@ -495,19 +523,29 @@ impl DesktopView {
         }
     }
 
-    /// Transcript tool-row title tone: finished work drops to the secondary
-    /// ramp so primary prose keeps the column, while live rows stay at full
-    /// foreground. The status indicator keeps its semantic color either way,
-    /// so state is never carried by the title tone alone.
-    pub(in super::super) fn tool_row_title_color(
-        state: ActivityState,
+    /// Transcript tool-row icon tone: always the muted ramp, never the
+    /// semantic status colors.
+    ///
+    /// The transcript follows the Codex tool-row reference (monochrome
+    /// outline icons plus dim verb-first titles): state stays readable via
+    /// shape (spinner for live work, cross for failures, kind icon at rest)
+    /// and the status label, never color alone. Inspector surfaces keep
+    /// [`Self::activity_status_color`] semantics (legend dots, activity
+    /// rows) where color aids scanning.
+    pub(in super::super) fn transcript_tool_icon_color(
         colors: gpui_kit::component::theme::ThemeColor,
     ) -> gpui_kit::Hsla {
-        if state == ActivityState::Completed {
-            themes::muted_text(&colors)
-        } else {
-            colors.foreground
-        }
+        themes::muted_text(&colors)
+    }
+
+    /// Transcript tool-row title tone: every state renders on the secondary
+    /// ramp so primary prose keeps the column, Codex-style. State rides the
+    /// indicator shape and the status label instead, never the title tone.
+    pub(in super::super) fn tool_row_title_color(
+        _state: ActivityState,
+        colors: gpui_kit::component::theme::ThemeColor,
+    ) -> gpui_kit::Hsla {
+        themes::muted_text(&colors)
     }
 
     fn render_activity_row(

@@ -395,6 +395,61 @@ fn expanded_tool_rows_show_summaries_not_json_dumps(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn tool_titles_split_verb_from_command_text(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            // An assistant message between the rows keeps both ungrouped so
+            // each renders its own callout directly.
+            view.transcript.push(TranscriptItem::new(
+                "exec-1".into(),
+                "tool".into(),
+                "Ran cargo check --locked".into(),
+                "completed\noutput".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "note".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Between the tools.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "solo-1".into(),
+                "tool".into(),
+                "Harness".into(),
+                "completed".into(),
+            ));
+        });
+        window.render_frame(cx);
+
+        // The verb leads in its own span; the command follows in mono.
+        let verb = window.find("tool-title-verb-exec-1");
+        let rest = window.find("tool-title-rest-exec-1");
+        assert!(verb.visible(), "verb span renders");
+        assert!(rest.visible(), "command span renders");
+        assert!(
+            rest.bounds().origin.x > verb.bounds().origin.x,
+            "command text trails the verb: verb={:?} rest={:?}",
+            verb.bounds(),
+            rest.bounds()
+        );
+        let row = window.find("tool-title-exec-1").bounds();
+        assert!(
+            rest.bounds().right() <= row.right() + px(1.),
+            "command text stays inside the callout: rest={:?} row={row:?}",
+            rest.bounds()
+        );
+        // Single-word titles keep the flat shape: the title container
+        // renders with no verb/remainder spans.
+        assert!(window.find("tool-title-solo-1").visible());
+        for id in ["tool-title-verb-solo-1", "tool-title-rest-solo-1"] {
+            assert!(window.try_find(id).is_none(), "single-word titles render no split spans ({id})");
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn activity_group_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

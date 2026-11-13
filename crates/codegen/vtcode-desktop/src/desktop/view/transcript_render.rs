@@ -837,7 +837,8 @@ impl DesktopView {
             rust_i18n::t!("app.transcript.archived_output").to_string()
         };
         let state = ActivityState::from_status(&status);
-        let status_color = Self::activity_status_color(state, colors);
+        let icon_color = Self::transcript_tool_icon_color(colors);
+        let kind_icon = Self::transcript_tool_kind_icon(item.tool_name.as_deref(), item.activity_category);
         let mut panel = div().w_full().max_w(px(self.content_width())).flex().flex_col().gap_1().child(
             desktop_button(format!("tool-{}", item.id))
                 .accessibility_label(
@@ -865,25 +866,23 @@ impl DesktopView {
                         .gap_2()
                         .min_w_0()
                         .w_full()
-                        .child(transcript_icon_slot(Self::render_activity_status_indicator(
+                        .child(transcript_icon_slot(Self::render_transcript_tool_indicator(
                             "tool-indicator",
                             &item.id,
                             state,
-                            status_color,
+                            icon_color,
+                            kind_icon,
                         )))
-                        .child(
-                            div()
-                                .id(format!("tool-title-{}", item.id))
-                                .test_support()
-                                .min_w_0()
-                                .flex_1()
-                                .truncate()
-                                .text_color(Self::tool_row_title_color(state, colors))
-                                .child(item.title.clone()),
-                        )
-                        // The state icon already signals completion, so
-                        // completed rows drop the redundant label; other
-                        // states keep theirs and the chevron stays docked.
+                        .child(Self::transcript_tool_title(
+                            &item.id,
+                            item.title.as_str(),
+                            Self::tool_row_title_color(state, colors),
+                            cx.theme().mono_font_family.clone(),
+                        ))
+                        // Completed rows drop the redundant label: they are
+                        // the only rows with a bare kind icon, which reads
+                        // as done. Other states keep spinner/cross/label and
+                        // the chevron stays docked.
                         .when(state != ActivityState::Completed, |row| {
                             row.child(
                                 div()

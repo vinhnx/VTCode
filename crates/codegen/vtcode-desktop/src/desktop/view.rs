@@ -91,7 +91,8 @@ use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, EditTotals, NoticeSeverity, ToolCategory, ToolCategoryCounts, Transcript,
     TranscriptItem, TranscriptRole, UserAttachment, activity_details_summary, activity_output_text, activity_payload,
-    activity_text, describe_activity_verbs, harness_is_user_visible, status as tool_status, tool_row_gist,
+    activity_text, describe_activity_verbs, harness_is_user_visible, split_tool_title_verb, status as tool_status,
+    tool_row_gist,
 };
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,
