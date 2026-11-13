@@ -440,7 +440,7 @@ impl DesktopView {
                 // flipping (and persisting) invisible state.
                 self.open_inspector_tab(self.inspector_tab, cx);
             } else {
-                self.inspector_open = !self.inspector_open;
+                self.inspector_open.toggle();
             }
             self.save_preferences();
             cx.notify();
@@ -448,7 +448,7 @@ impl DesktopView {
     }
 
     pub(super) fn toggle_zen_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.zen_mode = !self.zen_mode;
+        self.zen_mode.toggle();
         self.navigation_peek = false;
         if self.zen_mode {
             self.activate_composer(window, cx);

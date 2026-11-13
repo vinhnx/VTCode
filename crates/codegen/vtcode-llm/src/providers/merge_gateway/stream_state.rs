@@ -113,15 +113,9 @@ impl MergeStreamState {
 
     pub(crate) fn apply_text_fragment(&mut self, fragment: String, full_value: bool) -> Option<String> {
         if full_value {
-            let delta = if self.content.is_empty() {
-                fragment.clone()
-            } else if fragment == self.content {
-                String::new()
-            } else if fragment.starts_with(&self.content) {
-                fragment[self.content.len()..].to_string()
-            } else {
-                fragment.clone()
-            };
+            // trim_prefix covers every original arm: full match yields "",
+            // prefix match yields the delta, no match yields fragment itself.
+            let delta = fragment.trim_prefix(&self.content).to_string();
             self.content = fragment;
             if delta.is_empty() { None } else { Some(delta) }
         } else {
@@ -178,7 +172,7 @@ impl MergeStreamState {
             } else if fragment == *current {
                 None
             } else if fragment.starts_with(current.as_str()) {
-                Some(fragment[current.len()..].to_string())
+                Some(fragment.trim_prefix(current.as_str()).to_string())
             } else {
                 Some(fragment.clone())
             };

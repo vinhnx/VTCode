@@ -197,7 +197,7 @@ fn expand_inline_imports(
     for line in contents.lines() {
         let trimmed = line.trim_start();
         if is_fence_line(trimmed) {
-            in_code_block = !in_code_block;
+            in_code_block.toggle();
             output.push_str(line);
             output.push('\n');
             continue;

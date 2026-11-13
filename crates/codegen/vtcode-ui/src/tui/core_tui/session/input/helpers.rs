@@ -66,7 +66,7 @@ pub(super) fn compact_image_label(content: &str) -> Option<String> {
         return None;
     }
 
-    let without_at = unquoted.strip_prefix('@').unwrap_or(unquoted);
+    let without_at = unquoted.trim_prefix('@');
 
     // Skip npm scoped package patterns like @scope/package@version
     if without_at.contains('/')
@@ -84,7 +84,7 @@ pub(super) fn compact_image_label(content: &str) -> Option<String> {
         }
     }
 
-    let without_scheme = without_at.strip_prefix("file://").unwrap_or(without_at);
+    let without_scheme = without_at.trim_prefix("file://");
     let path = Path::new(without_scheme);
     if !is_image_path(path) {
         return None;
@@ -165,8 +165,8 @@ pub(super) fn image_label_for_path(raw: &str) -> Option<String> {
         return None;
     }
 
-    let without_at = trimmed.strip_prefix('@').unwrap_or(trimmed);
-    let without_scheme = without_at.strip_prefix("file://").unwrap_or(without_at);
+    let without_at = trimmed.trim_prefix('@');
+    let without_scheme = without_at.trim_prefix("file://");
     let unescaped = unescape_whitespace(without_scheme);
     let path = Path::new(unescaped.as_str());
     if !is_image_path(path) {

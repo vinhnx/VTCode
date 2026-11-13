@@ -510,7 +510,7 @@ impl TaskTrackerTool {
         for line in content.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("# ") && title.is_empty() {
-                title = trimmed.strip_prefix("# ").unwrap_or(trimmed).to_string();
+                title = trimmed.trim_prefix("# ").to_string();
                 continue;
             }
             if trimmed == "## Notes" {

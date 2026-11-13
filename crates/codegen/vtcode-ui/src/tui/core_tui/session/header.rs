@@ -758,7 +758,7 @@ impl Session {
     }
 
     fn strip_prefix<'a>(value: &'a str, prefix: &str) -> &'a str {
-        value.strip_prefix(prefix).unwrap_or(value)
+        value.trim_prefix(prefix)
     }
 }
 

@@ -537,7 +537,7 @@ trait PathExt {
 impl PathExt for PathBuf {
     fn expand_home(&self) -> Result<PathBuf> {
         if let Some(home) = std::env::var("HOME").ok().filter(|_| self.starts_with("~")) {
-            let stripped = self.strip_prefix("~").unwrap_or(self);
+            let stripped = self.trim_prefix("~");
             return Ok(PathBuf::from(home).join(stripped));
         }
         Ok(self.clone())

@@ -246,7 +246,7 @@ fn append_normalized_line(output: &mut String, has_output_line: &mut bool, line:
     if *has_output_line {
         output.push('\n');
     }
-    output.push_str(line.strip_suffix('\r').unwrap_or(line));
+    output.push_str(line.trim_suffix('\r'));
     *has_output_line = true;
 }
 

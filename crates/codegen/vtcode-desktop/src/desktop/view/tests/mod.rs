@@ -483,7 +483,7 @@ fn scroll_theme_into_view(
     id: &'static str,
     cx: &mut gpui_kit::App,
 ) {
-    let theme_id = id.strip_prefix("theme-").unwrap_or(id);
+    let theme_id = id.trim_prefix("theme-");
     let light = super::themes::mode_for_id(theme_id) != Some(ThemeMode::Dark);
     let mode = if light { ThemeMode::Light } else { ThemeMode::Dark };
     let viewport_id = if light { "theme-list-light" } else { "theme-list-dark" };

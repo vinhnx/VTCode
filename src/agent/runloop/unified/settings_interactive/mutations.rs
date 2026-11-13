@@ -136,7 +136,7 @@ pub(super) fn apply_scalar_operation(root: &mut TomlValue, path: &str, operation
             if operation != ScalarOperation::Toggle {
                 bail!("{path} supports toggle only");
             }
-            *value = !*value;
+            value.toggle();
             Ok(())
         }
         TomlValue::Integer(value) => {

@@ -77,7 +77,7 @@ impl Session {
         if !details_disclosed_in_transcript(&diagnostic.payload.agent_details, kind) {
             return false;
         }
-        diagnostic.expanded = !diagnostic.expanded;
+        diagnostic.expanded.toggle();
         let expanded_now = diagnostic.expanded;
         line.revision = revision;
         let was_following = self.scroll_manager.offset() == 0;

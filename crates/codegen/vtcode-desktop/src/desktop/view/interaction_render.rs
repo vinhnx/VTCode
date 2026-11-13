@@ -246,7 +246,7 @@ impl DesktopView {
                             .small()
                             .desktop_disabled(submitting)
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.interaction_plan_expanded = !view.interaction_plan_expanded;
+                                view.interaction_plan_expanded.toggle();
                                 cx.notify();
                             })),
                     )

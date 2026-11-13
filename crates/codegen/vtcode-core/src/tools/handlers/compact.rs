@@ -51,7 +51,7 @@ pub fn compact_tool_description(original: &str, mode: ToolDocumentationMode, per
     let summary = match mode {
         ToolDocumentationMode::Minimal => {
             let first = first_sentence(&normalized);
-            let first = first.strip_suffix('.').unwrap_or(first);
+            let first = first.trim_suffix('.');
             return truncate_chars_with_ellipsis(first, limit(MINIMAL_DESCRIPTION_MAX_CHARS));
         }
         ToolDocumentationMode::Progressive => {

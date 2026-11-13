@@ -486,7 +486,7 @@ fn normalize_file_operation_path(input: &str) -> String {
     let mut normalized = input.trim();
     normalized = strip_optional_word_prefix(normalized, "on");
     normalized = strip_optional_word_prefix(normalized, "from");
-    normalized = normalized.strip_prefix('@').unwrap_or(normalized);
+    normalized = normalized.trim_prefix('@');
     trim_wrapping_quotes_and_punctuation(normalized).to_string()
 }
 

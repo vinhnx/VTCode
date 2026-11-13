@@ -49,7 +49,7 @@ impl GeminiProvider {
         }
 
         if chunk.starts_with(accumulator.as_str()) {
-            let delta = &chunk[accumulator.len()..];
+            let delta = chunk.trim_prefix(accumulator.as_str());
             if delta.is_empty() {
                 return None;
             }

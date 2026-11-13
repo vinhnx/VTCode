@@ -105,7 +105,7 @@ impl ModelPickerState {
         renderer: &mut AnsiRenderer,
         input: &str,
     ) -> Result<ModelPickerProgress> {
-        let input = input.strip_prefix(ACTION_PREFIX).unwrap_or(input);
+        let input = input.trim_prefix(ACTION_PREFIX);
         let speed = match input.to_ascii_lowercase().as_str() {
             "keep" | "skip" => None,
             "standard" => Some(AnthropicSpeed::Standard),

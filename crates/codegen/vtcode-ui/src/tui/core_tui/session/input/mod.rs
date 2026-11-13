@@ -843,7 +843,7 @@ impl Session {
     }
 
     pub(super) fn create_git_status_spans(&self, text: &str, default_style: Style) -> Vec<Span<'static>> {
-        let text = text.strip_prefix(ui::HEADER_GIT_PREFIX).unwrap_or(text).trim_start();
+        let text = text.trim_prefix(ui::HEADER_GIT_PREFIX).trim_start();
         if let Some((branch_part, indicator_part)) = text.rsplit_once(" | ") {
             let mut spans = Vec::new();
             let branch_trim = branch_part.trim_end();

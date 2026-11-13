@@ -339,12 +339,12 @@ fn split_shell_words(text: &str) -> Vec<String> {
             continue;
         }
         if ch == '\'' && !in_double {
-            in_single = !in_single;
+            in_single.toggle();
             current.push(ch);
             continue;
         }
         if ch == '"' && !in_single {
-            in_double = !in_double;
+            in_double.toggle();
             current.push(ch);
             continue;
         }

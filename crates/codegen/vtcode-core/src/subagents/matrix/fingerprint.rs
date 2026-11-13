@@ -128,7 +128,7 @@ fn inventory_tracked_sources(
             .context("resolve submodule Git workspace")?;
         ensure!(top.status.success(), "invalid initialized matrix submodule");
         let top = std::str::from_utf8(&top.stdout).context("submodule workspace is not UTF-8")?;
-        let top = top.strip_suffix('\n').unwrap_or(top);
+        let top = top.trim_suffix('\n');
         ensure!(
             vtcode_commons::canonicalize(Path::new(top))? == submodule,
             "submodule Git workspace escaped gitlink"

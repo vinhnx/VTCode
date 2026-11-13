@@ -388,7 +388,7 @@ fn fenced_code_stats(docs: &[(PathBuf, String)]) -> (usize, usize) {
             total += 1;
             let trimmed = line.trim_start();
             if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
-                in_fence = !in_fence;
+                in_fence.toggle();
                 fenced += 1;
             } else if in_fence {
                 fenced += 1;

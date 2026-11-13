@@ -448,7 +448,7 @@ fn normalize_find_root(root: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    let stripped = trimmed.strip_prefix("./").unwrap_or(trimmed).trim_end_matches('/');
+    let stripped = trimmed.trim_prefix("./").trim_end_matches('/');
 
     if stripped.is_empty()
         || stripped == "."
@@ -470,7 +470,7 @@ fn normalize_workspace_file_family(path: &str) -> Option<String> {
     if trimmed.is_empty() || trimmed.starts_with('/') || trimmed.starts_with('~') || trimmed.starts_with('-') {
         return None;
     }
-    let stripped = trimmed.strip_prefix("./").unwrap_or(trimmed);
+    let stripped = trimmed.trim_prefix("./");
     let mut parts = stripped.split('/');
     let first = parts.next()?;
     if first.is_empty() || first == "." || first == ".." || first.contains('\0') {

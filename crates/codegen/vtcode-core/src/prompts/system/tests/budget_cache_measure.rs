@@ -271,7 +271,7 @@ fn test_cache_key_changes_with_budget_settings() {
     );
 
     let mut warning_changed = VTCodeConfig::default();
-    warning_changed.agent.system_prompt_budget_warning = !warning_changed.agent.system_prompt_budget_warning;
+    warning_changed.agent.system_prompt_budget_warning.toggle();
     assert_ne!(
         base_key,
         cache_key(&project_root, Some(&warning_changed), 0),
@@ -279,7 +279,7 @@ fn test_cache_key_changes_with_budget_settings() {
     );
 
     let mut trim_changed = VTCodeConfig::default();
-    trim_changed.agent.trim_system_prompt = !trim_changed.agent.trim_system_prompt;
+    trim_changed.agent.trim_system_prompt.toggle();
     assert_ne!(
         base_key,
         cache_key(&project_root, Some(&trim_changed), 0),

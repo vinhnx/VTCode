@@ -905,7 +905,7 @@ impl Session {
 
     /// Toggle logs panel visibility
     pub(crate) fn toggle_logs(&mut self) {
-        self.show_logs = !self.show_logs;
+        self.show_logs.toggle();
         self.invalidate_scroll_metrics();
         self.mark_dirty();
     }

@@ -154,7 +154,7 @@ impl_openai_compat_provider!(DeepSeekProvider, DeepSeekSpec, {
     async fn get_balance(&self) -> Result<Option<vtcode_commons::llm::BalanceInfo>, LLMError> {
         // Strip /v1 suffix to get the root API URL for the balance endpoint.
         let base = self.core.base_url.trim_end_matches('/');
-        let root = base.strip_suffix("/v1").unwrap_or(base);
+        let root = base.trim_suffix("/v1");
         let url = format!("{root}/user/balance");
 
         let response = self

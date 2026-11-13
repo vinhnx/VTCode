@@ -498,11 +498,11 @@ fn split_top_level_pipes(command: &str) -> Option<Vec<&str>> {
             continue;
         }
         if character == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
+            in_single_quote.toggle();
             continue;
         }
         if character == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
+            in_double_quote.toggle();
             continue;
         }
         if in_single_quote || in_double_quote {
@@ -544,11 +544,11 @@ fn is_pure_truncation_stage(stage: &str) -> bool {
             continue;
         }
         if character == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
+            in_single_quote.toggle();
             continue;
         }
         if character == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
+            in_double_quote.toggle();
             continue;
         }
         if in_single_quote || in_double_quote {

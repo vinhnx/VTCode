@@ -177,7 +177,7 @@ impl DesktopView {
     /// that is no longer visible must not keep consuming Back presses or make a
     /// later dismiss prompt name an editor nobody can see.
     pub(super) fn toggle_custom_themes_section(&mut self, cx: &mut Context<Self>) {
-        self.theme_editor.expanded = !self.theme_editor.expanded;
+        self.theme_editor.expanded.toggle();
         if !self.theme_editor.expanded {
             self.cancel_custom_theme_editor(cx);
         }

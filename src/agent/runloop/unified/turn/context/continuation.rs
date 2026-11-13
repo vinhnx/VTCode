@@ -849,19 +849,19 @@ fn clause_has_continuation_intent(clause: &str) -> bool {
 /// Subjects: "i" (and optionally "am"), "we"
 fn normalize_clause(s: &str) -> &str {
     let s = s.trim_start();
-    let s = s.strip_prefix("now ").unwrap_or(s);
-    let s = s.strip_prefix("then ").unwrap_or(s);
-    let s = s.strip_prefix("first, ").unwrap_or(s);
-    let s = s.strip_prefix("first ").unwrap_or(s);
-    let s = s.strip_prefix("next, ").unwrap_or(s);
+    let s = s.trim_prefix("now ");
+    let s = s.trim_prefix("then ");
+    let s = s.trim_prefix("first, ");
+    let s = s.trim_prefix("first ");
+    let s = s.trim_prefix("next, ");
     // "next" before a subject is a transition; otherwise it may be
     // part of an intent expression ("next step", "next up").
     let s = match s.strip_prefix("next ") {
         Some(after) if after.starts_with("i ") || after.starts_with("we ") => after,
         _ => s,
     };
-    let s = s.strip_prefix("my ").unwrap_or(s);
-    let s = s.strip_prefix("i am ").unwrap_or(s);
+    let s = s.trim_prefix("my ");
+    let s = s.trim_prefix("i am ");
     // Handle both "i " (uncontracted) and contractions (i'll, i'd, i'm, i've).
     // For contractions we strip only the "i", keeping the apostrophe so that
     // patterns like "'ll " and "'d like to " still match.
@@ -872,7 +872,7 @@ fn normalize_clause(s: &str) -> &str {
     } else {
         s
     };
-    let s = s.strip_prefix("we ").unwrap_or(s);
+    let s = s.trim_prefix("we ");
     s.trim_start()
 }
 

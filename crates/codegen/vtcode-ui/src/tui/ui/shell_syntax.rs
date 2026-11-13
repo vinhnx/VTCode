@@ -142,9 +142,9 @@ pub fn tokenize_preserve_whitespace(text: &str) -> Vec<&str> {
         } else if ch == '\\' && !in_single {
             escaped = true;
         } else if ch == '\'' && !in_double {
-            in_single = !in_single;
+            in_single.toggle();
         } else if ch == '"' && !in_single {
-            in_double = !in_double;
+            in_double.toggle();
         }
 
         let is_whitespace = !in_single && !in_double && ch.is_whitespace();
@@ -374,7 +374,7 @@ pub fn line_to_compact_segments(
                     let body = if is_final_line {
                         line.as_str()
                     } else {
-                        line.strip_suffix(" \\").unwrap_or(line)
+                        line.trim_suffix(" \\")
                     };
                     segments.extend(shell_syntax_segments(body, styles, expect_command));
                     if idx + 1 < wrapped.len() {

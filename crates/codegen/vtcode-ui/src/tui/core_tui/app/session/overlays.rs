@@ -11,7 +11,7 @@ impl AppSession {
     }
 
     pub(super) fn toggle_inline_lists_visibility(&mut self) {
-        self.inline_lists_visible = !self.inline_lists_visible;
+        self.inline_lists_visible.toggle();
         self.core.mark_dirty();
     }
 

@@ -3,7 +3,7 @@ pub(super) fn normalize_path_operand(target: &str) -> String {
 
     let normalized = strip_optional_word_prefix(trim_wrapping_quotes_and_punctuation(target), "on");
     let normalized = trim_wrapping_quotes_and_punctuation(normalized);
-    let normalized = normalized.strip_prefix('@').unwrap_or(normalized);
+    let normalized = normalized.trim_prefix('@');
     trim_wrapping_quotes_and_punctuation(normalized).to_string()
 }
 

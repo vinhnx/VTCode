@@ -139,7 +139,7 @@ pub(super) fn apply_statusline_action(action: &str, draft: &mut StatusLineConfig
         "statusline:refresh:edit" => return Ok(StatuslineSetupAction::EditRefreshInterval),
         "statusline:timeout:edit" => return Ok(StatuslineSetupAction::EditTimeout),
         "statusline:clock:toggle" => {
-            draft.show_clock = !draft.show_clock;
+            draft.show_clock.toggle();
             return Ok(StatuslineSetupAction::Continue);
         }
         "statusline:script:create" => {

@@ -160,12 +160,12 @@ fn shell_uses_only_and_chaining(command: &str) -> bool {
             continue;
         }
         if character == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
+            in_single_quote.toggle();
             index += 1;
             continue;
         }
         if character == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
+            in_double_quote.toggle();
             index += 1;
             continue;
         }

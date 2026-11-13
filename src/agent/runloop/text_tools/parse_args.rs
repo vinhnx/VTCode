@@ -125,7 +125,7 @@ fn has_double_quotes_in_strings(input: &str) -> bool {
             continue;
         }
         if ch == '\'' {
-            in_single = !in_single;
+            in_single.toggle();
         } else if ch == '"' && in_single {
             return true;
         }
@@ -150,7 +150,7 @@ fn convert_single_quoted_json(input: &str) -> String {
         }
         if ch == '\'' {
             result.push('"');
-            in_single = !in_single;
+            in_single.toggle();
         } else {
             result.push(ch);
         }

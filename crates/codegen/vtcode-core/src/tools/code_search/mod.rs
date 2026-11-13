@@ -143,7 +143,7 @@ fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<Compa
     let mut normalised = Vec::with_capacity(file_types.len());
     for value in file_types {
         let trimmed = value.trim();
-        let without_dot = trimmed.strip_prefix('.').unwrap_or(trimmed);
+        let without_dot = trimmed.trim_prefix('.');
         if without_dot.is_empty() {
             bail!("code_search file_types entries must not be empty");
         }

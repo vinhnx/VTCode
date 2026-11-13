@@ -49,7 +49,7 @@ pub(crate) use client::LMSTUDIO_CONNECTION_ERROR;
 /// lives at `/api/v0/*` on the server root, so we need `http://localhost:1234`.
 fn server_root_from_api_base(api_base: &str) -> String {
     let trimmed = api_base.trim_end_matches('/');
-    trimmed.strip_suffix("/v1").unwrap_or(trimmed).to_string()
+    trimmed.trim_suffix("/v1").to_string()
 }
 
 /// Fetches available models from the LM Studio API endpoint

@@ -746,7 +746,7 @@ mod tests {
     #[test]
     fn selected_provider_config_carries_workspace_anthropic_settings() {
         let mut auth_cfg = VTCodeConfig::default();
-        auth_cfg.provider.anthropic.count_tokens_enabled = !auth_cfg.provider.anthropic.count_tokens_enabled;
+        auth_cfg.provider.anthropic.count_tokens_enabled.toggle();
         auth_cfg.provider.anthropic.task_budget_tokens = Some(64_000);
         let selection = selection("anthropic", Some(Provider::Anthropic), "ANTHROPIC_API_KEY", None, true);
         let config = runtime_config();

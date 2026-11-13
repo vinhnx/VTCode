@@ -393,13 +393,13 @@ fn sanitize_static_shell_command(command: &str) -> Option<String> {
     while index < chars.len() {
         let character = chars[index];
         if character == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
+            in_single_quote.toggle();
             sanitized.push(character);
             index += 1;
             continue;
         }
         if character == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
+            in_double_quote.toggle();
             sanitized.push(character);
             index += 1;
             continue;

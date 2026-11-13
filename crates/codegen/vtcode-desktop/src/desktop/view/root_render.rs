@@ -264,7 +264,7 @@ impl Render for DesktopView {
             )
             .on_action(cx.listener(|view, _: &ToggleSidebar, _, cx| {
                 if view.preferences.navigation_visible() {
-                    view.sidebar_open = !view.sidebar_open;
+                    view.sidebar_open.toggle();
                 } else {
                     view.preferences.navigation_visible = Some(true);
                     view.save_preferences();

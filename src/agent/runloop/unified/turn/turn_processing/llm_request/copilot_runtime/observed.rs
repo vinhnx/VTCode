@@ -135,7 +135,7 @@ fn observed_tool_output_delta<'a>(previous: Option<&str>, current: &'a str) -> O
     match previous {
         None => Some(current),
         Some(prev) if prev == current => None,
-        Some(prev) if current.starts_with(prev) => Some(&current[prev.len()..]),
+        Some(prev) if current.starts_with(prev) => Some(current.trim_prefix(prev)),
         Some(prev) => {
             let prefix_len = calculate_common_prefix_len(prev, current);
             if prefix_len == 0 || prefix_len >= current.len() {

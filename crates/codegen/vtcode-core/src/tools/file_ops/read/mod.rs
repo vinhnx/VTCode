@@ -320,7 +320,7 @@ fn is_tool_output_spool_path(path: &Path) -> bool {
 fn pty_session_id_from_tool_output_path(path: &Path) -> Option<String> {
     let file_name = path.file_name()?.to_str()?;
     let session_file = file_name.strip_suffix(".txt")?;
-    let session_id = session_file.strip_prefix("write_stdin_").unwrap_or(session_file);
+    let session_id = session_file.trim_prefix("write_stdin_");
     if session_id.starts_with("run-")
         && session_id.len() > "run-".len()
         && session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')

@@ -796,7 +796,7 @@ impl Transcript {
             .or_else(|| self.items.iter().rposition(|item| item.id == id && item.is_tool()));
         if let Some(index) = index {
             if let Some(item) = self.items.get_mut(index) {
-                item.expanded = !item.expanded;
+                item.expanded.toggle();
             }
             self.bump_revision();
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
@@ -812,7 +812,7 @@ impl Transcript {
             .or_else(|| self.items.iter().rposition(|item| item.id == id && item.is_diff()));
         if let Some(index) = index {
             if let Some(item) = self.items.get_mut(index) {
-                item.expanded = !item.expanded;
+                item.expanded.toggle();
             }
             self.bump_revision();
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
@@ -836,7 +836,7 @@ impl Transcript {
             });
         if let Some(index) = index {
             if let Some(item) = self.items.get_mut(index) {
-                item.expanded = !item.expanded;
+                item.expanded.toggle();
             }
             self.bump_revision();
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);

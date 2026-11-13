@@ -505,7 +505,7 @@ impl<'a> PaletteCoordinator<'a> {
                 (ActivePalette::Mode, InlineListSelection::ConfigAction(action))
                     if action.starts_with(MODE_ACTION_PREFIX) =>
                 {
-                    let agent_name = action.strip_prefix(MODE_ACTION_PREFIX).unwrap_or(action);
+                    let agent_name = action.trim_prefix(MODE_ACTION_PREFIX);
                     return Ok(InlineLoopAction::SelectPrimaryAgent { name: Some(agent_name.to_string()) });
                 }
                 _ => {}

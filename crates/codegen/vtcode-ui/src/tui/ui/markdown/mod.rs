@@ -355,7 +355,7 @@ fn preprocess_plan_wrappers(source: &str) -> String {
         }
 
         if is_fence {
-            in_fenced_code = !in_fenced_code;
+            in_fenced_code.toggle();
             inline_code_ticks = None;
         }
     }

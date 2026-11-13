@@ -535,7 +535,7 @@ impl PluginLoader {
         }
 
         // Try different extensions
-        let base = base_name.strip_prefix("lib").unwrap_or(base_name);
+        let base = base_name.trim_prefix("lib");
         #[cfg(target_os = "macos")]
         {
             alternatives.push(format!("{base}.dylib"));

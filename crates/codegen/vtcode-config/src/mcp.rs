@@ -294,7 +294,7 @@ impl McpUiConfig {
 
     /// Resolve renderer profile for a fully qualified tool name
     pub fn renderer_for_tool(&self, tool_name: &str) -> Option<McpRendererProfile> {
-        let identifier = tool_name.strip_prefix("mcp_").unwrap_or(tool_name);
+        let identifier = tool_name.trim_prefix("mcp_");
         self.renderer_for_identifier(identifier)
     }
 }

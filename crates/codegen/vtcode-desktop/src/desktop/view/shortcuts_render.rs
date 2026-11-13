@@ -234,7 +234,7 @@ impl DesktopView {
     }
 
     pub(super) fn toggle_vim_navigation(&mut self, cx: &mut Context<Self>) {
-        self.preferences.vim_navigation = !self.preferences.vim_navigation;
+        self.preferences.vim_navigation.toggle();
         self.save_preferences();
         bootstrap::apply_vim_navigation(cx, self.preferences.vim_navigation);
         cx.notify();
@@ -244,7 +244,7 @@ impl DesktopView {
     /// immediately instead of lingering to the commit attempt. Toolbar
     /// buttons and keyboard shortcuts bypass the gate and keep working.
     pub(super) fn toggle_swipe_navigation(&mut self, cx: &mut Context<Self>) {
-        self.preferences.swipe_navigation = !self.preferences.swipe_navigation;
+        self.preferences.swipe_navigation.toggle();
         self.save_preferences();
         self.cancel_pending_swipe(cx);
         cx.notify();

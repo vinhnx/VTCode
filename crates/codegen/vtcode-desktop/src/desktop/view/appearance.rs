@@ -227,7 +227,7 @@ impl DesktopView {
     /// Full-width bottom bar: workspace, git branch, provider · model, and
     /// the live turn status.
     pub(super) fn toggle_status_bar(&mut self, cx: &mut Context<Self>) {
-        self.preferences.show_status_bar = !self.preferences.show_status_bar;
+        self.preferences.show_status_bar.toggle();
         self.save_preferences();
         cx.notify();
     }

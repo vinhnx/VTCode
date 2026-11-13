@@ -266,7 +266,7 @@ impl Session {
 
 fn strip_header_value(value: &str, prefix: &str) -> Option<String> {
     let trimmed = value.trim();
-    let stripped = trimmed.strip_prefix(prefix).unwrap_or(trimmed).trim();
+    let stripped = trimmed.trim_prefix(prefix).trim();
     if stripped.is_empty() || stripped == ui::HEADER_UNKNOWN_PLACEHOLDER {
         None
     } else {

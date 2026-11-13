@@ -673,7 +673,7 @@ fn hunk_line(diff: &str, path: &str) -> Option<u64> {
     let mut matching = false;
     for line in diff.lines() {
         if let Some(file) = line.strip_prefix("+++ ") {
-            matching = file.strip_prefix("b/").unwrap_or(file) == path;
+            matching = file.trim_prefix("b/") == path;
         }
         if matching && line.starts_with("@@ ") {
             return line.split_whitespace().find_map(|s| {
@@ -698,9 +698,9 @@ fn diff_for_file(diff: &str, path: &str) -> Option<String> {
             && let Some(new_file) = lines.peek().and_then(|line| line.strip_prefix("+++ "))
         {
             let file = if new_file == "/dev/null" {
-                old_file.strip_prefix("a/").unwrap_or(old_file)
+                old_file.trim_prefix("a/")
             } else {
-                new_file.strip_prefix("b/").unwrap_or(new_file)
+                new_file.trim_prefix("b/")
             };
             matching = file == path;
             if matching {

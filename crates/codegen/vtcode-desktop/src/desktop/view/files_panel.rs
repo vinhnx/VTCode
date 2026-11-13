@@ -730,7 +730,7 @@ impl DesktopView {
                     .small()
                     .on_click(cx.listener(|view, _, _, cx| {
                         if let Some(preview) = view.file_preview.as_mut() {
-                            preview.show_source = !preview.show_source;
+                            preview.show_source.toggle();
                             cx.notify();
                         }
                     })),
@@ -761,7 +761,7 @@ impl DesktopView {
                             if !preview.show_source {
                                 preview.show_source = true;
                             }
-                            preview.editing = !preview.editing;
+                            preview.editing.toggle();
                             // Entering edit mode hands focus to the source
                             // editor so typing starts immediately; the
                             // id-based handle resolves even though the

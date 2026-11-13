@@ -210,11 +210,11 @@ fn split_top_level_bracket_items(body: &str) -> Vec<String> {
                 }
             }
             '\'' if !in_double => {
-                in_single = !in_single;
+                in_single.toggle();
                 current.push(ch);
             }
             '"' if !in_single => {
-                in_double = !in_double;
+                in_double.toggle();
                 current.push(ch);
             }
             '[' if !in_single && !in_double => {
@@ -252,11 +252,11 @@ pub fn split_bracket_items(body: &str) -> Vec<String> {
     while let Some(ch) = chars.next() {
         match ch {
             '\'' if !in_double => {
-                in_single = !in_single;
+                in_single.toggle();
                 current.push(ch);
             }
             '"' if !in_single => {
-                in_double = !in_double;
+                in_double.toggle();
                 current.push(ch);
             }
             // Backslash escapes the next char outside single quotes (shell:

@@ -91,7 +91,7 @@ impl LocalAgentsState {
     }
 
     pub(super) fn toggle_expanded(&mut self) -> bool {
-        self.expanded = !self.expanded;
+        self.expanded.toggle();
         self.expanded
     }
 

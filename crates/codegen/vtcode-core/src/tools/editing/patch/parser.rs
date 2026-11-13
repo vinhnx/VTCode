@@ -252,7 +252,7 @@ fn parse_update_chunk(
     } else if let Some(context) = first.strip_prefix(CONTEXT_MARKER_PREFIX) {
         let context = context.trim();
         // Strip trailing "@@" delimiter if present (common in unified-diff-style anchors).
-        let context = context.strip_suffix("@@").unwrap_or(context).trim();
+        let context = context.trim_suffix("@@").trim();
         (Some(context.to_owned()), 1)
     } else if allow_missing_context {
         (None, 0)

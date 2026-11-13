@@ -253,7 +253,7 @@ impl WizardModalState {
                             if self.search.is_none()
                                 && (step.allow_freeform || Self::step_selected_custom_note_item_index(step).is_some())
                             {
-                                step.notes_active = !step.notes_active;
+                                step.notes_active.toggle();
                                 ModalListKeyResult::Redraw
                             } else {
                                 step.list.select_next();

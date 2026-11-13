@@ -75,9 +75,7 @@ fn finish_parse_standard_tagged_tool_call(
             rest = after_key;
             continue;
         }
-        if after_key.starts_with(ARG_KEY_CLOSE) {
-            after_key = &after_key[ARG_KEY_CLOSE.len()..];
-        }
+        after_key = after_key.trim_prefix(ARG_KEY_CLOSE);
 
         rest = after_key;
         let Some(value_index) = rest.find(ARG_VALUE_TAG) else {
@@ -85,9 +83,7 @@ fn finish_parse_standard_tagged_tool_call(
         };
         rest = &rest[value_index + ARG_VALUE_TAG.len()..];
         let (raw_value, mut after_value) = read_tag_text(rest);
-        if after_value.starts_with(ARG_VALUE_CLOSE) {
-            after_value = &after_value[ARG_VALUE_CLOSE.len()..];
-        }
+        after_value = after_value.trim_prefix(ARG_VALUE_CLOSE);
         rest = after_value;
 
         let key = raw_key.trim();

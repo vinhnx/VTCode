@@ -213,11 +213,11 @@ fn find_command_substitution(script: &str) -> Option<(shell_parser::Substitution
             continue;
         }
         if character == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
+            in_single_quote.toggle();
             continue;
         }
         if character == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
+            in_double_quote.toggle();
             continue;
         }
         if !in_single_quote {

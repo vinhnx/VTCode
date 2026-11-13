@@ -386,7 +386,7 @@ pub(crate) fn strip_all_plan_tags(text: &str) -> String {
         if index > 0 && !out.is_empty() && !out.ends_with('\n') {
             out.push('\n');
         }
-        let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = raw_line.trim_suffix('\n');
         let is_fence = is_fence_delimiter(line);
         if in_fenced_code || is_fence {
             out.push_str(raw_line);
@@ -394,7 +394,7 @@ pub(crate) fn strip_all_plan_tags(text: &str) -> String {
             out.push_str(&strip_plan_tags(raw_line, &mut inline_code_ticks));
         }
         if is_fence {
-            in_fenced_code = !in_fenced_code;
+            in_fenced_code.toggle();
             inline_code_ticks = None;
         }
     }
@@ -423,7 +423,7 @@ fn contains_plan_tag_outside_fences(text: &str, tags: &[&'static str]) -> bool {
     let mut in_fenced_code = false;
     let mut inline_code_ticks = None;
     for raw_line in text.split_inclusive('\n') {
-        let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = raw_line.trim_suffix('\n');
         let is_fence = is_fence_delimiter(line);
         if !in_fenced_code
             && !is_fence
@@ -432,7 +432,7 @@ fn contains_plan_tag_outside_fences(text: &str, tags: &[&'static str]) -> bool {
             return true;
         }
         if is_fence {
-            in_fenced_code = !in_fenced_code;
+            in_fenced_code.toggle();
             inline_code_ticks = None;
         }
     }
@@ -489,14 +489,14 @@ fn extract_plan_body_for_display(text: &str) -> Option<String> {
     let mut saw_plan = false;
 
     for raw_line in text.split_inclusive('\n') {
-        let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = raw_line.trim_suffix('\n');
         let is_fence = is_fence_delimiter(line);
         if in_fenced_code || is_fence {
             if saw_plan {
                 body.push_str(raw_line);
             }
             if is_fence {
-                in_fenced_code = !in_fenced_code;
+                in_fenced_code.toggle();
                 inline_code_ticks = None;
             }
             continue;
@@ -563,7 +563,7 @@ fn normalize_plan_display_markdown(body: &str) -> String {
         if in_fenced_code || is_fence {
             lines.push(DisplayLine { text: line.to_string(), structural: false });
             if is_fence {
-                in_fenced_code = !in_fenced_code;
+                in_fenced_code.toggle();
             }
             continue;
         }
@@ -586,7 +586,7 @@ fn normalize_plan_display_markdown(body: &str) -> String {
         // elsewhere are left untouched.
         let trimmed_owned = current.trim().to_string();
         let trimmed: &str = &trimmed_owned;
-        let label = trimmed.strip_suffix(':').unwrap_or(trimmed).trim();
+        let label = trimmed.trim_suffix(':').trim();
         let lowered = label.to_ascii_lowercase();
         if !label.is_empty() && label.len() <= 64 {
             if let Some((_, heading)) = HEADING_ALIASES.iter().find(|(alias, _)| *alias == lowered) {

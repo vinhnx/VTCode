@@ -209,12 +209,12 @@ fn contains_background_operator(script: &str) -> bool {
     while index < chars.len() {
         let character = chars[index];
         if character == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
+            in_single_quote.toggle();
             index += 1;
             continue;
         }
         if character == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
+            in_double_quote.toggle();
             index += 1;
             continue;
         }

@@ -170,7 +170,7 @@ pub(super) fn strip_html_comments(contents: &str) -> String {
     for line in contents.lines() {
         let trimmed = line.trim_start();
         if !in_comment && is_fence_line(trimmed) {
-            in_code_block = !in_code_block;
+            in_code_block.toggle();
             output.push_str(line);
             output.push('\n');
             continue;
@@ -234,7 +234,7 @@ pub(super) fn collect_imports(contents: &str) -> Vec<String> {
     for line in contents.lines() {
         let trimmed = line.trim_start();
         if is_fence_line(trimmed) {
-            in_code_block = !in_code_block;
+            in_code_block.toggle();
             continue;
         }
         if in_code_block {

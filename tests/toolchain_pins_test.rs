@@ -110,7 +110,7 @@ fn workflow_toolchain_pins(path: &Path, contents: &str) -> Result<Vec<ToolchainP
     let mut pins = Vec::new();
     for (line_index, line) in lines.iter().enumerate() {
         let trimmed = line.trim_start();
-        let uses = trimmed.strip_prefix("- ").unwrap_or(trimmed);
+        let uses = trimmed.trim_prefix("- ");
         if !uses.starts_with("uses: dtolnay/rust-toolchain@") {
             continue;
         }
