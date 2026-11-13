@@ -314,8 +314,16 @@ async fn inline_batches_many_reasoning_deltas_for_performance() {
 #[tokio::test]
 async fn inline_stream_defers_timestamp_footer_to_turn_end() {
     fn is_footer(text: &str) -> bool {
-        text.strip_prefix("  · ")
-            .is_some_and(|time| time.contains(':') && (time.ends_with("AM") || time.ends_with("PM")))
+        text.strip_prefix("  · ").is_some_and(|chrome| {
+            // One clock half plus an optional elapsed-duration half, matching
+            // `message_timestamp_footer`'s one-chrome-unit contract.
+            let mut halves = chrome.split(" · ");
+            let clock = halves.next().unwrap_or_default();
+            clock.contains(':')
+                && (clock.ends_with("AM") || clock.ends_with("PM"))
+                && halves.next().is_none_or(|elapsed| !elapsed.is_empty())
+                && halves.next().is_none()
+        })
     }
 
     let provider = ReasoningThenChunkedContentProvider {
