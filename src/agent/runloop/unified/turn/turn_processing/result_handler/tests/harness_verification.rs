@@ -41,8 +41,10 @@ async fn exhausted_budget_blocks_verification_without_reminder_rounds() {
     tracker.mark_verification_pending();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.tool_calls = 1;
+    // Fresh fixture: no files were modified this turn.
+    let turn_modified_files = BTreeSet::new();
     let outcome = ctx
-        .handle_pending_verification_text_response(&mut tracker, "The change is complete.")
+        .handle_pending_verification_text_response(&mut tracker, "The change is complete.", &turn_modified_files)
         .unwrap();
     let super::super::PendingVerificationTextOutcome::Block { reason } = outcome else {
         panic!("exhausted execution budget must produce a verification block");
@@ -52,11 +54,37 @@ async fn exhausted_budget_blocks_verification_without_reminder_rounds() {
     assert!(!super::super::helpers::is_pending_verification_block(&reason));
     assert!(!super::super::helpers::verification_block_allows_auto_recovery(&reason, &final_text));
     assert!(reason.starts_with("Tool-call budget exhausted for this turn (1/1)"));
-    assert!(final_text.contains("Changes remain unverified"));
+    assert!(reason.contains("No edits were made this turn"));
+    assert!(!reason.contains("Changes remain unverified"));
+    assert!(final_text.contains("No edits were made this turn"));
+    assert!(!final_text.contains("Changes remain unverified"));
     assert!(!final_text.contains("bounded autonomous recovery"));
     assert_eq!(tracker.verification_auto_recovery_attempts(), 0);
     assert!(!tracker.auto_verification_executed);
     assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
+}
+
+#[tokio::test]
+async fn exhausted_budget_with_edits_reports_changes_unverified() {
+    let mut backing = TestTurnProcessingBacking::new(1).await;
+    backing.set_verification_override_for_test("rustc --version");
+    let mut tracker = LoopTracker::new();
+    tracker.mark_verification_pending();
+    let mut ctx = backing.turn_processing_context();
+    ctx.harness_state.tool_calls = 1;
+    let turn_modified_files = BTreeSet::from([std::path::PathBuf::from("src/lib.rs")]);
+    let super::super::PendingVerificationTextOutcome::Block { reason } = ctx
+        .handle_pending_verification_text_response(&mut tracker, "The change is complete.", &turn_modified_files)
+        .unwrap()
+    else {
+        panic!("exhausted execution budget must produce a verification block");
+    };
+    assert!(reason.starts_with("Tool-call budget exhausted for this turn (1/1)"));
+    assert!(reason.contains("Changes remain unverified"));
+    assert!(!reason.contains("No edits were made this turn"));
+    let final_text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(&reason);
+    assert!(!super::super::helpers::is_pending_verification_block(&reason));
+    assert!(!super::super::helpers::verification_block_allows_auto_recovery(&reason, &final_text));
 }
 #[tokio::test]
 async fn wall_clock_exhaustion_has_priority_over_pending_verification_and_tool_calls() {
@@ -66,13 +94,17 @@ async fn wall_clock_exhaustion_has_priority_over_pending_verification_and_tool_c
     ctx.harness_state.tool_calls = 1;
     ctx.harness_state.max_tool_wall_clock = std::time::Duration::from_secs(600);
     ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(601);
-    let super::super::PendingVerificationTextOutcome::Block { reason } =
-        ctx.handle_pending_verification_text_response(&mut tracker, "Done").unwrap()
+    let turn_modified_files = BTreeSet::new();
+    let super::super::PendingVerificationTextOutcome::Block { reason } = ctx
+        .handle_pending_verification_text_response(&mut tracker, "Done", &turn_modified_files)
+        .unwrap()
     else {
         panic!("wall-clock exhaustion must stop completion without scheduling checks");
     };
     assert!(reason.starts_with("Tool wall-clock budget exhausted for this turn (600s)."));
     assert!(reason.contains("no additional verifier was scheduled"));
+    assert!(reason.contains("No edits were made this turn"));
+    assert!(!reason.contains("Changes remain unverified"));
     assert!(!super::super::helpers::is_pending_verification_block(&reason));
     assert!(!tracker.auto_verification_executed);
     assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
@@ -105,8 +137,9 @@ async fn required_verifier_recovery_advances_checks_instead_of_repeating_the_def
             .as_deref(),
         Some("rustc --help")
     );
+    let turn_modified_files = BTreeSet::new();
     let super::super::PendingVerificationTextOutcome::AutoVerify { command } = ctx
-        .handle_pending_verification_text_response(&mut tracker, "Still checking.")
+        .handle_pending_verification_text_response(&mut tracker, "Still checking.", &turn_modified_files)
         .unwrap()
     else {
         panic!("completion should run the missing check");

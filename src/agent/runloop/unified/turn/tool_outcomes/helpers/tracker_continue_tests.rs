@@ -167,8 +167,13 @@ fn refusal_notices_never_auto_continue() {
 #[test]
 fn exhausted_turn_does_not_queue_an_automatic_retry() {
     let budget_stop = "Tool-call budget exhausted for this turn (32/32). Changes remain unverified; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
+    let budget_stop_without_edits = "Tool-call budget exhausted for this turn (32/32). No edits were made this turn; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence.";
     let transient_stop = "Turn ended with a recovery fallback; the requested work was not confirmed. The current plan and task state were retained.";
-    for (reason, expected) in [(budget_stop, false), (transient_stop, true)] {
+    for (reason, expected) in [
+        (budget_stop, false),
+        (budget_stop_without_edits, false),
+        (transient_stop, true),
+    ] {
         assert_eq!(
             should_queue_tracker_auto_continue(true, false, false, Some(reason), false, None, 32, false, false),
             expected,

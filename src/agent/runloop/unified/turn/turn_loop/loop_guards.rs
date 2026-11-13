@@ -49,7 +49,11 @@ pub(super) async fn handle_stale_approved_plan_pause(
     {
         // The stale text was discarded (never committed), so no content
         // is available for completion-claim detection; pass empty text.
-        match turn_processing_ctx.handle_pending_verification_text_response(&mut *repeated_tool_attempts, "")? {
+        match turn_processing_ctx.handle_pending_verification_text_response(
+            &mut *repeated_tool_attempts,
+            "",
+            turn_modified_files,
+        )? {
             PendingVerificationTextOutcome::Block { reason } => {
                 return Ok(Some(ControlFlow::Break(TurnLoopResult::Blocked { reason: Some(reason) })));
             }
