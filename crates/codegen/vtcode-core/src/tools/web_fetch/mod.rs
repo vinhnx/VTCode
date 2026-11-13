@@ -43,14 +43,10 @@ const TEMP_SUBDIR: &str = "web_fetch";
 /// Max age in seconds before temp files are cleaned up (1 hour).
 const TEMP_MAX_AGE_SECS: u64 = 3600;
 
-pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetch a remote URL and return the start of the page inline. The result contains `preview` (readable text for HTML pages, else the first 8000 bytes of the body), `preview_kind` (`text` or `raw`), `content_length`, and a `temp_file` path holding the full fetched body; read `temp_file` only when the preview is not enough. The tool does not analyze the page: `prompt` is returned with the result to guide your own reading. Set format=markdown to get cleaned markdown inline from the defuddle.md extraction service instead; that mode allows 1 call per session. For docs domains, try /llms.txt first: for 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse linked URLs for relevant Markdown sources. Prefer llms.txt over llms-full.txt, which can be multi-megabyte. A body larger than max_bytes is cut off and the result reports truncated_by_max_bytes and source_size_bytes, so you can retry with a larger max_bytes. Temp files are ephemeral and may be cleaned up after about an hour.";
+pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetch a remote URL and return the start of the page inline. The result contains `preview` (readable text for HTML pages, else the first 8000 bytes of the body), `preview_kind` (`text` or `raw`), `content_length`, and a `temp_file` path holding the full fetched body; read `temp_file` only when the preview is not enough. The tool does not analyze the page: `prompt` is returned with the result to guide your own reading. For docs domains, try /llms.txt first: for 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse linked URLs for relevant Markdown sources. Prefer llms.txt over llms-full.txt, which can be multi-megabyte. A body larger than max_bytes is cut off and the result reports truncated_by_max_bytes and source_size_bytes, so you can retry with a larger max_bytes. Temp files are ephemeral and may be cleaned up after about an hour.";
 
 /// Parameter schema for `web_fetch`, shared by the distributed builtin
 /// registration and the web tool pack so the two surfaces cannot drift.
-///
-/// `format` must be declared here: argument validation rejects unknown
-/// properties (`additionalProperties: false`), so an undeclared `format`
-/// would make the markdown route in [`WebFetchTool::execute`] unreachable.
 pub(crate) fn web_fetch_parameter_schema() -> Value {
     json!({
         "type": "object",
@@ -62,11 +58,6 @@ pub(crate) fn web_fetch_parameter_schema() -> Value {
             "prompt": {
                 "type": "string",
                 "description": "Question or instruction describing what to look for in the fetched content. It is returned with the result to guide your analysis; omit it to get a default summarize instruction."
-            },
-            "format": {
-                "type": "string",
-                "enum": ["summary", "markdown"],
-                "description": "Output mode (default: summary). summary fetches the page directly and returns a preview plus a temp_file path. markdown returns the page as cleaned markdown inline via the defuddle.md extraction service; it allows 1 call per session, accepts only remote http(s) URLs, caps max_bytes at 262144, and ignores prompt and timeout_secs."
             },
             "max_bytes": {
                 "type": "integer",
@@ -103,9 +94,6 @@ pub struct WebFetchTool {
     pub blocked_patterns: Vec<String>,
     /// Allowed domains (for exemptions in restricted mode or primary list in whitelist mode)
     pub allowed_domains: HashSet<String>,
-    /// Defuddle markdown-extraction backend (used when `format: "markdown"`).
-    /// Shared session-cap state survives clones (Arc counter inside).
-    pub defuddle: crate::tools::defuddle::DefuddleTool,
     /// Strict HTTPS-only mode
     pub strict_https_only: bool,
 }
@@ -229,7 +217,6 @@ impl WebFetchTool {
             blocked_domains: HashSet::new(),
             blocked_patterns: Vec::new(),
             allowed_domains: HashSet::new(),
-            defuddle: crate::tools::defuddle::DefuddleTool::new(),
             strict_https_only: true,
         }
     }
@@ -247,7 +234,6 @@ impl WebFetchTool {
             blocked_domains: blocked_domains.into_iter().collect(),
             blocked_patterns,
             allowed_domains: allowed_domains.into_iter().collect(),
-            defuddle: crate::tools::defuddle::DefuddleTool::new(),
             strict_https_only,
         }
     }
@@ -770,26 +756,6 @@ impl Tool for WebFetchTool {
         // - Simple "fetch https://..." style calls are handled natively by VT Code.
         // - We do not force upstream agents or MCP tools to construct a full prompt.
         // - MCP tools like `get_current_time` remain unaffected (they are separate).
-        // `format: "markdown"` routes to the defuddle.md extraction backend
-        // (absorbs the former standalone `defuddle_fetch` tool). Session cap
-        // and URL validation are enforced by the backend itself.
-        if let Some(obj) = args.as_object_mut() {
-            let wants_markdown = obj
-                .get("format")
-                .and_then(Value::as_str)
-                .is_some_and(|f| f.eq_ignore_ascii_case("markdown"));
-            if wants_markdown {
-                let mut defuddle_args = serde_json::Map::new();
-                if let Some(url) = obj.get("url").cloned() {
-                    defuddle_args.insert("url".to_string(), url);
-                }
-                if let Some(max_bytes) = obj.get("max_bytes").cloned() {
-                    defuddle_args.insert("max_bytes".to_string(), max_bytes);
-                }
-                return self.defuddle.execute(Value::Object(defuddle_args)).await;
-            }
-        }
-
         if let Some(obj) = args.as_object_mut() {
             let has_url = obj.get("url").is_some_and(Value::is_string);
             let has_prompt = obj.get("prompt").is_some_and(Value::is_string);

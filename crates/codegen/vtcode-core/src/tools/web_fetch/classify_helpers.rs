@@ -1,5 +1,4 @@
-//! Shared error classification helpers used by `web_fetch`, `web_search`,
-//! and `defuddle_fetch`.
+//! Shared error classification helpers used by `web_fetch` and `web_search`.
 //!
 //! Each tool produces a different response shape, so the helpers here
 //! focus on the lower-level primitives: pulling an HTTP status code out

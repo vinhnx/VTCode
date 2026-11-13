@@ -817,8 +817,7 @@ pub(crate) fn describe_tool_action(
         actual_name
             if actual_name == tool_names::WEB_FETCH
                 || actual_name == tool_names::FETCH_URL
-                || actual_name == tool_names::FETCH
-                || actual_name == tool_names::DEFUDDLE_FETCH =>
+                || actual_name == tool_names::FETCH =>
         {
             let (desc, keys) = describe_fetch_action(args);
             with_keys(desc, keys)

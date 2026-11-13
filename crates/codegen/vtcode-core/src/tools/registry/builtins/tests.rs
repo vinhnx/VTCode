@@ -1,4 +1,5 @@
 use super::*;
+use serde_json::json;
 
 #[test]
 fn distributed_slice_contains_all_builtin_tools() {
@@ -179,14 +180,13 @@ fn web_fetch_builtin_description_matches_preview_and_temp_file_result() {
     // not produce an analyzed summary.
     assert!(description.contains("`preview`"));
     assert!(description.contains("`temp_file`"));
-    assert!(description.contains("format=markdown"));
     assert!(!description.contains("analyzed summary"));
     assert!(!description.contains("Accepts:"));
     assert!(!description.contains("Do NOT"));
 }
 
 #[test]
-fn web_fetch_schema_accepts_markdown_format() {
+fn web_fetch_schema_rejects_unknown_output_modes() {
     let registrations = builtin_tool_registrations(None);
     let web_fetch = registrations
         .iter()
@@ -194,12 +194,13 @@ fn web_fetch_schema_accepts_markdown_format() {
         .expect("web_fetch registration should exist");
     let schema = web_fetch.metadata().parameter_schema().expect("web_fetch schema");
 
-    assert_eq!(schema["properties"]["format"]["enum"], json!(["summary", "markdown"]));
+    // The schema has a single output mode, so `format` is not a property:
+    // `additionalProperties: false` rejects it rather than silently ignoring it.
+    assert!(schema["properties"].get("format").is_none());
     assert_eq!(schema["additionalProperties"], json!(false));
     let validator = jsonschema::validator_for(schema).expect("web_fetch schema should compile");
-    assert!(validator.is_valid(&json!({"url": "https://example.com", "format": "markdown"})));
-    assert!(validator.is_valid(&json!({"url": "https://example.com", "format": "summary"})));
-    assert!(!validator.is_valid(&json!({"url": "https://example.com", "format": "html"})));
+    assert!(validator.is_valid(&json!({"url": "https://example.com"})));
+    assert!(!validator.is_valid(&json!({"url": "https://example.com", "format": "markdown"})));
 }
 
 /// Tool descriptions are part of the prompt and directly drive tool

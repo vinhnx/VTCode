@@ -335,7 +335,6 @@ fn web_fetch_approval_url(tool_name: &str, tool_args: Option<&Value>) -> Option<
     let is_web_fetch = canonical == vtcode_core::config::constants::tools::WEB_FETCH
         || canonical == vtcode_core::config::constants::tools::FETCH_URL
         || canonical == vtcode_core::config::constants::tools::FETCH
-        || canonical == vtcode_core::config::constants::tools::DEFUDDLE_FETCH
         || tool_name == vtcode_core::config::constants::tools::FETCH;
     if !is_web_fetch {
         return None;

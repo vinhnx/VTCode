@@ -41,10 +41,6 @@ pub const MCP_DISCONNECT_SERVER: &str = "mcp_disconnect_server";
 pub const WEB_SEARCH: &str = "web_search";
 pub const WEB_FETCH: &str = "web_fetch";
 pub const FETCH_URL: &str = "fetch_url";
-/// Defuddle-backed markdown extraction for a single URL. The hosted
-/// `defuddle.md/{link}` service is rate-limited, so this tool is hard-capped
-/// at one call per tool instance (treat one tool instance as one session).
-pub const DEFUDDLE_FETCH: &str = "defuddle_fetch";
 pub const LIST: &str = "list";
 pub const GREP: &str = "grep";
 pub const FETCH: &str = "fetch";
@@ -255,7 +251,6 @@ const _: () = {
     validate_tool_name(WEB_SEARCH);
     validate_tool_name(WEB_FETCH);
     validate_tool_name(FETCH_URL);
-    validate_tool_name(DEFUDDLE_FETCH);
     validate_tool_name(LIST);
     validate_tool_name(GREP);
     validate_tool_name(FETCH);

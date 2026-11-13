@@ -315,7 +315,7 @@ allowed_domains = ["only.example.com"]
             assert!(snapshot.tool.web_config_load_failed);
             let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
             registry.allow_all_tools().await.unwrap();
-            for name in ["web_search", "web_fetch", "defuddle_fetch"] {
+            for name in ["web_search", "web_fetch"] {
                 let registration = registry.inventory.get_registration(name).unwrap();
                 let super::super::ToolHandler::TraitObject(tool) = registration.handler() else {
                     panic!("native web tool")

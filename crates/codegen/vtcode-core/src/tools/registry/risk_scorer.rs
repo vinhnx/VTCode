@@ -225,7 +225,6 @@ impl ToolRiskScorer {
             tools::WEB_SEARCH
                 | tools::WEB_FETCH
                 | tools::FETCH_URL
-                | tools::DEFUDDLE_FETCH
                 | tools::MCP_CONNECT_SERVER
                 | tools::MCP_DISCONNECT_SERVER
         ) || matches!(tool_name, "mcp:connect" | "mcp:disconnect")
@@ -267,7 +266,6 @@ impl ToolRiskScorer {
             tools::WEB_SEARCH
             | tools::WEB_FETCH
             | tools::FETCH_URL
-            | tools::DEFUDDLE_FETCH
             | tools::MCP_CONNECT_SERVER
             | tools::MCP_DISCONNECT_SERVER
             | "mcp:connect"
@@ -312,7 +310,6 @@ mod tests {
         assert!(ToolRiskScorer::is_network_tool(tools::WEB_FETCH));
         assert!(ToolRiskScorer::is_network_tool(tools::WEB_SEARCH));
         assert!(ToolRiskScorer::is_network_tool(tools::FETCH_URL));
-        assert!(ToolRiskScorer::is_network_tool(tools::DEFUDDLE_FETCH));
         assert!(ToolRiskScorer::is_network_tool("mcp:connect"));
         assert!(ToolRiskScorer::is_network_tool("mcp:disconnect"));
         assert!(!ToolRiskScorer::is_network_tool(tools::CODE_SEARCH));

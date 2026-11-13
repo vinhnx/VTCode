@@ -58,8 +58,9 @@ impl ToolCategory {
 
     pub(super) fn from_tool_name(tool_name: &str, args: Option<&serde_json::Value>) -> Self {
         match strip_mcp_prefix(tool_name) {
-            "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "defuddle_fetch" | "fetch"
-            | "get_errors" | "list_files" => Self::Read,
+            "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "fetch" | "get_errors" | "list_files" => {
+                Self::Read
+            }
             "edit_file" | "write_file" | "create_file" | "delete_file" | "apply_patch" | "search_replace" => Self::Edit,
             // Command launches render and merge like `exec_command`, mirroring
             // `tool_intent::is_command_run_tool_call` (its `EXEC_COMMAND` arm needs a

@@ -18,7 +18,6 @@ const NETWORK_TOOLS: &[&str] = &[
     "browser",
     "web_search",
     "web_fetch",
-    "defuddle_fetch",
     "read_web_page",
     "curl",
 ];

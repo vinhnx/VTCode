@@ -22,8 +22,8 @@ pub(super) fn extract_domain(url: &str) -> Result<String> {
 /// Returns `true` when `host` is a private, loopback, or link-local IP address.
 /// Return `true` when `host` is a loopback, private, link-local,
 /// broadcast, or multicast address. Used by the SSRF guard in
-/// `web_fetch::validate_url` and re-used by `defuddle` so a private host
-/// can never sneak through the defuddle relay.
+/// `web_fetch::validate_url`, so a private host can never sneak through
+/// the fetch relay.
 ///
 /// Accepts the host either bare or bracket-wrapped (the URL parser
 /// returns IPv6 hosts like `[::1]`; we strip the brackets before

@@ -13,7 +13,6 @@ use linkme::distributed_slice;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
-use crate::tools::defuddle::{DEFUDDLE_FETCH_DESCRIPTION, DefuddleTool};
 use crate::tools::handlers::task_tracker::{
     task_tracker_description_for_workflow, task_tracker_parameter_schema_for_workflow,
 };
@@ -23,7 +22,6 @@ use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
 use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_parameter_schema};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool, web_search_parameter_schema};
-use serde_json::json;
 use vtcode_utility_tool_specs::{
     AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION,
     agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters,
@@ -255,40 +253,6 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         .with_aliases(["search_web", "websearch"])
 }
 
-// ---------------------------------------------------------------------------
-// DEFUDDLE FETCH (built-in, one-shot markdown extraction via defuddle.md)
-// ---------------------------------------------------------------------------
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_defuddle_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let defuddle = DefuddleTool::new();
-    let defuddle_for_factory = defuddle.clone();
-    let defuddle_factory = native_cgp_tool_factory(move || defuddle_for_factory.clone());
-    ToolRegistration::from_tool_instance(tools::DEFUDDLE_FETCH, CapabilityLevel::Basic, defuddle)
-        .with_native_cgp_factory(defuddle_factory)
-        .with_description(DEFUDDLE_FETCH_DESCRIPTION)
-        .with_parameter_schema(json!({
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "format": "uri",
-                    "pattern": "^https?://",
-                    "description": "REMOTE web page URL (http:// or https:// ONLY). Do NOT use for local file paths."
-                },
-                "max_bytes": {
-                    "type": "integer",
-                    "description": "Hard cap on the returned markdown size in bytes (default: 262144, max: 262144)."
-                }
-            },
-            "required": ["url"],
-            "additionalProperties": false
-        }))
-        .with_permission(ToolPolicy::Prompt)
-        .with_aliases(["defuddle", "extract_markdown"])
-        .with_llm_visibility(false)
-}
-
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_mcp(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(tools::MCP, CapabilityLevel::CodeSearch, false, ToolRegistry::mcp_executor)
@@ -505,10 +469,8 @@ fn with_builtin_behavior(registration: ToolRegistration) -> ToolRegistration {
 fn with_builtin_network_access(registration: ToolRegistration) -> ToolRegistration {
     use super::ToolNetworkAccess;
     let access = match registration.name() {
-        "web_fetch" | "web_search" | "defuddle_fetch" | "exec_command" | "exec_pty_cmd" | "write_stdin"
-        | "run_pty_cmd" | "send_pty_input" | "create_pty_session" | "mcp" | "agent" | "cron" => {
-            ToolNetworkAccess::Network
-        }
+        "web_fetch" | "web_search" | "exec_command" | "exec_pty_cmd" | "write_stdin" | "run_pty_cmd"
+        | "send_pty_input" | "create_pty_session" | "mcp" | "agent" | "cron" => ToolNetworkAccess::Network,
         "read_file"
         | "list_files"
         | "write_file"

@@ -193,7 +193,6 @@ fn builtin_tool_names_all_pass_dispatchability_gate() {
         tools::WEB_SEARCH,
         tools::WEB_FETCH,
         tools::FETCH_URL,
-        tools::DEFUDDLE_FETCH,
         tools::LIST,
         tools::GREP,
         tools::FETCH,

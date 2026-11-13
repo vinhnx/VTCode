@@ -150,7 +150,6 @@ pub mod execution_context;
 pub mod execution_tracker;
 pub mod file_ops;
 pub mod file_search_bridge;
-pub mod file_search_rpc;
 pub mod file_tracker;
 mod grep_backend;
 pub mod grep_cache;
@@ -168,14 +167,12 @@ pub mod read_limits;
 pub mod resilience;
 
 pub use resilience::rate_limiter;
-pub mod defuddle;
 pub mod outline_search;
 pub mod registry;
 pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
 pub mod safety_gateway;
-pub mod search_metrics;
 pub(crate) mod search_runtime;
 pub mod shell;
 pub mod shell_snapshot;
@@ -224,17 +221,12 @@ pub use exec_read_target::{ExecReadTarget, parse_exec_read_target};
 pub use exec_session_id::ExecSessionId;
 pub use execution_context::{ToolExecutionContext, ToolExecutionRecord, ToolPattern};
 pub use execution_tracker::{ExecutionRecord, ExecutionStats, ExecutionStatus, ExecutionTracker};
-pub use file_search_rpc::{
-    FileMatchRpc, FileSearchRpcHandler, ListFilesRequest, ListFilesResponse, RpcError, RpcRequest, RpcResponse,
-    SearchFilesRequest, SearchFilesResponse,
-};
 pub use grep_file::GrepSearchManager;
 pub use invocation::{InvocationBuilder, ToolInvocation as UnifiedToolInvocation, ToolInvocationId};
 pub use search_runtime::{
     SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language, search_tool_bundle_status,
 };
 
-pub use defuddle::DefuddleTool;
 pub use optimized_registry::{CachedToolMetadata as OptimizedToolMetadata, OptimizedToolRegistry};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
@@ -251,7 +243,6 @@ pub use safety_gateway::{
     SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
     SafetyTrustLevel,
 };
-pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use shell_snapshot::{
     FileFingerprint, ShellKind, ShellSnapshot, ShellSnapshotManager, SnapshotStats, apply_snapshot_env,
     global_snapshot_manager,

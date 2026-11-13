@@ -321,7 +321,7 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
             Some(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false))
         }
-        tools::WEB_FETCH | tools::FETCH_URL | tools::WEB_SEARCH | tools::DEFUDDLE_FETCH => {
+        tools::WEB_FETCH | tools::FETCH_URL | tools::WEB_SEARCH => {
             Some(ToolBehavior::function(ToolMutationModel::ReadOnly, false, false))
         }
         tools::WRITE_FILE | tools::EDIT_FILE | tools::DELETE_FILE | tools::CREATE_FILE => {

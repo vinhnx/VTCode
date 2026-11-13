@@ -616,7 +616,6 @@ fn tool_category_mirrors_service_labels_at_summary_granularity() {
         ("read_pty_session", Read),
         ("web_fetch", Read),
         ("fetch_url", Read),
-        ("defuddle_fetch", Read),
         ("fetch", Read),
         ("get_errors", Read),
         ("list_files", Read),

@@ -592,8 +592,7 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
         }
     }
     match name {
-        "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "defuddle_fetch" | "fetch" | "get_errors"
-        | "list_files" => {
+        "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "fetch" | "get_errors" | "list_files" => {
             if let Some(base) = headline_basename(args) {
                 return format!("Read {base}");
             }
