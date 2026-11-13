@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::Result;
 use vtcode_core::core::agent::snapshots::SnapshotTurnContext;
 use vtcode_core::exec::events::HarnessEventKind;
@@ -11,23 +9,6 @@ use vtcode_core::utils::session_archive::SessionMessage;
 use crate::agent::runloop::unified::display::reset_inline_input;
 use crate::agent::runloop::unified::turn::context::{TurnLoopResult, TurnOutcomeContext};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
-
-fn format_turn_elapsed_label(duration: Duration) -> String {
-    let total_seconds = duration.as_secs();
-    if total_seconds < 60 {
-        return format!("{total_seconds}s");
-    }
-
-    if total_seconds < 3600 {
-        let minutes = total_seconds / 60;
-        let seconds = total_seconds % 60;
-        return format!("{minutes}m {seconds}s");
-    }
-
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    format!("{hours}h {minutes}m")
-}
 
 pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcomeContext<'_>) -> Result<()> {
     match outcome.result {
@@ -126,8 +107,10 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
                 }
             }
             if ctx.show_turn_timer {
-                ctx.renderer
-                    .line(MessageStyle::Info, &format!("Worked for {}", format_turn_elapsed_label(ctx.turn_elapsed)))?;
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!("Worked for {}", vtcode_commons::message_timestamp::format_turn_elapsed(ctx.turn_elapsed)),
+                )?;
             }
             Ok(())
         }
@@ -138,6 +121,7 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
 mod tests {
     use std::collections::BTreeSet;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
     use vtcode_core::utils::ansi::AnsiRenderer;
@@ -164,13 +148,6 @@ mod tests {
             }
         }
         lines
-    }
-
-    #[test]
-    fn format_turn_elapsed_label_mixed_adaptive() {
-        assert_eq!(format_turn_elapsed_label(Duration::from_secs(59)), "59s");
-        assert_eq!(format_turn_elapsed_label(Duration::from_secs(90)), "1m 30s");
-        assert_eq!(format_turn_elapsed_label(Duration::from_secs(3600)), "1h 0m");
     }
 
     #[tokio::test]

@@ -71,7 +71,7 @@ impl AnsiRenderer {
                 } else {
                     // Out-of-turn output (session-exit reprint, pre-turn prompt
                     // replies) owns no boundary to flush at, so it stamps now.
-                    sink.append_response_timestamp_footer(styles.status, indent)?;
+                    sink.append_response_timestamp_footer(styles.status, indent, None)?;
                     self.last_line_was_empty = false;
                 }
             }
@@ -112,7 +112,7 @@ impl AnsiRenderer {
                 // so one turn shows exactly one clock after its final message.
                 self.pending_response_footer = true;
             } else {
-                self.write_response_timestamp_footer(indent)?;
+                self.write_response_timestamp_footer(indent, None)?;
             }
         }
         Ok(())
@@ -124,8 +124,14 @@ impl AnsiRenderer {
     /// Mirrors [`AnsiRenderer::flush`] without recording the global transcript
     /// log: the footer is chrome, and the log feeds tail-matching,
     /// session-end hooks, and snapshot assertions that must not see it.
-    pub(super) fn write_response_timestamp_footer(&mut self, indent: &str) -> Result<()> {
-        let footer = vtcode_commons::message_timestamp::current_message_timestamp_footer();
+    /// `elapsed` comes from the armed turn bracket; out-of-turn stamps pass
+    /// `None`.
+    pub(super) fn write_response_timestamp_footer(
+        &mut self,
+        indent: &str,
+        elapsed: Option<std::time::Duration>,
+    ) -> Result<()> {
+        let footer = vtcode_commons::message_timestamp::current_message_timestamp_footer_with_elapsed(elapsed);
         self.buffer.clear();
         if !indent.is_empty() {
             self.buffer.push_str(indent);

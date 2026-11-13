@@ -53,6 +53,7 @@ impl AnsiRenderer {
             show_message_timestamps: true,
             pending_response_footer: false,
             defer_turn_footer: false,
+            turn_started_at: None,
             tool_display_mode: ToolDisplayMode::Compact,
             communication_style: vtcode_commons::ui_protocol::CommunicationStyle::Balanced,
             diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
@@ -201,9 +202,14 @@ impl AnsiRenderer {
 
     /// Start a fresh turn: arm footer deferral and drop any pending footer left
     /// by aborted output so it cannot leak into this turn's final message.
+    ///
+    /// The arm instant also brackets the turn's duration: the footer pairs the
+    /// wall clock with the elapsed time between this call and
+    /// [`AnsiRenderer::finish_turn_message_timestamp`].
     pub fn begin_turn_message_timestamp(&mut self) {
         self.pending_response_footer = false;
         self.defer_turn_footer = true;
+        self.turn_started_at = Some(std::time::Instant::now());
     }
 
     /// Show one wall-clock footer under the turn's final agent response.

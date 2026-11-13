@@ -603,7 +603,7 @@ impl AnsiRenderer {
         }
         let indent = MessageStyle::Response.indent();
         let status_style = theme::active_styles().status;
-        sink.append_response_timestamp_footer(status_style, indent)?;
+        sink.append_response_timestamp_footer(status_style, indent, None)?;
         self.last_line_was_empty = false;
         Ok(())
     }
@@ -612,13 +612,16 @@ impl AnsiRenderer {
     ///
     /// Called once at the turn boundary after the final agent message has been
     /// rendered. Disarms deferral so the next out-of-turn response stamps
-    /// immediately again. A no-op when no response body was rendered, when
-    /// timestamps are disabled, or during transcript-batch replay.
+    /// immediately again. The elapsed half of the footer measures the armed
+    /// turn bracket (`begin_turn_message_timestamp` to here). A no-op when no
+    /// response body was rendered, when timestamps are disabled, or during
+    /// transcript-batch replay.
     pub fn finish_turn_message_timestamp(&mut self) -> Result<()> {
         // Disarm before the early return: the session reuses one renderer, and
         // a turn that rendered nothing must not leave later output deferring
         // into a boundary that will never come.
         self.defer_turn_footer = false;
+        let elapsed = self.turn_started_at.take().map(|started| started.elapsed());
         if !self.pending_response_footer {
             return Ok(());
         }
@@ -632,9 +635,9 @@ impl AnsiRenderer {
                 return Ok(());
             }
             let status_style = theme::active_styles().status;
-            sink.append_response_timestamp_footer(status_style, indent)?;
+            sink.append_response_timestamp_footer(status_style, indent, elapsed)?;
         } else {
-            self.write_response_timestamp_footer(indent)?;
+            self.write_response_timestamp_footer(indent, elapsed)?;
         }
         self.last_line_was_empty = false;
         Ok(())

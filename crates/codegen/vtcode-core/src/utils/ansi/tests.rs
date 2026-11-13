@@ -447,6 +447,7 @@ fn line_function_no_trailing_empty_line() {
         show_message_timestamps: true,
         pending_response_footer: false,
         defer_turn_footer: false,
+        turn_started_at: None,
         tool_display_mode: ToolDisplayMode::default(),
         communication_style: vtcode_commons::ui_protocol::CommunicationStyle::Balanced,
         diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
@@ -814,13 +815,18 @@ pub(super) fn collect_kinded_append_lines(
     lines
 }
 
-/// Structural footer oracle: Response indent + middot + clock time + meridiem.
+/// Structural footer oracle: Response indent + middot + clock time + meridiem,
+/// with an optional trailing elapsed half (`· 1m 30s`).
 ///
 /// Deliberately independent of the formatting helper (which has its own unit
 /// tests) and of the wall clock, so minute rollovers cannot flake the suite.
 pub(super) fn is_timestamp_footer(text: &str) -> bool {
-    text.strip_prefix("  · ")
-        .is_some_and(|time| time.contains(':') && (time.ends_with("AM") || time.ends_with("PM")))
+    text.strip_prefix("  · ").is_some_and(|rest| {
+        // The elapsed half (when present) follows the clock after one middot;
+        // splitting keeps the meridiem check on the clock segment alone.
+        let time = rest.split(" · ").next().unwrap_or(rest);
+        time.contains(':') && (time.ends_with("AM") || time.ends_with("PM"))
+    })
 }
 
 mod turn_footer;

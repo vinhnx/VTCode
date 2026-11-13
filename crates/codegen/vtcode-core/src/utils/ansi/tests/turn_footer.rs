@@ -269,3 +269,32 @@ fn direct_response_skips_transcript_log_for_footer() {
     let snapshot = transcript::snapshot();
     assert!(!snapshot.iter().any(|line| is_timestamp_footer(line)), "direct footer must not leak into the log");
 }
+
+/// Whether a footer line carries the elapsed half: a digit-led `s`/`m`/`h`
+/// unit token after the final middot. Timing-free, so the assertion holds
+/// however long the begin→finish bracket takes under load.
+fn has_elapsed_half(text: &str) -> bool {
+    text.rsplit_once(" · ").is_some_and(|(_, tail)| {
+        tail.chars().next().is_some_and(|first| first.is_ascii_digit()) && tail.ends_with(['s', 'm', 'h'])
+    })
+}
+
+/// The turn footer pairs the clock with the measured turn duration; the
+/// out-of-turn stamp has no bracket and shows the clock alone.
+#[test]
+fn turn_footer_appends_elapsed_and_out_of_turn_footer_does_not() {
+    let (mut renderer, mut receiver) = turn_renderer();
+
+    renderer.line(MessageStyle::Response, "timed body").unwrap();
+    let _ = collect_kinded_append_lines(&mut receiver);
+    renderer.finish_turn_message_timestamp().unwrap();
+    let footer_lines = collect_kinded_append_lines(&mut receiver);
+    assert_eq!(footer_lines.len(), 1, "exactly one footer: {footer_lines:?}");
+    assert!(has_elapsed_half(&footer_lines[0].1), "turn footer must carry elapsed: {:?}", footer_lines[0].1);
+
+    let (mut idle, mut idle_receiver) = idle_renderer();
+    idle.line(MessageStyle::Response, "reprinted body").unwrap();
+    let lines = collect_kinded_append_lines(&mut idle_receiver);
+    assert!(is_timestamp_footer(&lines[1].1), "clock alone: {:?}", lines[1].1);
+    assert!(!has_elapsed_half(&lines[1].1), "out-of-turn stamps carry no elapsed: {:?}", lines[1].1);
+}

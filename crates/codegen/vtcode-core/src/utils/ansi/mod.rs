@@ -51,6 +51,9 @@ pub struct AnsiRenderer {
     /// responses stamp immediately, so out-of-turn callers never owe the
     /// renderer a flush to keep their clock.
     defer_turn_footer: bool,
+    /// When the armed turn began, for the footer's elapsed half. Cleared with
+    /// the footer itself at [`AnsiRenderer::finish_turn_message_timestamp`].
+    turn_started_at: Option<std::time::Instant>,
     tool_display_mode: ToolDisplayMode,
     communication_style: vtcode_commons::ui_protocol::CommunicationStyle,
     diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode,

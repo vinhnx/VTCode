@@ -467,11 +467,17 @@ impl InlineSink {
     /// Append the turn's single wall-clock footer after its final agent message.
     ///
     /// The footer reuses `Agent` kind so reflow keeps it glued to its message
-    /// (no divider or gap between consecutive agent lines). It is never
+    /// (no divider or gap between consecutive agent lines). `elapsed` comes
+    /// from the armed turn bracket; out-of-turn stamps pass `None`. It is never
     /// recorded in the global transcript log: the log feeds tail-matching,
     /// session-end hooks, and snapshot assertions that must not see chrome.
-    pub(super) fn append_response_timestamp_footer(&mut self, style: Style, indent: &str) -> Result<()> {
-        let footer = vtcode_commons::message_timestamp::current_message_timestamp_footer();
+    pub(super) fn append_response_timestamp_footer(
+        &mut self,
+        style: Style,
+        indent: &str,
+        elapsed: Option<std::time::Duration>,
+    ) -> Result<()> {
+        let footer = vtcode_commons::message_timestamp::current_message_timestamp_footer_with_elapsed(elapsed);
         self.write_multiline_with_transcript(style, indent, &footer, InlineMessageKind::Agent, false, None)
     }
 
