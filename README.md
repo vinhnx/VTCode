@@ -11,8 +11,6 @@
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-BFB38F?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/vtcode.svg)](https://github.com/vinhnx/vtcode/releases)
-[![GitHub stars](https://img.shields.io/github/stars/vinhnx/vtcode)](https://github.com/vinhnx/vtcode)
-[![GitHub forks](https://img.shields.io/github/forks/vinhnx/vtcode)](https://github.com/vinhnx/vtcode/forks)
 
 <!-- NB: not https://deepwiki.com/badge.svg — that route is behind a Vercel bot
   challenge, so GitHub's camo proxy gets 429 and renders the alt text instead.
