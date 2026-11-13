@@ -44,7 +44,9 @@ At segment creation, `request_builder::build_prompt_output` produces the immutab
    never persisted to canonical history), keeping the system prompt and tool catalog byte-identical to tool-enabled
    turns for prefix-cache reuse (`tool_choice: none` prevents calls).
 8. **Runtime Tool Catalog** — `append_runtime_tool_prompt_sections_for_profile` / `_for_model` with the
-   planning/capability filtered `SessionToolCatalogSnapshot`.
+   planning/capability filtered `SessionToolCatalogSnapshot`. The block is machine diagnostics for the
+   prompt/catalog alignment guard, not model guidance, so it carries one `key: value` payload line
+   rather than one line per field.
 9. **GitHub Copilot Client Tools** — only for the Copilot provider.
 10. **Active Primary Agent Runtime State** — model, reasoning effort, instructions, and `### Memory Appendix` if the
     agent has memory.
@@ -67,6 +69,15 @@ work unchanged on every provider, including small local models.
   deltas describe only mode mechanics (core tools, Planning workflow, tracker). Per-tool mechanics, including the single
   `start_planning` line, live in the `## Active Tools` section from `prompts/guidelines.rs`, and `[Harness Limits]`
   states limit values, their exemptions, and how to work within each limit; neither restates a universal rule.
+
+  There is exactly one rules section, `## Rules`: the universal guidance and the per-mode working style append to the
+  same bullet list rather than opening a second section, so a rule is never split across two headings.
+
+  **Tool schemas own per-tool mechanics.** The tool definitions reach the model with every request, so the
+  `## Active Tools` section carries only what a schema cannot state: cross-tool preferences (which tool to reach for),
+  ordering and batching rules, and the verification discipline. Envelope shape, parameter names, session-id handling,
+  background-process limits, and example command lists stay in the tool descriptions and schemas. A line that repeats
+  a schema is removed rather than shortened, because a duplicated rule drifts.
   `static_prompts::tests::shared_contract_lines_and_runtime_bullets_appear_exactly_once_per_profile` asserts that every
   `SHARED_CONTRACT_LINES` entry, every profile-specific contract line, and every Runtime Guidance bullet appears exactly
   once in each profile, and `guidelines::tests::universal_rules_have_one_home_across_composed_prompt_sections` composes
@@ -76,8 +87,7 @@ work unchanged on every provider, including small local models.
   or context-clearing parameters, and no formatting that depends on one vendor's renderer.
 - **Budgets with justification.** Each profile and section has a token or character bound in its tests. When a bound is
   raised, the constant or assertion carries a one-line comment saying why and what it measured. Current base sizes
-  (cl100k estimate): Minimal about 525, Lightweight about 730, Default about 860, Specialized about 875, Runtime
-  Guidance about 440.
+  (cl100k estimate): Minimal 457, Lightweight 628, Default 734, Specialized 730, Runtime Guidance 373.
 
 ## Few-shot management (Section 18.3.3)
 

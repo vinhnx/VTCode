@@ -150,19 +150,17 @@ python3 scripts/check_unsafe_docs.py --mode enforce
 
 ### Structural Rule Checks
 
-The repository carries its own `ast-grep` project scaffold (`sgconfig.yml`, `rules/`, `rule-tests/`). The `ast-grep`
-CLI is a developer tool invoked directly; it is not a VT Code runtime dependency and VT Code never installs it.
+Structural rules are enforced natively by clippy, which runs in the release gate with `-D warnings`. The
+`disallowed-methods` list in `clippy.toml` carries the repository-specific policies (no bare
+`reqwest::Client::new()`, no `Iterator::for_each`); the workspace lints in `Cargo.toml` carry the rest.
 
 ```bash
-# Run the rule tests and the repository scan through the repo wrapper
-./scripts/check.sh ast-grep
-
-# Or run the underlying ast-grep commands directly
-ast-grep test --config sgconfig.yml
-ast-grep scan --config sgconfig.yml
+# Run the lint gate (clippy with warnings denied)
+./scripts/check.sh clippy
 ```
 
-The wrapper skips the scan when `ast-grep` is not on `PATH`; the release gate (`./scripts/check.sh`) requires it.
+The same gate runs in `./scripts/check.sh` and `./scripts/check-dev.sh`, so a structural regression fails the build
+rather than relying on an optional external scanner.
 
 ### Integration Tests
 

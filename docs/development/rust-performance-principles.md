@@ -603,11 +603,10 @@ call, per recorded event, per indexed file. The lesson ports directly:
 - **Never do expensive work while holding a global lock.** Keep per-unit loops
   outside lock scopes; reborrow a guard once (`let state = &mut *guard;`)
   instead of re-acquiring per field access.
-- **Make the fast path the easy path.** The `no-per-call-regex-literal` ast-grep
-  rule (`rules/rust/`, enforced by `vtcode check ast-grep`) fails the build on a
-  literal `Regex::new` outside a lazy initializer, so the hoisted shape is the
-  path of least resistance — the maintainer duty from the article is to make
-  the bad shape hard to write, not to catch it in review.
+- **Make the fast path the easy path.** A literal `Regex::new` outside a lazy
+  initializer is a review finding, so the hoisted shape is the path of least
+  resistance — the maintainer duty from the article is to make the bad shape
+  hard to write, not to catch it in review.
 
 ## Cache Invalidation Without Key Clones
 
@@ -744,8 +743,7 @@ When reviewing or writing a hot path in vtcode:
       [Enum Footprint](#enum-footprint-in-bulk-collections).
 - [ ] Is overflow handling explicit (`checked_*`/`saturating_*`/`wrapping_*`) rather than relying on implicit wrap?
 - [ ] Is a literal regex compiled inside a function body instead of a `LazyLock`/`Lazy`/`OnceLock`
-      static? CI-enforced by the `no-per-call-regex-literal` ast-grep rule — see
-      [Per-Unit Cost of Expensive Work](#per-unit-cost-of-expensive-work).
+      static? See [Per-Unit Cost of Expensive Work](#per-unit-cost-of-expensive-work).
 - [ ] Is a runtime-derived pattern (config glob, deny list) recompiled per call instead of memoized
       behind a signature-keyed cache?
 - [ ] Does any per-unit path acquire a global lock or re-read shared state per element?
@@ -805,7 +803,7 @@ When reviewing or writing a hot path in vtcode:
 - [Optimizing a single Rust Clippy lint by 3133X](https://blog.goose.love/posts/making-a-clippy-lint-faster-by-3133x/) —
   blyxyas, 2026 (source of the Per-Unit Cost of Expensive Work section: per-expression global-lock and
   interner acquisition behind an innocuous helper, the pre-expansion rewrite, and the maintainer duty to
-  make the bad shape hard to write — enforced here by the `no-per-call-regex-literal` ast-grep rule).
+  make the bad shape hard to write — the hoisted shape is the path of least resistance).
 - [It's the memory latency, stupid](https://pivotlake.io/blog/its-the-memory-latency-stupid) —
   Pivot/Epsio Labs, 2026 (source of the Memory Latency section: cache table, GROUP BY radix partitioning,
   and the more-CPU-for-less-DRAM trade).

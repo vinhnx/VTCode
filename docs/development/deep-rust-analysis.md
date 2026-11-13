@@ -5,7 +5,7 @@ VT Code's Rust support is intentionally layered:
 - `code_search` reports **recognised declarations** and **exact syntactic usages**. A usage can belong
   to a different symbol with the same spelling, so it is *not* a semantically resolved reference
   (see [Language Support](../protocols/LANGUAGE_SUPPORT.md)).
-- `ast-grep` covers structural/AST queries over source shape.
+- `ast-grep` (an optional developer tool, not a repository dependency) covers structural/AST queries over source shape.
 - The shell covers builds, tests, and toolchain probes.
 
 None of these answer questions about what the compiler *computes*: which item an identifier truly
@@ -46,5 +46,5 @@ Rust tooling, keep these aligned:
   treat `.llbc` output as evidence, not a frozen contract, and label inferred claims.
 - **Batch, not low-latency.** Unlike rust-analyzer, Charon is not designed for fast incremental
   updates; never wire it into per-keystroke or per-turn paths.
-- **Prefer the cheaper tool first.** Text, path, and structural queries belong to `code_search` and
-  `ast-grep`; reach for Charon only when compiler semantics are the question.
+- **Prefer the cheaper tool first.** Text, path, and declaration queries belong to `code_search`;
+  reach for Charon only when compiler semantics are the question.

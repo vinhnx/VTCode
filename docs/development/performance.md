@@ -348,7 +348,7 @@ Layer status vs the profiling guide (what is wired, what is deferred and why):
   session event log, PTY/spool paths) stay out — the macro returns a wrapper type under `profiling`
   only, so those boundaries need a design first.
 - CPU sampling (`hotpath-cpu`): enabled on root `profiling`; see Profiling Build below for symbolized
-  runs. Per-call `Regex::new` stays banned by the `no-per-call-regex-literal` ast-grep rule.
+  runs. Per-call `Regex::new` stays banned by the `clippy::regex_creation_in_loops` lint.
 
 TUI invariants found via hotpath (keep these):
 

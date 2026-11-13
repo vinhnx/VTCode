@@ -7,9 +7,14 @@ VT Code has two distinct prompt sources:
 | Compiled runtime guidance | `crates/codegen/vtcode-core/src/prompts/runtime_guidance.rs`  | Small, universal user-facing behavior included in Default, Minimal, Lightweight, and Specialized profiles | Part of the application runtime                    |
 | Project instruction map   | User/workspace `AGENTS.md`, `CLAUDE.md`, and `.vtcode/rules/` | Project conventions, local architecture, and maintainer workflows                                         | User-controlled context, never a security boundary |
 
-The compiled section is deterministic, cached with the static profile, and kept below its approximate 850-token cap. It
+The compiled section is deterministic, cached with the static profile, and kept below its 420-token cap. It
 must not read, embed, or generate content from repository instruction files. Profile-specific operating details remain
 in the prompt builder; correctness-critical behavior belongs in runtime policy, schemas, tests, or lints.
+
+Every bullet states one rule. Where the runtime already enforces a rule (sandbox and approval gates, patch retry limits,
+read caps, spool paging), the prompt does not restate it, and the rule lives in the runtime policy, the tool schema, or
+the error message the model sees. The compiled section and the per-profile working style share one `## Rules` list, so
+a rule is never split across two headings.
 
 Repository claims must follow observed code and current metadata. Exact versions and capabilities should be omitted
 when that evidence is unavailable, rather than filled in from model memory. This rule shares the existing runtime

@@ -21,6 +21,7 @@ Paths are under `src/`. `core/agent/` runtime, event recording, runner, request 
 - Completion requires terminal exit zero after the latest code mutation, required checks bypass result reuse and caches, and edits stay available while verification is pending.
 - Treat learned `shell-pattern:` approval keys as opaque so a scoped approval never widens.
 - Build and Auto are authority-parity destinations that share the same guards, safety checks, verification gate, budgets, and recovery limits.
+- `prompts/` keeps one home per rule; never restate a tool schema in the prompt.
 
 ## Gotchas
 

@@ -362,6 +362,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Process Hardening?", "How does Architecture work?", "How does
     Security Measures work?"
 
+- **File**: `docs/development/prompt-and-dependency-simplification.md`
+  - **Content**: Prompt and Dependency Simplification Audit
+  - **Topics**: Summary, Result, 1. System prompt — REPLACE, 2. Tree-sitter — KEEP, 3. ast-grep — REPLACE (prune +
+    native clippy equivalents)
+  - **User Questions**: "What can you tell me about Prompt and Dependency Simplification Audit?", "How does Summary
+    work?", "How does Result work?"
+
 - **File**: `docs/development/prompt-model-evaluation.md`
   - **Content**: Prompt and Model Evaluation
   - **Topics**: Comparison procedure, Outcomes and measurements, Settings and tradeoffs, References
