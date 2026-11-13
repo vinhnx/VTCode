@@ -10,6 +10,33 @@ impl DesktopView {
         let expanded = (self.sidebar_open || self.navigation_peek) && !narrow_panel;
         let navigation_on_right = self.preferences.navigation_on_right();
         let utilities_selected = self.inspector_open && self.inspector_tab == InspectorTab::Utilities;
+        let update_available = self.can_offer_update_install();
+        let update_install_in_flight = self.update_install_state.is_in_flight();
+        let update_installed = matches!(&self.update_install_state, protocol::UpdateInstallState::Completed { .. });
+        let update_busy = self.update_request_pending || update_install_in_flight;
+        let update_label = if self.update_request_pending {
+            rust_i18n::t!("app.settings.about.checking").to_string()
+        } else if update_install_in_flight || update_installed {
+            about::update_install_status_description(&self.update_install_state)
+                .unwrap_or_else(|| rust_i18n::t!("app.settings.about.check_for_updates").to_string())
+        } else if update_available {
+            rust_i18n::t!("app.settings.about.install_update").to_string()
+        } else {
+            rust_i18n::t!("app.settings.about.check_for_updates").to_string()
+        };
+        let update_tooltip = match &self.update_install_state {
+            protocol::UpdateInstallState::Failed { message } if !self.update_request_pending => {
+                rust_i18n::t!("app.settings.about.install_failed", message = message.as_str()).to_string()
+            }
+            _ => update_label.clone(),
+        };
+        let update_icon = if update_available || update_install_in_flight {
+            IconName::Download
+        } else if update_installed {
+            IconName::Check
+        } else {
+            IconName::RefreshCw
+        };
         let rail = div()
             .id("navigation-rail")
             .test_support()
@@ -120,6 +147,30 @@ impl DesktopView {
                     .toggled(self.terminal_visible)
                     .when(self.terminal_visible, |button| button.bg(colors.secondary).text_color(colors.foreground))
                     .dispatches_desktop_action(ToggleTerminal, self.focus_handle.clone()),
+            )
+            .child(div().flex_grow(1.0))
+            .child(
+                desktop_button("nav-update")
+                    .icon(update_icon)
+                    .ghost()
+                    .rounded_lg()
+                    .accessibility_label(update_label)
+                    .tooltip(update_tooltip)
+                    .desktop_disabled(update_busy || update_installed)
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        if view.update_request_pending
+                            || view.update_install_state.is_in_flight()
+                            || matches!(&view.update_install_state, protocol::UpdateInstallState::Completed { .. })
+                        {
+                            return;
+                        }
+                        if view.can_offer_update_install() {
+                            view.request_update_install();
+                        } else {
+                            view.request_update_check();
+                        }
+                        cx.notify();
+                    })),
             )
             .into_any_element();
         let navigation = div()

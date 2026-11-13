@@ -107,48 +107,49 @@ impl AboutSettingsProps {
     /// The row's description: the live install phase while one runs, else the
     /// cached status. One line, so a long download never displaces the actions.
     pub(super) fn update_row_description(&self) -> String {
-        match &self.update_install {
-            protocol::UpdateInstallState::Idle => {}
-            protocol::UpdateInstallState::Downloading { downloaded, total } => {
-                return match total {
-                    Some(total) if *total > 0 => rust_i18n::t!(
-                        "app.settings.about.download_progress",
-                        downloaded = format_bytes(*downloaded),
-                        total = format_bytes(*total)
-                    )
-                    .to_string(),
-                    // No Content-Length: a byte count, never a fake percentage.
-                    _ => rust_i18n::t!(
-                        "app.settings.about.download_progress_unknown_total",
-                        downloaded = format_bytes(*downloaded)
-                    )
-                    .to_string(),
-                };
-            }
-            protocol::UpdateInstallState::Verifying => {
-                return rust_i18n::t!("app.settings.about.verifying").to_string();
-            }
-            protocol::UpdateInstallState::Extracting => {
-                return rust_i18n::t!("app.settings.about.extracting").to_string();
-            }
-            protocol::UpdateInstallState::Installing => {
-                return rust_i18n::t!("app.settings.about.replacing").to_string();
-            }
-            protocol::UpdateInstallState::Completed { version, needs_gatekeeper_approval } => {
-                let done = format!("{} ({version})", rust_i18n::t!("app.settings.about.installed"));
-                if *needs_gatekeeper_approval {
-                    // Ad hoc-signed builds need a one-time manual approval
-                    // before macOS launches the replaced bundle; without this
-                    // the restart lands on a Gatekeeper block with no guidance.
-                    return rust_i18n::t!("app.settings.about.installed_gatekeeper", done = done.as_str()).to_string();
-                }
-                return done;
-            }
-            protocol::UpdateInstallState::Failed { message } => {
-                return rust_i18n::t!("app.settings.about.install_failed", message = message.as_str()).to_string();
+        update_install_status_description(&self.update_install)
+            .unwrap_or_else(|| self.update_status_description.clone())
+    }
+}
+
+/// Describe a non-idle install state for both the About row and the compact
+/// navigation action. Progress stays textual so disabled state remains clear.
+pub(super) fn update_install_status_description(state: &protocol::UpdateInstallState) -> Option<String> {
+    match state {
+        protocol::UpdateInstallState::Idle => None,
+        protocol::UpdateInstallState::Downloading { downloaded, total } => {
+            Some(match total {
+                Some(total) if *total > 0 => rust_i18n::t!(
+                    "app.settings.about.download_progress",
+                    downloaded = format_bytes(*downloaded),
+                    total = format_bytes(*total)
+                )
+                .to_string(),
+                // No Content-Length: a byte count, never a fake percentage.
+                _ => rust_i18n::t!(
+                    "app.settings.about.download_progress_unknown_total",
+                    downloaded = format_bytes(*downloaded)
+                )
+                .to_string(),
+            })
+        }
+        protocol::UpdateInstallState::Verifying => Some(rust_i18n::t!("app.settings.about.verifying").to_string()),
+        protocol::UpdateInstallState::Extracting => Some(rust_i18n::t!("app.settings.about.extracting").to_string()),
+        protocol::UpdateInstallState::Installing => Some(rust_i18n::t!("app.settings.about.replacing").to_string()),
+        protocol::UpdateInstallState::Completed { version, needs_gatekeeper_approval } => {
+            let done = format!("{} ({version})", rust_i18n::t!("app.settings.about.installed"));
+            if *needs_gatekeeper_approval {
+                // Ad hoc-signed builds need a one-time manual approval
+                // before macOS launches the replaced bundle; without this
+                // the restart lands on a Gatekeeper block with no guidance.
+                Some(rust_i18n::t!("app.settings.about.installed_gatekeeper", done = done.as_str()).to_string())
+            } else {
+                Some(done)
             }
         }
-        self.update_status_description.clone()
+        protocol::UpdateInstallState::Failed { message } => {
+            Some(rust_i18n::t!("app.settings.about.install_failed", message = message.as_str()).to_string())
+        }
     }
 }
 
