@@ -318,11 +318,14 @@ async fn inline_stream_defers_timestamp_footer_to_turn_end() {
             // One clock half plus an optional elapsed-duration half, matching
             // `message_timestamp_footer`'s one-chrome-unit contract.
             let mut halves = chrome.split(" · ");
-            let clock = halves.next().unwrap_or_default();
-            clock.contains(':')
-                && (clock.ends_with("AM") || clock.ends_with("PM"))
-                && halves.next().is_none_or(|elapsed| !elapsed.is_empty())
-                && halves.next().is_none()
+            let Some(clock) = halves.next() else {
+                return false;
+            };
+            let clock_is_time = clock.contains(':') && (clock.ends_with("AM") || clock.ends_with("PM"));
+            let Some(elapsed) = halves.next() else {
+                return clock_is_time;
+            };
+            clock_is_time && !elapsed.is_empty() && halves.next().is_none()
         })
     }
 
