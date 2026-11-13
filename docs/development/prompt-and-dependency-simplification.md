@@ -358,12 +358,15 @@ the `prompts/` module owned by this audit had zero callers anywhere:
 hawk's list, and `list_styles` was found by following the orphan rather than
 reading the report.
 
-Deliberately **not** removed: `tools::optimized_registry` (153 lines, no live
-user) and the `PromptContext::project_type` field. Both are reachable from
-`vtcode-core`'s published API surface, and the field feeds the prompt cache
-key. Removing either is the same semver decision as `SimpleIndexer` — a
-breaking change to a published crate — not a cleanup this audit can make
-unilaterally.
+`tools::optimized_registry` went next: 153 lines, never instantiated anywhere
+in the workspace, reachable only through two `pub use` re-exports
+(`tools/mod.rs`, `lib.rs`). The `use_optimized_registry` config flag does *not*
+depend on it — the flag drives `ToolRegistry::hot_tool_cache`, a separate LRU
+cache that stays.
+
+Still deferred: `PromptContext::project_type`. Removing the field would change
+the prompt cache key (it is hashed in `prompts/system/cache.rs`), which is a
+behavioral change rather than dead-code removal.
 
 ## 8b. Stale module-wide `dead_code` allows — NARROWED
 

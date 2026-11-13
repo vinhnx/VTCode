@@ -204,7 +204,6 @@ pub mod improvement_algorithms;
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
-pub mod optimized_registry;
 pub mod output_spooler;
 pub mod pattern_engine;
 pub mod request_response;
@@ -227,7 +226,6 @@ pub use search_runtime::{
     SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language, search_tool_bundle_status,
 };
 
-pub use optimized_registry::{CachedToolMetadata as OptimizedToolMetadata, OptimizedToolRegistry};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{

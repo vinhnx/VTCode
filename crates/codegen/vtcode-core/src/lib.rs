@@ -341,7 +341,6 @@ pub use sandboxing::{
     SandboxPolicy as CodexSandboxPolicy, SandboxType, WritableRoot,
 };
 
-pub use tools::OptimizedToolRegistry;
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::registry::{
     McpBridge, PtySessionControl, SharedRegistry, ToolCatalog, ToolGroup, ToolMetrics, ToolRegistryApi, ToolResilience,

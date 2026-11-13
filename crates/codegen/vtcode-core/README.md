@@ -154,7 +154,7 @@ utility functions.
 
 - `Agent` / `AgentRunner` — main agent runtime
 - `VTCodeConfig` — configuration loader (`vtcode.toml` + environment overrides)
-- `ToolRegistry` / `OptimizedToolRegistry` — tool registration and execution
+- `ToolRegistry` — tool registration and execution
 - `AnyClient` / `make_client` — provider-agnostic LLM client factory
 - `PromptCache` / `PromptOptimizer` — prompt caching primitives
 - `ThreadManager` — thread lifecycle and event recording
