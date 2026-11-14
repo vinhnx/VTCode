@@ -27,6 +27,7 @@
 - CLI `/desktop` hands the desktop app a fork, never its live thread id: the session's exclusive lock is held for the whole session, so a resume-in-place handoff always fails with `SessionBusy`.
 - Desktop-server startup is auth-tolerant: missing credentials are recorded in `provider_auth_error`, never fatal.
 - Async checkpointing acknowledges consumed steering intents only after a `Persisted` history result, never after a throttled checkpoint.
+- The stop signal carries a force bit: a forced stop widens exec-session teardown to every session where the stop is observed, while the idle escape hatch queues only (an unhandled stop signal belongs to the next submitted turn).
 - A turn still active 5s after cancel — or immediately on a forced repeat — escalates to force-stop and restart from history, and unconfirmed termination holds `session_transitioning` instead of reporting a stop.
 - `session/recent_prompts` serves Everywhere/Project scopes from archives via `clean_archived_prompts`; Session answers empty since the client's live thread owns it.
 - A hard per-turn budget stop is a handoff, never an auto-continue trigger: tracker and planning continuation gates stay shut and only explicit user input resumes the work.
