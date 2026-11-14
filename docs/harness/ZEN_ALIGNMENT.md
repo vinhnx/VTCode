@@ -22,7 +22,7 @@ Last reviewed: 2026-10-29
 | 6 | Sparse is better than dense. | Prefer concise structures over dense prose in governance output. | Structured tables and remediation sections in checks | Active |
 | 7 | Readability counts. | Diagnostics must be readable and actionable. | Remediation-oriented messages across custom checks | Active |
 | 8 | Special cases aren't special enough to break the rules. | Exceptions must be limited and audited. | `python3 scripts/check_zen_allowlist.py --mode warn` | Added |
-| 9 | Although practicality beats purity. | Use staged rollout over disruptive hard-fail adoption. | Warn-first baselines (`./scripts/check.sh zen`) | Active |
+| 9 | Although practicality beats purity. | Use staged rollout over disruptive hard-fail adoption. | Warn-first baselines, promoted after cleanup: unwrap/expect scan now enforced, allowlist hygiene still warn (`./scripts/check.sh zen`) | Active |
 | 10 | Errors should never pass silently. | Checks must surface failures with details. | Non-zero exits in enforce mode + explicit findings | Active |
 | 11 | Unless explicitly silenced. | Every allowlisted exception must state rationale. | `check_zen_allowlist.py` requires `\| rationale` | Added |
 | 12 | In the face of ambiguity, refuse the temptation to guess. | Require explicit mode (`warn`/`enforce`) in governance checks. | Script CLI mode flags | Active |
@@ -77,7 +77,7 @@ python3 scripts/check_large_files.py 400000
 python3 scripts/check_rust_file_length.py --mode warn
 python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet
 python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet
-python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt
+python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt
 python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt
 ```
 
