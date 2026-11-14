@@ -368,7 +368,7 @@ impl MemoryPool {
 }
 
 /// Global memory pool instance
-static MEMORY_POOL: once_cell::sync::Lazy<Arc<MemoryPool>> = once_cell::sync::Lazy::new(|| Arc::new(MemoryPool::new()));
+static MEMORY_POOL: std::sync::LazyLock<Arc<MemoryPool>> = std::sync::LazyLock::new(|| Arc::new(MemoryPool::new()));
 
 /// Get the global memory pool
 pub fn global_pool() -> Arc<MemoryPool> {

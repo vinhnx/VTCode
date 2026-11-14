@@ -1,7 +1,7 @@
 use anstyle::{Color, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
 use arc_swap::{ArcSwap, ArcSwapOption};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Arc;
 use vtcode_config::constants::ui;
 
@@ -17,14 +17,14 @@ struct ActiveTheme {
     styles: ThemeStyles,
 }
 
-static COLOR_CONFIG: Lazy<ArcSwap<ColorAccessibilityConfig>> =
-    Lazy::new(|| ArcSwap::from_pointee(ColorAccessibilityConfig::default()));
+static COLOR_CONFIG: LazyLock<ArcSwap<ColorAccessibilityConfig>> =
+    LazyLock::new(|| ArcSwap::from_pointee(ColorAccessibilityConfig::default()));
 
 fn current_color_config() -> Arc<ColorAccessibilityConfig> {
     COLOR_CONFIG.load_full()
 }
 
-static ACTIVE: Lazy<ArcSwap<ActiveTheme>> = Lazy::new(|| {
+static ACTIVE: LazyLock<ArcSwap<ActiveTheme>> = LazyLock::new(|| {
     let default = theme_definition(DEFAULT_THEME_ID).expect("default theme must exist");
     let styles = default.palette.build_styles_with_accessibility(&current_color_config());
     ArcSwap::from_pointee(ActiveTheme { definition: default, styles })
@@ -39,7 +39,7 @@ static ACTIVE: Lazy<ArcSwap<ActiveTheme>> = Lazy::new(|| {
 /// atomic replacement. This follows the RwLock-vs-lockfree guidance — a
 /// coarse `RwLock` would work but pays an atomic read-modify-write per
 /// acquisition even without contention; whole-value swap avoids it.
-static PREVIEW: Lazy<ArcSwapOption<ActiveTheme>> = Lazy::new(ArcSwapOption::empty);
+static PREVIEW: LazyLock<ArcSwapOption<ActiveTheme>> = LazyLock::new(ArcSwapOption::empty);
 
 /// Update the runtime color accessibility configuration.
 pub fn set_color_accessibility_config(config: ColorAccessibilityConfig) {

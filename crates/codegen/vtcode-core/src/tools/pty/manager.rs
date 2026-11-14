@@ -31,7 +31,7 @@ use super::scrollback::PtyScrollback;
 use super::session::PtySessionHandle;
 use super::types::{PtyCommandRequest, PtyCommandResult};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 /// Per-workspace command locks to serialize long-running toolchain commands.
 /// Keyed by canonicalized workspace path to prevent lockfile contention.
@@ -41,8 +41,8 @@ use once_cell::sync::Lazy;
 /// dropped (the command that held it completes), the entry is collected on the
 /// next lookup, so the map stays bounded by the number of concurrently-held
 /// locks rather than the number of workspaces ever seen.
-static WORKSPACE_COMMAND_LOCKS: Lazy<Mutex<HashMap<PathBuf, Weak<tokio::sync::Mutex<()>>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static WORKSPACE_COMMAND_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Weak<tokio::sync::Mutex<()>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Get or create a command lock for the given workspace root
 fn get_command_lock(workspace_root: &Path) -> Arc<tokio::sync::Mutex<()>> {

@@ -14,7 +14,7 @@ use anstyle::Style;
 /// let diff_style = config.diff_new;
 /// ```
 use anyhow::Result;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::path::Path;
 
 /// Parsed Git configuration colors for diff, status, and branch visualization
@@ -156,7 +156,7 @@ impl GitColorConfig {
         let section_start = section_re.find(content)?.end();
 
         // Find the next section or end of file
-        static OPEN_BRACKET_RE: Lazy<regex::Regex> = Lazy::new(|| match regex::Regex::new(r"\[") {
+        static OPEN_BRACKET_RE: LazyLock<regex::Regex> = LazyLock::new(|| match regex::Regex::new(r"\[") {
             Ok(regex) => regex,
             Err(error) => panic!("open bracket regex must compile: {error}"),
         });

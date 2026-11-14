@@ -475,8 +475,8 @@ impl Drop for TimeoutHandle {
 }
 
 /// Global timeout detector instance
-use once_cell::sync::Lazy;
-pub static TIMEOUT_DETECTOR: Lazy<TimeoutDetector> = Lazy::new(TimeoutDetector::new);
+use std::sync::LazyLock;
+pub static TIMEOUT_DETECTOR: LazyLock<TimeoutDetector> = LazyLock::new(TimeoutDetector::new);
 
 #[cfg(test)]
 mod tests {

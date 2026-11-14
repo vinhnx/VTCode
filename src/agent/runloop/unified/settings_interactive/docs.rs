@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 
 use crate::agent::runloop::unified::config_section_headings::normalize_config_path;
@@ -51,8 +51,8 @@ impl FieldDocIndex {
     }
 }
 
-static QUOTED_VALUE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\"([^\"]+)\""#).expect("valid regex"));
-pub(super) static FIELD_DOCS: Lazy<FieldDocIndex> = Lazy::new(parse_field_reference_markdown);
+static QUOTED_VALUE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"\"([^\"]+)\""#).expect("valid regex"));
+pub(super) static FIELD_DOCS: LazyLock<FieldDocIndex> = LazyLock::new(parse_field_reference_markdown);
 
 fn parse_field_reference_markdown() -> FieldDocIndex {
     let mut by_path = HashMap::new();

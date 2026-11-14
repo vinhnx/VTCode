@@ -141,14 +141,14 @@ pub use self::ProviderSpec as ProviderConfig;
 mod http_client_pool {
     use crate::config::TimeoutsConfig;
     use hashbrown::HashMap;
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
     use reqwest::Client as HttpClient;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     type HttpClientPool = Arc<RwLock<HashMap<String, Arc<HttpClient>>>>;
 
-    static CLIENT_POOL: Lazy<HttpClientPool> = Lazy::new(|| {
+    static CLIENT_POOL: LazyLock<HttpClientPool> = LazyLock::new(|| {
         // Pooled clients share the installed `[timeouts]` budgets: every entry
         // carries both a total and a connect timeout, so no pooled caller can
         // hang on a stalled server or handshake. The helpers log and fall back

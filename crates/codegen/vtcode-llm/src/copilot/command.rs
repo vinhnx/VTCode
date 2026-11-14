@@ -3,14 +3,14 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use tokio::process::{Child, Command};
 use vtcode_config::auth::CopilotAuthConfig;
 
 use crate::process_env::{COPILOT_AUTH_ENV_VARS, sanitize_tokio_command_environment};
 
-static WHICH_CACHE: Lazy<std::sync::Mutex<std::collections::HashMap<String, bool>>> =
-    Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+static WHICH_CACHE: LazyLock<std::sync::Mutex<std::collections::HashMap<String, bool>>> =
+    LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
 const DEFAULT_PROGRAM: &str = "copilot";
 const ENV_OVERRIDE: &str = "VTCODE_COPILOT_COMMAND";

@@ -3,7 +3,7 @@ pub use crate::acp::permission_cache::ToolPermissionCache as PermissionCache;
 use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache};
 use crate::tools::shell::ShellOutput;
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use tokio::sync::{Mutex as TokioMutex, oneshot};
@@ -37,7 +37,7 @@ struct CommandCacheInner {
     cache: UnifiedCache<CommandCacheKey, ShellOutput>,
 }
 
-static COMMAND_CACHE: Lazy<CommandCache> = Lazy::new(|| CommandCache::new(CommandCacheConfig::default()));
+static COMMAND_CACHE: LazyLock<CommandCache> = LazyLock::new(|| CommandCache::new(CommandCacheConfig::default()));
 
 pub type InFlightResult = Result<ShellOutput, String>;
 
@@ -48,8 +48,8 @@ pub enum InFlightState {
     Wait(oneshot::Receiver<InFlightResult>),
 }
 
-static IN_FLIGHT: Lazy<TokioMutex<HashMap<CommandCacheKey, Vec<oneshot::Sender<InFlightResult>>>>> =
-    Lazy::new(|| TokioMutex::new(HashMap::new()));
+static IN_FLIGHT: LazyLock<TokioMutex<HashMap<CommandCacheKey, Vec<oneshot::Sender<InFlightResult>>>>> =
+    LazyLock::new(|| TokioMutex::new(HashMap::new()));
 
 impl PermissionCache {
     pub fn get(&mut self, key: &str) -> Option<bool> {

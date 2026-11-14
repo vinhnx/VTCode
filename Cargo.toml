@@ -66,7 +66,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 assert_fs = "1.1"
 futures = "0.3"
 http = "1"
-once_cell = "1.21"
 indexmap = { version = "2.13", features = ["serde"] }
 async-trait = "0.1.89"
 anstyle = "1.0"
@@ -381,7 +380,6 @@ toml = { workspace = true }
 futures = { workspace = true }
 memchr = { workspace = true }
 tempfile = { workspace = true }
-once_cell = { workspace = true }
 chrono = { workspace = true } # For timestamp handling in CLI
 uuid = { workspace = true, features = ["v4"] }
 tracing = { workspace = true }

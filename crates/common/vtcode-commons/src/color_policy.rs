@@ -9,7 +9,7 @@
 //! transcript-style output paths. By default it follows the NO_COLOR
 //! environment variable with strict "present and non-empty" semantics.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
@@ -47,7 +47,7 @@ const SOURCE_CONFIG_OVERRIDE: u8 = 5;
 static POLICY_ENABLED: AtomicBool = AtomicBool::new(true);
 static POLICY_SOURCE: AtomicU8 = AtomicU8::new(SOURCE_DEFAULT_AUTO);
 
-static INIT_FROM_ENV: Lazy<()> = Lazy::new(|| {
+static INIT_FROM_ENV: LazyLock<()> = LazyLock::new(|| {
     let default_policy = detect_policy_from_env();
     set_color_output_policy(default_policy);
 });
@@ -100,7 +100,7 @@ pub fn no_color_env_active() -> bool {
 
 /// Read the current runtime color policy.
 pub fn current_color_output_policy() -> ColorOutputPolicy {
-    Lazy::force(&INIT_FROM_ENV);
+    LazyLock::force(&INIT_FROM_ENV);
     ColorOutputPolicy {
         enabled: POLICY_ENABLED.load(Ordering::Relaxed),
         source: decode_source(POLICY_SOURCE.load(Ordering::Relaxed)),

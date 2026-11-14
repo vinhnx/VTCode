@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::skills::command_skill_specs;
 use crate::terminal_setup::detector::TerminalType;
@@ -16,7 +16,7 @@ pub struct SlashCommandInfo {
 }
 
 /// Collection of slash command definitions in the order they should be displayed.
-pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
+pub static SLASH_COMMANDS: LazyLock<Vec<SlashCommandInfo>> = LazyLock::new(|| {
     command_skill_specs()
         .iter()
         .map(|spec| SlashCommandInfo {

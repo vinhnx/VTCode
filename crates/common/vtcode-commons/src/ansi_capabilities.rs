@@ -1,7 +1,7 @@
 //! ANSI terminal capabilities detection and feature support
 
 use crate::color_policy::no_color_env_active;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -161,7 +161,7 @@ pub fn detect_color_scheme() -> ColorScheme {
     }
 
     // Check cached value first
-    static CACHED: Lazy<ColorScheme> = Lazy::new(detect_color_scheme_uncached);
+    static CACHED: LazyLock<ColorScheme> = LazyLock::new(detect_color_scheme_uncached);
     *CACHED
 }
 
@@ -285,7 +285,7 @@ fn detect_unicode_support() -> bool {
 }
 
 /// Global capabilities instance (cached)
-pub static CAPABILITIES: Lazy<AnsiCapabilities> = Lazy::new(AnsiCapabilities::detect);
+pub static CAPABILITIES: LazyLock<AnsiCapabilities> = LazyLock::new(AnsiCapabilities::detect);
 
 /// Check if NO_COLOR environment variable is set
 pub fn is_no_color() -> bool {

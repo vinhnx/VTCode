@@ -1,7 +1,7 @@
 //! Caching system for tool results
 
 use super::types::{EnhancedCacheEntry, EnhancedCacheStats};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use quick_cache::sync::Cache;
 use serde_json::Value;
 use std::future::Future;
@@ -15,10 +15,10 @@ use crate::cache::estimate_json_size;
 use vtcode_config::FileReadCacheConfig;
 
 /// Global file cache instance
-pub static FILE_CACHE: Lazy<FileCache> = Lazy::new(|| FileCache::new(1000));
+pub static FILE_CACHE: LazyLock<FileCache> = LazyLock::new(|| FileCache::new(1000));
 
-static FILE_READ_CACHE_CONFIG: Lazy<RwLock<FileReadCacheConfig>> =
-    Lazy::new(|| RwLock::new(FileReadCacheConfig::default()));
+static FILE_READ_CACHE_CONFIG: LazyLock<RwLock<FileReadCacheConfig>> =
+    LazyLock::new(|| RwLock::new(FileReadCacheConfig::default()));
 
 /// Enhanced file cache with quick-cache for high-performance caching
 ///

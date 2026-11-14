@@ -1,7 +1,7 @@
 use async_stream::try_stream;
 use async_trait::async_trait;
 use compact_str::format_compact;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 use vtcode_commons::llm::BackendKind;
@@ -142,8 +142,8 @@ impl ProviderCapabilities {
 }
 
 /// Global cache for provider capabilities (provider_name::model -> capabilities)
-static CAPABILITY_CACHE: Lazy<RwLock<FxHashMap<CompactStr, ProviderCapabilities>>> =
-    Lazy::new(|| RwLock::new(FxHashMap::default()));
+static CAPABILITY_CACHE: LazyLock<RwLock<FxHashMap<CompactStr, ProviderCapabilities>>> =
+    LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 /// Extract and cache provider capabilities for a given provider and model
 pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> ProviderCapabilities {

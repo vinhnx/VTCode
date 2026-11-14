@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::paths::WorkspacePaths;
 
@@ -11,10 +11,10 @@ const DEFAULT_SYNTAX_THEME: &str = "base16-ocean.dark";
 
 /// Empty by default — all ~250 syntect grammars are enabled.
 /// Users can set `enabled_languages` in vtcode.toml to restrict to a subset.
-static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(Vec::new);
+static DEFAULT_SYNTAX_LANGUAGES: LazyLock<Vec<String>> = LazyLock::new(Vec::new);
 
-static CONFIG_DEFAULTS: Lazy<RwLock<Arc<dyn ConfigDefaultsProvider>>> =
-    Lazy::new(|| RwLock::new(Arc::new(DefaultConfigDefaults)));
+static CONFIG_DEFAULTS: LazyLock<RwLock<Arc<dyn ConfigDefaultsProvider>>> =
+    LazyLock::new(|| RwLock::new(Arc::new(DefaultConfigDefaults)));
 
 fn read_env_var(key: &str) -> Option<String> {
     crate::env_helpers::read_env_var(key)

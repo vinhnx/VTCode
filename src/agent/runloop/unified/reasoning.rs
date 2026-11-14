@@ -10,21 +10,21 @@
 //! - Interrupt immediately if wrong approach detected
 //! - "Have your finger on the trigger to escape and interrupt any bad behavior"
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use vtcode_core::config::ReasoningDisplayMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;
 
-static RUSHING_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+static RUSHING_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(wrapping up|running out of time|quick summary|to conclude|finishing up|just to be safe|that.?s it|time to stop)").expect("valid regex pattern")
 });
 
-static UNCERTAIN_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+static UNCERTAIN_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(not sure|i.?m not certain|might be wrong|could be|sorry|apologies)").expect("valid regex pattern")
 });
 
-static COMPLEXITY_AVOIDANCE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+static COMPLEXITY_AVOIDANCE_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(too complex|too many|let.?s skip|for now|we can worry about|later)").expect("valid regex pattern")
 });
 
@@ -32,7 +32,7 @@ static COMPLEXITY_AVOIDANCE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
 ///
 /// Used to apply light emphasis when rendering the on-screen chain-of-thought
 /// so the agent's key decisions and tool calls stand out from filler text.
-static DECISION_TOOL_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+static DECISION_TOOL_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)(^(i will|i'?ll|let me|next,|now i|i need to|i should|i can|step \d|plan:|approach:)|tool call|call the .* tool|run the .* (command|tool)|execute|invoke|use the .* tool)",
     )

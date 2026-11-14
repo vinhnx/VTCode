@@ -7,7 +7,7 @@
 //!
 //! See `docs/reference/ansi-in-vtcode.md` for the cross-crate integration map.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::io::{IsTerminal, Write};
 
 use crate::utils::parse_bool_env_value;
@@ -72,7 +72,7 @@ pub enum NotifyMethodOverride {
     Osc9,
 }
 
-static DETECTED_NOTIFY_KIND: Lazy<TerminalNotifyKind> = Lazy::new(detect_terminal_notify_kind);
+static DETECTED_NOTIFY_KIND: LazyLock<TerminalNotifyKind> = LazyLock::new(detect_terminal_notify_kind);
 
 /// Play the terminal bell when enabled.
 #[inline]

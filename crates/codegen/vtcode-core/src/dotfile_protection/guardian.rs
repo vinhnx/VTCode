@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -17,7 +17,7 @@ use super::backup::BackupManager;
 use vtcode_config::core::DotfileProtectionConfig;
 
 /// Global dotfile guardian instance.
-static GLOBAL_GUARDIAN: OnceCell<Arc<DotfileGuardian>> = OnceCell::new();
+static GLOBAL_GUARDIAN: OnceLock<Arc<DotfileGuardian>> = OnceLock::new();
 
 /// Initialize the global dotfile guardian.
 ///

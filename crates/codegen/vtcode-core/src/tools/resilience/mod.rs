@@ -27,7 +27,7 @@ pub mod rate_limiter;
 use std::sync::Arc;
 use std::time::Duration;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use vtcode_commons::ErrorCategory;
 
@@ -145,8 +145,8 @@ impl ToolResilience {
 
 /// Process-wide resilience facade. Constructed lazily from the shared adaptive
 /// rate limiter and a default circuit breaker.
-pub static GLOBAL_TOOL_RESILIENCE: Lazy<Arc<ToolResilience>> =
-    Lazy::new(|| Arc::new(ToolResilience::new(AdaptiveRateLimiter::default(), CircuitBreaker::default())));
+pub static GLOBAL_TOOL_RESILIENCE: LazyLock<Arc<ToolResilience>> =
+    LazyLock::new(|| Arc::new(ToolResilience::new(AdaptiveRateLimiter::default(), CircuitBreaker::default())));
 
 #[cfg(test)]
 mod tests {

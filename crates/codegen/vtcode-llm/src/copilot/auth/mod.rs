@@ -11,7 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use regex::Regex;
 use serde::Deserialize;
@@ -34,7 +34,7 @@ use crate::process_env::{
 
 const DEFAULT_HOST_URL: &str = "https://github.com";
 const ENV_AUTH_VARS: &[&str] = &["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
-static DEVICE_FLOW_LINE_RE: Lazy<Regex> = Lazy::new(|| {
+static DEVICE_FLOW_LINE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)visit\s+(https?://\S+)\s+and\s+enter code\s+([A-Z0-9-]+)").expect("device flow regex must compile")
 });
 

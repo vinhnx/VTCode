@@ -1,7 +1,7 @@
 //! Task-scoped tool recursion limits and frame cleanup.
 
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,8 +29,8 @@ struct ReentrancyFrame {
 }
 
 static NEXT_REENTRANCY_FRAME_ID: AtomicU64 = AtomicU64::new(1);
-static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<ReentrancyFrame>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static TOOL_REENTRANCY_STACKS: LazyLock<Mutex<HashMap<TokioTaskId, Vec<ReentrancyFrame>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 thread_local! {
     static THREAD_REENTRANCY_STACK: RefCell<Vec<ReentrancyFrame>> = const { RefCell::new(Vec::new()) };
 }

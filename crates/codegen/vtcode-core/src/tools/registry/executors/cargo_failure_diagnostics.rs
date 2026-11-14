@@ -1,24 +1,24 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::{Value, json};
 
 use crate::tools::names::is_apply_patch_shell_collision_command;
 
-static CARGO_SELECTOR_ERROR_RE: Lazy<Regex> = Lazy::new(|| {
+static CARGO_SELECTOR_ERROR_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?m)^error: no test target named `([^`]+)` in `([^`]+)` package$")
         .expect("cargo selector error regex is valid")
 });
 
-static CARGO_FAIL_LINE_RE: Lazy<Regex> = Lazy::new(|| {
+static CARGO_FAIL_LINE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?m)^\s*FAIL \[[^\]]+\](?: \(\s*\d+/\d+\))? ([^\s]+) ([^\s]+)\s*$")
         .expect("cargo fail-line regex is valid")
 });
 
-static CARGO_THREAD_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"thread '([^']+)'").expect("cargo thread regex is valid"));
+static CARGO_THREAD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"thread '([^']+)'").expect("cargo thread regex is valid"));
 
-static CARGO_PANIC_LOCATION_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(.+):(\d+):\d+:$").expect("cargo panic location regex is valid"));
+static CARGO_PANIC_LOCATION_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(.+):(\d+):\d+:$").expect("cargo panic location regex is valid"));
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum CargoTestCommandKind {

@@ -12,7 +12,7 @@
 
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -50,7 +50,7 @@ impl PiiType {
 }
 
 // Compile default PII patterns once to avoid repeated regex compilation overhead.
-static DEFAULT_PII_PATTERNS: Lazy<Result<Vec<(PiiType, Regex)>, String>> = Lazy::new(|| {
+static DEFAULT_PII_PATTERNS: LazyLock<Result<Vec<(PiiType, Regex)>, String>> = LazyLock::new(|| {
     let patterns = vec![
         (PiiType::Email, r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
         (PiiType::PhoneNumber, r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}"),

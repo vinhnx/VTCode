@@ -59,7 +59,6 @@ shell-words = { workspace = true }
 indexmap = { workspace = true }
 tempfile = { workspace = true }
 dunce = "1.0"
-once_cell = { workspace = true }
 parking_lot = "0.13"
 sha2 = { workspace = true }
 lru = "0.19"

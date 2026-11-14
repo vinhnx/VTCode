@@ -34,7 +34,7 @@
 
 use crate::tui::ui::theme::get_syntax_theme_for_ui_theme;
 use anstyle::{Ansi256Color, AnsiColor, Effects, RgbColor, Style as AnstyleStyle};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use syntect::highlighting::{FontStyle, Highlighter, Theme, ThemeSet};
 use syntect::parsing::{Scope, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
@@ -57,10 +57,10 @@ const ANSI_ALPHA_DEFAULT: u8 = 0x01;
 const OPAQUE_ALPHA: u8 = u8::MAX;
 
 /// Global SyntaxSet singleton (~250 grammars)
-static SHARED_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
+static SHARED_SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 
 /// Global ThemeSet singleton.
-static SHARED_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| match ThemeSet::load_defaults() {
+static SHARED_THEME_SET: LazyLock<ThemeSet> = LazyLock::new(|| match ThemeSet::load_defaults() {
     defaults if !defaults.themes.is_empty() => defaults,
     _ => {
         warn!("Failed to load default syntax highlighting themes");
@@ -70,8 +70,8 @@ static SHARED_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| match ThemeSet::load_defa
 
 /// Cache for loaded themes to avoid repeated cloning from the ThemeSet.
 /// Key is theme name, value is the cloned theme.
-static THEME_CACHE: Lazy<std::sync::RwLock<std::collections::HashMap<String, Theme>>> =
-    Lazy::new(|| std::sync::RwLock::new(std::collections::HashMap::new()));
+static THEME_CACHE: LazyLock<std::sync::RwLock<std::collections::HashMap<String, Theme>>> =
+    LazyLock::new(|| std::sync::RwLock::new(std::collections::HashMap::new()));
 
 /// Get the global SyntaxSet reference
 #[inline]

@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 
 use crate::config::GatekeeperConfig;
 #[cfg(target_os = "macos")]
@@ -33,7 +33,7 @@ struct GatekeeperCacheEntry {
     warned: bool,
 }
 
-static GATEKEEPER_POLICY: OnceCell<GatekeeperPolicy> = OnceCell::new();
+static GATEKEEPER_POLICY: OnceLock<GatekeeperPolicy> = OnceLock::new();
 
 pub fn initialize_gatekeeper(config: &GatekeeperConfig, workspace_root: Option<&Path>) {
     let policy = GatekeeperPolicy::from_config(config, workspace_root);

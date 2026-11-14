@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use tokio::runtime::Handle;
 use tracing::debug;
 
@@ -16,7 +16,7 @@ pub struct PerfRecorder {
     pipeline: Arc<TelemetryPipeline>,
 }
 
-static PERF_RECORDER: OnceCell<PerfRecorder> = OnceCell::new();
+static PERF_RECORDER: OnceLock<PerfRecorder> = OnceLock::new();
 
 pub fn initialize_perf_telemetry(config: &TelemetryConfig) {
     let recorder = PerfRecorder {

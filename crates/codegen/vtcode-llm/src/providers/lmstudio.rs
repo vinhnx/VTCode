@@ -263,7 +263,7 @@ impl LLMProvider for LmStudioProvider {
 
     fn supported_models(&self) -> Vec<String> {
         // Hardcoded models prevent expensive network calls. Future enhancements:
-        // 1. Lazy initialization via once_cell to fetch models at startup
+        // 1. Lazy initialization to fetch models at startup
         // 2. Dynamic fetching with proper caching to avoid repeated network calls
         models::lmstudio::SUPPORTED_MODELS
             .iter()

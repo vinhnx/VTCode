@@ -446,8 +446,8 @@ fn should_exclude_env_var(key: &str) -> bool {
 }
 
 /// Global singleton for the shell snapshot manager.
-static GLOBAL_SNAPSHOT_MANAGER: once_cell::sync::Lazy<ShellSnapshotManager> =
-    once_cell::sync::Lazy::new(ShellSnapshotManager::new);
+static GLOBAL_SNAPSHOT_MANAGER: std::sync::LazyLock<ShellSnapshotManager> =
+    std::sync::LazyLock::new(ShellSnapshotManager::new);
 
 /// Get the global shell snapshot manager.
 pub fn global_snapshot_manager() -> &'static ShellSnapshotManager {

@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -10,15 +10,15 @@ pub use crate::utils::message_style::MessageStyle;
 const MAX_LINES: usize = 4000;
 const MAX_QUEUE_SIZE: usize = 100;
 
-static TRANSCRIPT: Lazy<RwLock<Vec<String>>> = Lazy::new(|| RwLock::new(Vec::new()));
-static INLINE_HANDLE: Lazy<RwLock<Option<Arc<InlineHandle>>>> = Lazy::new(|| RwLock::new(None));
+static TRANSCRIPT: LazyLock<RwLock<Vec<String>>> = LazyLock::new(|| RwLock::new(Vec::new()));
+static INLINE_HANDLE: LazyLock<RwLock<Option<Arc<InlineHandle>>>> = LazyLock::new(|| RwLock::new(None));
 /// Session-scoped replaceable tracker transcript block. Shared by every tracker
 /// writer (pipeline + plan-approval handoff) so one surface owns replace/dedupe.
-static REPLACEABLE_TRACKER_BLOCK: Lazy<RwLock<Option<Vec<String>>>> = Lazy::new(|| RwLock::new(None));
+static REPLACEABLE_TRACKER_BLOCK: LazyLock<RwLock<Option<Vec<String>>>> = LazyLock::new(|| RwLock::new(None));
 /// UI line count last written to `InlineHandle` by the tracker transcript
 /// helper. Used instead of deriving a UI `replace_last` count from TRANSCRIPT
 /// (the two stores can diverge when other writers hit only one side).
-static REPLACEABLE_TRACKER_UI_LEN: Lazy<RwLock<Option<usize>>> = Lazy::new(|| RwLock::new(None));
+static REPLACEABLE_TRACKER_UI_LEN: LazyLock<RwLock<Option<usize>>> = LazyLock::new(|| RwLock::new(None));
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TranscriptMode {
@@ -89,10 +89,10 @@ struct QueuedMessage {
     style: InlineTextStyle,
 }
 
-static MESSAGE_QUEUE: Lazy<RwLock<VecDeque<QueuedMessage>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
+static MESSAGE_QUEUE: LazyLock<RwLock<VecDeque<QueuedMessage>>> = LazyLock::new(|| RwLock::new(VecDeque::new()));
 /// Messages enqueued while no inline handle was attached. Drained FIFO on
 /// `set_inline_handle` so none are lost. Bounded like `MESSAGE_QUEUE`.
-static PENDING_QUEUE: Lazy<RwLock<VecDeque<QueuedMessage>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
+static PENDING_QUEUE: LazyLock<RwLock<VecDeque<QueuedMessage>>> = LazyLock::new(|| RwLock::new(VecDeque::new()));
 
 pub fn append(line: &str) {
     if is_suppressed() || line.trim().is_empty() {

@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
@@ -25,7 +25,7 @@ fn should_filter_model(provider: Provider, model: &ModelId) -> bool {
     provider == Provider::Copilot && !matches!(model, ModelId::CopilotAuto)
 }
 
-pub(super) static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
+pub(super) static MODEL_OPTIONS: LazyLock<Vec<ModelOption>> = LazyLock::new(|| {
     let models = ModelId::all_models();
     let mut options = Vec::with_capacity(models.len());
     for model in models {
@@ -47,7 +47,7 @@ pub(super) static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     options
 });
 
-static PROVIDER_OPTION_INDEXES: Lazy<HashMap<Provider, Box<[usize]>>> = Lazy::new(|| {
+static PROVIDER_OPTION_INDEXES: LazyLock<HashMap<Provider, Box<[usize]>>> = LazyLock::new(|| {
     let mut map = HashMap::<Provider, Vec<usize>>::with_capacity(64);
     for (index, option) in MODEL_OPTIONS.iter().enumerate() {
         map.entry(option.provider).or_default().push(index);
@@ -55,7 +55,7 @@ static PROVIDER_OPTION_INDEXES: Lazy<HashMap<Provider, Box<[usize]>>> = Lazy::ne
     map.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect()
 });
 
-static PICKER_PROVIDER_ORDER: Lazy<Box<[Provider]>> = Lazy::new(|| Provider::picker_display_order().into_boxed_slice());
+static PICKER_PROVIDER_ORDER: LazyLock<Box<[Provider]>> = LazyLock::new(|| Provider::picker_display_order().into_boxed_slice());
 
 pub(super) fn build_model_options_with_overrides(
     overrides: &BTreeMap<String, ProviderOverrideConfig>,

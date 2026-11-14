@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
 use humantime::format_rfc3339_seconds;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
@@ -90,11 +90,11 @@ impl LogForwarder {
     }
 }
 
-static LOG_FORWARDER: Lazy<Arc<LogForwarder>> = Lazy::new(|| Arc::new(LogForwarder::default()));
+static LOG_FORWARDER: LazyLock<Arc<LogForwarder>> = LazyLock::new(|| Arc::new(LogForwarder::default()));
 static TUI_LOG_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 
-static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
-static LOG_THEME_CACHE: Lazy<RwLock<Option<(String, Theme)>>> = Lazy::new(|| RwLock::new(None));
+static LOG_THEME_NAME: LazyLock<RwLock<Option<String>>> = LazyLock::new(|| RwLock::new(None));
+static LOG_THEME_CACHE: LazyLock<RwLock<Option<(String, Theme)>>> = LazyLock::new(|| RwLock::new(None));
 
 #[derive(Default)]
 struct FieldVisitor {

@@ -1,8 +1,8 @@
 //! Best-effort access to operating-system reduced-motion preferences.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static REDUCE_MOTION_PREFERENCE: Lazy<Option<bool>> = Lazy::new(detect_reduce_motion_preference);
+static REDUCE_MOTION_PREFERENCE: LazyLock<Option<bool>> = LazyLock::new(detect_reduce_motion_preference);
 
 /// Read the platform preference once; unsupported or unavailable settings remain unknown.
 pub(crate) fn reduce_motion_preference() -> Option<bool> {

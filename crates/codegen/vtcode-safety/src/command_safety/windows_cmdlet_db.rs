@@ -13,7 +13,7 @@
     reason = "Database builders are one-shot maps; discarded insert results are intentional."
 )]
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 /// Severity level of a cmdlet
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -78,7 +78,7 @@ pub struct CmdletInfo {
 }
 
 /// Comprehensive cmdlet database
-pub static DANGEROUS_CMDLETS: Lazy<HashMap<&'static str, CmdletInfo>> = Lazy::new(|| {
+pub static DANGEROUS_CMDLETS: LazyLock<HashMap<&'static str, CmdletInfo>> = LazyLock::new(|| {
     let mut m = HashMap::new();
 
     // ──── CRITICAL: System Compromise ────

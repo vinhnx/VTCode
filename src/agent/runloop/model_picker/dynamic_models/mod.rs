@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -31,8 +31,8 @@ use super::selection::{SelectionDetail, selection_from_dynamic_with_api_key_env}
 type StaticModelIndex = HashMap<Provider, HashSet<String>>;
 
 const MODEL_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
-static HTTP_CLIENT: Lazy<Client> =
-    Lazy::new(|| vtcode_commons::http::create_client_with_timeout(MODEL_DISCOVERY_TIMEOUT));
+static HTTP_CLIENT: LazyLock<Client> =
+    LazyLock::new(|| vtcode_commons::http::create_client_with_timeout(MODEL_DISCOVERY_TIMEOUT));
 
 #[derive(Clone, Default)]
 pub(crate) struct DynamicModelRegistry {

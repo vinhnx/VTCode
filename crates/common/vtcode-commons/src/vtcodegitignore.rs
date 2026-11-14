@@ -217,8 +217,8 @@ impl Default for VTCodeGitignore {
 /// would put atomic contention and an async lock acquisition on the read path;
 /// `ArcSwap` keeps reads lock-free (the article's "beware RWLock contention"
 /// guidance) while preserving atomic whole-value replacement.
-static VTCODE_GITIGNORE: once_cell::sync::Lazy<arc_swap::ArcSwap<VTCodeGitignore>> =
-    once_cell::sync::Lazy::new(|| arc_swap::ArcSwap::from_pointee(VTCodeGitignore::default()));
+static VTCODE_GITIGNORE: std::sync::LazyLock<arc_swap::ArcSwap<VTCodeGitignore>> =
+    std::sync::LazyLock::new(|| arc_swap::ArcSwap::from_pointee(VTCodeGitignore::default()));
 
 /// Initialize the global .vtcodegitignore instance
 pub async fn initialize_vtcode_gitignore() -> Result<()> {

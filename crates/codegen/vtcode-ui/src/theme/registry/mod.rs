@@ -1,7 +1,7 @@
 use anstyle::RgbColor;
 use catppuccin::PALETTE;
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use vtcode_config::constants::ui;
 
 use crate::theme::color_math::contrast_ratio;
@@ -58,7 +58,7 @@ mod suites;
 pub(crate) use suites::{all_theme_definitions, theme_definition};
 pub use suites::{available_theme_suites, available_themes, theme_label, theme_suite_id, theme_suite_label};
 
-static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
+static REGISTRY: LazyLock<HashMap<&'static str, ThemeDefinition>> = LazyLock::new(|| {
     let mut map = HashMap::new();
     curated::insert_curated_themes(&mut map);
     map.insert(

@@ -6,7 +6,7 @@
 //! Unicode monitoring and validation utilities
 
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
@@ -132,4 +132,4 @@ impl UnicodeValidationContext {
 }
 
 /// Global unicode monitor instance
-pub static UNICODE_MONITOR: Lazy<UnicodeMonitor> = Lazy::new(UnicodeMonitor::new);
+pub static UNICODE_MONITOR: LazyLock<UnicodeMonitor> = LazyLock::new(UnicodeMonitor::new);

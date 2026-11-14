@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tracing::warn;
@@ -92,7 +92,7 @@ impl AdaptiveRateLimiter {
 }
 
 /// Shared adaptive limiter for non-session-scoped execution flows (e.g. skill sub-LLM loops).
-pub static GLOBAL_ADAPTIVE_RATE_LIMITER: Lazy<AdaptiveRateLimiter> = Lazy::new(AdaptiveRateLimiter::default);
+pub static GLOBAL_ADAPTIVE_RATE_LIMITER: LazyLock<AdaptiveRateLimiter> = LazyLock::new(AdaptiveRateLimiter::default);
 
 /// Acquire from the shared adaptive limiter.
 pub fn try_acquire_global(tool_name: &str) -> Result<(), Duration> {

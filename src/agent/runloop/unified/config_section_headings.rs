@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -9,8 +9,8 @@ pub(super) struct SectionHeading {
     pub(super) summary: Cow<'static, str>,
 }
 
-static ARRAY_INDEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[(\d+)\]").expect("valid regex"));
-static MAP_KEY_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\[\"(?:\\.|[^\"\\])*\"\]"#).expect("valid regex"));
+static ARRAY_INDEX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[(\d+)\]").expect("valid regex"));
+static MAP_KEY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"\[\"(?:\\.|[^\"\\])*\"\]"#).expect("valid regex"));
 
 static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("acp", "ACP Bridge", "IDE and Agent Client Protocol integrations."),
