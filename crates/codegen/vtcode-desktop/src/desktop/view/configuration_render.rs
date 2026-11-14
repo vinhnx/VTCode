@@ -951,6 +951,7 @@ impl DesktopView {
                     )
                     .focus_trap("cli-config-editor-trap", &self.config_editor_focus),
             )
+            .fade_in("cli-config-editor-fade", cx.theme())
             .into_any_element()
     }
 }

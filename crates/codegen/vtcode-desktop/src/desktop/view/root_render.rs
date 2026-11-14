@@ -58,6 +58,10 @@ impl DesktopView {
                 .child(self.render_resize_handle(ResizeEdge::TerminalRight, cx)),
         }
         .when(zen, |dock| dock.p_0())
+        // The dock mounts through ToggleTerminal (and remounts when the
+        // position preference moves it between slots), so a stable id
+        // replays the fade exactly on those appearances.
+        .fade_in("terminal-dock-fade", cx.theme())
     }
 }
 

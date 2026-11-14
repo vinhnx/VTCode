@@ -201,7 +201,7 @@ impl DesktopView {
         };
         navigation
             .when(!self.effective_translucent_sidebar(), |navigation| navigation.bg(chrome_background(&colors)))
-            .with_animation("navigation-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+            .fade_in("navigation-fade", cx.theme())
             .into_any_element()
     }
     pub(super) fn render_chrome_menu(&self, id: &'static str, label: String) -> AnyElement {

@@ -490,6 +490,7 @@ impl DesktopView {
                             ),
                     ),
             )
+            .fade_in("changelog-fade", cx.theme())
             .into_any_element()
     }
 
@@ -566,6 +567,9 @@ impl DesktopView {
                         }),
                     )),
             )
+            // Passive announcement: it fades in with the chrome it joins
+            // instead of snapping onto an already-settled column.
+            .fade_in("release-notes-banner-fade", cx.theme())
             .into_any_element()
     }
 }

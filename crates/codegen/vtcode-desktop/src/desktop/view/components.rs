@@ -917,16 +917,35 @@ pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &Foc
         .dispatches_desktop_action(ToggleZenMode, focus.clone())
 }
 
-/// Opacity transition for elements appearing with a zen toggle, using the
-/// theme duration and enter curve. Pair it with a stable animation id per
-/// mount point; state-key the id when the element persists across modes so
-/// each toggle replays the fade. `with_animation` renders the end state
-/// statically under reduced motion, so no manual gate is needed.
-pub(super) fn zen_fade_animation(theme: &Theme) -> Animation {
+/// Opacity transition for elements that mount through user-driven state —
+/// toggles, panels, popups — using the theme duration and enter curve.
+/// `with_animation` renders the end state statically under reduced motion,
+/// so no manual gate is needed. Private on purpose: [`FadeInExt::fade_in`]
+/// is the single entry point, so the motion tokens stay tuned in one place.
+fn zen_fade_animation(theme: &Theme) -> Animation {
     let motion = theme.motion_tokens();
     let easing = motion.easing_enter.clone();
     Animation::new(motion.duration_normal).with_easing(move |delta| easing.sample(delta))
 }
+
+/// The shared mount fade, kept as one reusable definition: every toggle,
+/// panel, and popup that appears fades opacity 0→1 on mount through the
+/// theme's enter motion. Pair it with a stable animation id per mount
+/// point; state-key the id when the element persists across modes so each
+/// toggle replays the fade.
+pub(super) trait FadeInExt: AnimationExt + Sized {
+    /// Apply the shared appearance fade with a stable per-mount id. The
+    /// element/id types stay fully qualified so the shared import surface
+    /// (`use super::*`) never widens and re-flags existing call sites.
+    fn fade_in(self, id: impl Into<gpui_kit::ElementId>, theme: &Theme) -> gpui_kit::AnimationElement<Self>
+    where
+        Self: Styled,
+    {
+        self.with_animation(id, zen_fade_animation(theme), |el, delta| el.opacity(delta))
+    }
+}
+
+impl<T: AnimationExt + Sized> FadeInExt for T {}
 
 pub(super) trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;

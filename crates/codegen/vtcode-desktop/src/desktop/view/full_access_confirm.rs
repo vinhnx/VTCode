@@ -198,6 +198,7 @@ impl DesktopView {
                             ),
                     ),
             )
+            .fade_in("full-access-confirm-fade", cx.theme())
             .into_any_element()
     }
 }

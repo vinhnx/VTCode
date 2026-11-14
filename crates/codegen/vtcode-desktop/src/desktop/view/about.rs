@@ -530,6 +530,7 @@ impl DesktopView {
                             ),
                     ),
             )
+            .fade_in("about-fade", cx.theme())
             .into_any_element()
     }
 }

@@ -258,9 +258,7 @@ impl DesktopView {
                         .items_center()
                         .gap_1()
                         .overflow_hidden()
-                        .with_animation("zen-composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
-                            el.opacity(delta)
-                        })
+                        .fade_in("zen-composer-context-fade", cx.theme())
                         .child(self.render_attach_button(cx))
                         .child(self.render_model_button(cx).max_w(px(224.)))
                         .child(self.render_mode_button(cx))
@@ -276,9 +274,7 @@ impl DesktopView {
                         .items_center()
                         .gap_1()
                         .min_w_0()
-                        .with_animation("composer-secondary-fade", zen_fade_animation(cx.theme()), |el, delta| {
-                            el.opacity(delta)
-                        })
+                        .fade_in("composer-secondary-fade", cx.theme())
                         .child(self.render_attach_button(cx))
                         .child(self.render_policy_button(cx))
                         .child(self.render_mode_button(cx)),
@@ -293,11 +289,11 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .when(!self.zen_mode, |actions| {
-                    actions.child(self.render_model_button(cx).max_w(px(336.)).with_animation(
-                        "pick-model-fade",
-                        zen_fade_animation(cx.theme()),
-                        |el, delta| el.opacity(delta),
-                    ))
+                    actions.child(
+                        self.render_model_button(cx)
+                            .max_w(px(336.))
+                            .fade_in("pick-model-fade", cx.theme()),
+                    )
                 });
         // Running cluster: the frequent stop takes the primary fill (no red
         // anywhere in the cluster) and owns the emphasis alone while the
@@ -397,9 +393,7 @@ impl DesktopView {
                         .items_center()
                         .gap_2()
                         .py_1()
-                        .with_animation("composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
-                            el.opacity(delta)
-                        })
+                        .fade_in("composer-context-fade", cx.theme())
                         .child(self.render_workspace_picker(cx))
                         .child(
                             desktop_button("composer-cli-webmcp")

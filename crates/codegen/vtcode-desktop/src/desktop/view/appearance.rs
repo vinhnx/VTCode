@@ -348,7 +348,7 @@ impl DesktopView {
                     .text_xs()
                     .text_color(colors.muted_foreground),
             )
-            .with_animation("status-bar-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+            .fade_in("status-bar-fade", cx.theme())
     }
 
     pub(super) fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -731,7 +731,8 @@ impl DesktopView {
                                                 });
                                             }
                                         })
-                                })),
+                                }))
+                                .fade_in("theme-profile-row-fade", &theme),
                         )
                     })
                     .child(

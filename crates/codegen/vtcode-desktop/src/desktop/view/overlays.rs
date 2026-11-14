@@ -737,6 +737,10 @@ pub(super) fn dismissable_route_page(panel: impl IntoElement, cx: &mut Context<D
         .h_full()
         .flex()
         .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| view.request_panel_dismiss(window, cx)))
+        // The gutter keeps one id across route swaps, so settings → browser →
+        // review never replays the fade; only the workspace ↔ panel transition
+        // remounts it.
+        .fade_in("route-page-fade", cx.theme())
         .child(route_page(panel))
 }
 

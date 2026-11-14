@@ -378,6 +378,7 @@ impl DesktopView {
                             ),
                     ),
             )
+            .fade_in("file-rename-fade", cx.theme())
             .into_any_element()
     }
 }

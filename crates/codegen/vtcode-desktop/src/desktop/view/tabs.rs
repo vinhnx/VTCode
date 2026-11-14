@@ -396,6 +396,9 @@ impl DesktopView {
             .on_action(cx.listener(|view, _: &OpenSelectedThreadTab, window, cx| view.activate_focused_tab(window, cx)))
             .w_full()
             .child(bar)
+            // Mounts when a second thread tab opens; a stable id holds the
+            // fade to that appearance, not to tab reordering.
+            .fade_in("thread-tabs-fade", cx.theme())
             .into_any_element()
     }
 }

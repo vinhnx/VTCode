@@ -693,12 +693,14 @@ impl DesktopView {
         .detach();
     }
 
-    pub(super) fn render_file_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_file_preview(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let weak = cx.entity().downgrade();
         let colors = &theme.colors;
+        // The only caller gates on `file_preview.is_some()`, so this
+        // placeholder arm never renders; it keeps the function total.
         let Some(preview) = self.file_preview.as_ref() else {
-            return div();
+            return div().into_any_element();
         };
         let text = preview.text.clone();
         let mono = theme.mono_font_family.clone();
@@ -953,5 +955,7 @@ impl DesktopView {
                         )
                     }),
             )
+            .fade_in("file-preview-fade", cx.theme())
+            .into_any_element()
     }
 }

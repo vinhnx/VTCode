@@ -627,7 +627,7 @@ impl DesktopView {
                         .desktop_disabled(self.selected_session_id.is_none())
                         .dispatches_desktop_action(OpenCliHandoff, self.focus_handle.clone()),
                 )
-                .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta)),
+                .fade_in("thread-header-fade", theme),
         )
     }
 
@@ -783,7 +783,7 @@ impl DesktopView {
                 )
                 .child(self.render_header_actions(show_details, cx)),
         )
-        .with_animation("title-bar-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+        .fade_in("title-bar-fade", cx.theme())
         .into_any_element()
     }
 
@@ -857,7 +857,7 @@ impl DesktopView {
             .border_1()
             .border_color(soft_edge_color(&colors))
             .shadow_md()
-            .with_animation("zen-toggle-float", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+            .fade_in("zen-toggle-float", cx.theme())
             .child(zen_mode_toggle(true, faded, &self.focus_handle))
     }
 

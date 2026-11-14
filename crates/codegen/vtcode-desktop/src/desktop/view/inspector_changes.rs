@@ -194,7 +194,7 @@ impl DesktopView {
                     .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_change_file(true, cx)))
                     .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| view.navigate_change_file(false, cx)))
             })
-            .with_animation("inspector-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+            .fade_in("inspector-fade", cx.theme())
             .into_any_element()
     }
 

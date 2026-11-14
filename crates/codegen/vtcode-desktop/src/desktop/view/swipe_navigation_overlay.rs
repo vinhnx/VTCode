@@ -93,7 +93,7 @@ impl DesktopView {
                     .py_2()
                     .child(Icon::new(icon).small().text_color(colors.primary))
                     .child(div().text_sm().text_color(colors.foreground).child(label))
-                    .with_animation(animation_id, zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta)),
+                    .fade_in(animation_id, cx.theme()),
             )
             .into_any_element()
     }
