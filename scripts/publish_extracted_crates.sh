@@ -5,6 +5,16 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
+# Dependency cooldowns (RFC 3923, stable in Rust 1.100.0): a publisher whose
+# `.cargo/config.toml` sets `registry.global-min-publish-age` (e.g. "14 days")
+# would otherwise fail here — `cargo publish` re-resolves each crate's registry
+# deps, and sibling crates published minutes earlier in this same run are
+# younger than the window ("version X is too new, minimum age 14 days").
+# Publishing staged siblings is exactly the flow that must accept minutes-old
+# versions, so bypass the age gate for cargo invocations in this script only.
+# Scoped here rather than in common.sh so normal dev builds keep the protection.
+export CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow
+
 # publish_extracted_crates.sh orchestrates the sequential publishes for the
 # extracted VT Code crates. It follows the dependency order required by
 # crates.io tarball verification and provides optional dry-run coverage so the
@@ -446,7 +456,7 @@ for crate in "${CRATES[@]}"; do
 	if ! publish_cmd "$crate"; then
 		print_error "Failed to publish ${crate} ${CURRENT_VERSION}. Aborting remaining publishes."
 		print_info "Resume with: bash ./scripts/publish_extracted_crates.sh --start-from ${crate} --skip-tests --skip-tags --skip-follow-up"
-		print_info "Or retry this crate alone: cargo publish -p ${crate}"
+		print_info "Or retry this crate alone: CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo publish -p ${crate}"
 		exit 1
 	fi
 	wait_for_crates_io_version "$crate" "$CURRENT_VERSION"
