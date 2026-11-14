@@ -12,7 +12,7 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | `vtcode` / `vtcode chat`                                               | Interactive TUI session                                             |
 | `vtcode ask <prompt>`                                                  | One-shot prompt; prints the reply without tools or a session        |
-| `vtcode exec <prompt>`                                                 | Headless execution with the full tool loop; `--json` streams events |
+| `vtcode exec <prompt>`                                                 | Headless execution with full agent loop; `--json` streams events    |
 | `vtcode eval --suite <file>`                                           | Run an evaluation suite with pass@k / pass^k metrics                |
 | `vtcode review`                                                        | Non-interactive review of the current diff, files, or a git target  |
 | `vtcode continue`                                                      | Resume the most recent conversation; `--session-id` forks it        |

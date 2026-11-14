@@ -69,7 +69,7 @@ pub fn condensed_schema_hint(schema: &Value) -> Option<Value> {
 /// field was wrong and led agents to retry the same malformed call blindly for
 /// many turns. This prefixes the failure with its JSON-pointer path and, for
 /// enum/const/type failures, lists the accepted values so the model can
-/// self-correct in a single pass instead of burning the tool budget.
+/// self-correct in a single pass instead of retrying the malformed call.
 pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
     let path = err.instance_path().to_string();
     let path_label = if path.is_empty() { "(root)".to_string() } else { path };

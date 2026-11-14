@@ -14,7 +14,7 @@ pub fn agent_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["spawn", "spawn_subprocess", "send_input", "resume", "wait", "close"],
-                "description": "spawn: delegate a scoped task to a child agent (requires message). spawn_subprocess: run a subagent defined with background: true as a managed background VT Code process (requires message). send_input: send follow-up input to a running child (requires id + message or items). resume: reopen a completed or closed child from saved context (requires id). wait: block the current foreground turn until one or more children reach a terminal state, including managed background subprocess ids (requires ids). close: cancel and free a child's tool budget (requires id)."
+                "description": "spawn: delegate a scoped task to a child agent (requires message). spawn_subprocess: run a subagent defined with background: true as a managed background VT Code process (requires message). send_input: send follow-up input to a running child (requires id + message or items). resume: reopen a completed or closed child from saved context (requires id). wait: block the current foreground turn until one or more children reach a terminal state, including managed background subprocess ids (requires ids). close: cancel a child and free its execution slot (requires id)."
             },
             "agent_type": {"type": "string", "description": agent_type_description("spawn or spawn_subprocess: ", " spawn_subprocess requires an agent defined with background: true.")},
             "message": {"type": "string", "description": "spawn or spawn_subprocess: task prompt. send_input: follow-up prompt for the child."},

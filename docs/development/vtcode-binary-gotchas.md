@@ -52,11 +52,6 @@ changing the runloop, update path, allocator, or request assembly.
   for shell classification, freshness, mandatory tracker checks, and recovery boundaries. Copilot/direct and batch
   execution persist `SessionStats::verification_snapshot` after updating their `LoopTracker`, so resumed turns
   reconstruct the same gate state.
-- If the ordinary tool-loop allowance is reached and no manual extension is granted, schedule one tool-free synthesis
-  request before ending the turn. The loop allowance becomes unlimited only for that recovery control pass; the provider
-  request still has tools disabled. The absolute hard cap and its terminal behavior remain unchanged. After the first
-  successful interactive tool-loop grant in a process session, later limit hits auto-grant the maximum remaining `+N`
-  without another HITL prompt (`SessionStats::tool_loop_grant_preauthorized`); denials do not latch.
 - `wall_clock_exhausted_emitted` participates in the plan-mode `mark_recovery_exhausted` gates. The preflight circuit
   breaker in `turn/tool_outcomes/handlers/mod.rs` follows the same `Continue` plus deferred synthesis path via
   `preflight_circuit_recovery_pending` and `flush_preflight_circuit_recovery`; never return `Break(Blocked)` for an
@@ -119,8 +114,8 @@ changing the runloop, update path, allocator, or request assembly.
 - Plans stay compact/spec-like: `PLANNING_WORKFLOW_PLAN_QUALITY_LINE` requires roughly 1500 tokens with
   `Action -> files/symbols -> verify:` steps and file/symbol references. The truncation recovery prompt is bounded by
   `MAX_PLAN_SYNTHESIS_CONDENSE_ATTEMPTS`.
-- Planning research scales to request complexity; the wall-clock budget and tool-loop floor are the backstops.
-  Mid-turn config reapplication preserves the shared planning loop floor.
+- Planning research scales to request complexity; the wall-clock budget and the behavioral churn guards are the
+  backstops.
 - Approval phrases are classified by `detect_planning_intent` and resolve one typed plan target: ordinary current/fresh
   approval selects Build, while only an explicit Auto choice or configured full-auto policy selects Auto. The target
   carries destination, confirmation policy, context, persisted plan, and tracker through the shared direct/queued

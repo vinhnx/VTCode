@@ -490,8 +490,16 @@ impl ConfigManager {
     fn load_toml_from_file(path: &Path) -> Result<toml::Value> {
         let content =
             fs::read_to_string(path).with_context(|| format!("Failed to read config file: {}", path.display()))?;
+        Self::parse_layer_value(&content, path)
+    }
+
+    /// Parse one layer's TOML, normalize legacy top-level provider aliases,
+    /// and warn about keys removed from the schema. Single chokepoint so
+    /// every layer kind (required workspace path and optional system/user
+    /// layers) gets identical treatment.
+    fn parse_layer_value(content: &str, path: &Path) -> Result<toml::Value> {
         let mut value: toml::Value =
-            toml::from_str(&content).with_context(|| format!("Failed to parse config file: {}", path.display()))?;
+            toml::from_str(content).with_context(|| format!("Failed to parse config file: {}", path.display()))?;
         crate::loader::merge::normalize_legacy_top_level_provider_aliases(&mut value);
         Self::warn_removed_config_keys(&value, path);
         Ok(value)
@@ -538,18 +546,12 @@ impl ConfigManager {
         };
 
         let resolved_file = canonicalize_workspace_root(file);
+        let parsed = Self::parse_layer_value(&content, &resolved_file);
         let resolved_source = source.with_file(resolved_file);
 
-        match toml::from_str::<toml::Value>(&content) {
-            Ok(mut toml) => {
-                crate::loader::merge::normalize_legacy_top_level_provider_aliases(&mut toml);
-                Some(ConfigLayerEntry::new(resolved_source, toml))
-            }
-            Err(err) => {
-                let error =
-                    anyhow::Error::from(err).context(format!("Failed to parse config file: {}", file.display()));
-                Some(Self::disabled_layer_from_error(resolved_source, error))
-            }
+        match parsed {
+            Ok(toml) => Some(ConfigLayerEntry::new(resolved_source, toml)),
+            Err(error) => Some(Self::disabled_layer_from_error(resolved_source, error)),
         }
     }
 
@@ -853,7 +855,7 @@ const REMOVED_CONFIG_KEY_PATHS: &[&[&str]] = &[
     &["automation", "full_auto", "auto_grant_tool_limits"],
 ];
 
-pub(crate) fn removed_config_key_paths_present(value: &toml::Value) -> Vec<&'static [&'static str]> {
+pub(super) fn removed_config_key_paths_present(value: &toml::Value) -> Vec<&'static [&'static str]> {
     REMOVED_CONFIG_KEY_PATHS
         .iter()
         .copied()

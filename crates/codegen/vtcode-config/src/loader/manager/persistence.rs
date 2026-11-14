@@ -335,7 +335,7 @@ mod tests {
     fn save_prunes_removed_budget_keys_from_existing_config() {
         let temp = tempfile::tempdir().expect("tempdir");
         let path = temp.path().join("vtcode.toml");
-        std::fs::write(
+        fs::write(
             &path,
             "[agent.harness]\nmax_tool_calls_per_turn = 32\n\n[tools]\nmax_tool_loops = 20\nmax_repeated_tool_calls = 4\n\n[automation.full_auto]\nauto_grant_tool_limits = false\nenabled = true\n",
         )
@@ -348,7 +348,7 @@ mod tests {
         config.automation.full_auto.enabled = true;
         ConfigManager::save_config_to_path(&path, &config).expect("save");
 
-        let rewritten = std::fs::read_to_string(&path).expect("rewritten config");
+        let rewritten = fs::read_to_string(&path).expect("rewritten config");
         assert!(!rewritten.contains("max_tool_calls_per_turn"));
         assert!(!rewritten.contains("max_tool_loops"));
         assert!(!rewritten.contains("auto_grant_tool_limits"));

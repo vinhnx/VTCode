@@ -268,14 +268,9 @@ turn revalidates the handoff, exits any stale planning gate, and refreshes the s
 before tools are exposed. Mouse-wheel events outside the floating overlay are passed through to the transcript, so the
 full plan can be reviewed without dismissing the approval gate. Approval also distills the plan's numbered and checkbox
 steps into the `task_tracker` checklist; the implementation agent updates that checklist as work progresses.
-Approved-plan execution starts a fresh implementation turn with fresh loop and wall-clock budgets, so planning research
-does not leave the build phase with only the ordinary short-turn allowance.
-
-That implementation turn also receives one internal `+50` tool-loop allowance at initialization. The allowance is
-clamped by the ordinary loop hard cap (for example, the default `40` becomes `90`, while `100` remains capped at `120`)
-and does not stack with manual loop extensions. A configured loop value of `0`
-remains unlimited. Current and fresh-context approved-plan handoffs each initialize their own implementation turn, so
-each gets the same one-time allowance.
+Approved-plan execution starts a fresh implementation turn with a fresh wall-clock budget, so planning research does
+not leave the build phase with a depleted execution budget. Current and fresh-context approved-plan handoffs each
+initialize their own implementation turn.
 
 The implementation request is scheduled as an explicit internal next-turn trigger after the handoff directive is
 appended. It is not dependent on the bounded ordinary steering FIFO, and the synthetic user prompt is recorded once so
@@ -581,7 +576,7 @@ interrupted by real work does not accumulate. When a recovery pass is armed this
 churn family (for example `exec::inspection::ls::src ×3`) in the injected reason, and a pass that is already pending
 from another guard or the blocked-tool fuse is never re-announced. A planning tool-free violation that still carries
 plan-like salvage consumes one validation-repair budget and retries tool-free before the resumable handoff, and every
-failed-closed turn budget (`tool_loop`, `wall_clock_secs`) is recorded as a `budget_exhausted` trajectory
+failed-closed turn budget (`wall_clock_secs`) is recorded as a `budget_exhausted` trajectory
 event with its used/max counts so post-hoc diagnosis can tell which ceiling fired.
 
 Tool previews shown to the model share a bounded per-turn budget (96 KiB in planning, 64 KiB execution); plan-mode

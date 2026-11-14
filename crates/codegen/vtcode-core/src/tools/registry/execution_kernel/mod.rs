@@ -223,7 +223,7 @@ fn normalize_schema_aliases_in_place(value: &mut Value, schema: &Value) -> bool 
 /// expects a structured or primitive value — e.g. `"[\"path\"]"` for an array
 /// field, or `"10"` for an integer field. Left unhandled the agent retries the
 /// same malformed call for many turns (six preflight failures were observed in
-/// a single checkpoint turn), wasting tool budget and context.
+/// a single checkpoint turn), wasting context.
 ///
 /// When `value` is a string and `schema` declares a single non-string `type`,
 /// this rewrites it in place to the parsed JSON value, but **only** when the
