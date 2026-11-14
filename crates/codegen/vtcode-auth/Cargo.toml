@@ -15,7 +15,7 @@ categories = ["authentication", "development-tools"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-axum = "0.8"
+axum = { workspace = true }
 base64 = { workspace = true }
 dirs = { workspace = true }
 fs2 = { workspace = true }

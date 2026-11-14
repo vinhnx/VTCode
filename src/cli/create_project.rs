@@ -1,5 +1,4 @@
 use anyhow::Result;
-use itertools::Itertools;
 use std::path::Path;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::colors::style;
@@ -57,7 +56,7 @@ This is a new project created with VT Code.
 ## Features
 
 {}"#,
-        features.iter().map(|f| format!("- {f}\n")).join("")
+        features.iter().map(|f| format!("- {f}\n")).collect::<Vec<_>>().join("")
     );
 
     write_file_with_context_sync(&project_path.join("README.md"), &readme_content, "README.md")?;

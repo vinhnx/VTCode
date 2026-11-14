@@ -46,7 +46,7 @@ tokio-util = { workspace = true, features = ["codec"] }
 async-process = "2.2"
 futures = { workspace = true }
 fs2 = { workspace = true }
-async-stream = "0.3"
+async-stream = { workspace = true }
 base64 = { workspace = true }
 glob = "0.3"
 ignore = { workspace = true }
@@ -71,9 +71,6 @@ async-trait = { workspace = true }
 dirs = { workspace = true }
 # YAML support
 serde-saphyr = { workspace = true }
-# Zip support for skill packaging
-zip = { workspace = true }
-flate2 = "1.1"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 # ANSI styling
@@ -130,7 +127,7 @@ textwrap = "0.16"
 # Phase 1 pilot: DDG HTML parsing in web_search only (pinned; revisit on 0.1+)
 astral-html = "=0.0.4"
 rustc-hash = { workspace = true }
-arc-swap = "1.9"
+arc-swap = { workspace = true }
 linkme = { workspace = true }
 webbrowser = { workspace = true }
 

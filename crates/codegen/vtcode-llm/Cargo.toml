@@ -15,7 +15,7 @@ keywords = ["vt", "llm", "provider", "ai", "streaming"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-async-stream = "0.3"
+async-stream = { workspace = true }
 axum = { workspace = true, features = ["json", "macros"], optional = true }
 bytes = "1.11"
 compact_str = { workspace = true }

@@ -18,7 +18,7 @@ a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
 
 [dependencies]
 anyhow = { workspace = true }
-async-stream = "0.3"
+async-stream = { workspace = true }
 axum = { workspace = true, features = ["json", "macros"], optional = true }
 base64 = { workspace = true }
 chrono = { workspace = true }

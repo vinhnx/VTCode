@@ -5893,15 +5893,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11244,7 +11235,6 @@ checksum = "e464cf451ba96ebfc6f9b6542f17ee8b8956e33f1e40d9690624e59d7a7f8a4b"
 dependencies = [
  "bytes",
  "futures-core",
- "futures-io",
  "futures-sink",
  "libc",
  "pin-project-lite",
@@ -12030,7 +12020,6 @@ dependencies = [
  "hotpath",
  "indexmap 2.14.2",
  "insta",
- "itertools 0.15.0",
  "libc",
  "memchr",
  "mimalloc",
@@ -12038,7 +12027,7 @@ dependencies = [
  "once_cell",
  "predicates",
  "pretty_assertions",
- "rand 0.9.5",
+ "rand 0.10.3",
  "ratatui",
  "regex",
  "reqwest 0.12.28",
@@ -12305,7 +12294,6 @@ dependencies = [
  "dirs 7.0.0",
  "dunce",
  "filesnap",
- "flate2",
  "fs2",
  "futures",
  "glob",
@@ -12382,7 +12370,6 @@ dependencies = [
  "windows-sys 0.61.2",
  "wiremock",
  "xattr",
- "zip",
 ]
 
 [[package]]

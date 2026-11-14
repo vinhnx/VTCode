@@ -14,7 +14,7 @@ keywords = ["vt", "mcp", "protocol", "client"]
 
 [dependencies]
 anyhow = { workspace = true }
-arc-swap = "1.9"
+arc-swap = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }

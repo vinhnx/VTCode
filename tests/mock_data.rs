@@ -340,7 +340,7 @@ pub struct TestDataGenerator;
 
 impl TestDataGenerator {
     pub fn random_string(length: usize) -> String {
-        use rand::{Rng, distr::Alphanumeric};
+        use rand::{RngExt, distr::Alphanumeric};
 
         let mut rng = rand::rng();
         (&mut rng).sample_iter(&Alphanumeric).take(length).map(char::from).collect()
@@ -355,7 +355,7 @@ impl TestDataGenerator {
     }
 
     pub fn random_port() -> u16 {
-        use rand::Rng;
+        use rand::RngExt;
 
         rand::rng().random_range(1024..65535)
     }
