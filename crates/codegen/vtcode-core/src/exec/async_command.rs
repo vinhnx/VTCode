@@ -329,7 +329,8 @@ where
 async fn kill_child_process_group(child_pid: Option<u32>, child: &mut Child) -> Result<()> {
     #[cfg(unix)]
     if let Some(pid) = child_pid {
-        return vtcode_bash_runner::process_group::kill_process_group_by_pid(pid).context("failed to kill process group");
+        return vtcode_bash_runner::process_group::kill_process_group_by_pid(pid)
+            .context("failed to kill process group");
     }
     let _ = child_pid;
     child.kill().await.context("failed to kill child process")

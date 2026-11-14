@@ -86,8 +86,8 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
 
 ## Known manifest-lint expectations
 
-- cargo ≥1.100 emits `warning: unused dependency \`mimalloc\`` under `--all-features` (check-dev
-  clippy runs `--all-features`): with `profiling` + `allocator-jemalloc` both on, both allocators
+- cargo ≥1.100 emits an "unused dependency mimalloc" warning when the check-dev clippy run uses
+  `--all-features`: with `profiling` + `allocator-jemalloc` both on, both allocators
   are cfg'd out. Documented in `.vtcode/memory/gotchas.md` (2026-11-14); keep
   `unused_dependencies = "warn"`.
 - The previous "unused workspace deps vtcode-acp/vtcode-eval/vtcode-webmcp" warnings are resolved by
