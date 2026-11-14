@@ -18,8 +18,8 @@ use anyhow::Result;
 use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use vtcode_core::core::agent::runner::prompt_alignment;
 use vtcode_core::prompts::{
-    PromptContext, append_deferred_tools_prompt_section, append_runtime_tool_prompt_sections_for_model,
-    upsert_harness_limits_section,
+    PromptContext, append_fresh_deferred_tools_prompt_section, append_fresh_harness_limits_section,
+    append_fresh_runtime_tool_prompt_sections_for_model,
 };
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
@@ -58,6 +58,10 @@ pub(super) struct PromptAssemblyOutput {
     pub(super) tool_snapshot: SessionToolCatalogSnapshot,
     pub(super) agent_prompt_context: Option<PromptContext>,
     pub(super) few_shot_context: Option<String>,
+    /// Byte offset where the runtime-owned tool sections begin. Fresh
+    /// assembly only appends after this offset, so the alignment guard parses
+    /// catalog metadata solely from the runtime-owned suffix.
+    pub(super) runtime_sections_boundary: usize,
 }
 
 /// Builds the tool-free recovery contract as a standalone tail-position
@@ -142,7 +146,7 @@ async fn build_prompt_output(
 
         prompt_sections::append_active_primary_agent_skills(&mut system_prompt, agent, agent_prompt_context.as_ref());
 
-        upsert_harness_limits_section(
+        append_fresh_harness_limits_section(
             &mut system_prompt,
             input.turn.execution.max_tool_wall_clock_secs,
             input.turn.execution.max_tool_retries,
@@ -185,11 +189,14 @@ async fn build_prompt_output(
         }
     };
 
+    // Fresh assembly appends only; this offset equals the writer's internal
+    // boundary, so the alignment guard below parses only runtime-owned blocks.
+    let runtime_sections_boundary = system_prompt.len();
     {
         #[cfg(feature = "profiling")]
         let _phase_span = tracing::debug_span!(target: "vtcode.prompt", "prompt_assembly.tool_sections").entered();
 
-        append_runtime_tool_prompt_sections_for_model(
+        append_fresh_runtime_tool_prompt_sections_for_model(
             &mut system_prompt,
             &tool_snapshot,
             !input.turn.prompt_cache_shaping_mode.is_enabled(),
@@ -211,7 +218,7 @@ async fn build_prompt_output(
             // being withheld this turn. Recovery keeps the same wire filter
             // for cache stability; tools are present but not callable
             // (`tool_choice: none` / Merge omits the choice).
-            append_deferred_tools_prompt_section(
+            append_fresh_deferred_tools_prompt_section(
                 &mut system_prompt,
                 tool_snapshot.snapshot.as_deref().map_or(&[], |tools| tools.as_slice()),
             );
@@ -239,6 +246,7 @@ async fn build_prompt_output(
         tool_snapshot,
         agent_prompt_context,
         few_shot_context,
+        runtime_sections_boundary,
     })
 }
 
@@ -251,6 +259,7 @@ fn validate_prompt_output_alignment(
         &prompt_output.tool_snapshot,
         turn.planning_active,
         turn.request_user_input_enabled,
+        prompt_output.runtime_sections_boundary,
     )
 }
 
@@ -282,7 +291,8 @@ mod tests {
     use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
     use vtcode_core::prompts::append_runtime_tool_prompt_sections_for_profile;
 
-    use super::{PromptAssemblyOutput, validate_prompt_output_alignment};
+    use super::{PromptAssemblyInput, PromptAssemblyOutput, assemble_prompt, validate_prompt_output_alignment};
+    use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
     use crate::agent::runloop::unified::turn::turn_processing::llm_request::snapshot::capture_turn_request_snapshot;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
@@ -312,6 +322,7 @@ mod tests {
             tool_snapshot: make_snapshot(),
             agent_prompt_context: None,
             few_shot_context: None,
+            runtime_sections_boundary: 0,
         };
 
         let aligned_snapshot = make_snapshot();
@@ -327,12 +338,61 @@ mod tests {
             tool_snapshot: aligned_snapshot,
             agent_prompt_context: None,
             few_shot_context: None,
+            runtime_sections_boundary: 0,
         };
 
         let err = validate_prompt_output_alignment(&misaligned_output, &turn)
             .expect_err("stale runtime metadata should be rejected");
         assert!(err.should_rebuild_runtime_prompt());
         validate_prompt_output_alignment(&aligned_output, &turn).expect("aligned runtime metadata should pass");
+    }
+
+    async fn assemble_with_user_catalog_block(shaping: PromptCacheShapingMode) -> anyhow::Result<PromptAssemblyOutput> {
+        let mut backing = TestTurnProcessingBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        // User-authored block with values that cannot match the live snapshot.
+        ctx.context_manager.set_base_system_prompt(
+            "Workspace notes\n[Runtime Tool Catalog]\n- version: 424242\n- epoch: 424242\n- available_tools: 424242\n- request_user_input_enabled: true\n"
+                .to_string(),
+        );
+        let mut turn = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        turn.prompt_cache_shaping_mode = shaping;
+        assemble_prompt(&mut ctx, PromptAssemblyInput { turn: &turn }).await
+    }
+
+    #[tokio::test]
+    async fn assembly_ignores_user_authored_catalog_block_when_runtime_appends_none() {
+        use vtcode_core::core::agent::runner::prompt_alignment::validate_prompt_catalog_alignment;
+
+        // Shaping mode omits the runtime metadata block; the user-authored
+        // block must not be validated as runtime attestation.
+        let output = assemble_with_user_catalog_block(PromptCacheShapingMode::TrailingRuntimeContext)
+            .await
+            .expect("user-authored catalog block must not fail alignment");
+        assert_eq!(output.system_prompt.matches("[Runtime Tool Catalog]").count(), 1);
+        let user_block = output
+            .system_prompt
+            .find("[Runtime Tool Catalog]")
+            .expect("user block preserved");
+        assert!(
+            user_block < output.runtime_sections_boundary,
+            "recorded boundary must exclude the user-authored block"
+        );
+
+        // The recorded boundary — and only the recorded boundary — clears the guard.
+        let snapshot = &output.tool_snapshot;
+        let planning = snapshot.planning_active;
+        let request_user_input = snapshot.request_user_input_enabled;
+        validate_prompt_catalog_alignment(
+            &output.system_prompt,
+            snapshot,
+            planning,
+            request_user_input,
+            output.runtime_sections_boundary,
+        )
+        .expect("recorded boundary must exclude the user block");
+        validate_prompt_catalog_alignment(&output.system_prompt, snapshot, planning, request_user_input, 0)
+            .expect_err("whole-string aperture still sees the user block");
     }
 
     #[test]

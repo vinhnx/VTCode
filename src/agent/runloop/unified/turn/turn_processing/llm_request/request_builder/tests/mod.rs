@@ -116,6 +116,7 @@ fn collapsed_notice_count(messages: &[uni::Message]) -> usize {
 mod clearing_compaction;
 mod few_shot_collapsed;
 mod history_chain;
+mod payload_census;
 mod preflight_prefix;
 mod primary_agent_state;
 mod primary_agent_tools;

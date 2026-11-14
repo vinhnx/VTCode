@@ -1,6 +1,24 @@
 use super::*;
 
 #[tokio::test]
+async fn workspace_active_tools_heading_survives_runtime_request_assembly() {
+    let mut backing = TestTurnProcessingBacking::new().await;
+    backing.add_tool_definition(named_tool("exec_command")).await;
+    let mut ctx = backing.turn_processing_context();
+    ctx.context_manager
+        .set_base_system_prompt("Workspace\n## Active Tools\nKeep workspace guidance.".to_string());
+    ctx.working_history.push(uni::Message::user("hello".to_string()));
+    let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+    let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+        .await
+        .expect("request should build");
+    let prompt = system_prompt_text(&built.request);
+    assert!(prompt.contains("## Active Tools\nKeep workspace guidance."));
+    assert_eq!(prompt.matches("## Active Tools").count(), 2);
+    assert!(prompt.contains("Browse the repository with `exec_command.cmd`"));
+}
+
+#[tokio::test]
 async fn active_primary_agent_deny_list_applies_after_allow_list() {
     let mut backing = TestTurnProcessingBacking::new().await;
     backing.add_tool_definition(named_tool("code_search")).await;

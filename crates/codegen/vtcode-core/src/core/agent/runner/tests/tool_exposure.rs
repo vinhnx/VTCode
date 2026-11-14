@@ -6,6 +6,44 @@
 use super::*;
 
 #[tokio::test]
+async fn headless_runtime_preserves_workspace_active_tools_section() {
+    let workspace = TempDir::new().expect("workspace");
+    let prompt_dir = workspace.path().join(".vtcode/prompts");
+    fs::create_dir_all(&prompt_dir).expect("prompt directory");
+    fs::write(
+        prompt_dir.join("system.md"),
+        "Workspace\n[Harness Limits]\nUser limit notes.\n## Active Tools\nKeep workspace guidance.",
+    )
+    .expect("workspace system prompt");
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        workspace.path().to_path_buf(),
+        "thread-workspace-guidance".to_string(),
+        RunnerSettings { reasoning_effort: None, verbosity: None },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    ))
+    .await
+    .expect("runner");
+    runner.provider_client = Box::new(RecordingQueuedProvider::new(Vec::new()));
+    for simple in [false, true] {
+        let bundle = runner
+            .build_validated_runtime_prompt_bundle(simple)
+            .await
+            .expect("runtime prompt");
+        let prompt = bundle.request_envelope.system_prompt();
+        assert!(prompt.contains("[Harness Limits]\nUser limit notes.\n## Active Tools\nKeep workspace guidance."));
+        assert!(prompt.contains("## Active Tools\nKeep workspace guidance."));
+        assert_eq!(prompt.matches("## Active Tools").count(), 2, "simple={simple}");
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 2, "simple={simple}");
+    }
+}
+
+#[tokio::test]
 async fn headless_planning_prompt_preserves_canonical_contract_at_both_densities() {
     use crate::config::types::{ShellPromptProfile, SystemPromptMode};
     use crate::prompts::system::*;

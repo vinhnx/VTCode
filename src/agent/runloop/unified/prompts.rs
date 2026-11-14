@@ -4,8 +4,8 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::SystemPromptMode;
 use vtcode_core::prompts::PromptContext;
 use vtcode_core::prompts::system::{
-    SystemPromptReport, compose_system_instruction_with_report, default_lightweight_prompt, default_system_prompt,
-    minimal_system_prompt, specialized_system_prompt,
+    SystemPromptReport, compose_runtime_base_instruction_with_report, default_lightweight_prompt,
+    default_system_prompt, minimal_system_prompt, specialized_system_prompt,
 };
 
 /// Seed system prompt used on the interactive critical path before full
@@ -33,7 +33,7 @@ pub(crate) async fn read_system_prompt(
         .map(|manager| manager.config().clone());
 
     let (mut prompt, mut report) =
-        compose_system_instruction_with_report(workspace, vt_cfg.as_ref(), Some(&prompt_context)).await;
+        compose_runtime_base_instruction_with_report(workspace, vt_cfg.as_ref(), Some(&prompt_context)).await;
 
     if prompt.is_empty() {
         prompt = fallback_base_system_prompt(vt_cfg.as_ref()).to_string();
@@ -84,7 +84,17 @@ pub(crate) async fn read_system_prompt(
     let token_estimate = vtcode_commons::estimate_tokens(&prompt) as u64;
     let over_budget = token_estimate > max_tokens;
     let trimmed_sections = report.trimmed_sections.clone();
-    (prompt, SystemPromptReport { token_estimate, over_budget, trimmed_sections })
+    // Session appendices change the total but not the layer contribution.
+    let layer_token_estimate = report.layer_token_estimate;
+    (
+        prompt,
+        SystemPromptReport {
+            token_estimate,
+            over_budget,
+            trimmed_sections,
+            layer_token_estimate,
+        },
+    )
 }
 
 fn budget_addendum(addendum: &str, remaining_budget_tokens: u64) -> String {

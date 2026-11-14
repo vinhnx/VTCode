@@ -1,6 +1,30 @@
 use super::*;
 
 #[tokio::test]
+async fn runtime_limits_and_deferred_tools_preserve_workspace_sections() {
+    let mut backing = TestTurnProcessingBacking::new().await;
+    backing.add_tool_definition(named_tool("exec_command")).await;
+    backing
+        .add_tool_definition(named_tool("later_tool").with_defer_loading(true))
+        .await;
+    let mut ctx = backing.turn_processing_context();
+    let base = "Workspace\n[Harness Limits]\nUser limit notes.\n## Active Tools\nUser tool notes.\n[Deferred Tools]\nUser discovery notes.";
+    ctx.context_manager.set_base_system_prompt(base.to_string());
+    ctx.working_history.push(uni::Message::user("hello".to_string()));
+    let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+    snapshot.client_local_tool_deferral = true;
+    let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+        .await
+        .expect("request should build");
+    let prompt = system_prompt_text(&built.request);
+    assert!(prompt.contains(base));
+    assert_eq!(prompt.matches("[Harness Limits]").count(), 2);
+    assert_eq!(prompt.matches("[Deferred Tools]").count(), 2);
+    assert!(prompt.contains("additional deferred tools"));
+    assert!(!request_tool_names(&built.request).contains(&"later_tool".to_string()));
+}
+
+#[tokio::test]
 async fn recovery_request_keeps_tools_for_cache_and_disables_tool_choice() {
     let mut backing = TestTurnProcessingBacking::new().await;
     backing.select_primary_agent_from_specs(&[vtcode_config::builtin_primary_build_agent()], "build");

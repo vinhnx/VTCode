@@ -118,9 +118,6 @@ pub(crate) fn maybe_render_system_prompt_budget_warning(
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
     let report = &session_bootstrap.system_prompt_report;
-    if !report.over_budget {
-        return Ok(());
-    }
 
     let warning_enabled = vt_cfg.map(|cfg| cfg.agent.system_prompt_budget_warning).unwrap_or(true);
     if !warning_enabled {
@@ -131,11 +128,8 @@ pub(crate) fn maybe_render_system_prompt_budget_warning(
         .map(|cfg| cfg.agent.max_system_prompt_tokens)
         .unwrap_or(vtcode_core::config::constants::prompt_budget::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS);
 
-    renderer.line(
-        MessageStyle::Warning,
-        &format!(
-            "Base system prompt is ~{} tokens (budget {}); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt.",
-            report.token_estimate, max_tokens
-        ),
-    )
+    if let Some(warning) = report.over_budget_warning(max_tokens) {
+        renderer.line(MessageStyle::Warning, &warning)?;
+    }
+    Ok(())
 }

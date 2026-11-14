@@ -159,7 +159,8 @@ async fn test_over_budget_without_trim_keeps_full_text_and_reports_over_budget()
     });
     ctx.set_current_directory(PathBuf::from("/workspace"));
 
-    let sections = build_prompt_sections(workspace.path(), Some(&config), Some(&ctx)).await;
+    let layers = crate::prompts::resources::resolve_system_prompt_layers(workspace.path()).await;
+    let sections = build_prompt_sections_with_layers(Some(&config), Some(&ctx), &layers);
     let full_text = join_prompt_sections(&sections);
     let full_tokens = estimate_token_count(&full_text);
     assert!(full_tokens > config.agent.max_system_prompt_tokens, "test setup must exceed the configured budget");
@@ -198,7 +199,8 @@ async fn test_over_budget_with_trim_drops_sections_in_priority_order() {
     });
     ctx.set_current_directory(PathBuf::from("/workspace"));
 
-    let sections = build_prompt_sections(workspace.path(), Some(&config), Some(&ctx)).await;
+    let layers = crate::prompts::resources::resolve_system_prompt_layers(workspace.path()).await;
+    let sections = build_prompt_sections_with_layers(Some(&config), Some(&ctx), &layers);
     // Budget set to exactly the base-contract-only token count so every
     // droppable (trim_priority = Some(_)) section must be dropped, while
     // the untrimmable base contract always survives.
@@ -340,6 +342,52 @@ async fn measure_system_prompt_size_respects_max_budget_setting() {
     // Default base prompt is well under 8k tokens for an empty workspace.
     assert!(!report.over_budget, "default prompt should fit within 8k tokens, got {}", report.token_estimate);
 }
+#[tokio::test]
+async fn report_separates_layer_tokens_from_builtin_total() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let prompts_dir = workspace.path().join(".vtcode/prompts");
+    std::fs::create_dir_all(&prompts_dir).expect("prompts dir");
+    std::fs::write(prompts_dir.join("system.md"), "Workspace override body.").expect("write system");
+    std::fs::write(prompts_dir.join("append-system.md"), "Workspace append body.").expect("write append");
+    let mut config = VTCodeConfig::default();
+    config.agent.system_prompt_mode = SystemPromptMode::Minimal;
+    config.agent.include_temporal_context = false;
+    config.agent.include_working_directory = false;
+    config.agent.instruction_max_bytes = 0;
+
+    let (prompt, report) = compose_system_instruction_with_report(workspace.path(), Some(&config), None).await;
+    // Home layers are disabled under cfg(test), so only the workspace files contribute.
+    let expected_layers = "Workspace override body.\n\nWorkspace append body.";
+    assert_eq!(report.layer_token_estimate, estimate_token_count(expected_layers));
+    assert!(report.layer_token_estimate > 0);
+    assert!(report.token_estimate >= report.layer_token_estimate);
+    assert!(prompt.contains("Workspace override body."));
+    assert!(prompt.contains("Workspace append body."));
+}
+
+#[test]
+fn layer_token_estimate_survives_trimming_of_other_sections() {
+    use crate::prompts::resources::SystemPromptLayers;
+
+    let layers = SystemPromptLayers {
+        override_body: None,
+        append_bodies: vec!["layer append marker alpha".to_string()],
+    };
+    let mut config = VTCodeConfig::default();
+    config.agent.system_prompt_mode = SystemPromptMode::Default;
+    config.agent.include_structured_reasoning_tags = Some(true);
+    let mut ctx = PromptContext::default();
+    ctx.set_current_directory(PathBuf::from("/workspace"));
+    let sections = build_prompt_sections_with_layers(Some(&config), Some(&ctx), &layers);
+    // A tiny budget drops every trimmable built-in section; the layer text inside
+    // the untrimmable base contract must survive with its figure unchanged.
+    let layer_tokens = estimate_token_count(&layers.applied_text());
+    let (prompt, report) = apply_token_budget(sections, 1, false, true, layer_tokens);
+    assert!(!report.trimmed_sections.is_empty(), "tiny budget must drop sections");
+    assert!(prompt.contains("layer append marker alpha"), "layers are never trimmed");
+    assert_eq!(report.layer_token_estimate, layer_tokens);
+}
+
 #[test]
 fn planning_guidance_bounds_recovery_and_separates_scope_checks() {
     assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("one synthesis and two corrections"));

@@ -461,7 +461,7 @@ mod tests {
                 let prompt = crate::prompts::system::PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE;
                 assert!(
                     crate::core::agent::runner::prompt_alignment::validate_prompt_catalog_alignment(
-                        prompt, &next, planning, true
+                        prompt, &next, planning, true, 0
                     )
                     .is_ok()
                 );

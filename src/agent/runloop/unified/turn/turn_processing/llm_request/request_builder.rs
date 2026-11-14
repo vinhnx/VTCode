@@ -566,7 +566,7 @@ pub(super) async fn build_turn_request(
 
     // Phase 1.2 observability: record how the assembled first-request prefix is
     // spent across system prompt, tool schemas, and message history, using the
-    // real on-wire request payload. Cache read/write/miss are already surfaced
+    // assembled request before provider-specific serialization. Cache read/write/miss are already surfaced
     // via `SessionStats` prompt-cache diagnostics, so they are not duplicated.
     let request = &request_plan.request;
     let system_prompt_tokens = request
@@ -583,7 +583,7 @@ pub(super) async fn build_turn_request(
     // Keep prompt growth visible to the next compaction check even when the
     // provider rejects this request before returning usage. The message
     // estimator includes structured tool/image content rather than only text,
-    // while the tool schemas are measured from their serialized wire shape, so
+    // while tool schemas are estimated from serialized ToolDefinition values, so
     // the full assembled prompt contributes to session pressure accounting.
     ctx.context_manager.record_prompt_estimate(
         system_prompt_tokens

@@ -10,8 +10,8 @@ use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::core::agent::hash_utils::stable_system_prefix_hash;
 use crate::llm::provider::ToolDefinition;
 use crate::prompts::{
-    PromptContext, RuntimePromptContract, append_runtime_mode_sections, append_runtime_tool_prompt_sections_for_model,
-    upsert_harness_limits_section,
+    PromptContext, RuntimePromptContract, append_fresh_harness_limits_section,
+    append_fresh_runtime_tool_prompt_sections_for_model, append_runtime_mode_sections,
 };
 use anyhow::Result;
 use std::sync::Arc;
@@ -21,6 +21,10 @@ pub(super) struct RuntimePromptBundle {
     prompt_policy_hash: u64,
     pub(super) request_envelope: crate::core::agent::request_envelope::SessionRequestEnvelope,
     pub(super) tool_snapshot: SessionToolCatalogSnapshot,
+    /// Byte offset where the runtime-owned tool sections begin. Fresh
+    /// assembly only appends after this offset, so the alignment guard parses
+    /// catalog metadata solely from the runtime-owned suffix.
+    pub(super) runtime_sections_boundary: usize,
     /// Estimated token overhead of `request_tools`, computed once per
     /// snapshot (see [`crate::llm::usage_cost::estimate_tool_definition_tokens`]).
     pub(super) tool_def_tokens: u64,
@@ -119,13 +123,16 @@ impl AgentRunner {
                 request_user_input_enabled,
             },
         );
-        upsert_harness_limits_section(
+        append_fresh_harness_limits_section(
             &mut system_prompt,
             self.config().agent.harness.max_tool_wall_clock_secs,
             self.config().agent.harness.max_tool_retries,
         );
         let shell_profile = self.config().agent.shell_prompt_profile.resolve_for_current_platform();
-        append_runtime_tool_prompt_sections_for_model(
+        // Fresh assembly appends only; this offset equals the writer's internal
+        // boundary, so the alignment guard below parses only runtime-owned blocks.
+        let runtime_sections_boundary = system_prompt.len();
+        append_fresh_runtime_tool_prompt_sections_for_model(
             &mut system_prompt,
             &tool_snapshot,
             true,
@@ -171,6 +178,7 @@ impl AgentRunner {
             tool_snapshot,
             tool_def_tokens,
             system_prompt_report,
+            runtime_sections_boundary,
         })
     }
 
@@ -223,6 +231,7 @@ impl AgentRunner {
                     &bundle.tool_snapshot,
                     planning_active,
                     request_user_input_enabled,
+                    bundle.runtime_sections_boundary,
                 )
             },
             "prompt/catalog alignment mismatch; rebuilding runtime prompt bundle",

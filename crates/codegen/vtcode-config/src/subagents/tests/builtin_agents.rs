@@ -16,7 +16,6 @@ fn builtin_primary_agents_are_available() {
     let expected_readonly_tools = vec![
         tools::CODE_SEARCH.to_string(),
         tools::EXEC_COMMAND.to_string(),
-        tools::GREP_FILE.to_string(),
         tools::READ_FILE.to_string(),
         tools::LIST_FILES.to_string(),
     ];

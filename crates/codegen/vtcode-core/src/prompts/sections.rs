@@ -63,7 +63,21 @@ pub(crate) fn append_prompt_block(prompt: &mut String, block: &str) {
 /// sections (harness limits) and markdown-aware sections (active tools,
 /// deferred tools, catalog) preserve their contracts.
 pub(crate) fn remove_prompt_section(prompt: &mut String, section_header: &str, boundary_mode: SectionBoundaryMode) {
-    while let Some((section_start, section_end)) = find_prompt_section_bounds(prompt, section_header, boundary_mode) {
+    remove_prompt_section_after(prompt, 0, section_header, boundary_mode);
+}
+
+/// Remove sections only after a caller-owned, UTF-8 boundary.
+pub(crate) fn remove_prompt_section_after(
+    prompt: &mut String,
+    boundary: usize,
+    section_header: &str,
+    boundary_mode: SectionBoundaryMode,
+) {
+    while let Some((section_start, section_end)) =
+        find_prompt_section_bounds(&prompt[boundary..], section_header, boundary_mode)
+    {
+        let section_start = section_start + boundary;
+        let section_end = section_end + boundary;
         prompt.replace_range(section_start..section_end, "");
     }
 }

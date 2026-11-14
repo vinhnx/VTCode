@@ -110,7 +110,13 @@ impl ToolRegistry {
         request: ToolExecutionRequest,
         deadline: Option<Instant>,
     ) -> ToolExecutionOutcome {
-        let fetch_budget = (request.tool_name == crate::config::constants::tools::WEB_FETCH).then(|| {
+        // Classify retry and budget policy using the same public route as
+        // dispatch, while retaining the requested name for safety and errors.
+        let route_name = self
+            .resolve_public_tool(&request.tool_name)
+            .map(|resolution| resolution.registration_name().to_owned())
+            .unwrap_or_else(|_| request.tool_name.clone());
+        let fetch_budget = (route_name == crate::config::constants::tools::WEB_FETCH).then(|| {
             let request_deadline = Instant::now()
                 + Duration::from_secs(request.args.get("timeout_secs").and_then(Value::as_u64).unwrap_or(30).min(120));
             crate::tools::web_fetch::request_budget::RequestBudget::new(
@@ -118,14 +124,19 @@ impl ToolRegistry {
                 deadline.map_or(request_deadline, |deadline| deadline.min(request_deadline)),
             )
         });
-        let attempts = RETRY_APPROVAL.scope(std::cell::RefCell::new(None), self.execute_tool_request_attempts(request));
+        let attempts = RETRY_APPROVAL
+            .scope(std::cell::RefCell::new(None), self.execute_tool_request_attempts(request, &route_name));
         match fetch_budget {
             Some(budget) => budget.scope(attempts).await,
             None => attempts.await,
         }
     }
 
-    async fn execute_tool_request_attempts(&self, request: ToolExecutionRequest) -> ToolExecutionOutcome {
+    async fn execute_tool_request_attempts(
+        &self,
+        request: ToolExecutionRequest,
+        route_name: &str,
+    ) -> ToolExecutionOutcome {
         let execution_started_at = Instant::now();
         let tool_name = &request.tool_name;
         let policy = request.policy.clone();
@@ -149,17 +160,16 @@ impl ToolRegistry {
         );
         retry_policy.jitter = policy.retry_jitter.clamp(0.0, 1.0);
 
-        let max_attempts =
-            if matches!(tool_name.as_str(), crate::config::constants::tools::WEB_SEARCH | "search_web" | "websearch") {
-                // Paid search attempts require an explicit new call, even when a
-                // caller enables generic retries. Preserve the same rule for aliases.
-                1
-            } else if tool_name == crate::config::constants::tools::WEB_FETCH {
-                retry_policy.max_attempts.clamp(1, 2)
-            } else {
-                retry_policy.max_attempts.max(1)
-            };
-        let fetch_deadline = (tool_name == crate::config::constants::tools::WEB_FETCH)
+        let max_attempts = if route_name == crate::config::constants::tools::WEB_SEARCH {
+            // Paid search attempts require an explicit new call, even when a
+            // caller enables generic retries. Preserve the same rule for aliases.
+            1
+        } else if route_name == crate::config::constants::tools::WEB_FETCH {
+            retry_policy.max_attempts.clamp(1, 2)
+        } else {
+            retry_policy.max_attempts.max(1)
+        };
+        let fetch_deadline = (route_name == crate::config::constants::tools::WEB_FETCH)
             .then(crate::tools::web_fetch::request_budget::RequestBudget::current)
             .flatten()
             .map(|budget| budget.deadline());

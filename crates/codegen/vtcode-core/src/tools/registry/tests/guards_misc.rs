@@ -1,5 +1,60 @@
 use super::*;
 
+fn fetch_budget_probe<'a>(_registry: &'a ToolRegistry, _args: Value) -> BoxFuture<'a, Result<Value>> {
+    Box::pin(async {
+        let remaining_ms = crate::tools::web_fetch::request_budget::RequestBudget::current().map(|budget| {
+            u64::try_from(
+                budget
+                    .deadline()
+                    .saturating_duration_since(std::time::Instant::now())
+                    .as_millis(),
+            )
+            .unwrap_or(u64::MAX)
+        });
+        Ok(json!({"remaining_ms": remaining_ms}))
+    })
+}
+
+#[tokio::test]
+async fn structured_fetch_aliases_share_canonical_request_budget() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    registry
+        .register_tool(
+            ToolRegistration::new(tools::WEB_FETCH, CapabilityLevel::Basic, false, fetch_budget_probe)
+                .with_description("Fetch budget probe")
+                .with_parameter_schema(json!({"type": "object", "properties": {"url": {"type": "string"}}}))
+                .with_aliases(["fetch_url", "web"]),
+        )
+        .await?;
+    registry
+        .register_tool(
+            ToolRegistration::new("budget_control", CapabilityLevel::Basic, false, fetch_budget_probe)
+                .with_description("Non-fetch budget probe")
+                .with_parameter_schema(json!({"type": "object", "properties": {"url": {"type": "string"}}})),
+        )
+        .await?;
+    registry.allow_all_tools().await?;
+
+    for (index, name) in [tools::WEB_FETCH, "fetch_url", "web", "functions.web_fetch"].iter().enumerate() {
+        let request = ToolExecutionRequest::new(*name, json!({"url": format!("https://example.com/{index}")}));
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let outcome = registry.execute_public_tool_request_with_deadline(request, deadline).await;
+        assert!(outcome.is_success(), "{name}: {:?}", outcome.error);
+        let output = outcome.output.expect("probe output");
+        assert!(output["remaining_ms"].as_u64().is_some_and(|remaining| remaining <= 2_000), "{name}: {output}");
+    }
+    let control = registry
+        .execute_public_tool_request(ToolExecutionRequest::new(
+            "budget_control",
+            json!({"url": "https://example.com/control"}),
+        ))
+        .await;
+    assert!(control.is_success(), "{:?}", control.error);
+    assert!(control.output.expect("control output")["remaining_ms"].is_null());
+    Ok(())
+}
+
 #[tokio::test]
 async fn execution_history_records_harness_context() -> Result<()> {
     let temp_dir = TempDir::new()?;

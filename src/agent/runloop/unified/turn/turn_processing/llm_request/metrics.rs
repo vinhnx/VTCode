@@ -254,11 +254,9 @@ pub(super) fn emit_llm_retry_metrics(
     });
 }
 
-/// Rough on-wire token estimate (~4 chars/token, matching the convention in
-/// `estimate_schema_tokens` and the first-request budget test in
-/// `tools/registry/builtins.rs`) for the tool schemas the model actually
-/// receives. Serializes each `ToolDefinition` to its wire JSON so the estimate
-/// reflects the real payload, including provider-native tool configs.
+/// Rough pre-provider token estimate (~4 chars/token) for the selected tool
+/// definitions. Provider formatters may reshape or omit fields, so this is not
+/// an exact measurement of the serialized request sent over the wire.
 pub(super) fn estimate_tool_schema_tokens(tools: &[ToolDefinition]) -> usize {
     // Reuse a single buffer across all tools instead of allocating a fresh
     // `String` per definition. The buffer grows once to the largest serialized

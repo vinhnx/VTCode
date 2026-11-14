@@ -1,6 +1,22 @@
 use super::*;
 
 #[test]
+fn fresh_deferred_tools_preserve_matching_user_section() {
+    let base = "User\n[Deferred Tools]\nUser discovery notes.\n## Other\nKeep this.\n";
+    let tool = ToolDefinition::function("later".into(), "deferred".into(), serde_json::json!({"type": "object"}))
+        .with_defer_loading(true);
+    let mut prompt = base.to_string();
+    append_fresh_deferred_tools_prompt_section(&mut prompt, &[tool]);
+    assert!(prompt.starts_with(base));
+    assert_eq!(prompt.matches("[Deferred Tools]").count(), 2);
+    assert!(prompt.contains("1 additional deferred tools"));
+
+    let mut no_deferred = base.to_string();
+    append_fresh_deferred_tools_prompt_section(&mut no_deferred, &[]);
+    assert_eq!(no_deferred, base);
+}
+
+#[test]
 fn test_guidelines_stay_compact() {
     let tools = vec![
         TOOL_EXEC_COMMAND.to_string(),

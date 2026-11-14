@@ -43,6 +43,24 @@ fn normalize_history_for_request_drops_empty_noop_messages() {
 }
 
 #[test]
+fn normalize_history_for_request_preserves_nontext_attachments() {
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let image = uni::Message::user_with_parts(vec![uni::ContentPart::image("aW1hZ2U=".into(), "image/png".into())]);
+    let file = uni::Message::user_with_parts(vec![
+        uni::ContentPart::text("  \n".into()),
+        uni::ContentPart::file_from_url("https://example.com/report.pdf".into()),
+    ]);
+    assert!(matches!(manager.normalize_history_for_request(std::slice::from_ref(&image)), Cow::Borrowed(_)));
+    let blank = uni::Message::user_with_parts(vec![uni::ContentPart::text(" \t".into())]);
+    let history = vec![image.clone(), blank, file.clone()];
+    let before = history.clone();
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert_eq!(normalized.as_ref(), &[image, file]);
+    assert_eq!(history, before, "request cleanup must not alter durable history");
+}
+
+#[test]
 fn normalize_history_for_request_merges_plain_assistant_text_messages() {
     let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![

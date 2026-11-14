@@ -3,7 +3,8 @@ use crate::config::types::{CapabilityLevel, ResolvedShellPromptProfile};
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::llm::provider::ToolDefinition;
 use crate::prompts::sections::{
-    SectionBoundaryMode, append_prompt_block, remove_prompt_section, trim_trailing_newlines,
+    SectionBoundaryMode, append_prompt_block, remove_prompt_section, remove_prompt_section_after,
+    trim_trailing_newlines,
 };
 use crate::tools::registry::tool_groups;
 
@@ -341,7 +342,7 @@ pub fn append_runtime_tool_prompt_sections_for_profile(
     shell_profile: ResolvedShellPromptProfile,
 ) {
     let names = snapshot_tool_names(tool_snapshot);
-    append_runtime_tool_sections_with_names(prompt, tool_snapshot, names, include_catalog_metadata, shell_profile);
+    append_runtime_tool_sections_with_names(prompt, tool_snapshot, names, include_catalog_metadata, shell_profile, 0);
 }
 
 /// Select documentation density using the active route and session budgets.
@@ -354,9 +355,63 @@ pub fn append_runtime_tool_prompt_sections_for_model(
     model: &str,
     config: Option<&crate::config::VTCodeConfig>,
 ) {
+    append_runtime_tool_prompt_sections_for_model_after(
+        prompt,
+        tool_snapshot,
+        include_catalog_metadata,
+        shell_profile,
+        provider,
+        model,
+        config,
+        0,
+    );
+}
+
+/// Append runtime tool guidance while preserving all existing prompt content.
+///
+/// Call this with a fresh base prompt that does not contain generated tool
+/// guidance. The existing prefix may include user-authored section headings.
+pub fn append_fresh_runtime_tool_prompt_sections_for_model(
+    prompt: &mut String,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+    include_catalog_metadata: bool,
+    shell_profile: ResolvedShellPromptProfile,
+    provider: &dyn crate::llm::provider::LLMProvider,
+    model: &str,
+    config: Option<&crate::config::VTCodeConfig>,
+) {
+    let boundary = prompt.len();
+    append_runtime_tool_prompt_sections_for_model_after(
+        prompt,
+        tool_snapshot,
+        include_catalog_metadata,
+        shell_profile,
+        provider,
+        model,
+        config,
+        boundary,
+    );
+}
+
+fn append_runtime_tool_prompt_sections_for_model_after(
+    prompt: &mut String,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+    include_catalog_metadata: bool,
+    shell_profile: ResolvedShellPromptProfile,
+    provider: &dyn crate::llm::provider::LLMProvider,
+    model: &str,
+    config: Option<&crate::config::VTCodeConfig>,
+    boundary: usize,
+) {
     let names = snapshot_tool_names(tool_snapshot);
-    let default_guidance =
-        append_runtime_tool_sections_with_names(prompt, tool_snapshot, names, include_catalog_metadata, shell_profile);
+    let default_guidance = append_runtime_tool_sections_with_names(
+        prompt,
+        tool_snapshot,
+        names,
+        include_catalog_metadata,
+        shell_profile,
+        boundary,
+    );
     let pricing = crate::config::models::model_catalog_entry(provider.name(), model).map(|entry| entry.pricing);
     let profile = ToolGuidanceProfile::resolve(
         crate::compaction::effective_context_budget(config, provider, model),
@@ -371,7 +426,7 @@ pub fn append_runtime_tool_prompt_sections_for_model(
     if tool_snapshot.planning_active && profile == ToolGuidanceProfile::Default {
         return;
     }
-    remove_prompt_section(prompt, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
+    remove_prompt_section_after(prompt, boundary, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
     let presence = ToolPresence::of(names);
     let capability_level = Some(infer_capability_level_from_presence(&presence));
     let mut guidance = match profile {
@@ -409,10 +464,13 @@ fn append_runtime_tool_sections_with_names(
     names: &[String],
     include_catalog_metadata: bool,
     shell_profile: ResolvedShellPromptProfile,
+    boundary: usize,
 ) -> String {
-    remove_prompt_section(prompt, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
-    remove_prompt_section(prompt, "[Runtime Tool Catalog]", SectionBoundaryMode::BracketOrMarkdown);
-    trim_trailing_newlines(prompt);
+    remove_prompt_section_after(prompt, boundary, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
+    remove_prompt_section_after(prompt, boundary, "[Runtime Tool Catalog]", SectionBoundaryMode::BracketOrMarkdown);
+    if boundary == 0 {
+        trim_trailing_newlines(prompt);
+    }
 
     let guidelines = generate_runtime_tool_guidelines_for_profile(names, tool_snapshot.planning_active, shell_profile);
     if !guidelines.is_empty() {
@@ -484,7 +542,12 @@ fn append_minimal_planning_addendum(guidance: &mut String, presence: &ToolPresen
 /// to `DEFERRED_TOOLS_MAX_DESC_CHARS` characters.
 pub fn append_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDefinition]) {
     remove_prompt_section(prompt, "[Deferred Tools]", SectionBoundaryMode::BracketOrMarkdown);
+    append_fresh_deferred_tools_prompt_section(prompt, tools);
+}
 
+/// Append deferred-tool guidance to a fresh runtime prompt without removing
+/// user-authored sections with the same heading.
+pub fn append_fresh_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDefinition]) {
     let mut groups: Vec<_> = tool_groups(tools)
         .into_iter()
         .filter(|group| group.deferred_count > 0)

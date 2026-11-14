@@ -27,10 +27,11 @@ pub use few_shot::{
     DEFAULT_FEW_SHOT_BUDGET_TOKENS, FEW_SHOT_SECTION_HEADER, FewShotExample, FewShotStore, render_few_shot_section,
 };
 pub use guidelines::{
-    append_deferred_tools_prompt_section, append_runtime_tool_prompt_sections_for_model,
+    append_deferred_tools_prompt_section, append_fresh_deferred_tools_prompt_section,
+    append_fresh_runtime_tool_prompt_sections_for_model, append_runtime_tool_prompt_sections_for_model,
     append_runtime_tool_prompt_sections_for_profile,
 };
-pub use harness_limits::upsert_harness_limits_section;
+pub use harness_limits::{append_fresh_harness_limits_section, upsert_harness_limits_section};
 pub use resources::{
     PromptTemplate, apply_system_prompt_layers, discover_prompt_templates, expand_prompt_template,
     find_prompt_template, resolve_system_prompt_layers,

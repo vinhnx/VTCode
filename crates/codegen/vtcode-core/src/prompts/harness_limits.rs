@@ -13,14 +13,18 @@ const MAX_SAME_FILE_PATH_READS: usize = 6;
 /// This operation is idempotent: existing `[Harness Limits]` sections are removed before
 /// inserting the current values.
 pub fn upsert_harness_limits_section(prompt: &mut String, max_tool_wall_clock_secs: u64, max_tool_retries: u32) {
+    remove_prompt_section(prompt, "[Harness Limits]", SectionBoundaryMode::BracketOnly);
+    trim_trailing_newlines(prompt);
+    append_fresh_harness_limits_section(prompt, max_tool_wall_clock_secs, max_tool_retries);
+}
+
+/// Append limits to a fresh runtime prompt without removing user-authored sections.
+pub fn append_fresh_harness_limits_section(prompt: &mut String, max_tool_wall_clock_secs: u64, max_tool_retries: u32) {
     let max_tool_wall_clock_label = if max_tool_wall_clock_secs == 0 {
         "unlimited".to_string()
     } else {
         format!("{max_tool_wall_clock_secs} seconds")
     };
-
-    remove_prompt_section(prompt, "[Harness Limits]", SectionBoundaryMode::BracketOnly);
-    trim_trailing_newlines(prompt);
 
     let section = format!(
         "[Harness Limits]\n\
@@ -40,7 +44,18 @@ pub fn upsert_harness_limits_section(prompt: &mut String, max_tool_wall_clock_se
 
 #[cfg(test)]
 mod tests {
-    use super::upsert_harness_limits_section;
+    use super::{append_fresh_harness_limits_section, upsert_harness_limits_section};
+
+    #[test]
+    fn fresh_harness_limits_preserve_matching_user_section() {
+        let base = "User\n[Harness Limits]\nUser limit notes.\n## Active Tools\nKeep user guidance.\n";
+        let mut prompt = base.to_string();
+        append_fresh_harness_limits_section(&mut prompt, 90, 3);
+        assert!(prompt.starts_with(base));
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 2);
+        assert!(prompt.contains("- max_tool_wall_clock_secs: 90 seconds"));
+        assert!(prompt.contains("- max_tool_retries: 3"));
+    }
 
     #[test]
     fn upsert_harness_limits_adds_single_section() {

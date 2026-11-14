@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::VTCodeConfig;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
-use crate::prompts::system::{SystemPromptReport, compose_system_instruction_with_report};
+use crate::prompts::system::{SystemPromptReport, compose_runtime_base_instruction_with_report};
 use anyhow::Result;
 use serde_json::Value;
 
@@ -74,15 +74,14 @@ pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
 ///
 /// Returns the token-budget [`SystemPromptReport`] for the composed section
 /// text (measured before the appendix is appended, since the appendix is not
-/// one of the trimmable layers `compose_system_instruction_with_report`
-/// manages).
+/// one of the trimmable layers managed by the base composer).
 pub(super) async fn compose_system_prompt_with_appendix(
     workspace: &Path,
     config: &VTCodeConfig,
     prompt_context: &PromptContext,
 ) -> Result<(String, SystemPromptReport)> {
     let (mut system_prompt, report) =
-        compose_system_instruction_with_report(workspace, Some(config), Some(prompt_context)).await;
+        compose_runtime_base_instruction_with_report(workspace, Some(config), Some(prompt_context)).await;
 
     let mut appendix_config = config.agent.clone();
     if !config.memories_enabled() {

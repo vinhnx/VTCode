@@ -42,7 +42,7 @@ session: approval target, plan file path, and step titles. The viewer is read-on
 entry or session end clears it, while the plan file on disk is retained.
 
 The built-in `plan` agent's permission rules allow `read`, `request_user_input`, and `bash` so its wire catalog keeps
-`exec_command`, `code_search`, `grep_file`, and the interview tool visible. Read-only enforcement is not delegated to
+`exec_command`, `code_search`, and the interview tool visible. Read-only enforcement is not delegated to
 those permissions: the planning dispatch gate hard-blocks every mutating tool call (and non-allow-listed shell command)
 before execution, so granting `bash` admits the tool without weakening plan-mode safety. The `plan` agent is also
 excluded by name from approved-plan execution routing — selecting it always re-enters planning, never implementation.

@@ -881,9 +881,11 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
     // Always-eager set is the Codex baseline plus structured search
     // (HarnessTax lean defaults, revised 2026-09-28): `exec_command`,
     // `write_stdin`, `search_tools`, `apply_patch` in its supported representation, and
-    // `code_search`/`grep_file`. Session data showed deferred structured
-    // search is worse for cost than the extra schema tokens — models shell
-    // out via `rg`/`git` and feed huge outputs into the prompt.
+    // `code_search`. (`grep_file` keeps a match arm below as defense-in-depth
+    // but has no builtin registration, so it is never eager in practice.) Session
+    // data showed deferred structured search is worse for cost than the extra
+    // schema tokens — models shell out via `rg`/`git` and feed huge outputs
+    // into the prompt.
     match entry.public_name.as_str() {
         tools::EXEC_COMMAND
         | tools::WRITE_STDIN
@@ -900,9 +902,8 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::TASK_TRACKER
         | tools::START_PLANNING => true,
         // Planning keeps its read-only inspection surface on the wire even
-        // when MCP tools force deferral. Structured search
-        // (code_search/grep_file) is always-eager above; read_file/list_files
-        // stay planning-only.
+        // when MCP tools force deferral. Structured search (code_search) is
+        // always-eager above; read_file/list_files stay planning-only.
         tools::READ_FILE | tools::LIST_FILES if config.planning_active => true,
         tools::MCP_SEARCH_TOOLS | tools::MCP_GET_TOOL_DETAILS | tools::MCP_LIST_SERVERS => {
             config.deferred_tool_policy.is_client_local()

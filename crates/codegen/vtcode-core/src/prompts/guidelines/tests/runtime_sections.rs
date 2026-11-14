@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn fresh_runtime_tool_guidance_preserves_existing_matching_headings() {
+    use crate::llm::providers::OpenAIProvider;
+
+    let base = "User base\n## Active Tools\nUser tool instructions.\n\n## Other\nKeep this.\n";
+    let snapshot = SessionToolCatalogSnapshot::new(
+        7,
+        9,
+        false,
+        true,
+        Some(std::sync::Arc::new(vec![ToolDefinition::function(
+            TOOL_EXEC_COMMAND.to_owned(),
+            "Shell".to_owned(),
+            serde_json::json!({"type": "object"}),
+        )])),
+        false,
+    );
+    let provider = OpenAIProvider::new("offline-fixture".into());
+    for budget in [1, 100_000] {
+        let mut config = crate::config::VTCodeConfig::default();
+        config.agent.max_system_prompt_tokens = budget;
+        config.context.max_context_tokens = 128_000;
+        let mut prompt = base.to_owned();
+        append_fresh_runtime_tool_prompt_sections_for_model(
+            &mut prompt,
+            &snapshot,
+            true,
+            ResolvedShellPromptProfile::UnixLike,
+            &provider,
+            crate::config::constants::models::openai::DEFAULT_MODEL,
+            Some(&config),
+        );
+        assert!(prompt.starts_with(base), "workspace prefix changed for budget {budget}");
+        assert_eq!(prompt.matches("## Active Tools").count(), 2);
+        assert!(prompt.contains("Browse the repository with `exec_command.cmd`"));
+        assert!(prompt.contains("[Runtime Tool Catalog]"));
+    }
+}
+
+#[test]
 fn runtime_tool_guidance_uses_explicit_powershell_profile() {
     let tools = vec![
         TOOL_APPLY_PATCH.to_string(),
@@ -175,8 +214,10 @@ fn runtime_tool_catalog_metadata_round_trips_through_the_alignment_guard() {
     );
 
     // The block the writer produced satisfies the guard for its own snapshot.
-    crate::core::agent::runner::prompt_alignment::validate_prompt_catalog_alignment(&prompt, &snapshot, false, false)
-        .expect("the writer's catalog block must satisfy the alignment guard");
+    crate::core::agent::runner::prompt_alignment::validate_prompt_catalog_alignment(
+        &prompt, &snapshot, false, false, 0,
+    )
+    .expect("the writer's catalog block must satisfy the alignment guard");
 
     // Asymmetric counterpart: the same block read against a snapshot with a
     // different epoch must be rejected. Without this, a format change that
@@ -184,7 +225,7 @@ fn runtime_tool_catalog_metadata_round_trips_through_the_alignment_guard() {
     // guard treats an unreadable field as "no value to compare".
     let drifted = SessionToolCatalogSnapshot::new(7, 10, false, false, snapshot.snapshot.clone(), false);
     let err = crate::core::agent::runner::prompt_alignment::validate_prompt_catalog_alignment(
-        &prompt, &drifted, false, false,
+        &prompt, &drifted, false, false, 0,
     )
     .expect_err("a mismatched epoch must be detected");
     assert!(

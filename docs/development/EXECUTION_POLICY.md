@@ -177,7 +177,7 @@ bounded.
 - **Builtin tool count is capped.** The number of LLM-exposed builtin tools stays within a small cap; new tools must
   consolidate, defer, or deliberately raise the cap. Builtin tool schemas in `progressive` mode fit in a **2,000-token**
   envelope (measured ~1,793 on the Codex-4 default profile). The always-eager set is the Codex baseline plus structured
-  search (`exec_command`, `write_stdin`, `apply_patch` when supported, `search_tools`, `code_search`, `grep_file`).
+  search (`exec_command`, `write_stdin`, `apply_patch` when supported, `search_tools`, `code_search`).
   Deferred structured search pushed models to shell out via `exec_command` and pay in huge tool outputs (session data
   2026-09-28); the extra schema tokens are cheaper. Planner, skills, and agent tools defer until `search_tools` surfaces
   them (planner tools stay eager while planning is active).

@@ -302,6 +302,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about GPUI Kit desktop guide review?", "How does Scope and method work?",
     "How does Confirmed findings and changes work?"
 
+- **File**: `docs/development/harness-simplification-audit.md`
+  - **Content**: Harness simplification audit
+  - **Topics**: Prompt baseline, Offline tool catalog baseline, Full-request census, Ownership and findings
+  - **User Questions**: "What can you tell me about Harness simplification audit?", "How does Prompt baseline work?",
+    "How does Offline tool catalog baseline work?"
+
 - **File**: `docs/development/hypothesis-revision-validation.md`
   - **Content**: Hypothesis revision validation
   - **Topics**: Acceptance, Deterministic checks, Live replay pilot

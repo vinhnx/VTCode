@@ -202,10 +202,11 @@ fn plan_agent_interactive_wire_catalog_survives_all_filters() {
     use crate::permissions::{build_advertised_permission_requests, evaluate_effective_permissions};
     use crate::primary_agent::{ActivePrimaryAgent, primary_agent_allows_tool};
 
+    // No `grep_file` registration: none exists in the builtin packs, so the
+    // fixture mirrors production by omitting it (see the harness audit ledger).
     let registrations = [
         tools::EXEC_COMMAND,
         tools::CODE_SEARCH,
-        tools::GREP_FILE,
         tools::READ_FILE,
         tools::LIST_FILES,
         tools::REQUEST_USER_INPUT,
@@ -253,7 +254,6 @@ fn plan_agent_interactive_wire_catalog_survives_all_filters() {
         vec![
             tools::EXEC_COMMAND.to_string(),
             tools::CODE_SEARCH.to_string(),
-            tools::GREP_FILE.to_string(),
             tools::REQUEST_USER_INPUT.to_string(),
         ],
         "plan agent Interactive wire catalog must keep the read-only inspection + interview set"

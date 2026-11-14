@@ -337,16 +337,17 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
 }
 
 fn builtin_readonly_tool_ids() -> Vec<String> {
-    // The direct read tools must be listed explicitly: read-only agents deny
-    // `bash`, so the wire shaper hides `exec_command` for them — without
-    // grep_file/read_file/list_files their effective catalog collapses to
-    // bare `code_search` (the turn_912/913 planning failure shape). The
-    // planning profile and Interactive surface intersect this list further
-    // (e.g. read_file/list_files stay hidden on Interactive).
+    // Allowlist only: entries restrict the snapshot catalog and can never add
+    // tools to it. `code_search` is the live read path; `exec_command` survives
+    // here for surfaces that keep it (read-only agents deny `bash`, so the
+    // wire shaper hides it for them). `read_file`/`list_files` are registered
+    // but model-hidden, so they take effect only if a surface ever exposes
+    // them (turn_912/913: the planning profile admits the read surface; this
+    // list keeps agents from re-hiding it). `grep_file` has no registration
+    // and is intentionally absent (see the harness audit ledger).
     vec![
         tools::CODE_SEARCH.to_string(),
         tools::EXEC_COMMAND.to_string(),
-        tools::GREP_FILE.to_string(),
         tools::READ_FILE.to_string(),
         tools::LIST_FILES.to_string(),
     ]

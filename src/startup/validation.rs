@@ -296,6 +296,7 @@ pub(super) async fn check_system_prompt_size(config: &VTCodeConfig, workspace: &
     if report.over_budget {
         tracing::warn!(
             token_estimate = report.token_estimate,
+            layer_token_estimate = report.layer_token_estimate,
             max_system_prompt_tokens = config.agent.max_system_prompt_tokens,
             "System prompt exceeds configured token budget at startup"
         );

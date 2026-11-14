@@ -159,11 +159,10 @@ impl ContextManager {
         self.cached_stats.total_token_usage
     }
 
-    /// Record a lower-bound estimate for the assembled wire prompt before the
-    /// provider call. Provider usage remains authoritative when available,
-    /// but this estimate keeps newly rendered instructions, tool schemas, and
-    /// history growth in the next compaction decision when a request fails
-    /// before returning usage.
+    /// Record an estimate for the assembled prompt before the provider call.
+    /// Provider usage remains authoritative when available, but this estimate
+    /// keeps newly rendered instructions, tool schemas, and history growth in
+    /// the next compaction decision when a request fails before returning usage.
     pub(crate) fn record_prompt_estimate(&mut self, estimated_tokens: usize) {
         self.cached_stats.total_token_usage = self.cached_stats.total_token_usage.max(estimated_tokens);
     }
@@ -324,7 +323,13 @@ fn is_empty_context_message(message: &uni::Message) -> bool {
         && message.tool_call_id.is_none()
         && message.reasoning.is_none()
         && message.reasoning_details.is_none()
-        && message.content.trim().is_empty()
+        && match &message.content {
+            uni::MessageContent::Text(text) => text.trim().is_empty(),
+            uni::MessageContent::Parts(parts) => parts.iter().all(|part| match part {
+                uni::ContentPart::Text { text } => text.trim().is_empty(),
+                uni::ContentPart::Image { .. } | uni::ContentPart::File { .. } => false,
+            }),
+        }
 }
 
 fn can_merge_consecutive_assistant_text(previous: &uni::Message, current: &uni::Message) -> bool {

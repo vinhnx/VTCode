@@ -154,12 +154,12 @@ impl AgentRunner {
 
         let mut runtime = AgentRuntime::new(session_state, None, steering_receiver);
 
-        if prompt_bundle.system_prompt_report.over_budget && self.config().agent.system_prompt_budget_warning {
-            runtime.state.push_warning(format!(
-                "Base system prompt is ~{} tokens (budget {}); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt.",
-                prompt_bundle.system_prompt_report.token_estimate,
-                self.config().agent.max_system_prompt_tokens
-            ));
+        if self.config().agent.system_prompt_budget_warning
+            && let Some(warning) = prompt_bundle
+                .system_prompt_report
+                .over_budget_warning(self.config().agent.max_system_prompt_tokens)
+        {
+            runtime.state.push_warning(warning);
         }
 
         if let Err(err) = self.tool_registry.initialize_async().await {

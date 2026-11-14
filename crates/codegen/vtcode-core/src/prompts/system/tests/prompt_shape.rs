@@ -1,7 +1,145 @@
 use super::*;
 
 #[tokio::test]
-async fn planning_prompt_size_fixed_fixture() {
+async fn runtime_prompt_budget_with_registry_catalog() {
+    use crate::config::ToolDocumentationMode;
+    use crate::config::types::CapabilityLevel;
+    use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
+    use crate::llm::providers::OpenAIProvider;
+    use crate::prompts::{
+        RuntimePromptContract, append_fresh_runtime_tool_prompt_sections_for_model, append_runtime_mode_sections,
+    };
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+    use crate::tools::registry::ToolRegistry;
+
+    let workspace = tempfile::tempdir().expect("workspace");
+    let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+    let provider = OpenAIProvider::new("offline-fixture".into());
+    for planning in [false, true] {
+        let catalog_config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Progressive,
+            ToolModelCapabilities::default(),
+        )
+        .with_planning_active(planning);
+        let definitions = registry.model_tools(catalog_config).await;
+        assert!(!definitions.is_empty());
+        let snapshot =
+            SessionToolCatalogSnapshot::new(7, 9, planning, true, Some(std::sync::Arc::new(definitions)), false);
+        for mode in [
+            SystemPromptMode::Default,
+            SystemPromptMode::Minimal,
+            SystemPromptMode::Lightweight,
+            SystemPromptMode::Specialized,
+        ] {
+            for shell in [ShellPromptProfile::UnixLike, ShellPromptProfile::PowerShell] {
+                let mut config = VTCodeConfig::default();
+                config.agent.system_prompt_mode = mode;
+                config.agent.shell_prompt_profile = shell;
+                config.agent.include_temporal_context = false;
+                config.agent.include_working_directory = false;
+                config.agent.max_system_prompt_tokens = 100_000;
+                config.context.max_context_tokens = 128_000;
+                let sections = build_prompt_sections_with_layers(
+                    Some(&config),
+                    None,
+                    &crate::prompts::resources::SystemPromptLayers::default(),
+                );
+                let mut prompt = join_prompt_sections(&sections);
+                append_runtime_mode_sections(
+                    &mut prompt,
+                    RuntimePromptContract {
+                        planning_active: planning,
+                        request_user_input_enabled: true,
+                        ..Default::default()
+                    },
+                );
+                append_fresh_runtime_tool_prompt_sections_for_model(
+                    &mut prompt,
+                    &snapshot,
+                    true,
+                    shell.resolve_for_current_platform(),
+                    &provider,
+                    crate::config::constants::models::openai::DEFAULT_MODEL,
+                    Some(&config),
+                );
+                let lines = prompt.lines().count();
+                let tokens = estimate_tokens(&prompt);
+                eprintln!("{mode:?} {shell:?} planning={planning}: {lines} lines, {tokens} tokens");
+                assert!(lines <= BUILT_IN_COMPOSED_MAX_LINES, "{mode:?} {shell:?} planning={planning}: {lines} lines");
+                assert!(
+                    tokens <= REGISTRY_RUNTIME_MAX_TOKENS_USIZE,
+                    "{mode:?} {shell:?} planning={planning}: {tokens} tokens"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn built_in_composed_prompt_budget_without_workspace_additions() {
+    for mode in [
+        SystemPromptMode::Default,
+        SystemPromptMode::Minimal,
+        SystemPromptMode::Lightweight,
+        SystemPromptMode::Specialized,
+    ] {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = mode;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.shell_prompt_profile = ShellPromptProfile::UnixLike;
+        let sections = build_prompt_sections_with_layers(
+            Some(&config),
+            None,
+            &crate::prompts::resources::SystemPromptLayers::default(),
+        );
+        let prompt = join_prompt_sections(&sections);
+        let lines = prompt.lines().count();
+        let tokens = estimate_tokens(&prompt);
+        eprintln!("{mode:?}: {lines} lines, {tokens} estimated tokens");
+        assert!(lines <= BUILT_IN_COMPOSED_MAX_LINES, "{mode:?} built-in prompt has {lines} lines");
+        assert!(
+            tokens <= BUILT_IN_COMPOSED_MAX_TOKENS_USIZE,
+            "{mode:?} built-in prompt has {tokens} estimated tokens"
+        );
+    }
+}
+
+#[test]
+fn composed_prompt_preserves_override_and_append_layers() {
+    use crate::prompts::resources::SystemPromptLayers;
+    use crate::prompts::runtime_guidance::RUNTIME_GUIDANCE_SECTION;
+
+    let layers = SystemPromptLayers {
+        override_body: Some("custom override".to_string()),
+        append_bodies: vec!["first append".to_string(), "second append".to_string()],
+    };
+    let sections = build_prompt_sections_with_layers(None, None, &layers);
+    let prompt = join_prompt_sections(&sections);
+
+    assert!(prompt.starts_with("custom override\n\nfirst append\n\nsecond append\n\n"));
+    assert_eq!(prompt.matches(RUNTIME_GUIDANCE_SECTION).count(), 1);
+    assert!(!prompt.contains(PROMPT_TITLE));
+}
+
+#[test]
+fn empty_tool_context_keeps_workspace_tool_heading_without_generated_guidance() {
+    let layers = crate::prompts::resources::SystemPromptLayers {
+        override_body: Some("## Active Tools\nWorkspace instructions.".to_string()),
+        append_bodies: Vec::new(),
+    };
+    let sections = build_prompt_sections_with_layers_option(None, Some(&PromptContext::default()), &layers, false);
+    assert!(sections.iter().all(|section| section.kind != SectionKind::ToolGuidelines));
+    let prompt = join_prompt_sections(&sections);
+    assert!(prompt.contains("## Active Tools\nWorkspace instructions."));
+    assert_eq!(prompt.matches("## Active Tools").count(), 1);
+}
+
+#[test]
+fn planning_prompt_size_fixed_fixture() {
     use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
     use crate::llm::provider::ToolDefinition;
     use crate::llm::providers::OpenAIProvider;
@@ -16,7 +154,6 @@ async fn planning_prompt_size_fixed_fixture() {
         max_estimated_tokens: usize,
     }
 
-    let workspace = tempfile::TempDir::new().expect("workspace");
     let provider = OpenAIProvider::new("offline-fixture".into());
     let names = [
         tools::EXEC_COMMAND,
@@ -69,7 +206,20 @@ async fn planning_prompt_size_fixed_fixture() {
             ..Default::default()
         };
         context.set_current_directory(PathBuf::from("/workspace"));
-        let mut prompt = compose_system_instruction_text(workspace.path(), Some(&config), Some(&context)).await;
+        let sections = build_prompt_sections_with_layers(
+            Some(&config),
+            Some(&context),
+            &crate::prompts::resources::SystemPromptLayers::default(),
+        );
+        let (mut prompt, report) = apply_token_budget(
+            sections,
+            config.agent.max_system_prompt_tokens,
+            config.agent.system_prompt_budget_warning,
+            config.agent.trim_system_prompt,
+            0,
+        );
+        assert!(report.trimmed_sections.is_empty(), "fixture must include every composed section");
+        assert_eq!(report.layer_token_estimate, 0, "default layers contribute nothing");
         append_runtime_mode_sections(
             &mut prompt,
             RuntimePromptContract {
@@ -89,14 +239,20 @@ async fn planning_prompt_size_fixed_fixture() {
             Some(&config),
         );
         eprintln!(
-            "planning fixture {}: {} bytes, {} estimated tokens",
+            "planning fixture {}: {} lines, {} bytes, {} estimated tokens",
             case.density,
+            prompt.lines().count(),
             prompt.len(),
             estimate_tokens(&prompt)
         );
         assert!(prompt.contains(PLANNING_WORKFLOW_PLAN_PERSISTENCE_POLICY_LINE));
         assert!(prompt.contains("Checklists do not persist plans"));
         assert!(prompt.contains("Rejected plans stay blocked; repair before approval"));
+        assert!(
+            prompt.lines().count() <= BUILT_IN_COMPOSED_MAX_LINES,
+            "{} planning fixture exceeded line budget",
+            case.density
+        );
         assert!(prompt.len() <= case.max_prompt_bytes, "{} planning fixture exceeded byte budget", case.density);
         assert!(
             estimate_tokens(&prompt) <= case.max_estimated_tokens,

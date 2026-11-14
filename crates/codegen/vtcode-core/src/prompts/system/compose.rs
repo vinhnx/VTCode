@@ -9,7 +9,7 @@ use crate::prompts::context::PromptContext;
 use crate::prompts::guidelines::{generate_tool_guidelines_for_profile, render_shell_profile_guidance};
 use crate::prompts::output_styles::OutputStyleApplier;
 use crate::prompts::render::render_environment_addenda;
-use crate::prompts::resources::{apply_system_prompt_layers, resolve_system_prompt_layers};
+use crate::prompts::resources::{SystemPromptLayers, apply_system_prompt_layers, resolve_system_prompt_layers};
 use crate::prompts::static_prompts::static_profile_prompt;
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::skills::render::render_prompt_skills_section;
@@ -47,6 +47,19 @@ pub async fn compose_system_instruction_with_report(
     (prompt, report)
 }
 
+/// Compose a runtime base without provisional tool guidance. The live catalog
+/// is appended after the caller has added its workspace and runtime context.
+pub async fn compose_runtime_base_instruction_with_report(
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    prompt_context: Option<&PromptContext>,
+) -> (String, SystemPromptReport) {
+    let layers = resolve_system_prompt_layers(project_root).await;
+    let sections = build_prompt_sections_with_layers_option(vtcode_config, prompt_context, &layers, false);
+    let (max_tokens, warn_enabled, trim_enabled) = system_prompt_budget_settings(vtcode_config);
+    apply_token_budget(sections, max_tokens, warn_enabled, trim_enabled, applied_layer_token_estimate(&layers))
+}
+
 /// Compose a prompt and retain the stable instruction digest used by local and
 /// provider-facing prompt caches.
 async fn compose_system_instruction_with_identity(
@@ -54,10 +67,12 @@ async fn compose_system_instruction_with_identity(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
     prompt_context: Option<&PromptContext>,
 ) -> (String, SystemPromptReport, u64) {
-    let sections = build_prompt_sections(project_root, vtcode_config, prompt_context).await;
+    let layers = resolve_system_prompt_layers(project_root).await;
+    let sections = build_prompt_sections_with_layers(vtcode_config, prompt_context, &layers);
     let instruction_digest = stable_prompt_sections_digest(&sections);
     let (max_tokens, warn_enabled, trim_enabled) = system_prompt_budget_settings(vtcode_config);
-    let (prompt, report) = apply_token_budget(sections, max_tokens, warn_enabled, trim_enabled);
+    let (prompt, report) =
+        apply_token_budget(sections, max_tokens, warn_enabled, trim_enabled, applied_layer_token_estimate(&layers));
     (prompt, report, instruction_digest)
 }
 
@@ -71,14 +86,23 @@ pub async fn measure_system_prompt_size(
     project_root: &Path,
     vtcode_config: &crate::config::VTCodeConfig,
 ) -> SystemPromptReport {
-    let sections = build_prompt_sections(project_root, Some(vtcode_config), None).await;
+    let layers = resolve_system_prompt_layers(project_root).await;
+    let sections = build_prompt_sections_with_layers(Some(vtcode_config), None, &layers);
     let text = join_prompt_sections(&sections);
     let token_estimate = estimate_token_count(&text);
     SystemPromptReport {
         token_estimate,
         over_budget: token_estimate > vtcode_config.agent.max_system_prompt_tokens,
         trimmed_sections: Vec::new(),
+        layer_token_estimate: applied_layer_token_estimate(&layers),
     }
+}
+
+/// Token estimate of the user/workspace prompt-layer text spliced into the
+/// composed prompt. Measured on the exact applied layer text so the figure
+/// tracks what the model sees, modulo separators and later identity substitutions.
+fn applied_layer_token_estimate(layers: &SystemPromptLayers) -> u64 {
+    estimate_token_count(&layers.applied_text())
 }
 
 /// Resolve the effective `(max_system_prompt_tokens, budget_warning_enabled,
@@ -98,15 +122,23 @@ fn system_prompt_budget_settings(vtcode_config: Option<&crate::config::VTCodeCon
 /// as the legacy single-string builder would have appended it; the joiner
 /// trims section edges, so only the inter-section newlines differ from the
 /// legacy builder.
-pub(super) async fn build_prompt_sections(
-    project_root: &Path,
+pub(super) fn build_prompt_sections_with_layers(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
     prompt_context: Option<&PromptContext>,
+    resolved_layers: &SystemPromptLayers,
+) -> Vec<PromptSection> {
+    build_prompt_sections_with_layers_option(vtcode_config, prompt_context, resolved_layers, true)
+}
+
+pub(super) fn build_prompt_sections_with_layers_option(
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    prompt_context: Option<&PromptContext>,
+    resolved_layers: &SystemPromptLayers,
+    include_tool_guidance: bool,
 ) -> Vec<PromptSection> {
     let prompt_mode = vtcode_config.map(|c| c.agent.system_prompt_mode).unwrap_or_default();
     let static_base_prompt = static_profile_prompt(prompt_mode);
-    let resolved_layers = resolve_system_prompt_layers(project_root).await;
-    let mut base_prompt = apply_system_prompt_layers(static_base_prompt, &resolved_layers);
+    let mut base_prompt = apply_system_prompt_layers(static_base_prompt, resolved_layers);
     crate::prompts::runtime_guidance::ensure_runtime_guidance(&mut base_prompt);
 
     tracing::trace!(
@@ -152,13 +184,15 @@ pub(super) async fn build_prompt_sections(
         }
         // Static prompts ship the parallel-call hint unconditionally; only the
         // runtime per-turn path re-resolves it against the provider.
-        let guidelines =
-            generate_tool_guidelines_for_profile(&ctx.available_tools, ctx.capability_level, shell_profile, true);
-        if !guidelines.is_empty() {
-            sections.push(PromptSection {
-                kind: SectionKind::ToolGuidelines,
-                text: guidelines.trim_start_matches('\n').to_string(),
-            });
+        if include_tool_guidance {
+            let guidelines =
+                generate_tool_guidelines_for_profile(&ctx.available_tools, ctx.capability_level, shell_profile, true);
+            if !guidelines.is_empty() {
+                sections.push(PromptSection {
+                    kind: SectionKind::ToolGuidelines,
+                    text: guidelines.trim_start_matches('\n').to_string(),
+                });
+            }
         }
     }
 
@@ -205,6 +239,7 @@ pub(super) fn apply_token_budget(
     max_tokens: u64,
     warn_enabled: bool,
     trim_enabled: bool,
+    layer_token_estimate: u64,
 ) -> (String, SystemPromptReport) {
     let mut text = join_prompt_sections(&sections);
     let mut token_estimate = estimate_token_count(&text);
@@ -232,6 +267,7 @@ pub(super) fn apply_token_budget(
                 tracing::warn!(
                     token_estimate,
                     max_system_prompt_tokens = max_tokens,
+                    layer_token_estimate,
                     dropped_sections = ?trimmed_sections,
                     "Trimmed system prompt sections to satisfy token budget"
                 );
@@ -240,6 +276,7 @@ pub(super) fn apply_token_budget(
             tracing::warn!(
                 token_estimate,
                 max_system_prompt_tokens = max_tokens,
+                layer_token_estimate,
                 "System prompt exceeds configured token budget"
             );
         }
@@ -249,6 +286,7 @@ pub(super) fn apply_token_budget(
         token_estimate,
         over_budget: token_estimate > max_tokens,
         trimmed_sections,
+        layer_token_estimate,
     };
     (text, report)
 }

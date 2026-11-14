@@ -12,8 +12,8 @@ mod tokens;
 mod types;
 
 pub use compose::{
-    apply_coordinator_role_guidance, apply_output_style, compose_system_instruction_text,
-    compose_system_instruction_with_report, generate_system_instruction_with_config,
+    apply_coordinator_role_guidance, apply_output_style, compose_runtime_base_instruction_with_report,
+    compose_system_instruction_text, compose_system_instruction_with_report, generate_system_instruction_with_config,
     generate_system_instruction_with_config_and_report, generate_system_instruction_with_context_and_report,
     measure_system_prompt_size,
 };

@@ -308,26 +308,52 @@ pub async fn find_prompt_template(workspace_root: &Path, name: &str) -> Option<P
     find_prompt_template_with_options(PromptResourceOptions::new(workspace_root), normalized).await
 }
 
+impl SystemPromptLayers {
+    /// Override body that reaches the final prompt: trimmed and non-empty.
+    fn effective_override_body(&self) -> Option<&str> {
+        self.override_body.as_deref().map(str::trim).filter(|body| !body.is_empty())
+    }
+
+    /// Append bodies that reach the final prompt: trimmed, non-empty, in order.
+    fn effective_append_bodies(&self) -> impl Iterator<Item = &str> {
+        self.append_bodies
+            .iter()
+            .map(|body| body.trim())
+            .filter(|body| !body.is_empty())
+    }
+
+    /// Exact layer text spliced into the composed prompt: the effective
+    /// override (if any) plus every effective append body, joined the way
+    /// [`apply_system_prompt_layers`] splices them. Empty when no layer file
+    /// contributes. Token accounting measures this string so the figure tracks
+    /// what the model sees, modulo separators and later identity substitutions.
+    pub fn applied_text(&self) -> String {
+        let mut text = String::new();
+        let bodies = self.effective_override_body().into_iter().chain(self.effective_append_bodies());
+        for body in bodies {
+            if !text.is_empty() {
+                text.push_str("\n\n");
+            }
+            text.push_str(body);
+        }
+        text
+    }
+}
+
 pub fn apply_system_prompt_layers(base_prompt: &str, layers: &SystemPromptLayers) -> String {
     let mut prompt = String::new();
 
-    if let Some(override_body) = layers.override_body.as_deref().map(str::trim)
-        && !override_body.is_empty()
-    {
+    if let Some(override_body) = layers.effective_override_body() {
         prompt.push_str(override_body);
     } else {
         prompt.push_str(base_prompt);
     }
 
-    for append_body in &layers.append_bodies {
-        let trimmed = append_body.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
+    for append_body in layers.effective_append_bodies() {
         if !prompt.is_empty() {
             prompt.push_str("\n\n");
         }
-        prompt.push_str(trimmed);
+        prompt.push_str(append_body);
     }
 
     prompt
@@ -756,6 +782,43 @@ mod tests {
 
         let composed = apply_system_prompt_layers("fallback base", &layers);
         assert_eq!(composed, "workspace system override\n\nuser append\n\nworkspace append");
+    }
+
+    #[test]
+    fn applied_text_matches_spliced_layer_bodies() {
+        let layers = SystemPromptLayers {
+            override_body: Some("  workspace override  ".to_string()),
+            append_bodies: vec![
+                "   ".to_string(),
+                "user append".to_string(),
+                " workspace append ".to_string(),
+            ],
+        };
+        assert_eq!(layers.applied_text(), "workspace override\n\nuser append\n\nworkspace append");
+        // The override replaces the base, so composition is exactly the applied text.
+        assert_eq!(apply_system_prompt_layers("fallback base", &layers), layers.applied_text());
+    }
+
+    #[test]
+    fn applied_text_appends_follow_base_without_override() {
+        let layers = SystemPromptLayers {
+            override_body: None,
+            append_bodies: vec!["first append".to_string(), "second append".to_string()],
+        };
+        assert_eq!(layers.applied_text(), "first append\n\nsecond append");
+        let composed = apply_system_prompt_layers("BASE", &layers);
+        assert_eq!(composed, "BASE\n\nfirst append\n\nsecond append");
+    }
+
+    #[test]
+    fn applied_text_is_empty_without_effective_layers() {
+        let layers = SystemPromptLayers {
+            override_body: Some("   ".to_string()),
+            append_bodies: vec!["  ".to_string()],
+        };
+        assert!(layers.applied_text().is_empty());
+        assert_eq!(apply_system_prompt_layers("fallback base", &layers), "fallback base");
+        assert!(SystemPromptLayers::default().applied_text().is_empty());
     }
 
     #[tokio::test]

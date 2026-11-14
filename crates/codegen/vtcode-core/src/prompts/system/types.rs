@@ -98,6 +98,13 @@ pub struct SystemPromptReport {
     /// Names of sections dropped to satisfy the budget, in drop order. Empty
     /// unless `agent.trim_system_prompt` is enabled and trimming occurred.
     pub trimmed_sections: Vec<&'static str>,
+    /// `estimate_token_count` of the user/workspace prompt-layer text spliced
+    /// into the prompt (see [`crate::prompts::resources::SystemPromptLayers::applied_text`]),
+    /// measured before trimming. Layers are never trimmed, so this figure stays
+    /// valid after trimming; the built-in share is `token_estimate - layer_token_estimate`
+    /// modulo estimator rounding. Zero when the prompt was assembled outside
+    /// the layer pipeline.
+    pub layer_token_estimate: u64,
 }
 
 impl SystemPromptReport {
@@ -115,6 +122,62 @@ impl SystemPromptReport {
             token_estimate,
             over_budget: token_estimate > max_tokens,
             trimmed_sections: Vec::new(),
+            layer_token_estimate: 0,
         }
+    }
+
+    /// One-line over-budget warning shared by the headless (`task_setup.rs`)
+    /// and interactive (`header_context.rs`) paths so both sessions surface
+    /// the same signal. Returns `None` when within budget; callers gate on
+    /// `agent.system_prompt_budget_warning` themselves.
+    #[must_use]
+    pub fn over_budget_warning(&self, max_tokens: u64) -> Option<String> {
+        if !self.over_budget {
+            return None;
+        }
+        let layer_note = match self.layer_token_estimate {
+            0 => String::new(),
+            layer_tokens => format!(" User/workspace prompt layers contribute ~{layer_tokens} of those tokens."),
+        };
+        Some(format!(
+            "Base system prompt is ~{} tokens (budget {max_tokens}); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt.{layer_note}",
+            self.token_estimate,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn over_budget_warning_names_layer_share() {
+        let within = SystemPromptReport {
+            token_estimate: 100,
+            over_budget: false,
+            trimmed_sections: Vec::new(),
+            layer_token_estimate: 0,
+        };
+        assert!(within.over_budget_warning(1000).is_none());
+
+        let bare = SystemPromptReport {
+            token_estimate: 1500,
+            over_budget: true,
+            trimmed_sections: Vec::new(),
+            layer_token_estimate: 0,
+        };
+        assert_eq!(
+            bare.over_budget_warning(1000).expect("warning"),
+            "Base system prompt is ~1500 tokens (budget 1000); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt."
+        );
+
+        let layered = SystemPromptReport {
+            token_estimate: 1500,
+            over_budget: true,
+            trimmed_sections: Vec::new(),
+            layer_token_estimate: 400,
+        };
+        let warning = layered.over_budget_warning(1000).expect("warning");
+        assert!(warning.ends_with("trim_system_prompt. User/workspace prompt layers contribute ~400 of those tokens."));
     }
 }

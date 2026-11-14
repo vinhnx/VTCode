@@ -35,6 +35,14 @@ pub(super) const DEFAULT_LIVE_PROMPT_WITH_INSTRUCTIONS_MAX_TOKENS_U64: u64 = 1_0
 
 // --- Composed prompts (`estimate_tokens`, usize) ---
 
+// Empty prompt layers, Unix shell, no dynamic tool or skill context.
+// Measured: the largest profile was Default, at 48 lines and 881 tokens.
+pub(super) const BUILT_IN_COMPOSED_MAX_LINES: usize = 90;
+pub(super) const BUILT_IN_COMPOSED_MAX_TOKENS_USIZE: usize = 1_000;
+// Registry-backed runtime fixture across modes and both shell profiles.
+// Largest measured case: Default planning, Unix shell, 2,131 tokens.
+pub(super) const REGISTRY_RUNTIME_MAX_TOKENS_USIZE: usize = 2_300;
+
 // Measured after the schema-dedup rewrite: Minimal 725.
 pub(super) const COORDINATOR_MINIMAL_MAX_TOKENS_USIZE: usize = 780;
 

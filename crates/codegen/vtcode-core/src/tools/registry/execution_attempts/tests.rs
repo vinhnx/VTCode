@@ -76,7 +76,10 @@ async fn web_search_and_aliases_never_use_generic_automatic_retries() -> Result<
         )
         .await?;
     registry.allow_all_tools().await?;
-    for (index, name) in [tools::WEB_SEARCH, "search_web", "websearch"].iter().enumerate() {
+    for (index, name) in [tools::WEB_SEARCH, "search_web", "websearch", "functions.web_search"]
+        .iter()
+        .enumerate()
+    {
         let outcome = registry
             .execute_public_tool_request(
                 ToolExecutionRequest::new(*name, json!({"query":"rust"})).with_policy(retry_policy(5)),
@@ -85,6 +88,38 @@ async fn web_search_and_aliases_never_use_generic_automatic_retries() -> Result<
         assert!(!outcome.is_success());
         assert_eq!(outcome.attempts, 1);
         assert_eq!(calls.load(Ordering::SeqCst), index + 1);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn web_fetch_aliases_share_canonical_retry_limit() -> Result<()> {
+    for name in [tools::WEB_FETCH, "fetch_url", "web", "functions.web_fetch"] {
+        let workspace = TempDir::new()?;
+        let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        let calls = Arc::new(AtomicUsize::new(0));
+        registry
+            .register_tool(
+                ToolRegistration::from_tool_instance(
+                    tools::WEB_FETCH,
+                    CapabilityLevel::Basic,
+                    AttemptProbe {
+                        calls: Arc::clone(&calls),
+                        failures_before_success: usize::MAX,
+                    },
+                )
+                .with_aliases(["fetch_url", "web"]),
+            )
+            .await?;
+        registry.allow_all_tools().await?;
+        let outcome = registry
+            .execute_public_tool_request(
+                ToolExecutionRequest::new(name, json!({"url": "https://example.com"})).with_policy(retry_policy(5)),
+            )
+            .await;
+        assert!(!outcome.is_success(), "{name}");
+        assert_eq!(outcome.attempts, 2, "{name}");
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "{name}");
     }
     Ok(())
 }

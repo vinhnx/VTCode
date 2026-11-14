@@ -514,6 +514,171 @@ async fn public_decision_is_available_in_interactive_and_headless_planning_and_e
     }
 }
 
+/// Emit a reproducible offline catalog baseline for the harness audit.
+#[tokio::test]
+async fn model_tool_catalog_baseline_by_mode() {
+    use crate::config::ToolDocumentationMode;
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+    use vtcode_llm::providers::tool_format::{ProviderFamily, ProviderToolFormatter, formatter};
+
+    let workspace = tempfile::tempdir().expect("workspace");
+    let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+    for mode in [
+        ToolDocumentationMode::Minimal,
+        ToolDocumentationMode::Progressive,
+        ToolDocumentationMode::Full,
+    ] {
+        for planning in [false, true] {
+            let config = SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                mode,
+                ToolModelCapabilities::default(),
+            )
+            .with_planning_active(planning);
+            let entries = registry.schema_entries(config.clone()).await;
+            assert!(!entries.is_empty(), "catalog must not be empty");
+            assert!(entries.iter().any(|entry| entry.name == tools::EXEC_COMMAND));
+            assert_eq!(entries.iter().any(|entry| entry.name == tools::APPLY_PATCH), !planning);
+            assert_eq!(entries.iter().any(|entry| entry.name == tools::CODE_SEARCH), planning);
+            let bytes = serde_json::to_vec(&entries).expect("serialize catalog").len();
+            let model_tools = registry.model_tools(config).await;
+            let model_bytes = serde_json::to_vec(&model_tools).expect("serialize model tools").len();
+            eprintln!(
+                "{mode:?} planning={planning}: {} entries, {bytes} bytes; {} model tools, {model_bytes} bytes",
+                entries.len(),
+                model_tools.len()
+            );
+            for entry in &entries {
+                let size = serde_json::to_vec(entry).expect("serialize entry").len();
+                eprintln!("  {} {size}", entry.name);
+            }
+            for family in [
+                ProviderFamily::OpenAIChat,
+                ProviderFamily::OpenAIResponses,
+                ProviderFamily::Anthropic,
+                ProviderFamily::Gemini,
+            ] {
+                let formatted = formatter(family)
+                    .format_tools(&model_tools, "offline-fixture")
+                    .expect("format tools")
+                    .expect("nonempty provider tools");
+                let json = serde_json::to_vec(&formatted).expect("serialize provider tools");
+                assert!(String::from_utf8_lossy(&json).contains(tools::EXEC_COMMAND));
+                eprintln!("  {family:?} formatted: {} bytes", json.len());
+                // Context-pressure accounting measures pre-format definitions, so
+                // formatted wire bytes must track the internal JSON within 2x.
+                assert!(
+                    json.len() * 2 >= model_bytes && json.len() <= model_bytes * 2,
+                    "{family:?} formatted bytes {} diverged from internal {model_bytes}",
+                    json.len()
+                );
+            }
+        }
+    }
+}
+
+/// Model-surface inventory for the harness audit: entry names per surface
+/// from the real builtin packs. Prints the inventory (`--no-capture`) and
+/// pins that removed/hidden file tools never reach any model surface.
+#[tokio::test]
+async fn model_surface_inventory_by_surface() {
+    use crate::config::ToolDocumentationMode;
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+
+    // No pack registers `grep_file`: it must stay absent from every surface.
+    let registrations = shipped_registrations(None);
+    assert!(
+        registrations.iter().all(|registration| registration.name() != tools::GREP_FILE),
+        "grep_file must have no builtin registration"
+    );
+
+    let workspace = tempfile::tempdir().expect("workspace");
+    let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+    for surface in [
+        SessionSurface::Interactive,
+        SessionSurface::AgentRunner,
+        SessionSurface::Acp,
+    ] {
+        for planning in [false, true] {
+            let config = SessionToolsConfig::full_public(
+                surface,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Progressive,
+                ToolModelCapabilities::default(),
+            )
+            .with_planning_active(planning);
+            let mut names: Vec<_> = registry
+                .schema_entries(config)
+                .await
+                .iter()
+                .map(|entry| entry.name.clone())
+                .collect();
+            names.sort();
+            eprintln!("{surface:?} planning={planning}: {}", names.join(", "));
+            for absent in [tools::GREP_FILE, tools::READ_FILE, tools::LIST_FILES] {
+                assert!(!names.iter().any(|name| name == absent), "{absent} must not be model-visible on {surface:?}");
+            }
+            // Pin the primary (Interactive) surface exactly: any exposure change
+            // must update this census and the audit ledger deliberately.
+            if matches!(surface, SessionSurface::Interactive) {
+                let expected: &[&str] = if planning {
+                    &["code_search", "exec_command", "record_decision", "request_user_input"]
+                } else {
+                    &[
+                        "apply_patch",
+                        "exec_command",
+                        "record_decision",
+                        "search_tools",
+                        "write_stdin",
+                    ]
+                };
+                let actual: Vec<&str> = names.iter().map(String::as_str).collect();
+                assert_eq!(actual, expected, "Interactive catalog changed; update the ledger baseline");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn decision_tool_hosted_deferral_and_minimal_description() {
+    use crate::config::ToolDocumentationMode;
+    use crate::tools::handlers::{DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+
+    let workspace = tempfile::tempdir().expect("workspace");
+    let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+    for planning in [false, true] {
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Minimal,
+            ToolModelCapabilities::default(),
+        )
+        .with_planning_active(planning);
+        let entries = registry.schema_entries(config.clone()).await;
+        let decision = entries
+            .iter()
+            .find(|entry| entry.name == tools::RECORD_DECISION)
+            .expect("decision schema");
+        assert!(decision.description.contains("consequential choices"));
+        assert!(!decision.description.contains("ordinary commands"));
+
+        for (policy, deferred) in [
+            (DeferredToolPolicy::default(), false),
+            (DeferredToolPolicy::client_local(Vec::new()), false),
+            (DeferredToolPolicy::openai_hosted(Vec::new()), true),
+            (DeferredToolPolicy::openai_hosted(vec![tools::RECORD_DECISION.to_string()]), false),
+        ] {
+            let definitions = registry.model_tools(config.clone().with_deferred_tool_policy(policy)).await;
+            let decision = definitions
+                .iter()
+                .find(|tool| tool.function_name() == tools::RECORD_DECISION)
+                .expect("decision definition");
+            assert_eq!(decision.defer_loading == Some(true), deferred, "planning={planning}");
+        }
+    }
+}
+
 /// End-to-end regression for the first-request token budget: the actual
 /// builtin tool schemas sent in Progressive mode must fit in a small
 /// token envelope, leaving room for the system prompt and conversation.

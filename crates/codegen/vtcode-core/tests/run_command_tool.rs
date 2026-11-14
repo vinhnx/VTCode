@@ -57,7 +57,7 @@ async fn exec_pty_cmd_resolves_and_runs_in_registry() -> Result<()> {
     let registry = harness.registry().await;
     registry.allow_all_tools().await?;
 
-    // EXEC_PTY_CMD is offered to the model but must also resolve to a real
+    // EXEC_PTY_CMD is model-hidden but must still resolve to a real
     // executor; otherwise the call fails with "not found in registry".
     let response = registry
         .execute_tool(
