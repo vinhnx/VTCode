@@ -36,7 +36,7 @@
 
 ## Overview
 
-VT Code is a terminal-first coding agent for your repo, in the CLI and native macOS app.
+VT Code is a terminal-first coding agent for your repo, in the CLI and as a native macOS app.
 Context, tool calls, and execution policy stay auditable and resumable across long tasks.
 It is open source under **MIT OR Apache-2.0**; see [Contributing](#contributing) and [License](#license).
 
@@ -52,8 +52,8 @@ Details live in [Documentation](#documentation); the table above is the short ma
 
 ## Quick start
 
-Three steps on macOS, Linux, or Windows/WSL. Source builds need Rust 1.100.0+ (edition 2024). VT Code ships
-its own search engine; see the [installation guide](./docs/installation/README.md) for prerequisites.
+Three steps on macOS, Linux, or Windows/WSL. Building from source needs Rust 1.100.0+ (edition 2024).
+VT Code ships its own search engine; see the [installation guide](./docs/installation/README.md) for prerequisites.
 
 ### 1. Install
 
@@ -148,7 +148,7 @@ credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
-On Apple Silicon macOS 15+ (update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
+On macOS 15+ (Apple Silicon or Intel; update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
 
 ```bash
 brew trust vinhnx/tap
@@ -196,7 +196,7 @@ Curated entry points by task:
 
 - [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and
   [evals](./docs/guides/eval.md)
-- [Architecture](./docs/ARCHITECTURE.md), [desktop app](./docs/development/desktop-workspace.md), and
+- [Architecture](./docs/ARCHITECTURE.md), [desktop app](./docs/development/desktop-workspace.md),
   [loop engineering](./docs/project/PLAN-loop-engineering.md), and [protocols](./docs/protocols/OPEN_RESPONSES.md)
 
 ## Development
@@ -214,7 +214,7 @@ graph LR
     CORE --> UI["vtcode-ui"]
 ```
 
-Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.0).
+Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.1).
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git
