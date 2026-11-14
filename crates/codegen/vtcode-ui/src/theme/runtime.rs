@@ -1,8 +1,8 @@
 use anstyle::{Color, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
 use arc_swap::{ArcSwap, ArcSwapOption};
-use std::sync::LazyLock;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use vtcode_config::constants::ui;
 
 use crate::theme::color_math::{contrast_ratio, ensure_contrast, lighten};

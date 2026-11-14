@@ -1,8 +1,8 @@
-use std::sync::LazyLock;
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use crate::ui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
 pub use crate::utils::message_style::MessageStyle;

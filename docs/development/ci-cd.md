@@ -375,6 +375,13 @@ call the shared functions in `scripts/common.sh`, so the fast gate and the relea
 | --- | --- | --- |
 | `run_repo_governance_gates` | file length, docs/AGENTS.md links, top-level docs placement, tracked file sizes | `check-dev.sh`, `check.sh` |
 | `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Node: `npm install`) | `check-dev.sh --lints`, `check.sh` |
+| `run_cargo_machete` | unused dependencies (`cargo machete`, plain mode — never touches Cargo.lock) | `check-dev.sh`, `check.sh` |
+
+`run_cargo_machete` is warn-and-skip when `cargo-machete` is not installed (same convention as
+`run_cargo_deny`). It has known false positives for cfg-gated and re-exported dependencies — verify
+with `rg '<dep>' crates/<crate>/src` plus a `lib.rs` `pub use` check before removing, or record a
+justified ignore in that manifest's `[package.metadata.cargo-machete]` list. See
+[dependency-bloat-audit](dependency-bloat-audit.md) for the audit this gate came from.
 
 Do not describe these checks as CI-enforced. If a CI job is added later, it should call the same
 `scripts/common.sh` functions rather than re-implementing the checks in workflow YAML.

@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
-use std::sync::LazyLock;
 use regex::Regex;
+use std::sync::LazyLock;
 
 use crate::agent::runloop::unified::config_section_headings::normalize_config_path;
 

@@ -207,3 +207,25 @@ run_cargo_vet() {
         return 1
     fi
 }
+
+run_cargo_machete() {
+    local require_binary="${1:-optional}"
+    if [ "$require_binary" != "required" ]; then
+        if ! command -v cargo-machete > /dev/null 2>&1; then
+            print_warning "cargo-machete is not available. Skipping unused-dependency check. Install it with 'cargo install cargo-machete --locked'."
+            return 0
+        fi
+    fi
+    print_status "Running cargo-machete (unused dependencies)..."
+    # Plain mode (no --with-metadata): deterministic and never touches Cargo.lock.
+    # Machete has known false positives for cfg-gated and re-exported deps —
+    # verify with rg + lib.rs `pub use` before removing, or record the crate in
+    # that manifest's [package.metadata.cargo-machete] ignored list.
+    if cargo machete; then
+        print_success "No unused dependencies found!"
+        return 0
+    else
+        print_error "cargo-machete found unused dependencies. Verify each with rg before removing (re-export/cfg-gate false positives), or add a justified ignore to [package.metadata.cargo-machete]."
+        return 1
+    fi
+}

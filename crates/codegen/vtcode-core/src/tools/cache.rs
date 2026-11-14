@@ -1,11 +1,11 @@
 //! Caching system for tool results
 
 use super::types::{EnhancedCacheEntry, EnhancedCacheStats};
-use std::sync::LazyLock;
 use quick_cache::sync::Cache;
 use serde_json::Value;
 use std::future::Future;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 

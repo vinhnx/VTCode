@@ -421,6 +421,7 @@ main() {
     run_unsafe_docs_gate || ((failed_checks++))
     run_cargo_deny || ((failed_checks++))
     run_cargo_vet || ((failed_checks++))
+    run_cargo_machete || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))
     run_clippy || ((failed_checks++))
     run_headless_check || ((failed_checks++))

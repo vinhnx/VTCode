@@ -194,6 +194,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about DeepWiki grounding and Codex reference workflow?", "How does Inspect
     and research work?", "How does Compare and apply work?"
 
+- **File**: `docs/development/dependency-bloat-audit.md`
+  - **Content**: Dependency Bloat Audit (2026-11-14)
+  - **Topics**: Method note: Cargo.lock presence ≠ compiled, Baseline (2026-11-14, macOS aarch64, local), Applied
+    changes (this audit), KEEP verdicts (verified, not bloat), DEFERRED — upstream-bound, with revisit triggers
+  - **User Questions**: "What can you tell me about Dependency Bloat Audit (2026-11-14)?", "How does Method note:
+    Cargo.lock presence ≠ compiled work?", "How does Baseline (2026-11-14, macOS aarch64, local) work?"
+
 - **File**: `docs/development/DESIRE_PATHS.md`
   - **Content**: Desire Paths in VT Code
   - **Topics**: Philosophy, Current Paved Paths, Desire Paths to Implement, How to Report Friction, Implementation

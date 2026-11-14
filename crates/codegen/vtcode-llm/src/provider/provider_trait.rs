@@ -1,8 +1,8 @@
 use async_stream::try_stream;
 use async_trait::async_trait;
 use compact_str::format_compact;
-use std::sync::LazyLock;
 use rustc_hash::FxHashMap;
+use std::sync::LazyLock;
 use std::sync::RwLock;
 use vtcode_commons::llm::BackendKind;
 

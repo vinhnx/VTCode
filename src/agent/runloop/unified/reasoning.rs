@@ -10,8 +10,8 @@
 //! - Interrupt immediately if wrong approach detected
 //! - "Have your finger on the trigger to escape and interrupt any bad behavior"
 
-use std::sync::LazyLock;
 use regex::Regex;
+use std::sync::LazyLock;
 use vtcode_core::config::ReasoningDisplayMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;

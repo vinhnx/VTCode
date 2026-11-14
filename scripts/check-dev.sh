@@ -7,6 +7,7 @@
 #   - rustfmt (formatting)
 #   - clippy (linting, default-members only)
 #   - cargo check (compilation verification)
+#   - cargo-machete (unused dependencies; warn-and-skip when not installed)
 #   - file length gate (hard ceiling: 1000 lines per tracked text file)
 #   - Rust file length report (soft: src 500 / tests 800; check.sh enforces)
 #
@@ -329,6 +330,7 @@ print_usage() {
 	echo "  - rustfmt (formatting)"
 	echo "  - clippy (linting, default-members)"
 	echo "  - cargo check (compilation)"
+	echo "  - cargo-machete (unused dependencies; skipped with a warning when the tool is absent)"
 	echo "Cargo checks, metadata, and tests use --locked to preserve Cargo.lock."
 	echo ""
 	echo "Options:"
@@ -418,6 +420,7 @@ main() {
 	run_rustfmt || ((FAILED_CHECKS++))
 	run_clippy || ((FAILED_CHECKS++))
 	run_check || ((FAILED_CHECKS++))
+	run_cargo_machete || ((FAILED_CHECKS++))
 	run_repo_governance_gates || ((FAILED_CHECKS++))
 
 	# Run extra lints if requested

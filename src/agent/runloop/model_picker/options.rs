@@ -1,7 +1,7 @@
-use std::sync::LazyLock;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::LazyLock;
 use tracing::warn;
 
 use vtcode_config::VTCodeConfig;
@@ -55,7 +55,8 @@ static PROVIDER_OPTION_INDEXES: LazyLock<HashMap<Provider, Box<[usize]>>> = Lazy
     map.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect()
 });
 
-static PICKER_PROVIDER_ORDER: LazyLock<Box<[Provider]>> = LazyLock::new(|| Provider::picker_display_order().into_boxed_slice());
+static PICKER_PROVIDER_ORDER: LazyLock<Box<[Provider]>> =
+    LazyLock::new(|| Provider::picker_display_order().into_boxed_slice());
 
 pub(super) fn build_model_options_with_overrides(
     overrides: &BTreeMap<String, ProviderOverrideConfig>,

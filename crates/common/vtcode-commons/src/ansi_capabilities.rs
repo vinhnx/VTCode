@@ -1,8 +1,8 @@
 //! ANSI terminal capabilities detection and feature support
 
 use crate::color_policy::no_color_env_active;
-use std::sync::LazyLock;
 use std::io::IsTerminal;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// Check if `CLICOLOR` environment variable is set to a non-zero value.

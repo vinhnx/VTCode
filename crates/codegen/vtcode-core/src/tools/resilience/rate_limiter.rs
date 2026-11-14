@@ -156,7 +156,8 @@ use hashbrown::HashMap;
 /// dependency of the project.
 use std::sync::LazyLock;
 
-pub static GLOBAL_RATE_LIMITER: LazyLock<Mutex<RateLimiterInner>> = LazyLock::new(|| Mutex::new(RateLimiterInner::new()));
+pub static GLOBAL_RATE_LIMITER: LazyLock<Mutex<RateLimiterInner>> =
+    LazyLock::new(|| Mutex::new(RateLimiterInner::new()));
 
 /// Per-tool rate limiter for finer-grained control.
 /// Each tool gets its own token bucket, allowing different rate limits per tool.
@@ -226,7 +227,8 @@ impl PerToolRateLimiter {
 }
 
 /// Global per-tool rate limiter instance.
-pub static PER_TOOL_RATE_LIMITER: LazyLock<Mutex<PerToolRateLimiter>> = LazyLock::new(|| Mutex::new(PerToolRateLimiter::new()));
+pub static PER_TOOL_RATE_LIMITER: LazyLock<Mutex<PerToolRateLimiter>> =
+    LazyLock::new(|| Mutex::new(PerToolRateLimiter::new()));
 
 /// Public API – try to acquire permission for a tool call.
 ///

@@ -3,9 +3,9 @@ pub use crate::acp::permission_cache::ToolPermissionCache as PermissionCache;
 use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache};
 use crate::tools::shell::ShellOutput;
 use hashbrown::HashMap;
-use std::sync::LazyLock;
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use tokio::sync::{Mutex as TokioMutex, oneshot};
 use vtcode_config::CommandCacheConfig;
 

@@ -8,10 +8,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
-use std::sync::LazyLock;
 use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
+use std::sync::LazyLock;
 use tracing::warn;
 use vtcode_config::VTCodeConfig;
 use vtcode_config::auth::AuthCredentialsStoreMode;

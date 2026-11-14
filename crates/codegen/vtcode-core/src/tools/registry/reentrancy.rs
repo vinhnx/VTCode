@@ -1,9 +1,9 @@
 //! Task-scoped tool recursion limits and frame cleanup.
 
 use hashbrown::HashMap;
-use std::sync::LazyLock;
 use parking_lot::Mutex;
 use std::cell::RefCell;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::task::Id as TokioTaskId;
 

@@ -141,8 +141,8 @@ pub use self::ProviderSpec as ProviderConfig;
 mod http_client_pool {
     use crate::config::TimeoutsConfig;
     use hashbrown::HashMap;
-    use std::sync::LazyLock;
     use reqwest::Client as HttpClient;
+    use std::sync::LazyLock;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 

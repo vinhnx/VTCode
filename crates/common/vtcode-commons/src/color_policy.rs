@@ -9,8 +9,8 @@
 //! transcript-style output paths. By default it follows the NO_COLOR
 //! environment variable with strict "present and non-empty" semantics.
 
-use std::sync::LazyLock;
 use std::ffi::OsString;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 /// Source that determined the active runtime color policy.

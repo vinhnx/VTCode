@@ -4,11 +4,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
 use humantime::format_rfc3339_seconds;
-use std::sync::LazyLock;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
 };
+use std::sync::LazyLock;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::Theme;
 use syntect::parsing::SyntaxReference;

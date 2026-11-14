@@ -7,8 +7,8 @@
 //!
 //! See `docs/reference/ansi-in-vtcode.md` for the cross-crate integration map.
 
-use std::sync::LazyLock;
 use std::io::{IsTerminal, Write};
+use std::sync::LazyLock;
 
 use crate::utils::parse_bool_env_value;
 

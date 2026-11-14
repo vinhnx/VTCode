@@ -14,8 +14,8 @@ use anstyle::Style;
 /// let diff_style = config.diff_new;
 /// ```
 use anyhow::Result;
-use std::sync::LazyLock;
 use std::path::Path;
+use std::sync::LazyLock;
 
 /// Parsed Git configuration colors for diff, status, and branch visualization
 #[derive(Debug, Clone)]

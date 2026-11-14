@@ -12,9 +12,9 @@
 
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
-use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 use tracing::debug;
 
