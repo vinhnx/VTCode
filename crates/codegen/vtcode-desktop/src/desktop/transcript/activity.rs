@@ -21,8 +21,7 @@ impl Transcript {
     ///
     /// Queues remeasurement but deliberately no tail pause: the sole caller
     /// navigates to the row immediately, and `scroll_to_item` disengages
-    /// tail-following itself. A pause here would write its stale anchor over
-    /// the jump in the same sync pass.
+    /// tail-following itself, so a pause here would be a no-op.
     pub(in crate::desktop) fn reveal_tool_item(&mut self, id: &str) -> Option<usize> {
         let index = self.position_by_id(id)?;
         if !self.items.get(index).is_some_and(|item| item.is_tool()) {

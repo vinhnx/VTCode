@@ -97,13 +97,13 @@ impl DesktopView {
                         debug_assert!(applied, "transcript remeasurement range is out of bounds");
                     }
                     TranscriptLayoutChange::PauseFollowingTail => {
-                        // Kit exposes scrolling but no pause-only operation. Scroll to the
-                        // current row only when tail-following is active; a reader who has
-                        // already scrolled away keeps the exact existing item offset.
-                        if state.item_count() > 0 && state.is_following_tail() {
-                            let anchor = state.logical_scroll_top();
-                            let _scrolled = state.scroll_to_item(anchor.item_ix, cx);
-                        }
+                        // Freeze the viewport exactly where it is: disengage
+                        // tail-following without re-anchoring, so an interaction
+                        // during streaming neither shifts the view by the row
+                        // offset nor strands a short transcript at its top row.
+                        // Tail mode is retained, so following resumes once the
+                        // reader returns to the bottom (or jump-to-latest).
+                        state.pause_following_tail(cx);
                     }
                     TranscriptLayoutChange::FollowLatest => state.scroll_to_end(cx),
                 }

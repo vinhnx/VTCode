@@ -801,6 +801,7 @@ mod theme_picker;
 mod themes_transcript;
 mod thread_tabs;
 mod toolbar_glass;
+mod transcript_follow;
 mod transcript_inspector_ctas;
 mod transcript_navigation;
 mod transcript_readability;
