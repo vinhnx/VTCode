@@ -233,9 +233,11 @@ impl DesktopView {
             self.cancel_sent_turn_id = Some(turn_id);
             // Stop means stop: a stuck foreground process holds the turn
             // past cooperative cancellation, so every delivered stop also
-            // kills foreground exec sessions. Best-effort — a full queue
-            // here is near-impossible after the send above just succeeded,
-            // and the cancel watchdog re-sends the kill before tearing down.
+            // fires the forced stop signal, widening exec-session teardown
+            // to every session, foreground and background. Best-effort — a
+            // full queue here is near-impossible after the send above just
+            // succeeded, and the cancel watchdog re-sends the kill before
+            // tearing down.
             let _ = self.request(protocol::method::EXEC_FORCE_CANCEL, json!({ keys::SESSION_ID: session_id }));
         } else {
             self.error = Some(rust_i18n::t!("app.composer.cancellation_not_queued").to_string());

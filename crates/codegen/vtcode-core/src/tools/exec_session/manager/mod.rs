@@ -629,7 +629,10 @@ impl ExecSessionManager {
     }
 
     /// Kill each selected session's process group, then close it so it cannot
-    /// linger attached. Returns `(stopped, closed, failed)` counts.
+    /// linger attached. Sessions are killed concurrently: one wedged
+    /// session's bounded close (up to [`EXEC_SESSION_CLOSE_TIMEOUT`]) must
+    /// not starve the terminate signals owed to the remaining sessions under
+    /// the escalation's 5s budget. Returns `(stopped, closed, failed)` counts.
     async fn force_cancel_sessions_matching(&self, keep: impl Fn(bool) -> bool) -> (usize, usize, usize) {
         let sessions = self.sessions.read().await;
         let ids: Vec<_> = sessions
@@ -638,28 +641,25 @@ impl ExecSessionManager {
             .map(|record| record.metadata.id.clone())
             .collect();
         drop(sessions);
-        let mut stopped = 0usize;
-        let mut closed = 0usize;
-        let mut failed = 0usize;
-        for session_id in ids {
-            let was_running = self.is_session_completed(session_id.as_str()).await.ok().flatten().is_none();
+        let outcomes = futures::future::join_all(ids.into_iter().map(|session_id| async move {
             // Even an apparently completed pipe may have a failed wait; ask
             // the backend to confirm its direct child before detaching it.
-            if let Err(error) = self.force_terminate_session(session_id.as_str()).await {
+            let was_running = self.is_session_completed(&session_id).await.ok().flatten().is_none();
+            if let Err(error) = self.force_terminate_session(&session_id).await {
                 tracing::warn!(%session_id, %error, "force-cancel terminate failed");
-                failed += 1;
-                continue;
+                return (0, 0, 1);
             }
-            match self.close_session(session_id.as_str()).await {
-                Ok(_) if was_running => stopped += 1,
-                Ok(_) => closed += 1,
+            match self.close_session(&session_id).await {
+                Ok(_) if was_running => (1, 0, 0),
+                Ok(_) => (0, 1, 0),
                 Err(error) => {
                     tracing::warn!(%session_id, %error, "force-cancel close failed");
-                    failed += 1;
+                    (0, 0, 1)
                 }
             }
-        }
-        (stopped, closed, failed)
+        }))
+        .await;
+        outcomes.into_iter().fold((0, 0, 0), |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2))
     }
 
     /// Return the number of currently live background process reservations.
