@@ -98,9 +98,25 @@ pub(crate) async fn wait_for_host_turns_ready(slot: &StopHandleSlot) {
 /// readiness while retaining the turn identity; `InlineEvent::Cancel` only
 /// dismisses overlay waits.
 pub(crate) fn fire_stop_signal(slot: &StopHandleSlot) -> bool {
+    fire_stop_signal_inner(slot, false)
+}
+
+/// Fire a local cancel through published handles, marking it forced.
+///
+/// A forced stop widens the runloop's exec-session teardown from
+/// foreground-only to every session, including background ones. Returns
+/// `false` until initialization has finished, mirroring [`fire_stop_signal`].
+pub(crate) fn fire_forced_stop_signal(slot: &StopHandleSlot) -> bool {
+    fire_stop_signal_inner(slot, true)
+}
+
+fn fire_stop_signal_inner(slot: &StopHandleSlot, force: bool) -> bool {
     if slot.ready.load(std::sync::atomic::Ordering::Acquire)
         && let Some((state, notify)) = slot.handles.get()
     {
+        if force {
+            state.mark_force_kill();
+        }
         request_local_cancel(state, notify);
         true
     } else {
@@ -389,6 +405,35 @@ mod tests {
         publish_stop_handles(&slot, &second, &Arc::new(Notify::new()));
         assert!(fire_stop_signal(&slot));
         assert!(!second.is_cancel_requested(), "first publish wins");
+    }
+
+    #[test]
+    fn forced_stop_signal_marks_force_until_a_reset_clears_it() {
+        let slot = new_stop_handle_slot();
+        assert!(!fire_forced_stop_signal(&slot), "unpublished handles never fire");
+        let state = Arc::new(CtrlCState::new());
+        let notify = Arc::new(Notify::new());
+        publish_stop_handles(&slot, &state, &notify);
+        mark_host_turns_ready(&slot);
+        assert!(fire_forced_stop_signal(&slot));
+        assert!(state.is_cancel_requested());
+        assert!(state.is_force_kill(), "a forced fire must mark the outstanding stop");
+
+        // A cooperative fire neither inherits nor sets the flag.
+        state.reset();
+        assert!(fire_stop_signal(&slot));
+        assert!(state.is_cancel_requested());
+        assert!(!state.is_force_kill(), "a cooperative stop must stay foreground-only");
+
+        // Both reset paths clear a stale flag so a later stop never widens.
+        state.mark_force_kill();
+        state.reset();
+        assert!(!state.is_force_kill());
+        state.mark_force_kill();
+        state.request_local_cancel();
+        state.mark_cancel_handled();
+        assert!(state.reset_handled_cancel());
+        assert!(!state.is_force_kill(), "consuming a handled stop must clear stale force");
     }
 
     #[test]

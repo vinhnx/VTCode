@@ -2,20 +2,26 @@ use super::*;
 use crate::agent::runloop::unified::stop_requests;
 
 /// Wait for a starting runloop to accept turn cancellation, then fire.
-/// Detached so the cancel ack never blocks on runloop startup.
+/// Detached so the cancel ack never blocks on runloop startup. `force`
+/// carries the originating request's escalation so a late fire keeps it.
 pub(super) fn spawn_late_stop_signal(
     state: std::sync::Arc<Mutex<ServerState>>,
     stop: StopHandleSlot,
     input: mpsc::UnboundedSender<InlineEvent>,
     session_id: String,
     turn_id: String,
+    force: bool,
 ) {
     tokio::spawn(async move {
         tokio::select! {
             _ = stop_requests::wait_for_host_turns_ready(&stop) => {
                 let state = state.lock().await;
                 if cancel_is_current(&state, &session_id, &turn_id) {
-                    stop_requests::fire_stop_signal(&stop);
+                    if force {
+                        stop_requests::fire_forced_stop_signal(&stop);
+                    } else {
+                        stop_requests::fire_stop_signal(&stop);
+                    }
                 }
             }
             _ = input.closed() => {}
@@ -33,18 +39,24 @@ pub(super) fn cancel_is_current(state: &ServerState, session_id: &str, turn_id: 
 /// Re-assert a cancel signal after `delay` when the same turn is still
 /// active and still cancel-requested. Closes the Submit-reset race for
 /// single presses; the gate keeps a late task from touching a later turn.
+/// `force` carries the originating request's escalation.
 pub(super) fn spawn_cancel_refire(
     state: std::sync::Arc<Mutex<ServerState>>,
     stop: StopHandleSlot,
     session_id: String,
     turn_id: String,
     delay: Duration,
+    force: bool,
 ) {
     tokio::spawn(async move {
         tokio::time::sleep(delay).await;
         let state = state.lock().await;
         if cancel_is_current(&state, &session_id, &turn_id) {
-            stop_requests::fire_stop_signal(&stop);
+            if force {
+                stop_requests::fire_forced_stop_signal(&stop);
+            } else {
+                stop_requests::fire_stop_signal(&stop);
+            }
         }
     });
 }
@@ -212,10 +224,12 @@ async fn escalate_stalled_turn(
         }
     };
 
-    // Force-stop foreground execution and owned processes, then re-assert the
-    // cooperative signals in case the first delivery was consumed or missed.
+    // Force-stop execution and owned processes, then re-assert the stop in
+    // case the first delivery was consumed or missed. The forced fire marks
+    // the outstanding cancel so the runloop's teardown widens to every exec
+    // session; the queued events stay as between-turns backstops.
     let _ = input.send(InlineEvent::ForceCancelPtySession);
-    stop_requests::fire_stop_signal(&stop);
+    stop_requests::fire_forced_stop_signal(&stop);
     let _ = input.send(InlineEvent::Cancel);
 
     // A turn that clears inside this window resolved cooperatively after all;

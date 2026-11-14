@@ -612,24 +612,32 @@ impl ExecSessionManager {
         }
     }
 
-    /// Force-stop every foreground exec session and close it. Used by the TUI
-    /// ForceCancel escape hatch so a stuck PTY cannot keep the composer locked.
-    /// Closing after the kill is intentional: `force_terminate_or_close` alone
-    /// leaves live sessions attached ("remains visible until closed"), which
+    /// Force-stop every foreground exec session and close it (the TUI
+    /// ForceCancel escape hatch). Closing after the kill is intentional:
+    /// `force_terminate_or_close` alone leaves live sessions attached, which
     /// would keep the foreground counter elevated. Background sessions are
-    /// user-owned and are left alone. Returns `(stopped, closed, failed)`
-    /// counts where `stopped` are live kills and `closed` are already-exited
-    /// sessions removed from the map.
+    /// user-owned and are left alone. Returns `(stopped, closed, failed)` counts.
     pub async fn force_cancel_foreground_sessions(&self) -> (usize, usize, usize) {
-        let ids = {
-            let sessions = self.sessions.read().await;
-            sessions
-                .values()
-                .filter(|record| !record.background.load(Ordering::Acquire))
-                .map(|record| record.metadata.id.clone())
-                .collect::<Vec<_>>()
-        };
+        self.force_cancel_sessions_matching(|background| !background).await
+    }
 
+    /// Force-stop every exec session, background ones included: a forced stop
+    /// is "stop means stop" — the stop ending the turn also ends the work
+    /// background sessions carry. Only the forced teardown reaches this.
+    pub async fn force_cancel_all_sessions(&self) -> (usize, usize, usize) {
+        self.force_cancel_sessions_matching(|_| true).await
+    }
+
+    /// Kill each selected session's process group, then close it so it cannot
+    /// linger attached. Returns `(stopped, closed, failed)` counts.
+    async fn force_cancel_sessions_matching(&self, keep: impl Fn(bool) -> bool) -> (usize, usize, usize) {
+        let sessions = self.sessions.read().await;
+        let ids: Vec<_> = sessions
+            .values()
+            .filter(|record| keep(record.background.load(Ordering::Acquire)))
+            .map(|record| record.metadata.id.clone())
+            .collect();
+        drop(sessions);
         let mut stopped = 0usize;
         let mut closed = 0usize;
         let mut failed = 0usize;
@@ -643,13 +651,8 @@ impl ExecSessionManager {
                 continue;
             }
             match self.close_session(session_id.as_str()).await {
-                Ok(_) => {
-                    if was_running {
-                        stopped += 1;
-                    } else {
-                        closed += 1;
-                    }
-                }
+                Ok(_) if was_running => stopped += 1,
+                Ok(_) => closed += 1,
                 Err(error) => {
                     tracing::warn!(%session_id, %error, "force-cancel close failed");
                     failed += 1;

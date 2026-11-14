@@ -116,6 +116,18 @@ impl ToolRegistry {
         counts
     }
 
+    /// Force-stop every exec session and close it — background sessions
+    /// included — then retire verification bookkeeping for the sessions that
+    /// are actually gone. Only the forced teardown ("stop means stop") uses
+    /// this: the stop that ends the turn also ends the work background
+    /// sessions carry. Returns `(stopped, closed, failed)` counts.
+    pub async fn force_cancel_all_sessions_and_observe_cleanup(&self) -> (usize, usize, usize) {
+        let before = self.scoped_exec_session_ids(false).await;
+        let counts = self.exec_sessions.force_cancel_all_sessions().await;
+        self.observe_terminated_exec_sessions(before).await;
+        counts
+    }
+
     /// Snapshot the ids of in-scope exec sessions (foreground only when
     /// `active_only`) for post-cleanup reconciliation.
     async fn scoped_exec_session_ids(&self, active_only: bool) -> Vec<String> {

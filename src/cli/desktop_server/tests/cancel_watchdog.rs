@@ -22,6 +22,7 @@ struct WatchdogHarness {
     input: Option<mpsc::UnboundedReceiver<InlineEvent>>,
     input_sender: mpsc::UnboundedSender<InlineEvent>,
     exit_sender: Option<oneshot::Sender<std::result::Result<(), String>>>,
+    ctrl_c: std::sync::Arc<CtrlCState>,
     runtime_task: tokio::task::JoinHandle<()>,
 }
 
@@ -34,11 +35,8 @@ impl WatchdogHarness {
         let (exit_sender, exit) = oneshot::channel();
         let runtime_task = tokio::spawn(std::future::pending::<()>());
         let stop = stop_requests::new_stop_handle_slot();
-        stop_requests::publish_stop_handles(
-            &stop,
-            &std::sync::Arc::new(CtrlCState::new()),
-            &std::sync::Arc::new(Notify::new()),
-        );
+        let ctrl_c = std::sync::Arc::new(CtrlCState::new());
+        stop_requests::publish_stop_handles(&stop, &ctrl_c, &std::sync::Arc::new(Notify::new()));
         stop_requests::mark_host_turns_ready(&stop);
         {
             let mut state = context.state.lock().await;
@@ -62,6 +60,7 @@ impl WatchdogHarness {
             input: Some(input),
             input_sender,
             exit_sender: Some(exit_sender),
+            ctrl_c,
             runtime_task,
         }
     }
@@ -223,6 +222,10 @@ fn escalation_tears_down_stalled_turn_and_restarts_session_from_history() {
         assert!(matches!(harness.recv_input().await, InlineEvent::Cancel));
         assert!(matches!(harness.recv_input().await, InlineEvent::ForceCancelPtySession));
         assert!(matches!(harness.recv_input().await, InlineEvent::Cancel));
+        assert!(
+            harness.ctrl_c.is_force_kill(),
+            "the escalation's forced fire must widen the session teardown to every session"
+        );
         assert!(matches!(harness.recv_input().await, InlineEvent::Exit));
         harness.finish_exit();
 

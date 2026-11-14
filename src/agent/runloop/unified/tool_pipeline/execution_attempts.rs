@@ -430,7 +430,7 @@ async fn run_single_tool_attempt(
         match control {
             ExecutionControl::Continue => continue,
             ExecutionControl::Cancelled => {
-                terminate_active_exec_sessions(registry, name, "cancelled").await;
+                terminate_active_exec_sessions(registry, name, "cancelled", &tokens.state).await;
                 progress_reporter.set_message(format!("{name} cancelled")).await;
                 progress_reporter.set_progress(100).await;
                 break ToolExecutionStatus::Cancelled;
@@ -460,7 +460,7 @@ async fn run_single_tool_attempt(
             }
             ExecutionControl::TimedOut => {
                 token.cancel();
-                terminate_active_exec_sessions(registry, name, "timed out").await;
+                terminate_active_exec_sessions(registry, name, "timed out", &tokens.state).await;
                 progress_reporter.set_message(format!("{name} timed out")).await;
                 let timeout_category = registry.timeout_category_for_args(name, args).await;
                 break create_timeout_error(name, timeout_category, Some(tool_timeout));
@@ -472,14 +472,25 @@ async fn run_single_tool_attempt(
     status
 }
 
-async fn terminate_active_exec_sessions(registry: &ToolRegistry, tool_name: &str, reason: &str) {
-    if let Err(err) = registry.terminate_active_exec_sessions_async().await {
+/// Terminate the exec sessions a stopped tool leaves behind. Dropping the
+/// tool future only abandons the wait: the child process belongs to the
+/// session manager and keeps running until the queued force-cancel event is
+/// consumed between turns, so the teardown happens here, where the stop is
+/// observed. A cooperative stop tears down foreground sessions; a forced
+/// stop ("stop means stop") tears down background sessions too.
+async fn terminate_active_exec_sessions(registry: &ToolRegistry, tool_name: &str, reason: &str, state: &CtrlCState) {
+    let outcome = if state.is_force_kill() {
+        registry.force_cancel_all_sessions_and_observe_cleanup().await
+    } else {
+        registry.force_cancel_foreground_sessions_and_observe_cleanup().await
+    };
+    if outcome.2 > 0 {
         debug!(
             target: "vtcode.tool.exec",
             tool = tool_name,
             cancel_reason = reason,
-            error = %err,
-            "failed to terminate exec sessions after tool interruption"
+            failed = outcome.2,
+            "failed to terminate every exec session after tool interruption"
         );
     }
 }

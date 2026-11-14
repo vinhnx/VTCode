@@ -705,9 +705,15 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     // The out-of-band signal is what stops the running turn; the
                     // queued event only dismisses overlay waits. A closed channel
                     // proves the runtime is gone, so skip the signal and go
-                    // straight to the send-failure bail below.
+                    // straight to the send-failure bail below. A forced request
+                    // marks the stop so the runloop widens its session teardown.
                     if !input.is_closed() {
-                        if stop_requests::fire_stop_signal(&stop) {
+                        let fired = if params.force {
+                            stop_requests::fire_forced_stop_signal(&stop)
+                        } else {
+                            stop_requests::fire_stop_signal(&stop)
+                        };
+                        if fired {
                             // Reassert while the same turn is active as a
                             // backstop for older interruption paths.
                             spawn_cancel_refire(
@@ -716,6 +722,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                                 params.session_id.clone(),
                                 params.turn_id.clone(),
                                 CANCEL_REFIRE_DELAY,
+                                params.force,
                             );
                         } else {
                             // Startup is not ready for turn cancellation yet.
@@ -725,6 +732,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                                 input.clone(),
                                 params.session_id.clone(),
                                 params.turn_id.clone(),
+                                params.force,
                             );
                         }
                     }
@@ -748,7 +756,11 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     // re-queueing: the first signal may have been consumed
                     // already, and the turn is still active. Non-blocking: the
                     // first press owned the publish wait, so repeats stay cheap.
-                    stop_requests::fire_stop_signal(&stop);
+                    if params.force {
+                        stop_requests::fire_forced_stop_signal(&stop);
+                    } else {
+                        stop_requests::fire_stop_signal(&stop);
+                    }
                     if params.force {
                         // A forced repeat escalates now instead of waiting out
                         // the first press's grace period. The escalation claim
@@ -776,7 +788,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
         }
         method::EXEC_FORCE_CANCEL | method::EXEC_BACKGROUND => {
             let params: protocol::SessionIdParams = parse_params(&request.params)?;
-            let input = {
+            let (input, stop, turn_active) = {
                 let state = context.state.lock().await;
                 if state.session_id.as_deref() != Some(params.session_id.as_str()) {
                     bail!("session is not selected");
@@ -785,11 +797,23 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     .runtime
                     .as_ref()
                     .ok_or_else(|| anyhow!("selected session is not running"))?;
-                runtime.input.clone()
+                (runtime.input.clone(), runtime.stop.clone(), state.active_turn_id.is_some())
             };
-            // No active-turn gate: a stuck foreground session can outlive its
-            // turn, and the escape hatch must work whenever sessions exist.
+            // No active-turn gate on the queued event: a stuck foreground
+            // session can outlive its turn, and the escape hatch must work
+            // whenever sessions exist. When idle the parked driver consumes
+            // it immediately.
             let event = if request.method == method::EXEC_FORCE_CANCEL {
+                // The queued event is only consumed between turns, so a force
+                // stop for a mid-turn long-running process also fires the
+                // forced stop signal: the runloop's cancel paths observe it
+                // immediately and widen the exec-session teardown to every
+                // session, foreground and background. Gated on an active turn
+                // because an unhandled stop signal belongs to the next
+                // submitted turn and would cancel it on arrival.
+                if turn_active {
+                    stop_requests::fire_forced_stop_signal(&stop);
+                }
                 InlineEvent::ForceCancelPtySession
             } else {
                 InlineEvent::BackgroundOperation

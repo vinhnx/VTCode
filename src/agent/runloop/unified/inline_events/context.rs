@@ -418,7 +418,8 @@ impl<'a> InlineEventContext<'a> {
 
     /// Escape hatch: force-stop foreground exec sessions so a stuck PTY
     /// cannot keep the runloop loading and the composer locked. Background
-    /// sessions are user-owned and stay untouched.
+    /// sessions are user-owned and stay untouched — unless the outstanding
+    /// stop was forced ("stop means stop"), which tears down every session.
     async fn handle_force_cancel_pty_session(&mut self) -> Result<InlineLoopAction> {
         self.state.reset_interrupt_state();
         if self.tool_registry.is_none() && self.exec_sessions.is_none() {
@@ -427,17 +428,31 @@ impl<'a> InlineEventContext<'a> {
                 .line(MessageStyle::Warning, "No exec session manager is available to force-cancel.")?;
             return Ok(self.input_processor().passive());
         }
-        self.state
-            .renderer()
-            .line(MessageStyle::Status, "Force-cancelling foreground exec sessions...")?;
+        let forced = self.ctrl_c_state.is_force_kill();
+        self.state.renderer().line(
+            MessageStyle::Status,
+            if forced {
+                "Force-cancelling exec sessions..."
+            } else {
+                "Force-cancelling foreground exec sessions..."
+            },
+        )?;
         // Prefer the registry-owned path so force-cancelled mutating sessions
         // retire their verification boundary instead of stranding it. The
         // manager-direct path is the fallback when no registry is wired; it
         // cannot observe verification bookkeeping.
         let (stopped, closed, failed) = if let Some(registry) = self.tool_registry.clone() {
-            registry.force_cancel_foreground_sessions_and_observe_cleanup().await
+            if forced {
+                registry.force_cancel_all_sessions_and_observe_cleanup().await
+            } else {
+                registry.force_cancel_foreground_sessions_and_observe_cleanup().await
+            }
         } else if let Some(exec_sessions) = self.exec_sessions.clone() {
-            exec_sessions.force_cancel_foreground_sessions().await
+            if forced {
+                exec_sessions.force_cancel_all_sessions().await
+            } else {
+                exec_sessions.force_cancel_foreground_sessions().await
+            }
         } else {
             // Unreachable: availability was checked above. Fall through to
             // the passive action without touching any session.

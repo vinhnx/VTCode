@@ -5,7 +5,7 @@
 //! debounce/window timing, and steer-delivery accounting are verbatim, and the
 //! `pub(crate)` surface re-exported from `state.rs` is unchanged.
 
-use std::sync::atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +97,12 @@ pub(crate) struct CtrlCState {
     /// steers delivered before the runloop drains does not double-queue the
     /// second and later messages.
     steer_delivered: AtomicUsize,
+    /// Stop-signal escalation: set only by a host's forced stop (desktop
+    /// force stop, forced watchdog). The runloop's cancel paths widen the
+    /// exec-session teardown from foreground-only to every session —
+    /// including background ones — when this is set. Cleared by both reset
+    /// paths so a later cooperative stop never inherits stale force.
+    force_kill: AtomicBool,
 }
 
 const DOUBLE_CTRL_C_WINDOW: Duration = Duration::from_millis(1000);
@@ -182,6 +188,19 @@ impl CtrlCState {
         self.last_signal_time.store(0, Ordering::SeqCst);
     }
 
+    /// Record that the outstanding stop was forced. A TUI Ctrl+C never sets
+    /// this; only the host's force path (desktop force stop, forced watchdog
+    /// escalation) does.
+    pub(crate) fn mark_force_kill(&self) {
+        self.force_kill.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether the outstanding stop was forced: exec-session teardown widens
+    /// to every session instead of foreground-only.
+    pub(crate) fn is_force_kill(&self) -> bool {
+        self.force_kill.load(Ordering::SeqCst)
+    }
+
     pub(crate) fn request_exit(&self) {
         self.exit_started.get_or_init(std::time::Instant::now);
         self.phase.store(CtrlCPhase::ExitRequested as u8, Ordering::SeqCst);
@@ -202,6 +221,7 @@ impl CtrlCState {
     pub(crate) fn reset(&self) {
         self.set_phase(CtrlCPhase::Idle);
         self.last_signal_time.store(0, Ordering::SeqCst);
+        self.force_kill.store(false, Ordering::SeqCst);
     }
 
     /// Clear only a cancellation already consumed by the runloop. A new
@@ -213,6 +233,7 @@ impl CtrlCState {
             .is_ok();
         if cleared {
             self.last_signal_time.store(0, Ordering::SeqCst);
+            self.force_kill.store(false, Ordering::SeqCst);
         }
         cleared
     }

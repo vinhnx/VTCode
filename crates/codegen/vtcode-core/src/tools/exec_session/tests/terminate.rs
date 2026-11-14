@@ -95,6 +95,52 @@ async fn force_cancel_foreground_sessions_skips_background() -> anyhow::Result<(
     Ok(())
 }
 
+/// A forced stop is "stop means stop": the all-sessions teardown must kill
+/// the running background session too, not only the foreground one. This is
+/// what makes Stop actually end a long-running task the agent backgrounded.
+#[tokio::test]
+#[cfg(unix)]
+async fn force_cancel_all_sessions_kills_background_too() -> anyhow::Result<()> {
+    let temp_dir = tempdir()?;
+    let workspace_root = canonicalize_workspace(temp_dir.path());
+    let pty_sessions = PtySessionManager::new(workspace_root.clone(), PtyConfig::default());
+    let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
+    let foreground_count = Arc::new(AtomicUsize::new(0));
+    manager.set_foreground_pty_counter(Arc::clone(&foreground_count));
+
+    manager
+        .create_pipe_session(
+            "force-all-fg".to_string().into(),
+            vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 30".to_string()],
+            workspace_root.clone(),
+            HashMap::new(),
+        )
+        .await?;
+    manager
+        .create_pipe_session_with_sandbox_and_background(
+            "force-all-bg".to_string().into(),
+            vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 30".to_string()],
+            workspace_root,
+            HashMap::new(),
+            false,
+            true,
+        )
+        .await?;
+    assert_eq!(foreground_count.load(Ordering::Relaxed), 1);
+
+    let (stopped, closed, failed) = manager.force_cancel_all_sessions().await;
+    assert_eq!(failed, 0);
+    assert_eq!(closed, 0);
+    assert_eq!(stopped, 2, "both the foreground and the background session were live");
+    assert!(manager.session_record("force-all-fg").await.is_err());
+    assert!(
+        manager.session_record("force-all-bg").await.is_err(),
+        "a forced stop must not leave the background session behind"
+    );
+    assert_eq!(foreground_count.load(Ordering::Relaxed), 0);
+    Ok(())
+}
+
 #[tokio::test]
 async fn force_terminate_pipe_waits_for_the_child_exit() -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
