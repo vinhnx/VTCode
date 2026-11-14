@@ -5,6 +5,85 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.182.2 - 2026-11-14
+
+### Highlights
+
+#### Bug Fixes
+
+- Vary generic tool-free recovery retries after repeated violations (6287da70)
+- Apply glass translucency per macOS HIG (45e6088b)
+- Force stop tears down all exec sessions (b98e74bc)
+- Watchdog kills exec sessions directly from a published handle (3b56103c)
+- Forced stop signal never resurrects a handled cancel (693d6acf)
+- Map gemini medium thinking effort via the capability table (51f20d36)
+- Let oversized single SSE events parse and fail closed non-retryable (63b7c8cf)
+- Kill exec sessions concurrently on forced stop (6c730bec)
+- Cover user layers in the removed-key warning and purge stale budget docs (6f574610)
+- Clear three release-gate failures (dcbe8184)
+- Purge removed budget keys from the init scaffold and eval overrides (3ca8b10a)
+- Leave the translucent toolbar fully transparent (8fc134cb)
+- Freeze transcript viewport in place on row toggles (f4692faf)
+- Keep the diff card Changes jump always visible (9165e89d)
+- Ignore unparsable SGR params instead of resetting styles (cf113608)
+- Show release notes on the first launch after an update (31e2ec16)
+
+#### Documentation
+
+- Document 14-day dependency cooldown opt-in (185a36be)
+- Quote mermaid node labels in Development diagram (b7aee01b)
+- Enforce rustdoc link and table lints workspace-wide (3272f402)
+- Document force-stop teardown and glass behavior (4c164fc1)
+- Align shipped-surface docs with defuddle removal and footer elapsed (a302a4ff)
+- Record post-cleanup measurements in the audit (218e0a38)
+- Record exec-layer consolidation and ACP revisit trigger (818036be)
+- Record 3.6.0 migration, remaining blocking slice, 5.x trigger (eb6ea707)
+
+#### Features
+
+- First-launch changelog popup and conditional force-cancel (e39699e3)
+- Monochrome Codex-style tool callouts with kind icons (37961a41)
+- Add navigation updater button (fdc3a26a)
+- Revamp transcript feedback surfaces (521c6faf)
+- Pair turn completion footer with elapsed duration (05dd2b70)
+- Audit agent harness and simplify prompts, tools, accounting (4cb23e81)
+- Add tiered Rust file-length gate with ratchet baseline (690c275f)
+- Promote the unwrap/expect scan to enforce (ba1e6573)
+- Add a shared mount fade for toggles, panels, and popups (856b4509)
+- Hide failed-result evidence behind the compact failed shape (b51044f7)
+
+### Other Changes
+
+#### Other
+
+- Align MD060 table pipes in two development docs (9b1fc00b)
+- Revert "Update guide" (003ca91c)
+- Fix build (85b314b2)
+
+#### Refactors
+
+- Restate inline footer matcher as explicit shape check (b2cacf85)
+- Adopt 1.100 never type and DropGuard helper (90112a08)
+- Adopt bool::toggle and str::trim helpers (1d2b5b16)
+- Complete trim sweep over Path and slice sites (2981553b)
+- Unify terminal capability probing and fix copy pollution (1735ef50)
+- Remove the turn tool-loop budget (38f4145f)
+- Centralize workspace manifests and drop unused deps (6b7ed4ae)
+- Trim tokio "full" to explicit per-crate feature edges (6c1d696c)
+- Replace once_cell with std::sync::LazyLock/OnceLock (0749f986)
+- Consolidate async_command on tokio::process + group kill (8095f910)
+- Migrate agent-client-protocol 2.0.0 to 3.6.0, drop async-process (dcef0d1a)
+
+#### Tests
+
+- Match turn footer elapsed suffix in inline stream test (a5065e2c)
+- Resolve shipped binary without integration-only env var (2e911429)
+- Isolate prepared-call budget sweep in quick profile (89bad655)
+- Honor CARGO_TARGET_DIR in shipped-binary fallback (97457a25)
+- Pin merge-gateway delta branches and tracker task parsing (9092c0ea)
+- Pin glass translucency coverage across every theme (db07b2cf)
+- Add glass surface alpha probe across all themes (81897264)
+
 ## 0.182.1 - 2026-11-13
 
 ### Highlights
