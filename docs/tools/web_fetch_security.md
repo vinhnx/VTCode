@@ -3,8 +3,8 @@
 The `web_fetch` tool provides flexible security modes for controlling which URLs can be accessed by VT Code agents.
 
 `web_fetch` accepts remote `http://` or `https://` URLs only (subject to the HTTPS, SSRF, allowlist, and blocklist
-checks below). `file://` URLs, relative paths, and local workspace paths are rejected before either normal fetching or
-the `format = "markdown"` Defuddle route. Use `read_file` or `unified_file` to read local resources instead.
+checks below). `file://` URLs, relative paths, and local workspace paths are rejected before fetching. Use `read_file`
+or `unified_file` to read local resources instead.
 
 ## Security Modes
 

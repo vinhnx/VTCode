@@ -1818,12 +1818,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Agent Justification System?", "How does Overview work?", "How does
     Architecture work?"
 
-- **File**: `docs/tools/defuddle_fetch.md`
-  - **Content**: Defuddle Fetch (now `web_fetch` `format=markdown`)
-  - **Topics**: Guard Rails, Related Tools
-  - **User Questions**: "What can you tell me about Defuddle Fetch (now `web_fetch` `format=markdown`)?", "How does
-    Guard Rails work?", "How does Related Tools work?"
-
 - **File**: `docs/tools/EDITOR_CONFIG.md`
   - **Content**: External Editor Configuration
   - **Topics**: Overview, Configuration, Editor Detection Order, Usage Examples, Setting Your Preferred Editor

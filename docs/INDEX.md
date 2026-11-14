@@ -24,7 +24,6 @@ Last reviewed: 2026-11-06
 - [AI Tool Surface Migration](development/ai-tool-surface-migration.md) - Breaking-change notes for the Codex-style
   default tools.
 - [Web Search Tool](tools/web_search.md) - Web search configuration and guard rails.
-- [Defuddle Fetch](tools/defuddle_fetch.md) - Markdown extraction fallback for complex pages.
 - [Scheduled Tasks](user-guide/scheduled-tasks.md) - Reminder and durable scheduler flows.
 - [WebMCP Browser Bridge User Guide](user-guide/webmcp.md) - Connect a browser editor to an active VT Code session or a
   bounded standalone workspace bridge.

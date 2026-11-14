@@ -102,5 +102,5 @@ published DuckDuckGo quota.
 
 ## Related Tools
 
-- `web_fetch` — fetch full page content from a specific URL; pass `format="markdown"` for defuddle-style
-  cleaned-markdown extraction (consolidates the former `defuddle_fetch` tool)
+- `web_fetch` — fetch full page content from a specific URL; returns an inline preview plus a `temp_file` path with the
+  full body (the former `defuddle_fetch` markdown-extraction relay was removed)

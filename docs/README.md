@@ -126,7 +126,7 @@ VT Code has undergone significant improvements:
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
 - **Advanced Code Search** - Bounded definitions, syntactic usages, literal text, and matching paths through
   `code_search` in the advanced VT Code profile
-- **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped
+- **Web Search & Fetch** — `web_search` and `web_fetch` tools with TOML-driven network allowlist and domain-scoped
   approval caching
 - **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary
   file cleanup
@@ -174,7 +174,6 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the
   Codex-style default tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
-- **[Defuddle Fetch](./tools/defuddle_fetch.md)** - Markdown extraction fallback for complex pages
 - **[Code Standards](../AGENTS.md)** - Coding guidelines and best practices
 - **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and
   per-repository persistent memory
@@ -454,7 +453,7 @@ This documentation reflects version 0.133.21 of VT Code, which includes signific
 - Error recovery and resilience with intelligent pattern detection
 - Conversation summarization for long-running sessions
 - Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
-- `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist
+- `web_search` and `web_fetch` tools with TOML-driven network allowlist
 - query-led `code_search` for definitions, syntactic usages, literal text, and matching paths in the advanced VT Code
   profile
 - Post-tool recovery cycle tracking with cap checks and temporary file cleanup
