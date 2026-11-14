@@ -51,6 +51,13 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
 5. **cargo-machete wired into the gates** (`run_cargo_machete` in `scripts/common.sh`; runs in the
    `check-dev.sh` fast gate and `scripts/check.sh` release gate, warn-and-skip when the tool is
    absent — mirroring `run_cargo_deny`).
+6. **Exec layer consolidated on tokio::process** (`8095f910e`): `exec/async_command.rs` replaced
+   async-process with tokio::process + safe `process_group(0)`; timeout/cancellation kills now
+   target the whole process group via vtcode-bash-runner's `kill_process_group_by_pid` (DRY reuse),
+   fixing the grandchild-survival limitation the old doc comment documented. The
+   `Arc<Mutex<Child>>` deadlock workaround disappeared. Also fixed a latent bash-runner bug:
+   `kill_process_group_by_pid_with_signal` treated ESRCH as success via `ErrorKind::NotFound`,
+   which Rust does not produce on macOS; it now matches `Errno::ESRCH` directly.
 
 ## KEEP verdicts (verified, not bloat)
 
@@ -75,7 +82,7 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
 | `ratatui-cheese` re-enables ratatui default features via unification (calendar widget → duplicate `time` crate, `ratatui-macros`, `underline-color`) | cheese's own manifest requests plain `ratatui = "0.30"` with defaults; feature unification takes the union, so `default-features = false` on *our* edge is a no-op (verified: the flag was applied and reverted as ineffective). Load-bearing dep (13 files: input/help/theme/spinner), so vendoring a fork is disproportionate. Note: `time` stays compiled regardless via the mac-notification-sys patch and syntect→plist. | ratatui-cheese sets `default-features = false` upstream, or a `cargo bloat` run shows the calendar+macros chain is material. |
 | fancy-regex ×3 (0.13 harmony / 0.16 syntect / 0.19 jsonschema), tokio-tungstenite 0.29+0.30 (axum ws / vtcode-llm), toml_edit 0.22+0.25, base64 0.22+0.23, dirs ×3, hashbrown ×5 (desktop) | transitive pins of always-on product deps | parent-crate bumps; `deny.toml` `multiple-versions = "warn"` tracks drift. |
 | desktop gpui-fork duplicates (gpui-pre-reqwest 0.12.15, dirs 5/6, rand 0.8, toml 0.8, serde-saphyr 1.3) | `patches/gpui-pre-macos` fork | gpui-pre fork update; desktop-only, no CLI impact. |
-| `async-process` (smol family, ~10 small crates) in vtcode-core | used in exactly one file (`src/exec/async_command.rs`); likely deliberate for child-reaping semantics that `tokio::process` handles differently (unix reaper) | separate evaluation with exec-layer behavioral tests + measurement. |
+| smol family (async-process/async-io/async-net/…) still in the CLI binary | `agent-client-protocol` **2.0.0** (pinned `=2.0.0` for vtcode-acp) depends on async-process *mandatorily*; ACP ≥3.x made it optional behind the `process` feature (verified on crates.io: 5.2.0 is current). Our port already removed vtcode-core's own async-process edge (2026-11-14, commit `8095f910e`). | Upgrade agent-client-protocol 2.0.0 → 3.x+ **as its own migration**: three breaking releases of protocol message types; audit vtcode-acp's API usage and the `unstable_auth_methods` feature first; do not bundle with unrelated work. |
 
 ## Known manifest-lint expectations
 
