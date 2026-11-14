@@ -233,6 +233,7 @@ main() {
 			print_info "Step 1 (dry-run): Would run cargo check for x86_64-apple-darwin and aarch64-apple-darwin"
 		else
 			print_info "Step 1: Local sanity check (macOS: both architectures)..."
+			ensure_macos_rust_targets
 			env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo check --locked --profile release \
 				--target x86_64-apple-darwin --target aarch64-apple-darwin --jobs 4
 		fi
@@ -378,6 +379,9 @@ main() {
 
 		# Build macOS binaries in parallel
 		print_info "Building macOS binaries in parallel..."
+		# Needed when Step 1 was skipped (--skip-release): the arch builds
+		# below fail the same E0463 way without the std targets installed.
+		ensure_macos_rust_targets
 		macos_release_signing_preflight
 
 		# Binary size directly impacts cold-start time (dyld page-faults on the

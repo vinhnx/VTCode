@@ -5,6 +5,22 @@
 # This file is sourced by `scripts/release.sh`; it intentionally does not set
 # shell options so the caller controls `set -euo pipefail`.
 
+# Ensure the macOS Rust std targets required by Step 1 (sanity check) and
+# Step 4 (release builds) are installed. `rust-toolchain.toml` only pins the
+# Linux targets, so a fresh Apple Silicon checkout lacks x86_64-apple-darwin
+# and the Step 1 `cargo check` fails with E0463 (`can't find crate for core`).
+ensure_macos_rust_targets() {
+	local installed
+	installed=$(rustup target list --installed 2>/dev/null || true)
+	local target
+	for target in x86_64-apple-darwin aarch64-apple-darwin; do
+		if ! printf '%s\n' "$installed" | grep -Fqx "$target"; then
+			print_info "Installing Rust target $target..."
+			rustup target add "$target"
+		fi
+	done
+}
+
 package_release_archive() {
 	local target=$1
 	local binary_name=$2
