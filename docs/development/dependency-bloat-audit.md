@@ -58,6 +58,12 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
    `Arc<Mutex<Child>>` deadlock workaround disappeared. Also fixed a latent bash-runner bug:
    `kill_process_group_by_pid_with_signal` treated ESRCH as success via `ErrorKind::NotFound`,
    which Rust does not produce on macOS; it now matches `Errno::ESRCH` directly.
+7. **agent-client-protocol 2.0.0 → 3.6.0** (`dcef0d1a3`): the CLI binary no longer compiles
+   async-process/async-io at all (optional behind ACP's `process` feature since 3.0; we enable
+   only `stdio` + `schemars`). Closure 2172 → 2140 nodes. Protocol change absorbed: upstream
+   removed env-var auth methods from the schema, so ACP advertisement now covers the two OAuth
+   agent methods + terminal login; vtcode's own env-var/API-key configuration is unaffected.
+   The remaining smol slice is `blocking` via the `stdio` feature (see DEFERRED).
 
 ## KEEP verdicts (verified, not bloat)
 
@@ -82,7 +88,7 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
 | `ratatui-cheese` re-enables ratatui default features via unification (calendar widget → duplicate `time` crate, `ratatui-macros`, `underline-color`) | cheese's own manifest requests plain `ratatui = "0.30"` with defaults; feature unification takes the union, so `default-features = false` on *our* edge is a no-op (verified: the flag was applied and reverted as ineffective). Load-bearing dep (13 files: input/help/theme/spinner), so vendoring a fork is disproportionate. Note: `time` stays compiled regardless via the mac-notification-sys patch and syntect→plist. | ratatui-cheese sets `default-features = false` upstream, or a `cargo bloat` run shows the calendar+macros chain is material. |
 | fancy-regex ×3 (0.13 harmony / 0.16 syntect / 0.19 jsonschema), tokio-tungstenite 0.29+0.30 (axum ws / vtcode-llm), toml_edit 0.22+0.25, base64 0.22+0.23, dirs ×3, hashbrown ×5 (desktop) | transitive pins of always-on product deps | parent-crate bumps; `deny.toml` `multiple-versions = "warn"` tracks drift. |
 | desktop gpui-fork duplicates (gpui-pre-reqwest 0.12.15, dirs 5/6, rand 0.8, toml 0.8, serde-saphyr 1.3) | `patches/gpui-pre-macos` fork | gpui-pre fork update; desktop-only, no CLI impact. |
-| smol family (async-process/async-io/async-net/…) still in the CLI binary | `agent-client-protocol` **2.0.0** (pinned `=2.0.0` for vtcode-acp) depends on async-process *mandatorily*; ACP ≥3.x made it optional behind the `process` feature (verified on crates.io: 5.2.0 is current). Our port already removed vtcode-core's own async-process edge (2026-11-14, commit `8095f910e`). | Upgrade agent-client-protocol 2.0.0 → 3.x+ **as its own migration**: three breaking releases of protocol message types; audit vtcode-acp's API usage and the `unstable_auth_methods` feature first; do not bundle with unrelated work. |
+| agent-client-protocol 3.6.0 → 5.x | 5.0.0 restructures the SDK: v1/v2 versioned modules (`schema::v1` → `v1::schema`), version-neutral `Builder`, `SessionSetup`, request handles typed by protocol version. Empirically 24 structural errors vs 12 mechanical ones for 3.6.0. Our 3.6.0 landing (`dcef0d1a3`) already removed async-process/async-io from the CLI binary — the remaining smol slice is `blocking` (+ async-channel/async-task) pulled by ACP's `stdio` feature for the native Stdio transport. | Dedicated migration onto the settled 5.x surface; check whether 5.x's transport story allows dropping `blocking` too (custom byte-stream adapter instead of the native Stdio adapter). |
 
 ## Known manifest-lint expectations
 
