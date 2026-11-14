@@ -306,6 +306,9 @@ iter_not_returning_iterator = "warn"
 expl_impl_clone_on_copy = "warn"
 fallible_impl_from = "warn"
 dbg_macro = "warn"
+# Rust 1.100 additions (warn-by-default upstream; listed for self-documentation).
+option_zip_none = "warn"
+needless_nonzero_get = "warn"
 
 # Don't `allow` Your Way Around These Lints
 # Note: These require manual curation of all existing suppressions.
