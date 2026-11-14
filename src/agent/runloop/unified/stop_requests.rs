@@ -127,7 +127,15 @@ pub(crate) fn fire_stop_signal(slot: &StopHandleSlot) -> bool {
 ///
 /// A forced stop widens the runloop's exec-session teardown from
 /// foreground-only to every session, including background ones. Returns
-/// `false` until initialization has finished, mirroring [`fire_stop_signal`].
+/// `false` until initialization has finished, mirroring [`fire_stop_signal`],
+/// and also `false` when the runloop already consumed a stop for this turn:
+/// the runloop marks the cancel handled while the turn terminates, and a
+/// forced fire there would flip it back to unhandled — auto-cancelling the
+/// next submitted turn. System-initiated forced fires (the desktop escape
+/// hatch, forced refires, watchdog escalation) never need that resurrection;
+/// their process kill is covered by the queued force-cancel event and the
+/// watchdog's direct kill. A user's deliberate late cooperative re-press
+/// still re-asserts, as pinned by tests.
 pub(crate) fn fire_forced_stop_signal(slot: &StopHandleSlot) -> bool {
     fire_stop_signal_inner(slot, true)
 }
@@ -136,6 +144,9 @@ fn fire_stop_signal_inner(slot: &StopHandleSlot, force: bool) -> bool {
     if slot.ready.load(std::sync::atomic::Ordering::Acquire)
         && let Some((state, notify)) = slot.handles.get()
     {
+        if force && state.is_cancel_handled() {
+            return false;
+        }
         if force {
             state.mark_force_kill();
         }
@@ -471,6 +482,31 @@ mod tests {
         assert!(publish_exec_sessions(&slot, &manager));
         assert!(!publish_exec_sessions(&slot, &manager), "a repeated publish keeps the first manager");
         assert!(host_exec_sessions(&slot).is_some());
+    }
+
+    #[test]
+    fn forced_fire_never_resurrects_a_handled_cancel() {
+        let slot = new_stop_handle_slot();
+        let state = Arc::new(CtrlCState::new());
+        let notify = Arc::new(Notify::new());
+        publish_stop_handles(&slot, &state, &notify);
+        mark_host_turns_ready(&slot);
+        // The runloop consumed a stop and is terminating the turn: outcome
+        // processing marks the cancel handled before the server clears the
+        // active turn, so a forced fire can land in that window.
+        state.request_local_cancel();
+        state.mark_cancel_handled();
+        assert!(state.is_cancel_handled());
+        assert!(
+            !fire_forced_stop_signal(&slot),
+            "a system-initiated forced fire must not resurrect the handled cancel"
+        );
+        assert!(state.is_cancel_handled(), "phase stays handled");
+        assert!(!state.is_force_kill(), "no force bit without a live cancel");
+        // Asymmetric control: a user's deliberate late cooperative re-press
+        // re-asserts (pinned behavior — the stop belongs to the next turn).
+        assert!(fire_stop_signal(&slot));
+        assert!(state.is_cancel_requested());
     }
 
     #[test]
