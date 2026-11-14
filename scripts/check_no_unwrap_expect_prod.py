@@ -60,6 +60,13 @@ def list_tracked_rust_files() -> list[Path]:
 
 def is_test_path(path: Path) -> bool:
     rel = path.relative_to(REPO_ROOT).as_posix()
+    # Vendored third-party trees and generated output are not governed here
+    # (same exclusion policy as the tiered length gate); they would only
+    # pollute the findings with upstream code by design.
+    if rel.startswith("patches/"):
+        return True
+    if rel.endswith("/generated.rs") or rel.endswith(".generated.rs"):
+        return True
     return (
         rel.startswith("fuzz/")
         or rel.startswith("target/")
@@ -71,6 +78,13 @@ def is_test_path(path: Path) -> bool:
         or rel.endswith("tests.rs")
         or rel.endswith("_test.rs")
         or rel.endswith("_tests.rs")
+        # cfg(test) module conventions (see the tiered length gate's tiers):
+        # `mod tests_plugin;` loads `tests_plugin.rs`, `mod X_tests;` loads
+        # the `X_tests/` directory, and `test_support.rs` files are
+        # test-only helpers by name.
+        or Path(rel).name.startswith("tests_")
+        or "_tests/" in rel
+        or Path(rel).name == "test_support.rs"
     )
 
 
