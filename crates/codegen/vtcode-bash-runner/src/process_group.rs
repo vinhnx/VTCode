@@ -155,17 +155,21 @@ pub fn kill_process_group_by_pid_with_signal(pid: u32, signal: KillSignal) -> io
     // Always attempt to kill the direct child process handle as a fallback.
     // This ensures termination even if the cached PGID was stale or
     // the process group kill had issues.
-    if let Err(err) = signal::kill(target_pid, signal.as_nix_signal()) {
-        let io_err = nix_err_to_io(err);
-        if io_err.kind() == ErrorKind::NotFound {
-            // If direct kill says not found, we're done regardless of pgid result.
-            return Ok(());
+    match signal::kill(target_pid, signal.as_nix_signal()) {
+        Ok(()) => {}
+        // ESRCH means the target already exited and was reaped: nothing left
+        // to kill. Rust does not classify ESRCH as ErrorKind::NotFound on
+        // every host (including macOS) — see kill_process_group_with_signal —
+        // so match the errno itself instead of relying on ErrorKind.
+        Err(Errno::ESRCH) => return Ok(()),
+        Err(err) => {
+            let io_err = nix_err_to_io(err);
+            // If we have a pgid error and a direct kill error, prefer the pgid one.
+            if let Some(pgid_error) = pgid_err {
+                return Err(pgid_error);
+            }
+            return Err(io_err);
         }
-        // If we have a pgid error and a direct kill error, prefer the pgid one.
-        if let Some(pgid_error) = pgid_err {
-            return Err(pgid_error);
-        }
-        return Err(io_err);
     }
 
     Ok(())

@@ -2,14 +2,12 @@ use hashbrown::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
-use async_process::{Child, Command as AsyncCommand, ExitStatus, Stdio};
-
-use futures::io::AsyncReadExt;
-use tokio::sync::Mutex;
+use std::process::{ExitStatus, Stdio};
+use tokio::io::AsyncReadExt;
+use tokio::process::{Child, Command};
 use tokio::time::{Sleep, sleep, timeout};
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 
@@ -22,16 +20,14 @@ const DEFAULT_CAPTURE_LIMIT: usize = 256 * 1024; // 256 KiB
 /// the `TimedOut`/`Cancelled` paths, for (a) the child to be reaped and (b) the
 /// stdout/stderr pipes to drain.
 ///
-/// Killing the direct child does not guarantee its descendants exit: a
-/// grandchild process (for example a background server, a Python
-/// `subprocess.Popen`, or a `multiprocessing` worker) may have inherited the
-/// stdout/stderr pipe file descriptors and can keep the write end open after
-/// the direct child is gone. In that case the pipe never reaches EOF and an
-/// unbounded drain would block `run` forever, silently defeating the tool's
-/// own timeout/cancellation guarantee. Bounding the wait ensures `run` always
-/// returns; whatever bytes were already captured before the bound elapses are
-/// returned as-is, and any data written afterward is accepted as lost since
-/// the process has already been killed.
+/// The timeout/cancellation kill targets the child's whole process group, so
+/// descendants that inherited the group die with it. Two rare cases still
+/// justify the bound: a grandchild that called `setsid()` escapes the group and
+/// can keep the stdout/stderr pipe write ends open, and a wedged reap could
+/// stall indefinitely. Bounding the wait ensures `run` always returns; whatever
+/// bytes were already captured before the bound elapses are returned as-is,
+/// and any data written afterward is accepted as lost since the process has
+/// already been killed.
 const POST_KILL_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Configuration for capturing a process stream (stdout or stderr).
@@ -93,14 +89,11 @@ pub struct AsyncProcessRunner;
 impl AsyncProcessRunner {
     /// Spawn and await a child process with the given options.
     ///
-    /// On timeout or cancellation, only the direct child is killed (this
-    /// crate's `async-process` dependency does not expose creating the child
-    /// in its own process group without resorting to unsafe `pre_exec`
-    /// hooks, unlike the `libc`-based group-kill used by
-    /// `vtcode-bash-runner`), so any grandchild process the child spawned may
-    /// survive and keep holding the stdout/stderr pipes open. The post-kill
-    /// stream drain and process reap are therefore bounded by
-    /// `POST_KILL_DRAIN_TIMEOUT` so this function can never hang.
+    /// On Unix the child starts in its own process group, so the timeout and
+    /// cancellation kills terminate the child *and* any descendant that
+    /// inherited the group (see `kill_child_process_group`). The post-kill
+    /// stream drain and process reap stay bounded by `POST_KILL_DRAIN_TIMEOUT`
+    /// so this function can never hang.
     pub async fn run(options: ProcessOptions) -> Result<ProcessOutput> {
         if options.program.is_empty() {
             return Err(anyhow!("program cannot be empty"));
@@ -114,7 +107,7 @@ impl AsyncProcessRunner {
         gatekeeper::check_quarantine_for_program(&options.program);
 
         let start = Instant::now();
-        let mut command = AsyncCommand::new(&options.program);
+        let mut command = Command::new(&options.program);
         command.args(&options.args);
         if let Some(dir) = &options.current_dir {
             command.current_dir(dir);
@@ -122,6 +115,10 @@ impl AsyncProcessRunner {
         if !options.env.is_empty() {
             command.envs(&options.env);
         }
+        // Own process group (PGID == PID) on Unix: the kill path can then reach
+        // descendants via killpg instead of only the direct child.
+        #[cfg(unix)]
+        command.process_group(0);
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
 
@@ -129,13 +126,12 @@ impl AsyncProcessRunner {
             .spawn()
             .with_context(|| format!("failed to spawn '{}' with args {:?}", options.program, options.args))?;
 
+        let child_pid = child.id();
         let stdout_handle = child.stdout.take();
         let stderr_handle = child.stderr.take();
-        let shared_child = Arc::new(Mutex::new(child));
 
         let mut stdout_future = Box::pin(read_stream(stdout_handle, options.stdout));
         let mut stderr_future = Box::pin(read_stream(stderr_handle, options.stderr));
-        let mut wait_future = Box::pin(wait_for_status(shared_child.clone()));
         let mut timeout_future = options.timeout.map(|dur| Box::pin(sleep(dur)) as Pin<Box<Sleep>>);
         let mut cancellation_future = options
             .cancellation_token
@@ -155,7 +151,7 @@ impl AsyncProcessRunner {
 
         let completion = loop {
             tokio::select! {
-                res = &mut wait_future, if exit_status.is_none() => {
+                res = child.wait(), if exit_status.is_none() => {
                     exit_status = Some(res?);
                     // Continue to drain streams
                 }
@@ -191,27 +187,33 @@ impl AsyncProcessRunner {
             }
         };
 
-        // Once the process has been killed on the TimedOut/Cancelled paths, both
-        // reaping the child and draining its stdout/stderr pipes must be bounded:
-        // a surviving grandchild can hold the pipes open indefinitely, and (much
-        // more rarely) a wedged wait could stall too. The Finished path keeps its
-        // original, unbounded behavior because EOF and exit status are guaranteed
-        // once the process has exited normally.
+        // Once the process has been killed on the TimedOut/Cancelled paths,
+        // reaping the child and draining its stdout/stderr pipes must be
+        // bounded (see POST_KILL_DRAIN_TIMEOUT). The Finished path keeps its
+        // original, unbounded behavior because EOF and exit status are
+        // guaranteed once the process has exited normally.
         let bounded_drain = matches!(completion, Completion::TimedOut | Completion::Cancelled);
 
         let (timed_out, cancelled, status) = match completion {
             Completion::Finished => {
                 let status = match exit_status {
                     Some(status) => status,
-                    None => wait_future.await?,
+                    None => child.wait().await?,
                 };
                 (false, false, status)
             }
             Completion::TimedOut => {
-                kill_child(shared_child.clone()).await?;
+                // Skip the kill entirely when the child already exited: the
+                // PID may have been reaped (or even reused), so signaling it
+                // is both unnecessary and unsafe.
+                if exit_status.is_none() {
+                    kill_child_process_group(child_pid, &mut child)
+                        .await
+                        .with_context(|| format!("failed to kill timed-out process '{}'", options.program))?;
+                }
                 let status = match exit_status {
                     Some(status) => status,
-                    None => match timeout(POST_KILL_DRAIN_TIMEOUT, wait_future.as_mut()).await {
+                    None => match timeout(POST_KILL_DRAIN_TIMEOUT, child.wait()).await {
                         Ok(res) => res?,
                         Err(_) => {
                             return Err(anyhow!(
@@ -223,10 +225,15 @@ impl AsyncProcessRunner {
                 (true, false, status)
             }
             Completion::Cancelled => {
-                kill_child(shared_child.clone()).await?;
+                // Same skip rationale as the timeout path above.
+                if exit_status.is_none() {
+                    kill_child_process_group(child_pid, &mut child)
+                        .await
+                        .with_context(|| format!("failed to kill cancelled process '{}'", options.program))?;
+                }
                 let status = match exit_status {
                     Some(status) => status,
-                    None => match timeout(POST_KILL_DRAIN_TIMEOUT, wait_future.as_mut()).await {
+                    None => match timeout(POST_KILL_DRAIN_TIMEOUT, child.wait()).await {
                         Ok(res) => res?,
                         Err(_) => {
                             return Err(anyhow!(
@@ -240,9 +247,9 @@ impl AsyncProcessRunner {
         };
 
         // Ensure streams are fully read. On timeout/cancellation the drain of any
-        // still-pending stream is bounded: a killed process may have left a
-        // grandchild holding the pipe's write end open, so we accept whatever
-        // was captured so far rather than blocking forever.
+        // still-pending stream is bounded: a setsid-escaping descendant may still
+        // hold the pipe's write end open, so we accept whatever was captured so
+        // far rather than blocking forever.
         let stdout = match stdout_result {
             Some(Ok(data)) => data,
             Some(Err(e)) => return Err(e),
@@ -275,7 +282,7 @@ impl AsyncProcessRunner {
 
 async fn read_stream<R>(reader: Option<R>, config: StreamCaptureConfig) -> Result<Vec<u8>>
 where
-    R: futures::io::AsyncRead + Unpin,
+    R: tokio::io::AsyncRead + Unpin,
 {
     if !config.capture {
         return Ok(Vec::new());
@@ -312,27 +319,20 @@ where
     Ok(output)
 }
 
-async fn wait_for_status(child: Arc<Mutex<Child>>) -> Result<ExitStatus> {
-    // `Child::status` only needs `&mut Child` momentarily to build its returned
-    // future; the future itself does not borrow the child afterward (it holds
-    // its own clone of async-process's internal handle). The mutex guard is
-    // therefore taken only long enough to obtain that future and is dropped
-    // before awaiting it. Holding the guard across the await instead would
-    // deadlock `kill_child`, which also needs this same mutex: it would never
-    // be able to acquire the lock to kill the process while this future is
-    // pending on exit, and the process cannot exit until it is killed.
-    let status_future = {
-        let mut guard = child.lock().await;
-        guard.status()
-    };
-    let status = status_future.await?;
-    Ok(status)
-}
-
-async fn kill_child(child: Arc<Mutex<Child>>) -> Result<()> {
-    let mut guard = child.lock().await;
-    guard.kill()?;
-    Ok(())
+/// Kill the spawned child on the timeout/cancellation path.
+///
+/// On Unix the child was created in its own process group, so the
+/// `vtcode-bash-runner` group kill terminates descendants too; the helper
+/// SIGKILLs the direct child as a fallback and treats an already-exited child
+/// as success. Other platforms kill the direct child only, matching the
+/// previous behavior.
+async fn kill_child_process_group(child_pid: Option<u32>, child: &mut Child) -> Result<()> {
+    #[cfg(unix)]
+    if let Some(pid) = child_pid {
+        return vtcode_bash_runner::process_group::kill_process_group_by_pid(pid).context("failed to kill process group");
+    }
+    let _ = child_pid;
+    child.kill().await.context("failed to kill child process")
 }
 
 #[cfg(test)]
@@ -390,9 +390,11 @@ mod tests {
     }
 
     /// A grandchild process that inherits the stdout pipe and outlives the
-    /// direct child (killed on timeout) must not block `run` forever: the
-    /// bounded drain must let the call return, accepting a partial/empty
-    /// stdout capture instead of hanging.
+    /// direct child (killed on timeout) must not block `run` forever. On Unix
+    /// the group kill now terminates the grandchild itself, so the drain
+    /// completes normally; on platforms without process groups the bounded
+    /// drain lets the call return with a partial capture. Either way the call
+    /// must return promptly with `timed_out == true`.
     #[tokio::test]
     async fn run_bounds_drain_when_grandchild_holds_pipe_open() {
         let options = ProcessOptions {
