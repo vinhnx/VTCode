@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use semver::Version;
 use tracing::debug;
 
 use super::Updater;
@@ -14,6 +15,16 @@ const PREFLIGHT_TIMEOUT_CAP_SECS: u64 = 10;
 
 static PREFLIGHT_NOTICE: Mutex<Option<StartupUpdateNotice>> = Mutex::new(None);
 
+/// The release the preflight fetched, as `(version, release_notes)`.
+///
+/// Session setup decides the release-notes banner from the on-disk cache,
+/// which the preflight only finishes writing a moment later (the check is
+/// spawned so its network I/O never blocks startup). Publishing the fetch
+/// here lets `cached_current_release_highlights` serve the running version's
+/// notes on the first launch after an update instead of deferring them to a
+/// second launch.
+static PREFLIGHT_LATEST_RELEASE: Mutex<Option<(Version, String)>> = Mutex::new(None);
+
 fn set_preflight_notice(notice: Option<StartupUpdateNotice>) {
     if let Ok(mut guard) = PREFLIGHT_NOTICE.lock() {
         *guard = notice;
@@ -22,6 +33,28 @@ fn set_preflight_notice(notice: Option<StartupUpdateNotice>) {
 
 pub(crate) fn get_preflight_notice() -> Option<StartupUpdateNotice> {
     PREFLIGHT_NOTICE.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// The release the preflight fetched, as `(version, release_notes)`.
+///
+/// Like [`get_preflight_notice`], this is a same-process snapshot: `None`
+/// means the spawned check has not completed (or did not run), never an error.
+pub(crate) fn get_preflight_latest_release() -> Option<(Version, String)> {
+    PREFLIGHT_LATEST_RELEASE.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+fn set_preflight_latest_release(version: Version, release_notes: String) {
+    if let Ok(mut guard) = PREFLIGHT_LATEST_RELEASE.lock() {
+        *guard = Some((version, release_notes));
+    }
+}
+
+/// Test seam: pretend the preflight fetched this release. Returns the
+/// previous value for restoration, mirroring the cache-dir override.
+#[cfg(test)]
+pub(crate) fn set_preflight_latest_release_for_tests(release: Option<(Version, String)>) -> Option<(Version, String)> {
+    let mut guard = PREFLIGHT_LATEST_RELEASE.lock().unwrap_or_else(|e| e.into_inner());
+    std::mem::replace(&mut *guard, release)
 }
 
 /// Run a preflight update check at binary startup.
@@ -76,6 +109,9 @@ pub(crate) async fn run_preflight_check() {
     ) {
         debug!("Preflight update check: failed to update cache: {err}");
     }
+    // Publish for same-process readers that decided from the cache before
+    // this write landed (first launch after an update).
+    set_preflight_latest_release(latest.version.clone(), latest.release_notes.clone());
 
     if latest_is_newer {
         let cache_snapshot = cache::read_snapshot().unwrap_or_default();

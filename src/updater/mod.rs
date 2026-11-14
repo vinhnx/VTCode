@@ -93,7 +93,13 @@ impl Updater {
         }
 
         let latest =
-            github::fetch_latest_release(self, self.config.download_timeout_secs, &self.config.channel).await?;
+            match github::fetch_latest_release(self, self.config.download_timeout_secs, &self.config.channel).await {
+                Ok(info) => info,
+                Err(err) => {
+                    let _ = cache::record_failed_check();
+                    return Err(err);
+                }
+            };
 
         if latest.as_ref().is_some_and(|info| info.version > self.current_version) {
             if let Some(latest) = latest.as_ref() {
@@ -101,6 +107,17 @@ impl Updater {
             }
         } else {
             debug!("Already on latest version");
+        }
+
+        // Record the check like the background refresh does, so the fetched
+        // release's notes are in the cache before any install. The inline
+        // managed update (`/update install` on a Homebrew/cargo install) runs
+        // the package manager and relaunches without going through
+        // `install_update_reported`; without this record the relaunched first
+        // start reads a stale `latest_version` and defers the notes to a
+        // second start (the N vs N+1 regression).
+        if let Some(info) = latest.as_ref() {
+            record_fetched_release(&self.current_version, info);
         }
 
         Ok(latest)
@@ -334,6 +351,17 @@ fn current_version_notes_seen_for(version: &Version) -> bool {
 pub(crate) fn cached_current_release_highlights() -> Option<(Version, Vec<String>)> {
     let current = Version::parse(env!("CARGO_PKG_VERSION")).ok()?;
     parse_cached_highlights(cache::current_release_info(&current))
+        // The spawned preflight fetch may have landed after the banner
+        // decision read the cache (first launch after an update): serve the
+        // running version's notes from that fetch instead of deferring them
+        // to a second launch. A newer release never leaks in here.
+        .or_else(|| parse_cached_highlights(current_notes_from_preflight(&current)))
+}
+
+/// The preflight fetch's notes when they describe the running version.
+fn current_notes_from_preflight(current: &Version) -> Option<(Version, String)> {
+    let (version, release_notes) = preflight::get_preflight_latest_release()?;
+    (version == *current).then_some((version, release_notes))
 }
 
 /// The newest release the update cache knows about, with the Highlights
@@ -353,6 +381,16 @@ fn parse_cached_highlights(info: Option<(Version, String)>) -> Option<(Version, 
     let (version, release_notes) = info?;
     let parsed = parse_highlights(&version, &release_notes);
     (!parsed.items.is_empty()).then_some((version, parsed.items))
+}
+
+/// Record a release an explicit check just fetched from GitHub.
+///
+/// Mirrors the cache write [`Updater::refresh_startup_update_cache`] performs
+/// for the background refresh so every check — explicit or background — leaves
+/// the same on-disk state for the next launch to read.
+fn record_fetched_release(current: &Version, info: &UpdateInfo) {
+    let latest_is_newer = info.version > *current;
+    let _ = cache::record_successful_check_with_notes(Some(&info.version), latest_is_newer, Some(&info.release_notes));
 }
 
 /// Seed the update cache with the release notes for a newly installed version.
@@ -484,6 +522,109 @@ mod tests {
         let check = updater.startup_update_check().expect("startup check");
         assert!(check.cached_notice.is_some(), "Newer, non-dismissed version should produce a cached notice");
 
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn explicit_check_records_the_fetched_release_into_the_cache() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // An explicit check (`vtcode update`, `/update`) fetched a newer
+        // release: the cache must end up holding its version and notes, the
+        // same state the background refresh leaves behind. The inline managed
+        // update relaunches off this cache, so a stale one defers the notes
+        // to a second start (the N vs N+1 regression).
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        let fetched = Version::parse("99.0.0").expect("fetched version");
+        record_fetched_release(
+            &current,
+            &UpdateInfo {
+                version: fetched.clone(),
+                release_notes: "### Highlights\n- Fetched feature (abc1234)\n".into(),
+            },
+        );
+
+        let snapshot = cache::read_snapshot().expect("snapshot");
+        assert_eq!(snapshot.latest_version, Some(fetched.clone()));
+        assert!(snapshot.latest_was_newer, "the fetched release is newer than the running one");
+        let served = cache::latest_release_info().expect("the fetched release is cached");
+        assert_eq!(served.0, fetched);
+        assert!(served.1.contains("Fetched feature"), "the fetched notes are cached");
+
+        // Re-checking while already current records `latest_was_newer=false`
+        // — the exact state the first launch after an update must find.
+        record_fetched_release(
+            &current,
+            &UpdateInfo {
+                version: current.clone(),
+                release_notes: "### Highlights\n- Current feature (def5678)\n".into(),
+            },
+        );
+        let snapshot = cache::read_snapshot().expect("snapshot");
+        assert_eq!(snapshot.latest_version, Some(current));
+        assert!(!snapshot.latest_was_newer);
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn preflight_fetch_backfills_the_first_launch_banner() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+        let previous_preflight =
+            preflight::set_preflight_latest_release_for_tests(None).map(|(version, _)| (version, String::new()));
+
+        // A manual `brew upgrade` leaves the cache stale: the first launch
+        // after the upgrade reads no notes for the running version. The
+        // spawned preflight fetch (which lands a moment later) must backfill
+        // the banner instead of deferring the notes to a second launch.
+        let stale = Version::parse("0.1.0").expect("stale version");
+        cache::record_successful_check(Some(&stale), true).expect("write stale cache");
+
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        preflight::set_preflight_latest_release_for_tests(Some((
+            current.clone(),
+            "### Highlights\n- Fresh feature (abc1234)\n".to_string(),
+        )));
+
+        let highlights = cached_current_release_highlights().expect("preflight fetch serves the current banner");
+        assert_eq!(highlights.0, current);
+        assert_eq!(highlights.1, vec!["Fresh feature".to_string()]);
+
+        preflight::set_preflight_latest_release_for_tests(previous_preflight);
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn a_newer_preflight_release_never_leaks_into_the_current_banner() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+        let previous_preflight =
+            preflight::set_preflight_latest_release_for_tests(None).map(|(version, _)| (version, String::new()));
+
+        // The preflight fetched an even newer release than the running one:
+        // its notes belong to the update notice, never to the current-version
+        // banner (mirrors the cache-side leak guard).
+        let stale = Version::parse("0.1.0").expect("stale version");
+        cache::record_successful_check(Some(&stale), true).expect("write stale cache");
+        preflight::set_preflight_latest_release_for_tests(Some((
+            Version::parse("99.0.0").expect("newer version"),
+            "### Highlights\n- Later feature (def5678)\n".to_string(),
+        )));
+
+        assert!(
+            cached_current_release_highlights().is_none(),
+            "newer preflight notes must not leak into the current-version banner"
+        );
+
+        preflight::set_preflight_latest_release_for_tests(previous_preflight);
         cache::set_cache_dir_override_for_tests(previous);
     }
 
