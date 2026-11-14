@@ -13,6 +13,7 @@
 
 - Built-in themes must meet WCAG AA 4.5:1 for foreground and every accent against background; validate with `cargo nextest run -p vtcode-ui -E 'test(theme)'`.
 - Style bridging lives only in `design/color.rs` and `design/style.rs`, and downstream code uses the `tui/core_tui/style.rs` wrappers, so never fork new converters.
+- Border chrome comes from `vtcode_commons::terminal_capabilities`; never hard-code a `BorderType`.
 - Fuzzy matching primitives belong to `vtcode-commons::search` and are only re-exported here, so never fork the matcher.
 - Values `vtcode-config` reads live there and are re-exported, while TUI-only knobs stay in `tui/config/constants/`; never redeclare a config-owned name locally or leave a shadowed config copy.
 - `UpdateProgress` is presentation-only: runtime guards own accepted operations, the progress row stays out of history/exports/selection, and keyboard/paste handlers must not invent unowned progress.

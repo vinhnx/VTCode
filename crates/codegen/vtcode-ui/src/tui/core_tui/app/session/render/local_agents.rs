@@ -167,7 +167,9 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, panel_a
         "Background"
     };
     let block = Block::bordered()
-        .border_type(BorderType::Plain)
+        .border_set(crate::tui::core_tui::session::terminal_capabilities::border_set_with_fallback(
+            BorderType::Plain.to_border_set(),
+        ))
         .border_style(local_agents_divider_style(session, selected_index, &entries))
         .title(Span::styled(title, highlight_style));
     let inner = block.inner(panel);

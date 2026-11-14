@@ -9,6 +9,16 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use crate::tui::config::constants::ui;
+use crate::tui::core_tui::session::inline_list;
+
+/// The modal list's selection cursor.
+///
+/// `┃` is the only glyph VT Code paints as a selection indicator, which makes
+/// it unambiguous chrome: the transcript marks hierarchy with `│`, so a copied
+/// `│` could be content while a copied `┃` never is.
+const LIST_SELECTION_CURSOR: &str = ui::MODAL_LIST_HIGHLIGHT_SYMBOL;
+
 const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(450);
 
 /// Edge direction for auto-scroll while dragging a transcript selection.
@@ -208,7 +218,17 @@ impl MouseSelectionState {
         }
 
         let ((start_col, start_row), (end_col, end_row)) = self.normalized();
-        let mut result = String::new();
+
+        // The selection cursor is chrome, not content: the gutter it sits in
+        // marks the focused list row, and a copy that carried the marker
+        // would paste something that means nothing outside the TUI. Only the
+        // overlay surface draws that gutter; a transcript row may hold the
+        // glyph as ordinary content.
+        let strip_gutter = self.surface == SelectionSurface::Overlay;
+
+        // Collect the rows as (screen column, symbol) pairs.
+        let mut rows: Vec<Vec<(u16, &str)>> = Vec::new();
+        let mut cursor_columns: Vec<u16> = Vec::new();
 
         for row in start_row..=end_row {
             if row < area.y || row >= area.bottom() {
@@ -225,19 +245,48 @@ impl MouseSelectionState {
                 area.right()
             };
 
+            let mut cells: Vec<(u16, &str)> = Vec::new();
             for col in line_start..line_end {
                 if col < area.x || col >= area.right() {
                     continue;
                 }
-                let cell = &buf[(col, row)];
-                let symbol = cell.symbol();
-                if !symbol.is_empty() {
-                    result.push_str(symbol);
+                let symbol = buf[(col, row)].symbol();
+                if symbol.is_empty() {
+                    continue;
                 }
+                if strip_gutter && symbol == LIST_SELECTION_CURSOR && !cursor_columns.contains(&col) {
+                    cursor_columns.push(col);
+                }
+                cells.push((col, symbol));
+            }
+            rows.push(cells);
+        }
+
+        // The list gutter is the marker plus its trailing padding
+        // (`MODAL_LIST_HIGHLIGHT_FULL`). Drop that whole span wherever it
+        // falls inside the selection, so the copy neither carries the marker
+        // nor keeps its orphaned indentation. A cell holding real content
+        // stays: the gutter is only ever blank or the marker itself.
+        let gutter_width = u16::try_from(inline_list::selection_padding_width()).unwrap_or(1);
+        let is_gutter_cell = |col: u16, symbol: &str| {
+            strip_gutter
+                && cursor_columns
+                    .iter()
+                    .any(|start| col >= *start && col < start.saturating_add(gutter_width))
+                && (symbol.trim().is_empty() || symbol == LIST_SELECTION_CURSOR)
+        };
+
+        let mut result = String::new();
+        for (index, cells) in rows.iter().enumerate() {
+            for (col, symbol) in cells {
+                if is_gutter_cell(*col, symbol) {
+                    continue;
+                }
+                result.push_str(symbol);
             }
 
             // Add newline between rows (but not after the last)
-            if row < end_row {
+            if index < rows.len() - 1 {
                 // Trim trailing whitespace from each line
                 let trimmed = result.trim_end().len();
                 result.truncate(trimmed);
@@ -649,6 +698,77 @@ mod tests {
 
         let text = selection.extract_text(&buf, Rect::new(0, 0, 10, 10));
         assert_eq!(text, "AB\nCD");
+    }
+
+    /// Build a buffer whose rows are the given strings, left-aligned.
+    fn buffer_with_rows(rows: &[&str], width: u16) -> Buffer {
+        let height = u16::try_from(rows.len()).expect("row count fits in u16");
+        let mut buf = Buffer::empty(Rect::new(0, 0, width, height));
+        for (row_index, row) in rows.iter().enumerate() {
+            for (col, ch) in row.chars().enumerate() {
+                let col = u16::try_from(col).expect("column fits in u16");
+                if col >= width {
+                    break;
+                }
+                buf[(col, u16::try_from(row_index).expect("row fits in u16"))].set_symbol(&ch.to_string());
+            }
+        }
+        buf
+    }
+
+    #[test]
+    fn overlay_copy_drops_the_list_selection_cursor() {
+        // A modal list renders a two-cell gutter: the cursor on the focused
+        // row, blanks on the others.
+        let buf = buffer_with_rows(&["┃ Option one", "  Option two"], 20);
+
+        let mut selection = MouseSelectionState::new();
+        selection.start_overlay_selection(0, 0);
+        selection.finish_selection(14, 1);
+
+        let text = selection.extract_text(&buf, buf.area);
+        assert_eq!(text, "Option one\nOption two", "the gutter is chrome, the item text is content");
+    }
+
+    #[test]
+    fn overlay_copy_drops_the_gutter_when_the_selection_starts_inside_it() {
+        // Dragging from the marker itself must not leave the padding behind.
+        let buf = buffer_with_rows(&["┃ Option one"], 20);
+
+        let mut selection = MouseSelectionState::new();
+        selection.start_overlay_selection(0, 0);
+        selection.finish_selection(13, 0);
+
+        let text = selection.extract_text(&buf, buf.area);
+        assert_eq!(text, "Option one");
+    }
+
+    #[test]
+    fn transcript_copy_keeps_semantic_gutters() {
+        // The transcript marks hierarchy with `│`, and that marker is content:
+        // a copy must keep it.
+        let buf = buffer_with_rows(&["  │ nested output"], 20);
+
+        let mut selection = MouseSelectionState::new();
+        selection.start_selection(0, 0);
+        selection.finish_selection(17, 0);
+
+        let text = selection.extract_text(&buf, buf.area);
+        assert_eq!(text, "  │ nested output");
+    }
+
+    #[test]
+    fn transcript_copy_keeps_a_selection_cursor_that_is_part_of_the_content() {
+        // A transcript row may legitimately contain the cursor glyph; the
+        // transcript surface never treats it as chrome.
+        let buf = buffer_with_rows(&["┃ literal text"], 20);
+
+        let mut selection = MouseSelectionState::new();
+        selection.start_selection(0, 0);
+        selection.finish_selection(14, 0);
+
+        let text = selection.extract_text(&buf, buf.area);
+        assert_eq!(text, "┃ literal text");
     }
 
     #[test]

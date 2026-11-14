@@ -75,7 +75,7 @@ impl<'a> Widget for InputWidget<'a> {
         if let Some(title) = shell_mode_title {
             block = block
                 .title(title)
-                .border_type(crate::tui::ui::tui::session::terminal_capabilities::get_border_type())
+                .border_set(crate::tui::ui::tui::session::terminal_capabilities::get_border_set())
                 .border_style(self.session.styles.accent_style().add_modifier(Modifier::BOLD));
         }
         let inner = block.inner(input_area);

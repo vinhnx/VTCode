@@ -133,7 +133,7 @@ impl Session {
         let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
         let block = Block::bordered()
             .title(self.header_block_title())
-            .border_type(terminal_capabilities::get_border_type())
+            .border_set(terminal_capabilities::get_border_set())
             .border_style(border_style)
             .style(self.styles.default_style());
 

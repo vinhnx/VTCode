@@ -58,7 +58,7 @@ pub(crate) fn append_notice_highlight(highlights: &mut Vec<InlineHeaderHighlight
     highlights.push(highlight);
 }
 
-fn format_update_banner(notice: &StartupUpdateNotice, _use_unicode: bool) -> String {
+fn format_update_banner(notice: &StartupUpdateNotice) -> String {
     let lines = [
         format!("Update available! {} -> {}", notice.current_version, notice.latest_version),
         "Run /update install, or `vtcode update` from the CLI, to update.".to_string(),
@@ -73,13 +73,12 @@ fn format_update_banner(notice: &StartupUpdateNotice, _use_unicode: bool) -> Str
 pub(crate) fn display_update_notice(
     handle: &InlineHandle,
     header_context: &mut InlineHeaderContext,
-    use_unicode: bool,
     notice: &StartupUpdateNotice,
 ) {
     append_notice_highlight(&mut header_context.highlights, notice);
     handle.set_header_context(header_context.clone());
 
-    let banner = format_update_banner(notice, use_unicode);
+    let banner = format_update_banner(notice);
     handle.append_pasted_message(InlineMessageKind::Info, banner.clone(), line_count(&banner));
     handle.force_redraw();
 }
@@ -365,7 +364,7 @@ mod tests {
 
     #[test]
     fn banner_uses_release_specific_url() {
-        let banner = format_update_banner(&sample_notice(), true);
+        let banner = format_update_banner(&sample_notice());
         assert!(banner.contains("https://github.com/vinhnx/vtcode/releases/tag/0.113.0"));
         assert!(banner.contains("0.111.0 -> 0.113.0"));
         assert!(banner.contains("vtcode update"));
@@ -376,7 +375,7 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let handle = InlineHandle::new_for_tests(tx);
         let mut header_context = InlineHeaderContext::default();
-        display_update_notice(&handle, &mut header_context, true, &sample_notice());
+        display_update_notice(&handle, &mut header_context, &sample_notice());
 
         let first = rx.blocking_recv().expect("header command");
         let second = rx.blocking_recv().expect("transcript command");

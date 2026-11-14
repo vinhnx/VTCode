@@ -76,7 +76,10 @@ impl ColorDepth {
 pub struct AnsiCapabilities {
     /// Detected color depth
     color_depth: ColorDepth,
-    /// Whether unicode is supported
+    /// Whether the terminal can render Unicode box-drawing chrome.
+    ///
+    /// Sourced from the canonical capability probe in
+    /// [`crate::terminal_capabilities`].
     pub unicode_support: bool,
     /// Whether to force color output
     pub force_color: bool,
@@ -108,11 +111,6 @@ impl AnsiCapabilities {
     /// Check if true color (24-bit) is supported
     pub fn supports_true_color(&self) -> bool {
         self.supports_color() && self.color_depth.supports_true_color()
-    }
-
-    /// Check if advanced formatting (tables, boxes) should use unicode
-    pub fn should_use_unicode_boxes(&self) -> bool {
-        self.unicode_support && self.supports_color()
     }
 }
 
@@ -278,13 +276,12 @@ fn detect_color_depth() -> ColorDepth {
     depth
 }
 
-/// Detect if unicode is supported by the terminal
+/// Detect if unicode is supported by the terminal.
+///
+/// Delegates to the canonical capability probe so the CLI and the TUI always
+/// reach the same verdict for the same environment.
 fn detect_unicode_support() -> bool {
-    std::env::var("LANG")
-        .ok()
-        .map(|lang| lang.to_lowercase().contains("utf"))
-        .or_else(|| std::env::var("LC_ALL").ok().map(|lc| lc.to_lowercase().contains("utf")))
-        .unwrap_or(true)
+    crate::terminal_capabilities::box_glyph_tier().supports_unicode()
 }
 
 /// Global capabilities instance (cached)
@@ -298,4 +295,18 @@ pub fn is_no_color() -> bool {
 /// Check if CLICOLOR_FORCE is set
 pub fn is_clicolor_force() -> bool {
     clicolor_force()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unicode_support_follows_the_canonical_capability_probe() {
+        // The CLI and the TUI must never disagree about the same machine, so
+        // the capability struct has to follow the canonical probe verbatim.
+        let tier = crate::terminal_capabilities::box_glyph_tier();
+        assert_eq!(AnsiCapabilities::detect().unicode_support, tier.supports_unicode());
+        assert_eq!(CAPABILITIES.unicode_support, tier.supports_unicode());
+    }
 }

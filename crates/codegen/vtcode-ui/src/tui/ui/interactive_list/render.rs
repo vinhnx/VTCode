@@ -4,7 +4,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, List, ListDirection, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Block, List, ListDirection, ListItem, ListState, Paragraph, Wrap};
 
 use super::{SelectionEntry, SelectionListState};
 use crate::tui::ui::search::ListSearchFilter;
@@ -15,6 +15,16 @@ fn controls_hint() -> String {
 const FILTER_HINT: &str = "Type to filter · number jumps when filter is empty";
 const NUMBER_JUMP_HINT: &str = "Type a number to jump";
 const NO_MATCHES: &str = "No matching options";
+
+/// Rounded chrome, degraded to ASCII on terminals that cannot render it.
+///
+/// This selector paints outside the session transcript, so it reads the
+/// canonical capability probe itself rather than borrowing session state.
+fn selection_border_set() -> ratatui::symbols::border::Set<'static> {
+    crate::tui::core_tui::session::terminal_capabilities::border_set_with_fallback(
+        ratatui::widgets::BorderType::Rounded.to_border_set(),
+    )
+}
 
 mod styles {
     use ratatui::style::{Color, Modifier, Style};
@@ -92,7 +102,7 @@ pub(super) fn draw_selection_ui(
                 selection_layout(area, state.search_enabled(), instruction_height);
 
             let instructions_widget = Paragraph::new(instructions)
-                .block(Block::bordered().title("Instructions").border_type(BorderType::Rounded))
+                .block(Block::bordered().title("Instructions").border_set(selection_border_set()))
                 .wrap(Wrap { trim: true });
             frame.render_widget(instructions_widget, instructions_area);
 
@@ -143,7 +153,7 @@ pub(super) fn draw_selection_ui(
                         } else {
                             title.to_string()
                         })
-                        .border_type(BorderType::Rounded),
+                        .border_set(selection_border_set()),
                 )
                 .style(styles::DEFAULT_TEXT)
                 .highlight_style(styles::HIGHLIGHT)
@@ -184,7 +194,7 @@ pub(super) fn draw_selection_ui(
             )));
 
             let footer = Paragraph::new(summary_lines)
-                .block(Block::bordered().title("Selection").border_type(BorderType::Rounded))
+                .block(Block::bordered().title("Selection").border_set(selection_border_set()))
                 .wrap(Wrap { trim: true });
             frame.render_widget(footer, footer_area);
         })

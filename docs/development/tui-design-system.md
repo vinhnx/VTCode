@@ -61,6 +61,41 @@ modifiers.
 3. Prefer `setting` for anything with a live value; `action` for commands.
 4. Group long lists with `group_header` / `group_divider` — the renderer supplies spacing.
 
+## Terminal capability ladder
+
+`vtcode_commons::terminal_capabilities` owns the single answer to "what can this terminal draw?". Every surface reads
+that verdict instead of re-deriving it from environment variables, so the CLI and the TUI can never disagree about the
+same machine. The probe runs once per process (`box_glyph_tier()`), so bordered chrome costs no per-frame environment
+reads.
+
+The ladder is deterministic:
+
+| Tier          | Evidence                                                                                | Border set                      |
+| ------------- | --------------------------------------------------------------------------------------- | ------------------------------- |
+| `Ascii`       | `VTCODE_NO_UNICODE` is affirmative, or neither `TERM` nor a UTF-8 locale says otherwise | `+` `-` `\|`                    |
+| `Unicode`     | `TERM` advertises Unicode, or `LANG`/`LC_ALL`/`LC_CTYPE` declares UTF-8                 | rounded `╭` `─` `╮` `\|`        |
+| `RichUnicode` | the terminal program is known to render the dashed variants correctly                   | heavy double dashed `┏` `╍` `┓` |
+
+- `TERM` is authoritative because it describes the terminal program. `TERM_PROGRAM` identifies the program itself, which
+  is what selects the rich tier: iTerm2, WezTerm, and Hyper all advertise `TERM=xterm-256color`, so a `TERM`-substring
+  allowlist never matched them.
+- The env opt-outs follow the repository's canonical flag semantics (`vtcode_commons::utils::env_flag_enabled`), so only
+  `1`, `true`, `yes`, `on`, or `debug` turn a flag on. `VTCODE_NO_UNICODE=0` leaves Unicode chrome enabled.
+- Ratatui's `BorderType::Plain` still draws `┌─┐│└┘`, so the ASCII rung needs its own set
+  (`terminal_capabilities::ASCII_BORDER_SET`). Chrome that picks its own Unicode style must degrade through
+  `border_set_with_fallback` rather than hard-coding a border type.
+
+## Copy contract
+
+Chrome is not content. A copy carries the user's text, never the TUI's markers:
+
+- The modal list's selection cursor `┃` is chrome. It is the only glyph VT Code paints as a selection indicator, so
+  `MouseSelectionState::extract_text` drops the gutter column that carries it (and the blank cells aligned with it) for
+  overlay selections.
+- The transcript's `│` hierarchy markers are content and stay. They are indistinguishable from a panel frame by glyph
+  alone, so VT Code never guesses; a terminal-side cell-border protocol would remove that ambiguity, but no shipping
+  terminal implements one.
+
 ## Sticky prompt navigation
 
 The normal transcript reserves one row for the user prompt owning its first visible content once that prompt's first

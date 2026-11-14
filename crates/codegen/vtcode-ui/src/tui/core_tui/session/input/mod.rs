@@ -187,7 +187,7 @@ impl Session {
         };
         block = block.style(background_style).padding(self.input_block_padding());
         if shell_mode_title.is_some() || active_subagent_title.is_some() {
-            block = block.border_type(super::terminal_capabilities::get_border_type()).border_style(
+            block = block.border_set(super::terminal_capabilities::get_border_set()).border_style(
                 active_subagent_border_style.unwrap_or_else(|| self.styles.accent_style().add_modifier(Modifier::BOLD)),
             );
         }

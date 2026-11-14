@@ -711,7 +711,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let pending_mcp_refresh = false;
     let last_mcp_refresh = Instant::now();
     let startup_update_requested_restart = if let Some(notice) = startup_update_cached_notice.as_ref() {
-        display_update_notice(&handle, &mut header_context, renderer.should_use_unicode_formatting(), notice);
+        display_update_notice(&handle, &mut header_context, notice);
         let update_outcome = harness_try!(
             run_inline_update_prompt(
                 &mut renderer,

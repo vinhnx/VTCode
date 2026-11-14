@@ -102,7 +102,7 @@ impl<'a> Widget for HeaderWidget<'a> {
         let title = self.session.header_block_title_cached();
         let block = ratatui::widgets::Block::bordered()
             .title(title)
-            .border_type(crate::tui::core_tui::session::terminal_capabilities::get_border_type())
+            .border_set(crate::tui::core_tui::session::terminal_capabilities::get_border_set())
             .border_style(border_style)
             .style(self.session.styles.default_style());
         let inner = block.inner(area);

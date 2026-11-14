@@ -41,7 +41,6 @@ struct InlineEventLoop<'a> {
     full_auto: bool,
     startup_update_notice_rx: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     header_context: &'a mut InlineHeaderContext,
-    use_unicode: bool,
     conversation_history: &'a mut Vec<uni::Message>,
     session_stats: &'a mut SessionStats,
     context_manager: &'a mut ContextManager,
@@ -84,7 +83,6 @@ impl<'a> InlineEventLoop<'a> {
             full_auto,
             startup_update_notice_rx,
             header_context,
-            use_unicode,
             conversation_history,
             session_stats,
             context_manager,
@@ -119,7 +117,6 @@ impl<'a> InlineEventLoop<'a> {
             ctrl_c_notify,
             startup_update_notice_rx,
             header_context,
-            use_unicode,
             conversation_history,
             session_stats,
             context_manager,
@@ -209,12 +206,7 @@ impl<'a> InlineEventLoop<'a> {
             notice = recv_startup_update_notice(self.startup_update_notice_rx) => {
                 match notice {
                     StartupUpdateEvent::Notice(notice) => {
-                        display_update_notice(
-                            self.handle,
-                            self.header_context,
-                            self.use_unicode,
-                            &notice,
-                        );
+                        display_update_notice(self.handle, self.header_context, &notice);
                     }
                     StartupUpdateEvent::Closed => {}
                 }
@@ -409,7 +401,6 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub full_auto: bool,
     pub startup_update_notice_rx: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     pub header_context: &'a mut InlineHeaderContext,
-    pub use_unicode: bool,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub session_stats: &'a mut SessionStats,
     pub context_manager: &'a mut ContextManager,
@@ -646,7 +637,6 @@ mod tests {
             full_auto: false,
             startup_update_notice_rx: &mut startup_update_notice_rx,
             header_context: &mut header_context,
-            use_unicode: true,
             conversation_history: &mut Vec::new(),
             session_stats: &mut SessionStats::default(),
             context_manager: &mut ContextManager::default_for_test(),
@@ -724,7 +714,6 @@ mod tests {
             full_auto: false,
             startup_update_notice_rx: &mut startup_update_notice_rx,
             header_context: &mut header_context,
-            use_unicode: true,
             conversation_history: &mut Vec::new(),
             session_stats: &mut SessionStats::default(),
             context_manager: &mut ContextManager::default_for_test(),

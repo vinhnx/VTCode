@@ -1,10 +1,13 @@
 //! Terminal capability detection for optimal rendering
 //!
-//! This module provides utilities to detect terminal capabilities such as
-//! Unicode support, color support, and other features to ensure optimal
-//! rendering across different terminal environments.
+//! The verdict comes from the canonical probe in
+//! `vtcode_commons::terminal_capabilities`, so the TUI and the CLI always
+//! agree on what the terminal can draw. The environment is read once per
+//! process instead of once per bordered cell.
 
-use std::env;
+use ratatui::symbols::border;
+
+pub(crate) use crate::design::panel::{ASCII_BORDER_SET, border_set_with_fallback};
 
 #[cfg(test)]
 mod test_env_overrides {
@@ -36,7 +39,7 @@ fn read_env_var(key: &str) -> Option<String> {
         return override_value;
     }
 
-    env::var(key).ok()
+    std::env::var(key).ok()
 }
 
 #[cfg(test)]
@@ -49,110 +52,15 @@ pub(crate) fn clear_test_env_override(key: &str) {
     test_env_overrides::clear(key);
 }
 
-/// Detects if the current terminal supports Unicode box drawing characters
+use crate::design::panel::border_set_for_tier as border_set_for;
+
+/// Gets the appropriate border set based on terminal capabilities
 ///
-/// This function checks various environment variables and terminal settings
-/// to determine if Unicode characters can be safely displayed without
-/// appearing as broken ANSI sequences.
-fn supports_unicode_box_drawing() -> bool {
-    // Check if explicitly disabled via environment variable
-    if read_env_var("VTCODE_NO_UNICODE").is_some() {
-        return false;
-    }
-
-    // Check terminal type - many terminals support Unicode
-    if let Some(term) = read_env_var("TERM") {
-        let term_lower = term.to_lowercase();
-
-        // Modern terminals that definitely support Unicode
-        if term_lower.contains("unicode")
-            || term_lower.contains("utf")
-            || term_lower.contains("xterm-256color")
-            || term_lower.contains("screen-256color")
-            || term_lower.contains("tmux-256color")
-            || term_lower.contains("alacritty")
-            || term_lower.contains("wezterm")
-            || term_lower.contains("kitty")
-            || term_lower.contains("iterm")
-            || term_lower.contains("hyper")
-        {
-            return true;
-        }
-
-        // Older or basic terminal types that likely don't support Unicode well
-        if term_lower.contains("dumb")
-            || term_lower.contains("basic")
-            || term_lower == "xterm"
-            || term_lower == "screen"
-        {
-            return false;
-        }
-    }
-
-    // Check LANG environment variable for UTF-8 locale
-    if let Some(lang) = read_env_var("LANG")
-        && (lang.to_lowercase().contains("utf-8") || lang.to_lowercase().contains("utf8"))
-    {
-        return true;
-    }
-
-    // Check LC_ALL and LC_CTYPE for UTF-8
-    for var in &["LC_ALL", "LC_CTYPE"] {
-        if let Some(locale) = read_env_var(var)
-            && (locale.to_lowercase().contains("utf-8") || locale.to_lowercase().contains("utf8"))
-        {
-            return true;
-        }
-    }
-
-    // Default to plain ASCII for safety - prevents broken Unicode display
-    false
-}
-
-/// Detects if the terminal supports rich Unicode box drawing characters
-///
-/// This includes dashed border variants (╌, ╍, ┄, ┅, etc.) used by
-/// `BorderType::HeavyDoubleDashed` and similar types from ratatui 0.30.0.
-/// Only terminals known to render these correctly are opted in. Unknown
-/// Unicode-capable terminals receive `Rounded` borders instead.
-fn supports_rich_unicode_box_drawing() -> bool {
-    // Check if explicitly disabled via environment variable
-    if read_env_var("VTCODE_NO_RICH_UNICODE").is_some() {
-        return false;
-    }
-
-    // Rich Unicode requires basic Unicode support first
-    if !supports_unicode_box_drawing() {
-        return false;
-    }
-
-    // Only opt in for terminals known to render dashed box drawing correctly
-    if let Some(term) = read_env_var("TERM") {
-        let term_lower = term.to_lowercase();
-        return term_lower.contains("alacritty")
-            || term_lower.contains("wezterm")
-            || term_lower.contains("kitty")
-            || term_lower.contains("iterm")
-            || term_lower.contains("hyper")
-            || term_lower.contains("ghostty");
-    }
-
-    false
-}
-
-/// Gets the appropriate border type based on terminal capabilities
-///
-/// Returns `BorderType::HeavyDoubleDashed` for terminals with rich Unicode support,
-/// `BorderType::Rounded` for terminals with basic Unicode support, or
-/// `BorderType::Plain` for maximum compatibility.
-pub(crate) fn get_border_type() -> ratatui::widgets::BorderType {
-    if supports_rich_unicode_box_drawing() {
-        ratatui::widgets::BorderType::HeavyDoubleDashed
-    } else if supports_unicode_box_drawing() {
-        ratatui::widgets::BorderType::Rounded
-    } else {
-        ratatui::widgets::BorderType::Plain
-    }
+/// Heavy double dashed borders for terminals known to render the dashed
+/// variants correctly, rounded borders for terminals with basic Unicode
+/// support, and the ASCII set for terminals that cannot render Unicode.
+pub(crate) fn get_border_set() -> border::Set<'static> {
+    crate::design::panel::canonical_border_set()
 }
 
 pub(crate) fn queued_input_edit_uses_shift_left() -> bool {
@@ -182,7 +90,9 @@ pub(crate) fn queued_input_edit_hint() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::widgets::BorderType;
     use std::sync::{LazyLock, Mutex};
+    use vtcode_commons::terminal_capabilities::BoxGlyphTier;
 
     static TERMINAL_ENV_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -200,71 +110,58 @@ mod tests {
     }
 
     #[test]
-    fn test_supports_unicode_box_drawing() {
-        let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
-        for key in ["TERM", "LANG", "LC_ALL", "LC_CTYPE", "VTCODE_NO_UNICODE"] {
-            clear_var(key);
-        }
+    fn border_set_follows_the_canonical_tier() {
+        assert_eq!(border_set_for(BoxGlyphTier::RichUnicode), BorderType::HeavyDoubleDashed.to_border_set());
+        assert_eq!(border_set_for(BoxGlyphTier::Unicode), BorderType::Rounded.to_border_set());
+        assert_eq!(border_set_for(BoxGlyphTier::Ascii), ASCII_BORDER_SET);
+    }
 
-        // Test with VTCODE_NO_UNICODE set (should disable Unicode)
-        set_var("VTCODE_NO_UNICODE", "1");
-        assert!(!supports_unicode_box_drawing());
-        remove_var("VTCODE_NO_UNICODE");
-
-        // Test with modern terminal
-        set_var("TERM", "xterm-256color");
-        assert!(supports_unicode_box_drawing());
-
-        // Test with UTF-8 locale
-        set_var("LANG", "en_US.UTF-8");
-        assert!(supports_unicode_box_drawing());
-
-        // Test with basic terminal
-        set_var("TERM", "dumb");
-        assert!(!supports_unicode_box_drawing());
-
-        // Test with no locale info (should default to false for safety)
-        remove_var("TERM");
-        remove_var("LANG");
-        remove_var("LC_ALL");
-        remove_var("LC_CTYPE");
-        assert!(!supports_unicode_box_drawing());
-
-        for key in ["TERM", "LANG", "LC_ALL", "LC_CTYPE", "VTCODE_NO_UNICODE"] {
-            clear_var(key);
+    #[test]
+    fn ascii_border_set_uses_ascii_glyphs() {
+        assert_eq!(ASCII_BORDER_SET.top_left, "+");
+        assert_eq!(ASCII_BORDER_SET.vertical_left, "|");
+        assert_eq!(ASCII_BORDER_SET.horizontal_top, "-");
+        // Every glyph must be ASCII, which is the whole point of the tier.
+        for glyph in [
+            ASCII_BORDER_SET.top_left,
+            ASCII_BORDER_SET.top_right,
+            ASCII_BORDER_SET.bottom_left,
+            ASCII_BORDER_SET.bottom_right,
+            ASCII_BORDER_SET.vertical_left,
+            ASCII_BORDER_SET.vertical_right,
+            ASCII_BORDER_SET.horizontal_top,
+            ASCII_BORDER_SET.horizontal_bottom,
+        ] {
+            assert!(glyph.is_ascii(), "ASCII tier leaked a non-ASCII glyph: {glyph:?}");
         }
     }
 
     #[test]
-    fn test_get_border_type() {
-        let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
-        clear_var("TERM");
-        clear_var("VTCODE_NO_RICH_UNICODE");
+    fn tiers_render_distinct_glyphs() {
+        // Pins the glyphs the design-system doc names, so the table there can
+        // never drift from what ratatui actually paints.
+        let rich = border_set_for(BoxGlyphTier::RichUnicode);
+        assert_eq!((rich.top_left, rich.horizontal_top, rich.top_right), ("┏", "╍", "┓"));
 
-        // Test with rich Unicode terminal (Alacritty)
-        set_var("TERM", "alacritty");
-        let border_type = get_border_type();
-        assert!(matches!(border_type, ratatui::widgets::BorderType::HeavyDoubleDashed));
+        let unicode = border_set_for(BoxGlyphTier::Unicode);
+        assert_eq!((unicode.top_left, unicode.horizontal_top, unicode.top_right), ("╭", "─", "╮"));
 
-        // Test with Unicode-supporting terminal (xterm-256color) - not in known list
-        set_var("TERM", "xterm-256color");
-        clear_var("VTCODE_NO_RICH_UNICODE");
-        let border_type = get_border_type();
-        assert!(matches!(border_type, ratatui::widgets::BorderType::Rounded));
+        assert_ne!(rich, unicode, "the rich tier must not collapse into the Unicode tier");
+        assert_ne!(ASCII_BORDER_SET, unicode, "the ASCII tier must not collapse into the Unicode tier");
+    }
 
-        // Test with basic terminal
-        set_var("TERM", "dumb");
-        let border_type = get_border_type();
-        assert!(matches!(border_type, ratatui::widgets::BorderType::Plain));
+    #[test]
+    fn border_set_matches_the_cached_capability_probe() {
+        assert_eq!(border_set_for(vtcode_commons::terminal_capabilities::box_glyph_tier()), get_border_set());
+    }
 
-        // Test with rich Unicode disabled
-        set_var("TERM", "alacritty");
-        set_var("VTCODE_NO_RICH_UNICODE", "1");
-        let border_type = get_border_type();
-        assert!(matches!(border_type, ratatui::widgets::BorderType::Rounded));
-
-        clear_var("TERM");
-        clear_var("VTCODE_NO_RICH_UNICODE");
+    #[test]
+    fn cli_and_tui_agree_on_unicode_support() {
+        // The CLI reads the capability through `AnsiCapabilities`; the TUI
+        // reads it through the tier. They must never disagree about the same
+        // machine, so both views of the probe are pinned together.
+        let tier = vtcode_commons::terminal_capabilities::box_glyph_tier();
+        assert_eq!(vtcode_commons::ansi_capabilities::CAPABILITIES.unicode_support, tier.supports_unicode());
     }
 
     #[test]

@@ -337,7 +337,6 @@ pub(super) async fn run_interaction_loop_impl(
         }
 
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
-        let use_unicode = ctx.renderer.should_use_unicode_formatting();
         let idle_wake_delay = STATUS_REFRESH_INTERVAL.saturating_sub(last_status_refresh.elapsed());
         let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
         let resources = InlineEventLoopResources {
@@ -358,7 +357,6 @@ pub(super) async fn run_interaction_loop_impl(
             full_auto: ctx.full_auto,
             startup_update_notice_rx: ctx.startup_update_notice_rx,
             header_context: ctx.header_context,
-            use_unicode,
             conversation_history: ctx.conversation_history,
             session_stats: ctx.session_stats,
             context_manager: ctx.context_manager,

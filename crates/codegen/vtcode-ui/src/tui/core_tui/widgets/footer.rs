@@ -199,7 +199,7 @@ impl Widget for FooterWidget<'_> {
 
         let inner = if self.show_border && self.mode.show_borders() {
             let block = Block::bordered()
-                .border_type(terminal_capabilities::get_border_type())
+                .border_set(terminal_capabilities::get_border_set())
                 .border_style(self.styles.border_style());
             let inner = block.inner(area);
             block.render(area, buf);

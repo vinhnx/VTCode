@@ -111,7 +111,25 @@ pub fn extract_readme_excerpt(md: &str, max_len: usize) -> String {
 /// ```
 #[must_use]
 pub fn env_flag_enabled(var_name: &str) -> bool {
-    std::env::var(var_name).ok().is_some_and(|value| {
+    env_flag_value_enabled(std::env::var(var_name).ok().as_deref())
+}
+
+/// Whether an already-read environment value is an affirmative flag.
+///
+/// This is the same accepted-value set as [`env_flag_enabled`], applied to a
+/// value the caller has already read. Callers that snapshot the environment
+/// (see `vtcode_commons::terminal_capabilities::TerminalEnv`) reuse one
+/// canonical rule instead of forking the value set.
+///
+/// ```
+/// # use vtcode_commons::utils::env_flag_value_enabled;
+/// assert!(env_flag_value_enabled(Some("1")));
+/// assert!(!env_flag_value_enabled(Some("0")));
+/// assert!(!env_flag_value_enabled(None));
+/// ```
+#[must_use]
+pub fn env_flag_value_enabled(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
         matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on" | "debug")
     })
 }

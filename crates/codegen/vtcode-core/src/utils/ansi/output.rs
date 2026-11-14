@@ -181,11 +181,6 @@ impl AnsiRenderer {
         terminal_width.map(|width| width.saturating_sub(indent_width).saturating_sub(frame_width))
     }
 
-    /// Check if unicode should be used for formatting (tables, boxes, etc.)
-    pub fn should_use_unicode_formatting(&self) -> bool {
-        self.capabilities.should_use_unicode_boxes()
-    }
-
     /// Check if 256-color output is supported
     pub fn supports_256_colors(&self) -> bool {
         self.capabilities.supports_256_colors()
@@ -194,11 +189,6 @@ impl AnsiRenderer {
     /// Check if true color (24-bit) output is supported
     pub fn supports_true_color(&self) -> bool {
         self.capabilities.supports_true_color()
-    }
-
-    /// Check if should use unicode characters based on terminal capabilities
-    pub fn should_use_unicode(&self) -> bool {
-        self.capabilities.unicode_support
     }
 
     pub fn show_list_modal(

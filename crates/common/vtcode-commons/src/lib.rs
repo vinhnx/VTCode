@@ -76,6 +76,7 @@ pub mod stop_hints;
 pub mod styling;
 pub mod task_guard;
 pub mod telemetry;
+pub mod terminal_capabilities;
 pub mod terminal_detection;
 pub mod text_fence;
 pub mod thread_safety;

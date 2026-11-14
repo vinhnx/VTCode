@@ -8,10 +8,56 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Modifier, Style},
-    widgets::{Block, BorderType, Widget},
+    symbols::border,
+    widgets::{Block, Widget},
 };
 
 use crate::design::layout::LayoutMode;
+use vtcode_commons::terminal_capabilities::BoxGlyphTier;
+
+/// Chrome for terminals that cannot render Unicode box drawing.
+///
+/// Ratatui's `BorderType::Plain` still draws `┌─┐│└┘`, so the ASCII rung of the
+/// capability ladder needs its own set: the point of detecting a non-Unicode
+/// terminal is to avoid mojibake, not to pick a different Unicode style.
+pub(crate) const ASCII_BORDER_SET: border::Set<'static> = border::Set {
+    top_left: "+",
+    top_right: "+",
+    bottom_left: "+",
+    bottom_right: "+",
+    vertical_left: "|",
+    vertical_right: "|",
+    horizontal_top: "-",
+    horizontal_bottom: "-",
+};
+
+/// Panel chrome for a capability tier.
+pub(crate) fn border_set_for_tier(tier: BoxGlyphTier) -> border::Set<'static> {
+    match tier {
+        BoxGlyphTier::RichUnicode => ratatui::widgets::BorderType::HeavyDoubleDashed.to_border_set(),
+        BoxGlyphTier::Unicode => ratatui::widgets::BorderType::Rounded.to_border_set(),
+        BoxGlyphTier::Ascii => ASCII_BORDER_SET,
+    }
+}
+
+/// The canonical panel chrome for this terminal.
+///
+/// Reads the capability verdict once per process, so a bordered panel costs no
+/// per-frame environment probing.
+pub(crate) fn canonical_border_set() -> border::Set<'static> {
+    border_set_for_tier(vtcode_commons::terminal_capabilities::box_glyph_tier())
+}
+
+/// Degrade a preferred set to ASCII when the terminal cannot render Unicode.
+///
+/// Chrome that keeps a fixed Unicode style calls this instead of hard-coding a
+/// border set, so no surface draws mojibake on a non-Unicode terminal.
+pub(crate) fn border_set_with_fallback(preferred: border::Set<'static>) -> border::Set<'static> {
+    match vtcode_commons::terminal_capabilities::box_glyph_tier() {
+        BoxGlyphTier::Ascii => ASCII_BORDER_SET,
+        _ => preferred,
+    }
+}
 
 /// Trait for providing panel styles. Decouples `Panel` from any specific
 /// session or theme type.
@@ -42,7 +88,7 @@ pub trait PanelStyleProvider {
 ///     .title("Transcript")
 ///     .active(true)
 ///     .mode(layout_mode)
-///     .border_type(BorderType::Rounded)
+///     .border_set(border::ROUNDED)
 ///     .render_and_get_inner(area, buf);
 /// // Render child widget into `inner`
 /// ```
@@ -51,7 +97,7 @@ pub(crate) struct Panel<'a, S: PanelStyleProvider> {
     title: Option<&'a str>,
     active: bool,
     mode: LayoutMode,
-    border_type: Option<BorderType>,
+    border_set: Option<border::Set<'static>>,
 }
 
 impl<'a, S: PanelStyleProvider> Panel<'a, S> {
@@ -62,7 +108,7 @@ impl<'a, S: PanelStyleProvider> Panel<'a, S> {
             title: None,
             active: false,
             mode: LayoutMode::Standard,
-            border_type: None,
+            border_set: None,
         }
     }
 
@@ -87,10 +133,10 @@ impl<'a, S: PanelStyleProvider> Panel<'a, S> {
         self
     }
 
-    /// Override the border type.
+    /// Override the border set.
     #[must_use]
-    pub(crate) fn border_type(mut self, border_type: BorderType) -> Self {
-        self.border_type = Some(border_type);
+    pub(crate) fn border_set(mut self, border_set: border::Set<'static>) -> Self {
+        self.border_set = Some(border_set);
         self
     }
 
@@ -109,10 +155,10 @@ impl<'a, S: PanelStyleProvider> Panel<'a, S> {
             self.styles.border_style()
         };
 
-        let border_type = self.border_type.unwrap_or(BorderType::Plain);
+        let border_set = self.border_set.unwrap_or(border::PLAIN);
 
         let mut block = Block::bordered()
-            .border_type(border_type)
+            .border_set(border_set)
             .style(self.styles.default_style())
             .border_style(border_style);
 
@@ -233,6 +279,28 @@ mod tests {
         assert_eq!(inner.y, area.y + 1);
         assert_eq!(inner.width, area.width - 2);
         assert_eq!(inner.height, area.height - 2);
+    }
+
+    #[test]
+    fn ascii_tier_renders_ascii_chrome_end_to_end() {
+        // The tier constant is not the contract; the painted buffer is.
+        let styles = MockStyles::new();
+        let area = Rect::new(0, 0, 12, 4);
+        let mut buf = Buffer::empty(area);
+
+        let inner = Panel::new(&styles)
+            .mode(LayoutMode::Standard)
+            .border_set(border_set_for_tier(BoxGlyphTier::Ascii))
+            .render_and_get_inner(area, &mut buf);
+
+        let rendered: String = (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .map(|(x, y)| buf[(x, y)].symbol().to_string())
+            .collect();
+        assert!(rendered.is_ascii(), "the ASCII tier must paint only ASCII chrome, got: {rendered:?}");
+        assert_eq!(buf[(0, 0)].symbol(), "+", "top-left corner should be an ASCII plus");
+        assert_eq!(buf[(0, 1)].symbol(), "|", "left edge should be an ASCII pipe");
+        assert_eq!(inner, Rect::new(1, 1, 10, 2), "inner area must still be the bordered box");
     }
 
     #[test]
