@@ -210,7 +210,7 @@ time.sleep(30)
                  "agent.harness.tool_result_clearing.keep_recent_tool_batches=2")])
             self.assertEqual(len(first), len(second))
             self.assertIn("agent.harness.max_budget_usd=0.25", overrides0)
-            self.assertIn("automation.full_auto.auto_grant_tool_limits=false", overrides2)
+            self.assertNotIn("auto_grant_tool_limits", " ".join(overrides2))
 
     def test_incomplete_diagnostics_do_not_report_nonengagement(self):
         debug = self.root / "debug"

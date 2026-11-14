@@ -128,6 +128,22 @@ fn scaffold_config_inherits_program_status_default() {
     );
 }
 
+/// The scaffold must never restate a removed configuration key: `vtcode init`
+/// writes it into the user's config verbatim, and every subsequent load then
+/// raises the removed-key warning against a file the tool itself created. Pin
+/// the scaffold to the same path list the loader warns on, so the template
+/// cannot drift behind the schema again.
+#[test]
+fn scaffold_config_carries_no_removed_keys() {
+    let scaffold_text = include_str!("../../../data/default_config.toml");
+    let scaffold: toml::Value = toml::from_str(scaffold_text).expect("scaffold config must parse");
+    let stale = crate::loader::manager::removed_config_key_paths_present(&scaffold);
+    assert!(
+        stale.is_empty(),
+        "scaffold still carries removed keys {stale:?}; drop them from data/default_config.toml"
+    );
+}
+
 #[test]
 fn tool_profile_parses_and_serialises_in_tools_table() {
     let config: VTCodeConfig = toml::from_str(

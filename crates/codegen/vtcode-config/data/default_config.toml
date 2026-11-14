@@ -205,10 +205,6 @@ max_age_days = 30
 # "deny" - Block the tool
 default_policy = "prompt"
 
-# Maximum number of tool loops allowed per turn
-# Set to 0 to disable the limit and let other turn safeguards govern termination.
-max_tool_loops = 60
-
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
 
@@ -504,9 +500,6 @@ allowed_tools = [
 
 # Require profile acknowledgment before using full auto
 require_profile_ack = true
-
-# Grant tool-loop and session tool-call limit increases without prompting
-auto_grant_tool_limits = true
 
 # Path to full auto profile configuration
 profile_path = "automation/full_auto_profile.toml"
