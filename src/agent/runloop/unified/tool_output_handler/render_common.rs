@@ -20,10 +20,28 @@ pub(super) async fn render_tool_output_common(
     // canonical tool-output event and the plain-text trail instead of
     // becoming transcript incidents.
     let extras_visible = renderer.inline_failure_extras_visible(is_command_output_call(name, args_val));
+    // Failed results tighten the gate for their evidence rows (stderr,
+    // critical note): the compact failed marker plus the diagnosis headline
+    // carry the failure in the transcript, and hidden evidence stays in the
+    // canonical event, the plain-text trail, and Review. Successful results
+    // keep the extras policy — stderr there is ordinary output.
+    let evidence_rows_visible = if matches!(status, ToolDisplayStatus::Failure) {
+        renderer.failure_evidence_visible()
+    } else {
+        extras_visible
+    };
     // Hidden extras still join the plain-text transcript trail so text
     // exports stay complete; only the interactive paint is gated.
     let render_extras_line = |renderer: &mut AnsiRenderer, style: MessageStyle, text: &str| -> Result<()> {
         if extras_visible {
+            renderer.line(style, text)
+        } else {
+            transcript::append(text);
+            Ok(())
+        }
+    };
+    let render_evidence_line = |renderer: &mut AnsiRenderer, style: MessageStyle, text: &str| -> Result<()> {
+        if evidence_rows_visible {
             renderer.line(style, text)
         } else {
             transcript::append(text);
@@ -109,7 +127,7 @@ pub(super) async fn render_tool_output_common(
         }
 
         if let Some(note) = output_text(output, "critical_note") {
-            render_extras_line(renderer, MessageStyle::ToolError, note)?;
+            render_evidence_line(renderer, MessageStyle::ToolError, note)?;
         }
 
         // A distinct stderr field is not part of the live PTY block. Keep it
@@ -118,7 +136,11 @@ pub(super) async fn render_tool_output_common(
         if let Some(stderr) = stderr_for_inline_display(output) {
             let stderr_lines = normalize_terminal_output_lines(stderr);
             if !stderr_lines.is_empty() {
-                render_extras_line(renderer, MessageStyle::ToolError, &format!("stderr: {}", stderr_lines.join("\n")))?;
+                render_evidence_line(
+                    renderer,
+                    MessageStyle::ToolError,
+                    &format!("stderr: {}", stderr_lines.join("\n")),
+                )?;
             }
         }
 

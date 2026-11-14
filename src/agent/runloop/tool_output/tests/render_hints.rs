@@ -96,6 +96,7 @@ async fn render_tool_output_does_not_duplicate_loop_recovery_hint() {
 }
 #[tokio::test]
 async fn render_tool_output_command_session_keeps_exit_127_output_and_guidance() {
+    transcript::clear();
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
     let payload = json!({
@@ -113,10 +114,13 @@ async fn render_tool_output_command_session_keeps_exit_127_output_and_guidance()
         .expect("exit 127 payload should render");
 
     let inline_output = collect_inline_output(&mut receiver);
-    assert!(inline_output.contains("bash: pip: command not found"));
-    assert!(inline_output.contains("not found in PATH."));
+    assert!(inline_output.contains("bash: pip: command not found"), "captured output stays");
+    assert!(
+        !inline_output.contains("not found in PATH."),
+        "the critical note is failure evidence and stays out of the transcript"
+    );
     assert!(inline_output.contains("Check the command name or install the missing binary, then rerun the command."));
-    assert!(inline_output.contains("✓ exit 127"));
+    assert!(inline_output.contains("✗ failed (exit 127)"), "the badge reads as failure");
     assert!(!inline_output.contains("Solution:"));
     assert_eq!(
         inline_output
@@ -124,9 +128,13 @@ async fn render_tool_output_command_session_keeps_exit_127_output_and_guidance()
             .count(),
         1
     );
+    let trail = transcript::snapshot().join("\n");
+    assert!(trail.contains("Command `pip` was not found in PATH."), "the note joins the trail");
+    transcript::clear();
 }
 #[tokio::test]
 async fn render_tool_output_renders_generic_recoverable_failure_guidance() {
+    transcript::clear();
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
     let payload = json!({
@@ -140,11 +148,21 @@ async fn render_tool_output_renders_generic_recoverable_failure_guidance() {
         .expect("generic recoverable failure should render");
 
     let inline_output = collect_inline_output(&mut receiver);
-    assert!(inline_output.contains("Tool preflight validation failed: x"));
+    assert!(inline_output.contains("✗ failed"), "recoverable failures keep the compact marker");
+    assert!(
+        !inline_output.contains("Tool preflight validation failed: x"),
+        "the error message is evidence and stays out of the transcript"
+    );
     assert!(inline_output.contains("Retry with fallback_tool_args."));
     assert_eq!(inline_output.matches("Retry with fallback_tool_args.").count(), 1);
     assert!(!inline_output.contains("\"error\""));
     assert!(!inline_output.contains("\"next_action\""));
+    let trail = transcript::snapshot().join("\n");
+    assert!(
+        trail.contains("Tool preflight validation failed: x"),
+        "the error message joins the trail for Review and exports"
+    );
+    transcript::clear();
 }
 #[tokio::test]
 async fn render_tool_output_write_file_diff_truncation_does_not_claim_full_review() {

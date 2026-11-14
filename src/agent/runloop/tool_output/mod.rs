@@ -316,21 +316,30 @@ pub(crate) async fn render_tool_output(
         .await?;
     }
     if let Some(stderr) = val.get("stderr").and_then(Value::as_str) {
-        render_stream_section(
-            renderer,
-            "stderr",
-            stderr,
-            output_mode,
-            tail_limit,
-            tool_name,
-            &git_styles,
-            &ls_styles,
-            MessageStyle::ToolError,
-            allow_tool_ansi,
-            disable_spool,
-            vt_config,
-        )
-        .await?;
+        // A failed result's stderr is failure evidence: interactive styles
+        // keep it out of the transcript (the compact failed marker plus the
+        // diagnosis headline carry the failure) while the plain-text trail
+        // and canonical event retain it. Successful results keep stderr —
+        // progress and warning streams are ordinary output.
+        if result_failed(val) && !renderer.failure_evidence_visible() {
+            vtcode_core::utils::transcript::append(&vtcode_core::utils::ansi_parser::strip_ansi(stderr));
+        } else {
+            render_stream_section(
+                renderer,
+                "stderr",
+                stderr,
+                output_mode,
+                tail_limit,
+                tool_name,
+                &git_styles,
+                &ls_styles,
+                MessageStyle::ToolError,
+                allow_tool_ansi,
+                disable_spool,
+                vt_config,
+            )
+            .await?;
+        }
     }
     Ok(())
 }
@@ -349,10 +358,82 @@ fn render_simple_tool_status(renderer: &mut AnsiRenderer, _tool_name: Option<&st
     let has_error = val.get("error").is_some() || val.get("error_type").is_some();
 
     if has_error {
-        render_error_details(renderer, val)?;
+        // Failed-result evidence paints only in Verbose (or headless, where
+        // the transcript is the only surface). Interactive styles keep the
+        // compact failed marker; the evidence block joins the plain-text
+        // trail so Review and exports stay complete.
+        if renderer.failure_evidence_visible() {
+            render_error_details(renderer, val)?;
+        } else {
+            vtcode_core::utils::transcript::append(&error_evidence_text(val));
+            renderer.line(MessageStyle::ToolError, &compact_failed_label(val))?;
+        }
     }
 
     Ok(())
+}
+
+/// Whether the result payload describes a failed execution: structured error
+/// fields or a non-zero exit code.
+fn result_failed(val: &Value) -> bool {
+    val.get("error").is_some()
+        || val.get("error_type").is_some()
+        || val.get("exit_code").and_then(Value::as_i64).is_some_and(|code| code != 0)
+}
+
+/// Compact failed marker matching the desktop's muted row label.
+fn compact_failed_label(val: &Value) -> String {
+    match val.get("exit_code").and_then(Value::as_i64) {
+        Some(code) if code != 0 => format!("✗ failed (exit {code})"),
+        _ => "✗ failed".to_string(),
+    }
+}
+
+/// Plain-text form of [`render_error_details`], for the trail when the
+/// interactive transcript hides the evidence block.
+fn error_evidence_text(val: &Value) -> String {
+    let mut lines = Vec::new();
+    if let Some(error_msg) = error_message(val) {
+        lines.push(format!("Error: {error_msg}"));
+    }
+    if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
+        lines.push(format!("Type: {}", error_type_description(error_type)));
+    }
+    if let Some(original) = val
+        .get("original_error")
+        .and_then(|v| v.as_str())
+        .filter(|msg| !msg.trim().is_empty())
+    {
+        let display_error = vtcode_commons::formatting::truncate_byte_budget(original, 197, "...");
+        lines.push(format!("Details: {display_error}"));
+    }
+    if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
+        lines.push(format!("Path: {path}"));
+    }
+    lines.join("\n")
+}
+
+fn error_message(val: &Value) -> Option<&str> {
+    val.get("message")
+        .and_then(|v| v.as_str())
+        .filter(|msg| !msg.trim().is_empty())
+        .or_else(|| val.get("error").and_then(|v| v.as_str()).filter(|msg| !msg.trim().is_empty()))
+}
+
+fn error_type_description(error_type: &str) -> &str {
+    match error_type {
+        "InvalidParameters" => "Invalid parameters provided",
+        "ToolNotFound" => "Tool not found",
+        "ResourceNotFound" => "Resource not found",
+        "PermissionDenied" => "Permission denied",
+        "ExecutionError" => "Execution error",
+        "PolicyViolation" => "Policy violation",
+        "Timeout" => "Operation timed out",
+        "NetworkError" => "Network error",
+        "EncodingError" => "Encoding error",
+        "FileSystemError" => "File system error",
+        _ => error_type,
+    }
 }
 
 fn should_render_command_session_terminal_panel(val: &Value) -> bool {
@@ -384,30 +465,12 @@ fn should_render_command_session_terminal_panel(val: &Value) -> bool {
 }
 
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    if let Some(error_msg) = val
-        .get("message")
-        .and_then(|v| v.as_str())
-        .filter(|msg| !msg.trim().is_empty())
-        .or_else(|| val.get("error").and_then(|v| v.as_str()).filter(|msg| !msg.trim().is_empty()))
-    {
+    if let Some(error_msg) = error_message(val) {
         renderer.line(MessageStyle::ToolError, &format!("Error: {error_msg}"))?;
     }
 
     if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
-        let type_description = match error_type {
-            "InvalidParameters" => "Invalid parameters provided",
-            "ToolNotFound" => "Tool not found",
-            "ResourceNotFound" => "Resource not found",
-            "PermissionDenied" => "Permission denied",
-            "ExecutionError" => "Execution error",
-            "PolicyViolation" => "Policy violation",
-            "Timeout" => "Operation timed out",
-            "NetworkError" => "Network error",
-            "EncodingError" => "Encoding error",
-            "FileSystemError" => "File system error",
-            _ => error_type,
-        };
-        renderer.line(MessageStyle::ToolDetail, &format!("Type: {type_description}"))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("Type: {}", error_type_description(error_type)))?;
     }
 
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str())

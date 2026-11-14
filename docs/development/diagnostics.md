@@ -63,6 +63,11 @@ desktop cannot drift; the desktop reads the effective style from the
 `SharedUiPreferences` projection. Silent incidents are still persisted, still
 stored, and still reachable in Transcript Review — F8, click hit-testing, and
 the desktop transcript simply skip them. Headless text output stays complete.
+The same audience split governs failed-result evidence rows (the structured
+`Error:`/`Type:`/`Details:` block, stderr of a failed result, and its critical
+note): `AnsiRenderer::failure_evidence_visible` keeps them out of interactive
+transcripts outside `verbose`, leaving the compact ✗ failed marker and the
+diagnosis headline, while headless output retains the evidence inline.
 Transcript Review always retains the complete details, including when the main
 transcript is collapsed. Resume replays the latest canonical payload per incident
 through `restore_diagnostic`, without emitting duplicate events; Local Agents

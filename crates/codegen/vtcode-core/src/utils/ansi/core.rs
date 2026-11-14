@@ -247,11 +247,17 @@ impl AnsiRenderer {
         self.communication_style
     }
 
-    /// Whether failure evidence beyond the owning tool row's status (inline
-    /// warning/stderr/critical-note lines) paints for this tool call.
-    /// Hidden routine extras stay in the canonical tool-output event and the
-    /// plain-text trail; only user-direct command failures (and everything
-    /// under `Verbose`) keep inline evidence rows.
+    /// Whether a failed result's evidence rows (inline stderr/critical-note
+    /// lines and the structured error block) paint beyond the owning tool
+    /// row's compact failed marker. Interactive transcripts keep only the
+    /// compact marker outside `Verbose`: hidden evidence stays in the
+    /// canonical tool-output event, the plain-text trail, and Review.
+    /// Headless output is its own surface, so evidence always paints there.
+    pub fn failure_evidence_visible(&self) -> bool {
+        !self.writes_to_inline_sink()
+            || matches!(self.communication_style(), vtcode_commons::ui_protocol::CommunicationStyle::Verbose)
+    }
+
     /// Whether once-per-turn harness coaching notices (verification
     /// re-run prompts, repeated-evidence nudges) paint in the interactive
     /// transcript. These always reach the model as system messages; the
@@ -262,6 +268,10 @@ impl AnsiRenderer {
         !self.writes_to_inline_sink() || matches!(self.communication_style(), CommunicationStyle::Verbose)
     }
 
+    /// Whether a tool result's attention rows (inline `⚠ warning` lines) paint
+    /// for this tool call. These are outcome-adjacent signals rather than
+    /// failure evidence, so command tools keep them under the default style;
+    /// failed-result evidence uses [`Self::failure_evidence_visible`] instead.
     pub fn inline_failure_extras_visible(&self, is_command_tool: bool) -> bool {
         use vtcode_commons::ui_protocol::CommunicationStyle;
         match self.communication_style.resolve() {

@@ -145,51 +145,66 @@ pub(crate) async fn render_terminal_command_panel(
         .await?;
     }
 
+    // A failed command's stderr and critical note are failure evidence:
+    // interactive styles keep them out of the transcript (the compact badge
+    // plus the diagnosis headline carry the failure) while the plain-text
+    // trail and canonical event retain them. Successful results keep both —
+    // progress and warning streams are ordinary output.
+    let command_failed = exit_code.is_some_and(|code| code != 0);
+    let evidence_visible = !command_failed || renderer.failure_evidence_visible();
+
     // Render stderr if present, even for PTY sessions
     if !render_spool_reference_only && !inline_streaming && !stderr.trim().is_empty() {
-        render_stream_section(
-            renderer,
-            "stderr",
-            stderr.as_ref(),
-            output_mode,
-            tail_limit,
-            Some(tools::RUN_PTY_CMD),
-            git_styles,
-            ls_styles,
-            MessageStyle::ToolError, // Error output
-            allow_ansi,
-            disable_spool,
-            vt_config,
-        )
-        .await?;
+        if evidence_visible {
+            render_stream_section(
+                renderer,
+                "stderr",
+                stderr.as_ref(),
+                output_mode,
+                tail_limit,
+                Some(tools::RUN_PTY_CMD),
+                git_styles,
+                ls_styles,
+                MessageStyle::ToolError, // Error output
+                allow_ansi,
+                disable_spool,
+                vt_config,
+            )
+            .await?;
+        } else {
+            vtcode_core::utils::transcript::append(&vtcode_core::utils::ansi_parser::strip_ansi(&stderr));
+        }
     }
 
     if let Some(note) = critical_note {
-        if !stdout.trim().is_empty() || !stderr.trim().is_empty() {
-            renderer.line(MessageStyle::ToolDetail, "")?;
+        if evidence_visible {
+            if !stdout.trim().is_empty() || !stderr.trim().is_empty() {
+                renderer.line(MessageStyle::ToolDetail, "")?;
+            }
+            renderer.line(MessageStyle::ToolError, note)?;
+        } else {
+            vtcode_core::utils::transcript::append(note);
         }
-        renderer.line(MessageStyle::ToolError, note)?;
     }
 
-    // Add session completion note if completed
+    // Add session completion note if completed. The badge is the compact
+    // status shape: failures read as failures, matching the desktop's
+    // muted "failed (exit N)" label.
     if is_pty_session && is_completed {
-        let exit_badge = if let Some(code) = exit_code {
-            if code == 0 {
-                "exit 0".to_string()
-            } else {
-                format!("exit {code}")
-            }
-        } else {
-            "done".to_string()
+        let (badge_style, badge) = match exit_code {
+            Some(0) => (MessageStyle::ToolDetail, "✓ exit 0".to_string()),
+            Some(code) => (MessageStyle::ToolError, format!("✗ failed (exit {code})")),
+            None => (MessageStyle::ToolDetail, "✓ done".to_string()),
         };
-        renderer.line(MessageStyle::ToolDetail, &format!("✓ {exit_badge}"))?;
+        renderer.line(badge_style, &badge)?;
     }
 
     let rendered_follow_up_body = [
         (!render_spool_reference_only && !compact_completed_pipe && !inline_streaming && !stdout.trim().is_empty())
             .then_some(stdout.as_ref()),
-        (!render_spool_reference_only && !inline_streaming && !stderr.trim().is_empty()).then_some(stderr.as_ref()),
-        critical_note,
+        (!render_spool_reference_only && !inline_streaming && evidence_visible && !stderr.trim().is_empty())
+            .then_some(stderr.as_ref()),
+        critical_note.filter(|_| evidence_visible),
     ]
     .into_iter()
     .flatten()

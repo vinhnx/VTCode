@@ -41,6 +41,13 @@ user-direct command failures (`tool.command_failed`) stay visible under `balance
 line under `quiet`; safeguard blocks (`tool.policy_denied`) stay visible in every style. The agent loop always
 receives the complete diagnosis regardless of style.
 
+Failure evidence beyond the owning row — the structured error block (`Error:`/`Type:`/`Details:`), stderr of a
+failed result, and its critical note — paints only under `verbose` (or headless output, where the transcript is
+the only surface). Interactive styles keep the compact failed shape: the ✗ status line (`✗ failed (exit N)` /
+`✗ run error, exit code: N` / the PTY badge) plus the diagnosis headline above. Hidden evidence still reaches
+the plain-text trail, the canonical tool-output event, and Transcript Review, and it always reaches the agent;
+successful results keep their stderr and warning streams, which are ordinary output rather than failure evidence.
+
 When the UI collapses or bounds a tool result, every provider/model receives this exact disclosure after the tool-result
 user message:
 
