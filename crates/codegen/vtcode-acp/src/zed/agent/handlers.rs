@@ -224,7 +224,12 @@ async fn handle_initialize(
 }
 
 fn build_auth_methods() -> Vec<acp::AuthMethod> {
-    let mut methods = vec![
+    // Env-var auth methods (API keys / base URLs collected by the client) were
+    // removed from the ACP protocol schema upstream (schema 1.6+ dropped
+    // `AuthMethod::EnvVar`); advertise only the methods the wire still
+    // supports. vtcode's own env-var and API-key configuration is unaffected —
+    // it is read from the environment/config at startup regardless.
+    vec![
         acp::AuthMethod::Agent(
             acp::AuthMethodAgent::new("oauth-openai", "OpenAI OAuth")
                 .description("Authenticate with OpenAI via OAuth 2.0 with PKCE"),
@@ -233,75 +238,12 @@ fn build_auth_methods() -> Vec<acp::AuthMethod> {
             acp::AuthMethodAgent::new("oauth-openrouter", "OpenRouter OAuth")
                 .description("Authenticate with OpenRouter via OAuth 2.0 with PKCE"),
         ),
-    ];
-    methods.push(acp::AuthMethod::Terminal(
-        acp::AuthMethodTerminal::new("terminal-login", "Terminal Login")
-            .description("Interactive terminal-based authentication via vtcode login command")
-            .args(vec!["login".to_string()]),
-    ));
-    methods.push(acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new("env-api-keys", "API Key", env_api_keys())));
-    methods.push(acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new(
-        "env-base-urls",
-        "API Base URL",
-        env_base_urls(),
-    )));
-    methods
-}
-
-fn env_api_keys() -> Vec<acp::AuthEnvVar> {
-    const ENTRIES: &[(&str, &str, bool)] = &[
-        ("OPENAI_API_KEY", "OpenAI", false),
-        ("ANTHROPIC_API_KEY", "Anthropic", false),
-        ("GEMINI_API_KEY", "Google Gemini", false),
-        ("OPENROUTER_API_KEY", "OpenRouter", false),
-        ("DEEPSEEK_API_KEY", "DeepSeek", false),
-        ("META_API_KEY", "Meta AI", false),
-        ("MODEL_API_KEY", "Meta AI (documented)", false),
-        ("ZAI_API_KEY", "Z.AI", false),
-        ("MOONSHOT_API_KEY", "Moonshot", false),
-        ("MINIMAX_API_KEY", "MiniMax", false),
-        ("GROQ_API_KEY", "Groq", false),
-        ("XAI_API_KEY", "xAI", false),
-        ("COHERE_API_KEY", "Cohere", false),
-        ("HF_TOKEN", "Hugging Face", false),
-        ("MISTRAL_API_KEY", "Mistral", false),
-        ("GOOGLE_API_KEY", "Google (alt)", true),
-        ("OLLAMA_API_KEY", "Ollama", true),
-        ("OLLAMA_API_KEY", "Ollama Cloud", false),
-        ("LMSTUDIO_API_KEY", "LM Studio", true),
-    ];
-    ENTRIES
-        .iter()
-        .map(|(name, label, optional)| {
-            let mut var = acp::AuthEnvVar::new(*name).label(*label);
-            if *optional {
-                var = var.optional(true);
-            }
-            var
-        })
-        .collect()
-}
-
-fn env_base_urls() -> Vec<acp::AuthEnvVar> {
-    const ENTRIES: &[(&str, &str)] = &[
-        ("OPENAI_BASE_URL", "OpenAI"),
-        ("ANTHROPIC_BASE_URL", "Anthropic"),
-        ("GEMINI_BASE_URL", "Gemini"),
-        ("OPENROUTER_BASE_URL", "OpenRouter"),
-        ("DEEPSEEK_BASE_URL", "DeepSeek"),
-        ("META_BASE_URL", "Meta AI"),
-        ("ZAI_BASE_URL", "Z.AI"),
-        ("MOONSHOT_BASE_URL", "Moonshot"),
-        ("MINIMAX_BASE_URL", "MiniMax"),
-        ("XAI_BASE_URL", "xAI"),
-        ("HUGGINGFACE_BASE_URL", "Hugging Face"),
-        ("OLLAMA_BASE_URL", "Ollama"),
-        ("LMSTUDIO_BASE_URL", "LM Studio"),
-    ];
-    ENTRIES
-        .iter()
-        .map(|(name, label)| acp::AuthEnvVar::new(*name).label(*label).optional(true))
-        .collect()
+        acp::AuthMethod::Terminal(
+            acp::AuthMethodTerminal::new("terminal-login", "Terminal Login")
+                .description("Interactive terminal-based authentication via vtcode login command")
+                .args(vec!["login".to_string()]),
+        ),
+    ]
 }
 
 async fn handle_authenticate(
