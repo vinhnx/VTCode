@@ -460,8 +460,8 @@ pub(crate) async fn create_task_tracker_from_active_plan(
 #[cfg(test)]
 mod tests {
     use super::{
-        PlanContent, descriptive_tracker_title, leading_title_clause, resolve_tracker_file_response,
-        task_items_from_plan,
+        PlanContent, descriptive_tracker_title, leading_title_clause, markdown_task_description,
+        resolve_tracker_file_response, task_items_from_plan,
     };
     use serde_json::json;
     use std::path::{Path, PathBuf};
@@ -726,5 +726,25 @@ mod tests {
         assert_eq!(items[0]["description"], "Emit summary");
         assert_eq!(items[0]["files"], serde_json::json!(["src/a.rs", "src/b.rs"]));
         assert_eq!(items[0]["verify"], serde_json::json!(["cargo check"]));
+    }
+
+    #[test]
+    fn markdown_task_description_parses_bullet_and_numbered_forms() {
+        // Checkbox forms: the checked/unchecked pair is the boolean oracle.
+        assert_eq!(markdown_task_description("- [ ] emit summary"), Some(("emit summary", false)));
+        assert_eq!(markdown_task_description("- [x] emit summary"), Some(("emit summary", true)));
+        assert_eq!(markdown_task_description("- [X] emit summary"), Some(("emit summary", true)));
+        // Leading whitespace is trimmed before the bullet match.
+        assert_eq!(markdown_task_description("  - [ ] indented step"), Some(("indented step", false)));
+        // Numbered forms: '.' and ')' separators with digits-only prefixes.
+        assert_eq!(markdown_task_description("1. numbered step"), Some(("numbered step", false)));
+        assert_eq!(markdown_task_description("2) parenthesized step"), Some(("parenthesized step", false)));
+        // Non-bullet, non-numbered lines are not tracker items.
+        assert_eq!(markdown_task_description("plain prose line"), None);
+        assert_eq!(markdown_task_description("abc. non-numeric prefix"), None);
+        assert_eq!(markdown_task_description("1x. mixed prefix"), None);
+        // Empty descriptions are filtered out on both sides of the boundary.
+        assert_eq!(markdown_task_description("1."), None);
+        assert_eq!(markdown_task_description("1. "), None);
     }
 }

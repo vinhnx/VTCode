@@ -333,3 +333,52 @@ impl MergeStreamState {
         Ok(response)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn full_value_fragments_derive_deltas_across_the_branch_matrix() {
+        let mut state = MergeStreamState::new("model".to_owned());
+
+        // Empty accumulator: trim_prefix("") yields the fragment itself.
+        assert_eq!(state.apply_text_fragment("Hi".to_owned(), true), Some("Hi".to_owned()));
+        assert_eq!(state.content, "Hi");
+
+        // Extending snapshot: only the suffix is emitted.
+        state.content = "Hello".to_owned();
+        assert_eq!(state.apply_text_fragment("Hello world".to_owned(), true), Some(" world".to_owned()));
+        assert_eq!(state.content, "Hello world");
+
+        // Equal snapshot: empty delta is suppressed.
+        assert_eq!(state.apply_text_fragment("Hello world".to_owned(), true), None);
+
+        // Unrelated snapshot: the fragment itself is the delta.
+        assert_eq!(state.apply_text_fragment("xyz".to_owned(), true), Some("xyz".to_owned()));
+        assert_eq!(state.content, "xyz");
+
+        // Shrinking snapshot (the asymmetric twin of the extension case): a
+        // prefix of the accumulator matches nothing, so the fragment passes
+        // through untouched.
+        state.content = "Hello world".to_owned();
+        assert_eq!(state.apply_text_fragment("Hello".to_owned(), true), Some("Hello".to_owned()));
+        assert_eq!(state.content, "Hello");
+
+        // Multibyte boundaries stay intact.
+        state.content = "界".to_owned();
+        assert_eq!(state.apply_text_fragment("界尾".to_owned(), true), Some("尾".to_owned()));
+        assert_eq!(state.content, "界尾");
+    }
+
+    #[test]
+    fn partial_value_fragments_accumulate_verbatim() {
+        let mut state = MergeStreamState::new("model".to_owned());
+
+        assert_eq!(state.apply_text_fragment("Hi".to_owned(), false), Some("Hi".to_owned()));
+        // Empty fragments emit nothing and leave the accumulator untouched.
+        assert_eq!(state.apply_text_fragment(String::new(), false), None);
+        assert_eq!(state.apply_text_fragment(" world".to_owned(), false), Some(" world".to_owned()));
+        assert_eq!(state.content, "Hi world");
+    }
+}

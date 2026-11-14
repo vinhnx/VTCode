@@ -173,7 +173,7 @@ Cargo then refuses versions published within the last 14 days (the rust-lang rep
 published malicious crates are typically revoked within days. `--locked` builds and CI consume the existing lockfile
 without re-resolution, so in-window versions already in the lockfile keep building. `cargo publish --dry-run`
 re-resolves registry deps for the packaged crate, so sibling versions younger than the window need the override
-below locally. Known limits: `cargo install` ignores it — and since Rust 1.100, installing a published crate uses
+locally. Known limits: `cargo install` ignores it — and since Rust 1.100, installing a published crate uses
 that crate's embedded lockfile anyway, so published artifacts resolve deterministically regardless; it trusts
 registry publish-time data; and it is not a complete defense — to adopt a deliberately fresh
 version, override for that single update:
