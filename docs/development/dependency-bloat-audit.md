@@ -21,6 +21,14 @@ actual feature selection — not from raw lock entries.
 | `vtcode` dependency closure (`cargo tree -p vtcode -e normal`) | 2186 nodes |
 | Binary ↔ desktop relationship | separate binaries; CLI links only `vtcode-desktop-protocol` (JSON-RPC) |
 
+After the applied changes below: release binary **30,124,576 bytes vs 30,124,592 baseline (−16 bytes —
+unchanged; fat LTO + strip had already dead-stripped everything removed here)**, closure 2186 → 2172
+nodes, duplicate groups 160 → 159. The honest read: this round's value is manifest honesty, resolved
+lint flags, per-crate feature correctness, and the machete regression gate — the size-relevant items
+(harmony/reqwest dual stack) are upstream-bound and listed under DEFERRED. Note `once_cell` remains in
+the closure as a *transitive* dep (jsonschema→ahash, color-eyre, better-panic) — unavoidable from our
+side; only our direct edges were removed.
+
 The release profile itself is already optimal (see `decisions.md` 2026-10-09/2026-08-06: `codegen-units=1`
 for fat LTO gave −17%, `opt-level="z"` took 61 MB → 34 MB, cold start 1.16 s → 0.29–0.65 s). Do not
 re-tune profiles without re-measuring; this audit targets the dependency graph instead.
