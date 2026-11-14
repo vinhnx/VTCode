@@ -783,3 +783,28 @@ fn picker_swatches_group_every_entry_by_mode() {
     assert!(modes[..first_dark].iter().all(|mode| *mode == ThemeMode::Light));
     assert!(modes[first_dark..].iter().all(|mode| *mode == ThemeMode::Dark));
 }
+
+#[gpui_kit::test]
+fn probe_glass_alphas(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut rows = String::new();
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let sidebar = translucent_sidebar_surface(&colors);
+            let toolbar = translucent_toolbar_surface(&colors);
+            rows.push_str(&format!(
+                "{id}: sidebar.a={:.2} toolbar.a={:.2} bg_l={:.3} fg_l={:.3}\n",
+                sidebar.a,
+                toolbar.a,
+                relative_luminance(colors.background),
+                relative_luminance(colors.foreground),
+            ));
+        }
+        std::fs::write("/tmp/glass_alphas.txt", rows).unwrap();
+    });
+}
