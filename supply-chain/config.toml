@@ -130,15 +130,15 @@ version = "0.8.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.agent-client-protocol]]
-version = "2.0.0"
+version = "3.6.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.agent-client-protocol-derive]]
-version = "2.0.0"
+version = "3.6.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.agent-client-protocol-schema]]
-version = "1.5.0"
+version = "1.13.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.ahash]]
