@@ -187,7 +187,7 @@ fn open_desktop_sized_with_preferences_path(
                     point(px(0.), px(0.)),
                     size(px(width), px(height)),
                 ))),
-                ..super::desktop_window_options()
+                ..super::desktop_window_options(false)
             },
             cx,
             |window, cx| {

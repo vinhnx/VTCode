@@ -141,7 +141,8 @@ pub(super) fn open_or_activate_main_window(
         .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
     let start_customs = preferences.custom_themes.clone();
     let start_maximized = preferences.window_maximized();
-    let mut options = desktop_window_options();
+    let translucent = preferences.translucent_sidebar && !reduced_transparency_requested();
+    let mut options = desktop_window_options(translucent);
     // A maximized launch fills the main screen's visible frame explicitly:
     // AppKit `zoom:` targets the content-derived standard frame (GPUI sets
     // no standard-frame delegate), which leaves gaps and never satisfies
@@ -164,7 +165,7 @@ pub(super) fn open_or_activate_main_window(
         view
     })?;
     window.update(cx, |_, window, cx| {
-        DesktopView::apply_sidebar_background(view.read(cx).preferences.translucent_sidebar, window, cx);
+        DesktopView::apply_sidebar_background(view.read(cx).effective_translucent_sidebar(), window, cx);
         window.on_window_should_close(cx, |_, cx| {
             if menu_bar::should_hide(cx) {
                 menu_bar::hide(cx);

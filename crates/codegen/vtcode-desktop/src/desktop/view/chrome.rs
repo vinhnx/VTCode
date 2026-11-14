@@ -243,7 +243,7 @@ impl DesktopView {
             .gap_3()
             .p_4()
             .when(!self.preferences.navigation_on_right(), |sidebar| sidebar.pt(px(TOOLBAR_HEIGHT)))
-            .bg(if self.preferences.translucent_sidebar {
+            .bg(if self.effective_translucent_sidebar() {
                 themes::translucent_sidebar_surface(&theme.colors)
             } else {
                 themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground)
@@ -633,8 +633,13 @@ impl DesktopView {
 
     pub(super) fn render_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let toolbar_surface =
-            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
+        // The toolbar is chrome, not content: in translucent mode it tints
+        // the window vibrancy instead of painting an opaque band over it.
+        let toolbar_surface = if self.effective_translucent_sidebar() {
+            themes::translucent_toolbar_surface(&theme.colors)
+        } else {
+            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail
+        };
         // Fullscreen hides the traffic lights, so the leading cluster hugs the
         // window edge; windowed mode keeps the 80px light clearance. The kit
         // adds its own fullscreen pl_3 on the inner bar, which stacks here.

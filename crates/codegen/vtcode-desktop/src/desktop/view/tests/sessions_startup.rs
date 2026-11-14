@@ -415,6 +415,19 @@ fn reopening_restores_translucent_sidebar_root(cx: &mut TestAppContext) {
     .unwrap();
 }
 
+#[test]
+fn translucent_preference_blurs_the_window_from_launch() {
+    assert_eq!(
+        super::super::desktop_window_options(true).window_background,
+        gpui_kit::WindowBackgroundAppearance::Blurred,
+        "glass must mount with the window, not flip after the first opaque frame"
+    );
+    assert_eq!(
+        super::super::desktop_window_options(false).window_background,
+        gpui_kit::WindowBackgroundAppearance::Opaque
+    );
+}
+
 #[gpui_kit::test]
 fn picker_completion_rejects_switching_after_turn_starts(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);

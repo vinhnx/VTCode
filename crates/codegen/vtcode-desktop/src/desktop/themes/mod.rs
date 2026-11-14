@@ -840,24 +840,66 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
     NavigationSurfaces { rail, panel }
 }
 
-/// Choose a translucent sidebar fill that remains readable over light and dark backdrops.
-pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
-    let surface = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
-    for step in 0..=20 {
-        let alpha = 0.80 + step as f32 * 0.01;
-        let readable = [0.0, 1.0].into_iter().all(|backdrop| {
-            let backdrop = Hsla { h: 0.0, s: 0.0, l: backdrop, a: 1.0 };
-            let composite = composite_status_surface(backdrop, surface, alpha);
-            contrast_ratio(colors.foreground, composite) >= 4.5
-                && contrast_ratio(colors.muted_foreground, composite) >= 4.5
-                && contrast_ratio(label_foreground(colors), composite) >= 4.5
-                && contrast_ratio(colors.primary, composite) >= 3.0
-        });
+/// Model of the backdrop a glass surface actually sits on: the system
+/// vibrancy material tints the blurred wallpaper toward the appearance's own
+/// base, and blur plus saturation pull extreme wallpapers toward mid-tone.
+/// Checking contrast against pure black AND pure white instead would pin the
+/// fill at alpha >= 0.80 — often fully opaque — and the "translucent sidebar"
+/// toggle would render opaque. The macOS Liquid Glass answer is that the
+/// material itself adapts behind the content, so glass readability is checked
+/// against this modeled backdrop; the floor below keeps the scan honest when
+/// a palette cannot reach AA over it.
+const VIBRANCY_WALLPAPER_VARIANCE: f32 = 0.5;
+
+/// Modeled luminance of the vibrancy backdrop per appearance: half-way toward
+/// the mode's own pole from mid-gray (dark glass ≈ 0.25, light glass ≈ 0.75).
+fn vibrancy_backdrop(dark: bool) -> Hsla {
+    let l = if dark {
+        VIBRANCY_WALLPAPER_VARIANCE * 0.5
+    } else {
+        1.0 - VIBRANCY_WALLPAPER_VARIANCE * 0.5
+    };
+    Hsla { h: 0.0, s: 0.0, l, a: 1.0 }
+}
+
+/// Translucent floor and step for the glass scan: visibly see-through, but
+/// bounded so a palette that cannot reach AA falls back to its opaque tint.
+const GLASS_ALPHA_FLOOR: f32 = 0.30;
+const GLASS_ALPHA_STEPS: usize = 71;
+
+/// Choose the lightest-alpha glass fill of `tint` over the modeled vibrancy
+/// backdrop that keeps WCAG AA text (4.5:1) and icon (3:1) contrast. Falls
+/// back to the opaque tint when no alpha in the glass band qualifies.
+fn translucent_glass_surface(colors: &ThemeColor, tint: Hsla) -> Hsla {
+    let dark = relative_luminance(colors.background) < 0.179;
+    let backdrop = vibrancy_backdrop(dark);
+    for step in 0..GLASS_ALPHA_STEPS {
+        let alpha = GLASS_ALPHA_FLOOR + step as f32 * 0.01;
+        let composite = composite_status_surface(backdrop, tint, alpha);
+        let readable = contrast_ratio(colors.foreground, composite) >= 4.5
+            && contrast_ratio(colors.muted_foreground, composite) >= 4.5
+            && contrast_ratio(label_foreground(colors), composite) >= 4.5
+            && contrast_ratio(colors.primary, composite) >= 3.0;
         if readable {
-            return surface.opacity(alpha);
+            return tint.opacity(alpha);
         }
     }
-    surface
+    tint
+}
+
+/// Choose a translucent sidebar fill whose readability is modeled against the
+/// vibrancy backdrop (see [`vibrancy_backdrop`]), not worst-case wallpapers.
+pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
+    let panel = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
+    translucent_glass_surface(colors, panel)
+}
+
+/// Toolbar-band twin of [`translucent_sidebar_surface`]: the title bar rides
+/// the same window vibrancy, so it tints with the rail color and the same
+/// glass scan.
+pub(super) fn translucent_toolbar_surface(colors: &ThemeColor) -> Hsla {
+    let rail = navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;
+    translucent_glass_surface(colors, rail)
 }
 
 /// WCAG contrast ratio between two colors.

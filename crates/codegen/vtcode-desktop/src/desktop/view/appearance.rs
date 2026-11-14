@@ -199,9 +199,17 @@ impl DesktopView {
             return;
         }
         self.preferences.translucent_sidebar = enabled;
-        Self::apply_sidebar_background(enabled, window, cx);
+        Self::apply_sidebar_background(self.effective_translucent_sidebar(), window, cx);
         self.save_preferences();
         cx.notify();
+    }
+
+    /// Effective translucency: the stored preference wins unless macOS Reduce
+    /// Transparency asks apps to keep surfaces opaque (HIG accessibility).
+    /// The switch keeps reflecting the stored preference so the user's intent
+    /// survives; rendering and window appearance follow this gate instead.
+    pub(super) fn effective_translucent_sidebar(&self) -> bool {
+        self.preferences.translucent_sidebar && !reduced_transparency_requested()
     }
 
     pub(super) fn apply_sidebar_background(enabled: bool, window: &mut Window, cx: &mut App) {

@@ -729,7 +729,7 @@ fn settings_page_tracks_window_width_after_open(cx: &mut TestAppContext) {
 
 #[test]
 fn native_titlebar_is_transparent_and_kit_owns_dragging() {
-    let options = super::super::desktop_window_options();
+    let options = super::super::desktop_window_options(false);
     assert!(options.app_owns_titlebar_drag, "avoid duplicate AppKit/Kit double-click handling");
     assert_eq!(options.window_background, gpui_kit::WindowBackgroundAppearance::Opaque);
     let titlebar = options.titlebar.unwrap();

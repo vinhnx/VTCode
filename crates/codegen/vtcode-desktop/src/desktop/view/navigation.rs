@@ -49,7 +49,10 @@ impl DesktopView {
             .gap_2()
             .py_2()
             .when(!navigation_on_right, |rail| rail.pt(px(TOOLBAR_HEIGHT)))
-            .bg(chrome_background(&colors))
+            // The rail is part of the navigation panel the translucent
+            // sidebar setting makes glassy: leave it unpainted so the window
+            // vibrancy shows through, matching the container gate below.
+            .when(!self.effective_translucent_sidebar(), |rail| rail.bg(chrome_background(&colors)))
             .child(
                 div()
                     .id("nav-home-hover")
@@ -197,7 +200,7 @@ impl DesktopView {
                 .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))
         };
         navigation
-            .when(!self.preferences.translucent_sidebar, |navigation| navigation.bg(chrome_background(&colors)))
+            .when(!self.effective_translucent_sidebar(), |navigation| navigation.bg(chrome_background(&colors)))
             .with_animation("navigation-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
             .into_any_element()
     }

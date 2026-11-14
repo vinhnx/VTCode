@@ -440,7 +440,7 @@ fn navigation_surfaces_are_distinct_and_readable(cx: &mut gpui_kit::TestAppConte
 }
 
 #[gpui_kit::test]
-fn translucent_sidebar_preserves_contrast_over_light_and_dark_backdrops(cx: &mut gpui_kit::TestAppContext) {
+fn translucent_glass_surfaces_hold_aa_over_the_modeled_vibrancy_backdrop(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         let mut translucent_count = 0;
@@ -450,26 +450,35 @@ fn translucent_sidebar_preserves_contrast_over_light_and_dark_backdrops(cx: &mut
         {
             let _mode = apply_by_id(id, None, cx);
             let colors = cx.theme().colors;
-            let surface = translucent_sidebar_surface(&colors);
+            let sidebar = translucent_sidebar_surface(&colors);
+            let toolbar = translucent_toolbar_surface(&colors);
             if id == DEFAULT_THEME_ID {
-                assert!(surface.a < 1.0, "default theme must show the blurred backdrop");
+                assert!(sidebar.a < 1.0, "default theme must show the blurred backdrop");
+                assert!(
+                    sidebar.a < 0.80,
+                    "default theme glass must be visibly translucent, not the old near-opaque floor ({})",
+                    sidebar.a
+                );
+                assert!(toolbar.a < 1.0, "default theme toolbar glass must show the blurred backdrop");
             }
-            if surface.a >= 1.0 {
-                continue;
-            }
-            translucent_count += 1;
-            let rgba = gpui_kit::Rgba::from(surface);
-            for backdrop in [0.0, 1.0] {
-                let composite = Hsla::from(gpui_kit::Rgba {
-                    r: rgba.r * rgba.a + backdrop * (1.0 - rgba.a),
-                    g: rgba.g * rgba.a + backdrop * (1.0 - rgba.a),
-                    b: rgba.b * rgba.a + backdrop * (1.0 - rgba.a),
-                    a: 1.0,
-                });
-                assert!(contrast_ratio(colors.foreground, composite) >= 4.5, "{id}: foreground");
-                assert!(contrast_ratio(colors.muted_foreground, composite) >= 4.5, "{id}: muted");
-                assert!(contrast_ratio(label_foreground(&colors), composite) >= 4.5, "{id}: label");
-                assert!(contrast_ratio(colors.primary, composite) >= 3.0, "{id}: icon");
+            for (name, surface) in [("sidebar", sidebar), ("toolbar", toolbar)] {
+                if surface.a >= 1.0 {
+                    continue;
+                }
+                assert!(
+                    surface.a >= GLASS_ALPHA_FLOOR,
+                    "{id}: {name} glass alpha {a} left the glass band",
+                    a = surface.a
+                );
+                translucent_count += 1;
+                // Mirror the production oracle: glass readability is modeled
+                // against the vibrancy backdrop, not worst-case wallpapers.
+                let dark = relative_luminance(colors.background) < 0.179;
+                let composite = composite_status_surface(vibrancy_backdrop(dark), surface, surface.a);
+                assert!(contrast_ratio(colors.foreground, composite) >= 4.5, "{id}: {name} foreground");
+                assert!(contrast_ratio(colors.muted_foreground, composite) >= 4.5, "{id}: {name} muted");
+                assert!(contrast_ratio(label_foreground(&colors), composite) >= 4.5, "{id}: {name} label");
+                assert!(contrast_ratio(colors.primary, composite) >= 3.0, "{id}: {name} icon");
             }
         }
         assert!(translucent_count > 0, "at least one theme must permit translucency");

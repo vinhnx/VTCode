@@ -201,7 +201,7 @@ use chrome::*;
 use components::*;
 use glass_buttons::*;
 use inspector_changes::*;
-use launch_bounds::{desktop_window_options, main_screen_visible_bounds};
+use launch_bounds::{desktop_window_options, main_screen_visible_bounds, reduced_transparency_requested};
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
 use queue::*;

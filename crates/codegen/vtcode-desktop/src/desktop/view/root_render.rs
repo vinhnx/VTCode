@@ -30,7 +30,7 @@ impl DesktopView {
             .id("terminal-dock")
             .test_support()
             .relative()
-            .when(!self.preferences.translucent_sidebar || !navigation_visible, |dock| {
+            .when(!self.effective_translucent_sidebar() || !navigation_visible, |dock| {
                 dock.bg(chrome_background(&colors))
             });
         match position {
@@ -165,7 +165,7 @@ impl Render for DesktopView {
             .min_w_0()
             .min_h_0()
             .flex()
-            .when(!self.preferences.translucent_sidebar || !navigation_visible, |pane| {
+            .when(!self.effective_translucent_sidebar() || !navigation_visible, |pane| {
                 pane.bg(chrome_background(&colors))
             })
             .child(center);
@@ -213,7 +213,7 @@ impl Render for DesktopView {
         let mut body = div()
             .size_full()
             .flex()
-            .when(!self.preferences.translucent_sidebar || !navigation_visible, |body| body.bg(colors.background))
+            .when(!self.effective_translucent_sidebar() || !navigation_visible, |body| body.bg(colors.background))
             // The sidebar and inspector are siblings now, so the resize drag
             // ends on the body to catch releases over either pane.
             .on_mouse_up(
