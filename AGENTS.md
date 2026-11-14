@@ -17,7 +17,7 @@ Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` 
 - 4-space indentation, `snake_case` fns, `PascalCase` types, `anyhow::Result<T>` + `.with_context()`. Follow the [Rust style adoption matrix](docs/development/rust-style-guide.md) for flexible borrows, targeted `must_use`, API conventions, and exceptions.
 - CI sets `RUSTFLAGS: "-D warnings"` and uses `--locked`. Match locally with `cargo check --locked` when relevant.
 - Keep changes surgical: know which files the increment owns, preserve APIs and unrelated work, stage explicit reviewed paths, and check each scoped commit's staged diff.
-- Hard ceiling: no tracked text file may exceed 1000 lines (`python3 scripts/check_file_length.py --mode enforce`, gated by `check-dev.sh`/`check.sh`/pre-commit hook). Park generated/vendored outliers in `scripts/file_length_allowlist.txt` as `glob=MAX_LINES`; never allowlist first-party source without a split plan.
+- Hard ceiling: no tracked text file over 1000 lines (`python3 scripts/check_file_length.py --mode enforce`). Generated/vendored outliers: `scripts/file_length_allowlist.txt` (never first-party without a split plan). Rust tiered: src warn 500 / enforce 800, tests 1000; caps ratchet down only (`check.sh rust-length`).
 - Prefer direct single-agent execution. Do not impose orchestrator/worker or other multi-agent topologies: forced delegation burns usage limits and yields worse results. Delegate only when independent/parallel work or context isolation clearly helps.
 - `vtcode-exec-events::ThreadEvent` is the authoritative runtime event contract — do not invent parallel types.
 - Harness config is split across `agent.harness`, `automation.full_auto`, `context.dynamic` — do not add a new top-level harness subsystem.

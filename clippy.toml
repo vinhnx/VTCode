@@ -11,6 +11,12 @@ cognitive-complexity-threshold = 75
 # Too many arguments threshold for functions
 too-many-arguments-threshold = 9
 
+# Anchor for the tiered file-length gate (scripts/check_rust_file_length.py):
+# LOC is a weak proxy for complexity, so pair the file budgets with function
+# complexity. `too_many_lines` is a pedantic lint — enable it per-crate only
+# where a split plan exists; 100 lines matches the "split a function" norm.
+too-many-lines-threshold = 100
+
 # Disallow specific methods that should be avoided
 disallowed-methods = [
     { path = "std::panic::panic_any", reason = "Use anyhow/thiserror for error handling instead" },

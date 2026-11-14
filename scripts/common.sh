@@ -135,9 +135,19 @@ run_file_length_gate() {
         scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet
 }
 
+# Soft tiered Rust signal (src 500 / tests 800), shared by check-dev.sh and
+# check.sh. Blocking enforcement lives in check.sh's run_rust_length_gate.
+run_rust_length_report() {
+    print_status "Reporting Rust file lengths (warn: src 500 / tests 800)..."
+    run_python_gate "Rust file length report completed." \
+        "Rust file length report failed unexpectedly." \
+        scripts/check_rust_file_length.py --mode warn --quiet
+}
+
 run_repo_governance_gates() {
     local failed=0
     run_file_length_gate || failed=1
+    run_rust_length_report || failed=1
     print_status "Checking local links in docs and AGENTS.md files..."
     run_python_gate "Docs and AGENTS.md links resolve!" \
         "Broken docs links or overlong module AGENTS.md lines found." \

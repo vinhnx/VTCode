@@ -16,7 +16,7 @@ Last reviewed: 2026-10-29
 | --- | --- | --- | --- | --- |
 | 1 | Beautiful is better than ugly. | Prefer coherent, legible output and docs structure. | Markdown lint + harness document structure | Active |
 | 2 | Explicit is better than implicit. | Keep links, policies, and constraints explicit. | `python3 scripts/check_docs_links.py` | Active |
-| 3 | Simple is better than complex. | Keep files decomplected and focused. | Soft: `check_rust_file_length.py --mode warn --max-lines 500`; hard ceiling: `check_file_length.py --mode enforce --max-lines 1000` | Hard ceiling active |
+| 3 | Simple is better than complex. | Keep files decomplected and focused. | Soft: `check_rust_file_length.py --mode warn` (src 500 / tests 800); tiered enforce: `check.sh rust-length` (src 800 / tests 1000, ratchet baseline); hard ceiling: `check_file_length.py --mode enforce --max-lines 1000` | Tiered gate active |
 | 4 | Complex is better than complicated. | Accept necessary complexity, reject avoidable complication. | Layering invariants + focused scripts | Active |
 | 5 | Flat is better than nested. | Keep docs and modules discoverable and shallow where possible. | `python3 scripts/check_markdown_location.py` | Active |
 | 6 | Sparse is better than dense. | Prefer concise structures over dense prose in governance output. | Structured tables and remediation sections in checks | Active |
@@ -74,7 +74,8 @@ Last reviewed: 2026-10-29
 python3 scripts/check_docs_links.py
 python3 scripts/check_markdown_location.py
 python3 scripts/check_large_files.py 400000
-python3 scripts/check_rust_file_length.py --mode warn --max-lines 500
+python3 scripts/check_rust_file_length.py --mode warn
+python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet
 python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet
 python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt
 python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt

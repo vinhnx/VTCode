@@ -264,10 +264,10 @@ run_harness_regression_tests() {
 }
 
 # Run Zen governance checks in the documented warn-first rollout mode.
+# The soft Rust length signal lives in run_repo_governance_gates (common.sh).
 run_zen_governance() {
     print_status "Running Zen governance checks (warn mode)..."
-    if python3 scripts/check_rust_file_length.py --mode warn --max-lines 500 \
-        && python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt \
+    if python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt \
         && python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt; then
         print_success "Zen governance checks completed."
         return 0
@@ -277,6 +277,20 @@ run_zen_governance() {
     fi
 }
 
+# Tiered Rust file-length enforcement: production src fails at 800 lines
+# unless capped by the ratchet baseline (scripts/rust_length_baseline.txt);
+# tests/benches/fuzz/examples fail at 1000. The soft warn-500 signal runs in
+# run_repo_governance_gates so check-dev.sh sees it without blocking.
+run_rust_length_gate() {
+    print_status "Running Rust file length gate (src 800, tests 1000)..."
+    if python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet; then
+        print_success "Rust file lengths within tiered budgets!"
+        return 0
+    else
+        print_error "Rust file length violations found. Split the file or see scripts/rust_length_baseline.txt rules."
+        return 1
+    fi
+}
 
 # Catch platform-gated `unsafe` drift that host-only clippy cannot see: every
 # `unsafe` needs a `SAFETY:` marker and an `unsafe_code` allowance, even in code
@@ -401,6 +415,7 @@ main() {
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
     run_repo_governance_gates || ((failed_checks++))
+    run_rust_length_gate || ((failed_checks++))
     run_markdown_lint_gate || ((failed_checks++))
     run_unsafe_docs_gate || ((failed_checks++))
     run_cargo_deny || ((failed_checks++))
@@ -479,6 +494,7 @@ case "${1:-}" in
         echo "  contracts - Run release-artifact contract tests"
         echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
+        echo "  rust-length - Gate tiered Rust file lengths: src 800, tests 1000 (enforce)"
         echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
         echo "  deny    - Audit dependencies (cargo-deny advisories/licenses/bans/sources + cargo-vet audit provenance)"
         echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
@@ -491,6 +507,9 @@ case "${1:-}" in
         ;;
     "file-length")
         run_file_length_gate
+        ;;
+    "rust-length")
+        run_rust_length_gate
         ;;
     "unsafe-docs")
         run_unsafe_docs_gate

@@ -427,9 +427,9 @@ below based on the topic area.
 
 - **File**: `docs/development/rust-style-guide.md`
   - **Content**: Rust Style Guide Adoption
-  - **Topics**: Adoption matrix, Rust API migration notes, Audit scope and verification
+  - **Topics**: Adoption matrix, File length budgets, Rust API migration notes, Audit scope and verification
   - **User Questions**: "What can you tell me about Rust Style Guide Adoption?", "How does Adoption matrix work?", "How
-    does Rust API migration notes work?"
+    does File length budgets work?"
 
 - **File**: `docs/development/toolchain-updates.md`
   - **Content**: Rust Toolchain and MSRV

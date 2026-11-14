@@ -8,6 +8,7 @@
 #   - clippy (linting, default-members only)
 #   - cargo check (compilation verification)
 #   - file length gate (hard ceiling: 1000 lines per tracked text file)
+#   - Rust file length report (soft: src 500 / tests 800; check.sh enforces)
 #
 # Optional checks (via flags):
 #   - Tests (--test)

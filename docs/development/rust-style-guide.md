@@ -58,6 +58,42 @@ The rows below cover every section of the upstream guide. Grouped recommendation
 | Implementation: avoid `catch_unwind` | Exception: retain established coarse defensive/plugin unwind boundaries. | Removing them changes runtime isolation; never use unwind catching instead of ordinary error handling. |
 | Test framework | Use focused locked nextest suites, then workspace verification. | Do not replace the established test framework or add tests solely for annotation/import changes. |
 
+## File length budgets
+
+Line count is a weak proxy for quality, so Rust files are governed by tiers instead of one number, paired with the
+complexity lints below. The universal hard ceiling (no tracked text file over 1000 lines, `scripts/check_file_length.py`)
+stays the safety net; `scripts/check_rust_file_length.py` adds the Rust-specific design rule:
+
+| Tier | Files | Warn | Enforce |
+| --- | --- | ---: | ---: |
+| `src` (production source) | everything else | 500 | 800 |
+| `test` (cfg(test) modules: `tests.rs`, `*_tests.rs`, `tests_*.rs`, plus `tests/`, `benches/`, `fuzz/`, `examples/`) | long fixtures are lower-risk | 800 | 1000 |
+
+Vendored and generated trees (`patches/**`, `**/*.generated.rs`) are excluded entirely; they are capped by the universal
+allowlist instead. The `src` budget is a ratchet, not a one-time amnesty:
+
+- `scripts/rust_length_baseline.txt` is the debt ledger for src-tier files over 800 at adoption. Entries are
+  `path=CAP` with the file's size at adoption; growing a file past its cap fails the release gate.
+- New src files over 800 fail outright; split them or shrink them before merge. Files shrinking below 800 make their
+  baseline entry stale, and stale entries fail — remove the entry in the same change. Caps only ever ratchet down.
+- Test-tier files are never baselined; they enforce at 1000 directly.
+- Re-snapshotting is an explicit adoption decision, not a routine fix: `python3
+  scripts/check_rust_file_length.py --emit-baseline` prints the current over-budget set, and merging it into the
+  ledger must never raise an existing cap (review the ledger diff for upward moves).
+
+Wiring: the soft warn signal runs in every `check-dev.sh` run (`run_rust_length_report`); the release gate
+(`./scripts/check.sh`, subcommand `rust-length`) enforces the tier budgets. LOC is gameable, so pair the budgets with
+function-level complexity: `cognitive-complexity-threshold = 75` stays active, `too-many-lines-threshold = 100` is
+anchored in `clippy.toml` for per-crate `too_many_lines` adoption where a split plan exists. Repeat offenders for
+cohesion review: desktop `view/*`, runloop `turn/*` and `tool_routing`, `vtcode-llm` providers, `vtcode-ui` widgets.
+
+Gate commands:
+
+```sh
+python3 scripts/check_rust_file_length.py --mode warn   # soft signal (check-dev.sh runs this)
+python3 scripts/check_rust_file_length.py --mode enforce # release gate (check.sh rust-length)
+```
+
 ## Rust API migration notes
 
 These are source-level changes only. Serialized data, tool schemas, process approval, environment filtering, and runtime

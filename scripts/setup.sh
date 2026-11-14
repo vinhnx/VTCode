@@ -101,6 +101,12 @@ if ! python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quie
     exit 1
 fi
 
+# Run tiered Rust file length gate (src 800 / tests 1000; baseline caps ratchet down)
+if ! python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet; then
+    echo "Rust file length violations found. Split the file or see scripts/rust_length_baseline.txt rules."
+    exit 1
+fi
+
 echo "Pre-commit checks passed!"
 EOF
 
