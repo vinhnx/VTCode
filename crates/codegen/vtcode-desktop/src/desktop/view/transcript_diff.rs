@@ -50,7 +50,7 @@ impl DesktopView {
                         cx.notify();
                     })),
             )
-            .child(Self::diff_changes_cta(&item.id, self.transcript_row_revealed(item.id.as_str()), cx));
+            .child(Self::diff_changes_cta(&item.id, cx));
 
         let header = div()
             .w_full()

@@ -263,8 +263,6 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
         assert_eq!(window.find("diff-open-changes-edits").role(), Some(gpui_kit::Role::Button));
         assert_eq!(window.find("diff-open-changes-edits").label(), Some("Changes"));
 
-        window.hover("transcript-row-edits", cx);
-        window.render_frame(cx);
         window.click("diff-open-changes-edits", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
@@ -277,11 +275,6 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
             view.selected_change = None;
             view.inspector_open = false;
         });
-        // Settle the close, then reveal through keyboard focus: hover
-        // coverage lives in the dedicated recede tests, and this flow only
-        // needs the jump reachable for the no-preview fallback.
-        window.render_frame(cx);
-        view.update(cx, |view, _| view.keyboard_focused_message = Some("pending".into()));
         window.render_frame(cx);
         window.click("diff-open-changes-pending", cx);
         window.render_frame(cx);
@@ -583,7 +576,7 @@ fn transcript_header_rows_share_one_trailing_edge(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn diff_changes_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
+fn diff_changes_cta_stays_visible_without_hover_or_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -602,20 +595,16 @@ fn diff_changes_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
             view.transcript.push(edits);
         });
         window.render_frame(cx);
-        assert!(window.try_find("diff-open-changes-edits").is_some(), "receded jump keeps its space");
-        assert!(!window.find("diff-open-changes-edits").visible(), "jump hides at rest");
+        assert!(window.find("diff-open-changes-edits").visible(), "jump stays visible at rest");
         assert!(window.find("diff-edits").visible(), "toggle stays visible");
         let row = window.find("transcript-row-edits").bounds();
         window.hover("transcript-row-edits", cx);
         window.render_frame(cx);
-        assert!(window.find("diff-open-changes-edits").visible(), "hover reveals the jump");
-        assert_eq!(window.find("transcript-row-edits").bounds(), row, "reveal must not reflow the row");
+        assert!(window.find("diff-open-changes-edits").visible(), "hover keeps the jump visible");
+        assert_eq!(window.find("transcript-row-edits").bounds(), row, "hover must not reflow the row");
         window.hover("transcript-scroll", cx);
         window.render_frame(cx);
-        assert!(!window.find("diff-open-changes-edits").visible(), "leaving hides the jump");
-        view.update(cx, |view, _| view.keyboard_focused_message = Some("edits".into()));
-        window.render_frame(cx);
-        assert!(window.find("diff-open-changes-edits").visible(), "focus reveals the jump");
+        assert!(window.find("diff-open-changes-edits").visible(), "leaving the row keeps the jump visible");
     })
     .unwrap();
 }

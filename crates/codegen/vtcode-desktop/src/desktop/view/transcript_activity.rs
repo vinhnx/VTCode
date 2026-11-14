@@ -219,15 +219,15 @@ impl DesktopView {
     /// Jump button in a diff card header, opening Changes on the change-set's
     /// first previewable file, or the tab alone when nothing previews. The
     /// target resolves at click time from the live transcript (like the
-    /// copy-patch action), so a rebuilt projection cannot strand it. Recedes
-    /// until the row is hovered or keyboard highlighted, keeping its space.
-    pub(super) fn diff_changes_cta(item_id: &str, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
+    /// copy-patch action), so a rebuilt projection cannot strand it. Always
+    /// visible: the diff card summarizes edits, so its way into the full
+    /// change view must not hide behind hover.
+    pub(super) fn diff_changes_cta(item_id: &str, cx: &mut Context<Self>) -> impl IntoElement {
         let id = item_id.to_string();
         desktop_button(format!("diff-open-changes-{item_id}"))
             .label(rust_i18n::t!("app.inspector.tab_changes").to_string())
             .ghost()
             .xsmall()
-            .when(!revealed, |button| button.invisible())
             .tab_stop(false)
             .on_click(cx.listener(move |view, _, _, cx| {
                 let open_path = view
