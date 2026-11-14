@@ -144,7 +144,7 @@ async fn migrate_existing_files(
         if path.is_dir() {
             for entry in build_walker_single_threaded(&path).build().filter_map(|e| e.ok()) {
                 let file_path = entry.path();
-                let relative = file_path.strip_prefix(&path).unwrap_or(file_path);
+                let relative = file_path.trim_prefix(&path);
                 let dest_path = destination.join(relative);
                 if entry.file_type().is_some_and(|ft| ft.is_dir()) {
                     ensure_dir_exists(&dest_path).await?;

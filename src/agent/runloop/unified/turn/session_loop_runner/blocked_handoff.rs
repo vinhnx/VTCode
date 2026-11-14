@@ -257,7 +257,7 @@ pub(super) fn blocked_status_label(blocker_summary: &str) -> String {
         return "Turn blocked: recovery fallback".to_string();
     }
     let headline = truncated_block_reason(blocker_summary, "");
-    let headline = headline.strip_suffix("… — full reason: ").unwrap_or(headline.as_str());
+    let headline = headline.trim_suffix("… — full reason: ");
     if headline.is_empty() {
         return "Turn blocked".to_string();
     }

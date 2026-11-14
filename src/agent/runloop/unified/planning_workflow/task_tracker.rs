@@ -40,7 +40,7 @@ pub(crate) struct TaskTrackerHandoff {
 }
 
 fn markdown_task_description(line: &str) -> Option<(&str, bool)> {
-    let trimmed = line.trim().strip_prefix("- ").unwrap_or(line.trim());
+    let trimmed = line.trim().trim_prefix("- ");
     if let Some(description) = trimmed.strip_prefix("[ ] ") {
         return Some((description.trim(), false));
     }

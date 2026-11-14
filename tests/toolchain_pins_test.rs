@@ -192,7 +192,7 @@ fn every_rust_toolchain_pin_agrees() {
         .into_iter()
         .filter(|(_, version)| version != &pinned)
         .map(|(path, version)| {
-            let relative = path.strip_prefix(&root).unwrap_or(&path);
+            let relative = path.trim_prefix(&root);
             format!("{} pins {version}", relative.display())
         })
         .collect::<Vec<_>>();

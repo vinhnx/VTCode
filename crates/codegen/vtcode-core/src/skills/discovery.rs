@@ -309,7 +309,7 @@ impl SkillDiscovery {
         if path.starts_with("~") {
             // Expand home directory
             if let Ok(home) = std::env::var("HOME") {
-                let stripped = path.strip_prefix("~").unwrap_or(path);
+                let stripped = path.trim_prefix("~");
                 return PathBuf::from(home).join(stripped);
             }
         }

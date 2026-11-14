@@ -276,7 +276,7 @@ impl FileOpsTool {
             use vtcode_commons::walk::build_walker_single_threaded;
             for entry in build_walker_single_threaded(&from_path).build().filter_map(|e| e.ok()) {
                 let entry_path = entry.path();
-                let relative = entry_path.strip_prefix(&from_path).unwrap_or(entry_path);
+                let relative = entry_path.trim_prefix(&from_path);
                 let target = vtcode_commons::paths::ensure_path_within_workspace_resolved(
                     &to_path.join(relative),
                     self.canonical_workspace_root(),

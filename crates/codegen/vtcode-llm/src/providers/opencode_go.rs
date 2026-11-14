@@ -34,7 +34,7 @@ pub struct OpenCodeGoProvider {
 
 impl OpenCodeGoProvider {
     fn normalize_model(model: &str) -> &str {
-        model.trim().strip_prefix("opencode-go/").unwrap_or(model.trim())
+        model.trim().trim_prefix("opencode-go/")
     }
 
     pub fn new(api_key: String) -> Self {

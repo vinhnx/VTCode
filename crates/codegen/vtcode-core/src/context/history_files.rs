@@ -210,7 +210,7 @@ impl HistoryFileManager {
             .with_context(|| format!("Failed to write history file: {}", file_path.display()))?;
 
         // Calculate relative path
-        let relative_path = file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
+        let relative_path = file_path.trim_prefix(&self.workspace_root).to_path_buf();
 
         info!(
             session = %self.session_id,
@@ -293,7 +293,7 @@ impl HistoryFileManager {
             .with_context(|| format!("Failed to write history file: {}", file_path.display()))?;
 
         // Calculate relative path
-        let relative_path = file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
+        let relative_path = file_path.trim_prefix(&self.workspace_root).to_path_buf();
 
         info!(
             session = %self.session_id,

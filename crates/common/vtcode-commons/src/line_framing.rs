@@ -98,7 +98,7 @@ mod tests {
                         let mut line = vec![b'!'; 20];
                         for physical_line in input.split_inclusive(|byte| *byte == b'\n') {
                             let content = if ending == LineEnding::ExcludeLf {
-                                physical_line.strip_suffix(b"\n").unwrap_or(physical_line)
+                                physical_line.trim_suffix(b"\n")
                             } else {
                                 physical_line
                             };

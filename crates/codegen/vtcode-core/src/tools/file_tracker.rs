@@ -47,7 +47,7 @@ impl FileTracker {
                     continue;
                 }
                 let path = entry.path();
-                let relative = path.strip_prefix(&workspace).unwrap_or(path);
+                let relative = path.trim_prefix(&workspace);
                 let relative_str = relative.to_string_lossy();
                 for pattern in &glob_patterns {
                     if pattern.matches(&relative_str) {

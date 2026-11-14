@@ -216,7 +216,7 @@ fn impl_debug_no_inline(input: &DeriveInput) -> syn::Result<TokenStream2> {
 /// `type`, matching the built-in derive.
 fn field_name(ident: &syn::Ident) -> String {
     let raw = ident.to_string();
-    raw.strip_prefix("r#").unwrap_or(raw.as_str()).to_string()
+    raw.trim_prefix("r#").to_string()
 }
 
 fn fmt_body_struct(type_name: &str, fields: &Fields) -> TokenStream2 {

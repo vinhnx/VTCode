@@ -77,7 +77,7 @@ pub(crate) fn fingerprint_markdown_directories(directories: &[&Path]) -> Vec<Fil
                 continue;
             }
 
-            let relative_path = path.strip_prefix(directory).unwrap_or(path.as_path()).to_path_buf();
+            let relative_path = path.trim_prefix(directory).to_path_buf();
             fingerprint.push(FileMetadataFingerprint::from_metadata(source_index, relative_path, &metadata));
         }
     }

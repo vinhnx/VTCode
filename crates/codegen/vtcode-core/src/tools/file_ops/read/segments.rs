@@ -108,7 +108,7 @@ impl FileOpsTool {
             line_was_truncated |= truncated;
 
             let line = String::from_utf8_lossy(&buffer);
-            let line = line.strip_suffix('\n').unwrap_or(line.as_ref());
+            let line = line.trim_suffix('\n');
             let line = line.trim_suffix('\r');
             if line_index > 0 {
                 final_content.push('\n');

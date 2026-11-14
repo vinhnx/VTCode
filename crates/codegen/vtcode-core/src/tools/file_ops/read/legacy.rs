@@ -238,7 +238,7 @@ impl FileOpsTool {
 fn decode_bounded_line(buffer: &[u8]) -> (String, bool) {
     let has_newline = buffer.last() == Some(&b'\n');
     let line = String::from_utf8_lossy(buffer);
-    let line = line.strip_suffix('\n').unwrap_or(line.as_ref());
+    let line = line.trim_suffix('\n');
     (line.to_owned(), has_newline)
 }
 

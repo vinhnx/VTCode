@@ -22,7 +22,7 @@ pub struct EvolinkSpec;
 /// The curated `ModelId` catalog namespaces entries as `evolink/<model>`, so
 /// strip that prefix before sending the request upstream.
 fn normalize(model: &str) -> &str {
-    model.trim().strip_prefix("evolink/").unwrap_or(model.trim())
+    model.trim().trim_prefix("evolink/")
 }
 
 fn evolink_reasoning(message: &Value, choice: &Value) -> Option<String> {

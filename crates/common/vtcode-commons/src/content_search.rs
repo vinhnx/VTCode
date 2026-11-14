@@ -354,7 +354,7 @@ fn candidate_files(request: &SearchRequest) -> Vec<PathBuf> {
             // The relative path is empty when the search root is the file
             // itself, so the file name is used instead: a glob must still be
             // able to select the file that was searched directly.
-            let relative = path.strip_prefix(&request.root).unwrap_or(path);
+            let relative = path.trim_prefix(&request.root);
             let relative = if relative.as_os_str().is_empty() {
                 path
             } else {

@@ -235,7 +235,7 @@ fn get_plugin_symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T> {
     let symbol: Symbol<T> = unsafe { library.get(name) }.with_context(|| {
         format!(
             "Failed to load plugin symbol: {:?}",
-            String::from_utf8_lossy(name.strip_suffix(b"\0").unwrap_or(name))
+            String::from_utf8_lossy(name.trim_suffix(b"\0"))
         )
     })?;
     Ok(*symbol)

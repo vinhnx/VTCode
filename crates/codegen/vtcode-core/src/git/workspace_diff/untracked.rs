@@ -23,7 +23,7 @@ pub(super) async fn append(workspace: &Path, output: &mut GitOutput, max_bytes: 
     if prefix.truncated || !prefix.success {
         bail!("Untracked file prefix unavailable");
     }
-    let prefix = prefix.text.strip_suffix('\n').unwrap_or(&prefix.text);
+    let prefix = prefix.text.trim_suffix('\n');
     for (index, path) in listing.text.split('\0').filter(|path| !path.is_empty()).enumerate() {
         let remaining = max_bytes.saturating_sub(output.text.len());
         let patch = if index >= MAX_FILES || remaining == 0 {

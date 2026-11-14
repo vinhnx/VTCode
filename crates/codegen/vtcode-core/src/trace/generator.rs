@@ -101,7 +101,7 @@ impl TraceGenerator {
         workspace_path: &Path,
     ) -> Option<TraceFile> {
         // Get relative path from workspace
-        let relative_path = path.strip_prefix(workspace_path).unwrap_or(path).to_string_lossy().to_string();
+        let relative_path = path.trim_prefix(workspace_path).to_string_lossy().to_string();
 
         // Determine line range and content for hash
         let (line_range, content_for_hash) = match &change.kind {

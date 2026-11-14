@@ -679,7 +679,7 @@ fn build_pty_transcript_lines(
     for (index, line) in lines.into_iter().enumerate() {
         let prefix = if index == 0 { first_prefix } else { continuation_prefix };
         let full_text: String = line.spans.iter().map(|span| span.content.as_ref()).collect();
-        let body_text = full_text.strip_prefix(prefix).unwrap_or(full_text.as_str());
+        let body_text = full_text.trim_prefix(prefix);
         let body_end = combined_offset + body_text.len();
         let mut explicit_links = Vec::new();
 
