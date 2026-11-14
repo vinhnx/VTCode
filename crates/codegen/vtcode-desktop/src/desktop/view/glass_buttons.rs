@@ -2,7 +2,7 @@
 //!
 //! Same primary semantics, geometry, border, text, and Kit-owned states as
 //! [`desktop_primary_button`]; only the resting fill turns to glass, derived
-//! per theme and per seat by the [`themes`](super::themes) glass recipes.
+//! per theme and per seat by the [`themes`] glass recipes.
 //! Hover and press solidify to the theme's opaque primary tokens (Kit owns
 //! those slots). The builder owns the whole disabled composition: Kit replays
 //! the instance fill inside its disabled arm, so the wash cannot be a

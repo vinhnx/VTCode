@@ -331,6 +331,16 @@ allow_attributes_without_reason = "warn"
 unused_dependencies = "warn"
 redundant_homepage = "deny"
 
+# Rustdoc 1.100 lint: malformed Markdown tables render broken output in the
+# published docs. check.sh already gates `cargo doc --workspace --no-deps`,
+# so a deny turns that gate into an enforcement point for table shape. The
+# link lints are denied for the same reason: broken intra-doc links and
+# redundant explicit targets ship as visibly broken cross-references.
+[workspace.lints.rustdoc]
+invalid_markdown_table = "deny"
+broken_intra_doc_links = "deny"
+redundant_explicit_links = "deny"
+
 
 [dependencies]
 vtcode-bash-runner = { workspace = true }

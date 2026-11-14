@@ -90,7 +90,7 @@ pub(super) enum DeepLink {
     Action(PaletteAction),
     /// The changelog viewer: latest release when an update is available,
     /// else the running version's known notes. A viewer, not a palette
-    /// action, so it bypasses [`PaletteAction`](super::palette::PaletteAction).
+    /// action, so it bypasses [`PaletteAction`].
     Changelog,
 }
 

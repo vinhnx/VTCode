@@ -48,7 +48,7 @@ impl TerminalProcess {
     }
 
     /// Production sessions: a login shell so GUI-spawned terminals load the
-    /// user's profile (PATH, prompt). Tests use [`Self::spawn`] to stay hermetic.
+    /// user's profile (PATH, prompt). Tests use `Self::spawn` to stay hermetic.
     pub(super) fn spawn_login(workspace: &Path, shell: &Path, size: PtySize) -> Result<Self> {
         let mut command = Self::base_command(workspace, shell);
         command.arg("-l");

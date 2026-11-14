@@ -2,7 +2,7 @@
 //! and persistence.
 //!
 //! A custom theme is the same seven-seed palette a built-in row carries, so it
-//! resolves through the shared derivation in [`themes::apply_palette`] and
+//! resolves through the shared derivation in `themes::apply_palette` and
 //! inherits every WCAG floor. The section is a disclosure that starts folded,
 //! keeping the Appearance page focused on the built-in palettes; expanding it
 //! mounts one card holding the description, the saved rows, and the inline

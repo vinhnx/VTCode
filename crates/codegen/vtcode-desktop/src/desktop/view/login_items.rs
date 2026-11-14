@@ -3,7 +3,7 @@
 //! The OS owns the truth: the settings toggle registers/unregisters, and
 //! launch reconciles the preference with the OS status, because the user
 //! can flip the item in System Settings behind our back. Test builds swap
-//! the native calls for a `cx`-scoped stub (see [`test_override`]), so
+//! the native calls for a `cx`-scoped stub (see `test_override`), so
 //! parallel headless tests never share stub state.
 
 use super::*;

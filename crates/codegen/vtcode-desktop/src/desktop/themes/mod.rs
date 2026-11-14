@@ -395,7 +395,7 @@ pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Wi
     apply_selection_with_contrast(id, contrast, &[], window, cx)
 }
 
-/// Custom-aware variant of [`apply_with_contrast`].
+/// Custom-aware variant of `apply_with_contrast`.
 pub(super) fn apply_selection_with_contrast(
     id: &str,
     contrast: u8,
