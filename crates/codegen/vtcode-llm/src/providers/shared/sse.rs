@@ -45,10 +45,13 @@ pub(crate) fn drain_consumed_sse(buf: &mut Vec<u8>, offset: &mut usize) {
 ///
 /// Draining keeps the wire buffer at the unprocessed tail, but the tail
 /// itself is unbounded when a peer never emits an event boundary. SSE
-/// payloads are per-event JSON deltas (typically well under 64 KiB), so
-/// 1 MiB is generous headroom; anything past it fails closed instead of
-/// growing for the stream lifetime.
-pub(crate) const MAX_SSE_TAIL_BYTES: usize = 1_048_576;
+/// payloads are per-event JSON deltas (typically well under 64 KiB), but
+/// gateways that batch a whole completion into one event can legitimately
+/// exceed 1 MiB, so the cap only fails closed far past any real event
+/// (16 MiB is a multi-million-token event) while still stopping a
+/// boundary-less peer after bounded memory instead of growing for the
+/// stream lifetime.
+pub(crate) const MAX_SSE_TAIL_BYTES: usize = 16_777_216;
 
 /// The unprocessed SSE tail grew past [`MAX_SSE_TAIL_BYTES`] without
 /// completing an event.

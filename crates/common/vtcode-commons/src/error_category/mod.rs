@@ -636,7 +636,17 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::ServiceUnavailable;
     }
 
-    // --- Priority 15: Service unavailable (HTTP 5xx and related) ---
+    // --- Priority 15: Fail-closed stream bounds (non-retryable) ---
+    // The SSE tail overflow names its bound ("without an event boundary")
+    // and embeds the retained byte count, whose digits can contain status
+    // substrings ("500") — classification must not depend on the count. A
+    // peer that withholds event boundaries reproduces the failure on
+    // retry, so fail fast instead of scheduling bounded request retries.
+    if contains_any(&msg, &["without an event boundary"]) {
+        return ErrorCategory::ExecutionError;
+    }
+
+    // --- Priority 16: Service unavailable (HTTP 5xx and related) ---
     if contains_any(
         &msg,
         &[
@@ -655,7 +665,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::ServiceUnavailable;
     }
 
-    // --- Priority 16: Network (connectivity, DNS, transport) ---
+    // --- Priority 17: Network (connectivity, DNS, transport) ---
     if contains_any(
         &msg,
         &[
@@ -688,7 +698,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::Network;
     }
 
-    // --- Priority 17: Resource exhausted (memory, disk) ---
+    // --- Priority 18: Resource exhausted (memory, disk) ---
     if contains_any(&msg, &["out of memory", "disk full", "no space left"]) {
         return ErrorCategory::ResourceExhausted;
     }

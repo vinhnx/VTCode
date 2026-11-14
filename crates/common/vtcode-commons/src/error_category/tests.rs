@@ -42,6 +42,22 @@ fn follow_up_stream_failures_are_retryable() {
 }
 
 #[test]
+fn sse_tail_overflow_classifies_regardless_of_retained_digits() {
+    // The overflow message embeds the retained byte count; digits can
+    // contain status-code substrings ("1050000" holds "500"), which used to
+    // make retryability depend on the count. The bound marker decides.
+    for retained in [1050000, 502123, 1502504] {
+        let msg = format!("stream event exceeded 16777216 bytes without an event boundary (retained {retained} bytes)");
+        let category = classify_error_message(&msg);
+        assert_eq!(category, ErrorCategory::ExecutionError, "{msg} -> {category:?}");
+        assert!(!category.is_retryable(), "fail-closed stream bounds must not retry");
+    }
+    // Counter-case: genuine 5xx responses stay retryable despite the new
+    // marker group sitting before the status-digit markers.
+    assert_eq!(classify_error_message("503 service unavailable"), ErrorCategory::ServiceUnavailable);
+}
+
+#[test]
 fn authentication_errors() {
     assert_eq!(classify_error_message("invalid api key provided"), ErrorCategory::Authentication);
     assert_eq!(classify_error_message("401 unauthorized"), ErrorCategory::Authentication);
