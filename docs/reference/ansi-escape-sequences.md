@@ -134,6 +134,11 @@ malformed streams.
 >
 > **Note:** Both dim and bold modes are reset with the `ESC[22m` sequence. The `ESC[21m` sequence is a non-specified
 > sequence for double underline mode and only work in some terminals and is reset with `ESC[24m`.
+>
+> **Note:** mintty extends SGR 8 with a colon subparameter for overstriking: `ESC[8:7m` enables overstrike mode and
+> `ESC[28m` returns to overwriting mode, with `ESC[?20h` / `ESC[?20l` as the VK100-compatible private-mode forms. VT Code
+> does not implement overstrike rendering: its shared stripper removes these sequences and its PTY SGR interpreter
+> ignores them without disturbing active styles.
 
 ### Color codes
 

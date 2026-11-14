@@ -440,6 +440,16 @@ mod tests {
     }
 
     #[test]
+    fn strips_mintty_overstrike_mode_sequences() {
+        // mintty/VK100 overstrike switching: SGR `8:7` enables overstrike,
+        // `28` returns to overwriting mode, and `?20h`/`?20l` are the
+        // private-mode forms. All are consumed like any other CSI sequence.
+        let input = "a\x1b[8:7mb\x1b[28mc\x1b[?20hd\x1b[?20le";
+        assert_eq!(strip_ansi(input), "abcde");
+        assert_eq!(strip_ansi_ascii_only(input), "abcde");
+    }
+
+    #[test]
     fn strips_three_byte_esc_sequences() {
         // ESC # 8 = DEC screen alignment test
         let input = "a\x1b#8b";

@@ -54,10 +54,24 @@ fn clear_sgr_effects(effects: &mut Effects, code: u16) {
 }
 
 fn apply_sgr_codes(sequence: &str, current: &mut InlineTextStyle, fallback: &InlineTextStyle) {
+    // ECMA-48: an empty param defaults to 0 (reset). A non-empty param that is
+    // not an integer — colon subparameters like mintty's overstrike `8:7` or
+    // out-of-range codes — is ignored, never coerced to 0, so unknown SGR
+    // cannot spuriously reset already-active styles.
     let params: Vec<u16> = if sequence.trim().is_empty() {
         vec![0]
     } else {
-        sequence.split(';').map(|value| value.parse::<u16>().unwrap_or(0)).collect()
+        sequence
+            .split(';')
+            .filter_map(|value| {
+                let value = value.trim();
+                if value.is_empty() {
+                    Some(0)
+                } else {
+                    value.parse::<u16>().ok()
+                }
+            })
+            .collect()
     };
 
     let mut index = 0usize;
@@ -377,6 +391,62 @@ mod tests {
         let text: String = marked.iter().map(|segment| segment.text.as_str()).collect();
         assert_eq!(text, "  │ git add a \\");
         assert_eq!(marked.last().map(|segment| segment.text.as_str()), Some(" \\"));
+    }
+
+    #[test]
+    fn overstrike_colon_sgr_does_not_reset_active_style() {
+        // mintty/VK100 overstrike enable (`ESC[8:7m`) carries a colon
+        // subparameter, so it is not an integer SGR code. VT Code has no
+        // overstrike render state: the sequence must be ignored, never
+        // coerced to `0` (reset). Asymmetric control: a real `ESC[0m` in the
+        // same position must clear the bold.
+        let styles = PtyLineStyles::new();
+        let (kept, _) = line_to_segments("  └ \u{1b}[1m\u{1b}[8:7mbold", &styles);
+        let kept_bold = kept.iter().find(|segment| segment.text == "bold").expect("bold segment");
+        assert!(kept_bold.style.effects.contains(Effects::BOLD));
+
+        // Same garbage param inside one sequence, after a valid code.
+        let (combined, _) = line_to_segments("  └ \u{1b}[1;8:7mbold", &styles);
+        let combined_bold = combined.iter().find(|segment| segment.text == "bold").expect("bold segment");
+        assert!(combined_bold.style.effects.contains(Effects::BOLD));
+
+        let (cleared, _) = line_to_segments("  └ \u{1b}[1m\u{1b}[0mplain", &styles);
+        let cleared_plain = cleared.iter().find(|segment| segment.text == "plain").expect("plain segment");
+        assert!(!cleared_plain.style.effects.contains(Effects::BOLD));
+        assert_eq!(cleared_plain.style.color, styles.output.color);
+    }
+
+    #[test]
+    fn overstrike_exit_modes_preserve_active_style_without_leaking_text() {
+        // `ESC[28m` is ECMA-48 conceal-off and mintty's overwriting mode
+        // (exit overstrike); `ESC[?20h` / `ESC[?20l` are the VK100-compatible
+        // private-mode forms. None of these states exist in the PTY renderer,
+        // so all three must be consumed silently without disturbing styles.
+        let styles = PtyLineStyles::new();
+        let (conceal_off, _) = line_to_segments("  └ \u{1b}[1m\u{1b}[28mbold", &styles);
+        let bold = conceal_off.iter().find(|segment| segment.text == "bold").expect("bold segment");
+        assert!(bold.style.effects.contains(Effects::BOLD));
+
+        let (private, _) = line_to_segments("  └ \u{1b}[1m\u{1b}[?20ha\u{1b}[?20lb", &styles);
+        let text = private.iter().map(|segment| segment.text.as_str()).collect::<String>();
+        assert_eq!(text, "  └ ab");
+        for segment in private.iter().filter(|segment| segment.text == "a" || segment.text == "b") {
+            assert!(segment.style.effects.contains(Effects::BOLD), "style lost on {}", segment.text);
+        }
+    }
+
+    #[test]
+    fn unparsable_sgr_params_are_ignored_while_empty_still_resets() {
+        // Out-of-range codes are ignored like any other unparsable param;
+        // only an empty param (`ESC[m`) keeps its ECMA-48 default of reset.
+        let styles = PtyLineStyles::new();
+        let (kept, _) = line_to_segments("  └ \u{1b}[1m\u{1b}[99999mbold", &styles);
+        let kept_bold = kept.iter().find(|segment| segment.text == "bold").expect("bold segment");
+        assert!(kept_bold.style.effects.contains(Effects::BOLD));
+
+        let (cleared, _) = line_to_segments("  └ \u{1b}[1m\u{1b}[mplain", &styles);
+        let cleared_plain = cleared.iter().find(|segment| segment.text == "plain").expect("plain segment");
+        assert!(!cleared_plain.style.effects.contains(Effects::BOLD));
     }
 
     #[test]
