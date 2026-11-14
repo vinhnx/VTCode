@@ -89,7 +89,6 @@ crossterm = { workspace = true, features = ["event-stream"], optional = true }
 # Keep the optional SQLite feature on the stable toolchain: rusqlite 0.40
 # requires libsqlite3-sys 0.38, which uses unstable cfg_select.
 rusqlite = { version = "0.41", features = ["bundled"], optional = true }
-nix = { workspace = true, features = ["user", "signal", "poll", "term"] }
 ratatui = { workspace = true, features = [
     "crossterm",
     "unstable-rendered-line-info",
@@ -152,6 +151,10 @@ optional = true
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+# Process-group/termios/zsh-bridge plumbing, all behind `#[cfg(unix)]`.
+nix = { workspace = true, features = ["user", "signal", "poll", "term"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 xattr = "1.6"

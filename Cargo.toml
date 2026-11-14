@@ -312,6 +312,25 @@ dbg_macro = "warn"
 allow_attributes = "allow"  # TODO: Phase in after suppression audit
 allow_attributes_without_reason = "warn"
 
+[workspace.lints.cargo]
+# Cargo 1.100 manifest lints (`cargo::unused_dependencies`,
+# `cargo::redundant_homepage`). Deny is sound cross-platform because every
+# platform-only dependency (nix, libc, landlock, seccompiler, windows-sys)
+# lives in a `[target.'cfg(...)']` table, so the unused-dependency analysis
+# sees each dep only on platforms where its gated call sites compile. The
+# unused-dependency warning only surfaces when every target that could use a
+# dep is built (e.g. `--all-targets`); it never covers dev-dependencies.
+#
+# `unused_dependencies` stays at "warn" rather than deny for one structural
+# reason: the root binary's selectable global allocator (`mimalloc` default,
+# `tikv-jemallocator` under `allocator-jemalloc`) is mutually exclusive with
+# `profiling`, which installs its own allocator — so an `--all-features`
+# build compiles neither allocator static and a deny would reject a correct
+# manifest. Cargo has no per-group lints inheritance to scope the override to
+# root. Revisit if the allocator selection design ever changes.
+unused_dependencies = "warn"
+redundant_homepage = "deny"
+
 
 [dependencies]
 vtcode-bash-runner = { workspace = true }
@@ -348,7 +367,6 @@ async-trait = { workspace = true }
 async-stream = "0.3"
 # Home directory detection
 dirs = { workspace = true }
-nix = { workspace = true, features = ["user", "process", "resource"] }
 # Hashing for large output file paths
 sha2 = { workspace = true }
 # ANSI styling
@@ -376,6 +394,11 @@ serde-saphyr = { workspace = true }
 mimalloc = { version = "0.1", default-features = false }
 tikv-jemallocator = { version = "0.6", optional = true, features = ["background_threads"] }
 hotpath = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+# Process hardening (src/process_hardening.rs); unix-gated so the
+# unused-dependency analysis stays sound on non-unix CI platforms.
+nix = { workspace = true, features = ["user", "process", "resource"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 vtcode-safety = { workspace = true }

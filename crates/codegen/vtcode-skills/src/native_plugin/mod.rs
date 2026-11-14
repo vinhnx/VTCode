@@ -233,10 +233,7 @@ fn get_plugin_symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T> {
     // SAFETY: symbol name and signature are defined by the plugin ABI; we trust
     // the library (canonicalized/trusted location). `T: Copy` makes the deref safe.
     let symbol: Symbol<T> = unsafe { library.get(name) }.with_context(|| {
-        format!(
-            "Failed to load plugin symbol: {:?}",
-            String::from_utf8_lossy(name.trim_suffix(b"\0"))
-        )
+        format!("Failed to load plugin symbol: {:?}", String::from_utf8_lossy(name.trim_suffix(b"\0")))
     })?;
     Ok(*symbol)
 }

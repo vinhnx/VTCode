@@ -18,7 +18,6 @@ axum = { workspace = true, features = ["ws"] }
 futures = { workspace = true }
 hashbrown = { workspace = true }
 http = { workspace = true }
-libc = { workspace = true }
 rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server", "transport-io"] }
 schemars = { workspace = true }
 serde = { workspace = true }
@@ -43,6 +42,8 @@ reqwest = { workspace = true }
 tempfile = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
+# O_NOFOLLOW / openat hardening, all behind `#[cfg(unix)]`-gated modules.
+libc = { workspace = true }
 nix = { workspace = true, features = ["fs"] }
 
 [lints]

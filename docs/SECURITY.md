@@ -175,7 +175,8 @@ without re-resolution, so in-window versions already in the lockfile keep buildi
 re-resolves registry deps for the packaged crate, so sibling versions younger than the window need the override
 below locally. Known limits: `cargo install`
 ignores it, it trusts registry publish-time data, and it is not a complete defense — to adopt a deliberately fresh
-version, re-resolve with `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`.
+version, override for that single update:
+`CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update <crate> --precise <version>`.
 
 ### Auditing Shipped Binaries
 
