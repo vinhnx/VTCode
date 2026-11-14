@@ -28,10 +28,11 @@ tokio = { workspace = true, features = [
     "fs",
     "io-util",
     "macros",
+    "process",
     "rt-multi-thread",
+    "signal",
     "sync",
     "time",
-    "process",
 ] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }

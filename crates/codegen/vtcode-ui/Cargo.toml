@@ -47,7 +47,7 @@ signal-hook      = "0.4"
 syntect          = { version = "5.2", default-features = false, features = ["default-fancy"] }
 terminal_size    = "0.4.4"
 thiserror        = { workspace = true }
-tokio            = { workspace = true }
+tokio            = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util       = { workspace = true, features = ["codec"] }
 toml             = { workspace = true }
 tracing          = { workspace = true }

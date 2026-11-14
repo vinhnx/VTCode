@@ -42,7 +42,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 rust-i18n = "=4.2.4"
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
 url = { workspace = true }
 vtcode-commons = { workspace = true }
 vtcode-bash-runner = { workspace = true, default-features = false }

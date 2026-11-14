@@ -21,7 +21,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 # This crate does not inherit the broader workspace lint policy yet. Keep the
 # workspace's API-style checks explicit here without changing unrelated lints.
