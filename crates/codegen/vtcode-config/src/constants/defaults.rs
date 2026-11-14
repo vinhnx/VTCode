@@ -6,7 +6,6 @@ pub const DEFAULT_PROVIDER: &str = "openrouter";
 pub const DEFAULT_API_KEY_ENV: &str = "OPENROUTER_API_KEY";
 pub const DEFAULT_THEME: &str = "ciapre";
 pub(crate) use super::tool_limits::DEFAULT_FULL_AUTO_MAX_TURNS;
-pub use super::tool_limits::DEFAULT_MAX_TOOL_LOOPS;
 pub const DEFAULT_MAX_REPEATED_TOOL_CALLS: usize = 2;
 pub const DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN: usize = 6;
 pub const DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN: usize = 8;

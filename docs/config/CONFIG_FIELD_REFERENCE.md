@@ -205,7 +205,6 @@ python3 scripts/generate_config_field_reference.py
 | `auth.openrouter.use_oauth` | `boolean` | no | `false` | Whether to use OAuth instead of API key |
 | `automation.full_auto.allowed_tools` | `array` | no | `["exec_command", "write_stdin", "apply_patch", "code_search", "task_tracker", "start_planning", "request_user_input"]` | Allow-list of tools that may execute automatically. |
 | `automation.full_auto.allowed_tools[]` | `string` | no | `-` | - |
-| `automation.full_auto.auto_grant_tool_limits` | `boolean` | no | `true` | Automatically grant tool-loop limit increases while a full-auto run is active, instead of prompting. Grants reuse the same per-prompt increments and absolute hard caps as manual approvals. Set to `false` to restore the interactive prompts. |
 | `automation.full_auto.enabled` | `boolean` | no | `false` | Enable the runtime flag once the workspace is configured for autonomous runs. |
 | `automation.full_auto.max_turns` | `integer` | no | `100` | Maximum number of autonomous agent turns before the exec runner pauses. |
 | `automation.full_auto.profile_path` | `null \| string` | no | `null` | Optional path to a profile describing acceptable behaviors. |
@@ -812,7 +811,6 @@ python3 scripts/generate_config_field_reference.py
 | `tools.max_consecutive_blocked_tool_calls_per_turn` | `integer` | no | `8` | Maximum consecutive blocked tool calls allowed per turn before forcing a turn break. The total fuse is 2x this value in normal mode, 4x in Plan Mode, and this value in recovery mode, unless overridden by `max_total_blocked_tool_calls_per_turn`. |
 | `tools.max_repeated_tool_calls` | `integer` | no | `2` | Maximum number of times the same tool invocation can be retried with the identical arguments within a single turn. |
 | `tools.max_sequential_spool_chunk_reads` | `integer` | no | `6` | Maximum sequential spool-chunk `read_file` calls allowed per turn before nudging the agent to switch to targeted extraction/summarization. |
-| `tools.max_tool_loops` | `integer` | no | `60` | Maximum inner tool-call loops per user turn. Set to `0` to disable the limit. Prevents infinite tool-calling cycles in interactive chat. This limits how many back-and-forths the agent will perform executing tools and re-asking the model before returning a final answer. |
 | `tools.max_tool_rate_per_second` | `integer \| null` | no | `null` | Optional per-second rate limit for tool calls to smooth bursty retries. When unset, the runtime defaults apply. |
 | `tools.max_total_blocked_tool_calls_per_turn` | `integer \| null` | no | `null` | Optional explicit cap for total blocked tool calls per turn. When unset, the runtime derives it from the consecutive cap (2x normal, 4x plan, 1x recovery) so existing configs keep their behavior. |
 | `tools.plugins.allow` | `array` | no | `[]` | Explicit allow-list of plugin identifiers permitted to load. |

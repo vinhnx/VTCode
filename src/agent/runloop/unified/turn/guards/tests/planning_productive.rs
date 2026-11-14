@@ -13,7 +13,7 @@ async fn many_productive_planning_previews_do_not_force_recovery() {
         );
     }
     let mut tracker = LoopTracker::new();
-    let result = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, usize::MAX).await;
+    let result = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, usize::MAX).await;
     assert!(matches!(result, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
     assert!(!tracker.planning_low_signal_synthesis_triggered);
@@ -67,7 +67,7 @@ async fn planning_one_repeated_successful_inspection_remains_productive() {
     assert_eq!(tracker.repeated_navigation_count(), 1);
     assert_eq!(tracker.consecutive_low_signal_navigations, 0);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 3).await;
 
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
@@ -113,7 +113,7 @@ async fn planning_diverse_inspection_remains_productive() {
     assert_eq!(tracker.consecutive_navigations, commands.len());
     assert_eq!(tracker.repeated_navigation_count(), 0);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 3).await;
 
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
@@ -143,7 +143,7 @@ async fn planning_genuine_repeated_navigation_still_recovers() {
     assert!(tracker.repeated_navigation_count() >= 3);
     assert_eq!(tracker.consecutive_low_signal_navigations, 0);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, NAVIGATION_LOOP_THRESHOLD, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, NAVIGATION_LOOP_THRESHOLD, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert_eq!(tracker.consecutive_navigations, 0);

@@ -62,5 +62,5 @@ pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{BundledSkillsConfig, PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{
     EditorToolConfig, ToolPolicy, ToolProfile, ToolsConfig, WebFetchConfig, WebFetchMode, WebSearchConfig,
-    WebSearchProvider, tool_call_delay_for_rate, tool_loop_limit_reached,
+    WebSearchProvider, tool_call_delay_for_rate,
 };

@@ -25,7 +25,7 @@ fn record_turn_duration_records_once() {
 
 #[test]
 fn finalize_outcome_marks_success() {
-    let mut state = AgentSessionState::new("test".to_string(), 10, 5, 10000);
+    let mut state = AgentSessionState::new("test".to_string(), 10, 10000);
     state.is_completed = true;
     state.stats.turns_executed = 2;
 
@@ -36,7 +36,7 @@ fn finalize_outcome_marks_success() {
 
 #[test]
 fn finalize_outcome_turn_limit() {
-    let mut state = AgentSessionState::new("test".to_string(), 6, 5, 10000);
+    let mut state = AgentSessionState::new("test".to_string(), 6, 10000);
     state.stats.turns_executed = 6;
 
     state.finalize_outcome(6);
@@ -45,22 +45,8 @@ fn finalize_outcome_turn_limit() {
 }
 
 #[test]
-fn finalize_outcome_tool_loop_limit() {
-    let mut state = AgentSessionState::new("test".to_string(), 10, 2, 10000);
-    state.stats.turns_executed = 2;
-    state.tool_loop_limit_hit = true;
-
-    state.finalize_outcome(10);
-
-    assert_eq!(
-        state.outcome,
-        TaskOutcome::tool_loop_limit_reached(state.constraints.max_tool_loops, state.consecutive_tool_loops)
-    );
-}
-
-#[test]
 fn into_results_computes_metrics() {
-    let mut state = AgentSessionState::new("test".to_string(), 5, 5, 10000);
+    let mut state = AgentSessionState::new("test".to_string(), 5, 10000);
     state.turn_durations_ms = vec![100, 200, 300];
     state.turn_total_ms = 600;
     state.turn_max_ms = 300;

@@ -398,7 +398,6 @@ pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
     repeated_tool_attempts: &mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
-    max_tool_loops: usize,
     tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
     use vtcode_core::llm::provider as uni;
@@ -570,7 +569,6 @@ pub(crate) async fn handle_turn_balancer(
 
     if crate::agent::runloop::unified::turn::utils::should_trigger_turn_balancer(
         step_count,
-        max_tool_loops,
         max_repeated,
         tool_repeat_limit,
     ) {

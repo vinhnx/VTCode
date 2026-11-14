@@ -589,7 +589,7 @@ mod tests {
     #[test]
     fn response_loop_ignores_current_assistant_message() {
         let repeated_response = "The task is complete";
-        let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+        let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
         state.messages_mut().push(Message::assistant(repeated_response.to_string()));
         let history = state.messages.clone();
         state.push_warning("Existing warning");
@@ -605,7 +605,7 @@ mod tests {
     fn response_loop_still_detects_prior_duplicate_assistant_message() {
         let repeated_response = "The task is complete";
         for prior_position in 0..2 {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             for position in 0..2 {
                 let text = if position == prior_position {
                     repeated_response
@@ -627,7 +627,7 @@ mod tests {
             " \tThe\r\ntask\u{000b}is\u{000c}complete  ",
             "\u{00a0}The\u{2003}task\u{2028}is\u{3000}complete\u{0085}",
         ] {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             state
                 .messages_mut()
                 .push(Message::assistant("The\ttask  is\ncomplete".to_string()));
@@ -640,7 +640,7 @@ mod tests {
     #[test]
     fn response_loop_equates_whitespace_only_responses() {
         let response = " \t\n\r\u{2003}\u{3000}";
-        let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+        let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
         state.messages_mut().push(Message::assistant("\n \t".to_string()));
         state.messages_mut().push(Message::assistant(response.to_string()));
 
@@ -658,7 +658,7 @@ mod tests {
             "Thetask is complete",
             "The\u{200b}task is complete",
         ] {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             state
                 .messages_mut()
                 .push(Message::assistant("The task is complete".to_string()));
@@ -677,7 +677,7 @@ mod tests {
     #[test]
     fn response_loop_ignores_duplicates_outside_prior_assistant_window() {
         let response = "The task is complete";
-        let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+        let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
         for text in [
             response,
             "Second older response",
@@ -698,7 +698,7 @@ mod tests {
     fn response_loop_filters_interleaved_user_and_tool_messages_before_windowing() {
         let response = "The task is complete";
         for prior_response in [response, "An unrelated prior response"] {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             state.messages_mut().extend([
                 Message::assistant(prior_response.to_string()),
                 Message::user(response.to_string()),
@@ -718,7 +718,7 @@ mod tests {
     #[test]
     fn response_loop_preserves_ten_byte_cutoff() {
         for response in ["123456789", "éééé", "1234567890", "ééééé"] {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             state.messages_mut().push(Message::assistant(response.to_string()));
             state.messages_mut().push(Message::assistant(response.to_string()));
 
@@ -732,7 +732,7 @@ mod tests {
     #[test]
     fn response_loop_preserves_multipart_text_concatenation() {
         for response in ["The task is complete", "The ta sk is complete"] {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             state.messages_mut().push(Message::assistant_with_parts(vec![
                 ContentPart::Text { text: "The ta".to_string() },
                 ContentPart::Text { text: "sk\tis complete".to_string() },
@@ -749,7 +749,7 @@ mod tests {
     fn response_loop_preserves_warning_and_saturating_idle_counter() {
         let response = "The task is complete";
         for initial_idle_turns in [3, usize::MAX] {
-            let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+            let mut state = AgentSessionState::new("session".to_string(), 8, 128_000);
             state.messages_mut().push(Message::assistant(response.to_string()));
             state.messages_mut().push(Message::assistant(response.to_string()));
             let history = state.messages.clone();

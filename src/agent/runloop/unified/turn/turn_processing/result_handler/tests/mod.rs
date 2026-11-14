@@ -45,7 +45,6 @@ async fn drive_tracker_poll(
         step_count: step,
         repeated_tool_attempts: tracker,
         turn_modified_files: modified,
-        max_tool_loops: 20,
         tool_repeat_limit: 3,
     })
     .await
@@ -74,7 +73,6 @@ async fn drive_pending_texts(
             step_count: step as usize,
             repeated_tool_attempts: &mut *repeated_tool_attempts,
             turn_modified_files: &mut *turn_modified_files,
-            max_tool_loops: 8,
             tool_repeat_limit: 4,
         })
         .await
@@ -155,7 +153,6 @@ Please re-run with tools enabled."#
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -201,7 +198,6 @@ async fn advance_planning_recovery_to_tool_free_pass(
                 step_count: step,
                 repeated_tool_attempts,
                 turn_modified_files,
-                max_tool_loops: 4,
                 tool_repeat_limit: 4,
             })
             .await
@@ -262,7 +258,6 @@ async fn handle_planning_empty_with(
         step_count,
         repeated_tool_attempts,
         turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await

@@ -23,7 +23,7 @@ fn full_follow_up_queue_survives_envelope_write_and_restore() {
 
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("session.memory.json");
-    let state = AgentSessionState::new("session".into(), 8, 8, 16_000);
+    let state = AgentSessionState::new("session".into(), 8, 16_000);
     let mut original = AgentRuntime::new(state, None, None);
     let capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
     for index in 0..capacity {
@@ -54,7 +54,7 @@ fn full_follow_up_queue_survives_envelope_write_and_restore() {
     );
     write_memory_envelope_to_path(&path, &snapshot).unwrap();
     let saved: SessionMemoryEnvelope = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
-    let state = AgentSessionState::new("restored".into(), 8, 8, 16_000);
+    let state = AgentSessionState::new("restored".into(), 8, 16_000);
     let mut restored = AgentRuntime::new(state, None, None);
     restored
         .restore_follow_up_state(saved.pending_intents, saved.applied_intent_ids)

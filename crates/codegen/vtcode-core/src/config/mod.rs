@@ -37,7 +37,7 @@ pub use core::{
     PromptCachingConfig, ProviderPromptCachingConfig, ScheduledTasksConfig, SecurityConfig, ToolPolicy, ToolProfile,
     ToolsConfig, build_openai_prompt_cache_key, build_session_affinity_prompt_cache_key,
     map_prompt_cache_key_for_provider, session_affinity_key_enabled, session_affinity_provider,
-    tool_call_delay_for_rate, tool_loop_limit_reached,
+    tool_call_delay_for_rate,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{

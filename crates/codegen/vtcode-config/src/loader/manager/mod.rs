@@ -493,7 +493,22 @@ impl ConfigManager {
         let mut value: toml::Value =
             toml::from_str(&content).with_context(|| format!("Failed to parse config file: {}", path.display()))?;
         crate::loader::merge::normalize_legacy_top_level_provider_aliases(&mut value);
+        Self::warn_removed_config_keys(&value, path);
         Ok(value)
+    }
+
+    /// Warn once per loaded file about keys that were removed from the schema
+    /// (they still parse — serde ignores unknown fields — but no longer do
+    /// anything). The next config save prunes them
+    /// (`remove_deprecated_config_keys`).
+    fn warn_removed_config_keys(value: &toml::Value, path: &Path) {
+        for key_path in removed_config_key_paths_present(value) {
+            let joined = key_path.join(".");
+            tracing::warn!(
+                config = %path.display(),
+                "Configuration key `{joined}` was removed and is ignored; it will be pruned on the next config save."
+            );
+        }
     }
 
     fn load_optional_layer(source: ConfigLayerSource) -> Option<ConfigLayerEntry> {
@@ -828,6 +843,22 @@ impl ConfigManager {
 
         WorkspaceLifecycleHooks { commands }
     }
+}
+
+/// Key paths that were removed from the schema but still parse (serde ignores
+/// unknown fields). Detection is pure so tests can pin the exact paths.
+const REMOVED_CONFIG_KEY_PATHS: &[&[&str]] = &[
+    &["agent", "harness", "max_tool_calls_per_turn"],
+    &["tools", "max_tool_loops"],
+    &["automation", "full_auto", "auto_grant_tool_limits"],
+];
+
+pub(crate) fn removed_config_key_paths_present(value: &toml::Value) -> Vec<&'static [&'static str]> {
+    REMOVED_CONFIG_KEY_PATHS
+        .iter()
+        .copied()
+        .filter(|key_path| key_path.iter().try_fold(value, |cursor, key| cursor.get(*key)).is_some())
+        .collect()
 }
 
 #[cfg(test)]

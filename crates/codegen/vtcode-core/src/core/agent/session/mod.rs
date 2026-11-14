@@ -75,8 +75,6 @@ pub struct AgentSessionState {
     pub last_dir_path: Option<String>,
 
     // Internal loop state
-    pub consecutive_tool_loops: usize,
-    pub tool_loop_limit_hit: bool,
     /// Consecutive escalation events in the current escalation chain.
     /// Reset to 0 when tool calls dispatch without escalation.
     pub consecutive_escalations: u32,
@@ -95,7 +93,6 @@ pub struct AgentSessionState {
 
     // Legacy / Stats fields for compatibility
     pub consecutive_idle_turns: usize,
-    pub max_tool_loop_streak: usize,
     pub turn_count: usize,
     pub turn_total_ms: u128,
     pub turn_max_ms: u128,
@@ -158,12 +155,11 @@ impl SessionStats {
 #[derive(Debug, Clone)]
 pub struct SessionConstraints {
     pub max_turns: usize,
-    pub max_tool_loops: usize,
     pub max_context_tokens: usize,
 }
 
 impl AgentSessionState {
-    pub fn new(session_id: String, max_turns: usize, max_tool_loops: usize, max_context_tokens: usize) -> Self {
+    pub fn new(session_id: String, max_turns: usize, max_context_tokens: usize) -> Self {
         Self {
             session_id,
             schema_version: SchemaVersion::CURRENT,
@@ -171,7 +167,7 @@ impl AgentSessionState {
             messages: Arc::new(Vec::new()),
             stats: SessionStats::default(),
             auto_compact_suppressed: crate::compaction::SUPPRESS_NONE,
-            constraints: SessionConstraints { max_turns, max_tool_loops, max_context_tokens },
+            constraints: SessionConstraints { max_turns, max_context_tokens },
             outcome: TaskOutcome::Unknown,
             stop_reason: None,
             total_cost_usd: None,
@@ -183,8 +179,6 @@ impl AgentSessionState {
             warnings: Vec::with_capacity(16),
             last_file_path: None,
             last_dir_path: None,
-            consecutive_tool_loops: 0,
-            tool_loop_limit_hit: false,
             consecutive_escalations: 0,
             progress_hashes: VecDeque::with_capacity(16),
             stagnant_turns: 0,
@@ -193,7 +187,6 @@ impl AgentSessionState {
             error_recovery: Arc::new(Mutex::new(ErrorRecoveryState::default())),
             pending_actions: PendingActions::new(100),
             consecutive_idle_turns: 0,
-            max_tool_loop_streak: 0,
             turn_count: 0,
             turn_total_ms: 0,
             turn_max_ms: 0,
@@ -272,25 +265,11 @@ impl AgentSessionState {
         if self.outcome != TaskOutcome::Unknown {
             return;
         }
-        // Priority order: tool loop limit > completion > turn limit
-        if self.tool_loop_limit_hit {
-            self.outcome =
-                TaskOutcome::tool_loop_limit_reached(self.constraints.max_tool_loops, self.consecutive_tool_loops);
-        } else if self.is_completed {
+        if self.is_completed {
             self.outcome = TaskOutcome::Success;
         } else if self.stats.turns_executed >= max_turns {
             self.outcome = TaskOutcome::turn_limit_reached(max_turns, self.stats.turns_executed);
         }
-    }
-
-    pub fn register_tool_loop(&mut self) -> usize {
-        self.consecutive_tool_loops += 1;
-        self.max_tool_loop_streak = self.max_tool_loop_streak.max(self.consecutive_tool_loops);
-        self.consecutive_tool_loops
-    }
-
-    pub fn reset_tool_loop_guard(&mut self) {
-        self.consecutive_tool_loops = 0;
     }
 
     pub fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {
@@ -332,15 +311,6 @@ impl AgentSessionState {
 
     pub fn clear_previous_response_chain(&mut self) {
         self.previous_response_chains.clear();
-    }
-
-    pub fn mark_tool_loop_limit_hit(&mut self) {
-        if self.tool_loop_limit_hit {
-            return;
-        }
-        self.tool_loop_limit_hit = true;
-        self.outcome =
-            TaskOutcome::tool_loop_limit_reached(self.constraints.max_tool_loops, self.consecutive_tool_loops);
     }
 
     /// Mutable access to the conversation history.
@@ -547,14 +517,11 @@ impl AgentSessionState {
         self.cached_total_tokens = 0;
         self.last_processed_message_idx = 0;
         self.previous_response_chains.clear();
-        self.consecutive_tool_loops = 0;
-        self.tool_loop_limit_hit = false;
         self.consecutive_escalations = 0;
         self.progress_hashes.clear();
         self.stagnant_turns = 0;
         self.pending_actions = PendingActions::new(100);
         self.consecutive_idle_turns = 0;
-        self.max_tool_loop_streak = 0;
         self.turn_tool_observations.clear();
         self.current_stage = None;
         self.auto_compact_suppressed = crate::compaction::SUPPRESS_NONE;
@@ -687,7 +654,7 @@ mod tests {
     /// (see `crate::llm::request_gap`); this just pins the delegation.
     #[test]
     fn cache_gap_exceeds_delegates_to_request_gap_tracker() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert_eq!(state.cache_gap_exceeds(Duration::from_millis(1)), None);
 
         state.note_request_sent();
@@ -698,20 +665,20 @@ mod tests {
 
     #[test]
     fn note_reasoning_effort_change_is_false_on_first_request() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
     }
 
     #[test]
     fn note_reasoning_effort_change_is_false_when_unchanged() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
         assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
     }
 
     #[test]
     fn note_reasoning_effort_change_is_true_when_changed() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
         assert!(state.note_reasoning_effort_change(Some(ReasoningEffortLevel::High)));
         // Baseline is now High; requesting High again is not a change.
@@ -720,20 +687,20 @@ mod tests {
 
     #[test]
     fn note_model_change_is_false_on_first_request() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert!(!state.note_model_change("gpt-5.6"));
     }
 
     #[test]
     fn note_model_change_is_false_when_unchanged() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert!(!state.note_model_change("gpt-5.6"));
         assert!(!state.note_model_change("gpt-5.6"));
     }
 
     #[test]
     fn note_model_change_is_true_when_changed() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         assert!(!state.note_model_change("gpt-5.6"));
         assert!(state.note_model_change("claude-opus-4-6"));
         // Baseline is now Opus; requesting Opus again is not a change.
@@ -742,7 +709,7 @@ mod tests {
 
     #[test]
     fn previous_response_chain_is_scoped_to_provider_and_model() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         let messages_52 = vec![Message::user("hello".to_string())];
         let messages_54 = vec![Message::user("continue".to_string())];
 
@@ -772,7 +739,7 @@ mod tests {
 
     #[test]
     fn shared_previous_response_chain_reuses_history_arc() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         let messages = Arc::new(vec![Message::user("hello".to_string())]);
 
         state.set_previous_response_chain_shared("openai", "gpt-5.6-sol", Some("resp_123"), Arc::clone(&messages));
@@ -785,22 +752,8 @@ mod tests {
     }
 
     #[test]
-    fn register_tool_loop_tracks_current_and_max_streak() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
-
-        assert_eq!(state.register_tool_loop(), 1);
-        assert_eq!(state.register_tool_loop(), 2);
-        assert_eq!(state.consecutive_tool_loops, 2);
-        assert_eq!(state.max_tool_loop_streak, 2);
-
-        state.reset_tool_loop_guard();
-        assert_eq!(state.register_tool_loop(), 1);
-        assert_eq!(state.max_tool_loop_streak, 2);
-    }
-
-    #[test]
     fn push_tool_error_preserves_structured_json_for_gemini() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         let payload = serde_json::json!({
             "error": {
                 "tool_name": "read_file",
@@ -823,7 +776,7 @@ mod tests {
 
     #[test]
     fn harness_notices_are_tagged_synthetic_while_user_messages_are_not() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         state.add_user_message("fix the flaky test".to_string());
         state.add_synthetic_user_message("It looks like you're repeating the same response.".to_string());
         state.add_user_message_with_intent("steer: stop after this".to_string(), Some("intent-1".to_string()));
@@ -854,7 +807,7 @@ mod tests {
 
     #[test]
     fn cached_total_tokens_matches_direct_computation() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
 
         // Add messages through the standard push methods
         state.add_user_message("Hello, how are you?".to_string());
@@ -879,7 +832,7 @@ mod tests {
 
     #[test]
     fn reconcile_token_count_resyncs_after_external_mutation() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         state.add_user_message("test message".to_string());
         let before = state.total_tokens();
 
@@ -895,7 +848,7 @@ mod tests {
 
     #[test]
     fn clear_conversation_history_resets_all_state() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         state.messages_mut().push(Message::user("hello".to_string()));
         state.messages_mut().push(Message::assistant("hi".to_string()));
         state.conversation.push(crate::llm::providers::gemini::wire::Content {
@@ -925,7 +878,7 @@ mod tests {
 
     #[test]
     fn push_warning_skips_exact_duplicates() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         state.push_warning("rate limited");
         state.push_warning("rate limited");
         state.push_warning("rate limited");
@@ -935,7 +888,7 @@ mod tests {
 
     #[test]
     fn push_warning_retains_distinct_warnings() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         state.push_warning("first warning");
         state.push_warning("second warning");
         state.push_warning("third warning");
@@ -947,7 +900,7 @@ mod tests {
 
     #[test]
     fn push_warning_inserts_elision_marker_at_cap() {
-        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
         // Fill up to the cap with unique warnings.
         for i in 0..super::MAX_SESSION_WARNINGS {
             state.push_warning(format!("warning {i}"));

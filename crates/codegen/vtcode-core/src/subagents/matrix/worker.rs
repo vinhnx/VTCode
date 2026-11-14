@@ -140,31 +140,7 @@ pub(super) async fn execute(
             });
         }
         let mut checks_succeeded = true;
-        let previous_checks = controller.matrix_snapshot().await.map_or(0, |snapshot| {
-            snapshot
-                .tasks
-                .iter()
-                .find(|state| state.id == assignment.task_id)
-                .map_or(0, |state| {
-                    state
-                        .attempts
-                        .iter()
-                        .filter(|attempt| {
-                            attempt.id != assignment.attempt_id
-                                && attempt.phase == MatrixPhase::Verify
-                                && attempt.launch_requested
-                        })
-                        .count()
-                        .saturating_mul(task.checks.len())
-                })
-        });
         for (index, command) in task.checks.iter().enumerate() {
-            if vtcode_config::core::tools::tool_loop_limit_reached(
-                previous_checks.saturating_add(index),
-                cfg.tools.max_tool_loops,
-            ) {
-                return Ok(MatrixOutcome::BudgetExhausted);
-            }
             let value = runner
                 .execute_scheduled_tool(
                     "exec_command",

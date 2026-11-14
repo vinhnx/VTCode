@@ -63,21 +63,6 @@ pub(crate) struct ToolWallClockExhaustionNotice {
     pub first_notice: bool,
 }
 
-/// Fraction of `max_tool_loops` at which the turn loop warns the model once
-/// to batch or wrap up before the hard limit forces tool-free synthesis.
-pub(crate) const TOOL_LOOP_WARNING_THRESHOLD: f64 = 0.75;
-
-/// Whether tool-loop limit increases may be granted without an interactive
-/// prompt. Requires all three: the turn runs under full-auto policy,
-/// `[automation.full_auto]` is enabled, and the opt-out
-/// `auto_grant_tool_limits` flag is still on. Live config reloads can disable
-/// `enabled` mid-session while the runtime bool stays true, so both sides
-/// of the gate are checked.
-#[inline]
-pub(crate) fn full_auto_loop_grants_enabled(full_auto: bool, vt_cfg: Option<&VTCodeConfig>) -> bool {
-    full_auto
-        && vt_cfg.is_some_and(|cfg| cfg.automation.full_auto.enabled && cfg.automation.full_auto.auto_grant_tool_limits)
-}
 const TOOL_PREVIEW_METADATA_MAX_DEPTH: usize = 8;
 
 const TOOL_PREVIEW_METADATA_STRING_LIMIT: usize = 512;

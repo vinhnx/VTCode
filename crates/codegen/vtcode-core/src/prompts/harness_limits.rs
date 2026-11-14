@@ -54,7 +54,12 @@ mod tests {
         assert!(prompt.contains("- max_readonly_tool_calls: 30"));
         assert!(prompt.contains("- max_same_file_path_reads: 6"));
         assert!(prompt.contains("single-call long run"));
+        // The removed tool-call and tool-loop budgets must never re-enter the
+        // shipped prompt surface.
         assert!(!prompt.contains("max_tool_calls_per_turn"));
+        assert!(!prompt.contains("max_tool_loops"));
+        assert!(!prompt.contains("tool-loop"));
+        assert!(!prompt.contains("tool loop"));
     }
 
     #[test]

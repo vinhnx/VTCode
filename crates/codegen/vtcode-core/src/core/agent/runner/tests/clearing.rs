@@ -50,7 +50,7 @@ async fn headless_noop_compaction_preserves_shared_history() {
         };
         runner.provider_client = Box::new(provider.clone());
         let mut bundle = runner.build_validated_runtime_prompt_bundle(false).await.unwrap();
-        let mut state = AgentSessionState::new("noop-sharing".into(), 1, 1, case.capacity);
+        let mut state = AgentSessionState::new("noop-sharing".into(), 1, case.capacity);
         state.messages = Arc::new(vec![Message::user("retained source ".repeat(1_000))]);
         state.auto_compact_suppressed = case.suppressed;
         let miss = crate::exec::events::Usage {
@@ -99,7 +99,7 @@ async fn headless_successful_compaction_starts_new_cache_health_streak() {
         requests: Arc::new(Mutex::new(Vec::new())),
     });
     let mut bundle = runner.build_validated_runtime_prompt_bundle(false).await.unwrap();
-    let mut state = AgentSessionState::new("cache-compaction".into(), 1, 1, 32000);
+    let mut state = AgentSessionState::new("cache-compaction".into(), 1, 32000);
     state.messages = Arc::new(evidence_history(32000, false));
     let miss = crate::exec::events::Usage {
         input_tokens: 12740,
@@ -253,7 +253,7 @@ async fn headless_clearing_stages_before_compaction_capacity_sweep() {
             let overhead = bundle.system_prompt_report.token_estimate as usize
                 + crate::llm::usage_cost::estimate_tool_definition_tokens(&bundle.request_envelope.ordered_tools())
                     as usize;
-            let mut state = AgentSessionState::new("projection".into(), 1, 1, capacity);
+            let mut state = AgentSessionState::new("projection".into(), 1, capacity);
             state.messages = Arc::new(full_history.clone());
             let projected = runner.project_request_history(&state, &ModelId::default().as_str(), overhead, 2_000);
             let projected_tokens = projected.iter().map(Message::estimate_tokens).sum::<usize>();

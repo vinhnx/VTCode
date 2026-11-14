@@ -95,7 +95,7 @@ impl ToolPack for HitlPack {
                 ToolRegistry::cron_executor,
             )
             .with_description(
-                "Create, list, or delete session-scoped scheduled prompts. Use action=create to schedule a prompt, action=list to show scheduled prompts, or action=delete to remove one by id. Do not schedule per-minute jobs because they exhaust the per-turn tool budget. Scheduled prompts end when the vtcode process exits.",
+                "Create, list, or delete session-scoped scheduled prompts. Use action=create to schedule a prompt, action=list to show scheduled prompts, or action=delete to remove one by id. Do not schedule per-minute jobs because they exhaust the per-turn tool wall-clock budget. Scheduled prompts end when the vtcode process exits.",
             )
             .with_parameter_schema(cron_parameters())
             .with_aliases([

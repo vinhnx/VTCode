@@ -62,13 +62,6 @@ pub struct FullAutoConfig {
     /// This doubles cost on mutating calls but catches propose-side errors.
     #[serde(default)]
     verify_mutations: bool,
-
-    /// Automatically grant tool-loop limit increases while a full-auto run is
-    /// active, instead of prompting. Grants reuse the same per-prompt
-    /// increments and absolute hard caps as manual approvals. Set to `false`
-    /// to restore the interactive prompts.
-    #[serde(default = "default_auto_grant_tool_limits")]
-    pub auto_grant_tool_limits: bool,
 }
 
 impl Default for FullAutoConfig {
@@ -80,7 +73,6 @@ impl Default for FullAutoConfig {
             require_profile_ack: default_require_profile_ack(),
             profile_path: None,
             verify_mutations: false,
-            auto_grant_tool_limits: default_auto_grant_tool_limits(),
         }
     }
 }
@@ -109,10 +101,6 @@ fn default_full_auto_allowed_tools() -> Vec<String> {
 }
 
 fn default_require_profile_ack() -> bool {
-    true
-}
-
-fn default_auto_grant_tool_limits() -> bool {
     true
 }
 
@@ -179,17 +167,12 @@ mod tests {
     }
 
     #[test]
-    fn full_auto_grants_loop_limits_without_prompting_by_default() {
-        assert!(FullAutoConfig::default().auto_grant_tool_limits);
-    }
-
-    #[test]
-    fn full_auto_loop_grants_survive_missing_field_for_backward_compatibility() {
-        let without_field = toml::from_str::<FullAutoConfig>("enabled = true").expect("minimal full-auto parses");
-        assert!(without_field.auto_grant_tool_limits);
-
-        let opted_out = toml::from_str::<FullAutoConfig>("enabled = true\nauto_grant_tool_limits = false")
-            .expect("explicit opt-out parses");
-        assert!(!opted_out.auto_grant_tool_limits);
+    fn full_auto_ignores_removed_auto_grant_key() {
+        // `auto_grant_tool_limits` was removed with the tool-loop budget;
+        // stale configs carrying it must still parse (the key is pruned on
+        // the next save with a warning).
+        let parsed = toml::from_str::<FullAutoConfig>("enabled = true\nauto_grant_tool_limits = false")
+            .expect("stale auto-grant key must parse");
+        assert!(parsed.enabled);
     }
 }

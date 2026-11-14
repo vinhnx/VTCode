@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use crate::constants::{defaults, tool_limits, tools};
+use crate::constants::{defaults, tools};
 use crate::core::plugins::PluginRuntimeConfig;
 
 /// Model-facing tool profile for a session.
@@ -41,15 +41,6 @@ pub struct ToolsConfig {
         schemars(with = "std::collections::BTreeMap<String, ToolPolicy>")
     )]
     pub policies: IndexMap<String, ToolPolicy>,
-
-    /// Maximum inner tool-call loops per user turn. Set to `0` to disable the limit.
-    ///
-    /// Prevents infinite tool-calling cycles in interactive chat. This limits how
-    /// many back-and-forths the agent will perform executing tools and
-    /// re-asking the model before returning a final answer.
-    ///
-    #[serde(default = "default_max_tool_loops")]
-    pub max_tool_loops: usize,
 
     /// Maximum number of times the same tool invocation can be retried with the
     /// identical arguments within a single turn.
@@ -266,7 +257,6 @@ impl Default for ToolsConfig {
             profile: ToolProfile::default(),
             default_policy: default_tool_policy(),
             policies,
-            max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
             max_consecutive_blocked_tool_calls_per_turn: default_max_consecutive_blocked_tool_calls_per_turn(),
             max_total_blocked_tool_calls_per_turn: None,
@@ -285,19 +275,9 @@ impl Default for ToolsConfig {
 
 impl ToolsConfig {
     #[inline]
-    fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
-        tool_loop_limit_reached(completed_tool_loops, self.max_tool_loops)
-    }
-
-    #[inline]
     pub fn tool_call_delay(&self) -> Option<Duration> {
         tool_call_delay_for_rate(self.max_tool_rate_per_second)
     }
-}
-
-#[inline]
-pub const fn tool_loop_limit_reached(completed_tool_loops: usize, max_tool_loops: usize) -> bool {
-    max_tool_loops > 0 && completed_tool_loops >= max_tool_loops
 }
 
 #[inline]
@@ -384,11 +364,6 @@ pub enum ToolPolicy {
 #[inline]
 const fn default_tool_policy() -> ToolPolicy {
     ToolPolicy::Prompt
-}
-
-#[inline]
-const fn default_max_tool_loops() -> usize {
-    tool_limits::DEFAULT_MAX_TOOL_LOOPS
 }
 
 #[inline]
@@ -482,11 +457,6 @@ mod tests {
     }
 
     #[test]
-    fn tools_config_defaults_to_shared_tool_loop_budget() {
-        assert_eq!(ToolsConfig::default().max_tool_loops, tool_limits::DEFAULT_MAX_TOOL_LOOPS);
-    }
-
-    #[test]
     fn vt_code_profile_round_trips_through_toml() {
         let config: ToolsConfig = toml::from_str("profile = \"vt_code\"").expect("vt_code tool profile should parse");
         assert_eq!(config.profile, ToolProfile::VtCode);
@@ -553,18 +523,11 @@ mod tests {
     }
 
     #[test]
-    fn disabled_tool_loop_limit_never_trips() {
-        assert!(!tool_loop_limit_reached(1, 0));
-        assert!(!tool_loop_limit_reached(32, 0));
-        assert!(tool_loop_limit_reached(2, 2));
-    }
-
-    #[test]
-    fn tools_config_reports_tool_loop_limit() {
-        let config = ToolsConfig { max_tool_loops: 2, ..Default::default() };
-
-        assert!(!config.tool_loop_limit_reached(1));
-        assert!(config.tool_loop_limit_reached(2));
+    fn tools_config_ignores_removed_tool_loop_budget_key() {
+        // `max_tool_loops` was removed; stale configs carrying it must still
+        // parse (the key is pruned on the next save with a warning).
+        let parsed: ToolsConfig = toml::from_str("max_tool_loops = 20").expect("stale loop-budget key must parse");
+        assert_eq!(parsed.max_repeated_tool_calls, defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
     }
 
     #[test]

@@ -6,9 +6,7 @@ use super::TurnLoopContext;
 use super::context::effective_vt_cfg;
 use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
 use crate::agent::runloop::unified::session_settings::SessionSettingsControl;
-use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    PrecomputedTurnConfig, apply_mode_switch_remaining_tool_loop_floor, extract_turn_config,
-};
+use crate::agent::runloop::unified::turn::turn_loop_helpers::{PrecomputedTurnConfig, extract_turn_config};
 
 /// Consume completed selections just before the next model request is built.
 pub(super) async fn apply_pending_session_settings(
@@ -116,19 +114,15 @@ pub(super) async fn apply_mid_turn_settings(
     Ok(settings_applied)
 }
 
-/// Re-derive turn config and grant a full *remaining* tool-loop floor after
-/// a Build<->Plan auto-switch mid-turn, so the new phase is not starved by
-/// the prior phase's consumption.
+/// Re-derive turn config after a Build<->Plan auto-switch mid-turn, so the
+/// new phase's tool capability set applies from the next request.
 pub(super) fn apply_mid_turn_mode_switch(
     ctx: &mut TurnLoopContext<'_>,
     last_planning_active: &mut bool,
     turn_config: &mut PrecomputedTurnConfig,
-    current_max_tool_loops: &mut usize,
-    step_count: usize,
 ) {
-    // Build↔Plan auto-switch mid-turn: re-derive turn config and grant a
-    // full *remaining* tool-loop floor so the new phase is not starved by
-    // the prior phase's consumption.
+    // Build↔Plan auto-switch mid-turn: re-derive turn config so the new
+    // phase is not left with the prior phase's capability snapshot.
     let planning_now = ctx.is_planning_active();
     if planning_now != *last_planning_active {
         *last_planning_active = planning_now;
@@ -149,7 +143,6 @@ pub(super) fn apply_mid_turn_mode_switch(
         if ctx.plan_session.is_interview_denied() {
             turn_config.request_user_input_enabled = false;
         }
-        apply_mode_switch_remaining_tool_loop_floor(current_max_tool_loops, step_count, planning_now);
     }
 }
 

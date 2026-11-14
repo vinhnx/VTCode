@@ -16,8 +16,6 @@ impl AgentRunner {
         warnings: &[String],
         messages: &[Message],
         turns_executed: usize,
-        peak_tool_loops: usize,
-        max_tool_loops: usize,
         outcome: TaskOutcome,
         total_duration_ms: u128,
         average_turn_duration_ms: Option<f64>,
@@ -45,16 +43,7 @@ impl AgentRunner {
             reasoning_label
         ));
 
-        let tool_loops_used = peak_tool_loops;
-        let max_tool_loops_label = if max_tool_loops == 0 {
-            "unlimited".to_owned()
-        } else {
-            max_tool_loops.to_string()
-        };
-        summary.push(format!(
-            "Turns: {} used / {} max | Tool loops: {} used / {} max",
-            turns_executed, self.max_turns, tool_loops_used, max_tool_loops_label
-        ));
+        summary.push(format!("Turns: {} used / {} max", turns_executed, self.max_turns));
 
         let mut duration_line = format!("Duration: {total_duration_ms} ms");
         let mut duration_metrics = Vec::new();

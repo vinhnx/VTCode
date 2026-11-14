@@ -23,7 +23,7 @@ async fn execution_total_low_signal_guard_trips_at_threshold() {
             &json!({"query": format!("q{step}"), "path": "src"}),
         );
     }
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 40, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 
@@ -33,7 +33,7 @@ async fn execution_total_low_signal_guard_trips_at_threshold() {
         tool_names::CODE_SEARCH,
         &json!({"query": "q-final", "path": "src"}),
     );
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 13, &mut tracker, 40, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 13, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     let reason = ctx.recovery_reason().unwrap_or_default();
@@ -62,7 +62,7 @@ async fn execution_total_low_signal_guard_fires_once_per_turn() {
         );
     }
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 16, &mut tracker, 40, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 16, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 }
@@ -109,7 +109,7 @@ async fn execution_total_low_signal_window_resets_on_mutation() {
             &json!({"query": format!("b{step}"), "path": "src"}),
         );
     }
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 24, &mut tracker, 40, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 24, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 }

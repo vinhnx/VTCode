@@ -180,7 +180,6 @@ fn attends_to_user(selection: &InlineListSelection) -> bool {
             | InlineListSelection::FileConflictReload
             | InlineListSelection::FileConflictViewDiff
             | InlineListSelection::FileConflictAbort
-            | InlineListSelection::SessionLimitIncrease(_)
     )
 }
 

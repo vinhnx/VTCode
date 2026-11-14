@@ -9,7 +9,7 @@ async fn planning_recovery_triggers_at_exact_consecutive_low_signal_threshold() 
     tracker.consecutive_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
     tracker.total_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
 
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
@@ -48,7 +48,7 @@ async fn unchanged_tracker_polls_get_one_correction_then_terminal_handoff() {
         for _ in 0..2 {
             update_repetition_tracker(&mut tracker, &outcome, tool_names::TASK_TRACKER, &json!({"action":"list"}));
         }
-        let result = super::super::handle_turn_balancer(&mut ctx, 2 + round * 2, &mut tracker, 20, 3).await;
+        let result = super::super::handle_turn_balancer(&mut ctx, 2 + round * 2, &mut tracker, 3).await;
         if round == 0 {
             assert!(matches!(result, TurnHandlerOutcome::Continue));
             assert!(!ctx.is_recovery_active(), "correction must retain usable tools");
@@ -70,7 +70,7 @@ async fn planning_recovery_triggers_at_exact_total_low_signal_threshold() {
     tracker.consecutive_low_signal_navigations = 1;
     tracker.total_low_signal_navigations = PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD;
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 10, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 10, &mut tracker, 3).await;
 
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
@@ -85,7 +85,7 @@ async fn adaptive_low_signal_threshold_does_not_change_non_planning_turns() {
     tracker.consecutive_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
     tracker.total_low_signal_navigations = PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD;
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 1, &mut tracker, 120, 20).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 1, &mut tracker, 20).await;
 
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
@@ -99,7 +99,7 @@ async fn adaptive_low_signal_synthesis_triggers_only_once_per_turn() {
     tracker.consecutive_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
     tracker.total_low_signal_navigations = PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD;
 
-    let first = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let first = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(first, TurnHandlerOutcome::Continue));
     assert!(tracker.planning_low_signal_synthesis_triggered);
     assert!(
@@ -112,7 +112,7 @@ async fn adaptive_low_signal_synthesis_triggers_only_once_per_turn() {
 
     tracker.consecutive_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
     tracker.total_low_signal_navigations = PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD;
-    let second = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 120, usize::MAX).await;
+    let second = super::super::handle_turn_balancer(&mut ctx, 12, &mut tracker, usize::MAX).await;
     assert!(matches!(second, TurnHandlerOutcome::Continue));
     assert_eq!(tracker.consecutive_low_signal_navigations, PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD);
     assert_eq!(tracker.total_low_signal_navigations, PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD);

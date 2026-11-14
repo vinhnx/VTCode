@@ -1,19 +1,11 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::agent::runloop::unified::inline_events::harness::harness_event;
 use crate::agent::runloop::unified::planning_workflow::detect_enter_planning_intent;
-use crate::agent::runloop::unified::run_loop_context::{
-    BudgetExhaustedMetrics, HarnessTurnState, budget_kind, emit_budget_exhausted_metric, full_auto_loop_grants_enabled,
-};
 use crate::agent::runloop::unified::turn::context::{TurnLoopResult, last_user_message};
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS;
-use vtcode_core::config::constants::tool_limits::{
-    APPROVED_PLAN_TOOL_LOOP_INCREMENT, DEFAULT_MAX_TOOL_LOOPS, MAX_TOOL_LOOP_INCREMENT_PER_PROMPT,
-    PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT, PLANNING_WORKFLOW_MIN_TOOL_LOOPS, tool_loop_hard_cap,
-};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::features::FeatureSet;
@@ -22,33 +14,8 @@ use vtcode_core::llm::provider as uni;
 
 #[derive(Debug, Clone)]
 pub(super) struct PrecomputedTurnConfig {
-    pub(super) max_tool_loops: usize,
     pub(super) tool_repeat_limit: usize,
     pub(super) request_user_input_enabled: bool,
-}
-
-const UNLIMITED_TOOL_LOOPS: usize = usize::MAX;
-fn tool_loop_limit_recovery_reason(limit: usize) -> String {
-    format!(
-        "Tool loop budget exhausted before a final response ({limit}/{limit}). Tools are disabled for one bounded synthesis pass; answer from the completed tool outputs and state any incomplete work explicitly."
-    )
-}
-
-/// Initialize the loop allowance for a turn that is executing an approved
-/// plan. The allowance is applied at turn initialization only; later
-/// extensions continue through the existing grant path (automatic in
-/// full-auto runs with auto-grant enabled, otherwise prompt-driven).
-pub(super) fn initial_tool_loop_limit(configured_limit: usize, approved_plan_execution: bool) -> usize {
-    if configured_limit == 0 || configured_limit == UNLIMITED_TOOL_LOOPS {
-        return UNLIMITED_TOOL_LOOPS;
-    }
-    if !approved_plan_execution {
-        return configured_limit;
-    }
-
-    configured_limit
-        .saturating_add(APPROVED_PLAN_TOOL_LOOP_INCREMENT)
-        .min(tool_loop_hard_cap(configured_limit, false))
 }
 
 #[inline]
@@ -60,7 +27,6 @@ pub(super) fn extract_turn_config(
     let features = FeatureSet::from_config(vt_cfg);
     vt_cfg
         .map(|cfg| PrecomputedTurnConfig {
-            max_tool_loops: resolve_tool_loop_limit(cfg.tools.max_tool_loops, planning_active),
             tool_repeat_limit: if cfg.tools.max_repeated_tool_calls > 0 {
                 cfg.tools.max_repeated_tool_calls
             } else {
@@ -69,36 +35,9 @@ pub(super) fn extract_turn_config(
             request_user_input_enabled: features.request_user_input_enabled(planning_active, interactive_session),
         })
         .unwrap_or(PrecomputedTurnConfig {
-            max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, planning_active),
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             request_user_input_enabled: features.request_user_input_enabled(planning_active, interactive_session),
         })
-}
-
-pub(super) enum ToolLoopLimitAction {
-    Proceed,
-    ContinueLoop,
-    BreakLoop,
-}
-
-/// Remaining-headroom rule for tool-loop iterations (`step_count` is
-/// loops already taken this turn).
-pub(super) fn apply_mode_switch_remaining_tool_loop_floor(
-    current_max_tool_loops: &mut usize,
-    step_count: usize,
-    planning_active: bool,
-) {
-    if *current_max_tool_loops == UNLIMITED_TOOL_LOOPS {
-        return;
-    }
-    let floor = if planning_active {
-        PLANNING_WORKFLOW_MIN_TOOL_LOOPS
-    } else {
-        // Implementation after a plan still needs a full research-sized
-        // runway for edits + verification in the same turn.
-        PLANNING_WORKFLOW_MIN_TOOL_LOOPS.max(DEFAULT_MAX_TOOL_LOOPS)
-    };
-    *current_max_tool_loops = (*current_max_tool_loops).max(step_count.saturating_add(floor));
 }
 
 /// Detects a stale recovery status response that incorrectly carries the
@@ -130,231 +69,6 @@ pub(super) fn is_stale_approved_plan_pause_response(text: &str) -> bool {
 
 const PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS: &str =
     "Planning workflow: explicit planning request detected. Entering read-only planning before continuing this turn.";
-
-fn resolve_tool_loop_limit(configured_limit: usize, planning_active: bool) -> usize {
-    if configured_limit == 0 {
-        UNLIMITED_TOOL_LOOPS
-    } else if planning_active {
-        configured_limit.max(PLANNING_WORKFLOW_MIN_TOOL_LOOPS)
-    } else {
-        configured_limit
-    }
-}
-
-fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
-    let configured = super::turn_loop::effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg)
-        .map(|cfg| cfg.tools.max_tool_loops)
-        .filter(|limit| *limit > 0)
-        .unwrap_or(DEFAULT_MAX_TOOL_LOOPS);
-    resolve_tool_loop_limit(configured, ctx.is_planning_active())
-}
-
-fn clamp_tool_loop_increment(
-    requested_increment: usize,
-    current_limit: usize,
-    hard_cap: usize,
-    planning_active: bool,
-) -> usize {
-    let remaining = hard_cap.saturating_sub(current_limit);
-    let per_prompt_limit = if planning_active {
-        PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
-    } else {
-        MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
-    };
-    requested_increment.min(per_prompt_limit).min(remaining)
-}
-
-/// Increment a full-auto run (or a session-preauthorized interactive run)
-/// grants itself when it hits the tool-loop limit:
-/// the same maximum one manual approval may add, clamped to the remaining
-/// headroom below the hard cap. Pure so the grant arithmetic stays unit
-/// tested without standing up an interactive session.
-///
-/// The planning branch is currently unreachable in the unified runloop:
-/// planning loop exhaustion early-returns to tool-free synthesis above and
-/// planning session limits are unbounded. It is retained for arithmetic
-/// symmetry with `tool_loop_hard_cap` and its tests, not as a live path.
-fn auto_tool_loop_grant_increment(current_limit: usize, hard_cap: usize, planning_active: bool) -> usize {
-    let per_prompt_limit = if planning_active {
-        PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
-    } else {
-        MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
-    };
-    clamp_tool_loop_increment(per_prompt_limit, current_limit, hard_cap, planning_active)
-}
-
-/// How a tool-loop increase is authorized at a limit hit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ToolLoopGrantSource {
-    /// Full-auto policy with `auto_grant_tool_limits` on.
-    FullAuto,
-    /// Interactive session where the user already granted once.
-    SessionPreauthorized,
-    /// Manual HITL approval (or denial handled by the caller).
-    Manual,
-}
-
-impl ToolLoopGrantSource {
-    /// Whether this source skips the HITL modal and grants the max increment.
-    fn is_automatic(self) -> bool {
-        matches!(self, Self::FullAuto | Self::SessionPreauthorized)
-    }
-}
-
-/// Pure grant-policy decision at a tool-loop limit hit.
-///
-/// Full-auto always auto-grants. Otherwise the first interactive hit prompts;
-/// once the session latch is set by a successful grant, later hits auto-grant
-/// the maximum increment without a modal.
-fn tool_loop_grant_source(full_auto_grants_enabled: bool, session_preauthorized: bool) -> ToolLoopGrantSource {
-    if full_auto_grants_enabled {
-        ToolLoopGrantSource::FullAuto
-    } else if session_preauthorized {
-        ToolLoopGrantSource::SessionPreauthorized
-    } else {
-        ToolLoopGrantSource::Manual
-    }
-}
-
-/// Apply one tool-loop limit increase shared by the full-auto grant path,
-/// the session-preauthorized path, and the manual prompt path. Only the
-/// user-facing wording records who authorized the increase; the event kind
-/// and continuation semantics are identical.
-///
-/// A successful manual grant latches session-preauthorized auto-grants for
-/// later limit hits in this process session. Denial never reaches this
-/// function, so it cannot latch.
-fn apply_tool_loop_grant(
-    ctx: &mut TurnLoopContext<'_>,
-    current_max_tool_loops: &mut usize,
-    increment: usize,
-    requested_increment: usize,
-    hard_cap: usize,
-    grant_source: ToolLoopGrantSource,
-) -> Result<ToolLoopLimitAction> {
-    if grant_source == ToolLoopGrantSource::Manual {
-        ctx.session_stats.mark_tool_loop_grant_preauthorized();
-    }
-    let previous_max_tool_loops = *current_max_tool_loops;
-    *current_max_tool_loops = (*current_max_tool_loops).saturating_add(increment);
-    let agent_name = ctx.active_primary_agent.active().name();
-    let event_message = match grant_source {
-        ToolLoopGrantSource::FullAuto => {
-            format!(
-                "Full-auto auto-granted +{} tool loops to current agent {} (limit {}); continuing this turn and reusing existing tool outputs.",
-                increment, agent_name, *current_max_tool_loops,
-            )
-        }
-        ToolLoopGrantSource::SessionPreauthorized => {
-            format!(
-                "Auto-granted +{} tool loops to current agent {} (limit {}); earlier grant this session preauthorized further increases. Continuing this turn and reusing existing tool outputs.",
-                increment, agent_name, *current_max_tool_loops,
-            )
-        }
-        ToolLoopGrantSource::Manual => {
-            format!(
-                "Current agent {} granted +{} tool loops (limit {}); continuing this turn and reusing existing tool outputs.",
-                agent_name, increment, *current_max_tool_loops,
-            )
-        }
-    };
-    if let Some(emitter) = ctx.harness_emitter
-        && let Err(error) = emitter.emit(harness_event(
-            vtcode_core::exec::events::HarnessEventKind::ToolLoopLimitIncreased,
-            Some(event_message),
-            None,
-            None,
-            None,
-        ))
-    {
-        tracing::debug!(error = %error, "Failed to emit tool-loop grant event");
-    }
-    tracing::info!(
-        grant_source = ?grant_source,
-        "Updated tool loop limit: turn={} (was {})",
-        *current_max_tool_loops,
-        previous_max_tool_loops,
-    );
-    let status_message = match grant_source {
-        ToolLoopGrantSource::FullAuto => {
-            format!(
-                "Full-auto auto-granted +{} tool loops (limit {}, cap {})",
-                increment, *current_max_tool_loops, hard_cap,
-            )
-        }
-        ToolLoopGrantSource::SessionPreauthorized => {
-            format!(
-                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases",
-                increment, *current_max_tool_loops, hard_cap,
-            )
-        }
-        ToolLoopGrantSource::Manual if requested_increment != increment => {
-            format!(
-                "Tool loop limit increased to {} (+{}, requested +{}, cap {})",
-                *current_max_tool_loops, increment, requested_increment, hard_cap,
-            )
-        }
-        ToolLoopGrantSource::Manual => {
-            format!("Tool loop limit increased to {} (+{}, cap {})", *current_max_tool_loops, increment, hard_cap,)
-        }
-    };
-    display_status(ctx.renderer, &status_message)?;
-    Ok(ToolLoopLimitAction::ContinueLoop)
-}
-
-fn emit_loop_hard_cap_break_metric(
-    ctx: &TurnLoopContext<'_>,
-    step_count: usize,
-    current_limit: usize,
-    base_limit: usize,
-    hard_cap: usize,
-    reason: &'static str,
-) {
-    tracing::info!(
-        target: "vtcode.turn.metrics",
-        metric = "loop_hard_cap_break",
-        reason,
-        run_id = %ctx.harness_state.run_id.0,
-        turn_id = %ctx.harness_state.turn_id.0,
-        planning_workflow = ctx.is_planning_active(),
-        step_count,
-        current_limit,
-        base_limit,
-        hard_cap,
-        tool_calls = ctx.harness_state.tool_calls,
-        "turn metric"
-    );
-    // Trajectory twin of the metric above: post-hoc reports of an exhausted
-    // turn ("tool budget exhausted") are otherwise undebuggable because no
-    // trajectory kind records which ceiling fired.
-    emit_budget_exhausted_metric(
-        ctx.traj,
-        BudgetExhaustedMetrics {
-            budget: budget_kind::TOOL_LOOP,
-            used: current_limit,
-            max: hard_cap,
-            step_count: Some(step_count),
-            planning_active: ctx.is_planning_active(),
-            tool_calls: ctx.harness_state.tool_calls,
-        },
-    );
-}
-
-/// Arm the single tool-free synthesis pass used when a turn reaches its loop
-/// allowance. The loop allowance is made unlimited only for the control loop
-/// itself; the recovery request disables tools at the provider boundary, so
-/// this does not weaken the ordinary hard cap or permit another tool batch.
-fn arm_tool_loop_synthesis_recovery(harness_state: &mut HarnessTurnState, current_max_tool_loops: &mut usize) -> bool {
-    // `activate_recovery` only arms from the `Inactive` phase and reports
-    // whether it did, so a pending/in-flight pass never widens the loop
-    // allowance here.
-    if !harness_state.activate_recovery(tool_loop_limit_recovery_reason(*current_max_tool_loops)) {
-        return false;
-    }
-
-    *current_max_tool_loops = UNLIMITED_TOOL_LOOPS;
-    true
-}
 
 pub(super) async fn handle_steering_messages(
     ctx: &mut TurnLoopContext<'_>,
@@ -780,129 +494,5 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
         }
     }
 }
-
-pub(super) async fn maybe_handle_tool_loop_limit(
-    ctx: &mut TurnLoopContext<'_>,
-    step_count: usize,
-    current_max_tool_loops: &mut usize,
-) -> Result<ToolLoopLimitAction> {
-    if *current_max_tool_loops == UNLIMITED_TOOL_LOOPS {
-        return Ok(ToolLoopLimitAction::Proceed);
-    }
-
-    if step_count < *current_max_tool_loops {
-        return Ok(ToolLoopLimitAction::Proceed);
-    }
-
-    let planning_active = ctx.is_planning_active();
-    if planning_active {
-        ctx.plan_session.mark_budget_exhausted();
-        ctx.harness_state
-            .activate_recovery(tool_loop_limit_recovery_reason(*current_max_tool_loops));
-        ctx.harness_state.switch_to_tool_free_recovery();
-        *current_max_tool_loops = UNLIMITED_TOOL_LOOPS;
-        display_status(
-            ctx.renderer,
-            "Planning research has reached its safe limit. I’m stopping research and synthesizing a plan from the evidence already collected.",
-        )?;
-        return Ok(ToolLoopLimitAction::ContinueLoop);
-    }
-
-    display_status(ctx.renderer, &format!("Reached maximum tool loops ({})", *current_max_tool_loops))?;
-
-    let base_limit = configured_tool_loop_base_limit(ctx);
-    let hard_cap = tool_loop_hard_cap(base_limit, planning_active);
-    if *current_max_tool_loops >= hard_cap {
-        emit_loop_hard_cap_break_metric(
-            ctx,
-            step_count,
-            *current_max_tool_loops,
-            base_limit,
-            hard_cap,
-            "hard_cap_reached",
-        );
-        display_status(
-            ctx.renderer,
-            &format!("Tool loop hard cap reached ({hard_cap}). Stopping turn to prevent runaway looping."),
-        )?;
-        return Ok(ToolLoopLimitAction::BreakLoop);
-    }
-
-    let grant_source = tool_loop_grant_source(
-        full_auto_loop_grants_enabled(ctx.full_auto, super::turn_loop::effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg)),
-        ctx.session_stats.tool_loop_grant_preauthorized(),
-    );
-    let prompt_result = if grant_source.is_automatic() {
-        let increment = auto_tool_loop_grant_increment(*current_max_tool_loops, hard_cap, planning_active);
-        if increment == 0 {
-            emit_loop_hard_cap_break_metric(
-                ctx,
-                step_count,
-                *current_max_tool_loops,
-                base_limit,
-                hard_cap,
-                "no_remaining_headroom",
-            );
-            display_status(
-                ctx.renderer,
-                &format!("Tool loop limit cannot be increased further for this turn (already at cap {hard_cap})."),
-            )?;
-            return Ok(ToolLoopLimitAction::BreakLoop);
-        }
-        return apply_tool_loop_grant(ctx, current_max_tool_loops, increment, increment, hard_cap, grant_source);
-    } else {
-        crate::agent::runloop::unified::tool_routing::prompt_tool_loop_limit_increase(
-            ctx.handle,
-            ctx.session,
-            ctx.ctrl_c_state,
-            ctx.ctrl_c_notify,
-            *current_max_tool_loops,
-            hard_cap,
-            Some(ctx.active_primary_agent.active().name()),
-        )
-        .await
-    };
-    match prompt_result {
-        Ok(Some(requested_increment)) => {
-            let increment =
-                clamp_tool_loop_increment(requested_increment, *current_max_tool_loops, hard_cap, planning_active);
-            if increment == 0 {
-                emit_loop_hard_cap_break_metric(
-                    ctx,
-                    step_count,
-                    *current_max_tool_loops,
-                    base_limit,
-                    hard_cap,
-                    "no_remaining_headroom",
-                );
-                display_status(
-                    ctx.renderer,
-                    &format!("Tool loop limit cannot be increased further for this turn (already at cap {hard_cap})."),
-                )?;
-                return Ok(ToolLoopLimitAction::BreakLoop);
-            }
-            apply_tool_loop_grant(
-                ctx,
-                current_max_tool_loops,
-                increment,
-                requested_increment,
-                hard_cap,
-                ToolLoopGrantSource::Manual,
-            )
-        }
-        _ => {
-            display_status(
-                ctx.renderer,
-                "Tool loop limit was not increased. Synthesizing from the tool results already collected.",
-            )?;
-            if arm_tool_loop_synthesis_recovery(ctx.harness_state, current_max_tool_loops) {
-                Ok(ToolLoopLimitAction::ContinueLoop)
-            } else {
-                Ok(ToolLoopLimitAction::BreakLoop)
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests;

@@ -35,7 +35,6 @@ async fn tool_free_recovery_texts_bypass_verification_accounting() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 8,
         tool_repeat_limit: 4,
     })
     .await
@@ -68,7 +67,6 @@ async fn refusal_blocks_turn_with_reason_even_during_recovery() {
             step_count: 1,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
             tool_repeat_limit: 4,
         })
         .await
@@ -100,7 +98,6 @@ async fn recovery_empty_response_emits_fallback_and_completes_turn() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -136,7 +133,6 @@ async fn recovery_empty_response_fallback_stays_concise_without_evidence_dump() 
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -184,7 +180,6 @@ async fn recovery_empty_response_fallback_omits_spool_excerpt() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -218,7 +213,6 @@ async fn recovery_retry_empty_response_emits_fallback_and_completes_turn() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -263,7 +257,6 @@ async fn recovery_textual_tool_markup_breaks_turn_as_blocked() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -290,7 +283,6 @@ async fn empty_response_schedules_tool_enabled_retry_without_prior_tool_activity
             step_count: 1,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
             tool_repeat_limit: 4,
         })
         .await
@@ -327,7 +319,6 @@ async fn empty_response_after_tool_activity_schedules_tool_free_recovery() {
             step_count: 1,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
             tool_repeat_limit: 4,
         })
         .await

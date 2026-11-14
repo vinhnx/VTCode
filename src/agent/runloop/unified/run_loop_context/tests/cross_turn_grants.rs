@@ -228,27 +228,6 @@ fn cross_turn_tracker_order_independent_fingerprint() {
     assert!(warning.unwrap().contains("Cross-turn loop detected"));
 }
 #[test]
-fn full_auto_loop_grants_require_runtime_and_config_and_opt_in() {
-    // No config at all: interactive sessions keep prompting.
-    assert!(!full_auto_loop_grants_enabled(true, None));
-    assert!(!full_auto_loop_grants_enabled(false, None));
-
-    let mut cfg = VTCodeConfig::default();
-    // Default config has full-auto disabled: no auto-grant either way.
-    assert!(!full_auto_loop_grants_enabled(true, Some(&cfg)));
-    assert!(!full_auto_loop_grants_enabled(false, Some(&cfg)));
-
-    // Full-auto runtime + enabled config grants by default (opt-out flag on).
-    cfg.automation.full_auto.enabled = true;
-    assert!(full_auto_loop_grants_enabled(true, Some(&cfg)));
-    // Ordinary runtime never grants, even with full-auto configured.
-    assert!(!full_auto_loop_grants_enabled(false, Some(&cfg)));
-
-    // Explicit opt-out restores prompting in full-auto runs.
-    cfg.automation.full_auto.auto_grant_tool_limits = false;
-    assert!(!full_auto_loop_grants_enabled(true, Some(&cfg)));
-}
-#[test]
 fn failure_diagnosis_memo_round_trips_and_caps_model_calls() {
     let mut state = HarnessTurnState::new(TurnRunId("r".into()), TurnId("t".into()), 60, 1);
     let key = DiagnosisMemoKey {

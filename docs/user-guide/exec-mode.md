@@ -26,9 +26,7 @@ configured, VT Code selects the effective `auto` primary agent, and the run fail
 Full-auto treats `[automation.full_auto].allowed_tools` as a hard gate: tools outside the allow-list are denied, and
 tools inside the allow-list still pass explicit deny and policy checks. Workflow-coordination tools (`task_tracker`,
 `start_planning`, `request_user_input`) stay available in every mode even when omitted from the allow-list. Promptable
-outcomes that remain inside the allow-list are routed through automatic permission review instead of asking. Tool-loop
-limit increases are likewise granted automatically up to the hard cap; set
-`automation.full_auto.auto_grant_tool_limits = false` to restore the interactive prompts.
+outcomes that remain inside the allow-list are routed through automatic permission review instead of asking.
 `--dangerously-skip-permissions` similarly auto-approves promptable actions while still respecting explicit denies and
 policy blocks. You can capture the final summary separately with `--last-message-file` or persist the raw JSON stream
 with `--events`. Use `--json` when you want to see the live JSONL feed on stdout.

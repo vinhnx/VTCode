@@ -488,10 +488,6 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let traj = metadata.trajectory;
     let telemetry = metadata.telemetry;
     let error_recovery = metadata.error_recovery;
-    let max_tool_loops = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.tools.max_tool_loops)
-        .unwrap_or(vtcode_config::constants::tool_limits::DEFAULT_MAX_TOOL_LOOPS);
     let effective_model = crate::agent::runloop::unified::turn::turn_processing::resolve_effective_request_model(
         &config.model,
         active_primary_agent.active(),
@@ -499,12 +495,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let max_context_tokens =
         vtcode_core::compaction::effective_context_budget(vt_cfg.as_ref(), provider_client.as_ref(), &effective_model);
     let mut runtime = AgentRuntime::new(
-        AgentSessionState::new(
-            SessionId::generate().into_inner(),
-            config.max_conversation_turns,
-            max_tool_loops,
-            max_context_tokens,
-        ),
+        AgentSessionState::new(SessionId::generate().into_inner(), config.max_conversation_turns, max_context_tokens),
         None,
         steering_receiver.take(),
     );

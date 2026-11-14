@@ -764,6 +764,9 @@ pub enum HarnessEventKind {
     /// removed. Retained for wire compatibility with older session logs.
     SessionToolLimitIncreased,
     /// The user granted additional tool-loop capacity for the current turn.
+    ///
+    /// No longer emitted: the per-turn tool-loop budget was removed.
+    /// Retained for wire compatibility with older session logs.
     ToolLoopLimitIncreased,
     /// A background subprocess or exec session reached a terminal state.
     BackgroundSubprocessCompleted,

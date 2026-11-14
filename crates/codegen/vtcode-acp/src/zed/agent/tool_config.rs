@@ -4,7 +4,6 @@ use crate::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_
 use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use vtcode_core::config::tool_loop_limit_reached;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::utils::path::ensure_path_within_workspace;
@@ -54,17 +53,6 @@ impl ZedAgent {
         } else {
             Some(ToolChoice::none())
         }
-    }
-
-    pub(super) fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
-        tool_loop_limit_reached(completed_tool_loops, self.tool_loop_limit)
-    }
-
-    pub(super) fn tool_loop_limit_message(&self) -> String {
-        format!(
-            "Reached maximum tool loops ({}); stopping this turn to avoid an unsafe autonomous loop.",
-            self.tool_loop_limit
-        )
     }
 
     pub(super) fn client_supports_read_text_file(&self) -> bool {

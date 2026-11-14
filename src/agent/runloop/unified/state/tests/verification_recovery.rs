@@ -22,28 +22,6 @@ fn verification_pending_survives_stall_recovery_until_explicitly_cleared() {
     assert!(!stats.verification_snapshot().0);
 }
 #[test]
-fn tool_loop_grant_preauthorized_latches_only_after_explicit_grant() {
-    let mut stats = SessionStats::default();
-    assert!(!stats.tool_loop_grant_preauthorized(), "session starts unlatched");
-
-    stats.mark_tool_loop_grant_preauthorized();
-    assert!(stats.tool_loop_grant_preauthorized());
-
-    // Idempotent: later grants do not flip it back.
-    stats.mark_tool_loop_grant_preauthorized();
-    assert!(stats.tool_loop_grant_preauthorized());
-}
-#[test]
-fn tool_loop_grant_preauthorized_survives_fresh_execution_in_session() {
-    let mut stats = SessionStats::default();
-    stats.mark_tool_loop_grant_preauthorized();
-    stats.reset_for_fresh_execution();
-    assert!(
-        stats.tool_loop_grant_preauthorized(),
-        "the one-time HITL latch is process-session scoped, not conversation-context scoped"
-    );
-}
-#[test]
 fn preflight_fresh_execution_clears_validation_without_restoring_continuations() {
     let mut stats = SessionStats::default();
     stats.record_tracker_continuation_turn_with_limit(3);

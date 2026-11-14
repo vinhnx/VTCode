@@ -1,42 +1,6 @@
 use super::*;
 
 #[tokio::test]
-async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
-    let temp = TempDir::new().expect("tempdir");
-    let workspace = workspace_root(&temp);
-    seed_tracker(&workspace, json!(["Investigate loop"])).await;
-
-    let mut vt_cfg = VTCodeConfig::default();
-    vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    vt_cfg.automation.full_auto.max_turns = 1;
-    vt_cfg.tools.max_tool_loops = 1;
-    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-tool-loop-blocked")).await;
-    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![tool_call_response(
-        tools::TASK_TRACKER,
-        json!({
-            "action": "list"
-        }),
-    )]));
-
-    let result = Box::pin(runner.execute_task(&task("Loop blocked", "exec-task"), &[]))
-        .await
-        .expect("task result");
-
-    assert!(matches!(result.outcome, TaskOutcome::ToolLoopLimitReached { .. }));
-    let paths = harness_paths(&result, HarnessEventKind::BlockedHandoffWritten);
-    assert_eq!(paths.len(), 2);
-    for path in paths {
-        let content = fs::read_to_string(&path).expect("blocked handoff file");
-        assert!(content.contains("tool_loop_limit_reached"));
-        assert!(content.contains("Stopped after reaching tool loop limit"));
-        assert!(!content.contains("resume_command:"));
-        assert!(
-            content.contains("Resume unavailable because the legacy agent runner does not create a session archive.")
-        );
-    }
-}
-#[tokio::test]
 async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
     let temp = TempDir::new().expect("tempdir");
     let workspace = workspace_root(&temp);

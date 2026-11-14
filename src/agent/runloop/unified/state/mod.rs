@@ -74,11 +74,6 @@ pub(crate) struct SessionStats {
     /// This survives a blocked turn so a later `continue` cannot claim
     /// completion from inspection-only work.
     verification_pending: bool,
-    /// Whether the user granted a tool-loop increase at least once this
-    /// session. After that first successful grant, later tool-loop limit hits
-    /// auto-grant the maximum increment without another HITL prompt. Denials
-    /// leave this false so the prompt remains available.
-    tool_loop_grant_preauthorized: bool,
     /// Bounded autonomous turns the session loop may schedule after a
     /// verification-blocked turn before requiring manual `continue`.
     /// Reset only by genuine fresh user requests; incremented by
@@ -478,19 +473,6 @@ impl SessionStats {
 
     pub(crate) fn recent_touched_files(&self) -> Vec<String> {
         self.recent_touched_files.iter().cloned().collect()
-    }
-
-    /// Whether later tool-loop limit hits may skip the HITL prompt and
-    /// auto-grant the maximum increment. Set only after the first successful
-    /// interactive grant in this process session.
-    pub(crate) fn tool_loop_grant_preauthorized(&self) -> bool {
-        self.tool_loop_grant_preauthorized
-    }
-
-    /// Latch session-preauthorized tool-loop auto-grants after a successful
-    /// interactive grant. Idempotent; denials never call this.
-    pub(crate) fn mark_tool_loop_grant_preauthorized(&mut self) {
-        self.tool_loop_grant_preauthorized = true;
     }
 
     pub(crate) fn auto_permission_prompt_fallback_active(&self) -> bool {

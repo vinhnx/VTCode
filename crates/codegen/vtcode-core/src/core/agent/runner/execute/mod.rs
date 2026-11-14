@@ -7,7 +7,6 @@ use super::execute_helpers::{
 use super::headless_planning;
 use crate::config::constants::tools;
 use crate::config::models::Provider as ModelProvider;
-use crate::config::tool_loop_limit_reached;
 use crate::config::types::ReasoningEffortLevel;
 use crate::config::{build_session_affinity_prompt_cache_key, session_affinity_key_enabled};
 use crate::core::agent::harness_kernel::{HarnessRequestPlanInput, build_harness_request_plan};
@@ -60,7 +59,6 @@ impl AgentRunner {
         let is_simple_task = setup.is_simple_task;
         let mut prompt_bundle = setup.prompt_bundle;
         let preserve_recent_turns = setup.preserve_recent_turns;
-        let max_tool_loops = setup.max_tool_loops;
         let max_context_tokens = setup.max_context_tokens;
         let mut runtime = setup.runtime;
         self.tool_registry
@@ -845,33 +843,8 @@ impl AgentRunner {
                     || had_effective_shell_tool_call;
 
                 if had_tool_call {
-                    let loops = runtime.state.register_tool_loop();
-                    if tool_loop_limit_reached(loops, runtime.state.constraints.max_tool_loops) {
-                        let warning_message = format!(
-                            "You have reached the tool-call iteration limit of {}. \
-                             This typically means you are in a loop — repeatedly calling tools \
-                             without making progress toward the task goal.\n\n\
-                             To proceed:\n\
-                             1. Review what you have already learned from previous tool outputs.\n\
-                             2. Synthesize your findings into a concrete answer or implementation.\n\
-                             3. If you need more information, use a different approach or tool.\n\
-                             4. If you are truly stuck, explain what you have accomplished so far \
-                             and what is blocking you.",
-                            runtime.state.constraints.max_tool_loops
-                        );
-                        self.record_warning(
-                            &agent_prefix,
-                            &mut runtime.state,
-                            &mut event_recorder,
-                            warning_message.clone(),
-                        );
-                        runtime.state.add_synthetic_user_message(warning_message);
-                        runtime.state.mark_tool_loop_limit_hit();
-                        break;
-                    }
                     runtime.state.consecutive_idle_turns = 0;
                 } else {
-                    runtime.state.reset_tool_loop_guard();
                     if forced_continuation {
                         runtime.state.consecutive_idle_turns = 0;
                     } else if !runtime.state.is_completed {
@@ -930,7 +903,6 @@ impl AgentRunner {
                 run_started_at,
                 agent_prefix: &agent_prefix,
                 effective_task: &effective_task,
-                max_tool_loops,
                 max_context_tokens,
                 session_costs: &session_costs,
             })

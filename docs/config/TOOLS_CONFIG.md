@@ -2,28 +2,16 @@
 
 This document describes the tools-related configuration in `vtcode.toml`.
 
-- max_tool_loops: Maximum number of inner tool-call loops per user turn. The ordinary default is `60`. Plan raises
-  smaller nonzero values to its `60`-loop floor; an explicit `0` means unlimited. Prompt-approved planning extensions
-  remain bounded by the `240`-loop planning cap. When the limit is reached, the interactive prompt only offers
-  increments that fit the remaining headroom below the hard cap (e.g. remaining `40` offers `+40/+20/+10` with the exact
-  remainder marked `reaches cap`); at the cap the turn stops without re-prompting. After the user grants a tool-loop
-  increase **once** in the current process session, later limit hits auto-grant the maximum remaining `+N` (same
-  arithmetic as full-auto) without another prompt; denials leave the prompt available for the next hit. Full-auto runs
-  with `automation.full_auto.auto_grant_tool_limits` still auto-grant from the first hit.
-  - Configuration: `[tools].max_tool_loops` in `vtcode.toml`
-  - Code default: `vtcode_config::constants::tool_limits::DEFAULT_MAX_TOOL_LOOPS`, consumed by
-    `crates/codegen/vtcode-config/src/core/tools.rs`
-  - Ordinary default: `60`
-  - Plan floor: `60` (for configured nonzero values below the floor)
-  - Explicit `0`: unlimited
-  - Planning extension cap: `240`
+- `max_tool_loops` was removed. Turns are no longer capped by a tool-loop count; the runloop converges through the
+  behavioral guards (`max_repeated_tool_calls`, navigation/low-signal/read caps, blocked-tool fuse) and the resource
+  bounds (`max_tool_wall_clock_secs`, `max_budget_usd`, context compaction). Stale `[tools].max_tool_loops` keys parse
+  but do nothing and are pruned on the next config save.
 
 Example:
 
 ```toml
 [tools]
 default_policy = "prompt"
-max_tool_loops = 60
 ```
 
 ## Blocked-call limits and blocked handoffs

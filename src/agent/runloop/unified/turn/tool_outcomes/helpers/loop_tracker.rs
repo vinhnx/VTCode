@@ -77,8 +77,8 @@ pub(crate) struct LoopTracker {
     /// Bound status-masking feedback to one notice per turn, including across
     /// successful verification and navigation recovery.
     piped_verification_notice_emitted: bool,
-    /// Diagnostic-only identities, bounded by this turn's tool budget. Never
-    /// confer verifier authority; removed on completion, loss, or cleanup.
+    /// Diagnostic-only identities. Never confer verifier authority; removed on
+    /// completion, loss, or cleanup.
     pub(super) pending_checker_session_ids: FxHashSet<vtcode_core::types::CompactStr>,
     /// Bounded in-turn autonomous recovery attempts consumed when the model
     /// emits text instead of a verifier while the gate is pending. Turn-scoped

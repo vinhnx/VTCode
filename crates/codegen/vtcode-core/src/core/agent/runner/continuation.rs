@@ -681,7 +681,7 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let mut previous = make_controller(&temp, ContinuationPolicy::All, false);
         previous.prepare(&sample_task()).await.expect("old scaffold");
-        let mut state = AgentSessionState::new("fresh-session".to_string(), 5, 5, 10_000);
+        let mut state = AgentSessionState::new("fresh-session".to_string(), 5, 10_000);
         state.messages = std::sync::Arc::new(vec![
             Message::assistant_with_tools(
                 String::new(),
@@ -751,7 +751,7 @@ mod tests {
         let before = std::fs::read_to_string(&tracker_path).expect("old tracker");
         let mut current = make_controller(&temp, ContinuationPolicy::All, false);
         current.prepare(&sample_task()).await.expect("fresh task");
-        let state = AgentSessionState::new("fresh-session".to_string(), 5, 5, 10_000);
+        let state = AgentSessionState::new("fresh-session".to_string(), 5, 10_000);
         assert!(current.incomplete_tracker_labels(false).await.expect("labels").is_empty());
         assert!(matches!(
             current
@@ -780,7 +780,7 @@ mod tests {
         let mut controller = make_controller(&temp, ContinuationPolicy::ExecOnly, false);
         controller.prepare(&sample_task()).await.expect("prepare");
 
-        let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
+        let session_state = AgentSessionState::new("session".to_string(), 5, 10_000);
         let assessment = controller
             .assess_completion(&sample_task(), &session_state, false)
             .await
@@ -814,7 +814,7 @@ mod tests {
         let mut controller = make_controller(&temp, ContinuationPolicy::All, true);
         controller.prepare(&sample_task()).await.expect("prepare");
 
-        let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
+        let session_state = AgentSessionState::new("session".to_string(), 5, 10_000);
         let assessment = controller
             .assess_completion(&sample_task(), &session_state, false)
             .await
@@ -829,7 +829,7 @@ mod tests {
         let mut controller = make_controller(&temp, ContinuationPolicy::Off, false);
         controller.prepare(&sample_task()).await.expect("prepare");
 
-        let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
+        let session_state = AgentSessionState::new("session".to_string(), 5, 10_000);
         let assessment = controller
             .assess_completion(&sample_task(), &session_state, false)
             .await
@@ -844,7 +844,7 @@ mod tests {
         let mut controller = make_controller_with_flags(&temp, ContinuationPolicy::ExecOnly, false, false, false);
         controller.prepare(&sample_task()).await.expect("prepare");
 
-        let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
+        let session_state = AgentSessionState::new("session".to_string(), 5, 10_000);
         let assessment = controller
             .assess_completion(&sample_task(), &session_state, false)
             .await

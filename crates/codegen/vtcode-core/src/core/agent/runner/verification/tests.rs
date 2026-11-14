@@ -22,7 +22,7 @@ async fn headless_verification_waits_for_yielded_terminal_pass_and_failure() {
         let runner = Box::pin(make_runner(&temp, cfg, "yielded-verifier")).await;
         let command = "./rustc --version".to_string();
         let mut recorder = ExecEventRecorder::new("verification", None, None);
-        let mut runtime = AgentRuntime::new(AgentSessionState::new("verification".into(), 3, 3, 10000), None, None);
+        let mut runtime = AgentRuntime::new(AgentSessionState::new("verification".into(), 3, 10000), None, None);
         let results = runner
             .run_verification_commands(&[command], &mut recorder, &mut runtime)
             .await
@@ -89,7 +89,7 @@ async fn headless_verification_resumes_current_model_check_but_not_stale_checks(
             assert!(runner.tool_registry.pending_completion_verifier_session(command).is_none());
         }
         std::fs::write(temp.path().join("release"), "ready").unwrap();
-        let mut runtime = AgentRuntime::new(AgentSessionState::new("verification".into(), 3, 3, 10000), None, None);
+        let mut runtime = AgentRuntime::new(AgentSessionState::new("verification".into(), 3, 10000), None, None);
         let mut recorder = ExecEventRecorder::new("verification", None, None);
         let results = runner
             .run_verification_commands(&[command.into()], &mut recorder, &mut runtime)
@@ -156,7 +156,7 @@ async fn headless_verification_cancellation_and_execution_limit_remain_unverifie
             }
         });
         let mut runtime =
-            AgentRuntime::new(AgentSessionState::new("verification".into(), 3, 3, 10000), None, Some(receiver));
+            AgentRuntime::new(AgentSessionState::new("verification".into(), 3, 10000), None, Some(receiver));
         let mut recorder = ExecEventRecorder::new("verification", None, None);
         let results = runner
             .run_verification_commands(&["./rustc --version".into(), "pwd".into()], &mut recorder, &mut runtime)

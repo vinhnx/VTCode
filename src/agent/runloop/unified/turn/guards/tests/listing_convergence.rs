@@ -10,7 +10,7 @@ async fn oversized_preview_does_not_trigger_synthesis_outside_planning() {
     assert!(!ctx.harness_state.model_visible_preview_budget_exhausted());
 
     let mut tracker = LoopTracker::new();
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 }
@@ -40,7 +40,7 @@ async fn build_listing_loop_converges_on_third_same_base_scan() {
     assert_eq!(tracker.max_coarse_listing_count(), 2);
     assert_eq!(tracker.repeated_navigation_count(), 0);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 
@@ -52,7 +52,7 @@ async fn build_listing_loop_converges_on_third_same_base_scan() {
     );
     assert_eq!(tracker.max_coarse_listing_count(), 3);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert!(
@@ -86,7 +86,7 @@ async fn build_search_triplets_do_not_trip_listing_convergence() {
     }
     assert_eq!(tracker.max_coarse_listing_count(), 0);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 }
@@ -125,7 +125,7 @@ async fn same_pattern_search_repeats_do_not_trip_early_recovery() {
     assert_eq!(tracker.max_low_signal_count(), 0);
     assert_eq!(tracker.dominant_churn(), None);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 }

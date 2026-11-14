@@ -104,7 +104,7 @@ impl LLMProvider for DeltaStreamProvider {
 
 #[tokio::test]
 async fn queued_follow_up_inputs_are_applied_one_at_a_time() {
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = AgentRuntime::new(state, None, Some(receiver));
 
@@ -270,13 +270,13 @@ fn recovered_follow_up_stays_ordered_and_drains_mid_turn() {
 
 #[test]
 fn pending_snapshot_restores_in_flight_before_queued_intents() {
-    let state = AgentSessionState::new("session".into(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".into(), 16, 128_000);
     let mut runtime = AgentRuntime::new(state, None, None);
     runtime.try_queue_follow_up_input("first".into()).unwrap();
     runtime.try_queue_follow_up_input("second".into()).unwrap();
     assert_eq!(runtime.run_until_idle().as_deref(), Some("first"));
     let snapshot = runtime.steering.pending_follow_up_intents_snapshot();
-    let mut restored = AgentRuntime::new(AgentSessionState::new("restored".into(), 16, 4, 128_000), None, None);
+    let mut restored = AgentRuntime::new(AgentSessionState::new("restored".into(), 16, 128_000), None, None);
     restored.restore_follow_up_state(snapshot, Vec::new()).unwrap();
     assert_eq!(restored.run_until_idle().as_deref(), Some("first"));
     assert_eq!(restored.run_until_idle().as_deref(), Some("second"));
@@ -284,7 +284,7 @@ fn pending_snapshot_restores_in_flight_before_queued_intents() {
 
 #[test]
 fn run_until_idle_tags_and_acknowledges_follow_up_intent() {
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let mut runtime = AgentRuntime::new(state, None, None);
     runtime
         .try_queue_follow_up_input("steer me".to_string())
@@ -311,7 +311,7 @@ fn run_until_idle_tags_and_acknowledges_follow_up_intent() {
 
 #[test]
 fn run_until_idle_preserves_synthetic_follow_up_provenance_at_turn_boundary() {
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let mut runtime = AgentRuntime::new(state, None, None);
     runtime
         .try_queue_synthetic_follow_up_input("continue the saved plan".to_string())
@@ -354,7 +354,7 @@ fn recovery_replays_only_unrepresented_intent_ids() {
     );
     let same_text_different_id = QueuedFollowUpIntent::from_parts("intent-distinct", pending.text());
 
-    let mut interrupted = AgentRuntime::new(AgentSessionState::new("session".to_string(), 16, 4, 128_000), None, None);
+    let mut interrupted = AgentRuntime::new(AgentSessionState::new("session".to_string(), 16, 128_000), None, None);
     interrupted
         .restore_follow_up_state([pending.clone(), same_text_different_id.clone()], Vec::new())
         .expect("unwritten intents should be recoverable");
@@ -366,13 +366,13 @@ fn recovery_replays_only_unrepresented_intent_ids() {
         .expect("repeated restore should not duplicate queued IDs");
     assert_eq!(interrupted.steering.pending_follow_up_intents().len(), 2);
 
-    let mut duplicate_envelope = AgentRuntime::new(AgentSessionState::new("other".into(), 16, 4, 128_000), None, None);
+    let mut duplicate_envelope = AgentRuntime::new(AgentSessionState::new("other".into(), 16, 128_000), None, None);
     duplicate_envelope
         .restore_follow_up_state([pending.clone(), pending.clone(), same_text_different_id.clone()], Vec::new())
         .unwrap();
     assert_eq!(duplicate_envelope.steering.pending_follow_up_intents().len(), 2);
 
-    let mut acknowledged = AgentRuntime::new(AgentSessionState::new("acknowledged".into(), 16, 4, 128_000), None, None);
+    let mut acknowledged = AgentRuntime::new(AgentSessionState::new("acknowledged".into(), 16, 128_000), None, None);
     acknowledged.steering.acknowledge_follow_up_intent(pending.id());
     acknowledged
         .restore_follow_up_state([pending.clone(), same_text_different_id.clone()], Vec::new())
@@ -380,7 +380,7 @@ fn recovery_replays_only_unrepresented_intent_ids() {
     assert_eq!(acknowledged.steering.pending_follow_up_intents().len(), 1);
     assert_eq!(acknowledged.steering.pending_follow_up_intents()[0].id(), "intent-distinct");
 
-    let mut restarted_state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let mut restarted_state = AgentSessionState::new("session".to_string(), 16, 128_000);
     restarted_state.add_user_message_with_intent(pending.text().to_string(), Some(pending.id().to_string()));
     let mut restarted = AgentRuntime::new(restarted_state, None, None);
     restarted
@@ -394,7 +394,7 @@ fn recovery_replays_only_unrepresented_intent_ids() {
 
 #[test]
 fn no_archive_release_reuses_follow_up_capacity_without_applied_ids() {
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let mut runtime = AgentRuntime::new(state, None, None);
     let total_capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
     for index in 0..total_capacity {
@@ -421,7 +421,7 @@ fn no_archive_release_reuses_follow_up_capacity_without_applied_ids() {
 
 #[tokio::test]
 async fn paused_runtime_resumes_and_preserves_follow_up_inputs() {
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = AgentRuntime::new(state, None, Some(receiver));
 
@@ -438,7 +438,7 @@ async fn paused_runtime_resumes_and_preserves_follow_up_inputs() {
 
 #[tokio::test]
 async fn paused_runtime_stop_request_wins() {
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = AgentRuntime::new(state, None, Some(receiver));
 
@@ -460,7 +460,7 @@ async fn run_turn_once_uses_completed_payload_when_no_deltas_exist() {
         ..Default::default()
     };
     let provider = CompletedOnlyStreamProvider { response: response.clone() };
-    let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+    let state = AgentSessionState::new("session".to_string(), 16, 128_000);
     let mut runtime = AgentRuntime::new(state, None, None);
     let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
     let request = LLMRequest {

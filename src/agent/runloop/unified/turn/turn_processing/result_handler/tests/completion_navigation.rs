@@ -24,7 +24,6 @@ async fn recovery_clean_prose_is_not_intercepted_by_marker_guard() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -59,7 +58,6 @@ async fn denied_interview_retries_plain_text_once_before_approval() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -113,7 +111,7 @@ async fn navigation_synthesis_resumes_execution_once_and_second_stall_blocks() {
         ctx.working_history
             .push(uni::Message::user("Implement the fix and verify it.".into()));
         tracker.total_low_signal_navigations = EXECUTION_TOTAL_LOW_SIGNAL_THRESHOLD;
-        assert!(matches!(handle_turn_balancer(&mut ctx, 8, &mut tracker, 40, 3).await, TurnHandlerOutcome::Continue));
+        assert!(matches!(handle_turn_balancer(&mut ctx, 8, &mut tracker, 3).await, TurnHandlerOutcome::Continue));
         assert_eq!(ctx.session_stats.navigation_recovery, NavigationRecovery::Synthesizing);
         assert!(ctx.consume_recovery_pass());
         handle_turn_processing_result(HandleTurnProcessingResultParams {
@@ -128,7 +126,6 @@ async fn navigation_synthesis_resumes_execution_once_and_second_stall_blocks() {
             step_count: 8,
             repeated_tool_attempts: &mut tracker,
             turn_modified_files: &mut modified,
-            max_tool_loops: 40,
             tool_repeat_limit: 3,
         })
         .await
@@ -162,7 +159,6 @@ async fn navigation_synthesis_resumes_execution_once_and_second_stall_blocks() {
             step_count: 9,
             repeated_tool_attempts: &mut tracker,
             turn_modified_files: &mut modified,
-            max_tool_loops: 40,
             tool_repeat_limit: 3,
         })
         .await
@@ -182,7 +178,7 @@ async fn navigation_synthesis_resumes_execution_once_and_second_stall_blocks() {
 
     tracker.total_low_signal_navigations = EXECUTION_TOTAL_LOW_SIGNAL_THRESHOLD;
     assert!(matches!(
-        handle_turn_balancer(&mut ctx, 16, &mut tracker, 40, 3).await,
+        handle_turn_balancer(&mut ctx, 16, &mut tracker, 3).await,
         TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
     ));
     assert!(ctx.session_stats.navigation_recovery.blocked());
@@ -195,11 +191,12 @@ async fn navigation_synthesis_resumes_execution_once_and_second_stall_blocks() {
 #[tokio::test]
 async fn navigation_synthesis_respects_terminal_handoffs_and_existing_limits() {
     use crate::agent::runloop::unified::state::NavigationRecovery;
+    // The removed per-turn loop-limit veto ("loops") is gone with the
+    // budget; the surviving exhaustion/handoff shapes stay pinned.
     for case in [
         "policy",
         "wallclock",
         "validation",
-        "loops",
         "disabled",
         "approval",
         "informational",
@@ -248,10 +245,9 @@ async fn navigation_synthesis_respects_terminal_handoffs_and_existing_limits() {
                     proposed_plan: None,
                 },
                 response_streamed: false,
-                step_count: if case == "loops" { 20 } else { 4 },
+                step_count: 4,
                 repeated_tool_attempts: &mut tracker,
                 turn_modified_files: &mut modified,
-                max_tool_loops: 20,
                 tool_repeat_limit: 3,
             })
             .await
@@ -300,7 +296,6 @@ async fn navigation_synthesis_uses_only_adopted_tracker_and_nonempty_summary() {
                 step_count: 4,
                 repeated_tool_attempts: &mut tracker,
                 turn_modified_files: &mut modified,
-                max_tool_loops: 20,
                 tool_repeat_limit: 3,
             })
             .await

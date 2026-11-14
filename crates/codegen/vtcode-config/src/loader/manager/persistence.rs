@@ -164,6 +164,8 @@ impl ConfigManager {
         Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
         Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools", "auto_permission"]);
         Self::remove_path_and_prune_empty_parents(table, &["agent", "harness", "max_tool_calls_per_turn"]);
+        Self::remove_path_and_prune_empty_parents(table, &["tools", "max_tool_loops"]);
+        Self::remove_path_and_prune_empty_parents(table, &["automation", "full_auto", "auto_grant_tool_limits"]);
     }
 
     fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) {
@@ -322,5 +324,36 @@ impl ConfigManager {
     fn sync_from_config(&mut self, config: &VTCodeConfig) -> Result<()> {
         self.config = config.clone();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_prunes_removed_budget_keys_from_existing_config() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("vtcode.toml");
+        std::fs::write(
+            &path,
+            "[agent.harness]\nmax_tool_calls_per_turn = 32\n\n[tools]\nmax_tool_loops = 20\nmax_repeated_tool_calls = 4\n\n[automation.full_auto]\nauto_grant_tool_limits = false\nenabled = true\n",
+        )
+        .expect("seed stale config");
+
+        // The save merges a sparse serialization of this config, so surviving
+        // keys must be non-default to appear in it.
+        let mut config = VTCodeConfig::default();
+        config.tools.max_repeated_tool_calls = 4;
+        config.automation.full_auto.enabled = true;
+        ConfigManager::save_config_to_path(&path, &config).expect("save");
+
+        let rewritten = std::fs::read_to_string(&path).expect("rewritten config");
+        assert!(!rewritten.contains("max_tool_calls_per_turn"));
+        assert!(!rewritten.contains("max_tool_loops"));
+        assert!(!rewritten.contains("auto_grant_tool_limits"));
+        // Surviving non-default keys stay.
+        assert!(rewritten.contains("max_repeated_tool_calls"));
+        assert!(rewritten.contains("enabled = true"));
     }
 }

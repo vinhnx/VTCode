@@ -51,7 +51,6 @@ pub enum InlineListSelection {
     FileConflictReload,
     FileConflictViewDiff,
     FileConflictAbort,
-    SessionLimitIncrease(usize),
     RewindCheckpoint(usize),
     RewindAction(RewindAction),
 

@@ -200,8 +200,8 @@ enum ToolHaltDecision {
     Halt {
         /// Human-readable reason appended to session warnings.
         warning: &'static str,
-        /// Whether the session's tool-loop-limit counter should be incremented.
-        mark_loop_limit: bool,
+        /// Whether the halt reports the legacy tool-safeguard outcome.
+        safeguard_halt: bool,
     },
 }
 
@@ -213,11 +213,11 @@ fn classify_halt_decision(category: ErrorCategory) -> ToolHaltDecision {
     match category {
         ErrorCategory::RateLimit => ToolHaltDecision::Halt {
             warning: "Tool was rate limited; halting further tool calls this turn.",
-            mark_loop_limit: true,
+            safeguard_halt: true,
         },
         ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => ToolHaltDecision::Halt {
             warning: "Tool denied by policy; halting further tool calls this turn.",
-            mark_loop_limit: false,
+            safeguard_halt: false,
         },
         _ => ToolHaltDecision::Continue,
     }
@@ -229,10 +229,10 @@ pub(super) fn apply_tool_failure_halt_policy(
 ) -> bool {
     match classify_halt_decision(category) {
         ToolHaltDecision::Continue => false,
-        ToolHaltDecision::Halt { warning, mark_loop_limit } => {
+        ToolHaltDecision::Halt { warning, safeguard_halt } => {
             session_state.push_warning(warning);
-            if mark_loop_limit {
-                session_state.mark_tool_loop_limit_hit();
+            if safeguard_halt {
+                session_state.outcome = crate::core::agent::task::TaskOutcome::tool_safeguard_halt(0);
             }
             true
         }

@@ -1,18 +1,12 @@
 use super::{
-    ToolLoopGrantSource, UNLIMITED_TOOL_LOOPS, apply_mode_switch_remaining_tool_loop_floor,
-    arm_tool_loop_synthesis_recovery, auto_tool_loop_grant_increment, clamp_tool_loop_increment, extract_turn_config,
-    handle_steering_messages, initial_tool_loop_limit, is_internal_harness_follow_up,
-    is_stale_approved_plan_pause_response, resolve_tool_loop_limit, tool_loop_grant_source, tool_loop_hard_cap,
-    tool_loop_limit_recovery_reason,
+    extract_turn_config, handle_steering_messages, is_internal_harness_follow_up, is_stale_approved_plan_pause_response,
 };
 use crate::agent::runloop::unified::planning_workflow::{
     PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
 };
-use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use std::time::Duration;
-use vtcode_core::config::constants::tool_limits::PLANNING_WORKFLOW_MIN_TOOL_LOOPS;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::llm::provider::MessageRole;
@@ -156,172 +150,6 @@ fn confirmation_words_do_not_trigger_when_stay_in_planning_workflow_is_prompted(
 }
 
 #[test]
-fn tool_loop_hard_cap_scales_and_bounds() {
-    assert_eq!(tool_loop_hard_cap(20, false), 60);
-    assert_eq!(tool_loop_hard_cap(40, false), 120);
-    assert_eq!(tool_loop_hard_cap(120, false), 120);
-    assert_eq!(tool_loop_hard_cap(200, false), 200);
-    assert_eq!(tool_loop_hard_cap(40, true), 240);
-    assert_eq!(tool_loop_hard_cap(120, true), 240);
-}
-
-#[test]
-fn clamp_tool_loop_increment_respects_cap_and_per_prompt_limit() {
-    assert_eq!(clamp_tool_loop_increment(200, 20, 60, false), 40);
-    assert_eq!(clamp_tool_loop_increment(50, 20, 80, false), 50);
-    assert_eq!(clamp_tool_loop_increment(10, 75, 80, false), 5);
-    assert_eq!(clamp_tool_loop_increment(10, 80, 80, false), 0);
-    assert_eq!(clamp_tool_loop_increment(120, 80, 240, true), 80);
-}
-
-#[test]
-fn auto_grant_uses_max_prompt_step_clamped_to_remaining_headroom() {
-    // Ordinary turns grant the +50 manual maximum: 20 -> 60 needs one
-    // grant, 40 -> 120 needs two (40 + 50, then 90 + 30).
-    assert_eq!(auto_tool_loop_grant_increment(20, 60, false), 40);
-    assert_eq!(auto_tool_loop_grant_increment(40, 120, false), 50);
-    assert_eq!(auto_tool_loop_grant_increment(90, 120, false), 30);
-    // Planning turns grant the +80 manual maximum instead.
-    assert_eq!(auto_tool_loop_grant_increment(60, 240, true), 80);
-    assert_eq!(auto_tool_loop_grant_increment(200, 240, true), 40);
-    // No headroom left means no grant: the caller breaks the loop.
-    assert_eq!(auto_tool_loop_grant_increment(60, 60, false), 0);
-    assert_eq!(auto_tool_loop_grant_increment(120, 120, false), 0);
-    assert_eq!(auto_tool_loop_grant_increment(240, 240, true), 0);
-}
-
-#[test]
-fn tool_loop_grant_source_prefers_full_auto_then_session_latch() {
-    assert_eq!(
-        tool_loop_grant_source(true, false),
-        ToolLoopGrantSource::FullAuto,
-        "full-auto wins even before any interactive grant"
-    );
-    assert_eq!(
-        tool_loop_grant_source(true, true),
-        ToolLoopGrantSource::FullAuto,
-        "full-auto wording stays full-auto after an interactive grant"
-    );
-    assert_eq!(
-        tool_loop_grant_source(false, true),
-        ToolLoopGrantSource::SessionPreauthorized,
-        "after the first successful grant later hits auto-grant without a prompt"
-    );
-    assert_eq!(
-        tool_loop_grant_source(false, false),
-        ToolLoopGrantSource::Manual,
-        "first interactive hit (and any denial retry) still prompts"
-    );
-
-    // Only Manual opens the HITL modal; the other two auto-grant max +N
-    // via `auto_tool_loop_grant_increment` (already covered above).
-    assert!(!tool_loop_grant_source(false, false).is_automatic());
-    assert!(tool_loop_grant_source(false, true).is_automatic());
-    assert!(tool_loop_grant_source(true, false).is_automatic());
-    assert!(tool_loop_grant_source(true, true).is_automatic());
-}
-
-#[test]
-fn extract_turn_config_applies_planning_workflow_loop_floor() {
-    for (configured_limit, expected_limit) in [(20, 60), (40, 60), (60, 60), (80, 80)] {
-        let mut cfg = VTCodeConfig::default();
-        cfg.tools.max_tool_loops = configured_limit;
-        let turn_cfg = extract_turn_config(Some(&cfg), true, true);
-        assert_eq!(turn_cfg.max_tool_loops, expected_limit);
-    }
-}
-
-#[test]
-fn extract_turn_config_keeps_non_planning_workflow_loop_limit() {
-    for configured_limit in [20, 40, 60, 80] {
-        let mut cfg = VTCodeConfig::default();
-        cfg.tools.max_tool_loops = configured_limit;
-        let turn_cfg = extract_turn_config(Some(&cfg), false, true);
-        assert_eq!(turn_cfg.max_tool_loops, configured_limit);
-    }
-}
-
-#[test]
-fn resolve_tool_loop_limit_allows_unlimited_mode() {
-    assert_eq!(resolve_tool_loop_limit(0, false), UNLIMITED_TOOL_LOOPS);
-    assert_eq!(resolve_tool_loop_limit(0, true), UNLIMITED_TOOL_LOOPS);
-}
-
-#[test]
-fn mode_switch_grants_remaining_tool_loop_floor() {
-    let mut loops = 60usize;
-    apply_mode_switch_remaining_tool_loop_floor(&mut loops, 55, true);
-    assert_eq!(loops, 55 + PLANNING_WORKFLOW_MIN_TOOL_LOOPS);
-    let mut loops = 200usize;
-    apply_mode_switch_remaining_tool_loop_floor(&mut loops, 10, true);
-    assert_eq!(loops, 200);
-    let mut loops = usize::MAX;
-    apply_mode_switch_remaining_tool_loop_floor(&mut loops, 10, true);
-    assert_eq!(loops, usize::MAX);
-}
-
-#[test]
-fn approved_plan_execution_gets_one_bounded_loop_allowance() {
-    assert_eq!(initial_tool_loop_limit(40, true), 90);
-    assert_eq!(initial_tool_loop_limit(100, true), 120);
-    assert_eq!(initial_tool_loop_limit(0, true), UNLIMITED_TOOL_LOOPS);
-    assert_eq!(initial_tool_loop_limit(40, false), 40);
-    // The helper is an initialization transform; applying the allowance
-    // to the already-initialized value is not part of the turn loop.
-    assert_eq!(initial_tool_loop_limit(initial_tool_loop_limit(40, true), false), 90);
-}
-
-#[test]
-fn exhausted_loop_limit_arms_one_tool_free_synthesis_pass() {
-    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 0, 1);
-    let mut loop_limit = 40;
-
-    assert!(arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
-    assert_eq!(loop_limit, UNLIMITED_TOOL_LOOPS);
-    assert!(state.is_recovery_active());
-    assert!(state.recovery_is_tool_free());
-    assert_eq!(state.recovery_reason(), Some(tool_loop_limit_recovery_reason(40).as_str()));
-
-    // The recovery request is the only pass added by this transition.
-    assert!(!arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
-    assert!(state.consume_recovery_pass());
-    assert!(state.finish_recovery_pass());
-    assert!(!arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
-}
-
-#[tokio::test]
-async fn planning_loop_exhaustion_retains_limit_and_hard_cap_stays_terminal() {
-    let mut planning = TestTurnProcessingBacking::new().await;
-    planning.activate_planning_for_test();
-    let mut limit = 7;
-    let mut ctx = planning.turn_loop_context();
-    assert!(matches!(
-        super::maybe_handle_tool_loop_limit(&mut ctx, 7, &mut limit).await.unwrap(),
-        super::ToolLoopLimitAction::ContinueLoop
-    ));
-    assert_eq!(limit, UNLIMITED_TOOL_LOOPS);
-    assert_eq!(
-        ctx.harness_state.budget_recovery_reason(),
-        Some("Tool loop budget exhausted before a final response (7/7)")
-    );
-    assert!(ctx.harness_state.recovery_is_tool_free());
-
-    let mut build = TestTurnProcessingBacking::new().await;
-    let mut cfg = VTCodeConfig::default();
-    cfg.tools.max_tool_loops = 5;
-    build.set_vt_cfg_for_test(cfg);
-    let cap = tool_loop_hard_cap(5, false);
-    let mut limit = cap;
-    let mut ctx = build.turn_loop_context();
-    assert!(matches!(
-        super::maybe_handle_tool_loop_limit(&mut ctx, cap, &mut limit).await.unwrap(),
-        super::ToolLoopLimitAction::BreakLoop
-    ));
-    assert_eq!(limit, cap);
-    assert!(!ctx.harness_state.is_recovery_active());
-}
-
-#[test]
 fn stale_approved_plan_pause_response_requires_both_pause_and_unavailable_markers() {
     assert!(is_stale_approved_plan_pause_response(
         "Implementation is paused because tool use is disabled. Wait for the next turn."
@@ -358,7 +186,10 @@ fn fresh_turn_supersedes_expired_recovery_without_changing_history() {
     super::restore_fresh_turn_tool_guidance(&mut history, false);
     super::restore_fresh_turn_tool_guidance(&mut history, false);
     assert_eq!(history.len(), restored_len, "already superseded restrictions must not duplicate guidance");
-    history.push(Message::system(tool_loop_limit_recovery_reason(60)));
+    history.push(Message::system(
+        "Tool wall-clock budget exhausted for this turn (600s). Tools are disabled for one bounded synthesis pass."
+            .to_owned(),
+    ));
     history.push(Message::user("Retry after the new recovery".to_owned()));
     super::restore_fresh_turn_tool_guidance(&mut history, true);
     assert_eq!(history.len(), restored_len + 2, "active recovery still takes precedence");
@@ -397,7 +228,6 @@ fn fresh_turn_restores_generated_budget_and_post_tool_recovery_directives() {
     use vtcode_core::llm::provider::Message;
 
     for directive in [
-        tool_loop_limit_recovery_reason(60),
         ToolWallClockExhaustion { max_secs: 600 }.synthesis_directive_message(),
         POST_TOOL_RECOVERY_REASON.to_owned(),
         POST_TOOL_RECOVERY_REASON_PLAN_MODE.to_owned(),

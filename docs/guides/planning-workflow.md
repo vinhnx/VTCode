@@ -644,25 +644,20 @@ tool-budget reset status. The Open Responses bridge forwards this as `vtcode.con
 
 ## Budget Exhaustion
 
-If the configured planning tool-loop limit is reached, the runloop stops research and enters the tool-free recovery
-path. It asks for one compact decision-ready plan from the evidence already gathered rather than ending with only a
-loop-limit message. After synthesis, review the plan and choose the current-context implementation or the fresh-thread
-handoff. Session budget and wall-clock hard caps remain enforced; when those caps prevent synthesis, the draft and
-research are preserved for a later approval or revision command.
+Planning research converges through the behavioral guards (low-signal navigation caps, read caps) and the resource
+bounds (`max_budget_usd`, `max_tool_wall_clock_secs`, context compaction) rather than a tool-loop count. When the
+wall-clock budget disables tools mid-turn, the runloop enters the tool-free recovery path and asks for one compact
+decision-ready plan from the evidence already gathered. After synthesis, review the plan and choose the
+current-context implementation or the fresh-thread handoff. Session budget and wall-clock hard caps remain enforced;
+when those caps prevent synthesis, the draft and research are preserved for a later approval or revision command.
 
 During implementation, tool results remain causally attached to the assistant tool-call batch that produced them.
 Recovery and system directives are appended only after the complete batch, so a provider never receives a directive
 between the assistant call and its results. Request assembly may create a repaired, request-only view when older history
 contains split, orphaned, duplicate, or missing results; the durable session history is not rewritten by this repair.
 
-If the tool-loop limit is reached during an active turn, VT Code shows the current primary agent and asks
-whether to grant more loops. A grant continues the turn with the current agent, emits `tool_loop_limit_increased`,
-and keeps tools enabled; it does not enter tool-free recovery. A denial remains an explicit
-denial. Only the first tool-loop grant in a session prompts: after one manual grant, later
-tool-loop limit hits auto-grant the remaining increment without a prompt (a denial never latches that preauthorization,
-so the prompt returns if you previously denied). Full-auto auto-grants regardless, and the hard cap still applies.
-Transient bridge submissions, including mode-switch input, are deferred or ignored while the prompt owns input and are
-not interpreted as a denial.
+The per-turn tool-loop budget (and its grant prompt) was removed; turns are no longer capped by a tool-loop count.
+`tool_loop_limit_increased` remains a recognized event kind for replaying older session logs but is no longer emitted.
 
 ## Plan File Persistence
 

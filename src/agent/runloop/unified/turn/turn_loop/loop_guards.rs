@@ -30,7 +30,6 @@ pub(super) async fn handle_stale_approved_plan_pause(
     turn_modified_files: &mut BTreeSet<PathBuf>,
     processing_result: &TurnProcessingResult,
     step_count: usize,
-    current_max_tool_loops: usize,
     tool_repeat_limit: usize,
 ) -> Result<Option<ControlFlow<TurnLoopResult>>> {
     // A recovery directive from the planning turn can leak into the first
@@ -66,7 +65,6 @@ pub(super) async fn handle_stale_approved_plan_pause(
                     &mut *repeated_tool_attempts,
                     &mut *turn_modified_files,
                     step_count,
-                    current_max_tool_loops,
                     tool_repeat_limit,
                     command,
                 )

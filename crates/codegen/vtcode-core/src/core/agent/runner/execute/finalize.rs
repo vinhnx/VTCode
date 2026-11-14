@@ -37,7 +37,6 @@ pub(super) struct TaskFinalization<'a> {
     pub run_started_at: Instant,
     pub agent_prefix: &'a str,
     pub effective_task: &'a Task,
-    pub max_tool_loops: usize,
     pub max_context_tokens: usize,
     pub session_costs: &'a SessionCostAccumulator,
 }
@@ -61,7 +60,6 @@ impl AgentRunner {
             run_started_at,
             agent_prefix,
             effective_task,
-            max_tool_loops,
             max_context_tokens,
             session_costs,
         } = fin;
@@ -144,8 +142,6 @@ impl AgentRunner {
                 &runtime.state.warnings,
                 &runtime.state.messages,
                 runtime.state.stats.turns_executed,
-                runtime.state.max_tool_loop_streak,
-                max_tool_loops,
                 outcome,
                 total_duration_ms,
                 average_turn_duration_ms,
@@ -243,7 +239,7 @@ impl AgentRunner {
         let steering_receiver = runtime.take_steering_receiver();
         let state = std::mem::replace(
             &mut runtime.state,
-            AgentSessionState::new(self.session_id.clone(), self.max_turns, max_tool_loops, max_context_tokens),
+            AgentSessionState::new(self.session_id.clone(), self.max_turns, max_context_tokens),
         );
 
         Ok((state.into_results(summary, thread_events, total_duration_ms), steering_receiver))

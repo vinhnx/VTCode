@@ -205,7 +205,6 @@ async fn completion_claim_jumps_straight_to_harness_verification() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 8,
         tool_repeat_limit: 4,
     })
     .await

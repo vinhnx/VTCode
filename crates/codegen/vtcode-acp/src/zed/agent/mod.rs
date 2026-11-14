@@ -51,7 +51,6 @@ pub(crate) struct ZedAgent {
     client: Arc<Mutex<Option<Arc<ConnectionHandle>>>>,
     title: Option<String>,
     primary_agents: PrimaryAgentCatalog,
-    tool_loop_limit: usize,
     tool_call_delay: Option<Duration>,
     permissions_config: vtcode_config::core::permissions::PermissionsConfig,
     providers_whitelist: Vec<String>,
@@ -78,7 +77,6 @@ impl ZedAgent {
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
-        let tool_loop_limit = tools_config.max_tool_loops;
         let tool_call_delay = tools_config.tool_call_delay();
         let file_ops_tool = if zed_config.tools.list_files {
             let search_root = workspace_root.clone();
@@ -133,7 +131,6 @@ impl ZedAgent {
             client: Arc::new(Mutex::new(None)),
             title,
             primary_agents,
-            tool_loop_limit,
             tool_call_delay,
             permissions_config,
             providers_whitelist,

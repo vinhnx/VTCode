@@ -367,7 +367,7 @@ mod tests {
             ),
         ] {
             let mut stats = SessionStats::default();
-            let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 4, 16_000), None, None);
+            let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
             let mut renderer = AnsiRenderer::stdout();
             let plan = PlanningWorkflowSessionState::default();
             let outcome = RunLoopTurnLoopResult::Blocked { reason: Some(reason.into()) };

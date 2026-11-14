@@ -1,4 +1,4 @@
-//! Turn budget accounting: tool-call/wall-clock exhaustion notices and metrics.
+//! Turn budget accounting: wall-clock exhaustion notices and metrics.
 
 use super::*;
 
@@ -12,6 +12,8 @@ impl HarnessTurnState {
 
 pub(crate) fn budget_exhaustion_cause(reason: &str) -> Option<&str> {
     [
+        // Legacy per-turn tool-loop budget stop (removed): recognized so old
+        // session vocabulary still classifies as a hard handoff.
         "Tool loop budget exhausted",
         "Tool wall-clock budget exhausted for this turn",
     ]
@@ -29,35 +31,6 @@ pub(super) struct PreviewBudgetExhaustedProbe {
     pub(super) preview_budget_exhausted: Option<bool>,
 }
 
-/// Whether the turn loop owes the model a loop-budget warning this
-/// iteration: at or past `threshold` of `max_tool_loops`, once per turn.
-/// Unlimited (`usize::MAX`, the `UNLIMITED_TOOL_LOOPS` sentinel) and
-/// disabled (`0`) budgets never warn.
-#[must_use]
-pub(crate) fn tool_loop_warning_due(
-    step_count: usize,
-    max_tool_loops: usize,
-    threshold: f64,
-    already_emitted: bool,
-) -> bool {
-    if already_emitted || max_tool_loops == 0 || max_tool_loops == usize::MAX {
-        return false;
-    }
-    step_count as f64 / max_tool_loops as f64 >= threshold
-}
-
-/// Tool-loop pressure warning: same shape and batching advice the model
-/// already knows from the loop-budget contract.
-#[must_use]
-pub(crate) fn tool_loop_warning_message(used: usize, max: usize) -> String {
-    format!(
-        "Tool-loop budget warning: {}/{} used; {} remaining for this turn. Use targeted extraction/batching before additional tool calls.",
-        used,
-        max,
-        max.saturating_sub(used),
-    )
-}
-
 /// Shared tail of the wall-clock budget exhaustion directive.
 pub(crate) const BUDGET_EXHAUSTED_SYNTHESIS_NOTE: &str = "Tools are disabled for the rest of this turn, so further tool calls are \
 skipped. Synthesize your final answer now from the tool outputs already gathered in this conversation.";
@@ -66,8 +39,6 @@ skipped. Synthesize your final answer now from the tool outputs already gathered
 /// so post-hoc diagnosis can tell which ceiling fired; the model-facing
 /// recovery directives already cover the live behavior.
 pub(crate) mod budget_kind {
-    /// Per-turn tool-loop iterations (`max_tool_loops` hard cap).
-    pub(crate) const TOOL_LOOP: &str = "tool_loop";
     /// Per-turn aggregate tool wall-clock time (`max_tool_wall_clock_secs`).
     pub(crate) const WALL_CLOCK: &str = "wall_clock_secs";
 }
@@ -150,24 +121,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tool_loop_warning_fires_once_at_threshold() {
-        const THRESHOLD: f64 = 0.75;
-        // Both sides of the 45/60 boundary.
-        assert!(!tool_loop_warning_due(44, 60, THRESHOLD, false));
-        assert!(tool_loop_warning_due(45, 60, THRESHOLD, false));
-        assert!(tool_loop_warning_due(59, 60, THRESHOLD, false));
-        // One-shot latch.
-        assert!(!tool_loop_warning_due(59, 60, THRESHOLD, true));
-        // Unlimited and disabled budgets never warn (and must not divide by zero).
-        assert!(!tool_loop_warning_due(usize::MAX, usize::MAX, THRESHOLD, false));
-        assert!(!tool_loop_warning_due(usize::MAX, 0, THRESHOLD, false));
-        assert!(!tool_loop_warning_due(0, 60, THRESHOLD, false));
-    }
-
-    #[test]
-    fn tool_loop_warning_message_mirrors_call_warning_shape() {
-        let message = tool_loop_warning_message(45, 60);
-        assert!(message.starts_with("Tool-loop budget warning: 45/60 used; 15 remaining for this turn."));
-        assert!(message.contains("Use targeted extraction/batching before additional tool calls."));
+    fn budget_exhaustion_cause_recognizes_wall_clock_prefix() {
+        assert_eq!(
+            budget_exhaustion_cause("Tool wall-clock budget exhausted for this turn (600s). Synthesize now."),
+            Some("Tool wall-clock budget exhausted for this turn (600s)")
+        );
+        assert_eq!(budget_exhaustion_cause("unrelated"), None);
     }
 }

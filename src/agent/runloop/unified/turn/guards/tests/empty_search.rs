@@ -16,13 +16,13 @@ async fn planning_empty_search_pipelines_schedule_bounded_synthesis() {
         let command = format!("rg --files --hidden | rg 'optional-lint-{index}' | head -10");
         update_repetition_tracker(&mut tracker, &empty, tool_names::EXEC_COMMAND, &json!({"cmd": command}));
         if index + 1 < PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD {
-            let outcome = super::super::handle_turn_balancer(&mut ctx, index as usize + 1, &mut tracker, 120, 3).await;
+            let outcome = super::super::handle_turn_balancer(&mut ctx, index as usize + 1, &mut tracker, 3).await;
             assert!(matches!(outcome, TurnHandlerOutcome::Continue));
             assert!(!ctx.is_recovery_active());
         }
     }
     assert_eq!(tracker.max_low_signal_count(), 1);
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert!(tracker.planning_low_signal_synthesis_triggered);
@@ -56,7 +56,7 @@ async fn planning_listing_triplet_stays_below_early_recovery() {
     }
     assert_eq!(tracker.max_coarse_listing_count(), 3);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active(), "planning triplet must not schedule early recovery");
 
@@ -70,7 +70,7 @@ async fn planning_listing_triplet_stays_below_early_recovery() {
     }
     assert_eq!(tracker.max_coarse_listing_count(), 5);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 8, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 8, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert!(
@@ -89,7 +89,7 @@ async fn pending_verification_preserves_navigation_loop_recovery() {
     tracker.mark_verification_pending();
     tracker.consecutive_navigations = NAVIGATION_LOOP_THRESHOLD;
 
-    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 1, &mut tracker, 8, 3).await;
+    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 1, &mut tracker, 3).await;
     assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
     assert_eq!(tracker.consecutive_navigations, 0);
     assert!(ctx.is_recovery_active());

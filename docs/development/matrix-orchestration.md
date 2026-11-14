@@ -138,8 +138,8 @@ safe replay require coordinator decisions. Explicit `retry` reruns task instruct
 fresh complete verification phase; wait for current owned work to stop first. Retrying cannot reuse successful
 evidence from a different attempt or workspace generation.
 
-Verification reruns count against the existing tool-loop budget. Exhaustion stops further checks and requires a
-coordinator decision; changing a workspace cannot create an unlimited verification loop.
+Verification reruns are bounded by each worker's inherited turn limit; changing a workspace cannot create an
+unlimited verification loop.
 
 ## Development verification
 

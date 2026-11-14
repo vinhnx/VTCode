@@ -134,13 +134,6 @@ pub(crate) async fn run_checkup_diagnostics(
         render_doctor_check(
             renderer,
             &mut summary,
-            "Max Tool Loops",
-            DoctorCheckOutcome::Pass(format!("{}", cfg.tools.max_tool_loops)),
-        )?;
-
-        render_doctor_check(
-            renderer,
-            &mut summary,
             "HITL Enabled",
             DoctorCheckOutcome::Pass((if cfg.security.human_in_the_loop { "Yes" } else { "No" }).to_string()),
         )?;

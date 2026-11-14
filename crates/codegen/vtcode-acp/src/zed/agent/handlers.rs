@@ -573,7 +573,6 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
             }
         }
     } else {
-        let mut tool_loop_count = 0usize;
         loop {
             if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 stop_reason = acp::StopReason::Cancelled;
@@ -600,22 +599,6 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
             }
 
             if tools_allowed && let Some(tool_calls) = response.tool_calls.clone().filter(|calls| !calls.is_empty()) {
-                if agent.tool_loop_limit_reached(tool_loop_count) {
-                    let message = agent.tool_loop_limit_message();
-                    drop(agent.advance_plan_to_response(&args.session_id, &mut plan).await);
-                    drop(
-                        agent
-                            .send_update(
-                                &args.session_id,
-                                acp::SessionUpdate::AgentMessageChunk(text_chunk(message.clone())),
-                            )
-                            .await,
-                    );
-                    assistant_message = message;
-                    stop_reason = acp::StopReason::EndTurn;
-                    break;
-                }
-                tool_loop_count = tool_loop_count.saturating_add(1);
                 if plan.start_context() {
                     drop(agent.send_plan_update(&args.session_id, &plan).await);
                 }

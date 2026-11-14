@@ -9,7 +9,6 @@ fn default_config_selects_build_primary_agent() {
 fn compiled_default_config_contains_release_loop_budgets() {
     let config = VTCodeConfig::default();
 
-    assert_eq!(config.tools.max_tool_loops, tool_limits::DEFAULT_MAX_TOOL_LOOPS);
     assert_eq!(config.automation.full_auto.max_turns, tool_limits::DEFAULT_FULL_AUTO_MAX_TURNS);
     assert_eq!(config.agent.max_conversation_turns, tool_limits::DEFAULT_MAX_CONVERSATION_TURNS);
 }
@@ -351,4 +350,19 @@ fn test_config_builder_overrides() {
         assert!(matches!(layers[0].source, ConfigLayerSource::Workspace { .. }));
         assert!(matches!(layers[1].source, ConfigLayerSource::Runtime));
     });
+}
+
+#[test]
+fn removed_config_key_paths_detect_stale_budget_keys() {
+    use crate::loader::manager::removed_config_key_paths_present;
+
+    let stale: toml::Value = toml::from_str(
+        "[agent.harness]\nmax_tool_calls_per_turn = 32\n\n[tools]\nmax_tool_loops = 20\n\n[automation.full_auto]\nauto_grant_tool_limits = false\n",
+    )
+    .unwrap();
+    let found = removed_config_key_paths_present(&stale);
+    assert_eq!(found.len(), 3, "every removed budget key path must be detected");
+
+    let clean: toml::Value = toml::from_str("[tools]\nmax_repeated_tool_calls = 2\n").unwrap();
+    assert!(removed_config_key_paths_present(&clean).is_empty());
 }

@@ -274,7 +274,6 @@ async fn unrelated_passing_verifiers_cannot_starve_the_required_check() {
                 step_count: step,
                 repeated_tool_attempts: &mut tracker,
                 turn_modified_files: &mut modified,
-                max_tool_loops: 20,
                 tool_repeat_limit: 3,
             })
             .await
@@ -377,7 +376,6 @@ async fn recovery_tool_calls_break_turn_as_blocked() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await

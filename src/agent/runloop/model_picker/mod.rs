@@ -522,7 +522,6 @@ impl ModelPickerState {
                 | InlineListSelection::FileConflictReload
                 | InlineListSelection::FileConflictViewDiff
                 | InlineListSelection::FileConflictAbort
-                | InlineListSelection::SessionLimitIncrease(_)
                 | InlineListSelection::RewindCheckpoint(_)
                 | InlineListSelection::RewindAction(_)
                 | InlineListSelection::AskUserChoice { .. }
@@ -651,7 +650,6 @@ impl ModelPickerState {
                 | InlineListSelection::FileConflictReload
                 | InlineListSelection::FileConflictViewDiff
                 | InlineListSelection::FileConflictAbort
-                | InlineListSelection::SessionLimitIncrease(_)
                 | InlineListSelection::RewindCheckpoint(_)
                 | InlineListSelection::RewindAction(_)
                 | InlineListSelection::AskUserChoice { .. }

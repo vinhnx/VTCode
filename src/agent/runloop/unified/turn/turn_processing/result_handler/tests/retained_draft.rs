@@ -45,7 +45,6 @@ async fn invalid_and_no_match_required_grep_bound_repeated_completion_summaries(
                     step_count: step,
                     repeated_tool_attempts: &mut tracker,
                     turn_modified_files: &mut modified,
-                    max_tool_loops: 20,
                     tool_repeat_limit: 4,
                 })
                 .await
@@ -104,7 +103,6 @@ async fn passing_local_check_accepts_external_limitation_without_another_recover
             step_count: 1,
             repeated_tool_attempts: &mut tracker,
             turn_modified_files: &mut modified,
-            max_tool_loops: 8,
             tool_repeat_limit: 3,
         })
         .await
@@ -149,7 +147,6 @@ async fn failed_optional_check_without_mutations_cannot_create_completion_obliga
         step_count: 2,
         repeated_tool_attempts: &mut tracker,
         turn_modified_files: &mut modified,
-        max_tool_loops: 8,
         tool_repeat_limit: 4,
     })
     .await

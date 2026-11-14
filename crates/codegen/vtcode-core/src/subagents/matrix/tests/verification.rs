@@ -49,13 +49,12 @@ async fn matrix_real_checks_collect_nonzero_and_later_success_and_timeout_cleanu
     sink.close().await.unwrap();
 }
 #[tokio::test]
-async fn matrix_verification_preserves_full_auto_denials_and_work_budgets() {
+async fn matrix_verification_preserves_full_auto_denials_and_runs_all_checks() {
     for allow_execution in [false, true] {
         let root = tempfile::tempdir().unwrap();
         let mut cfg = VTCodeConfig::default();
         cfg.agent.harness.inspection.mode = vtcode_config::core::agent::InspectionMode::Off;
         cfg.automation.full_auto.enabled = true;
-        cfg.tools.max_tool_loops = 1;
         cfg.automation.full_auto.allowed_tools = if allow_execution {
             vec!["exec_command".into(), "write_stdin".into()]
         } else {
@@ -77,14 +76,16 @@ async fn matrix_verification_preserves_full_auto_denials_and_work_budgets() {
         assert_eq!(
             result.outcome,
             if allow_execution {
-                MatrixOutcome::BudgetExhausted
+                MatrixOutcome::Success
             } else {
                 MatrixOutcome::PermissionDenied
             }
         );
-        assert_eq!(result.evidence.len(), usize::from(allow_execution));
+        // Both checks run (and record evidence) once verification is allowed;
+        // the removed per-turn tool-loop budget no longer truncates the list.
+        assert_eq!(result.evidence.len(), 2 * usize::from(allow_execution));
         assert_eq!(root.path().join("first.txt").exists(), allow_execution);
-        assert!(!root.path().join("second.txt").exists());
+        assert_eq!(root.path().join("second.txt").exists(), allow_execution);
         assert!(result.cleanup_confirmed);
     }
 }

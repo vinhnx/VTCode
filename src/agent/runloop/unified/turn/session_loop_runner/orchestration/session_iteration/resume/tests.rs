@@ -20,7 +20,7 @@ struct TrackerResumeCase {
 }
 
 fn runtime(messages: Vec<Message>) -> AgentRuntime {
-    let mut state = AgentSessionState::new("restore-test".to_string(), 10, 10, 4096);
+    let mut state = AgentSessionState::new("restore-test".to_string(), 10, 4096);
     state.messages = messages.into();
     AgentRuntime::new(state, None, None)
 }

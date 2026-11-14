@@ -135,7 +135,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
     assert!(!runner.is_valid_tool(tools::UNIFIED_SEARCH).await);
     assert!(!runner.is_valid_tool("exec_code").await);
 
-    let mut session_state = AgentSessionState::new("thread-tool-validation".to_string(), 1, 1, 8_000);
+    let mut session_state = AgentSessionState::new("thread-tool-validation".to_string(), 1, 8_000);
     let exec_call = runner
         .admit_tool_call(tools::EXEC_COMMAND, json!({ "cmd": "echo hi" }), &mut session_state)
         .expect("exec_command should be admitted by public name");
@@ -309,7 +309,7 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
     assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
     assert_provider_hides_tool(&snapshot, tools::WRITE_STDIN);
 
-    let mut session_state = AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
+    let mut session_state = AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 8_000);
     let denied = runner
         .admit_tool_call(tools::EXEC_COMMAND, json!({ "cmd": "echo denied" }), &mut session_state)
         .expect_err("primary-agent deny should block execution");
@@ -405,7 +405,7 @@ async fn advertisement_and_admission_preserve_global_and_agent_permission_preced
         });
 
         assert_eq!(runner.is_tool_exposed(tools::EXEC_COMMAND).await, case.exposed);
-        let mut state = AgentSessionState::new("thread-permission-precedence".to_string(), 1, 1, 8_000);
+        let mut state = AgentSessionState::new("thread-permission-precedence".to_string(), 1, 8_000);
         assert_eq!(
             runner
                 .admit_tool_call(tools::EXEC_COMMAND, json!({"cmd": "true"}), &mut state)
@@ -750,7 +750,7 @@ async fn normalize_tool_args_applies_transform_after_defaults() {
         serde_json::Value::Object(obj)
     }));
 
-    let mut state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
+    let mut state = AgentSessionState::new("session".to_string(), 5, 10_000);
     state.last_dir_path = Some(temp.path().display().to_string());
     let normalized = runner.normalize_tool_args(tools::LIST_FILES, json!({}), &mut state);
 
@@ -858,7 +858,7 @@ async fn delegated_child_policy_denies_at_concrete_admission() {
     .expect("runner");
     runner.set_subagent_mode(true);
 
-    let mut state = AgentSessionState::new("thread-child-policy".to_string(), 1, 1, 8_000);
+    let mut state = AgentSessionState::new("thread-child-policy".to_string(), 1, 8_000);
     assert!(
         runner
             .admit_tool_call(tools::EXEC_COMMAND, json!({"cmd": "true"}), &mut state)

@@ -36,7 +36,6 @@ async fn recovery_non_parseable_tool_call_marker_breaks_turn() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -83,7 +82,6 @@ async fn recovery_parseable_tool_call_with_preamble_breaks_turn() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -139,7 +137,6 @@ async fn recovery_complete_tool_call_with_appended_disclosure_still_breaks() {
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
         tool_repeat_limit: 4,
     })
     .await
@@ -187,7 +184,6 @@ async fn recovery_complete_tool_call_in_planning_uses_shared_allowance_before_ha
             step_count: request,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
             tool_repeat_limit: 4,
         })
         .await

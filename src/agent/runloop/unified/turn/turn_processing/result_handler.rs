@@ -30,8 +30,6 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub step_count: usize,
     pub repeated_tool_attempts: &'a mut helpers::LoopTracker,
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
-    /// Pre-computed max tool loops limit for efficiency.
-    pub max_tool_loops: usize,
     /// Pre-computed tool repeat limit for efficiency.
     pub tool_repeat_limit: usize,
 }
@@ -278,7 +276,6 @@ pub(crate) async fn execute_harness_auto_verification(
     repeated_tool_attempts: &mut helpers::LoopTracker,
     turn_modified_files: &mut BTreeSet<PathBuf>,
     step_count: usize,
-    max_tool_loops: usize,
     tool_repeat_limit: usize,
     command: String,
 ) -> Result<TurnHandlerOutcome> {
@@ -444,7 +441,7 @@ pub(crate) async fn execute_harness_auto_verification(
 
     // Mirror the ToolCalls branch: run the balancer before continuing so
     // navigation churn converging during verification still converges.
-    Ok(handle_turn_balancer(ctx, step_count, repeated_tool_attempts, max_tool_loops, tool_repeat_limit).await)
+    Ok(handle_turn_balancer(ctx, step_count, repeated_tool_attempts, tool_repeat_limit).await)
 }
 
 /// Match the headless verifier's per-command ceiling and owned-session cleanup.
@@ -567,7 +564,6 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 &mut *params.ctx,
                 params.step_count,
                 &mut *params.repeated_tool_attempts,
-                params.max_tool_loops,
                 params.tool_repeat_limit,
             )
             .await;
@@ -601,9 +597,6 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             // bound this path instead, and the generic cap still refuses
             // unverified completion.
             let tool_free_synthesis = params.ctx.in_tool_free_recovery_synthesis();
-            if tool_free_synthesis && params.max_tool_loops > 0 && params.step_count >= params.max_tool_loops {
-                params.ctx.session_stats.navigation_recovery.consume();
-            }
             if !is_planning_synthesis && params.ctx.tool_registry.completion_verification_pending() {
                 params.repeated_tool_attempts.mark_verification_pending();
             } else if params.ctx.tool_registry.has_current_completion_verification()
@@ -693,7 +686,6 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                                 &mut *params.repeated_tool_attempts,
                                 &mut *params.turn_modified_files,
                                 params.step_count,
-                                params.max_tool_loops,
                                 params.tool_repeat_limit,
                                 command.clone(),
                             )

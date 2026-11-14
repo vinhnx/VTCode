@@ -30,9 +30,10 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   disables cross-turn auto-queue. After a **Completed** turn with incomplete tracker steps it queues the next tracker
   implementation turn. After a **recoverable Blocked** turn — with or without tracker steps — it queues a bounded
   blocked-end resume ("The previous turn ended on a recoverable block: …"). Recoverable means the production
-  blocked-reason constants only (turn / tool-loop budgets, per-result preview limits, safety caps, blocked-tool
-  fuse, tool-free recovery). Pending verification, including exhaustion of the wall-clock budget,
-  uses the separate verifier-first recovery path and its verification turn/failure limits, preserving the pending gate.
+  blocked-reason constants only (budget exhaustion incl. the removed loop-budget vocabulary, per-result preview
+  limits, safety caps, blocked-tool fuse, tool-free recovery). Pending verification, including exhaustion of the
+  wall-clock budget, uses the separate verifier-first recovery path and its verification turn/failure limits,
+  preserving the pending gate.
   A pending-verification recap does not veto that budget-only retry; genuine policy or user-decision handoffs still do.
   Provider refusals, true handoffs, and unknown reasons never auto-queue.
   Successful auto-queue never prints “Type `continue`”.

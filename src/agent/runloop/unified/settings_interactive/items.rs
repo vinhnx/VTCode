@@ -88,7 +88,6 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         paths: &[
             "tools.default_policy",
             "tools.profile",
-            "tools.max_tool_loops",
             "tools.client_tool_search",
             "tools.editor",
             "tools.web_fetch.mode",

@@ -295,8 +295,7 @@ async fn execute_parallel_group_inner<'a, 'b>(
                 exec_settlement_mode_for_tool_call(true, &name, &args),
                 // Every call in this group was safety-admitted by
                 // validate_tool_call before parallel execution; the registry
-                // must not re-admit it on the shared gateway (double-counting
-                // halves the effective per-turn tool budget).
+                // must not re-admit it on the shared gateway.
                 true,
             )
             .await;

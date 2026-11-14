@@ -33,15 +33,11 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, turn_started_event};
 use crate::agent::runloop::unified::planning_workflow::maybe_handle_planning_exit_trigger;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
-use crate::agent::runloop::unified::run_loop_context::{
-    HarnessTurnState, RunLoopContext, TOOL_LOOP_WARNING_THRESHOLD, TurnPhase, tool_loop_warning_due,
-    tool_loop_warning_message,
-};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext, TurnPhase};
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    ToolLoopLimitAction, extract_turn_config, handle_steering_messages, initial_tool_loop_limit,
-    maybe_handle_planning_enter_trigger, maybe_handle_tool_loop_limit,
+    extract_turn_config, handle_steering_messages, maybe_handle_planning_enter_trigger,
 };
 
 #[path = "turn_loop/compaction.rs"]
@@ -219,10 +215,6 @@ pub(crate) async fn run_turn_loop(
     }
 
     let mut step_count = 0;
-    let mut current_max_tool_loops =
-        initial_tool_loop_limit(turn_config.max_tool_loops, ctx.harness_state.is_approved_plan_execution());
-    // Turn-scoped loop-warning latch: a local bool resets naturally each turn.
-    let mut tool_loop_warning_emitted = false;
     let mut turn_history_start_len = working_history.len();
     // Bounded condense-retry counter for truncated planning syntheses (see
     // the re-prompt block after generation). Prevents an oversized plan from
@@ -247,10 +239,8 @@ pub(crate) async fn run_turn_loop(
     // Reset per-turn rate-limiter state on the shared safety gateway.
     ctx.safety_validator.start_turn();
     // Tracks the planning flag from the previous loop iteration so Build↔Plan
-    // auto-switches mid-turn re-apply the tool-loop floor in *both*
-    // directions. Raising only `max(limit, floor)` is not enough: the prior
-    // mode may have already consumed that cap, so the new mode needs a full
-    // floor of remaining headroom from now.
+    // auto-switches mid-turn re-derive the turn config (and start the
+    // planning stage) exactly once per switch, in both directions.
     let mut last_planning_active = ctx.is_planning_active();
 
     loop {
@@ -294,13 +284,7 @@ pub(crate) async fn run_turn_loop(
         }
 
         // Build<->Plan auto-switch mid-turn (see `settings` for the starvation report).
-        apply_mid_turn_mode_switch(
-            &mut ctx,
-            &mut last_planning_active,
-            &mut turn_config,
-            &mut current_max_tool_loops,
-            step_count,
-        );
+        apply_mid_turn_mode_switch(&mut ctx, &mut last_planning_active, &mut turn_config);
 
         // The settings application and Build↔Plan mode switch above are the
         // only points that can change the request identity mid-iteration:
@@ -347,31 +331,6 @@ pub(crate) async fn run_turn_loop(
             result = loop_result;
             pending_plan_execution_target = target;
             break;
-        }
-
-        // Warn once at 75% of the loop budget so the model batches or
-        // wraps up before the hard limit forces tool-free synthesis.
-        if tool_loop_warning_due(
-            step_count,
-            current_max_tool_loops,
-            TOOL_LOOP_WARNING_THRESHOLD,
-            tool_loop_warning_emitted,
-        ) {
-            tool_loop_warning_emitted = true;
-            working_history.push(uni::Message::system(tool_loop_warning_message(step_count, current_max_tool_loops)));
-        }
-
-        match maybe_handle_tool_loop_limit(&mut ctx, step_count, &mut current_max_tool_loops).await? {
-            ToolLoopLimitAction::Proceed => {}
-            ToolLoopLimitAction::ContinueLoop => continue,
-            ToolLoopLimitAction::BreakLoop => {
-                result = TurnLoopResult::Blocked {
-                    reason: Some(format!(
-                        "Tool loop budget exhausted ({step_count}/{current_max_tool_loops}); no additional synthesis pass is available. The current plan and task state were retained."
-                    )),
-                };
-                break;
-            }
         }
 
         // Shared config view for the budget check and compaction decisions
@@ -694,7 +653,6 @@ pub(crate) async fn run_turn_loop(
             &mut turn_modified_files,
             &processing_result,
             step_count,
-            current_max_tool_loops,
             turn_config.tool_repeat_limit,
         )
         .await?
@@ -729,7 +687,6 @@ pub(crate) async fn run_turn_loop(
             step_count,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: current_max_tool_loops,
             tool_repeat_limit: turn_config.tool_repeat_limit,
         })
         .await;

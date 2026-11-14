@@ -180,7 +180,6 @@ async fn harness_required_verifiers_report_progress_and_finish_without_repeating
             &mut modified,
             1,
             8,
-            4,
             command.into(),
         )
         .await
@@ -220,7 +219,6 @@ async fn harness_required_verifiers_report_progress_and_finish_without_repeating
             step_count: 3,
             repeated_tool_attempts: &mut tracker,
             turn_modified_files: &mut modified,
-            max_tool_loops: 8,
             tool_repeat_limit: 4,
         })
         .await

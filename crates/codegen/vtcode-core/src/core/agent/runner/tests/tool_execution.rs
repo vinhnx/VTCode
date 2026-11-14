@@ -75,7 +75,7 @@ async fn planning_denial_reports_policy_denial_not_invalid_arguments() {
     );
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-planning-denied".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-planning-denied".to_string(), 16, 128_000), None, None);
 
     let events = admit_one_tool_call(
         &mut runner,
@@ -132,7 +132,7 @@ async fn malformed_arguments_still_report_invalid_tool() {
     assert!(!runner.tool_registry.is_planning_active());
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-invalid-args".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-invalid-args".to_string(), 16, 128_000), None, None);
 
     let events =
         admit_one_tool_call(&mut runner, &mut runtime, "thread-invalid-args", tools::APPLY_PATCH, json!({})).await;
@@ -160,8 +160,7 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     let provider = QueuedProvider::new(vec![response]);
     let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
 
-    let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-denied".to_string(), 16, 4, 128_000), None, None);
+    let mut runtime = AgentRuntime::new(AgentSessionState::new("session-denied".to_string(), 16, 128_000), None, None);
     let request = LLMRequest {
         model: "gpt-5-codex".to_string(),
         ..Default::default()
@@ -203,7 +202,7 @@ async fn denied_parallel_tool_halt_returns_promptly() {
     .expect("tool call response");
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-denied-parallel".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-denied-parallel".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-denied-parallel", None, None);
 
     let start = Instant::now();
@@ -241,7 +240,7 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     ];
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-duplicate-parallel".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-duplicate-parallel".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-duplicate-parallel", None, None);
 
     runner
@@ -321,11 +320,8 @@ async fn removed_public_tool_names_are_rejected() {
         ),
     ];
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-removed-public-tools".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-removed-public-tools".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-removed-public-tools", None, None);
 
     runner
@@ -382,7 +378,7 @@ async fn denied_sequential_tool_halt_returns_promptly() {
     .expect("tool call response");
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-denied-sequential".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-denied-sequential".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-denied-sequential", None, None);
 
     let start = Instant::now();
@@ -454,7 +450,7 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
     ];
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-policy-halt".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-policy-halt".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-policy-halt", None, None);
 
     runner
@@ -498,7 +494,7 @@ async fn sequential_tool_failures_record_categorized_user_message() {
     )];
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-policy-message".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-policy-message".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-policy-message", None, None);
 
     runner
@@ -544,7 +540,7 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
     )];
 
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-policy-guard".to_string(), 16, 4, 128_000), None, None);
+        AgentRuntime::new(AgentSessionState::new("session-policy-guard".to_string(), 16, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-policy-guard", None, None);
 
     runner
@@ -574,7 +570,7 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
 
     let (steering_tx, steering_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime =
-        AgentRuntime::new(AgentSessionState::new("session-stop".to_string(), 16, 4, 128_000), None, Some(steering_rx));
+        AgentRuntime::new(AgentSessionState::new("session-stop".to_string(), 16, 128_000), None, Some(steering_rx));
     let request = LLMRequest {
         model: "gpt-5-codex".to_string(),
         ..Default::default()

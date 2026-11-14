@@ -96,20 +96,13 @@ fn remove_oldest_non_system(history: &mut Vec<uni::Message>) -> bool {
     }
     false
 }
-const UNLIMITED_TOOL_LOOP_BALANCER_WINDOW: usize = 20;
+/// Fixed turn-loop horizon for the churn balancer. It used to scale with the
+/// removed per-turn tool-loop budget; the repetition-evidence gate keeps the
+/// trigger behavior-bounded on a fixed window.
+const TURN_BALANCER_WINDOW: usize = 20;
 
-pub(crate) fn should_trigger_turn_balancer(
-    step_count: usize,
-    max_tool_loops: usize,
-    repeated: usize,
-    repeat_limit: usize,
-) -> bool {
-    let loop_window = if max_tool_loops == usize::MAX {
-        UNLIMITED_TOOL_LOOP_BALANCER_WINDOW
-    } else {
-        max_tool_loops
-    };
-    let step_threshold = loop_window.saturating_mul(3) / 4;
+pub(crate) fn should_trigger_turn_balancer(step_count: usize, repeated: usize, repeat_limit: usize) -> bool {
+    let step_threshold = TURN_BALANCER_WINDOW.saturating_mul(3) / 4;
     let effective_repeat_limit = repeat_limit.max(3);
     step_count > step_threshold && repeated >= effective_repeat_limit
 }
@@ -120,16 +113,10 @@ mod tests {
 
     #[test]
     fn balancer_triggers_after_three_quarters_and_effective_repeat_limit() {
-        assert!(should_trigger_turn_balancer(16, 20, 3, 3));
-        assert!(!should_trigger_turn_balancer(15, 20, 3, 3));
-        assert!(!should_trigger_turn_balancer(16, 20, 2, 3));
-        assert!(!should_trigger_turn_balancer(16, 20, 2, 2));
-    }
-
-    #[test]
-    fn balancer_uses_fallback_window_for_unlimited_loop_limit() {
-        assert!(should_trigger_turn_balancer(16, usize::MAX, 3, 3));
-        assert!(!should_trigger_turn_balancer(15, usize::MAX, 3, 3));
+        assert!(should_trigger_turn_balancer(16, 3, 3));
+        assert!(!should_trigger_turn_balancer(15, 3, 3));
+        assert!(!should_trigger_turn_balancer(16, 2, 3));
+        assert!(!should_trigger_turn_balancer(16, 2, 2));
     }
 
     #[test]

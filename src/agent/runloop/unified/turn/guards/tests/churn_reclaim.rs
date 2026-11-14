@@ -24,7 +24,7 @@ async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_t
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
 
-    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 4, &mut tracker, 4, 3).await;
+    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 4, &mut tracker, 3).await;
     assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert!(ctx.consume_recovery_pass());
@@ -55,7 +55,7 @@ async fn early_low_signal_search_churn_schedules_recovery_before_turn_window() {
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
 
-    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 20, 3).await;
+    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 3).await;
     assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert_eq!(tracker.consecutive_navigations, 0);
@@ -85,7 +85,7 @@ async fn early_balancer_recovery_is_plan_aware_in_planning_workflow() {
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
 
-    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 20, 3).await;
+    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 3).await;
     assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert!(tracker.planning_low_signal_synthesis_triggered);
@@ -112,7 +112,7 @@ async fn early_balancer_recovery_stays_generic_outside_planning_workflow() {
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
     update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
 
-    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 20, 3).await;
+    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 3).await;
     assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert!(!tracker.planning_low_signal_synthesis_triggered);
@@ -151,7 +151,7 @@ async fn early_balancer_trips_on_same_root_listings_below_low_signal_limit() {
     }
     assert!(tracker.max_low_signal_count() < 5);
 
-    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 5, &mut tracker, 20, 5).await;
+    let balancer_outcome = super::super::handle_turn_balancer(&mut ctx, 5, &mut tracker, 5).await;
     assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     let reason = ctx.recovery_reason().unwrap_or_default();
@@ -177,7 +177,7 @@ async fn diverse_root_listings_stay_below_early_recovery() {
     }
     assert_eq!(tracker.max_coarse_listing_count(), 1);
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 20, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(!ctx.is_recovery_active());
 }
@@ -202,7 +202,7 @@ async fn balancer_does_not_reclaim_an_already_pending_recovery() {
         update_repetition_tracker(&mut tracker, &success, tool_names::EXEC_COMMAND, &json!({"cmd":command}));
     }
 
-    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+    let outcome = super::super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 3).await;
     assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     assert!(ctx.is_recovery_active());
     assert_eq!(ctx.recovery_reason(), Some("blocked-tool recovery"));
@@ -219,7 +219,7 @@ async fn balancer_does_not_reclaim_an_already_pending_recovery() {
     }));
 }
 #[tokio::test]
-async fn retained_search_results_converge_before_the_loop_budget() {
+async fn retained_search_results_converge_before_the_late_balancer_window() {
     let mut backing = TestTurnProcessingBacking::new().await;
     let mut ctx = backing.turn_processing_context();
     let mut tracker = LoopTracker::new();
@@ -236,7 +236,7 @@ async fn retained_search_results_converge_before_the_loop_budget() {
             tool_names::CODE_SEARCH,
             &json!({"query":format!("query{step}"),"path":"README.md"}),
         );
-        let outcome = super::super::handle_turn_balancer(&mut ctx, step + 1, &mut tracker, 60, 3).await;
+        let outcome = super::super::handle_turn_balancer(&mut ctx, step + 1, &mut tracker, 3).await;
         assert!(matches!(outcome, TurnHandlerOutcome::Continue));
         assert_eq!(ctx.is_recovery_active(), step == 3);
     }

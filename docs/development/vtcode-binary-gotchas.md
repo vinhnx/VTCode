@@ -35,9 +35,10 @@ changing the runloop, update path, allocator, or request assembly.
 - Wall-clock budget exhaustion follows one contract: emit the full policy message once, compact stubs for
   later batch calls, then one synthesis directive via `flush_budget_synthesis_directives` after the tool batch. Do not
   break the turn as `Blocked`, because that skips synthesis. The flush arms `switch_to_tool_free_recovery()` so the next
-  request removes tool definitions at the API level. (The per-turn/session tool-call count budget was removed; turns are
-  bounded by `max_tool_loops` and `max_tool_wall_clock_secs`. The `SessionToolLimitIncreased` event is retained for
-  wire compatibility but no longer emitted.) Loop-limit grants emit `ToolLoopLimitIncreased` and leave tools enabled.
+  request removes tool definitions at the API level. (The per-turn/session tool-call count budget and the per-turn
+  tool-loop budget (`tools.max_tool_loops`) were removed; turns are bounded by `max_tool_wall_clock_secs`,
+  `max_budget_usd`, the behavioral guards, and — headless — `max_turns`. The `SessionToolLimitIncreased` and
+  `ToolLoopLimitIncreased` events are retained for wire compatibility but no longer emitted.)
   Exclude explicit `request_user_input` think-time and command-session `wait` time from the wall-clock calculation;
   neither consumes autonomous execution budget.
 - Verification gates successful completion, not edits or inspections. The registry owns required checks,

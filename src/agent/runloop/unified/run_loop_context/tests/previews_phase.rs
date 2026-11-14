@@ -152,21 +152,21 @@ fn budget_exhausted_record_carries_exact_ceiling_values() {
     assert_eq!(value["tool_calls"], 41);
     assert!(value["ts"].is_number());
 
-    // Asymmetric counterpart: a planning tool-loop record differs in
-    // every mode-dependent field, so consumers can tell ceilings apart.
+    // Asymmetric counterpart: a planning wall-clock record differs in
+    // every mode-dependent field, so consumers can tell records apart.
     let planned = serde_json::to_value(budget_exhausted_record(BudgetExhaustedMetrics {
-        budget: budget_kind::TOOL_LOOP,
-        used: 20,
-        max: 20,
+        budget: budget_kind::WALL_CLOCK,
+        used: 240,
+        max: 240,
         step_count: Some(20),
         planning_active: true,
         tool_calls: 41,
     }))
     .unwrap();
-    assert_eq!(planned["budget"], "tool_loop");
+    assert_eq!(planned["budget"], "wall_clock_secs");
     assert_eq!(planned["step_count"], 20);
     assert_eq!(planned["planning_active"], true);
-    assert_ne!(planned["budget"], value["budget"]);
+    assert_ne!(planned["used"], value["used"]);
 }
 #[test]
 fn oversized_suppressed_preview_skips_unbounded_json_parse() {

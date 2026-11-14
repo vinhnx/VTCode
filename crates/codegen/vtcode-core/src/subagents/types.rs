@@ -462,8 +462,8 @@ impl ChildRecord {
                 };
                 self.summary = Some(result.summary);
                 // Store error info for all non-success outcomes, not just Failed.
-                // This ensures budget/turn/tool-loop limits and other terminations
-                // carry a diagnostic message for debugging.
+                // This ensures budget/turn limits and other terminations carry a
+                // diagnostic message for debugging.
                 self.error = if result.outcome.is_success() {
                     None
                 } else {

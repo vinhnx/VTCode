@@ -1,4 +1,4 @@
-use super::{prepare_responses_request_messages, record_terminal_turn_event, tool_loop_limit_reached};
+use super::{prepare_responses_request_messages, record_terminal_turn_event};
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::state::should_apply_local_tool_result_clearing;
@@ -73,14 +73,8 @@ fn successful_outcome_emits_only_turn_completed() {
 }
 
 #[test]
-fn disabled_tool_loop_limit_never_trips() {
-    assert!(!tool_loop_limit_reached(1, 0));
-    assert!(!tool_loop_limit_reached(32, 0));
-}
-
-#[test]
 fn openai_prepare_responses_request_messages_keeps_full_history_without_previous_response_id() {
-    let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+    let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
     let prior_messages = vec![Message::user("hello".to_string())];
     let current_messages = vec![
         Message::user("hello".to_string()),
@@ -102,7 +96,7 @@ fn openai_prepare_responses_request_messages_keeps_full_history_without_previous
 
 #[test]
 fn openai_runner_success_path_does_not_record_previous_response_chain() {
-    let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+    let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
     let messages = vec![Message::user("hello".to_string())];
 
     if records_responses_continuation_state("openai", true) {
@@ -114,7 +108,7 @@ fn openai_runner_success_path_does_not_record_previous_response_chain() {
 
 #[test]
 fn compatible_runner_success_path_does_not_record_previous_response_chain() {
-    let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+    let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
     let messages = vec![Message::user("hello".to_string())];
 
     if records_responses_continuation_state("mycorp", true) {
@@ -126,7 +120,7 @@ fn compatible_runner_success_path_does_not_record_previous_response_chain() {
 
 #[test]
 fn gemini_prepare_responses_request_messages_keeps_full_history() {
-    let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+    let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
     let prior_messages = vec![Message::user("hello".to_string())];
     let current_messages = vec![
         Message::user("hello".to_string()),
@@ -148,7 +142,7 @@ fn gemini_prepare_responses_request_messages_keeps_full_history() {
 
 #[test]
 fn compatible_prepare_responses_request_messages_keeps_custom_provider_stateless() {
-    let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+    let mut state = AgentSessionState::new("session".to_string(), 4, 16_000);
     let prior_messages = vec![Message::user("hello".to_string())];
     let current_messages = vec![
         Message::user("hello".to_string()),

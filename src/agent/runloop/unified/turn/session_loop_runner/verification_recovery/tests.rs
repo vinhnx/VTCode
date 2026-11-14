@@ -17,7 +17,7 @@ impl RecoveryFixture {
     async fn new() -> Self {
         let workspace = tempfile::tempdir().unwrap();
         let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let state = AgentSessionState::new("verification-recovery".into(), 4, 4, 16_000);
+        let state = AgentSessionState::new("verification-recovery".into(), 4, 16_000);
         Self {
             _workspace: workspace,
             registry,

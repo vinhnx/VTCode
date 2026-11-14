@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn approved_plan_execution_input_is_appended_as_a_single_user_message() {
-        let state = vtcode_core::core::agent::session::AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let state = vtcode_core::core::agent::session::AgentSessionState::new("session".to_string(), 16, 128_000);
         let mut runtime = AgentRuntime::new(state, None, None);
 
         let (input, prompt_message_index) = append_approved_plan_execution_input(&mut runtime);

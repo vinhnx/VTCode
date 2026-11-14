@@ -6,7 +6,6 @@ mod approval_cache;
 mod approval_persistence;
 mod approval_policy;
 mod hook_messages;
-mod limit_prompts;
 mod permission_events;
 mod permission_prompt;
 mod preflight;
@@ -853,27 +852,6 @@ pub(crate) async fn prompt_external_tool_permission<S: UiSession + ?Sized>(
         approval_recorder,
         hitl_notification_bell,
         active_thread_label.filter(|label| *label != "main"),
-    )
-    .await
-}
-
-pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
-    handle: &InlineHandle,
-    session: &mut S,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    max_limit: usize,
-    hard_cap: usize,
-    agent_name: Option<&str>,
-) -> Result<Option<usize>> {
-    limit_prompts::prompt_tool_loop_limit_increase(
-        handle,
-        session,
-        ctrl_c_state,
-        ctrl_c_notify,
-        max_limit,
-        hard_cap,
-        agent_name,
     )
     .await
 }

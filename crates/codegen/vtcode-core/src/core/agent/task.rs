@@ -48,6 +48,10 @@ pub enum TaskOutcome {
         max_budget_usd: f64,
         actual_cost_usd: f64,
     },
+    /// Legacy outcome of the removed per-turn tool-loop budget, kept so older
+    /// serialized artifacts still deserialize. No longer produced by the
+    /// config-driven budget; a rate-limit safeguard halt may still construct
+    /// it with `max_tool_loops: 0`.
     ToolLoopLimitReached {
         max_tool_loops: usize,
         actual_tool_loops: usize,
@@ -103,7 +107,7 @@ impl TaskOutcome {
             }
             Self::ToolLoopLimitReached { max_tool_loops, actual_tool_loops } => {
                 if *max_tool_loops == 0 {
-                    format!("Stopped after a tool-loop safeguard halted execution (reached: {actual_tool_loops})")
+                    "Stopped after a tool safeguard halted execution".into()
                 } else {
                     format!(
                         "Stopped after reaching tool loop limit (max: {max_tool_loops}, reached: {actual_tool_loops})"
@@ -176,8 +180,11 @@ impl TaskOutcome {
         Self::BudgetLimitReached { max_budget_usd, actual_cost_usd }
     }
 
-    pub fn tool_loop_limit_reached(max_tool_loops: usize, actual_tool_loops: usize) -> Self {
-        Self::ToolLoopLimitReached { max_tool_loops, actual_tool_loops }
+    /// Safeguard halt from a rate-limited tool (not the removed configured
+    /// budget): reuses the legacy loop-limit outcome with `max_tool_loops: 0`
+    /// so existing consumers keep one "tool safeguard stopped the run" shape.
+    pub fn tool_safeguard_halt(actual_tool_loops: usize) -> Self {
+        Self::ToolLoopLimitReached { max_tool_loops: 0, actual_tool_loops }
     }
 
     pub fn failed(
@@ -218,11 +225,12 @@ mod tests {
     use super::{TaskOutcome, ThreadCompletionSubtype};
 
     #[test]
-    fn tool_loop_limit_description_handles_disabled_limit() {
-        let description = TaskOutcome::tool_loop_limit_reached(0, 4).description();
+    fn tool_safeguard_halt_renders_without_a_budget_count() {
+        let outcome = TaskOutcome::tool_safeguard_halt(0);
 
-        assert!(description.contains("tool-loop safeguard halted execution"));
-        assert!(description.contains("reached: 4"));
+        assert!(outcome.is_hard_block());
+        assert_eq!(outcome.code(), "tool_loop_limit_reached");
+        assert_eq!(outcome.description(), "Stopped after a tool safeguard halted execution");
     }
 
     #[test]

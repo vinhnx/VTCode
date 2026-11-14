@@ -49,8 +49,6 @@ recovery limits remain unchanged.
   (`task_tracker`, `start_planning`, `request_user_input`), which stay available in every mode.
 - Explicit denies and policy blocks are honoured before full-auto review.
 - Promptable allow-listed actions are reviewed automatically instead of interrupting for user input.
-- Tool-loop limit increases are granted automatically (same per-grant increments and hard caps as
-  manual approvals) instead of showing an interactive prompt. Set `auto_grant_tool_limits = false` to restore the prompts.
 - Informational or read-only requests (summarize, explain, compare, explore — no imperative action clause) end the run
   once answered instead of triggering another autonomous continuation provider call. Action requests remain on the
   continuation path.
@@ -123,7 +121,6 @@ This support is experimental. No live classification or cost comparison has been
 enabled = true
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
-auto_grant_tool_limits = true
 allowed_tools = [
     "exec_command",
     "write_stdin",
