@@ -51,12 +51,15 @@ pub(crate) fn request_local_cancel(ctrl_c_state: &Arc<CtrlCState>, ctrl_c_notify
 /// the host fires [`request_local_cancel`] directly.
 pub(crate) type StopHandles = (Arc<CtrlCState>, Arc<Notify>);
 
-/// Host stop handles and the point at which a submitted turn can consume a
-/// cancellation. Exit may use the handles during initialization; turn stops
-/// wait until initialization has finished.
+/// Host-facing runtime handles and the point at which a submitted turn can
+/// consume a cancellation. Exit may use the handles during initialization;
+/// turn stops wait until initialization has finished. The exec-session
+/// handle is what lets a host escalation kill owned processes directly when
+/// the runloop is too wedged to observe any signal.
 #[derive(Default)]
 pub(crate) struct HostStopHandles {
     handles: std::sync::OnceLock<StopHandles>,
+    exec_sessions: std::sync::OnceLock<vtcode_core::tools::exec_session::ExecSessionManager>,
     ready: std::sync::atomic::AtomicBool,
     ready_notify: Notify,
 }
@@ -73,6 +76,25 @@ pub(crate) fn new_stop_handle_slot() -> StopHandleSlot {
 /// repeated publish keeps the first handles.
 pub(crate) fn publish_stop_handles(slot: &StopHandleSlot, state: &Arc<CtrlCState>, notify: &Arc<Notify>) {
     let _kept_first = slot.handles.set((Arc::clone(state), Arc::clone(notify)));
+}
+
+/// Publish the runloop's exec-session manager for host-side direct kills.
+/// Called once the tool registry exists (sessions cannot predate it); a
+/// repeated publish keeps the first manager.
+pub(crate) fn publish_exec_sessions(
+    slot: &StopHandleSlot,
+    manager: &vtcode_core::tools::exec_session::ExecSessionManager,
+) -> bool {
+    slot.exec_sessions.set(manager.clone()).is_ok()
+}
+
+/// Clone the published exec-session manager, if initialization got far
+/// enough to create one. `None` before that — and there are no owned
+/// sessions before that either.
+pub(crate) fn host_exec_sessions(
+    slot: &StopHandleSlot,
+) -> Option<vtcode_core::tools::exec_session::ExecSessionManager> {
+    slot.exec_sessions.get().cloned()
 }
 
 pub(crate) fn mark_host_turns_ready(slot: &StopHandleSlot) {
@@ -434,6 +456,21 @@ mod tests {
         state.mark_cancel_handled();
         assert!(state.reset_handled_cancel());
         assert!(!state.is_force_kill(), "consuming a handled stop must clear stale force");
+    }
+
+    #[test]
+    fn exec_session_handle_publishes_once_and_reads_back_cloned() {
+        let slot = new_stop_handle_slot();
+        assert!(host_exec_sessions(&slot).is_none(), "nothing published before the registry exists");
+        let workspace = std::env::temp_dir().join("vtcode-stop-requests-test");
+        let pty_sessions = vtcode_core::tools::registry::PtySessionManager::new(
+            workspace.clone(),
+            vtcode_core::config::PtyConfig::default(),
+        );
+        let manager = vtcode_core::tools::exec_session::ExecSessionManager::new(workspace, pty_sessions);
+        assert!(publish_exec_sessions(&slot, &manager));
+        assert!(!publish_exec_sessions(&slot, &manager), "a repeated publish keeps the first manager");
+        assert!(host_exec_sessions(&slot).is_some());
     }
 
     #[test]

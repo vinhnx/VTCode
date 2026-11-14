@@ -745,6 +745,10 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         crate::updater::record_current_version_seen();
     }
     if let Some(slot) = stop_slot.as_ref() {
+        // The exec-session handle lets a host escalation kill owned processes
+        // directly when the runloop is wedged; sessions cannot predate the
+        // registry, so publishing at the ready-mark covers every turn.
+        crate::agent::runloop::unified::stop_requests::publish_exec_sessions(slot, &exec_session_manager);
         crate::agent::runloop::unified::stop_requests::mark_host_turns_ready(slot);
     }
     Ok(SetupFlow::Proceed(Box::new(Setup {

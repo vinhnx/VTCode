@@ -1,5 +1,4 @@
 pub mod async_command;
-pub mod cancellation;
 pub mod code_executor;
 pub mod events;
 pub mod integration_tests;

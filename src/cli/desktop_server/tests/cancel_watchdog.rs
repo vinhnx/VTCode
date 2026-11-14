@@ -22,6 +22,7 @@ struct WatchdogHarness {
     input: Option<mpsc::UnboundedReceiver<InlineEvent>>,
     input_sender: mpsc::UnboundedSender<InlineEvent>,
     exit_sender: Option<oneshot::Sender<std::result::Result<(), String>>>,
+    stop: StopHandleSlot,
     ctrl_c: std::sync::Arc<CtrlCState>,
     runtime_task: tokio::task::JoinHandle<()>,
 }
@@ -47,7 +48,7 @@ impl WatchdogHarness {
             state.runtime = Some(RuntimeSession {
                 session_id: session_id.into(),
                 input: input_sender.clone(),
-                stop,
+                stop: std::sync::Arc::clone(&stop),
                 exit,
                 abort: runtime_task.abort_handle(),
                 command_forwarder: std::thread::spawn(|| {}),
@@ -60,6 +61,7 @@ impl WatchdogHarness {
             input: Some(input),
             input_sender,
             exit_sender: Some(exit_sender),
+            stop,
             ctrl_c,
             runtime_task,
         }
@@ -597,4 +599,58 @@ async fn unconfirmed_termination_keeps_submissions_blocked() {
     drop(harness.input.take());
     drop(harness.exit_sender.take());
     harness.runtime_task.abort();
+}
+
+/// The escalation exists for the runloop too wedged to observe any signal,
+/// so its kill step must come from the published exec-session handle rather
+/// than runtime cooperation. Verified compositionally: the kill mechanics
+/// (a real background child dies) are pinned in vtcode-core's
+/// `force_cancel_all_sessions_kills_background_too`; here both handle states
+/// — published (empty) and unpublished, the cancel-during-init case — must
+/// run the kill step and still reach the terminal endgame.
+#[test]
+#[serial]
+fn escalation_kill_step_reaches_the_endgame_for_every_handle_state() {
+    block_on_with_desktop_stack(async {
+        let mut harness = WatchdogHarness::install("kill-session", "stalled-turn").await;
+        let workspace = vtcode_commons::canonicalize(harness.context.workspace.clone()).expect("workspace path");
+        let pty_sessions = vtcode_core::tools::registry::PtySessionManager::new(
+            workspace.clone(),
+            vtcode_core::config::PtyConfig::default(),
+        );
+        let manager = vtcode_core::tools::exec_session::ExecSessionManager::new(workspace, pty_sessions);
+        assert!(stop_requests::publish_exec_sessions(&harness.stop, &manager));
+        assert!(!stop_requests::publish_exec_sessions(&harness.stop, &manager), "first publish wins");
+
+        // Asymmetric control arm: no published handle (cancellation during
+        // init, before the registry) must degrade to the signal-only path.
+        let mut empty = WatchdogHarness::install("kill-empty", "stalled-turn").await;
+
+        harness.force_cancel_turn("kill-session", "stalled-turn").await;
+        empty.force_cancel_turn("kill-empty", "stalled-turn").await;
+
+        // The fake runtime never consumes events; only the direct kill and
+        // the exit handshake move the escalation forward.
+        harness.finish_exit();
+        empty.finish_exit();
+        let (mut saw_restart, mut saw_empty_restart) = (false, false);
+        timeout(Duration::from_secs(30), async {
+            while !(saw_restart && saw_empty_restart) {
+                let notification = harness.notifications.recv().await.expect("service remains connected");
+                saw_restart |= notification.method == protocol::method::TURN_STATUS
+                    && notification.params["turnId"] == "stalled-turn"
+                    && notification.params["status"] == "failed"
+                    && notification.params["restarted"] == true;
+                let empty_notification = empty.notifications.recv().await.expect("service remains connected");
+                saw_empty_restart |= empty_notification.method == protocol::method::TURN_STATUS
+                    && empty_notification.params["turnId"] == "stalled-turn"
+                    && empty_notification.params["status"] == "failed"
+                    && empty_notification.params["restarted"] == true;
+            }
+        })
+        .await
+        .expect("both escalations kill, tear down, and rebuild from history");
+        harness.runtime_task.abort();
+        empty.runtime_task.abort();
+    });
 }

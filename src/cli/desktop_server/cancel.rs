@@ -78,6 +78,11 @@ pub(super) const CANCEL_ESCALATION: EscalationWaits = EscalationWaits {
     exit_wait: RUNLOOP_EXIT_TIMEOUT,
 };
 
+/// Bound for the escalation's direct exec-session kill: a graceful
+/// terminate-then-confirm poll takes up to ~3s per child, so one bound
+/// covers a small session set without stretching the teardown budget.
+pub(super) const ESCALATION_KILL_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[cfg(test)]
 pub(super) fn escalation_waits_for(state: &ServerState) -> EscalationWaits {
     state.escalation_waits.unwrap_or(CANCEL_ESCALATION)
@@ -165,9 +170,11 @@ impl Drop for EscalationGuard {
 }
 
 /// Watch one cancelled turn: if the same turn is still active after the grace
-/// period, force-stop its foreground execution, await bounded runtime
-/// shutdown, and rebuild the session from durable history. Queued prompts are
-/// preserved in place and dispatch once the replacement runtime is ready.
+/// period, force-stop its owned execution — killing exec sessions directly
+/// from the published handle, since a wedged runloop observes no signal —
+/// await bounded runtime shutdown, and rebuild the session from durable
+/// history. Queued prompts are preserved in place and dispatch once the
+/// replacement runtime is ready.
 pub(super) fn spawn_cancel_watchdog(
     context: &ServiceContext,
     session_id: String,
@@ -231,6 +238,18 @@ async fn escalate_stalled_turn(
     let _ = input.send(InlineEvent::ForceCancelPtySession);
     stop_requests::fire_forced_stop_signal(&stop);
     let _ = input.send(InlineEvent::Cancel);
+    // This escalation exists for the runloop that cannot observe any of the
+    // signals above, so kill owned processes directly from the published
+    // session manager instead of trusting Drop glue after abort. Bounded so a
+    // wedged child cannot stretch the teardown; before the manager is
+    // published no session can exist, so `None` needs no fallback here.
+    if let Some(manager) = stop_requests::host_exec_sessions(&stop)
+        && timeout(ESCALATION_KILL_TIMEOUT, manager.force_cancel_all_sessions())
+            .await
+            .is_err()
+    {
+        tracing::warn!(target: "vtcode.desktop", session_id, turn_id, "escalation exec-session kill timed out");
+    }
 
     // A turn that clears inside this window resolved cooperatively after all;
     // its runtime is healthy, so keep it instead of restarting.

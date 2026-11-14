@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::Error;
 use serde_json::Value;
-use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use vtcode_core::retry::RetryPolicy;
 #[cfg(test)]
@@ -13,18 +12,16 @@ use vtcode_core::tools::registry::{
     ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError, ToolExecutionRequest, ToolRegistry,
 };
 
-use crate::agent::runloop::unified::progress::ProgressReporter;
-use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::wait_feedback::{
-    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, wait_keepalive_message,
-};
-use vtcode_core::exec::cancellation;
-
 use super::CancellationTokens;
 use super::execution_helpers::process_llm_tool_output;
 use super::status::{TOOL_EXECUTION_METADATA_FIELD, ToolExecutionStatus};
 use super::timeout::{TimeoutWarningGuard, create_timeout_error};
 use super::{DEFAULT_TOOL_TIMEOUT, MAX_RETRY_BACKOFF, RETRY_BACKOFF_BASE};
+use crate::agent::runloop::unified::progress::ProgressReporter;
+use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::wait_feedback::{
+    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, wait_keepalive_message,
+};
 
 /// The registry owns the actual command-wait deadline. The outer harness
 /// timeout is only a cancellation guard, so leave room for result draining
@@ -326,8 +323,7 @@ async fn run_single_tool_attempt(
 
         progress_reporter.set_message(format!("Executing {name}...")).await;
 
-        let token = CancellationToken::new();
-        let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
+        let exec_future = async {
             progress_reporter.set_progress(40).await;
 
             let mut policy = ExecutionPolicySnapshot::default()
@@ -371,10 +367,9 @@ async fn run_single_tool_attempt(
             progress_reporter.set_message(format!("Processing {name} results...")).await;
             progress_reporter.set_progress(90).await;
             result
-        });
+        };
 
         if tokens.state.is_cancel_requested() || tokens.state.is_exit_requested() {
-            token.cancel();
             return ToolExecutionStatus::Cancelled;
         }
 
@@ -401,10 +396,8 @@ async fn run_single_tool_attempt(
                 biased;
                 _ = &mut cancel_notifier => {
                     if let Err(_e) = tokens.state.check_cancellation() {
-                        token.cancel();
                         ExecutionControl::Cancelled
                     } else {
-                        token.cancel();
                         ExecutionControl::Continue
                     }
                 }
@@ -459,7 +452,6 @@ async fn run_single_tool_attempt(
                 };
             }
             ExecutionControl::TimedOut => {
-                token.cancel();
                 terminate_active_exec_sessions(registry, name, "timed out", &tokens.state).await;
                 progress_reporter.set_message(format!("{name} timed out")).await;
                 let timeout_category = registry.timeout_category_for_args(name, args).await;
