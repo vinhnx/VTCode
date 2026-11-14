@@ -481,7 +481,14 @@ fn translucent_glass_surfaces_hold_aa_over_the_modeled_vibrancy_backdrop(cx: &mu
                 assert!(contrast_ratio(colors.primary, composite) >= 3.0, "{id}: {name} icon");
             }
         }
-        assert!(translucent_count > 0, "at least one theme must permit translucency");
+        // Every palette scans to a glass-band alpha today; a future palette that
+        // falls back to opaque must consciously relax this, not drift into it.
+        // Sidebar and toolbar each count once per theme.
+        let theme_count = (all_themes().len() + 2) * 2; // + system light and dark
+        assert_eq!(
+            translucent_count, theme_count,
+            "every theme must permit visible translucency; {translucent_count}/{theme_count} did"
+        );
     });
 }
 
