@@ -338,6 +338,103 @@ fn gemini4_argon_medium_thinking_mapping() {
 }
 
 #[test]
+fn gemini4_hydrogen_medium_thinking_mapping() {
+    use vtcode_config::constants::models;
+    use vtcode_config::types::ReasoningEffortLevel;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Hydrogen natively supports medium (low/medium/high default/xhigh): it
+    // must not fall back to high like models without a native medium.
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())].into(),
+        model: models::google::GEMINI_4_HYDROGEN.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Medium),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+
+    let generation_config = gemini_request.generation_config.expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config.thinking_level.as_deref().unwrap(),
+        "medium",
+        "Gemini 4 Hydrogen should map medium reasoning effort to medium thinking level"
+    );
+}
+
+#[test]
+fn gemini4_hydrogen_xhigh_thinking_mapping() {
+    use vtcode_config::constants::models;
+    use vtcode_config::types::ReasoningEffortLevel;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Hydrogen is the one model supporting xhigh; effort levels above high
+    // must map to it rather than the generic high fallback.
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())].into(),
+        model: models::google::GEMINI_4_HYDROGEN.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::XHigh),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+
+    let generation_config = gemini_request.generation_config.expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config.thinking_level.as_deref().unwrap(),
+        "xhigh",
+        "Gemini 4 Hydrogen should map xhigh reasoning effort to the xhigh thinking level"
+    );
+}
+
+#[test]
+fn gemini4_argon_unsupported_levels_fall_back() {
+    use vtcode_config::constants::models;
+    use vtcode_config::types::ReasoningEffortLevel;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Argon supports low/medium/high: minimal falls back to low (the API
+    // rejects `minimal`), and xhigh falls back to high (only Hydrogen
+    // supports xhigh) — the opposite sides of the preview-minimal and
+    // hydrogen-xhigh mappings.
+    for (effort, expected) in [
+        (ReasoningEffortLevel::Minimal, "low"),
+        (ReasoningEffortLevel::XHigh, "high"),
+    ] {
+        let request = LLMRequest {
+            messages: vec![Message::user("test".to_string())].into(),
+            model: models::google::GEMINI_4_ARGON.to_string(),
+            reasoning_effort: Some(effort),
+            ..Default::default()
+        };
+
+        let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+
+        let generation_config = gemini_request.generation_config.expect("generation_config should be present");
+        let thinking_config = generation_config
+            .thinking_config
+            .as_ref()
+            .expect("thinking_config should be present");
+        assert_eq!(
+            thinking_config.thinking_level.as_deref().unwrap(),
+            expected,
+            "Argon should map unsupported effort {effort:?} to {expected}"
+        );
+    }
+}
+
+#[test]
 fn gemini4_argon_output_limit_validation() {
     use vtcode_config::constants::models;
 
