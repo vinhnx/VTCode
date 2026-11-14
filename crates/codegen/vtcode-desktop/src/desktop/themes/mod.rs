@@ -894,14 +894,6 @@ pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
     translucent_glass_surface(colors, panel)
 }
 
-/// Toolbar-band twin of [`translucent_sidebar_surface`]: the title bar rides
-/// the same window vibrancy, so it tints with the rail color and the same
-/// glass scan.
-pub(super) fn translucent_toolbar_surface(colors: &ThemeColor) -> Hsla {
-    let rail = navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;
-    translucent_glass_surface(colors, rail)
-}
-
 /// WCAG contrast ratio between two colors.
 pub(super) fn contrast_ratio(a: Hsla, b: Hsla) -> f32 {
     let la = relative_luminance(a);

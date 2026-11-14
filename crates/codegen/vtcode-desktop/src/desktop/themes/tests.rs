@@ -440,7 +440,7 @@ fn navigation_surfaces_are_distinct_and_readable(cx: &mut gpui_kit::TestAppConte
 }
 
 #[gpui_kit::test]
-fn translucent_glass_surfaces_hold_aa_over_the_modeled_vibrancy_backdrop(cx: &mut gpui_kit::TestAppContext) {
+fn translucent_glass_sidebar_holds_aa_over_the_modeled_vibrancy_backdrop(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         let mut translucent_count = 0;
@@ -450,41 +450,35 @@ fn translucent_glass_surfaces_hold_aa_over_the_modeled_vibrancy_backdrop(cx: &mu
         {
             let _mode = apply_by_id(id, None, cx);
             let colors = cx.theme().colors;
-            let sidebar = translucent_sidebar_surface(&colors);
-            let toolbar = translucent_toolbar_surface(&colors);
+            // The toolbar floats fully transparent on the vibrancy, so only
+            // the sidebar panel scans a tint (see `toolbar_band_surface`).
+            let surface = translucent_sidebar_surface(&colors);
             if id == DEFAULT_THEME_ID {
-                assert!(sidebar.a < 1.0, "default theme must show the blurred backdrop");
+                assert!(surface.a < 1.0, "default theme must show the blurred backdrop");
                 assert!(
-                    sidebar.a < 0.80,
+                    surface.a < 0.80,
                     "default theme glass must be visibly translucent, not the old near-opaque floor ({})",
-                    sidebar.a
+                    surface.a
                 );
-                assert!(toolbar.a < 1.0, "default theme toolbar glass must show the blurred backdrop");
             }
-            for (name, surface) in [("sidebar", sidebar), ("toolbar", toolbar)] {
-                if surface.a >= 1.0 {
-                    continue;
-                }
-                assert!(
-                    surface.a >= GLASS_ALPHA_FLOOR,
-                    "{id}: {name} glass alpha {a} left the glass band",
-                    a = surface.a
-                );
-                translucent_count += 1;
-                // Mirror the production oracle: glass readability is modeled
-                // against the vibrancy backdrop, not worst-case wallpapers.
-                let dark = relative_luminance(colors.background) < 0.179;
-                let composite = composite_status_surface(vibrancy_backdrop(dark), surface, surface.a);
-                assert!(contrast_ratio(colors.foreground, composite) >= 4.5, "{id}: {name} foreground");
-                assert!(contrast_ratio(colors.muted_foreground, composite) >= 4.5, "{id}: {name} muted");
-                assert!(contrast_ratio(label_foreground(&colors), composite) >= 4.5, "{id}: {name} label");
-                assert!(contrast_ratio(colors.primary, composite) >= 3.0, "{id}: {name} icon");
+            if surface.a >= 1.0 {
+                continue;
             }
+            assert!(surface.a >= GLASS_ALPHA_FLOOR, "{id}: sidebar glass alpha {a} left the glass band", a = surface.a);
+            translucent_count += 1;
+            // Mirror the production oracle: glass readability is modeled
+            // against the vibrancy backdrop, not worst-case wallpapers.
+            let dark = relative_luminance(colors.background) < 0.179;
+            let composite = composite_status_surface(vibrancy_backdrop(dark), surface, surface.a);
+            assert!(contrast_ratio(colors.foreground, composite) >= 4.5, "{id}: sidebar foreground");
+            assert!(contrast_ratio(colors.muted_foreground, composite) >= 4.5, "{id}: sidebar muted");
+            assert!(contrast_ratio(label_foreground(&colors), composite) >= 4.5, "{id}: sidebar label");
+            assert!(contrast_ratio(colors.primary, composite) >= 3.0, "{id}: sidebar icon");
         }
         // Every palette scans to a glass-band alpha today; a future palette that
         // falls back to opaque must consciously relax this, not drift into it.
-        // Sidebar and toolbar each count once per theme.
-        let theme_count = (all_themes().len() + 2) * 2; // + system light and dark
+        // The sidebar counts once per theme.
+        let theme_count = all_themes().len() + 2; // + system light and dark
         assert_eq!(
             translucent_count, theme_count,
             "every theme must permit visible translucency; {translucent_count}/{theme_count} did"
@@ -782,29 +776,4 @@ fn picker_swatches_group_every_entry_by_mode() {
         .expect("dark themes exist");
     assert!(modes[..first_dark].iter().all(|mode| *mode == ThemeMode::Light));
     assert!(modes[first_dark..].iter().all(|mode| *mode == ThemeMode::Dark));
-}
-
-#[gpui_kit::test]
-fn probe_glass_alphas(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        gpui_kit::init(cx);
-        let mut rows = String::new();
-        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
-            .into_iter()
-            .chain(all_themes().iter().map(|theme| theme.id))
-        {
-            let _mode = apply_by_id(id, None, cx);
-            let colors = cx.theme().colors;
-            let sidebar = translucent_sidebar_surface(&colors);
-            let toolbar = translucent_toolbar_surface(&colors);
-            rows.push_str(&format!(
-                "{id}: sidebar.a={:.2} toolbar.a={:.2} bg_l={:.3} fg_l={:.3}\n",
-                sidebar.a,
-                toolbar.a,
-                relative_luminance(colors.background),
-                relative_luminance(colors.foreground),
-            ));
-        }
-        std::fs::write("/tmp/glass_alphas.txt", rows).unwrap();
-    });
 }

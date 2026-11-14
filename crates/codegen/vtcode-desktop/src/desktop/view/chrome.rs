@@ -30,6 +30,20 @@ impl Render for ResizeDragPreview {
     }
 }
 
+/// Toolbar band fill: fully transparent in translucent mode so the bar reads
+/// as window glass continuous with the unpainted rail — any tinted fill
+/// seams against the pure-blur chrome around it and reads as an opaque
+/// slab. Transparency must be explicit: Kit TitleBar paints an opaque
+/// default gradient that a missing fill would leave standing. Opaque mode
+/// keeps the solid rail fill.
+pub(super) fn toolbar_band_surface(translucent: bool, rail: gpui_kit::Hsla) -> gpui_kit::Hsla {
+    if translucent {
+        gpui_kit::transparent_black()
+    } else {
+        rail
+    }
+}
+
 impl DesktopView {
     /// The draggable divider between panes.
     pub(super) fn render_resize_handle(&self, edge: ResizeEdge, cx: &mut Context<Self>) -> impl IntoElement {
@@ -633,13 +647,13 @@ impl DesktopView {
 
     pub(super) fn render_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        // The toolbar is chrome, not content: in translucent mode it tints
-        // the window vibrancy instead of painting an opaque band over it.
-        let toolbar_surface = if self.effective_translucent_sidebar() {
-            themes::translucent_toolbar_surface(&theme.colors)
-        } else {
-            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail
-        };
+        // The toolbar is chrome, not content: in translucent mode it floats
+        // fully transparent on the window vibrancy instead of painting a
+        // band over it (see `toolbar_band_surface`).
+        let toolbar_surface = toolbar_band_surface(
+            self.effective_translucent_sidebar(),
+            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail,
+        );
         // Fullscreen hides the traffic lights, so the leading cluster hugs the
         // window edge; windowed mode keeps the 80px light clearance. The kit
         // adds its own fullscreen pl_3 on the inner bar, which stacks here.
