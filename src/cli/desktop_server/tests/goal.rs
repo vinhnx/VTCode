@@ -4,6 +4,7 @@ use std::sync::Arc;
 /// A selected desktop session ("session") with a published goal tracker.
 struct GoalHarness {
     context: ServiceContext,
+    events_path: PathBuf,
     _runtime_task: tokio::task::JoinHandle<()>,
     _workspace_guard: tempfile::TempDir,
 }
@@ -32,8 +33,12 @@ impl GoalHarness {
         }
         let tracker = Arc::new(Mutex::new(vtcode_memory::GoalTracker::new(workspace_guard.path().join("session-1"))));
         stop_requests::publish_goal_tracker(&stop, &tracker);
+        let events_path = workspace_guard.path().join("events.jsonl");
+        let emitter = stop_requests::HarnessEventEmitter::new(events_path.clone()).unwrap();
+        stop_requests::publish_goal_emitter(&stop, &emitter);
         Self {
             context,
+            events_path,
             _runtime_task: runtime_task,
             _workspace_guard: workspace_guard,
         }
@@ -85,6 +90,17 @@ async fn goal_execute_pause_and_resume_round_trip() {
     let resumed = harness.execute("session", "resume").await;
     assert!(resumed.mutated);
     assert!(resumed.submit.as_deref().is_some_and(|p| p.contains("Ship it")));
+}
+
+#[tokio::test]
+async fn goal_execute_emits_canonical_event_on_mutation() {
+    let harness = GoalHarness::new().await;
+    harness.execute("session", "Ship it").await;
+    harness.execute("session", "pause").await;
+
+    let log = std::fs::read_to_string(&harness.events_path).unwrap();
+    assert!(log.contains("\"goal.updated\""), "mutations must emit: {log}");
+    assert!(log.contains("Ship it"), "emitted snapshot must carry the objective");
 }
 
 #[tokio::test]

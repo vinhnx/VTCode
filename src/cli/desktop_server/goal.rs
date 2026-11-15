@@ -25,7 +25,7 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
     if params.args.len() > MAX_GOAL_ARGS_BYTES {
         bail!("goal command arguments are too long");
     }
-    let tracker = {
+    let (tracker, emitter) = {
         let state = context.state.lock().await;
         if state.session_id.as_deref() != Some(params.session_id.as_str()) {
             bail!("goal commands are only available for the selected session");
@@ -34,7 +34,9 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
             .runtime
             .as_ref()
             .ok_or_else(|| anyhow!("selected session is not running"))?;
-        stop_requests::host_goal_tracker(&runtime.stop).ok_or_else(|| anyhow!("session is still starting"))?
+        let tracker =
+            stop_requests::host_goal_tracker(&runtime.stop).ok_or_else(|| anyhow!("session is still starting"))?;
+        (tracker, stop_requests::host_goal_emitter(&runtime.stop))
     };
     let command = parse_goal_slash_command(&params.args);
     let now = chrono::Utc::now();
@@ -49,12 +51,18 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
     let effect = apply_goal_command(&mut guard, &command, 0, &seed);
     if effect.mutated {
         guard.persist().context("goal snapshot persist failed")?;
+        if let Some(emitter) = &emitter
+            && let Err(err) = emitter.emit(guard.to_goal_updated_event())
+        {
+            tracing::warn!("goal event emit failed: {err:#}");
+        }
     }
     let snapshot = guard.goal_snapshot();
     drop(guard);
     let lines = effect.lines;
 
     let result = protocol::GoalExecuteResult {
+        session_id: params.session_id,
         lines: lines.into_iter().map(|(_, line)| line).collect(),
         mutated: effect.mutated,
         submit: effect.submit,

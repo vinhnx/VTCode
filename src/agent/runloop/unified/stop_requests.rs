@@ -5,6 +5,8 @@ use tokio::sync::Notify;
 
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 
+pub(crate) use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+
 /// Request a stop through the Ctrl+C state machine and notify waiters.
 ///
 /// # Priority Guarantee
@@ -61,6 +63,7 @@ pub(crate) struct HostStopHandles {
     handles: std::sync::OnceLock<StopHandles>,
     exec_sessions: std::sync::OnceLock<vtcode_core::tools::exec_session::ExecSessionManager>,
     goal_tracker: std::sync::OnceLock<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker>,
+    goal_emitter: std::sync::OnceLock<HarnessEventEmitter>,
     ready: std::sync::atomic::AtomicBool,
     ready_notify: Notify,
 }
@@ -113,6 +116,19 @@ pub(crate) fn host_goal_tracker(
     slot: &StopHandleSlot,
 ) -> Option<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker> {
     slot.goal_tracker.get().cloned()
+}
+
+/// Publish the runloop's own event emitter for host-side `goal/execute`
+/// calls, so desktop-driven mutations land in the canonical log (and live
+/// stream) with identical annotation. Called once alongside the tracker.
+pub(crate) fn publish_goal_emitter(slot: &StopHandleSlot, emitter: &HarnessEventEmitter) {
+    let _kept_first = slot.goal_emitter.set(emitter.clone());
+}
+
+/// Clone the published goal emitter, if initialization got far enough to
+/// create one. `None` before that.
+pub(crate) fn host_goal_emitter(slot: &StopHandleSlot) -> Option<HarnessEventEmitter> {
+    slot.goal_emitter.get().cloned()
 }
 
 pub(crate) fn mark_host_turns_ready(slot: &StopHandleSlot) {
@@ -300,7 +316,7 @@ pub(crate) async fn await_initialization<T>(
 }
 
 pub(crate) struct InitializationExitContext<'a> {
-    pub emitter: Option<&'a super::inline_events::harness::HarnessEventEmitter>,
+    pub emitter: Option<&'a HarnessEventEmitter>,
     pub session_id: &'a str,
     pub config: &'a vtcode_core::config::types::AgentConfig,
     pub full_auto: bool,

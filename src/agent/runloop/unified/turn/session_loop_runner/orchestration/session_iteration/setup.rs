@@ -663,6 +663,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let goal_tracker = Arc::new(tokio::sync::Mutex::new(goal_tracker));
     if let Some(slot) = stop_slot.as_ref() {
         crate::agent::runloop::unified::stop_requests::publish_goal_tracker(slot, &goal_tracker);
+        if let Some(emitter) = harness_emitter.as_ref() {
+            crate::agent::runloop::unified::stop_requests::publish_goal_emitter(slot, emitter);
+        }
     }
     Ok(SetupFlow::Proceed(Box::new(Setup {
         config,
