@@ -343,7 +343,7 @@ impl GoalStatus {
     }
 
     /// `true` for any paused variant.
-    fn is_paused(&self) -> bool {
+    pub fn is_paused(&self) -> bool {
         matches!(
             self,
             Self::UserPaused | Self::BackOffPaused | Self::NoProgressPaused | Self::InfraPaused | Self::Blocked
@@ -601,7 +601,7 @@ pub struct GoalTracker {
 
 impl GoalTracker {
     /// Create a new tracker with no active goal.
-    fn new(session_dir: PathBuf) -> Self {
+    pub fn new(session_dir: PathBuf) -> Self {
         Self {
             orchestration: None,
             session_dir,
@@ -647,17 +647,17 @@ impl GoalTracker {
     }
 
     /// `true` if a goal is currently active.
-    fn is_active(&self) -> bool {
+    pub fn is_active(&self) -> bool {
         self.orchestration.as_ref().is_some_and(|o| o.status == GoalStatus::Active)
     }
 
     /// Current execution phase, if a goal is active.
-    fn phase(&self) -> Option<GoalPhase> {
+    pub fn phase(&self) -> Option<GoalPhase> {
         self.orchestration.as_ref().map(|o| o.phase)
     }
 
     /// Current lifecycle status, if a goal is active.
-    fn status(&self) -> Option<GoalStatus> {
+    pub fn status(&self) -> Option<GoalStatus> {
         self.orchestration.as_ref().map(|o| o.status)
     }
 
@@ -667,17 +667,17 @@ impl GoalTracker {
     }
 
     /// Human-readable objective, if a goal is active.
-    fn objective(&self) -> Option<&str> {
+    pub fn objective(&self) -> Option<&str> {
         self.orchestration.as_ref().map(|o| o.objective.as_str())
     }
 
     /// Token budget cap, if set.
-    fn token_budget(&self) -> Option<i64> {
+    pub fn token_budget(&self) -> Option<i64> {
         self.orchestration.as_ref().and_then(|o| o.token_budget)
     }
 
     /// Create a new goal. Replaces any existing orchestration.
-    fn create_goal(
+    pub fn create_goal(
         &mut self,
         goal_id: String,
         objective: String,
@@ -748,12 +748,12 @@ impl GoalTracker {
     }
 
     /// Pause the goal with a specific reason. Only transitions from `Active`.
-    fn pause(&mut self, reason: GoalPauseReason) -> bool {
+    pub fn pause(&mut self, reason: GoalPauseReason) -> bool {
         self.pause_inner(reason, None)
     }
 
     /// Like [`Self::pause`] but also stores a human-readable `message`.
-    fn pause_with_message(&mut self, reason: GoalPauseReason, message: String) -> bool {
+    pub fn pause_with_message(&mut self, reason: GoalPauseReason, message: String) -> bool {
         self.pause_inner(reason, Some(message))
     }
 
@@ -779,7 +779,7 @@ impl GoalTracker {
     }
 
     /// Resume a paused goal (any paused variant). Returns `true` if applied.
-    fn resume(&mut self) -> bool {
+    pub fn resume(&mut self) -> bool {
         if let Some(o) = &mut self.orchestration
             && o.status.is_paused()
         {
@@ -797,7 +797,7 @@ impl GoalTracker {
     }
 
     /// Mark the goal as complete. Accepts `Active` or any paused variant.
-    fn complete(&mut self) -> bool {
+    pub fn complete(&mut self) -> bool {
         if let Some(o) = &mut self.orchestration
             && (o.status == GoalStatus::Active || o.status.is_paused())
         {
@@ -817,7 +817,7 @@ impl GoalTracker {
     }
 
     /// Mark the goal as budget-limited. Accepts `Active` or any paused variant.
-    fn budget_limit(&mut self) -> bool {
+    pub fn budget_limit(&mut self) -> bool {
         if let Some(o) = &mut self.orchestration
             && (o.status == GoalStatus::Active || o.status.is_paused())
         {
@@ -856,7 +856,7 @@ impl GoalTracker {
             && let Some(since) = self.active_since
         {
             o.elapsed_ms = o.elapsed_ms.saturating_add(since.elapsed().as_millis() as u64);
-            self.active_since = Some(since);
+            self.active_since = Some(Instant::now());
         }
     }
 
@@ -947,6 +947,7 @@ impl GoalTracker {
     }
 }
 
+mod goal_api;
 #[cfg(test)]
 mod goal_tracker_tests;
 #[cfg(test)]

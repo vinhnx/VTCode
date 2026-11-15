@@ -388,3 +388,159 @@ fn reset_strategist_state_clears_streak_marker_and_recommendation() {
     assert!(o.last_strategy_path.is_none());
     assert!(o.last_strategy_recommendation.is_none());
 }
+
+#[test]
+fn elapsed_ms_accrues_while_active_and_freezes_when_paused() {
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let running = t.elapsed_ms();
+    assert!(running > 0, "active goal must accrue wall-clock time");
+
+    assert!(t.pause(GoalPauseReason::User));
+    let frozen = t.elapsed_ms();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert_eq!(t.elapsed_ms(), frozen, "paused goal must not accrue time");
+}
+
+#[test]
+fn account_elapsed_flushes_baseline_without_double_counting() {
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    t.account_elapsed();
+    let after_first_flush = t.elapsed_ms();
+    t.account_elapsed();
+    let second_increment = t.elapsed_ms().saturating_sub(after_first_flush);
+    assert!(
+        second_increment < after_first_flush,
+        "immediate second flush must add ~0ms, got {second_increment}ms on top of {after_first_flush}ms"
+    );
+}
+
+#[test]
+fn record_token_observation_tracks_monotonic_high_water() {
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    assert_eq!(t.tokens_used(), 0);
+    t.record_token_observation(500);
+    assert_eq!(t.tokens_used(), 500);
+    t.record_token_observation(300);
+    assert_eq!(t.tokens_used(), 500, "high-water mark must not decrease");
+    t.record_token_observation(700);
+    assert_eq!(t.tokens_used(), 700);
+
+    let mut fresh = make_tracker();
+    activate_tracker(&mut fresh);
+    fresh.record_token_observation(-50);
+    assert_eq!(fresh.tokens_used(), 0, "usage floors at zero");
+}
+
+#[test]
+fn set_objective_replaces_in_place_and_trims() {
+    let mut t = make_tracker();
+    assert!(!t.set_objective("no goal"), "must fail without a goal");
+    activate_tracker(&mut t);
+    assert!(t.set_objective("  Ship it  "));
+    assert_eq!(t.objective(), Some("Ship it"));
+    assert_eq!(t.status(), Some(GoalStatus::Active), "edit must preserve status");
+}
+
+#[test]
+fn goal_status_labels_cover_every_variant() {
+    assert_eq!(GoalStatus::Active.display_name(), "Active");
+    assert_eq!(GoalStatus::UserPaused.display_name(), "Paused");
+    assert_eq!(GoalStatus::BackOffPaused.display_name(), "Paused (backing off)");
+    assert_eq!(GoalStatus::NoProgressPaused.display_name(), "Paused (no progress)");
+    assert_eq!(GoalStatus::InfraPaused.display_name(), "Paused (infra error)");
+    assert_eq!(GoalStatus::Blocked.display_name(), "Blocked");
+    assert_eq!(GoalStatus::BudgetLimited.display_name(), "Budget limited");
+    assert_eq!(GoalStatus::Complete.display_name(), "Complete");
+}
+
+#[test]
+fn persist_and_restore_round_trip_preserves_paused_goal() {
+    let dir = tempfile::tempdir().unwrap();
+    let session_dir = dir.path().join("session-1");
+    let mut t = GoalTracker::new(session_dir.clone());
+    t.create_goal("goal-1".into(), "Build a widget".into(), Some(100_000), 0, "2026-01-01T00:00:00Z".into(), None);
+    t.record_token_observation(250);
+    assert!(t.pause_with_message(GoalPauseReason::Infra, "Turn failed: auth".into()));
+    t.persist().unwrap();
+
+    let restored = GoalTracker::restore(session_dir).unwrap();
+    assert!(restored.has_goal());
+    assert_eq!(restored.goal_id(), Some("goal-1"));
+    assert_eq!(restored.status(), Some(GoalStatus::InfraPaused));
+    assert_eq!(restored.objective(), Some("Build a widget"));
+    assert_eq!(restored.token_budget(), Some(100_000));
+    assert_eq!(restored.tokens_used(), 250);
+    assert_eq!(restored.pause_message(), Some("Turn failed: auth"));
+    assert!(!restored.is_active());
+}
+
+#[test]
+fn restore_without_snapshot_returns_empty_tracker() {
+    let dir = tempfile::tempdir().unwrap();
+    let restored = GoalTracker::restore(dir.path().join("fresh")).unwrap();
+    assert!(!restored.has_goal());
+    assert_eq!(restored.status(), None);
+}
+
+#[test]
+fn persist_after_clear_removes_snapshot_so_goal_never_resurrects() {
+    let dir = tempfile::tempdir().unwrap();
+    let session_dir = dir.path().join("session-1");
+    let mut t = GoalTracker::new(session_dir.clone());
+    t.create_goal("goal-1".into(), "Build a widget".into(), None, 0, "2026-01-01T00:00:00Z".into(), None);
+    t.persist().unwrap();
+    assert!(session_dir.join("goal").join("goal.json").exists());
+
+    t.clear();
+    t.persist().unwrap();
+    let restored = GoalTracker::restore(session_dir).unwrap();
+    assert!(!restored.has_goal());
+}
+
+#[test]
+fn to_goal_updated_event_maps_state_and_cleared() {
+    let empty = make_tracker();
+    let cleared = empty.to_goal_updated_event();
+    assert!(
+        matches!(cleared, vtcode_exec_events::ThreadEvent::GoalUpdated(e) if e.goal.is_none()),
+        "tracker without a goal must emit a cleared payload"
+    );
+
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    match t.to_goal_updated_event() {
+        vtcode_exec_events::ThreadEvent::GoalUpdated(e) => {
+            let g = e.goal.expect("active goal must emit a snapshot");
+            assert_eq!(g.goal_id, "goal-1");
+            assert_eq!(g.state, vtcode_exec_events::goal::GoalState::Active);
+            assert_eq!(g.objective, "Build a widget");
+            assert_eq!(g.token_budget, Some(100_000));
+        }
+        other => panic!("expected GoalUpdated, got {other:?}"),
+    }
+
+    t.pause(GoalPauseReason::BackOff);
+    let paused = t.to_goal_updated_event();
+    assert!(
+        matches!(paused, vtcode_exec_events::ThreadEvent::GoalUpdated(e) if e.goal.as_ref().is_some_and(|g| g.state == vtcode_exec_events::goal::GoalState::Paused)),
+        "fine-grained pause reasons must collapse to Paused on the wire"
+    );
+}
+
+#[test]
+fn restore_demotes_in_flight_active_goal_to_paused() {
+    let dir = tempfile::tempdir().unwrap();
+    let session_dir = dir.path().join("session-1");
+    let mut t = GoalTracker::new(session_dir.clone());
+    t.create_goal("goal-1".into(), "Build a widget".into(), None, 0, "2026-01-01T00:00:00Z".into(), None);
+    t.persist().unwrap();
+
+    let restored = GoalTracker::restore(session_dir).unwrap();
+    assert_eq!(restored.status(), Some(GoalStatus::UserPaused));
+    assert!(!restored.is_active());
+}
