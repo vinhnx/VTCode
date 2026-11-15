@@ -230,11 +230,14 @@ impl DesktopView {
             panel = panel.child(self.render_interaction(&interaction, window, cx));
         }
 
-        let can_submit = self.session_change_idle()
-            && self.workspace_permission_ready()
-            && !self.attachments_picker_open
-            && self.retained_submission.is_none()
-            && !self.composer.read(cx).value().trim().is_empty();
+        let draft_ready = !self.composer.read(cx).value().trim().is_empty();
+        let composer_gates_open =
+            self.workspace_permission_ready() && !self.attachments_picker_open && self.retained_submission.is_none();
+        let can_submit = self.session_change_idle() && composer_gates_open && draft_ready;
+        // The running-tolerant twin of `can_submit`: a running turn queues
+        // behind it instead of blocking, so the queue commit enables under
+        // the same gates that let a submit through mid-turn.
+        let can_queue = self.submit_allowed() && composer_gates_open && draft_ready;
         let buttons = div()
             .w_full()
             .min_w_0()
@@ -312,21 +315,34 @@ impl DesktopView {
         // the Medium tier for their icon: Kit derives an icon-only
         // button's glyph from its own size tier (Large paints a 24px
         // icon, Medium 16px, same 32px frame) and its `ButtonIcon`
-        // wrapper overwrites any size set on the inner `Icon`.
+        // wrapper overwrites any size set on the inner `Icon`. A
+        // non-empty draft swaps the stop out for the queue commit: the
+        // send look (ArrowUp) with queue copy, since Enter would queue
+        // behind the turn from this state. Clearing the draft swaps the
+        // stop back in; the force-cancel ghost is independent of the swap.
         if self.running {
-            model_actions = model_actions
-                .when(self.cancel_requested, |actions| {
-                    actions.child(
-                        desktop_button("force-cancel-exec")
-                            .ghost()
-                            .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
-                            .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
-                            .icon(IconName::X)
-                            .desktop_elevated()
-                            .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
-                    )
-                })
-                .child(
+            model_actions = model_actions.when(self.cancel_requested, |actions| {
+                actions.child(
+                    desktop_button("force-cancel-exec")
+                        .ghost()
+                        .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
+                        .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
+                        .icon(IconName::X)
+                        .desktop_elevated()
+                        .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
+                )
+            });
+            if draft_ready {
+                model_actions = model_actions.child(
+                    desktop_glass_primary_button("queue-prompt", &colors, !can_queue)
+                        .accessibility_label(rust_i18n::t!("app.composer.queue").to_string())
+                        .tooltip(rust_i18n::t!("app.composer.queue_tooltip").to_string())
+                        .icon(IconName::ArrowUp)
+                        .when(can_queue, |button| button.desktop_elevated())
+                        .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
+                );
+            } else {
+                model_actions = model_actions.child(
                     desktop_glass_primary_button("cancel-turn", &colors, false)
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
@@ -338,6 +354,7 @@ impl DesktopView {
                         .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
+            }
         } else {
             model_actions = model_actions.child(
                 desktop_glass_primary_button("send-prompt", &colors, !can_submit)
@@ -454,13 +471,23 @@ impl DesktopView {
                         }
                     }))
                     .capture_action(cx.listener(|view, _: &IndentInline, window, cx| {
-                        // The history palette cycles matches on Tab (CLI
-                        // parity). File-mention and slash suggestions keep the
-                        // accept-on-Tab convention.
+                        // Suggestion-first priority (CLI parity): the
+                        // history palette cycles matches on Tab, and
+                        // file-mention and slash suggestions keep the
+                        // accept-on-Tab convention. With no suggestion
+                        // to take, a submittable draft enqueues behind
+                        // the turn (TUI Tab-to-queue parity: batchable
+                        // while running, immediate while idle) instead
+                        // of moving focus. Anything else keeps native
+                        // Tab navigation so keyboard focus never wedges.
                         if view.palette_kind == PaletteKind::PromptHistory && view.palette.is_some() {
                             let _cycled = view.move_composer_suggestion(true, window, cx);
                         } else if !view.accept_composer_suggestion(window, cx) {
-                            window.focus_next(cx);
+                            if view.tab_enqueue_allowed(cx) {
+                                view.submit_batched_prompt(window, cx);
+                            } else {
+                                window.focus_next(cx);
+                            }
                         }
                         cx.stop_propagation();
                     }))

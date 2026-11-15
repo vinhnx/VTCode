@@ -136,6 +136,12 @@ fn immediate_ack_promotes_a_queued_entry_when_idle_first(cx: &mut TestAppContext
             prompt: "promoted".to_string(),
             acknowledged: false,
         });
+        view.push_submission_echo(&SubmissionDraft {
+            prompt: "promoted".into(),
+            attachments: Vec::new(),
+            echo_id: "echo-promoted".into(),
+            delivery_uncertain: false,
+        });
         view.handle_backend_event(
             submit_response(
                 vtcode_desktop_protocol::method::TURN_SUBMIT,
@@ -143,7 +149,13 @@ fn immediate_ack_promotes_a_queued_entry_when_idle_first(cx: &mut TestAppContext
             ),
             cx,
         );
-        assert!(view.queued_submissions[0].acknowledged);
+        // Promotion runs the entry immediately: it leaves the pending
+        // list (the service publishes no queue snapshot on immediate
+        // dispatch, so keeping it would strand the row), while its
+        // transcript echo stays as the running turn's user row.
+        assert!(view.queued_submissions.is_empty(), "promoted entry leaves the pending list");
+        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden);
+        assert!(view.transcript.items().any(|item| item.text == "promoted"), "echo stays as history");
         assert_eq!(view.active_turn_id.as_deref(), Some("turn-1"));
         assert!(view.running);
     });

@@ -32,6 +32,6 @@
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics, and `on_next_frame` never runs headless.
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
 - Never rebuild rio-vt palettes per frame (uncached regex compiles); tables are statics, rows virtualize, custom buttons fix height.
-- Transcript disclosure rows share one title spine (inset + icon slot + gap): never retier one row alone. Plan rail, themes, dismiss guards, login, handoff, ceilings, submit detours, slash catalog: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
+- Transcript disclosure rows share one title spine (inset + icon slot + gap): never retier one row alone. Plan rail, themes, dismiss guards, login, handoff, ceilings, submit detours, slash catalog, cli-dry: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.

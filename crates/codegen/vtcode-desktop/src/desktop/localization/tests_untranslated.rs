@@ -215,3 +215,19 @@ fn terminal_position_copy_resolves_in_every_language() {
         "Terminal position"
     );
 }
+
+#[test]
+fn queue_button_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in ["app.composer.queue", "app.composer.queue_tooltip"] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(rust_i18n::t!("app.composer.queue", locale = "en").to_string(), "Queue message");
+    assert_eq!(rust_i18n::t!("app.composer.queue_tooltip", locale = "en").to_string(), "Queue message (Tab)");
+}

@@ -126,6 +126,44 @@ impl DesktopView {
         }
     }
 
+    /// Promote the oldest unconfirmed queued entry to the running turn: the
+    /// service ran it immediately instead of queueing it (idle race), so it
+    /// leaves the pending list — no queue snapshot follows an immediate
+    /// dispatch to clear it. Its transcript echo stays as the turn's user
+    /// row. Returns whether an entry was promoted.
+    pub(super) fn promote_oldest_queued_submission(&mut self) -> bool {
+        if let Some(index) = self.queued_submissions.iter().position(|entry| !entry.acknowledged) {
+            let _ = self.queued_submissions.remove(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Converge the pending list to an authoritative depth: confirmed
+    /// entries past it dispatched (their transcript rows stay as
+    /// history). Unconfirmed entries stay — their acks are still in
+    /// flight. Shared by snapshots, take-latest, and remove responses
+    /// so every depth report clears the same way.
+    pub(super) fn truncate_dispatched_to_depth(&mut self, depth: usize) {
+        // Confirmed entries always form a prefix: confirmation marks the
+        // oldest unconfirmed entry, demotion appends only when nothing is
+        // unconfirmed, and new entries append unconfirmed. Truncating the
+        // front therefore only ever removes confirmed (dispatched) entries.
+        let confirmed = self.queued_submissions.iter().filter(|entry| entry.acknowledged).count();
+        if confirmed > depth {
+            drop(self.queued_submissions.drain(..confirmed - depth));
+        }
+        self.queue_depth = depth;
+    }
+
+    /// Whether the newest entry can be popped back into the composer: no
+    /// request in flight and every entry acknowledged, so the service pop
+    /// maps to the newest local row exactly.
+    pub(super) fn take_latest_ready(&self) -> bool {
+        !self.take_latest_pending && !self.queued_submissions.iter().any(|entry| !entry.acknowledged)
+    }
+
     /// Apply an authoritative queue snapshot: reconcile entries, record the
     /// depth, previews, ids, elapsed seconds, and drop count. Confirmed entries
     /// beyond the service depth dispatched (their transcript rows stay as
@@ -135,14 +173,7 @@ impl DesktopView {
         if self.selected_session_id.as_deref() != Some(status.session_id.as_str()) {
             return;
         }
-        // Confirmed entries always form a prefix: confirmation marks the
-        // oldest unconfirmed entry, demotion appends only when nothing is
-        // unconfirmed, and new entries append unconfirmed. Truncating the
-        // front therefore only ever removes confirmed (dispatched) entries.
-        let confirmed = self.queued_submissions.iter().filter(|entry| entry.acknowledged).count();
-        if confirmed > status.queue_depth {
-            drop(self.queued_submissions.drain(..confirmed - status.queue_depth));
-        }
+        self.truncate_dispatched_to_depth(status.queue_depth);
         // Bind optimistic entries to their wire identity: the service lists
         // its queue oldest first, and confirmed entries (whose acks arrived)
         // own the leading ids. Optimistic entries wait for a later snapshot.
@@ -151,7 +182,6 @@ impl DesktopView {
             let Some(id) = ids.next() else { break };
             entry.entry_id = Some(id);
         }
-        self.queue_depth = status.queue_depth;
         self.queue_previews = status.previews;
         self.queue_ages_secs = status.queued_for_secs;
         if status.dropped_total > self.queue_dropped_total {
@@ -165,8 +195,11 @@ impl DesktopView {
 
     /// Pop the newest queued message back into the composer for editing.
     /// Mirrors the CLI `EditQueue` gesture; the service text is authoritative.
+    /// Blocked while any entry is unacknowledged: the service pops its
+    /// newest entry, which only maps to the newest local row once every
+    /// ack has landed.
     pub(super) fn take_latest_queued(&mut self, cx: &mut Context<Self>) {
-        if self.take_latest_pending || self.attachments_picker_open || self.backend.is_none() {
+        if !self.take_latest_ready() || self.attachments_picker_open || self.backend.is_none() {
             return;
         }
         let Some(session_id) = self.selected_session_id.clone() else {
@@ -188,9 +221,10 @@ impl DesktopView {
     }
 
     /// Remove one queued message by its service-minted entry id. The row is
-    /// removed optimistically when the local entry matches; the authoritative
-    /// snapshot restores it if the service disagrees. Entries without an id
-    /// (optimistic, unsnapped) cannot be removed until their snapshot arrives.
+    /// removed optimistically when the local entry matches; the removal
+    /// stands even if the service reports it already left via dispatch.
+    /// Entries without an id (optimistic, unsnapped) cannot be removed
+    /// until their snapshot arrives.
     pub(super) fn remove_queued_submission(&mut self, echo_id: &str, cx: &mut Context<Self>) {
         let Some(session_id) = self.selected_session_id.clone() else {
             return;
@@ -206,8 +240,8 @@ impl DesktopView {
             let removed = self.queued_submissions.remove(position);
             self.transcript.remove(&removed.echo_id);
         }
-        // The optimistic row hides immediately; the service publishes the
-        // resulting snapshot, which reconciles or restores on disagreement.
+        // The optimistic row hides immediately; the removal response and
+        // the resulting snapshot converge the depth right after.
         if !self.request(
             protocol::method::TURN_QUEUE_REMOVE,
             json!({ keys::SESSION_ID: session_id, keys::ENTRY_ID: entry_id }),
@@ -263,6 +297,7 @@ impl DesktopView {
         };
         let rows_len = rows.len();
         let composer_busy = !self.composer.read(cx).value().is_empty();
+        let take_latest_ready = self.take_latest_ready();
         let muted = themes::muted_text(&colors);
         let hairline = themes::hairline(colors.popover, colors.foreground);
         div()
@@ -295,7 +330,7 @@ impl DesktopView {
                             .label(rust_i18n::t!("app.composer.edit_queued").to_string())
                             .ghost()
                             .small()
-                            .desktop_disabled(self.take_latest_pending || composer_busy)
+                            .desktop_disabled(!take_latest_ready || composer_busy)
                             .on_click(cx.listener(|view, _, _, cx| view.take_latest_queued(cx))),
                     ),
             )
@@ -340,7 +375,9 @@ impl DesktopView {
                     );
                 // Trailing action lane: one quiet icon button per row. Every
                 // service-addressed entry removes by id; the newest local
-                // entry without an id keeps the header-level pop affordance.
+                // entry without an id keeps the header-level pop affordance
+                // once its ack lands (before that the service pop cannot
+                // map to a row, so no pop control is offered).
                 match (&echo_id, &entry_id) {
                     (_, Some(_)) => row.child(
                         desktop_button(queued_remove_element_id(row_index, echo_id.as_deref()))
@@ -359,7 +396,7 @@ impl DesktopView {
                                 })
                             }),
                     ),
-                    (Some(_), None) if row_index + 1 == rows_len && !composer_busy => row.child(
+                    (Some(_), None) if row_index + 1 == rows_len && !composer_busy && take_latest_ready => row.child(
                         desktop_button("edit-newest-queued-row")
                             .icon(IconName::ArrowUp)
                             .accessibility_label(rust_i18n::t!("app.composer.edit_queued").to_string())

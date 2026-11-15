@@ -560,6 +560,17 @@ impl DesktopView {
         true
     }
 
+    /// Whether Tab enqueues the draft (TUI Tab-to-queue parity): a
+    /// non-empty draft with no picker claiming Tab and no silent submit
+    /// block. Otherwise Tab keeps native focus navigation.
+    pub(super) fn tab_enqueue_allowed(&self, cx: &App) -> bool {
+        self.palette.is_none()
+            && !self.attachments_picker_open
+            && self.retained_submission.is_none()
+            && self.submit_allowed()
+            && !self.composer.read(cx).value().trim().is_empty()
+    }
+
     pub(super) fn handle_composer_enter(&mut self, action: &Enter, window: &mut Window, cx: &mut Context<Self>) {
         if action.secondary {
             // Cmd+Enter carries the batched-queue intent: leave it for the

@@ -554,10 +554,13 @@ impl DesktopView {
                         // Lifecycle events can complete the turn before the request response arrives.
                         // An already-started turn owns its ack: queued entries
                         // are newer submissions whose own acks are still in
-                        // flight, so promotion only runs while idle.
+                        // flight, so promotion only runs while idle. The
+                        // promoted entry leaves the pending list: it is the
+                        // running turn now, and no queue snapshot follows an
+                        // immediate dispatch to clear it.
                         if self.pending_submission.is_none()
                             && self.active_turn_id.is_none()
-                            && !self.confirm_oldest_queued_submission()
+                            && !self.promote_oldest_queued_submission()
                         {
                             return;
                         }
@@ -578,8 +581,12 @@ impl DesktopView {
                             self.error = Some(rust_i18n::t!("app.service.invalid_ack_detail").to_string());
                             return;
                         };
-                        self.queue_depth = taken.queue_depth;
+                        let depth = taken.queue_depth;
                         let Some(text) = taken.text else {
+                            // Nothing popped (the service queue was already
+                            // empty) and no snapshot follows an empty take:
+                            // converge confirmed rows to the depth now.
+                            self.truncate_dispatched_to_depth(depth);
                             return;
                         };
                         // Remove the newest confirmed entry (the request-time
@@ -589,6 +596,9 @@ impl DesktopView {
                             let entry = self.queued_submissions.remove(index);
                             self.transcript.remove(&entry.echo_id);
                         }
+                        // A concurrent dispatch may have drained more than the
+                        // pop; converge to the authoritative depth.
+                        self.truncate_dispatched_to_depth(depth);
                         if self.composer.read(cx).value().is_empty() {
                             self.pending_composer_restore = Some(text);
                         } else {
@@ -602,6 +612,18 @@ impl DesktopView {
                             });
                             self.prune_attachment_thumbnails();
                             self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
+                        }
+                    }
+                    protocol::method::TURN_QUEUE_REMOVE => {
+                        // Convergence hint only: the row already dropped
+                        // optimistically. A mismatch is a stale response (the
+                        // session moved on) — ignore it quietly instead of
+                        // banner-ing; snapshots converge the rest.
+                        let removed = serde_json::from_value::<protocol::TurnQueueRemoveResult>(result)
+                            .ok()
+                            .filter(|removed| self.selected_session_id.as_deref() == Some(removed.session_id.as_str()));
+                        if let Some(removed) = removed {
+                            self.truncate_dispatched_to_depth(removed.queue_depth);
                         }
                     }
                     protocol::method::TURN_CANCEL => {
