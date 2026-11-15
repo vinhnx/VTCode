@@ -222,7 +222,7 @@ impl LoopDetector {
 
                 if identical {
                     // Escalate to hard limit so callers halt immediately.
-                    let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+                    let hard_limit = self.get_limit_for_tool(tool_name).saturating_mul(HARD_LIMIT_MULTIPLIER);
                     self.tool_counts.insert(tool_name.to_string(), hard_limit);
 
                     return Some(format!(
@@ -251,7 +251,10 @@ impl LoopDetector {
         // Use get_mut + insert to avoid String allocation on every call.
         // entry() would allocate tool_name.to_string() even for existing keys.
         match self.tool_counts.get_mut(tool_name) {
-            Some(count) => *count += 1,
+            // Saturate: escalation paths above can set the count to the
+            // saturated hard limit (`usize::MAX`), and plain `+= 1` would
+            // then panic on the next call with overflow checks enabled.
+            Some(count) => *count = count.saturating_add(1),
             None => {
                 self.tool_counts.insert(tool_name.to_string(), 1);
             }
@@ -290,7 +293,7 @@ impl LoopDetector {
         // exhausted every later call this turn hits this stop, whatever its kind.
         let readonly_budget = self.effective_readonly_budget();
         if self.total_readonly_calls >= readonly_budget {
-            let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+            let hard_limit = self.get_limit_for_tool(tool_name).saturating_mul(HARD_LIMIT_MULTIPLIER);
             self.tool_counts.insert(tool_name.to_string(), hard_limit);
             return Some(format!(
                 "{HARD_STOP_PREFIX} the global read-only budget is exhausted ({} total read-only calls, limit: {}), \
@@ -303,7 +306,7 @@ impl LoopDetector {
         let (warning_streak, hard_stop_streak) = self.effective_navigation_thresholds();
         if self.readonly_streak >= warning_streak {
             if self.readonly_streak >= hard_stop_streak {
-                let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+                let hard_limit = self.get_limit_for_tool(tool_name).saturating_mul(HARD_LIMIT_MULTIPLIER);
                 self.tool_counts.insert(tool_name.to_string(), hard_limit);
                 return Some(format!(
                     "{HARD_STOP_PREFIX} {} consecutive read-only calls without an edit or command, \
@@ -414,7 +417,7 @@ impl LoopDetector {
         let max_calls = self.get_limit_for_tool(tool_name);
 
         // Hard limit check - immediate halt
-        let hard_limit = max_calls * HARD_LIMIT_MULTIPLIER;
+        let hard_limit = max_calls.saturating_mul(HARD_LIMIT_MULTIPLIER);
         if count >= hard_limit {
             return Some(format!(
                 "{HARD_STOP_PREFIX} '{tool_name}' was called {count} times (hard limit: {hard_limit}), \
@@ -497,7 +500,7 @@ impl LoopDetector {
         }
 
         if same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS && variants.len() <= MAX_SIMILAR_READ_TARGET_VARIANTS {
-            let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+            let hard_limit = self.get_limit_for_tool(tool_name).saturating_mul(HARD_LIMIT_MULTIPLIER);
             self.tool_counts.insert(tool_name.to_string(), hard_limit);
             return Some(format!(
                 "{HARD_STOP_PREFIX} repeated '{}' calls for '{}' with minimal argument variation \

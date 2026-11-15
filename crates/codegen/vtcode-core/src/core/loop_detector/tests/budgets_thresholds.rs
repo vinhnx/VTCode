@@ -182,3 +182,60 @@ fn main_agent_readonly_budget_still_30() {
     let msg = warning.unwrap();
     assert!(msg.contains("limit: 30"), "Expected limit 30 in message: {msg}");
 }
+
+#[test]
+fn extreme_custom_limit_does_not_overflow_hard_limit_math() {
+    let mut detector = LoopDetector::new();
+    detector.set_tool_limit("custom_tool", usize::MAX);
+    // Release builds keep `overflow-checks = true`: `limit * 2` must saturate.
+    let warning = detector.record_call("custom_tool", &json!({"a": 1}));
+    assert!(warning.is_none());
+    assert!(!detector.is_hard_limit_exceeded("custom_tool"));
+}
+
+#[test]
+fn extreme_custom_limit_does_not_overflow_identical_call_escalation() {
+    let mut detector = LoopDetector::with_max_repeated_calls(2);
+    detector.set_tool_limit("custom_tool", usize::MAX);
+    let args = json!({"a": 1});
+    assert!(detector.record_call("custom_tool", &args).is_none());
+    let warning = detector.record_call("custom_tool", &args);
+    assert!(warning.is_some(), "identical repeat must still hard-stop");
+    assert!(detector.is_hard_limit_exceeded("custom_tool"));
+}
+
+#[test]
+fn extreme_custom_limit_does_not_overflow_budget_and_navigation_stops() {
+    let mut detector = LoopDetector::new();
+    detector.set_tool_limit(tools::CODE_SEARCH, usize::MAX);
+    let mut saw_hard_stop = false;
+    for i in 0..35 {
+        let args = json!({"query": format!("unique_{i}"), "path": "src/"});
+        if let Some(msg) = detector.record_call(tools::CODE_SEARCH, &args)
+            && msg.starts_with(HARD_STOP_PREFIX)
+        {
+            saw_hard_stop = true;
+        }
+    }
+    assert!(saw_hard_stop, "budget and navigation stops must still fire");
+    assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
+}
+
+#[test]
+fn extreme_custom_limit_does_not_overflow_read_target_stop() {
+    // Read-target streaks only track file reads (searches are neutral
+    // filler by design), so this uses read_file on one target.
+    let mut detector = LoopDetector::with_max_repeated_calls(100);
+    detector.set_tool_limit(tools::READ_FILE, usize::MAX);
+    let args = json!({"path": "src/same.rs"});
+    let mut saw_hard_stop = false;
+    for _ in 0..6 {
+        if let Some(msg) = detector.record_call(tools::READ_FILE, &args)
+            && msg.starts_with(HARD_STOP_PREFIX)
+        {
+            saw_hard_stop = true;
+        }
+    }
+    assert!(saw_hard_stop, "read-target stop must still fire");
+    assert!(detector.is_hard_limit_exceeded(tools::READ_FILE));
+}
