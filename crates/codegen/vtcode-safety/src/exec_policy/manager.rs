@@ -95,7 +95,7 @@ pub struct ExecPolicyManager {
     workspace_root: PathBuf,
 
     /// Commands that have been pre-approved this session.
-    session_approved: RwLock<HashSet<String>>,
+    session_approved: RwLock<HashSet<Vec<String>>>,
 }
 
 impl ExecPolicyManager {
@@ -175,10 +175,9 @@ impl ExecPolicyManager {
     /// Check if a command requires approval.
     async fn check_approval(&self, command: &[String]) -> ExecApprovalRequirement {
         // Check if already approved this session
-        let command_key = command.join(" ");
         {
             let approved = self.session_approved.read().await;
-            if approved.contains(&command_key) {
+            if approved.contains(command) {
                 return ExecApprovalRequirement::skip();
             }
         }
@@ -247,9 +246,8 @@ impl ExecPolicyManager {
 
     /// Mark a command as approved for this session.
     async fn approve_command(&self, command: &[String]) {
-        let command_key = command.join(" ");
         let mut approved = self.session_approved.write().await;
-        let _inserted = approved.insert(command_key);
+        let _inserted = approved.insert(command.to_vec());
     }
 
     /// Clear all session approvals.
@@ -585,6 +583,18 @@ mod tests {
         // Needs approval again
         let result = manager.check_approval(&cmd).await;
         assert!(result.requires_approval());
+    }
+
+    #[tokio::test]
+    async fn session_approval_preserves_argument_boundaries() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::with_defaults(dir.path().to_path_buf());
+        let approved = vec!["unknown".to_string(), "one two".to_string()];
+        let distinct = vec!["unknown".to_string(), "one".to_string(), "two".to_string()];
+
+        manager.approve_command(&approved).await;
+        assert!(manager.check_approval(&approved).await.can_proceed());
+        assert!(manager.check_approval(&distinct).await.requires_approval());
     }
 
     #[tokio::test]

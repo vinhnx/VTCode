@@ -106,7 +106,8 @@ impl UnifiedCommandEvaluator {
             });
         }
 
-        let command_text = command.join(" ");
+        // Length prefixes preserve argument boundaries even when arguments contain spaces.
+        let command_text: String = command.iter().map(|arg| format!("{}:{arg}", arg.len())).collect();
 
         // 1. Check cache first
         if let Some(cached_decision) = self.cache.get(&command_text).await {
@@ -311,6 +312,22 @@ mod tests {
         assert!(result2.allowed);
         matches!(result2.primary_reason, EvaluationReason::CacheHit(true, _));
         assert_eq!(evaluator.audit_logger().count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn cache_keeps_argument_boundaries_in_both_orders() {
+        let safe = vec!["find".to_string(), ". -delete".to_string()];
+        let dangerous = vec!["find".to_string(), ".".to_string(), "-delete".to_string()];
+        for safe_first in [true, false] {
+            let evaluator = UnifiedCommandEvaluator::new();
+            let (first, second) = if safe_first {
+                (&safe, &dangerous)
+            } else {
+                (&dangerous, &safe)
+            };
+            assert_eq!(evaluator.evaluate(first).await.unwrap().allowed, safe_first);
+            assert_eq!(evaluator.evaluate(second).await.unwrap().allowed, !safe_first);
+        }
     }
 
     #[tokio::test]
