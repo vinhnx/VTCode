@@ -174,6 +174,9 @@ pub(crate) enum SlashCommandOutcome {
     Notify {
         message: String,
     },
+    GoalCommand {
+        command: vtcode_desktop_protocol::slash_command::GoalSlashCommand,
+    },
     StopAgent,
     ManageMcp {
         action: McpCommandAction,

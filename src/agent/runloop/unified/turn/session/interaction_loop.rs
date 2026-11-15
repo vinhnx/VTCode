@@ -26,6 +26,7 @@ use crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker;
 use crate::agent::runloop::unified::webmcp::ActiveWebmcpBridge;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use std::collections::BTreeSet;
@@ -58,6 +59,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub active_primary_agent: &'a mut ActivePrimaryAgentState,
     pub session_stats: &'a mut SessionStats,
     pub plan_session: &'a mut PlanningWorkflowSessionState,
+    pub goal_tracker: SharedGoalTracker,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
     pub linked_directories: &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
     pub lifecycle_hooks: &'a mut Option<LifecycleHookEngine>,

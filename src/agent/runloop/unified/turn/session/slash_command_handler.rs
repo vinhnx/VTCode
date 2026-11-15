@@ -78,6 +78,7 @@ pub(crate) async fn handle_input_commands(
                         active_primary_agent: ctx.active_primary_agent,
                         session_stats: ctx.session_stats,
                         plan_session: ctx.plan_session,
+                        goal_tracker: &ctx.goal_tracker,
                         input_status_state: state.input_status_state,
                         tools: ctx.tools,
                         tool_catalog: ctx.tool_catalog,

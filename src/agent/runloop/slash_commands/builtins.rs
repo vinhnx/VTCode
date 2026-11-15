@@ -5,7 +5,8 @@ use vtcode_core::skills::CommandSkillSpec;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_desktop_protocol::slash_command::{
-    WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_webmcp_slash_command,
+    WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_goal_slash_command,
+    parse_webmcp_slash_command,
 };
 
 use super::flow::{
@@ -472,6 +473,10 @@ fn handle_vim_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
     }
 }
 
+fn handle_goal_command(args: &str) -> Result<SlashCommandOutcome> {
+    Ok(SlashCommandOutcome::GoalCommand { command: parse_goal_slash_command(args) })
+}
+
 fn handle_webmcp_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let command = match parse_webmcp_slash_command(args) {
         Ok(command) => command,
@@ -537,6 +542,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "splash" => Ok(SlashCommandOutcome::ShowSplash),
         "stop" => Ok(SlashCommandOutcome::StopAgent),
+        "goal" => handle_goal_command(args),
         "pause" => handle_pause_command(renderer),
         "update" => handle_update_command(args),
         "mcp" => handle_mcp_command(args, renderer),

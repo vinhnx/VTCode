@@ -47,6 +47,7 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::StopWebmcp
         | SlashCommandOutcome::ShowLogViewer { .. }
         | SlashCommandOutcome::Notify { .. }
+        | SlashCommandOutcome::GoalCommand { .. }
         | SlashCommandOutcome::StopAgent
         | SlashCommandOutcome::ManageMcp { .. }
         | SlashCommandOutcome::StartCheckupInteractive
@@ -145,6 +146,7 @@ async fn route_runtime_outcome(
             handlers::handle_show_log_viewer(ctx, format, scope, save).await
         }
         SlashCommandOutcome::Notify { message } => handlers::handle_notify(ctx, message).await,
+        SlashCommandOutcome::GoalCommand { command } => handlers::handle_goal_command(ctx, command).await,
         SlashCommandOutcome::StopAgent => handlers::handle_stop_agent(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
         SlashCommandOutcome::StartCheckupInteractive => handlers::handle_start_checkup_interactive(ctx).await,

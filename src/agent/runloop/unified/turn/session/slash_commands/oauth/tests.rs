@@ -42,6 +42,9 @@ async fn openrouter_login_returns_continue_when_ctrl_c_is_pending() {
         vtcode_core::core::threads::ThreadManager::new()
             .start_thread_with_identifier("test-thread", vtcode_core::core::threads::ThreadBootstrap::new(None)),
     ));
+    let goal_tracker = Arc::new(tokio::sync::Mutex::new(vtcode_memory::GoalTracker::new(
+        std::env::temp_dir().join("vtcode-goal-test-noop"),
+    )));
 
     let ctx = SlashCommandContext {
         thread_id: "test-thread",
@@ -64,6 +67,7 @@ async fn openrouter_login_returns_continue_when_ctrl_c_is_pending() {
         active_primary_agent,
         session_stats: turn.session_stats,
         plan_session,
+        goal_tracker: &goal_tracker,
         input_status_state: turn.input_status_state,
         tools: turn.tools,
         tool_catalog: turn.tool_catalog,

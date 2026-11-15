@@ -56,6 +56,7 @@ struct HeadlessHarness {
     active_primary_agent: &'static mut vtcode_core::primary_agent::ActivePrimaryAgentState,
     plan_session: &'static mut crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
     thread_handle: &'static mut vtcode_core::core::threads::ThreadRuntimeHandle,
+    goal_tracker: super::SharedGoalTracker,
 }
 
 impl HeadlessHarness {
@@ -87,6 +88,9 @@ impl HeadlessHarness {
                     vtcode_core::core::threads::ThreadBootstrap::new(None),
                 ),
             )),
+            goal_tracker: Arc::new(tokio::sync::Mutex::new(vtcode_memory::GoalTracker::new(
+                std::env::temp_dir().join("vtcode-goal-test-noop"),
+            ))),
         }
     }
 
@@ -113,6 +117,7 @@ impl HeadlessHarness {
             active_primary_agent: &mut *self.active_primary_agent,
             session_stats: turn.session_stats,
             plan_session: &mut *self.plan_session,
+            goal_tracker: &self.goal_tracker,
             input_status_state: turn.input_status_state,
             tools: turn.tools,
             tool_catalog: turn.tool_catalog,

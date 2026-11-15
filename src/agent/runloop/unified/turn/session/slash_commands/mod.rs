@@ -34,6 +34,7 @@ mod explain;
 mod handlers;
 mod outcome_router;
 pub mod secrets;
+pub(crate) use handlers::{GoalSeed, SharedGoalTracker, apply_goal_command};
 
 #[cfg(test)]
 mod headless_tests;
@@ -68,6 +69,7 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) active_primary_agent: &'a mut ActivePrimaryAgentState,
     pub(crate) session_stats: &'a mut SessionStats,
     pub(crate) plan_session: &'a mut PlanningWorkflowSessionState,
+    pub(crate) goal_tracker: &'a SharedGoalTracker,
     pub(crate) input_status_state: &'a mut InputStatusState,
     pub(crate) tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub(crate) tool_catalog: &'a Arc<ToolCatalogState>,
@@ -108,6 +110,7 @@ impl<'a> SlashCommandContext<'a> {
             active_primary_agent: &mut *self.active_primary_agent,
             session_stats: self.session_stats,
             plan_session: self.plan_session,
+            goal_tracker: self.goal_tracker,
             input_status_state: self.input_status_state,
             tools: self.tools,
             tool_catalog: self.tool_catalog,

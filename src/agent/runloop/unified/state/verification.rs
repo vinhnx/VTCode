@@ -193,6 +193,33 @@ impl SessionStats {
         self.tracker_continuation_turns = 0;
     }
 
+    pub(crate) fn record_goal_continuation_turn_with_limit(&mut self, max_turns: u8) -> bool {
+        if self.goal_continuation_turns >= max_turns {
+            return false;
+        }
+        self.goal_continuation_turns = self.goal_continuation_turns.saturating_add(1);
+        true
+    }
+
+    pub(crate) fn goal_continuation_turns(&self) -> u8 {
+        self.goal_continuation_turns
+    }
+
+    pub(crate) fn reset_goal_continuation_budget(&mut self) {
+        self.goal_continuation_turns = 0;
+    }
+
+    /// Total session tokens as a saturating `i64` for goal budget accounting.
+    pub(crate) fn total_tokens_i64(&self) -> i64 {
+        let usage = self.total_usage();
+        let total = usage
+            .input_tokens
+            .saturating_add(usage.cached_input_tokens)
+            .saturating_add(usage.cache_creation_tokens)
+            .saturating_add(usage.output_tokens);
+        i64::try_from(total).unwrap_or(i64::MAX)
+    }
+
     /// Apply a live tracker probe to the incomplete-items cache.
     ///
     /// Successful `Complete` probes **clear** the cache so auto-continue stops

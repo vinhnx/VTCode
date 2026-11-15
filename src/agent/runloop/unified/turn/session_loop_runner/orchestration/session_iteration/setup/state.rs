@@ -5,6 +5,7 @@
 //! encodes) lives in one place instead of spanning the setup procedure.
 
 use super::*;
+use crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker;
 
 /// Loop-lived state built by session setup, in declaration order.
 pub(in crate::agent::runloop::unified::turn) struct Setup<'a> {
@@ -77,6 +78,7 @@ pub(in crate::agent::runloop::unified::turn) struct Setup<'a> {
     pub _signal_handler: TaskGuard,
     pub session_stats: SessionStats,
     pub plan_session: PlanningWorkflowSessionState,
+    pub goal_tracker: SharedGoalTracker,
     pub linked_directories: Vec<LinkedDirectory>,
     pub model_picker_state: Option<ModelPickerState>,
     pub palette_state: Option<ActivePalette>,

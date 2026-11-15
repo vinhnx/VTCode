@@ -652,6 +652,18 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         crate::agent::runloop::unified::stop_requests::publish_exec_sessions(slot, &exec_session_manager);
         crate::agent::runloop::unified::stop_requests::mark_host_turns_ready(slot);
     }
+    let goal_session_dir = vtcode_memory::session_directory(&config.workspace, thread_handle.thread_id().as_str());
+    let goal_tracker = match vtcode_memory::GoalTracker::restore(goal_session_dir.clone()) {
+        Ok(tracker) => tracker,
+        Err(err) => {
+            tracing::warn!("goal snapshot restore failed, starting without a goal: {err:#}");
+            vtcode_memory::GoalTracker::new(goal_session_dir)
+        }
+    };
+    let goal_tracker = Arc::new(tokio::sync::Mutex::new(goal_tracker));
+    if let Some(slot) = stop_slot.as_ref() {
+        crate::agent::runloop::unified::stop_requests::publish_goal_tracker(slot, &goal_tracker);
+    }
     Ok(SetupFlow::Proceed(Box::new(Setup {
         config,
         session_skip_confirmations,
@@ -722,6 +734,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         _signal_handler,
         session_stats,
         plan_session,
+        goal_tracker,
         linked_directories,
         model_picker_state,
         palette_state,

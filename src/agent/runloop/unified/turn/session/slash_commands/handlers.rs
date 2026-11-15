@@ -18,6 +18,8 @@ mod desktop;
 mod diagnostics;
 #[path = "fast.rs"]
 mod fast;
+#[path = "goal.rs"]
+mod goal;
 #[path = "interactive.rs"]
 mod interactive;
 #[path = "local_server.rs"]
@@ -68,6 +70,8 @@ pub(super) use diagnostics::{
 #[expect(unused_imports, reason = "guard-rail for the upcoming /checkup 7-step flow")]
 pub(super) use diagnostics::memory::config_persistence::persist_workspace_config_change;
 pub(super) use fast::handle_toggle_fast_mode;
+pub(super) use goal::handle_goal_command;
+pub(crate) use goal::{GoalSeed, SharedGoalTracker, apply_goal_command};
 pub(super) use interactive::{handle_show_jobs_panel, handle_toggle_tasks_panel};
 pub(super) use local_server::handle_manage_local_server;
 pub(super) use log_viewer::handle_show_log_viewer;
