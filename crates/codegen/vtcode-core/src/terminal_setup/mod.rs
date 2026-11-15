@@ -14,12 +14,8 @@ pub mod terminals;
 pub mod wizard;
 
 pub use detector::{TerminalFeature, TerminalType};
+pub use terminals::iterm2::{
+    TerminalIconCommand, ensure_profile_icon, parse_terminal_icon_command, profile_icon_instructions,
+    run_profile_icon_install, run_profile_icon_reset, run_terminal_icon_show, run_terminal_icon_switch,
+};
 pub use wizard::run_terminal_setup_wizard;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_module_structure() {
-        // Smoke test to ensure module compiles
-    }
-}

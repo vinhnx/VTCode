@@ -15,7 +15,8 @@ pub enum ConfigFormat {
     PlainText,
     /// TOML format
     Toml,
-    /// JSON format
+    /// JSON with comments (JSONC, as in Zed settings). Never strict JSON:
+    /// markers render as `//` comments, which strict parsers reject.
     Json,
     /// YAML format
     Yaml,
@@ -68,10 +69,13 @@ impl ConfigWriter {
 
     /// Merge new VT Code configuration section with existing config
     ///
-    /// Removes old VT Code sections and adds the new section, preserving user customizations
+    /// Removes old VT Code sections and adds the new section, preserving user customizations.
+    /// Fails without touching anything when the existing markers are unbalanced, so a
+    /// half-edited section can never silently eat user content. `Json` markers are `//`
+    /// comments: only valid for JSONC (Zed), never for strict JSON.
     pub fn merge_with_markers(existing: &str, new_section: &str, format: ConfigFormat) -> Result<String> {
         // Remove any existing VT Code section
-        let cleaned = Self::remove_vtcode_section(existing);
+        let cleaned = Self::remove_vtcode_section(existing)?;
 
         // Add new VT Code section with markers
         let vtcode_section = Self::wrap_with_markers(new_section, format);
@@ -89,8 +93,11 @@ impl ConfigWriter {
         Ok(merged)
     }
 
-    /// Remove existing VT Code configuration section from content
-    fn remove_vtcode_section(content: &str) -> String {
+    /// Remove existing VT Code configuration sections from content
+    ///
+    /// Fails closed on an unterminated section: returning the truncated text
+    /// would delete every user line after the stray marker.
+    fn remove_vtcode_section(content: &str) -> Result<String> {
         let mut result = Vec::new();
         let mut in_vtcode_section = false;
 
@@ -110,7 +117,13 @@ impl ConfigWriter {
             }
         }
 
-        result.join("\n")
+        if in_vtcode_section {
+            anyhow::bail!(
+                "unbalanced VT Code section: found '{VTCODE_BEGIN_MARKER}' without '{VTCODE_END_MARKER}'; refusing to modify the file"
+            );
+        }
+
+        Ok(result.join("\n"))
     }
 
     /// Wrap configuration content with VT Code markers
@@ -177,12 +190,33 @@ vtcode_setting = 2
 another_setting = 3
 "#;
 
-        let result = ConfigWriter::remove_vtcode_section(content);
+        let result = ConfigWriter::remove_vtcode_section(content).expect("balanced section strips");
 
         assert!(!result.contains("vtcode_setting"));
         assert!(result.contains("user_setting"));
         assert!(result.contains("another_setting"));
         assert!(!result.contains("VTCODE CONFIGURATION"));
+    }
+
+    #[test]
+    fn unterminated_section_fails_closed() {
+        let content = "# User config\nuser_setting = 1\n\n# BEGIN VTCODE CONFIGURATION\nvtcode_setting = 2\n";
+
+        let result = ConfigWriter::remove_vtcode_section(content);
+        assert!(result.is_err(), "unterminated section must fail, not truncate user content");
+
+        let merged = ConfigWriter::merge_with_markers(content, "vtcode_setting = 3", ConfigFormat::PlainText);
+        assert!(merged.is_err(), "merge must propagate the failure instead of writing");
+    }
+
+    #[test]
+    fn multiple_balanced_sections_are_all_removed() {
+        let content = "# BEGIN VTCODE CONFIGURATION\nold = 1\n# END VTCODE CONFIGURATION\nuser = 2\n# BEGIN VTCODE CONFIGURATION\nolder = 0\n# END VTCODE CONFIGURATION\n";
+
+        let result = ConfigWriter::remove_vtcode_section(content).expect("balanced sections strip");
+
+        assert!(!result.contains("old"));
+        assert!(result.contains("user = 2"));
     }
 
     #[test]

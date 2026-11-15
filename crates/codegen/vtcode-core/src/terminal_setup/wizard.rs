@@ -220,7 +220,7 @@ fn native_terminal_setup_messages(terminal_type: TerminalType) -> Vec<String> {
             lines.push("Optional macOS shortcut: set Left/Right Option to \"Esc+\" in Profiles -> Keys.".to_string());
             lines.extend(crate::terminal_setup::features::notifications::get_notification_instructions(terminal_type));
             lines.push(String::new());
-            lines.extend(crate::terminal_setup::terminals::iterm2::profile_icon_instructions());
+            lines.extend(crate::terminal_setup::profile_icon_instructions());
         }
         TerminalType::Ghostty | TerminalType::Kitty | TerminalType::WezTerm => {
             lines.extend(crate::terminal_setup::features::notifications::get_notification_instructions(terminal_type));
@@ -285,11 +285,6 @@ fn guidance_only_messages(terminal_type: TerminalType) -> Vec<String> {
 mod tests {
     use super::{guidance_only_messages, native_terminal_setup_messages};
     use crate::terminal_setup::detector::TerminalType;
-
-    #[test]
-    fn test_wizard_module() {
-        // Placeholder test - actual wizard tests would need mocked terminal I/O
-    }
 
     #[test]
     fn native_setup_messages_are_noop_guidance() {

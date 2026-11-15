@@ -86,6 +86,10 @@ impl ConfigBackupManager {
             return Ok(Vec::new());
         }
 
+        // Match pattern: config_name.vtcode_backup_YYYYMMDD_HHMMSS. The full
+        // delimiter is part of the prefix so `alacritty.toml` never matches
+        // backups of `alacritty.toml.bak` sharing the directory.
+        let expected_prefix = format!("{config_name}.vtcode_backup_");
         let mut backups = Vec::new();
 
         for entry in
@@ -95,8 +99,7 @@ impl ConfigBackupManager {
             let file_name = entry.file_name();
             let file_name_str = file_name.to_string_lossy();
 
-            // Match pattern: config_name.vtcode_backup_YYYYMMDD_HHMMSS
-            if file_name_str.starts_with(&*config_name) && file_name_str.contains(".vtcode_backup_") {
+            if file_name_str.starts_with(&expected_prefix) {
                 backups.push(entry.path());
             }
         }
@@ -229,6 +232,30 @@ mod tests {
 
         // Should only have MAX_BACKUPS (5) remaining
         assert_eq!(backups.len(), MAX_BACKUPS);
+    }
+
+    #[test]
+    fn cleanup_preserves_backups_of_other_configs_sharing_the_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let main_path = temp_dir.path().join("alacritty.toml");
+        let sibling_path = temp_dir.path().join("alacritty.toml.bak");
+        fs::write(&main_path, "main").unwrap();
+        fs::write(&sibling_path, "sibling").unwrap();
+
+        let manager = ConfigBackupManager::new(TerminalType::Alacritty);
+        manager.backup_config(&main_path).unwrap();
+        for _ in 0..6 {
+            manager.backup_config(&sibling_path).unwrap();
+        }
+
+        manager.cleanup_old_backups(&main_path).unwrap();
+
+        assert_eq!(manager.list_backups(&main_path).unwrap().len(), 1);
+        assert_eq!(
+            manager.list_backups(&sibling_path).unwrap().len(),
+            MAX_BACKUPS,
+            "cleanup for one config must not delete a sibling config's backups"
+        );
     }
 
     #[test]

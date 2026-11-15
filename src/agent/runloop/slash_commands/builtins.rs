@@ -425,25 +425,28 @@ fn handle_jobs_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 }
 
 fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
-    use vtcode_core::terminal_setup::terminals::iterm2::TerminalIconCommand;
+    use vtcode_core::terminal_setup::{
+        TerminalIconCommand, parse_terminal_icon_command, run_profile_icon_install, run_profile_icon_reset,
+        run_terminal_icon_show, run_terminal_icon_switch,
+    };
 
     match args.trim().to_ascii_lowercase().as_str() {
         "" => Ok(SlashCommandOutcome::StartTerminalSetup),
         "install-iterm2-icon" => {
-            vtcode_core::terminal_setup::terminals::iterm2::run_profile_icon_install(renderer)?;
+            run_profile_icon_install(renderer)?;
             Ok(SlashCommandOutcome::Handled)
         }
         "reset-iterm2-icon" => {
-            vtcode_core::terminal_setup::terminals::iterm2::run_profile_icon_reset(renderer)?;
+            run_profile_icon_reset(renderer)?;
             Ok(SlashCommandOutcome::Handled)
         }
         _ => {
-            match vtcode_core::terminal_setup::terminals::iterm2::parse_terminal_icon_command(args) {
+            match parse_terminal_icon_command(args) {
                 Some(TerminalIconCommand::Show) => {
-                    vtcode_core::terminal_setup::terminals::iterm2::run_terminal_icon_show(renderer)?;
+                    run_terminal_icon_show(renderer)?;
                 }
                 Some(TerminalIconCommand::Switch(preference)) => {
-                    vtcode_core::terminal_setup::terminals::iterm2::run_terminal_icon_switch(renderer, preference)?;
+                    run_terminal_icon_switch(renderer, preference)?;
                 }
                 None => {
                     renderer.line(
