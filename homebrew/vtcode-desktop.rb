@@ -1,6 +1,6 @@
 cask "vtcode-desktop" do
-  version "0.182.3"
-  sha256 "18ce47a8d2dbbbb57dc6ff873f247dccc00b9c718bfbc8936c4565cde0b13a2e"
+  version "0.182.4"
+  sha256 "c39227ee2119cb89f539f78e493ff4a0dea6f09a08063686d5eba654600b80b6"
 
   url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-desktop-#{version}-aarch64-apple-darwin.zip"
   name "VT Code"
