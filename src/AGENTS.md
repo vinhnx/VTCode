@@ -5,7 +5,7 @@
 
 ## Modules
 
-`main.rs` entry | `cli/` command handlers, WebMCP serving, companion exec supervision | `startup/` onboarding and `StartupPolicy` | `updater/` downloads and self-replacement | `main_helpers/` tracing and runtime init | `codex_app_server/` bridge | `allocator.rs`, `process_hardening.rs` process setup
+`main.rs` entry | `cli/` command handlers, WebMCP serving, companion exec supervision | `startup/` onboarding and `StartupPolicy` | `updater/` downloads, self-replacement, release-notes policy | `main_helpers/` tracing and runtime init | `codex_app_server/` bridge | `allocator.rs`, `process_hardening.rs` process setup
 `agent/runloop/` single-agent loop: `unified/turn/session_loop_runner/` facade with `orchestration/` owning the loop body, setup, and teardown; `unified/turn/turn_loop/` request-boundary compaction and ordered finalization; `unified/session_setup/hook_approval.rs` workspace hook approval overlay
 `agent/runloop/tool_output/` tracker rows, dispatch, and ANSI diff rendering | `agent/runloop/unified/turn/compaction/` delegates to `vtcode-core::compaction` | `agent/runloop/unified/webmcp.rs` active WebMCP bridge | `agent/runloop/unified/instruction_audit.rs` read-only `/doctor prompt-audit`
 

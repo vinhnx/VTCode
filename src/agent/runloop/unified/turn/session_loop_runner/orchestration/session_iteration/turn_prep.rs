@@ -83,6 +83,7 @@ pub(super) enum TurnPrepFlow<'a> {
 }
 
 /// Prepare the next turn: validate input, split borrows, checkpoint, notes.
+#[expect(clippy::cognitive_complexity, reason = "turn preparation; split per stage")]
 pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnPrep<'_>) -> Result<TurnPrepFlow<'a>> {
     let TurnPrep {
         plan_session,

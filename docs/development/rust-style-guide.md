@@ -82,16 +82,34 @@ allowlist instead. The `src` budget is a ratchet, not a one-time amnesty:
   ledger must never raise an existing cap (review the ledger diff for upward moves).
 
 Wiring: the soft warn signal runs in every `check-dev.sh` run (`run_rust_length_report`); the release gate
-(`./scripts/check.sh`, subcommand `rust-length`) enforces the tier budgets. LOC is gameable, so pair the budgets with
-function-level complexity: `cognitive-complexity-threshold = 75` stays active, `too-many-lines-threshold = 100` is
-anchored in `clippy.toml` for per-crate `too_many_lines` adoption where a split plan exists. Repeat offenders for
-cohesion review: desktop `view/*`, runloop `turn/*` and `tool_routing`, `vtcode-llm` providers, `vtcode-ui` widgets.
+(`./scripts/check.sh`, subcommand `rust-length`) enforces the tier budgets.
+
+LOC is gameable, so the budgets are paired with a function-level complexity lint:
+
+- `clippy::cognitive_complexity` is enabled workspace-wide (`[workspace.lints.clippy]`) with
+  `cognitive-complexity-threshold = 75` in `clippy.toml`. Because `check.sh` runs clippy with `-D warnings`, an
+  over-budget function fails the release gate, not just a report.
+- A function that legitimately owns a wide branch matrix (event routers, key normalization, locale coverage) ships an
+  `#[expect(clippy::cognitive_complexity, reason = "...")]` naming the split it still owes. `#[expect]`, not
+  `#[allow]`: rustc reports `unfulfilled_lint_expectations` the moment the function drops under the threshold or is
+  deleted, so the debt cannot silently outlive the code, and every suppression is greppable
+  (`rg -n "clippy::cognitive_complexity" -B 2`).
+- `too-many-lines-threshold = 100` is anchored in `clippy.toml` for per-crate `too_many_lines` adoption where a split
+  plan exists; it is deliberately not workspace-wide (445 hits).
+
+The lint was previously documented as active while the March 2026 manifest cleanup had silently dropped it
+(`eaca32a6e`), leaving only the dead threshold in `clippy.toml`. Re-enabled 2026-11-15 with a 24-site `#[expect]`
+ledger, so the doc and the build now agree.
+
+Repeat offenders for cohesion review: desktop `view/*`, runloop `turn/*` and `tool_routing`, `vtcode-llm` providers,
+`vtcode-ui` widgets.
 
 Gate commands:
 
 ```sh
 python3 scripts/check_rust_file_length.py --mode warn   # soft signal (check-dev.sh runs this)
 python3 scripts/check_rust_file_length.py --mode enforce # release gate (check.sh rust-length)
+cargo clippy --workspace --all-targets                  # cognitive_complexity + the rest of the lint stack
 ```
 
 ## Rust API migration notes

@@ -437,6 +437,7 @@ fn catalog_reasoning_does_not_imply_configurable_effort() {
 }
 
 #[test]
+#[expect(clippy::cognitive_complexity, reason = "table-driven preset assertions")]
 fn test_generated_model_capability_lookup() {
     let gpt54_catalog = model_catalog_entry("openai", "gpt-5.6-sol").expect("gpt-5.4 metadata");
     assert_eq!(gpt54_catalog.context_window, 1_050_000);

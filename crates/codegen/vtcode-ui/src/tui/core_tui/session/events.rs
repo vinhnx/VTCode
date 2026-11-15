@@ -112,6 +112,7 @@ fn copy_selected_input_if_requested(session: &mut Session, key: &KeyEvent, has_c
     false
 }
 
+#[expect(clippy::cognitive_complexity, reason = "key-event matrix; split per key class")]
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {
     let key = action::normalize_terminal_control_event(key);
     if !session.has_active_overlay()

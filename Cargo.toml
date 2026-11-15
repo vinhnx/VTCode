@@ -250,6 +250,11 @@ new_without_default = "warn"
 len_without_is_empty = "warn"
 derivable_impls = "warn"
 unnecessary_unwrap = "warn"
+# Function-level complexity budget, paired with the tiered file-length gate
+# (`scripts/check_rust_file_length.py`): line count alone is gameable — a huge
+# function can hide in a small file. The threshold lives in `clippy.toml`
+# (`cognitive-complexity-threshold = 75`); keep the two in sync.
+cognitive_complexity = "warn"
 
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
 # Slice and indexing operations must make their safety assumptions explicit.

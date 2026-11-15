@@ -1,7 +1,19 @@
+//! Release notes: parsing the highlights bullets and deciding which release
+//! still owes the user its notes.
+//!
+//! Parsing turns a GitHub release body into bullet items; the policy half
+//! answers "has this release been announced yet?" from the shared update
+//! cache, so the CLI and the desktop app announce a release exactly once.
+
 use std::sync::LazyLock;
 
 use regex::Regex;
 use semver::Version;
+use tracing::debug;
+
+use super::cache;
+use super::preflight;
+use super::types::UpdateInfo;
 
 /// Parsed highlight items extracted from a GitHub release body.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -72,6 +84,141 @@ static COMMIT_METADATA_RE: LazyLock<Regex> =
 /// Strip trailing `(commit_hash) (@author)` patterns from a highlight line.
 fn strip_commit_metadata(text: &str) -> String {
     COMMIT_METADATA_RE.replace(text, "").to_string()
+}
+
+/// Check whether release notes should be shown for the current version.
+///
+/// Returns `true` if the current version has not been recorded as "seen" in the
+/// update cache. A cache read failure stays quiet (`false`): the notes are a
+/// courtesy, never worth a spurious banner.
+///
+/// This is the single source of truth for "does this release still owe the
+/// user its notes?" — the TUI transcript banner and the desktop inline banner
+/// both derive from it, so one release is announced once across surfaces.
+pub(crate) fn should_show_release_notes_for_current_version() -> bool {
+    let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) else {
+        return false;
+    };
+    !current_version_notes_seen_for(&current)
+}
+
+/// Whether the running version's release notes were already announced by any
+/// VT Code surface (TUI transcript or desktop banner).
+///
+/// The marker lives in the shared update cache, so the CLI and the desktop app
+/// cannot both announce the same release. A cache read failure reports "seen":
+/// announcements are a courtesy, so an unreadable cache must stay quiet rather
+/// than risk repeating the notes on every launch.
+pub(crate) fn current_version_notes_seen() -> bool {
+    let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) else {
+        return true;
+    };
+    current_version_notes_seen_for(&current)
+}
+
+fn current_version_notes_seen_for(version: &Version) -> bool {
+    match cache::read_snapshot() {
+        Ok(snapshot) => snapshot.last_seen_version.as_ref() == Some(version),
+        Err(err) => {
+            debug!("Failed to read update cache for release notes check: {err}");
+            true
+        }
+    }
+}
+
+pub(crate) fn cached_current_release_highlights() -> Option<(Version, Vec<String>)> {
+    let current = Version::parse(env!("CARGO_PKG_VERSION")).ok()?;
+    parse_cached_highlights(cache::current_release_info(&current))
+        // The spawned preflight fetch may have landed after the banner
+        // decision read the cache (first launch after an update): serve the
+        // running version's notes from that fetch instead of deferring them
+        // to a second launch. A newer release never leaks in here.
+        .or_else(|| parse_cached_highlights(current_notes_from_preflight(&current)))
+}
+
+/// The preflight fetch's notes when they describe the running version.
+fn current_notes_from_preflight(current: &Version) -> Option<(Version, String)> {
+    let (version, release_notes) = preflight::get_preflight_latest_release()?;
+    (version == *current).then_some((version, release_notes))
+}
+
+/// The newest release the update cache knows about, with the Highlights
+/// bullets parsed from its cached notes. Served to the desktop
+/// `update/status` handler as the reader-facing changelog source, so the
+/// viewer works whether or not the release is still an offered update.
+///
+/// An empty item list means the cached notes carry no Highlights section:
+/// callers render a link-only state. `None` means the cache holds no notes at
+/// all, which is the only "nothing to read" case.
+pub(crate) fn cached_latest_release() -> Option<(Version, Vec<String>)> {
+    let (version, release_notes) = cache::latest_release_info()?;
+    Some((version.clone(), parse_highlights(&version, &release_notes).items))
+}
+
+/// Resolve the release notes to announce on this launch.
+///
+/// Prefers the highlights captured during session hydration, but re-reads the
+/// live cache when hydration found nothing: the preflight fetch often lands
+/// between hydration and the transcript banner (first launch after an external
+/// update), and serving it now beats deferring the notes to a second launch.
+pub(crate) fn resolve_release_notes_for_display(
+    bootstrap: Option<(Version, Vec<String>)>,
+) -> Option<(Version, Vec<String>)> {
+    if bootstrap.is_some() {
+        return bootstrap;
+    }
+    if !should_show_release_notes_for_current_version() {
+        return None;
+    }
+    cached_current_release_highlights()
+}
+
+fn parse_cached_highlights(info: Option<(Version, String)>) -> Option<(Version, Vec<String>)> {
+    let (version, release_notes) = info?;
+    let parsed = parse_highlights(&version, &release_notes);
+    (!parsed.items.is_empty()).then_some((version, parsed.items))
+}
+
+/// Record a release an explicit check just fetched from GitHub.
+///
+/// Mirrors the cache write the background refresh performs so every check —
+/// explicit or background — leaves the same on-disk state for the next launch
+/// to read.
+pub(super) fn record_fetched_release(current: &Version, info: &UpdateInfo) {
+    let latest_is_newer = info.version > *current;
+    let _ = cache::record_successful_check_with_notes(Some(&info.version), latest_is_newer, Some(&info.release_notes));
+}
+
+/// Seed the update cache with the release notes for a newly installed version.
+///
+/// Called immediately after a successful install (standalone `self_replace`
+/// or a managed package-manager command) so the next `vtcode` launch finds
+/// `latest_version == current` with notes available and shows highlights on
+/// its first start. Best effort: cache failures are ignored.
+pub(crate) fn seed_release_notes_for_installed_version(version: &Version, release_notes: &str) {
+    let _ = cache::record_successful_check_with_notes(Some(version), false, Some(release_notes));
+    // Keep the install record apart from the check slot: a later check that
+    // reports an even newer release overwrites `latest_version`/`release_notes`
+    // and would otherwise hide the notes this version still owes the user.
+    let _ = cache::record_installed_release(version, release_notes);
+    let _ = cache::clear_dismissed_version();
+}
+
+/// Record that a version's release notes have been shown.
+///
+/// Called by every surface that announced the notes: the TUI transcript
+/// banner and the desktop banner via `update/acknowledge`. `vtcode update`
+/// prints the installed release's notes as immediate feedback but leaves the
+/// marker alone, so the first app launch still announces them.
+pub(crate) fn record_version_notes_seen(version: &Version) {
+    let _ = cache::record_seen_version(version);
+}
+
+/// Record that the current version's release notes have been shown.
+pub(crate) fn record_current_version_seen() {
+    if let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) {
+        record_version_notes_seen(&current);
+    }
 }
 
 #[cfg(test)]

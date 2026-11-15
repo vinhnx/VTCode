@@ -215,6 +215,7 @@ fn app_catalog_covers_language_controls_and_kit_overrides() {
     assert_eq!(rust_i18n::t!("gpui_component.Attachment.Retry", locale = "uk").to_string(), "Повторити");
 }
 
+#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn notification_and_about_settings_copy_covers_every_language() {
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "en").to_string(), "Notifications");
@@ -485,6 +486,7 @@ fn composer_placeholder_matches_cli_bootstrap_lead() {
     );
 }
 
+#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn workspace_review_surface_is_translated_and_interpolates_values() {
     macro_rules! assert_translated {
@@ -582,6 +584,7 @@ fn workspace_review_surface_is_translated_and_interpolates_values() {
     }
 }
 
+#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn workspace_file_browser_and_preview_copy_covers_every_language() {
     macro_rules! assert_translated {
@@ -628,6 +631,7 @@ fn workspace_file_browser_and_preview_copy_covers_every_language() {
     }
 }
 
+#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn command_and_composer_palettes_are_translated_for_every_language() {
     macro_rules! assert_translated {

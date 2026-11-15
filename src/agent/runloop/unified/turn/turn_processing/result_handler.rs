@@ -473,6 +473,7 @@ async fn block_verification_execution_limit(
 }
 
 /// Dispatch the appropriate response handler based on the processing result.
+#[expect(clippy::cognitive_complexity, reason = "turn result routing; split per outcome")]
 pub(crate) async fn handle_turn_processing_result<'a>(
     params: HandleTurnProcessingResultParams<'a>,
 ) -> Result<TurnHandlerOutcome> {

@@ -128,6 +128,7 @@ fn session_summary(listing: &SessionListing) -> SessionSummary {
     }
 }
 
+#[expect(clippy::cognitive_complexity, reason = "JSON-RPC dispatch; split per method family")]
 pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
     use protocol::method;
 

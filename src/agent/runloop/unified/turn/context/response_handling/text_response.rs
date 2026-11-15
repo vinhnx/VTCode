@@ -1,6 +1,7 @@
 use super::*;
 
 impl<'a> TurnProcessingContext<'a> {
+    #[expect(clippy::cognitive_complexity, reason = "text-response branches; split per outcome")]
     pub(crate) async fn handle_text_response(
         &mut self,
         text: String,

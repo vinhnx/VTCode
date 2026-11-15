@@ -52,6 +52,7 @@ fn loop_detection_block_payload(tool_name: &str, display_name: &str, repeat_coun
 }
 
 impl ToolRegistry {
+    #[expect(clippy::cognitive_complexity, reason = "tool-execution funnel; split per stage")]
     async fn execute_tool_ref_internal(
         &self,
         name: &str,

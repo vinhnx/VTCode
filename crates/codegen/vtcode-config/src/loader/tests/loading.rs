@@ -137,7 +137,7 @@ fn scaffold_config_inherits_program_status_default() {
 fn scaffold_config_carries_no_removed_keys() {
     let scaffold_text = include_str!("../../../data/default_config.toml");
     let scaffold: toml::Value = toml::from_str(scaffold_text).expect("scaffold config must parse");
-    let stale = crate::loader::manager::removed_config_key_paths_present(&scaffold);
+    let stale = manager::removed_config_key_paths_present(&scaffold);
     assert!(
         stale.is_empty(),
         "scaffold still carries removed keys {stale:?}; drop them from data/default_config.toml"

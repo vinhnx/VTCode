@@ -540,6 +540,7 @@ fn finish_parse_textual_skill_tool_call(
 /// * `tool_registry` - The tool registry for executing nested tools
 /// * `available_tools` - Tools available to the skill
 /// * `model` - The model to use for skill execution
+#[expect(clippy::cognitive_complexity, reason = "skill step pipeline; split per step")]
 pub async fn execute_skill_with_sub_llm(
     skill: &Skill,
     user_input: String,

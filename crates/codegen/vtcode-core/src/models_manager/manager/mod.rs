@@ -154,6 +154,7 @@ impl ModelsManager {
     }
 
     /// Refresh available models, using cache if fresh
+    #[expect(clippy::cognitive_complexity, reason = "models merge; split resolve/normalize")]
     pub async fn refresh_available_models(&self) -> anyhow::Result<()> {
         if !self.remote_models_enabled {
             debug!("Remote model fetching is disabled");

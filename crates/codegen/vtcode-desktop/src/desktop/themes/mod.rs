@@ -29,6 +29,8 @@ pub(super) use glass::{
 };
 mod terminal;
 pub(super) use terminal::{ciapre_ansi_slots, latte_ansi_slots, light_ansi_slots};
+mod toolbar;
+pub(super) use toolbar::toolbar_band_surface;
 
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";

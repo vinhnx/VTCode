@@ -19,7 +19,7 @@ src/agent/runloop/unified/settings_interactive/docs.rs:54 | static quoted-value 
 src/agent/runloop/unified/turn/session/slash_commands/share_log.rs:22 | static regex for email validation in share-log
 src/agent/runloop/unified/turn/session/slash_commands/share_log.rs:24 | static regex for user path sanitization in share-log
 src/agent/runloop/unified/turn/session/slash_commands/config_toml.rs:21 | toml table entry was just inserted; always a table
-src/updater/release_notes.rs:70 | hardcoded release-notes regex literal compiled at startup; failure indicates programmer error
+src/updater/release_notes.rs | static release-notes regex compiled at module load; the literal is hardcoded, so failure indicates programmer error
 vtcode-core/src/scheduler/session.rs:20 | static remind-at regex compiled at startup
 vtcode-core/src/scheduler/session.rs:35 | static remind-in regex compiled at startup
 vtcode-core/src/scheduler/session.rs:39 | static time-only regex compiled at startup
@@ -76,7 +76,7 @@ vtcode-config/src/models/model_id/display.rs:26 | generated OpenRouter model met
 # Initialization-ordering invariants.
 vtcode-core/src/tools/registry/distributed.rs:45 | OnceCell initialized after first set() call
 vtcode-core/src/tools/skills/mod.rs:674 | filtered to skills with manifests
-src/agent/runloop/unified/turn/session_loop_runner/orchestration/session_iteration/setup.rs:482 | tool registry completed before interaction
+src/agent/runloop/unified/turn/session_loop_runner/orchestration/session_iteration/setup.rs | tool registry completed before interaction (the only expect in the file)
 
 # Runtime operations that use expect() for invariant assertions
 src/agent/runloop/prompt.rs:85 | fallback_to_main_model() should succeed when called after route check
@@ -110,4 +110,4 @@ vtcode-ui/src/tui/core_tui/widgets/theme_snapshot.rs | snapshot render test harn
 
 # Binary invariants.
 src/agent/runloop/model_picker/rendering.rs:58 | rendering rows are laid out before draw
-src/agent/runloop/unified/session_setup/init/mod.rs:767 | MCP config requires a loaded VTCodeConfig
+src/agent/runloop/unified/session_setup/init/mod.rs | MCP config requires a loaded VTCodeConfig (the only expect in the file)

@@ -220,6 +220,7 @@ impl DesktopView {
 
 mod event_signals;
 mod handle;
+mod response_error;
 mod thread_events;
 
 pub(super) use event_signals::can_coalesce_item_updates;

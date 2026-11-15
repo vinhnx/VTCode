@@ -167,6 +167,7 @@ impl ToolRegistry {
     }
 
     /// Refresh MCP tools (reconnect to providers and update tool lists).
+    #[expect(clippy::cognitive_complexity, reason = "MCP dispatch; split request/response")]
     pub async fn refresh_mcp_tools(&self) -> Result<()> {
         let mcp_client_opt = self.mcp_client.read().clone();
         if let Some(mcp_client) = mcp_client_opt {

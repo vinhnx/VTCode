@@ -149,6 +149,7 @@ pub(super) const RECOVERY_CONTRACT_VIOLATION_REASON: &str =
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
+#[expect(clippy::cognitive_complexity, reason = "turn loop; split per phase")]
 pub(crate) async fn run_turn_loop(
     working_history: &mut Vec<uni::Message>,
     mut ctx: TurnLoopContext<'_>,

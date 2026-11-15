@@ -98,6 +98,7 @@ pub(super) fn immediate_file_open_allowed(vt_cfg: Option<&VTCodeConfig>) -> bool
     !(editor_config.suspend_tui && TerminalAppLauncher::editor_command_requires_terminal(preferred_editor.as_deref()))
 }
 
+#[expect(clippy::cognitive_complexity, reason = "session UI bootstrap; split per mode")]
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,

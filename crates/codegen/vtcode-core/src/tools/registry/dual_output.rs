@@ -34,6 +34,7 @@ impl ToolRegistry {
     /// // result.ui_content: [Full formatted output with all 127 matches]
     /// // Savings: ~98% token reduction
     /// ```
+    #[expect(clippy::cognitive_complexity, reason = "dual-output projection; split per surface")]
     pub async fn execute_tool_dual(&self, name: &str, args: Value) -> Result<SplitToolResult> {
         // Execute the tool using existing infrastructure
         let result = self.execute_tool_ref(name, &args).await?;

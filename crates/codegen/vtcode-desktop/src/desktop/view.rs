@@ -136,6 +136,7 @@ mod deeplinks;
 mod exec_controls;
 mod file_preview;
 mod file_rename;
+mod file_tree;
 mod files_panel;
 mod full_access_confirm;
 mod glass_buttons;
@@ -155,6 +156,7 @@ mod palette;
 mod palette_render;
 mod prompt_confirm;
 mod queue;
+mod resize;
 mod root_render;
 mod running_confirm;
 mod runtime_items;
@@ -197,14 +199,15 @@ use backend_events::*;
 pub(crate) use bootstrap::run;
 #[cfg(test)]
 use bootstrap::{dispatch_handoff_links, init_keybindings, open_or_activate_main_window};
-use chrome::*;
 use components::*;
+use file_tree::{file_tree_items, find_file_tree_item};
 use glass_buttons::*;
 use inspector_changes::*;
 use launch_bounds::{desktop_window_options, main_screen_visible_bounds, reduced_transparency_requested};
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
 use queue::*;
+use resize::{PaneResize, ResizeEdge};
 use running_confirm::{RunningSwitch, RunningSwitchIntent};
 use runtime_items::*;
 use sessions::*;
@@ -912,52 +915,6 @@ struct DesktopView {
     sidebar_width: f32,
     inspector_width: f32,
     resizing: Option<PaneResize>,
-}
-
-fn file_tree_items(entries: &[FileEntry], parent: Option<&str>, expanded: &HashSet<String>) -> Vec<TreeItem> {
-    // Group once by parent directory so each level below walks only its own
-    // children instead of re-scanning every entry; pushes preserve entry
-    // order within each level, and output order never depends on map order.
-    let mut by_parent: HashMap<Option<&str>, Vec<&FileEntry>> = HashMap::new();
-    for entry in entries {
-        by_parent
-            .entry(entry.rel_path.rsplit_once('/').map(|(dir, _)| dir))
-            .or_default()
-            .push(entry);
-    }
-    file_tree_items_grouped(&by_parent, parent, expanded)
-}
-
-fn file_tree_items_grouped(
-    by_parent: &HashMap<Option<&str>, Vec<&FileEntry>>,
-    parent: Option<&str>,
-    expanded: &HashSet<String>,
-) -> Vec<TreeItem> {
-    by_parent.get(&parent).map_or_else(Vec::new, |children| {
-        children
-            .iter()
-            .map(|entry| {
-                let nested = if entry.is_dir {
-                    file_tree_items_grouped(by_parent, Some(&entry.rel_path), expanded)
-                } else {
-                    Vec::new()
-                };
-                TreeItem::new(entry.rel_path.clone(), entry.rel_path.clone())
-                    .children(nested)
-                    .expanded(expanded.contains(&entry.rel_path))
-            })
-            .collect()
-    })
-}
-
-fn find_file_tree_item<'a>(items: &'a [TreeItem], path: &str) -> Option<&'a TreeItem> {
-    items.iter().find_map(|item| {
-        if item.id.as_ref() == path {
-            Some(item)
-        } else {
-            find_file_tree_item(&item.children, path)
-        }
-    })
 }
 
 fn send_request(commands: &mpsc::Sender<BackendCommand>, method: &str, params: Value) -> bool {

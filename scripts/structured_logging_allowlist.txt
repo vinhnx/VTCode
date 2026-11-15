@@ -15,3 +15,4 @@ crates/common/vtcode-commons/src/startup_trace.rs | Pre-tracing startup phase re
 crates/codegen/vtcode-desktop/src/desktop/view/bootstrap/keybindings.rs:122 | Desktop keybinding fallback diagnostic; the GUI binary has no logging pipeline, so stderr is the only channel.
 crates/common/vtcode-commons/src/diagnostics.rs:69 | stderr_diagnostic intentionally renders redacted pre-UI diagnostics to stderr by contract.
 patches/gpui-pre-macos/src/window_appearance.rs:26 | Vendored upstream GPUI fork; not modified in-repo.
+patches/gpui-component/src/table/state.rs:2722 | Vendored upstream GPUI fork; not modified in-repo.

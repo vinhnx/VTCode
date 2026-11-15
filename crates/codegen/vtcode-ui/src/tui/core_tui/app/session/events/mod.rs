@@ -74,6 +74,10 @@ pub(super) fn process_key_with_clipboard_text_reader(
 }
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
+#[cfg_attr(
+    not(feature = "profiling"),
+    expect(clippy::cognitive_complexity, reason = "key-event matrix; split per key class")
+)]
 fn process_key_with_clipboard_readers(
     session: &mut Session,
     key: KeyEvent,

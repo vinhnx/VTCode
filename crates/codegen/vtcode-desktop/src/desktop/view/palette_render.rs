@@ -6,6 +6,7 @@ use gpui_kit::component::kbd::Kbd;
 impl DesktopView {
     /// Modal ⌘K palette. The state entity is created on open, never during
     /// render; confirm and cancel run through the owning view.
+    #[expect(clippy::cognitive_complexity, reason = "palette renderer; split per palette kind")]
     pub(super) fn render_command_palette(
         &self,
         state: Entity<CommandState>,

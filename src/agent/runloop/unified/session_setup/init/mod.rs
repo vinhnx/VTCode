@@ -388,6 +388,7 @@ pub(crate) async fn complete_session_registry(
     clippy::too_many_arguments,
     reason = "session hydration mirrors initialize_session_critical inputs"
 )]
+#[expect(clippy::cognitive_complexity, reason = "session init; split per stage")]
 pub(crate) async fn hydrate_session_runtime(
     session_state: &mut SessionState,
     context_manager: &mut ContextManager,

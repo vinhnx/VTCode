@@ -169,6 +169,10 @@ async fn finish_planning_model_selection(
 }
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
+#[cfg_attr(
+    not(feature = "profiling"),
+    expect(clippy::cognitive_complexity, reason = "interaction loop; split per phase")
+)]
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,

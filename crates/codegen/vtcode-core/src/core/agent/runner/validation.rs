@@ -12,6 +12,7 @@ impl AgentRunner {
         planning_active: bool,
         request_user_input_enabled: bool,
     ) -> SessionToolsConfig {
+        let provider = crate::llm::factory::infer_provider(Some(&self.config().agent.provider), &self.model);
         SessionToolsConfig {
             surface: SessionSurface::AgentRunner,
             capability_level: CapabilityLevel::CodeSearch,
@@ -20,12 +21,12 @@ impl AgentRunner {
             request_user_input_enabled,
             model_capabilities: ToolModelCapabilities::for_model_name(&self.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
-                crate::llm::factory::infer_provider(Some(&self.config().agent.provider), &self.model),
+                provider,
                 self.provider_client.supports_responses_compaction(&self.model),
                 Some(self.config()),
             ),
             anthropic_native_memory_enabled: crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
-                crate::llm::factory::infer_provider(Some(&self.config().agent.provider), &self.model),
+                provider,
                 &self.model,
                 Some(self.config()),
             ),
@@ -41,18 +42,19 @@ impl AgentRunner {
         // schemas stay masked to their planning-safe shape when a tool exists
         // in both modes. Active names still follow the current profile, mode,
         // permissions, and allow-list.
-        let planning_config = self.session_tools_config_for_snapshot(true, true);
-        let mut definitions = self.tool_registry.model_tools(planning_config).await;
+        let mut config = self.session_tools_config_for_snapshot(true, true);
+        let mut definitions = self.tool_registry.model_tools(config.clone()).await;
         let mut definition_names: HashSet<String> =
             definitions.iter().map(|tool| tool.function_name().to_string()).collect();
-        let normal_config = self.session_tools_config_for_snapshot(false, true);
-        for tool in self.tool_registry.model_tools(normal_config).await {
+        config.planning_active = false;
+        for tool in self.tool_registry.model_tools(config.clone()).await {
             if definition_names.insert(tool.function_name().to_string()) {
                 definitions.push(tool);
             }
         }
-        let runtime_config = self.session_tools_config_for_snapshot(planning_active, false);
-        let runtime_tools = self.tool_registry.model_tools(runtime_config).await;
+        config.planning_active = planning_active;
+        config.request_user_input_enabled = request_user_input_enabled;
+        let runtime_tools = self.tool_registry.model_tools(config).await;
         if let Some(runtime_task_tracker) = runtime_tools
             .iter()
             .find(|tool| tool.function_name() == crate::config::constants::tools::TASK_TRACKER)

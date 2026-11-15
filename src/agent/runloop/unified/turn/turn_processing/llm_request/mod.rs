@@ -163,6 +163,10 @@ impl TurnProcessingContext<'_> {
 }
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
+#[cfg_attr(
+    not(feature = "profiling"),
+    expect(clippy::cognitive_complexity, reason = "LLM request execution; split per phase")
+)]
 async fn execute_llm_request_with_options_impl(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
