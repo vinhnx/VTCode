@@ -161,7 +161,9 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
                 && end >= start
                 && !obj.contains_key("limit")
             {
-                obj.insert("limit".to_string(), json!(end - start + 1));
+                // Saturate: user-supplied bounds reach `usize::MAX`, and
+                // release keeps `overflow-checks = true`.
+                obj.insert("limit".to_string(), json!(end.saturating_sub(start).saturating_add(1)));
             }
         }
 

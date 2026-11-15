@@ -118,7 +118,7 @@ impl FileOpsTool {
         self.normalize_and_validate_candidate(Path::new(&input.path), &input.path).await
     }
 
-    fn directory_cache_key(&self, input: &ListInput) -> String {
+    fn directory_cache_key(&self, input: &ListInput, dir_mtime_nanos: u128) -> String {
         fn push_component(key: &mut String, value: &str) {
             key.push_str(&value.len().to_string());
             key.push(':');
@@ -126,7 +126,11 @@ impl FileOpsTool {
             key.push('|');
         }
 
-        let mut key = String::from("dir_list:v2:");
+        // v3 keys the entry on the directory mtime so creates/deletes/renames
+        // invalidate the cached listing; input-only v2 keys served stale
+        // results for the full TTL after any mutation.
+        let mut key = String::from("dir_list:v3:");
+        push_component(&mut key, &dir_mtime_nanos.to_string());
         push_component(&mut key, &self.canonical_workspace_root().to_string_lossy());
         push_component(&mut key, &input.path);
         push_component(&mut key, if input.include_hidden { "hidden" } else { "visible" });
@@ -179,8 +183,16 @@ impl FileOpsTool {
         let base_is_dir = base_metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
         let base_is_file = base_metadata.as_ref().is_some_and(std::fs::Metadata::is_file);
 
-        // Try to get result from cache first for directories
-        let cache_key = self.directory_cache_key(input);
+        // Try to get result from cache first for directories. The key carries
+        // the directory mtime (already fetched above) so any mutation that
+        // adds, removes, or renames a direct child invalidates the entry.
+        let dir_mtime_nanos = base_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or(0);
+        let cache_key = self.directory_cache_key(input, dir_mtime_nanos);
         if base_is_dir && let Some(cached_result) = FILE_CACHE.get_directory(&cache_key).await {
             return Ok(cached_result);
         }

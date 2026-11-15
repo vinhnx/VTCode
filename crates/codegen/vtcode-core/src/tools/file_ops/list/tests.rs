@@ -116,12 +116,18 @@ fn basic_list_cache_keys_separate_all_response_dimensions() {
         let mut args = json!({"path": "listing"});
         args.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
         let input: ListInput = serde_json::from_value(args).unwrap();
-        assert!(keys.insert(tool.directory_cache_key(&input)));
+        assert!(keys.insert(tool.directory_cache_key(&input, 1)));
     }
     let other_workspace = TempDir::new().unwrap();
-    assert!(keys.insert(
-        make_tool(&other_workspace).directory_cache_key(&serde_json::from_value(json!({"path": "listing"})).unwrap())
-    ));
+    assert!(
+        keys.insert(
+            make_tool(&other_workspace)
+                .directory_cache_key(&serde_json::from_value(json!({"path": "listing"})).unwrap(), 1)
+        )
+    );
+    // The directory mtime is its own cache dimension: a mutation must miss.
+    let same_input: ListInput = serde_json::from_value(json!({"path": "listing"})).unwrap();
+    assert_ne!(tool.directory_cache_key(&same_input, 1), tool.directory_cache_key(&same_input, 2));
 }
 
 #[tokio::test]
@@ -393,4 +399,23 @@ async fn list_extreme_page_does_not_overflow() {
         .await
         .expect("extreme paging in recursive mode must not panic");
     assert_eq!(recursive["count"], 0);
+}
+
+#[tokio::test]
+async fn directory_listing_reflects_mutations_despite_cache() {
+    let workspace = TempDir::new().unwrap();
+    let directory = workspace.path().join("cache_freshness");
+    fs::create_dir(&directory).unwrap();
+    fs::write(directory.join("a.txt"), "fixture").unwrap();
+    let tool = make_tool(&workspace);
+    let args = || json!({"path": "cache_freshness", "mode": "list", "max_items": 50});
+
+    assert_eq!(names(&tool.execute(args()).await.unwrap()), BTreeSet::from(["a.txt".to_string()]));
+    fs::write(directory.join("b.txt"), "fixture").unwrap();
+    assert_eq!(
+        names(&tool.execute(args()).await.unwrap()),
+        BTreeSet::from(["a.txt".to_string(), "b.txt".to_string()])
+    );
+    fs::remove_file(directory.join("a.txt")).unwrap();
+    assert_eq!(names(&tool.execute(args()).await.unwrap()), BTreeSet::from(["b.txt".to_string()]));
 }

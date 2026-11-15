@@ -53,6 +53,23 @@ fn build_read_handler_args_normalizes_zero_bounds() {
 }
 
 #[test]
+fn build_read_handler_args_extreme_line_range_does_not_overflow() {
+    let canonical = Path::new("/tmp/example.txt");
+    // `end - start + 1` must saturate: release builds keep
+    // `overflow-checks = true`, so a plain add is an agent-reachable abort.
+    let args = json!({
+        "path": "example.txt",
+        "start_line": 0,
+        "end_line": usize::MAX,
+    });
+
+    let built = build_read_handler_args(&args, canonical);
+
+    assert_eq!(built["offset"], json!(1));
+    assert_eq!(built["limit"], json!(usize::MAX));
+}
+
+#[test]
 fn build_read_handler_args_avoids_duplicate_path_aliases() {
     let canonical = Path::new("/tmp/example.txt");
     let args = json!({
