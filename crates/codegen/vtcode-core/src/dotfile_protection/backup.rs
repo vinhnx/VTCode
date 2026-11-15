@@ -126,11 +126,12 @@ impl BackupManager {
         // Compute content hash
         let content_hash = calculate_sha256(&content);
 
-        // Generate backup path
+        // Generate backup path. Same-millisecond collisions (two files with
+        // colliding safe names, or a fast retry) must not overwrite.
         let timestamp = Utc::now();
         let safe_name = self.safe_filename(file_path);
-        let backup_filename = format!("{}.{}.backup", safe_name, timestamp.format("%Y%m%d_%H%M%S_%3f"));
-        let backup_path = self.backup_dir.join(&backup_filename);
+        let backup_stem = format!("{}.{}.backup", safe_name, timestamp.format("%Y%m%d_%H%M%S_%3f"));
+        let backup_path = self.unique_backup_path(&backup_stem).await;
 
         // Write backup
         write_private_file_atomic(&backup_path, &content)
@@ -161,6 +162,18 @@ impl BackupManager {
         tracing::info!("Created backup for {:?} at {:?}", file_path, backup_path);
 
         Ok(backup)
+    }
+
+    /// Resolve a collision-free backup path, appending a counter suffix when
+    /// the timestamped stem already exists.
+    async fn unique_backup_path(&self, stem: &str) -> PathBuf {
+        let mut candidate = self.backup_dir.join(stem);
+        let mut suffix: u32 = 0;
+        while tokio::fs::symlink_metadata(&candidate).await.is_ok() {
+            suffix += 1;
+            candidate = self.backup_dir.join(format!("{stem}_{suffix}"));
+        }
+        candidate
     }
 
     /// Convert a file path to a safe filename for backup.
@@ -229,18 +242,22 @@ impl BackupManager {
             }
         }
 
-        // Update index (remove deleted backups)
-        let remaining: Vec<_> = backups
-            .into_iter()
-            .filter(|b| {
-                if b.original_path == file_path_str {
-                    self.is_managed_backup_path(Path::new(&b.backup_path))
-                        && std::fs::symlink_metadata(&b.backup_path).is_ok_and(|metadata| metadata.is_file())
-                } else {
-                    true
-                }
-            })
-            .collect();
+        // Update index (remove deleted backups). Async metadata checks: this
+        // runs on a Tokio worker, never blocking file calls.
+        let mut remaining = Vec::with_capacity(backups.len());
+        for b in backups {
+            if b.original_path != file_path_str {
+                remaining.push(b);
+                continue;
+            }
+            if self.is_managed_backup_path(Path::new(&b.backup_path))
+                && tokio::fs::symlink_metadata(&b.backup_path)
+                    .await
+                    .is_ok_and(|metadata| metadata.is_file())
+            {
+                remaining.push(b);
+            }
+        }
 
         let index_path = self.backup_dir.join("backups.json");
         write_private_json_file(&index_path, &remaining)
@@ -362,6 +379,21 @@ mod tests {
         // Verify content is restored
         let restored = tokio::fs::read_to_string(&test_file).await.unwrap();
         assert_eq!(restored, original_content);
+    }
+
+    #[tokio::test]
+    async fn test_unique_backup_path_appends_counter_on_collision() {
+        let dir = tempdir().unwrap();
+        let backup_dir = dir.path().join("backups");
+        let manager = BackupManager::new(&backup_dir, 5).await.unwrap();
+
+        assert_eq!(manager.unique_backup_path("a.backup").await, backup_dir.join("a.backup"));
+
+        tokio::fs::write(backup_dir.join("a.backup"), "taken").await.unwrap();
+        assert_eq!(manager.unique_backup_path("a.backup").await, backup_dir.join("a.backup_1"));
+
+        tokio::fs::write(backup_dir.join("a.backup_1"), "taken").await.unwrap();
+        assert_eq!(manager.unique_backup_path("a.backup").await, backup_dir.join("a.backup_2"));
     }
 
     #[tokio::test]

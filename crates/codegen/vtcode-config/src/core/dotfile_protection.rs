@@ -45,6 +45,9 @@ pub struct DotfileProtectionConfig {
     pub max_backups_per_file: usize,
 
     /// Preserve original file permissions and ownership.
+    ///
+    /// NOTE: reserved for future use — restore currently always preserves
+    /// permissions on Unix regardless of this setting.
     #[serde(default = "default_true")]
     pub preserve_permissions: bool,
 
@@ -61,6 +64,8 @@ pub struct DotfileProtectionConfig {
     pub block_during_automation: bool,
 
     /// Operations that trigger extra protection.
+    ///
+    /// NOTE: reserved for future use — no enforcement reads this list yet.
     #[serde(default = "default_blocked_operations")]
     pub blocked_operations: Vec<String>,
 
@@ -274,6 +279,11 @@ impl DotfileProtectionConfig {
             return false;
         }
 
+        // Normalize Windows separators first: nested-dotdir detection splits
+        // on `/`, so without this `C:\u\.ssh\config` would evade every check.
+        // On Unix a literal backslash can only widen matches (fail-closed).
+        let normalized = path.replace('\\', "/");
+        let path = normalized.as_str();
         let filename = std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
 
         // Check if it's a dotfile (starts with . or contains /. or is in a dotfile directory)
@@ -316,10 +326,25 @@ impl DotfileProtectionConfig {
     }
 
     /// Check if a file is in the whitelist.
+    ///
+    /// Compares separator-normalized forms on both sides, so a whitelist
+    /// entry written with `\` still matches the same path written with `/`
+    /// (whitelisted files face the stronger secondary-auth gate, so a missed
+    /// match would weaken protection).
     pub fn is_whitelisted(&self, path: &str) -> bool {
-        let filename = std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
-
-        self.whitelist.contains(path) || self.whitelist.contains(filename)
+        let normalized = path.replace('\\', "/");
+        let filename = std::path::Path::new(&normalized)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&normalized);
+        self.whitelist.iter().any(|entry| {
+            let entry_normalized = entry.replace('\\', "/");
+            let entry_filename = std::path::Path::new(&entry_normalized)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&entry_normalized);
+            entry_normalized == normalized || entry_filename == filename
+        })
     }
 
     /// Simple pattern matching with wildcard support.
@@ -389,5 +414,25 @@ mod tests {
         assert!(DotfileProtectionConfig::matches_pattern(".env.local", ".env.*"));
         assert!(DotfileProtectionConfig::matches_pattern(".env.production", ".env.*"));
         assert!(DotfileProtectionConfig::matches_pattern(".vscode/settings.json", ".vscode/*"));
+    }
+
+    #[test]
+    fn test_windows_separators_do_not_evade_detection() {
+        let config = DotfileProtectionConfig::default();
+
+        assert!(config.is_protected("C:\\Users\\test\\.ssh\\config"));
+        assert!(config.is_protected(".ssh\\known_hosts"));
+        assert!(config.is_protected("C:\\Users\\test\\.env"));
+        assert!(!config.is_protected("C:\\Users\\test\\README.md"));
+        assert!(!config.is_protected("C:\\Users\\test\\src\\main.rs"));
+    }
+
+    #[test]
+    fn test_whitelist_matches_across_separator_styles() {
+        let mut config = DotfileProtectionConfig::default();
+        config.whitelist.insert("C:\\Users\\test\\.gitignore".into());
+
+        assert!(config.is_whitelisted("C:\\Users\\test\\.gitignore"));
+        assert!(config.is_whitelisted("C:/Users/test/.gitignore"));
     }
 }

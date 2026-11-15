@@ -32,6 +32,8 @@ pub enum AuditOutcome {
     UserRejected,
     /// Access was allowed without confirmation (protection disabled).
     AllowedUnprotected,
+    /// Access is awaiting the user's decision (confirmation requested).
+    PendingConfirmation,
 }
 
 impl std::fmt::Display for AuditOutcome {
@@ -43,6 +45,7 @@ impl std::fmt::Display for AuditOutcome {
             AuditOutcome::Denied => write!(f, "DENIED"),
             AuditOutcome::UserRejected => write!(f, "USER_REJECTED"),
             AuditOutcome::AllowedUnprotected => write!(f, "ALLOWED_UNPROTECTED"),
+            AuditOutcome::PendingConfirmation => write!(f, "PENDING_CONFIRMATION"),
         }
     }
 }

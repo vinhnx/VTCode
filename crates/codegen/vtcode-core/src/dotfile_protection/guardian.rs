@@ -328,8 +328,10 @@ impl DotfileGuardian {
         }
 
         if self.is_whitelisted(&context.file_path) && self.config.require_secondary_auth_for_whitelist {
+            self.log_access(context, AuditOutcome::PendingConfirmation).await?;
             Ok(ProtectionDecision::RequiresSecondaryAuth(request))
         } else if self.config.require_explicit_confirmation {
+            self.log_access(context, AuditOutcome::PendingConfirmation).await?;
             Ok(ProtectionDecision::RequiresConfirmation(request))
         } else {
             // Protection enabled but no confirmation required (unusual config)
@@ -339,6 +341,11 @@ impl DotfileGuardian {
     }
 
     /// Record that user confirmed the modification.
+    ///
+    /// Executor contract: call this after the user approves a
+    /// `RequiresConfirmation`/`RequiresSecondaryAuth` decision and the tool
+    /// runs. It creates the pre-modification backup, logs the approval, and
+    /// feeds cascade tracking. Without this call no backups are created.
     pub async fn confirm_modification(&self, context: &AccessContext, is_whitelisted: bool) -> Result<()> {
         // Create backup before modification
         if let Some(ref backup_manager) = self.backup_manager
@@ -374,6 +381,9 @@ impl DotfileGuardian {
     }
 
     /// Record that user rejected the modification.
+    ///
+    /// Executor contract: call this when the user rejects a confirmation
+    /// request so the rejection is audited and pending state is released.
     pub async fn reject_modification(&self, context: &AccessContext) -> Result<()> {
         self.log_access(context, AuditOutcome::UserRejected).await?;
 
@@ -556,6 +566,19 @@ mod tests {
         } else {
             panic!("Expected RequiresConfirmation");
         }
+    }
+
+    #[tokio::test]
+    async fn test_confirmation_seeking_access_is_audited_as_pending() {
+        let (guardian, _dir) = create_test_guardian().await;
+
+        let context = AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session");
+        let decision = guardian.request_access(&context).await.unwrap();
+        assert!(decision.requires_confirmation());
+
+        let history = guardian.get_audit_history(".gitignore").await.unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].outcome, AuditOutcome::PendingConfirmation);
     }
 
     #[tokio::test]
