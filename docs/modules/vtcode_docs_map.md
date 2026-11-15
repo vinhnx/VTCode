@@ -309,6 +309,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about GPUI Kit desktop guide review?", "How does Scope and method work?",
     "How does Confirmed findings and changes work?"
 
+- **File**: `docs/development/goal-loop.md`
+  - **Content**: Goal loop contract
+  - **Topics**: Ownership and persistence, Command flow, Turn boundary and auto-continue, Non-goals (v1)
+  - **User Questions**: "What can you tell me about Goal loop contract?", "How does Ownership and persistence work?",
+    "How does Command flow work?"
+
 - **File**: `docs/development/harness-simplification-audit.md`
   - **Content**: Harness simplification audit
   - **Topics**: Prompt baseline, Offline tool catalog baseline, Full-request census, Ownership and findings
