@@ -165,6 +165,68 @@ async fn undo_add_removes_file_and_delete_restores_it() {
 }
 
 #[tokio::test]
+async fn undo_refuses_partial_or_contradictory_deletion_hunks() {
+    for diff in [
+        "--- a/gone.rs\n+++ b/gone.rs\n@@ -1,1 +1,1 @@\n-old\n+new\n",
+        "--- a/gone.rs\n+++ /dev/null\n@@ -2,1 +0,0 @@\n-tail\n",
+        "--- a/gone.rs\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-first\n@@ -3,1 +0,0 @@\n-last\n",
+    ] {
+        let directory = hermetic_workspace();
+        let workspace = canonical_workspace(&directory);
+        write_events(
+            &workspace,
+            SESSION,
+            &[file_change_event(
+                "call:changes",
+                Some(TURN),
+                vec![("gone.rs", PatchChangeKind::Delete)],
+                Some(false),
+                PatchApplyStatus::Completed,
+                Some(diff),
+                false,
+            )],
+        );
+        let context = initialized_context(workspace.clone()).await;
+        let result = undo_turn(&context, SESSION, TURN).await.expect("undo");
+        assert!(!result.undone, "diff={diff:?}");
+        assert!(result.reason.contains("incomplete deletion diff"), "{}", result.reason);
+        assert!(!workspace.join("gone.rs").exists());
+    }
+}
+
+#[tokio::test]
+async fn undo_restores_whole_file_from_produced_deletion_preview() {
+    let directory = hermetic_workspace();
+    let workspace = canonical_workspace(&directory);
+    let mut preview = vtcode_core::tools::file_ops::build_diff_preview("gone.rs", Some("first\nsecond\n"), "");
+    preview["path"] = serde_json::json!("gone.rs");
+    preview["operation"] = serde_json::json!("deleted");
+    let mut event = vtcode_core::core::agent::events::file_change_completed_event(
+        "call",
+        "apply_patch",
+        &serde_json::json!({}),
+        &serde_json::json!({"success":true,"diff":[preview]}),
+    )
+    .expect("file change");
+    let ThreadEvent::ItemCompleted(ref mut completed) = event else {
+        panic!("completed item")
+    };
+    completed.item.context = Some(Box::new(ItemContext {
+        task_id: "task".into(),
+        turn_id: TURN.into(),
+        actor_id: "actor".into(),
+        parent_actor_id: None,
+        timestamp: "2026-11-05T00:00:00Z".into(),
+        activity: None,
+    }));
+    write_events(&workspace, SESSION, &[event]);
+    let context = initialized_context(workspace.clone()).await;
+    let result = undo_turn(&context, SESSION, TURN).await.expect("undo");
+    assert!(result.undone, "{}", result.reason);
+    assert_eq!(std::fs::read_to_string(workspace.join("gone.rs")).expect("read"), "first\nsecond\n");
+}
+
+#[tokio::test]
 async fn undo_repeated_edits_same_file_in_reverse() {
     let directory = hermetic_workspace();
     let workspace = canonical_workspace(&directory);
@@ -730,7 +792,7 @@ async fn undo_empty_file_add_and_delete() {
                 vec![("empty-gone.rs", PatchChangeKind::Delete)],
                 Some(false),
                 PatchApplyStatus::Completed,
-                None,
+                Some(""),
                 false,
             ),
         ],
@@ -744,6 +806,156 @@ async fn undo_empty_file_add_and_delete() {
         "",
         "empty deleted file recreated"
     );
+}
+
+#[tokio::test]
+async fn undo_refuses_empty_delete_without_complete_evidence() {
+    for (diff, terminators) in [(None, Some(false)), (Some(""), None), (Some(""), Some(true))] {
+        let directory = hermetic_workspace();
+        let workspace = canonical_workspace(&directory);
+        write_events(
+            &workspace,
+            SESSION,
+            &[file_change_event(
+                "call-1:changes",
+                Some(TURN),
+                vec![("gone.rs", PatchChangeKind::Delete)],
+                terminators,
+                PatchApplyStatus::Completed,
+                diff,
+                false,
+            )],
+        );
+        let context = initialized_context(workspace.clone()).await;
+        let result = undo_turn(&context, SESSION, TURN).await.expect("undo");
+        assert!(!result.undone, "diff={diff:?}, terminators={terminators:?}");
+        assert!(result.reason.contains("cannot be verified"), "{}", result.reason);
+        assert!(!workspace.join("gone.rs").exists());
+    }
+}
+
+#[tokio::test]
+async fn undo_refuses_turn_with_unrecorded_native_delete() {
+    let directory = hermetic_workspace();
+    let workspace = canonical_workspace(&directory);
+    std::fs::write(workspace.join("edited.rs"), "new\n").expect("fixture");
+    let edit = file_change_event(
+        "edit:changes",
+        Some(TURN),
+        vec![("edited.rs", PatchChangeKind::Update)],
+        Some(false),
+        PatchApplyStatus::Completed,
+        Some("--- a/edited.rs\n+++ b/edited.rs\n@@ -1 +1 @@\n-old\n+new\n"),
+        false,
+    );
+    let mut deletion = vtcode_core::core::agent::events::file_change_completed_event(
+        "delete",
+        "delete_file",
+        &serde_json::json!({"path":"gone.rs"}),
+        &serde_json::json!({"success":true,"deleted":true,"path":"gone.rs","kind":"file"}),
+    )
+    .expect("incomplete change item");
+    let ThreadEvent::ItemCompleted(ref mut completed) = deletion else {
+        panic!("completed item")
+    };
+    completed.item.context = Some(Box::new(ItemContext {
+        task_id: "task".into(),
+        turn_id: TURN.into(),
+        actor_id: "actor".into(),
+        parent_actor_id: None,
+        timestamp: "2026-11-05T00:00:00Z".into(),
+        activity: None,
+    }));
+    write_events(&workspace, SESSION, &[edit, deletion]);
+    let context = initialized_context(workspace.clone()).await;
+    let result = undo_turn(&context, SESSION, TURN).await.expect("undo");
+    assert!(!result.undone);
+    assert!(result.reason.contains("incomplete"), "{}", result.reason);
+    assert_eq!(std::fs::read_to_string(workspace.join("edited.rs")).expect("read"), "new\n");
+    assert!(!workspace.join("gone.rs").exists());
+}
+
+#[tokio::test]
+async fn undo_correlates_historical_file_invocations_by_item_id() {
+    use vtcode_core::exec::events::{ToolCallStatus, ToolOutcome};
+    for (tool, args, status, matching_change, should_undo) in [
+        ("delete_file", serde_json::json!({"path":"gone"}), ToolCallStatus::Completed, false, false),
+        (
+            "file_operation_internal",
+            serde_json::json!({"action":"delete","path":"gone"}),
+            ToolCallStatus::Completed,
+            false,
+            false,
+        ),
+        (
+            "write_file",
+            serde_json::json!({"path":"edited.rs","content":"new\n"}),
+            ToolCallStatus::Completed,
+            true,
+            true,
+        ),
+        (
+            "file_operation_internal",
+            serde_json::json!({"action":"read","path":"gone"}),
+            ToolCallStatus::Completed,
+            false,
+            true,
+        ),
+        ("delete_file", serde_json::json!({"path":"gone"}), ToolCallStatus::Failed, false, true),
+    ] {
+        let directory = hermetic_workspace();
+        let workspace = canonical_workspace(&directory);
+        std::fs::write(workspace.join("edited.rs"), "new\n").expect("fixture");
+        let change_id = if matching_change {
+            "call:changes"
+        } else {
+            "other:changes"
+        };
+        let edit = file_change_event(
+            change_id,
+            Some(TURN),
+            vec![("edited.rs", PatchChangeKind::Update)],
+            Some(false),
+            PatchApplyStatus::Completed,
+            Some("--- a/edited.rs\n+++ b/edited.rs\n@@ -1 +1 @@\n-old\n+new\n"),
+            false,
+        );
+        let outcome = if status == ToolCallStatus::Completed {
+            ToolOutcome::Success
+        } else {
+            ToolOutcome::Error
+        };
+        let mut invocation = vtcode_core::core::agent::events::tool_invocation_completed_event(
+            "call".into(),
+            tool,
+            Some(&args),
+            Some("provider-id"),
+            status,
+            outcome,
+        );
+        let ThreadEvent::ItemCompleted(ref mut completed) = invocation else {
+            panic!("completed item")
+        };
+        completed.item.context = Some(Box::new(ItemContext {
+            task_id: "task".into(),
+            turn_id: TURN.into(),
+            actor_id: "actor".into(),
+            parent_actor_id: None,
+            timestamp: "2026-11-05T00:00:00Z".into(),
+            activity: None,
+        }));
+        write_events(&workspace, SESSION, &[edit, invocation]);
+        let context = initialized_context(workspace.clone()).await;
+        let result = undo_turn(&context, SESSION, TURN).await.expect("undo");
+        assert_eq!(result.undone, should_undo, "tool={tool}, args={args}");
+        if !should_undo {
+            assert!(result.reason.contains("without recorded change evidence"), "{}", result.reason);
+        }
+        assert_eq!(
+            std::fs::read_to_string(workspace.join("edited.rs")).expect("read"),
+            if should_undo { "old\n" } else { "new\n" }
+        );
+    }
 }
 
 #[tokio::test]

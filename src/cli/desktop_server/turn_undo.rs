@@ -23,13 +23,14 @@
 //! degrade to documented refusals only where the evidence allows.
 
 use super::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::io::ErrorKind;
 
 use vtcode_commons::paths::{canonicalize_async, ensure_path_within_workspace};
 use vtcode_core::exec::events::{
-    CommandActivity, FileChangeItem, PatchApplyStatus, PatchChangeKind, ThreadEvent, ThreadItemDetails,
+    CommandActivity, FileChangeItem, PatchApplyStatus, PatchChangeKind, ThreadEvent, ThreadItemDetails, ToolCallStatus,
+    ToolOutcome,
 };
 use vtcode_diff::{DiffHunk, DiffLineKind, UnifiedFile, reverse_apply_hunks, split_unified_files};
 
@@ -113,6 +114,8 @@ fn gather_undo_ops(workspace: &Path, session_id: &str, turn_id: &str) -> Result<
     let mut ops = Vec::new();
     let mut unattributed = 0usize;
     let mut shell_mutation = false;
+    let mut completed_file_calls = HashSet::new();
+    let mut recorded_file_changes = HashSet::new();
     for event in tail.events {
         let ThreadEvent::ItemCompleted(completed) = event.into_event() else {
             continue;
@@ -127,6 +130,13 @@ fn gather_undo_ops(workspace: &Path, session_id: &str, turn_id: &str) -> Result<
         if context.turn_id != turn_id {
             continue;
         }
+        if let ThreadItemDetails::ToolInvocation(invocation) = &item.details
+            && invocation.status == ToolCallStatus::Completed
+            && invocation.outcome.is_none_or(|outcome| outcome == ToolOutcome::Success)
+            && is_file_mutation(&invocation.tool_name, invocation.arguments.as_ref())
+        {
+            completed_file_calls.insert(item.id.clone());
+        }
         // Mutating shell activity runs outside the file pipeline, so its
         // bytes are invisible to reversal: the turn cannot be undone
         // exactly. File tools never carry this stamp (only command-session
@@ -140,10 +150,17 @@ fn gather_undo_ops(workspace: &Path, session_id: &str, turn_id: &str) -> Result<
         let ThreadItemDetails::FileChange(change) = item.details else {
             continue;
         };
+        recorded_file_changes.insert(item.id);
         collect_item_ops(&change, &mut ops)?;
     }
     if shell_mutation {
         return Err("turn ran mutating commands outside the file pipeline; undo is unavailable".to_string());
+    }
+    if completed_file_calls
+        .iter()
+        .any(|id| !recorded_file_changes.contains(&format!("{id}:changes")))
+    {
+        return Err("turn has a file operation without recorded change evidence; undo is unavailable".to_string());
     }
     if ops.is_empty() {
         if unattributed > 0 {
@@ -155,6 +172,23 @@ fn gather_undo_ops(workspace: &Path, session_id: &str, turn_id: &str) -> Result<
         return Err("turn has too many file changes to undo safely".to_string());
     }
     Ok(ops)
+}
+
+fn is_file_mutation(tool_name: &str, args: Option<&Value>) -> bool {
+    use vtcode_core::config::constants::tools;
+    let file_tool = matches!(
+        tool_name,
+        tools::APPLY_PATCH
+            | tools::WRITE_FILE
+            | tools::EDIT_FILE
+            | tools::CREATE_FILE
+            | tools::DELETE_FILE
+            | tools::MOVE_FILE
+            | tools::COPY_FILE
+            | tools::UNIFIED_FILE
+            | "file"
+    );
+    file_tool && args.is_none_or(|args| vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args).mutating)
 }
 
 fn public_tail_reason(error: &vtcode_memory::SessionStoreError) -> String {
@@ -181,12 +215,20 @@ fn collect_item_ops(change: &FileChangeItem, ops: &mut Vec<UndoFileOp>) -> Resul
     }
     let diff = change.unified_diff.as_deref().filter(|diff| !diff.trim().is_empty());
     let Some(diff) = diff else {
-        // An empty recording is evidence only for whole-file Add/Delete of
-        // an empty file (no bytes, hence no terminators to lose): anything
-        // else is indistinguishable from a missing recording.
+        // An added empty file is checked against disk. A deleted file has no
+        // pre-image to check, so require an actual empty, fidelity-attested
+        // recording rather than treating a missing diff as an empty file.
         if change.changes.len() == 1 && matches!(change.changes[0].kind, PatchChangeKind::Add | PatchChangeKind::Delete)
         {
             let only = &change.changes[0];
+            if only.kind == PatchChangeKind::Delete
+                && (change.unified_diff.as_deref() != Some("") || only.terminators_normalized != Some(false))
+            {
+                return Err(format!(
+                    "turn deleted {}, whose original bytes cannot be verified; undo is unavailable",
+                    only.path
+                ));
+            }
             ops.push(UndoFileOp {
                 path: only.path.clone(),
                 kind: only.kind,
@@ -220,6 +262,14 @@ fn collect_item_ops(change: &FileChangeItem, ops: &mut Vec<UndoFileOp>) -> Resul
         matched[index] = true;
         if files[index].hunks.len() > MAX_UNDO_HUNKS_PER_FILE {
             return Err(format!("{} changed too much to undo safely", change.path));
+        }
+        if change.kind == PatchChangeKind::Delete {
+            let [hunk] = files[index].hunks.as_slice() else {
+                return Err(format!("{} has an incomplete deletion diff; undo is unavailable", change.path));
+            };
+            if hunk.old_start != 1 || hunk.old_lines == 0 || hunk.new_lines != 0 {
+                return Err(format!("{} has an incomplete deletion diff; undo is unavailable", change.path));
+            }
         }
         ops.push(UndoFileOp {
             path: change.path.clone(),
