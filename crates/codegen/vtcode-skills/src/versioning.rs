@@ -52,6 +52,14 @@ pub struct SkillLockfile {
 
 const LOCKFILE_NAME: &str = "skills.lock";
 
+/// Return the explicitly populated version or the SKILL.md metadata version.
+pub(super) fn effective_version(manifest: &SkillManifest) -> Option<&str> {
+    manifest
+        .version
+        .as_deref()
+        .or_else(|| manifest.metadata.as_ref()?.get("version")?.as_str())
+}
+
 impl SkillLockfile {
     /// Load lockfile from a directory (repo or user level)
     pub fn load(dir: &Path) -> Result<Self> {
@@ -122,9 +130,9 @@ pub fn resolve_version(
                 return Ok(latest.clone());
             }
 
-            if let Some(ref version) = manifest.version {
+            if let Some(version) = effective_version(manifest) {
                 debug!("Falling back to manifest version '{}' for '{}'", version, manifest.name);
-                return Ok(version.clone());
+                return Ok(version.to_owned());
             }
 
             warn!("No version info available for '{}', using '0.0.0'", manifest.name);
@@ -145,12 +153,34 @@ pub fn resolve_default_version(manifest: &SkillManifest, lockfile: Option<&Skill
         return default.clone();
     }
 
-    manifest.version.clone().unwrap_or_else(|| "0.0.0".to_string())
+    effective_version(manifest).unwrap_or("0.0.0").to_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parsed_metadata_version_resolves_with_existing_precedence() {
+        let content = "---\nname: sample\ndescription: Example\nmetadata:\n  version: 1.2.3\n---\nbody";
+        let (mut manifest, _) = crate::manifest::parse_skill_content(content).unwrap();
+        assert_eq!(resolve_version(&manifest, &SkillVersion::Latest, None).unwrap(), "1.2.3");
+        assert_eq!(resolve_default_version(&manifest, None), "1.2.3");
+
+        manifest.version = Some("2.0.0".to_owned());
+        manifest.latest_version = Some("3.0.0".to_owned());
+        assert_eq!(resolve_version(&manifest, &SkillVersion::Latest, None).unwrap(), "3.0.0");
+        assert_eq!(resolve_default_version(&manifest, None), "2.0.0");
+
+        let mut lock = SkillLockfile::default();
+        lock.lock("sample".to_owned(), "4.0.0".to_owned());
+        assert_eq!(resolve_version(&manifest, &SkillVersion::Latest, Some(&lock)).unwrap(), "4.0.0");
+        assert_eq!(resolve_default_version(&manifest, Some(&lock)), "4.0.0");
+        assert_eq!(
+            resolve_version(&manifest, &SkillVersion::Specific("5.0.0".to_owned()), Some(&lock)).unwrap(),
+            "5.0.0"
+        );
+    }
 
     fn test_manifest(name: &str) -> SkillManifest {
         SkillManifest {

@@ -13,8 +13,12 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
-use vtcode_commons::canonicalize;
 use vtcode_commons::safe_archive_relative_path;
+
+mod recovery;
+use vtcode_commons::{
+    VtCodePaths, canonicalize, fs::rename_synced, fs::sync_dir, validate_no_escaping_symlink_ancestors,
+};
 
 /// Maximum compressed bundle size (50 MB)
 const MAX_BUNDLE_SIZE: usize = 50 * 1024 * 1024;
@@ -127,16 +131,31 @@ pub fn import_skill_bundle(zip_bytes: &[u8], dest_store: &Path) -> Result<Import
         &fs::read_to_string(&skill_md_path).context("Failed to read extracted SKILL.md")?,
     )?;
 
-    let version = manifest.version.clone().unwrap_or_else(|| "0.0.0".to_string());
-
-    let dest_dir = dest_store.join(&manifest.name).join(&version);
-    if dest_dir.exists() {
-        warn!("Overwriting existing skill version at {}", dest_dir.display());
-        fs::remove_dir_all(&dest_dir).context("Failed to remove existing version")?;
+    if let Some(value) = manifest.metadata.as_ref().and_then(|metadata| metadata.get("version")) {
+        let _ = value.as_str().context("skill metadata.version must be a string")?;
     }
-    fs::create_dir_all(&dest_dir).context("Failed to create destination directory")?;
+    let version = crate::versioning::effective_version(&manifest).unwrap_or("0.0.0");
+    if !safe_version(version) {
+        bail!("skill metadata.version must be a safe version identifier");
+    }
 
-    let (file_count, total_size) = copy_dir_recursive(skill_root, &dest_dir)?;
+    let dest_dir = dest_store.join(&manifest.name).join(version);
+    let (file_count, total_size) = VtCodePaths::with_private_file_lock(dest_store.join("index.json"), || {
+        recovery::recover_abandoned_imports(dest_store)?;
+        let index = load_skill_index_unlocked(dest_store)?;
+        validate_no_escaping_symlink_ancestors(&dest_dir, true).context("validate skill destination")?;
+        let staging = tempfile::Builder::new().prefix(".skill-import-").tempdir_in(dest_store)?;
+        let staged = staging.path().join("new");
+        fs::create_dir(&staged).context("create staged skill directory")?;
+        let counts = copy_dir_recursive(skill_root, &staged)?;
+        let parent = dest_dir.parent().context("skill destination has no parent")?;
+        fs::create_dir_all(parent).context("create skill directory")?;
+        let index_json = updated_skill_index(index, &manifest.name, version)?;
+        let had_previous = recovery::directory_exists(&dest_dir)?;
+        recovery::record_transaction(staging.path(), dest_store, &manifest.name, version, had_previous, &index_json)?;
+        publish_staged_skill(staging, &dest_dir, || publish_skill_index(dest_store, &index_json))?;
+        Ok(counts)
+    })?;
 
     info!(
         "Imported skill '{}' v{} ({} files, {} bytes) to {}",
@@ -147,7 +166,7 @@ pub fn import_skill_bundle(zip_bytes: &[u8], dest_store: &Path) -> Result<Import
         dest_dir.display()
     );
 
-    update_skill_index(dest_store, &manifest.name, &version)?;
+    let version = version.to_owned();
 
     Ok(ImportedSkillInfo {
         name: manifest.name,
@@ -157,6 +176,59 @@ pub fn import_skill_bundle(zip_bytes: &[u8], dest_store: &Path) -> Result<Import
         file_count,
         total_size,
     })
+}
+
+fn safe_version(version: &str) -> bool {
+    !(version.is_empty()
+        || version.len() > 128
+        || version == "."
+        || version == ".."
+        || !version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b'+')))
+}
+
+fn publish_staged_skill(
+    staging: tempfile::TempDir,
+    dest: &Path,
+    publish_index: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let staged = staging.path().join("new");
+    let backup = staging.path().join("previous");
+    let had_previous = match fs::symlink_metadata(dest) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+            warn!("Overwriting existing skill version at {}", dest.display());
+            rename_synced(dest, &backup).context("back up existing skill version")?;
+            true
+        }
+        Ok(_) => bail!("skill destination is not a regular directory: {}", dest.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error).context("inspect existing skill version"),
+    };
+
+    let result = rename_synced(&staged, dest)
+        .context("publish staged skill version")
+        .and_then(|()| publish_index());
+    if let Err(error) = result {
+        let rollback = (|| -> Result<()> {
+            if !staged.exists() {
+                fs::remove_dir_all(dest).context("remove failed skill version")?;
+            }
+            if had_previous {
+                rename_synced(&backup, dest).context("restore previous skill version")?;
+            }
+            Ok(())
+        })();
+        if let Err(rollback_error) = rollback {
+            let retained = staging.keep();
+            return Err(error.context(format!(
+                "rollback failed: {rollback_error:#}; recovery files retained at {}",
+                retained.display()
+            )));
+        }
+        return Err(error);
+    }
+    Ok(())
 }
 
 /// Import a skill from base64-encoded zip (inline bundle)
@@ -312,7 +384,10 @@ fn validate_dir_recursive(root: &Path, dir: &Path, file_count: &mut u64, total_s
     Ok(())
 }
 
-/// Copy directory recursively, returning (file_count, total_bytes)
+/// Copy directory recursively, returning (file_count, total_bytes).
+///
+/// Each copied file is synced before the destination directory is synced, so
+/// a staged skill tree is crash-durable leaf-up once this returns.
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
     let mut count = 0usize;
     let mut size = 0u64;
@@ -331,6 +406,10 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
         } else {
             fs::copy(&src_path, &dst_path)
                 .with_context(|| format!("failed to copy {} to {}", src_path.display(), dst_path.display()))?;
+            fs::File::open(&dst_path)
+                .with_context(|| format!("failed to open copied file {}", dst_path.display()))?
+                .sync_all()
+                .with_context(|| format!("failed to sync copied file {}", dst_path.display()))?;
             count += 1;
             size += entry
                 .metadata()
@@ -339,16 +418,18 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
         }
     }
 
+    sync_dir(dst).with_context(|| format!("failed to sync copied directory {}", dst.display()))?;
+
     Ok((count, size))
 }
 
 /// Skill store index for tracking versions
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub struct SkillStoreIndex {
     skills: HashMap<String, SkillVersionIndex>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SkillVersionIndex {
     latest_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -357,16 +438,7 @@ pub struct SkillVersionIndex {
 }
 
 /// Update the skill index after import
-fn update_skill_index(store_path: &Path, skill_name: &str, version: &str) -> Result<()> {
-    let index_path = store_path.join("index.json");
-
-    let mut index: SkillStoreIndex = if index_path.exists() {
-        let content = fs::read_to_string(&index_path)?;
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        SkillStoreIndex::default()
-    };
-
+fn updated_skill_index(mut index: SkillStoreIndex, skill_name: &str, version: &str) -> Result<Vec<u8>> {
     let entry = index.skills.entry(skill_name.to_string()).or_insert_with(|| SkillVersionIndex {
         latest_version: version.to_string(),
         default_version: None,
@@ -378,11 +450,14 @@ fn update_skill_index(store_path: &Path, skill_name: &str, version: &str) -> Res
     }
     entry.latest_version = version.to_string();
 
-    fs::create_dir_all(store_path)
-        .with_context(|| format!("failed to create store dir at {}", store_path.display()))?;
-    let index_json =
-        serde_json::to_vec_pretty(&index).with_context(|| format!("failed to serialize index for {skill_name}"))?;
-    fs::write(&index_path, index_json).with_context(|| format!("failed to write index at {}", index_path.display()))?;
+    serde_json::to_vec_pretty(&index).with_context(|| format!("failed to serialize index for {skill_name}"))
+}
+
+fn publish_skill_index(store_path: &Path, index_json: &[u8]) -> Result<()> {
+    let index_path = store_path.join("index.json");
+    VtCodePaths::write_private_file_atomic(&index_path, index_json)
+        .with_context(|| format!("failed to write index at {}", index_path.display()))?;
+    sync_dir(store_path).with_context(|| format!("failed to sync store at {}", store_path.display()))?;
 
     debug!("Updated skill index at {}", index_path.display());
     Ok(())
@@ -390,143 +465,23 @@ fn update_skill_index(store_path: &Path, skill_name: &str, version: &str) -> Res
 
 /// Load the skill store index
 pub fn load_skill_index(store_path: &Path) -> Result<SkillStoreIndex> {
-    let index_path = store_path.join("index.json");
-    if !index_path.exists() {
-        return Ok(SkillStoreIndex::default());
+    match fs::metadata(store_path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(SkillStoreIndex::default()),
+        Err(error) => return Err(error).context("Failed to inspect skill store"),
+        Ok(_) => {}
     }
-    let content = fs::read_to_string(&index_path)?;
-    serde_json::from_str(&content).context("Failed to parse skill store index")
+    VtCodePaths::with_private_file_lock(store_path.join("index.json"), || {
+        recovery::recover_abandoned_imports(store_path)?;
+        load_skill_index_unlocked(store_path)
+    })
+}
+
+fn load_skill_index_unlocked(store_path: &Path) -> Result<SkillStoreIndex> {
+    let Some(content) = recovery::read_index(store_path)? else {
+        return Ok(SkillStoreIndex::default());
+    };
+    serde_json::from_slice(&content).context("Failed to parse skill store index")
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_skill_store_index_default() {
-        let index = SkillStoreIndex::default();
-        assert!(index.skills.is_empty());
-    }
-
-    #[test]
-    fn test_skill_store_index_roundtrip() {
-        let mut index = SkillStoreIndex::default();
-        index.skills.insert(
-            "test-skill".to_string(),
-            SkillVersionIndex {
-                latest_version: "1.0.0".to_string(),
-                default_version: Some("1.0.0".to_string()),
-                versions: vec!["0.9.0".to_string(), "1.0.0".to_string()],
-            },
-        );
-        let json = serde_json::to_string(&index).expect("serialize");
-        let parsed: SkillStoreIndex = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(parsed.skills["test-skill"].latest_version, "1.0.0");
-        assert_eq!(parsed.skills["test-skill"].versions.len(), 2);
-    }
-
-    #[test]
-    fn test_bundle_size_limit() {
-        let oversized = vec![0u8; MAX_BUNDLE_SIZE + 1];
-        let temp = tempfile::tempdir().expect("tempdir");
-        let result = import_skill_bundle(&oversized, temp.path());
-        assert!(result.is_err());
-        assert!(result.expect_err("should fail").to_string().contains("exceeds maximum"));
-    }
-
-    /// Build an uncompressed zip archive from `(name, contents)` entries.
-    fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
-        let mut buf = Vec::new();
-        {
-            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-            let options = zip::write::SimpleFileOptions::default();
-            for (name, data) in entries {
-                writer.start_file(*name, options).expect("start_file");
-                writer.write_all(data).expect("write_all");
-            }
-            writer.finish().expect("finish");
-        }
-        buf
-    }
-
-    #[test]
-    fn copy_bounded_accepts_exactly_the_limit() {
-        let data = vec![7u8; 10];
-        let mut out = Vec::new();
-        let written = copy_bounded(&mut data.as_slice(), &mut out, 10).expect("exact limit is allowed");
-        assert_eq!(written, 10);
-        assert_eq!(out.len(), 10);
-    }
-
-    #[test]
-    fn copy_bounded_rejects_one_byte_over_the_limit() {
-        let data = vec![7u8; 11];
-        let mut out = Vec::new();
-        let err = copy_bounded(&mut data.as_slice(), &mut out, 10).expect_err("over limit must fail");
-        assert!(err.to_string().contains("exceeds maximum"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn within_total_budget_boundaries() {
-        assert!(within_total_budget(0));
-        assert!(within_total_budget(MAX_TOTAL_UNCOMPRESSED_SIZE));
-        assert!(!within_total_budget(MAX_TOTAL_UNCOMPRESSED_SIZE + 1));
-    }
-
-    #[test]
-    fn extract_rejects_parent_directory_traversal() {
-        let bytes = zip_bytes(&[("../evil.txt", b"pwned")]);
-        let temp = tempfile::tempdir().expect("tempdir");
-        let err = extract_zip_safely(&bytes, temp.path()).expect_err("traversal must fail");
-        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
-        assert!(!temp.path().join("../evil.txt").exists());
-    }
-
-    #[test]
-    fn extract_rejects_absolute_path_entries() {
-        let bytes = zip_bytes(&[("/abs.txt", b"pwned")]);
-        let temp = tempfile::tempdir().expect("tempdir");
-        let err = extract_zip_safely(&bytes, temp.path()).expect_err("absolute path must fail");
-        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn extract_rejects_mid_path_traversal() {
-        let bytes = zip_bytes(&[("skills/../../evil.txt", b"pwned")]);
-        let temp = tempfile::tempdir().expect("tempdir");
-        let err = extract_zip_safely(&bytes, temp.path()).expect_err("mid-path traversal must fail");
-        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
-        assert!(!temp.path().join("evil.txt").exists());
-    }
-
-    #[test]
-    fn extract_accepts_dot_dot_inside_a_single_component() {
-        // `..` inside one component is a legitimate file name, not traversal;
-        // the substring check this replaced used to reject it.
-        let bytes = zip_bytes(&[("v1..2/README.md", b"body")]);
-        let temp = tempfile::tempdir().expect("tempdir");
-        extract_zip_safely(&bytes, temp.path()).expect("dot-dot component must extract");
-
-        assert_eq!(fs::read(temp.path().join("v1..2/README.md")).expect("read"), b"body");
-    }
-
-    #[test]
-    fn import_round_trips_an_exported_bundle() {
-        let source = tempfile::tempdir().expect("source tempdir");
-        let skill_dir = source.path().join("roundtrip-skill");
-        fs::create_dir_all(&skill_dir).expect("create skill dir");
-        fs::write(
-            skill_dir.join("SKILL.md"),
-            "---\nname: roundtrip-skill\ndescription: Round trip test skill\nversion: 1.2.3\n---\n# Body\n",
-        )
-        .expect("write SKILL.md");
-
-        let bytes = export_skill_bundle(&skill_dir).expect("export");
-
-        let store = tempfile::tempdir().expect("store tempdir");
-        let imported = import_skill_bundle(&bytes, store.path()).expect("import");
-        assert_eq!(imported.name, "roundtrip-skill");
-        assert!(imported.file_count >= 1, "expected at least SKILL.md to be copied");
-        assert!(imported.path.join("SKILL.md").exists(), "SKILL.md must land in the versioned store");
-    }
-}
+mod tests;
