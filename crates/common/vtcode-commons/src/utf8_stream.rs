@@ -49,10 +49,15 @@ impl Utf8StreamDecoder {
     ///
     /// This avoids the intermediate `String` allocation that `push` creates
     /// when the caller only needs bytes (e.g. feeding an SSE byte buffer).
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "offset advances only over validated bytes within pending"
+    )]
     pub fn push_bytes(&mut self, bytes: &[u8], out: &mut Vec<u8>) {
         self.pending.extend_from_slice(bytes);
+        let mut offset = 0;
         loop {
-            match std::str::from_utf8(&self.pending) {
+            match std::str::from_utf8(&self.pending[offset..]) {
                 Ok(text) => {
                     out.extend_from_slice(text.as_bytes());
                     self.pending.clear();
@@ -60,7 +65,7 @@ impl Utf8StreamDecoder {
                 }
                 Err(err) => {
                     let valid = err.valid_up_to();
-                    if let Some(valid_bytes) = self.pending.get(..valid) {
+                    if let Some(valid_bytes) = self.pending.get(offset..offset + valid) {
                         // `valid_bytes` is guaranteed valid UTF-8 by `valid_up_to`.
                         out.extend_from_slice(valid_bytes);
                     }
@@ -68,11 +73,11 @@ impl Utf8StreamDecoder {
                         // Genuinely invalid sequence: emit replacement and skip it.
                         Some(invalid_len) => {
                             out.extend_from_slice("\u{FFFD}".as_bytes());
-                            let _ = self.pending.drain(..valid + invalid_len);
+                            offset += valid + invalid_len;
                         }
                         // Incomplete trailing sequence: keep it for the next push.
                         None => {
-                            let _ = self.pending.drain(..valid);
+                            let _ = self.pending.drain(..offset + valid);
                             break;
                         }
                     }
@@ -123,6 +128,18 @@ mod tests {
         // 0xFF is never a valid UTF-8 lead byte.
         let mut dec = Utf8StreamDecoder::new();
         assert_eq!(dec.push(&[b'a', 0xFF, b'b']), "a\u{FFFD}b");
+    }
+
+    #[test]
+    fn invalid_bytes_and_split_suffix_match_lossy_decoding() {
+        let mut decoder = Utf8StreamDecoder::new();
+        let first = [b'a', 0xff, b'b', 0xfe, 0xe2, 0x80];
+        let second = [0x94, 0xff, b'z'];
+        let mut decoded = decoder.push(&first);
+        decoded.push_str(&decoder.push(&second));
+        decoded.push_str(&decoder.finish());
+        let bytes = [first.as_slice(), second.as_slice()].concat();
+        assert_eq!(decoded, String::from_utf8_lossy(&bytes));
     }
 
     #[test]

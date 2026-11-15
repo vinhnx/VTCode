@@ -14,7 +14,7 @@ pub fn is_safe_relative_path(path: &str) -> bool {
     }
 
     // Block absolute paths for security
-    if path.starts_with('/') || path.contains(':') {
+    if path.starts_with(['/', '\\']) || path.contains(':') {
         return false;
     }
 
@@ -122,6 +122,15 @@ pub fn safe_archive_relative_path(name: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safe_relative_path_rejects_rooted_windows_paths() {
+        assert!(!is_safe_relative_path(r"\Windows\secret.txt"));
+        assert!(!is_safe_relative_path(r"\\server\share\file.txt"));
+        assert!(!is_safe_relative_path("/etc/passwd"));
+        assert!(is_safe_relative_path(r"src\main.rs"));
+        assert!(is_safe_relative_path("src/main.rs"));
+    }
 
     #[test]
     fn accepts_nested_relative_names() {

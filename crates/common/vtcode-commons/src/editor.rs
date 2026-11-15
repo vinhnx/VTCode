@@ -88,11 +88,16 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
     }
 
     if raw.starts_with("file://") {
-        let url = Url::parse(raw).ok()?;
-        let location_suffix = url
-            .fragment()
-            .and_then(normalize_editor_hash_fragment)
-            .or_else(|| extract_trailing_location(url.path()));
+        let mut url = Url::parse(raw).ok()?;
+        let location_suffix = if let Some(fragment) = url.fragment().and_then(normalize_editor_hash_fragment) {
+            Some(fragment)
+        } else if let Some(suffix) = extract_trailing_location(url.path()) {
+            let path = url.path().strip_suffix(&suffix)?.to_owned();
+            url.set_path(&path);
+            Some(suffix)
+        } else {
+            None
+        };
         let path = url.to_file_path().ok()?;
         return Some(EditorTarget::new(path, location_suffix));
     }
@@ -320,6 +325,17 @@ mod tests {
         let target = parse_editor_target("file:///tmp/demo.rs#L12").expect("target");
         assert_eq!(target.path(), Path::new("/tmp/demo.rs"));
         assert_eq!(target.location_suffix(), Some(":12"));
+    }
+
+    #[test]
+    fn file_url_colon_location_is_removed_from_encoded_path() {
+        let target = parse_editor_target("file:///tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12:4").expect("target");
+        assert_eq!(target.path(), Path::new("/tmp/Example Folder/Résumé.md"));
+        assert_eq!(target.point(), Some(EditorPoint { line: 12, column: Some(4) }));
+
+        let fragment = parse_editor_target("file:///tmp/name:42#L7").expect("target");
+        assert_eq!(fragment.path(), Path::new("/tmp/name:42"));
+        assert_eq!(fragment.location_suffix(), Some(":7"));
     }
 
     #[test]
