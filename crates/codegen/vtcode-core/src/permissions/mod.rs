@@ -2,12 +2,13 @@ use glob::Pattern;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+use tracing::warn;
 use url::Url;
 
 use crate::config::PermissionsConfig;
 use crate::config::constants::tools;
 use crate::tools::command_args;
-use crate::tools::mcp::{MCP_QUALIFIED_TOOL_PREFIX, parse_canonical_mcp_tool_name};
+use crate::tools::mcp::{MCP_QUALIFIED_TOOL_PREFIX, legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
 use crate::tools::tool_intent;
 use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault, normalize_permission_rule};
 
@@ -253,7 +254,15 @@ impl From<PermissionDefault> for ResolvedPermissionDecision {
 fn compile_rules(rules: &[String], workspace_root: &Path, current_dir: &Path) -> Vec<CompiledPermissionRule> {
     rules
         .iter()
-        .filter_map(|rule| CompiledPermissionRule::compile(rule, workspace_root, current_dir))
+        .filter_map(|rule| {
+            let compiled = CompiledPermissionRule::compile(rule, workspace_root, current_dir);
+            if compiled.is_none() {
+                // A rule that compiles to nothing silently enforces nothing;
+                // say so loudly, since a typo here usually means a missing deny.
+                warn!("Ignoring unparseable permission rule: {rule}");
+            }
+            compiled
+        })
         .collect()
 }
 
@@ -381,7 +390,13 @@ impl CompiledPermissionRule {
                 _ => false,
             },
             Self::McpServer(server) | Self::McpWildcard(server) => match &request.kind {
-                PermissionRequestKind::Mcp { server: candidate, .. } => candidate == server,
+                PermissionRequestKind::Mcp { server: candidate, tool } => {
+                    candidate == server
+                        || (tool.is_empty()
+                            && candidate
+                                .strip_prefix(server.as_str())
+                                .is_some_and(|rest| rest.starts_with('_')))
+                }
                 _ => false,
             },
             Self::McpTool { server, tool } => match &request.kind {
@@ -529,12 +544,24 @@ fn parse_mcp_request(normalized_tool_name: &str) -> Option<(String, String)> {
         return Some((server.to_string(), tool.to_string()));
     }
 
+    if let Some((server, tool)) = parse_qualified_mcp_tool_name(normalized_tool_name) {
+        return Some((server.to_string(), tool.to_string()));
+    }
+
+    // Legacy `mcp_<provider>_<tool>` names carry no provider/tool delimiter,
+    // so the server is ambiguous. Report the whole remainder with an empty
+    // tool: server rules match it by prefix (fail-closed), exact tool rules
+    // cannot match it.
+    legacy_mcp_tool_name(normalized_tool_name).map(|remainder| (remainder.to_string(), String::new()))
+}
+
+fn parse_qualified_mcp_tool_name(normalized_tool_name: &str) -> Option<(&str, &str)> {
     let stripped = normalized_tool_name.strip_prefix(MCP_QUALIFIED_TOOL_PREFIX)?;
     let (server, tool) = stripped.split_once("__")?;
     if server.is_empty() || tool.is_empty() || tool == "*" {
         return None;
     }
-    Some((server.to_string(), tool.to_string()))
+    Some((server, tool))
 }
 
 fn is_web_fetch_request(normalized_tool_name: &str, _args: &Value) -> bool {
@@ -586,45 +613,16 @@ fn extract_candidate_paths(
     }
 
     if normalized_tool_name == tools::APPLY_PATCH {
-        for patch_path in extract_patch_paths(args) {
-            push_resolved_path(&mut paths, workspace_root, current_dir, &patch_path);
+        // Decode and parse through the same path the executor uses: a naive
+        // line scan would miss base64 payloads entirely (deny bypass).
+        for patch_path in crate::tools::apply_patch::mutation_target_paths(normalized_tool_name, args) {
+            push_resolved_path(&mut paths, workspace_root, current_dir, &patch_path.to_string_lossy());
         }
     }
 
     paths.sort();
     paths.dedup();
     paths
-}
-
-fn extract_patch_paths(args: &Value) -> Vec<String> {
-    let patch = args
-        .get("patch")
-        .and_then(Value::as_str)
-        .or_else(|| args.get("input").and_then(Value::as_str))
-        .or_else(|| args.as_str());
-    let Some(patch) = patch else {
-        return Vec::new();
-    };
-
-    patch
-        .lines()
-        .filter_map(|line| {
-            for prefix in [
-                "*** Update File: ",
-                "*** Add File: ",
-                "*** Delete File: ",
-                "*** Move to: ",
-            ] {
-                if let Some(path) = line.strip_prefix(prefix) {
-                    let trimmed = path.trim();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed.to_string());
-                    }
-                }
-            }
-            None
-        })
-        .collect()
 }
 
 fn push_resolved_path(paths: &mut Vec<PathBuf>, workspace_root: &Path, current_dir: &Path, raw: &str) {
@@ -635,13 +633,10 @@ fn push_resolved_path(paths: &mut Vec<PathBuf>, workspace_root: &Path, current_d
 
     let resolved = if Path::new(trimmed).is_absolute() {
         PathBuf::from(trimmed)
+    } else if current_dir.starts_with(workspace_root) {
+        current_dir.join(trimmed)
     } else {
-        current_dir
-            .strip_prefix(workspace_root)
-            .ok()
-            .filter(|relative| !relative.as_os_str().is_empty())
-            .map(|relative| workspace_root.join(relative).join(trimmed))
-            .unwrap_or_else(|| workspace_root.join(trimmed))
+        workspace_root.join(trimmed)
     };
     paths.push(crate::utils::path::normalize_path(&resolved));
 }

@@ -132,9 +132,24 @@ fn protected_directory_exceptions_are_not_flagged() {
 fn apply_patch_paths_are_extracted_for_edit_rules() {
     let (_temp, workspace, cwd) = workspace_roots();
     let config = PermissionsConfig {
-        ask: vec!["Edit(/src/**)".to_string()],
+        ask: vec!["Edit(/nested/src/**)".to_string()],
         ..PermissionsConfig::default()
     };
+    let request = build_permission_request(
+        &workspace,
+        &cwd,
+        "apply_patch",
+        Some(&json!({
+            "patch": "*** Begin Patch\n*** Update File: src/main.rs\n@@\n-test\n+test\n*** End Patch\n"
+        })),
+    );
+
+    assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Ask);
+}
+
+#[test]
+fn apply_patch_rejected_paths_yield_no_targets() {
+    let (_temp, workspace, cwd) = workspace_roots();
     let request = build_permission_request(
         &workspace,
         &cwd,
@@ -144,7 +159,12 @@ fn apply_patch_paths_are_extracted_for_edit_rules() {
         })),
     );
 
-    assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Ask);
+    // The executor rejects `..` traversal in patches, so permission
+    // evaluation must see the same empty target set, not a line-scan guess.
+    match request.kind {
+        PermissionRequestKind::Edit { paths } => assert!(paths.is_empty(), "{paths:?}"),
+        other => panic!("expected Edit request, got {other:?}"),
+    }
 }
 
 #[test]
@@ -551,4 +571,72 @@ fn builtin_plan_agent_keeps_planning_catalog_wire_visible() {
         });
         assert!(all_denied, "{tool} must stay hidden from the plan agent");
     }
+}
+
+#[test]
+fn apply_patch_base64_payload_yields_edit_targets() {
+    let (_temp, workspace, cwd) = workspace_roots();
+    let request = build_permission_request(
+        &workspace,
+        &cwd,
+        tools::APPLY_PATCH,
+        Some(&json!({
+            "patch": "base64:KioqIEJlZ2luIFBhdGNoCioqKiBVcGRhdGUgRmlsZTogc2Vuc2l0aXZlLnR4dApAQAotb2xkCituZXcKKioqIEVuZCBQYXRjaAo="
+        })),
+    );
+
+    match request.kind {
+        PermissionRequestKind::Edit { paths } => {
+            assert!(paths.iter().any(|path| path.ends_with("sensitive.txt")), "base64 patch targets: {paths:?}");
+        }
+        other => panic!("expected Edit request, got {other:?}"),
+    }
+}
+
+#[test]
+fn apply_patch_hunk_body_markers_are_not_targets() {
+    let (_temp, workspace, cwd) = workspace_roots();
+    let request = build_permission_request(
+        &workspace,
+        &cwd,
+        tools::APPLY_PATCH,
+        Some(&json!({
+            "patch": "*** Begin Patch\n*** Update File: real.txt\n@@\n-old\n+new\n+*** Update File: fake.txt\n*** End Patch\n"
+        })),
+    );
+
+    match request.kind {
+        PermissionRequestKind::Edit { paths } => {
+            assert!(paths.iter().any(|path| path.ends_with("real.txt")), "{paths:?}");
+            assert!(!paths.iter().any(|path| path.ends_with("fake.txt")), "hunk content is not a target: {paths:?}");
+        }
+        other => panic!("expected Edit request, got {other:?}"),
+    }
+}
+
+#[test]
+fn legacy_mcp_names_match_server_rules() {
+    let (_temp, workspace, cwd) = workspace_roots();
+    let config = PermissionsConfig {
+        deny: vec!["mcp__github".to_string()],
+        ..PermissionsConfig::default()
+    };
+    let request = build_permission_request(&workspace, &cwd, "mcp_github_list_issues", None);
+
+    assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Deny);
+}
+
+#[test]
+fn qualified_mcp_servers_keep_exact_matching() {
+    let (_temp, workspace, cwd) = workspace_roots();
+    let config = PermissionsConfig {
+        deny: vec!["mcp__a_b".to_string()],
+        ..PermissionsConfig::default()
+    };
+    let request = build_permission_request(&workspace, &cwd, "mcp__a_b_c__tool", None);
+
+    assert_eq!(
+        evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
+        PermissionRuleDecision::NoMatch
+    );
 }
