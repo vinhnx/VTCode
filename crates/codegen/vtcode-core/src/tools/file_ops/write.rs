@@ -147,9 +147,13 @@ impl FileOpsTool {
             _ => None,
         };
 
+        // A single pre-write conflict check: every other caller invokes
+        // detect_conflict once per operation, and a second identical call can
+        // never change the outcome (a conflict returns early; agreement is
+        // otherwise guaranteed by unchanged inputs).
         if let Some(conflict) = self
             .edited_file_monitor
-            .detect_conflict(&file_path, intended_content.clone(), override_snapshot.clone())
+            .detect_conflict(&file_path, intended_content.clone(), override_snapshot)
             .await?
         {
             return Ok(conflict.to_tool_output(&self.workspace_root));
@@ -159,15 +163,6 @@ impl FileOpsTool {
             "append" => intended_content.clone().unwrap_or_else(|| input.content.clone()),
             _ => input.content.clone(),
         };
-
-        if matches!(effective_mode, "overwrite" | "append")
-            && let Some(conflict) = self
-                .edited_file_monitor
-                .detect_conflict(&file_path, intended_content.clone(), override_snapshot)
-                .await?
-        {
-            return Ok(conflict.to_tool_output(&self.workspace_root));
-        }
 
         match effective_mode {
             "overwrite" => {

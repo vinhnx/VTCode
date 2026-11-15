@@ -175,6 +175,24 @@ impl FileOpsTool {
         if self.edited_file_monitor.source_inspection().mode() != vtcode_config::core::agent::InspectionMode::Off {
             self.require_existing_tree(&canonical).await?;
         }
+
+        // A symlink argument unlinks the link itself: resolving first and
+        // deleting through it would erase the target's contents instead.
+        // Containment above already constrains the resolved target.
+        if with_path_context(tokio::fs::symlink_metadata(&target_path).await, "inspect link for", &path)?
+            .file_type()
+            .is_symlink()
+        {
+            with_path_context(tokio::fs::remove_file(&target_path).await, "remove symlink", &path)?;
+            self.refresh_agent_write(&target_path).await;
+            return Ok(json!({
+                "success": true,
+                "deleted": true,
+                "path": self.workspace_relative_display(&target_path),
+                "kind": "symlink",
+            }));
+        }
+
         let metadata = with_path_context(tokio::fs::metadata(&canonical).await, "read metadata for", &path)?;
 
         let deleted_kind = if metadata.is_dir() {
@@ -320,5 +338,56 @@ impl FileOpsTool {
             "from": self.workspace_relative_display(&from_path),
             "to": self.workspace_relative_display(&to_path),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tools::file_ops::FileOpsTool;
+    use crate::tools::grep_file::GrepSearchManager;
+    use serde_json::json;
+    use std::fs;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    fn make_tool(workspace: &TempDir) -> FileOpsTool {
+        let grep_manager = Arc::new(GrepSearchManager::new(workspace.path().to_path_buf()));
+        FileOpsTool::new(workspace.path().to_path_buf(), grep_manager)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn delete_file_removes_the_symlink_not_its_target() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        let target = temp_dir.path().join("target");
+        fs::create_dir_all(&target).expect("create target");
+        fs::write(target.join("keep.txt"), "keep").expect("write file");
+        std::os::unix::fs::symlink(&target, temp_dir.path().join("link")).expect("create symlink");
+
+        let file_ops = make_tool(&temp_dir);
+        let result = file_ops
+            .delete_file(json!({"path": "link", "recursive": true}))
+            .await
+            .expect("delete link succeeds");
+        assert_eq!(result["deleted"], true);
+        assert!(fs::symlink_metadata(temp_dir.path().join("link")).is_err(), "link itself must be removed");
+        assert_eq!(fs::read_to_string(target.join("keep.txt")).expect("target must survive"), "keep");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn delete_file_still_removes_a_real_directory_recursively() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        let target = temp_dir.path().join("target");
+        fs::create_dir_all(&target).expect("create target");
+        fs::write(target.join("gone.txt"), "gone").expect("write file");
+
+        let file_ops = make_tool(&temp_dir);
+        let result = file_ops
+            .delete_file(json!({"path": "target", "recursive": true}))
+            .await
+            .expect("delete dir succeeds");
+        assert_eq!(result["deleted"], true);
+        assert!(!target.exists());
     }
 }
