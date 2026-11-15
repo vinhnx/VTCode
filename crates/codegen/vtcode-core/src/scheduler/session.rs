@@ -98,10 +98,16 @@ impl SessionScheduler {
         if let Some(record) = self.tasks.remove(query) {
             return Some(record.summary());
         }
-        let key = self
+        // Names are not unique: only delete when exactly one task matches, so
+        // an ambiguous name can never remove the wrong task.
+        let mut matches = self
             .tasks
             .iter()
-            .find_map(|(id, record)| record.definition.name.eq_ignore_ascii_case(query).then(|| id.clone()))?;
+            .filter(|(_, record)| record.definition.name.eq_ignore_ascii_case(query))
+            .map(|(id, _)| id.clone());
+        let (Some(key), None) = (matches.next(), matches.next()) else {
+            return None;
+        };
         self.tasks.remove(&key).map(|record| record.summary())
     }
 
@@ -164,7 +170,17 @@ impl ScheduleCreateInput {
         now: DateTime<Local>,
         default_workspace: Option<PathBuf>,
     ) -> Result<ScheduledTaskDefinition> {
-        let action = match (self.prompt, self.reminder) {
+        // Blank action text counts as absent so `--prompt ""` fails with the
+        // same "one of" error instead of creating an empty task.
+        let prompt = self
+            .prompt
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let reminder = self
+            .reminder
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let action = match (prompt, reminder) {
             (Some(prompt), None) => ScheduledTaskAction::Prompt { prompt },
             (None, Some(reminder)) => ScheduledTaskAction::Reminder { message: reminder },
             (Some(_), Some(_)) => bail!("Choose either --prompt or --reminder"),
@@ -260,25 +276,42 @@ pub fn parse_session_language_command(input: &str, now: DateTime<Local>) -> Opti
     }
 
     if let Some(captures) = REMIND_IN_RE.captures(trimmed) {
-        let count = captures["count"].parse::<i64>().ok()?;
+        let too_far = || anyhow!("Reminder is too far in the future");
+        let Ok(count) = captures["count"].parse::<i64>() else {
+            return Some(Err(too_far()));
+        };
         let prompt = captures["prompt"].trim().to_string();
+        // Checked constructors: `TimeDelta::{minutes,hours,days}` and `+`
+        // panic on overflow, and the count comes straight from user input.
         let delta = match captures["unit"].to_ascii_lowercase().as_str() {
-            "minute" | "minutes" => ChronoDuration::minutes(count),
-            "hour" | "hours" => ChronoDuration::hours(count),
-            "day" | "days" => ChronoDuration::days(count),
+            "minute" | "minutes" => ChronoDuration::try_minutes(count),
+            "hour" | "hours" => ChronoDuration::try_hours(count),
+            "day" | "days" => ChronoDuration::try_days(count),
             _ => return None,
         };
-        return Some(Ok(SessionLanguageCommand::CreateOneShotPrompt {
-            prompt,
-            run_at: (now + delta).with_timezone(&Utc),
-        }));
+        let Some(delta) = delta else {
+            return Some(Err(too_far()));
+        };
+        let Some(run_at) = now.checked_add_signed(delta) else {
+            return Some(Err(too_far()));
+        };
+        return Some(Ok(SessionLanguageCommand::CreateOneShotPrompt { prompt, run_at: run_at.with_timezone(&Utc) }));
     }
 
-    if let Some(query) = trimmed.strip_prefix("cancel ") {
+    if let Some(query) = strip_cancel_prefix(trimmed) {
         return Some(Ok(SessionLanguageCommand::CancelTask { query: query.trim().to_string() }));
     }
 
     None
+}
+
+fn strip_cancel_prefix(trimmed: &str) -> Option<&str> {
+    const PREFIX_LEN: usize = "cancel ".len();
+    if trimmed.len() >= PREFIX_LEN && trimmed[..PREFIX_LEN].eq_ignore_ascii_case("cancel ") {
+        Some(&trimmed[PREFIX_LEN..])
+    } else {
+        None
+    }
 }
 
 pub fn parse_schedule_create_args(args: &str) -> Result<ScheduleCreateInput> {

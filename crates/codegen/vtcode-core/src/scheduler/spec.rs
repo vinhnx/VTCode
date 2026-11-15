@@ -356,7 +356,7 @@ fn humanize_interval(seconds: u64) -> String {
                 format!("every {hours} hours")
             }
         }
-        value => {
+        value if value % 60 == 0 => {
             let minutes = value / 60;
             if minutes == 1 {
                 "every 1 minute".to_string()
@@ -364,5 +364,6 @@ fn humanize_interval(seconds: u64) -> String {
                 format!("every {minutes} minutes")
             }
         }
+        value => format!("every {value} seconds"),
     }
 }

@@ -133,6 +133,7 @@ impl DurableTaskStore {
     }
 
     pub fn delete(&self, id: &str) -> Result<Option<ScheduledTaskSummary>> {
+        validate_task_id(id)?;
         let Some(record) = self.load_record(id)? else {
             return Ok(None);
         };
@@ -143,6 +144,7 @@ impl DurableTaskStore {
     }
 
     pub fn load_record(&self, id: &str) -> Result<Option<ScheduledTaskRecord>> {
+        validate_task_id(id)?;
         let definition_path = self.paths.definition_path(id);
         if !definition_path.exists() {
             return Ok(None);
@@ -177,7 +179,19 @@ impl DurableTaskStore {
         self.paths.ensure_dirs()?;
         let mut records = Vec::new();
         for definition_path in self.definition_paths()? {
-            let definition = read_definition(&definition_path)?;
+            // One corrupt or hostile definition must not take down the whole
+            // sweep: skip it loudly and keep serving the healthy tasks.
+            let definition = match read_definition(&definition_path) {
+                Ok(definition) => definition,
+                Err(error) => {
+                    tracing::warn!(
+                        path = %definition_path.display(),
+                        error = %error,
+                        "Skipping unreadable scheduled task definition"
+                    );
+                    continue;
+                }
+            };
             let runtime = self
                 .read_runtime(&definition.id)?
                 .unwrap_or(initialize_runtime_state(&definition)?);
@@ -225,7 +239,25 @@ impl DurableTaskStore {
 
 fn read_definition(path: &Path) -> Result<ScheduledTaskDefinition> {
     let raw = fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    toml::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))
+    let definition: ScheduledTaskDefinition =
+        toml::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))?;
+    validate_task_id(&definition.id)?;
+    Ok(definition)
+}
+
+/// Task ids become file names under managed directories: reject anything
+/// that could escape them. Generated ids are flat hex, so this only bites
+/// hand-edited definitions and hostile CLI input.
+fn validate_task_id(id: &str) -> Result<()> {
+    if id.is_empty()
+        || id.contains(['/', '\\'])
+        || Path::new(id)
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        bail!("Invalid scheduled task id: {id:?}");
+    }
+    Ok(())
 }
 
 fn try_acquire_claim(paths: &SchedulerPaths, id: &str) -> Result<bool> {

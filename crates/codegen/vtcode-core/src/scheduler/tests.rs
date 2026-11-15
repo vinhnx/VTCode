@@ -305,3 +305,153 @@ fn schedule_create_arg_parser_supports_workspace() {
     assert_eq!(parsed.every.as_deref(), Some("15m"));
     assert_eq!(parsed.workspace, Some(PathBuf::from("/tmp/demo")));
 }
+
+#[test]
+fn remind_in_overflow_errors_instead_of_panicking() {
+    let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
+    for input in [
+        "in 99999999999999999 days, hello",
+        "in 99999999999999999999999 days, hello",
+    ] {
+        match parse_session_language_command(input, now) {
+            Some(Err(_)) => {}
+            other => panic!("{input:?} must error, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn schedule_create_rejects_empty_prompt_and_reminder() {
+    let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
+    for input in [
+        ScheduleCreateInput {
+            name: None,
+            prompt: Some("   ".to_string()),
+            reminder: None,
+            every: Some("1h".to_string()),
+            cron: None,
+            at: None,
+            workspace: None,
+        },
+        ScheduleCreateInput {
+            name: None,
+            prompt: None,
+            reminder: Some(String::new()),
+            every: Some("1h".to_string()),
+            cron: None,
+            at: None,
+            workspace: None,
+        },
+    ] {
+        assert!(input.build_definition(now, None).is_err(), "empty action text must be rejected");
+    }
+}
+
+#[test]
+fn cancel_command_is_case_insensitive() {
+    let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
+    for (input, expected) in [
+        ("Cancel Standup", "Standup"),
+        ("CANCEL deploy", "deploy"),
+        ("cancel x", "x"),
+    ] {
+        match parse_session_language_command(input, now).expect("command").expect("parsed") {
+            SessionLanguageCommand::CancelTask { query } => assert_eq!(query, expected),
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn session_delete_requires_unique_name_match() {
+    let mut scheduler = SessionScheduler::new();
+    let at = utc(2026, 3, 29, 9, 0, 0);
+    let first = scheduler
+        .create_prompt_task(Some("standup".to_string()), "one".to_string(), ScheduleSpec::one_shot(at), at)
+        .expect("create first");
+    scheduler
+        .create_prompt_task(Some("standup".to_string()), "two".to_string(), ScheduleSpec::one_shot(at), at)
+        .expect("create second");
+
+    assert!(scheduler.delete("standup").is_none(), "ambiguous name must not delete");
+    assert_eq!(scheduler.len(), 2);
+    assert!(scheduler.delete(&first.id).is_some(), "exact id deletes");
+    assert_eq!(scheduler.len(), 1);
+    assert!(scheduler.delete("standup").is_some(), "unique name deletes");
+    assert!(scheduler.is_empty());
+}
+
+#[test]
+fn humanize_interval_renders_sub_minute_precision() {
+    use std::time::Duration;
+    assert_eq!(
+        FixedInterval::from_duration(Duration::from_secs(90))
+            .expect("90s")
+            .human_description(),
+        "every 90 seconds"
+    );
+    assert_eq!(
+        FixedInterval::from_duration(Duration::from_secs(60))
+            .expect("60s")
+            .human_description(),
+        "every 1 minute"
+    );
+    assert_eq!(
+        FixedInterval::from_duration(Duration::from_secs(3600))
+            .expect("1h")
+            .human_description(),
+        "every 1 hour"
+    );
+}
+
+#[test]
+fn durable_store_skips_corrupt_definitions() {
+    let temp = tempdir().expect("tempdir");
+    let store = DurableTaskStore::with_paths(SchedulerPaths {
+        config_root: temp.path().join("cfg"),
+        data_root: temp.path().join("data"),
+    });
+    let definition = ScheduledTaskDefinition::new(
+        Some("good".to_string()),
+        ScheduleSpec::OneShot(OneShot { at: utc(2026, 3, 29, 9, 0, 0) }),
+        ScheduledTaskAction::Reminder { message: "hi".to_string() },
+        None,
+        utc(2026, 3, 28, 0, 0, 0),
+        None,
+    )
+    .expect("definition");
+    store.create(definition).expect("create");
+    let corrupt = store.paths().tasks_dir().join("corrupt.toml");
+    fs::write(&corrupt, "not = [valid toml").expect("write corrupt");
+
+    let tasks = store.list().expect("list survives corrupt file");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].name, "good");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn serve_forever_survives_sweep_errors() {
+    let temp = tempdir().expect("tempdir");
+    let paths = SchedulerPaths {
+        config_root: temp.path().join("cfg"),
+        data_root: temp.path().join("data"),
+    };
+    fs::create_dir_all(&paths.config_root).expect("cfg dir");
+    fs::write(paths.tasks_dir(), "blocking file").expect("block tasks dir");
+    let daemon = SchedulerDaemon::new(DurableTaskStore::with_paths(paths), PathBuf::from("/bin/true"));
+
+    let result = tokio::time::timeout(std::time::Duration::from_millis(300), daemon.serve_forever()).await;
+    assert!(result.is_err(), "daemon must keep running through sweep errors, got {result:?}");
+}
+
+#[test]
+fn durable_store_rejects_traversal_ids() {
+    let temp = tempdir().expect("tempdir");
+    let store = DurableTaskStore::with_paths(SchedulerPaths {
+        config_root: temp.path().join("cfg"),
+        data_root: temp.path().join("data"),
+    });
+    assert!(store.delete("../../outside").is_err());
+    assert!(store.load_record("a/b").is_err());
+}

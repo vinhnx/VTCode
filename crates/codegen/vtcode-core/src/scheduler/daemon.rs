@@ -26,7 +26,12 @@ impl SchedulerDaemon {
 
     pub async fn serve_forever(&self) -> Result<()> {
         loop {
-            self.run_due_tasks_once().await?;
+            // A failing sweep (transient I/O, store hiccup) must never stop
+            // the daemon: log it and keep the 1s cadence so healthy tasks
+            // keep firing.
+            if let Err(error) = self.run_due_tasks_once().await {
+                tracing::warn!(error = %error, "Scheduled task sweep failed; continuing");
+            }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
