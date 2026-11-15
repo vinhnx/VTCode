@@ -35,6 +35,7 @@ pub(super) enum DesktopSlashAction {
     Go(String),
     Cli,
     Desktop,
+    Goal(String),
 }
 
 /// Settings-tab aliases shared by the `/config` and `/settings` deep-links
@@ -98,6 +99,10 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
         "model" | "models" => Some(DesktopSlashAction::ModelPicker),
         "cli" => Some(DesktopSlashAction::Cli),
         "desktop" => Some(DesktopSlashAction::Desktop),
+        // Native quiet route: a non-turn slash submitted as turn text would
+        // wedge waiting for a terminal turn event, so `/goal` executes
+        // through `goal/execute` instead of the shared turn pipeline.
+        "goal" => Some(DesktopSlashAction::Goal(args.to_string())),
         "history" if args.is_empty() => Some(DesktopSlashAction::History),
         "splash" if args.is_empty() => Some(DesktopSlashAction::Splash),
         "help" if args.is_empty() => Some(DesktopSlashAction::Help),

@@ -501,6 +501,8 @@ impl DesktopView {
             ui_progress_active: false,
             background_activity_count: 0,
             tracker_snapshot: None,
+            goal_snapshot: None,
+            goal_expanded: false,
             error: None,
             configuration: None,
             pending_permission_choice: None,

@@ -745,6 +745,7 @@ mod files_destination;
 mod files_preview;
 mod files_webmcp;
 mod full_access_confirm;
+mod goal_bar;
 mod handoff_notification;
 mod heading_tiers;
 mod inspector_appearance;

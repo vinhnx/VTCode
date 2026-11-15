@@ -140,6 +140,7 @@ mod file_tree;
 mod files_panel;
 mod full_access_confirm;
 mod glass_buttons;
+mod goal;
 mod ids;
 mod inspector_changes;
 mod inspector_panels;
@@ -603,6 +604,11 @@ struct DesktopView {
     /// tab and the inline transcript task block; reset on session switch and
     /// disconnect so another conversation cannot inherit it.
     tracker_snapshot: Option<vtcode_exec_events::tracker::TrackerSnapshot>,
+    /// Latest `goal.updated` snapshot. Feeds the composer goal bar; reset on
+    /// session switch and disconnect so another conversation cannot inherit it.
+    goal_snapshot: Option<vtcode_exec_events::goal::GoalSnapshot>,
+    /// Whether the goal bar shows the full objective instead of truncating it.
+    goal_expanded: bool,
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,
     pending_permission_choice: Option<protocol::PermissionMode>,

@@ -429,6 +429,9 @@ impl DesktopView {
                 ),
             );
         }
+        if let Some(goal_bar) = self.render_goal_bar(cx) {
+            panel = panel.child(goal_bar);
+        }
         div().w_full().flex().justify_center().px_3().child(
             panel.child(
                 div()

@@ -273,6 +273,9 @@ impl DesktopView {
             ThreadEvent::TrackerUpdated(snapshot) => {
                 self.tracker_snapshot = Some(snapshot.as_ref().clone());
             }
+            ThreadEvent::GoalUpdated(event) => {
+                self.goal_snapshot = event.goal.clone();
+            }
             _ => {}
         }
         if produced_content {

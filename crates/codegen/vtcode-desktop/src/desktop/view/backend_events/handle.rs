@@ -493,6 +493,9 @@ impl DesktopView {
                     protocol::method::TURN_UNDO => {
                         self.handle_turn_undo_response(result);
                     }
+                    protocol::method::GOAL_EXECUTE => {
+                        self.apply_goal_execute_response(result, cx);
+                    }
                     protocol::method::EXEC_FORCE_CANCEL | protocol::method::EXEC_BACKGROUND => {
                         self.apply_exec_command_response(method.as_str());
                     }
@@ -653,6 +656,8 @@ impl DesktopView {
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
                 self.tracker_snapshot = None;
+                self.goal_snapshot = None;
+                self.goal_expanded = false;
                 self.reset_hidden_inspector_tab_if_stranded();
                 self.active_turn_id = None;
                 self.cancel_requested = false;
@@ -709,6 +714,8 @@ impl DesktopView {
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
                 self.tracker_snapshot = None;
+                self.goal_snapshot = None;
+                self.goal_expanded = false;
                 self.reset_hidden_inspector_tab_if_stranded();
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;

@@ -167,6 +167,10 @@ impl DesktopView {
                 cx.notify();
                 true
             }
+            DesktopSlashAction::Goal(args) => {
+                self.clear_submitted_command(window, cx);
+                self.execute_goal_command(args, cx)
+            }
             DesktopSlashAction::Go(target) => {
                 if target.trim().is_empty() {
                     self.clear_submitted_command(window, cx);

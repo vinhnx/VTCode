@@ -162,6 +162,9 @@ fn desktop_slash_actions_route_native_equivalents_and_config_deep_links() {
     assert_eq!(desktop_slash_action("/fast"), Some(DesktopSlashAction::FastMode(None)));
     assert_eq!(desktop_slash_action("/fast off"), Some(DesktopSlashAction::FastMode(Some(false))));
     assert_eq!(desktop_slash_action("/theme ciapre"), Some(DesktopSlashAction::Theme(Some("ciapre".into()))));
+    assert_eq!(desktop_slash_action("/goal"), Some(DesktopSlashAction::Goal(String::new())));
+    assert_eq!(desktop_slash_action("/goal pause"), Some(DesktopSlashAction::Goal("pause".into())));
+    assert_eq!(desktop_slash_action("/goal ship it"), Some(DesktopSlashAction::Goal("ship it".into())));
     assert_eq!(desktop_slash_action("/theme"), Some(DesktopSlashAction::Theme(None)));
     // Whitespace-only arguments are "no theme", and exactly one token survives
     // the extra separator runs.

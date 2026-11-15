@@ -644,6 +644,7 @@ impl DesktopView {
         let timeline = Arc::clone(&self.restored_timeline);
         self.restore_review_summaries(&timeline);
         self.restore_tracker_snapshot(&timeline);
+        self.restore_goal_snapshot(&timeline);
         for item in &loaded.activity_items {
             use vtcode_exec_events::ThreadItemDetails;
             if !matches!(
@@ -763,6 +764,8 @@ impl DesktopView {
         self.restored_activity_history_incomplete = false;
         self.restored_timeline = Arc::new(Vec::new());
         self.tracker_snapshot = None;
+        self.goal_snapshot = None;
+        self.goal_expanded = false;
         self.reset_hidden_inspector_tab_if_stranded();
         self.changes = ChangesProjection::default();
         self.selected_change = None;
