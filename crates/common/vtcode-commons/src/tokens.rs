@@ -107,27 +107,26 @@ pub fn format_token_count(tokens: usize) -> String {
 /// Truncate `text` to at most `max_tokens` tokens.
 ///
 /// Decodes the truncated token sequence back to text so the result is always
-/// valid UTF-8 with no mid-token corruption. Falls back to byte-level
-/// truncation if BPE decode fails (should not happen in practice).
+/// valid UTF-8 with no mid-token corruption. If a token ends mid-character,
+/// earlier token boundaries are tried. Without BPE, uses the byte heuristic.
 pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
     if max_tokens == 0 || text.is_empty() {
         return String::new();
     }
-    // Byte-level fallback used when BPE is unavailable or decode fails.
-    let byte_truncate = || {
-        let end = text.floor_char_boundary(max_tokens.saturating_mul(CHARS_PER_TOKEN));
-        let mut result = text[..end].to_string();
-        result.push_str("...");
-        result
-    };
     let Some(bpe) = bpe() else {
-        return byte_truncate();
+        let end = text.floor_char_boundary(max_tokens.saturating_mul(CHARS_PER_TOKEN));
+        return text[..end].to_string();
     };
     let tokens = bpe.encode_with_special_tokens(text);
     if tokens.len() <= max_tokens {
         return text.to_string();
     }
-    bpe.decode_to_string(&tokens[..max_tokens]).unwrap_or_else(|_| byte_truncate())
+    for end in (1..=max_tokens).rev() {
+        if let Ok(decoded) = bpe.decode_to_string(&tokens[..end]) {
+            return decoded;
+        }
+    }
+    String::new()
 }
 
 #[cfg(test)]
@@ -188,6 +187,20 @@ mod tests {
     #[test]
     fn truncate_zero_returns_empty() {
         assert_eq!(truncate_to_tokens("hello", 0), "");
+    }
+
+    #[test]
+    fn truncate_split_unicode_token_stays_within_budget() {
+        let text = "🙂🙂 more text";
+        let bpe = bpe().expect("builtin encoding is available");
+        let tokens = bpe.encode_with_special_tokens(text);
+        assert!(bpe.decode_to_string(&tokens[..1]).is_err());
+        for limit in 1..=4 {
+            let truncated = truncate_to_tokens(text, limit);
+            assert!(text.starts_with(&truncated), "limit={limit} output={truncated:?}");
+            assert!(estimate_tokens(&truncated) <= limit, "limit={limit} output={truncated:?}");
+        }
+        assert_eq!(truncate_to_tokens("short", 20), "short");
     }
 
     #[test]
