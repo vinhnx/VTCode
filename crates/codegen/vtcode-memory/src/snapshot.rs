@@ -23,6 +23,8 @@ pub struct EventTail {
 /// Missing logs return `None` for compatibility with legacy archives.
 /// The workspace must be an absolute, resolved root; symlink paths are rejected.
 /// Platforms without handle-bound reads return an `Unsupported` I/O error.
+/// Returns an I/O error if an observed truncation, modification, or replacement
+/// makes the bounded snapshot inconsistent; callers may retry.
 pub fn read_event_tail(workspace: &Path, session_id: &str, max_bytes: usize) -> Result<Option<EventTail>> {
     if max_bytes == 0
         || max_bytes > 16 * 1024 * 1024
@@ -40,10 +42,10 @@ pub fn read_event_tail(workspace: &Path, session_id: &str, max_bytes: usize) -> 
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(SessionStoreError::io(workspace.join(&relative), error)),
     };
-    let length = file
+    let initial = file
         .metadata()
-        .map_err(|error| SessionStoreError::io(workspace.join(&relative), error))?
-        .len();
+        .map_err(|error| SessionStoreError::io(workspace.join(&relative), error))?;
+    let length = initial.len();
     let start = length.saturating_sub(max_bytes as u64);
     let partial_prefix = if start > 0 {
         file.seek(SeekFrom::Start(start - 1))
@@ -57,11 +59,55 @@ pub fn read_event_tail(workspace: &Path, session_id: &str, max_bytes: usize) -> 
     };
     file.seek(SeekFrom::Start(start))
         .map_err(|error| SessionStoreError::io(workspace.join(&relative), error))?;
-    let mut bytes = Vec::new();
-    file.take(length - start)
-        .read_to_end(&mut bytes)
+    let bytes = read_exact_tail(&mut file, length - start)
         .map_err(|error| SessionStoreError::io(workspace.join(&relative), error))?;
+    let final_metadata = file
+        .metadata()
+        .map_err(|error| SessionStoreError::io(workspace.join(&relative), error))?;
+    let current = vtcode_commons::fs::bound_file::open_file_beneath(workspace, &relative)
+        .and_then(|file| file.metadata())
+        .map_err(|error| SessionStoreError::io(workspace.join(&relative), error))?;
+    if !same_snapshot(&initial, &final_metadata) || !same_snapshot(&initial, &current) {
+        return Err(SessionStoreError::io(
+            workspace.join(&relative),
+            std::io::Error::other("event log changed while reading its tail"),
+        ));
+    }
     decode_tail(&bytes, start > 0, partial_prefix).map(Some)
+}
+
+#[cfg(unix)]
+fn same_snapshot(first: &std::fs::Metadata, second: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    first.dev() == second.dev()
+        && first.ino() == second.ino()
+        && first.len() == second.len()
+        && first.mtime() == second.mtime()
+        && first.mtime_nsec() == second.mtime_nsec()
+        && first.ctime() == second.ctime()
+        && first.ctime_nsec() == second.ctime_nsec()
+}
+
+#[cfg(not(unix))]
+fn same_snapshot(first: &std::fs::Metadata, second: &std::fs::Metadata) -> bool {
+    first.len() == second.len()
+        && first
+            .modified()
+            .ok()
+            .zip(second.modified().ok())
+            .is_some_and(|(left, right)| left == right)
+}
+
+fn read_exact_tail(reader: &mut impl Read, expected: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    reader.take(expected).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 != expected {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "event log shortened while reading its tail",
+        ));
+    }
+    Ok(bytes)
 }
 
 fn decode_tail(bytes: &[u8], omitted_prefix: bool, partial_prefix: bool) -> Result<EventTail> {
@@ -112,6 +158,35 @@ mod tests {
         assert_eq!(bounded.events, vec![serde_json::from_slice::<VersionedThreadEvent>(&record("second")).unwrap()]);
         assert!(bounded.truncated);
         assert!(decode_tail(b"bad\n", false, false).is_err());
+    }
+
+    #[test]
+    fn tail_read_rejects_early_eof_even_at_a_record_boundary() {
+        let first = record("first");
+        let second = record("second");
+        let expected = (first.len() + second.len()) as u64;
+        let mut shortened = std::io::Cursor::new(first.clone());
+        let error = read_exact_tail(&mut shortened, expected).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::UnexpectedEof);
+
+        let mut complete = std::io::Cursor::new([first.clone(), second].concat());
+        let bytes = read_exact_tail(&mut complete, expected).unwrap();
+        assert_eq!(decode_tail(&bytes, false, false).unwrap().events.len(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn snapshot_identity_rejects_same_length_atomic_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        let replacement = dir.path().join("replacement");
+        std::fs::write(&path, b"old\n").unwrap();
+        let open = std::fs::File::open(&path).unwrap();
+        let initial = open.metadata().unwrap();
+        assert!(same_snapshot(&initial, &open.metadata().unwrap()));
+        std::fs::write(&replacement, b"new\n").unwrap();
+        std::fs::rename(replacement, &path).unwrap();
+        assert!(!same_snapshot(&initial, &std::fs::metadata(&path).unwrap()));
     }
 
     #[cfg(unix)]

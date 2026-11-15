@@ -210,6 +210,93 @@ fn migrate_legacy_imports_history_and_trajectory() {
     assert_eq!(sessions.len(), 2);
 }
 
+#[test]
+fn migrate_legacy_never_overwrites_a_live_or_closed_session() {
+    let dir = TempDir::new().expect("tempdir");
+    let history = dir.path().join(".vtcode/history");
+    fs::create_dir_all(&history).expect("history");
+    let source = history.join("session-foo.memory.json");
+    fs::write(&source, b"legacy input").expect("legacy input");
+    let log = open_exclusive(dir.path(), "session-foo.memory", DEFAULT_MAX_EVENTS).expect("open session");
+    for event in &sample_turn() {
+        log.append(event).expect("append");
+    }
+    log.flush().expect("flush");
+    let session = sessions_root(dir.path()).join("session-foo.memory");
+    let manifest = fs::read(session.join("manifest.json")).expect("manifest");
+    let events = fs::read(session.join("events.jsonl")).expect("events");
+
+    assert!(matches!(migrate_legacy(dir.path(), true), Err(SessionStoreError::SessionBusy { .. })));
+    drop(log);
+    let err = migrate_legacy(dir.path(), true).expect_err("closed session must not be overwritten");
+    assert!(matches!(err, SessionStoreError::Io { source, .. } if source.kind() == std::io::ErrorKind::AlreadyExists));
+    assert_eq!(fs::read(session.join("manifest.json")).expect("manifest"), manifest);
+    assert_eq!(fs::read(session.join("events.jsonl")).expect("events"), events);
+    assert_eq!(fs::read(source).expect("legacy input"), b"legacy input");
+}
+
+#[test]
+fn migrate_legacy_reuses_exact_import_on_retry_and_cleans_source() {
+    let dir = TempDir::new().expect("tempdir");
+    let history = dir.path().join(".vtcode/history");
+    fs::create_dir_all(&history).expect("history");
+    let source = history.join("session-retry.memory.json");
+    fs::write(&source, br#"{"summary":"original"}"#).expect("legacy source");
+    assert_eq!(migrate_legacy(dir.path(), false).expect("first import").sessions_created, 1);
+    let session = sessions_root(dir.path()).join("session-retry.memory");
+    let manifest = fs::read(session.join("manifest.json")).expect("manifest");
+    let report = migrate_legacy(dir.path(), true).expect("retry and cleanup");
+    assert_eq!(report.sessions_created, 0);
+    assert!(!source.exists());
+    assert_eq!(fs::read(session.join("manifest.json")).expect("manifest"), manifest);
+    assert_eq!(fs::read(session.join("derived/memory.json")).expect("import"), br#"{"summary":"original"}"#);
+}
+
+#[test]
+fn migrate_cleanup_removes_only_imported_files() {
+    let dir = TempDir::new().expect("tempdir");
+    let history = dir.path().join(".vtcode/history");
+    let logs = dir.path().join(".vtcode/logs");
+    fs::create_dir_all(&history).expect("history");
+    fs::create_dir_all(logs.join("nested")).expect("logs");
+    fs::write(history.join("session.memory.json"), br#"{"summary":"saved"}"#).expect("memory");
+    fs::write(history.join("notes.txt"), b"keep history").expect("notes");
+    fs::write(logs.join("trajectory-1.jsonl"), b"trajectory\n").expect("trajectory");
+    fs::write(logs.join("nested/keep.jsonl"), b"keep nested").expect("nested");
+    fs::write(logs.join("other.log"), b"keep log").expect("other log");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(history.join("notes.txt"), history.join("linked.json")).expect("linked source");
+
+    let report = migrate_legacy(dir.path(), true).expect("migrate and clean");
+    assert_eq!((report.memory_imported, report.trajectory_imported), (1, 1));
+    assert!(!history.join("session.memory.json").exists());
+    assert!(!logs.join("trajectory-1.jsonl").exists());
+    assert_eq!(fs::read(history.join("notes.txt")).expect("notes"), b"keep history");
+    assert_eq!(fs::read(logs.join("other.log")).expect("other log"), b"keep log");
+    assert_eq!(fs::read(logs.join("nested/keep.jsonl")).expect("nested"), b"keep nested");
+    #[cfg(unix)]
+    assert!(
+        fs::symlink_metadata(history.join("linked.json"))
+            .expect("link retained")
+            .file_type()
+            .is_symlink()
+    );
+}
+
+#[test]
+fn migrate_legacy_ignores_stale_staged_copies() {
+    let dir = TempDir::new().expect("tempdir");
+    let history = dir.path().join(".vtcode/history");
+    fs::create_dir_all(&history).expect("history");
+    fs::write(history.join("session.memory.json"), br#"{"summary":"saved"}"#).expect("memory");
+    let stale = history.join(".session.memory.json.migrated-99999");
+    fs::write(&stale, b"stale").expect("stale staged");
+    let report = migrate_legacy(dir.path(), true).expect("migrate and clean");
+    assert_eq!((report.sessions_created, report.memory_imported), (1, 1));
+    assert!(!history.join("session.memory.json").exists());
+    assert_eq!(fs::read(&stale).expect("stale staged preserved"), b"stale");
+}
+
 /// Hold a session's lock file on a foreign fd, simulating another process.
 /// Same-process flock conflicts, so this deterministically reproduces
 /// cross-process contention without spawning subprocesses.
@@ -265,6 +352,33 @@ fn exclusive_open_fails_when_held_elsewhere_and_recovers_on_release() {
     drop(foreign);
     let log = open_exclusive(dir.path(), "sess-busy", DEFAULT_MAX_EVENTS).expect("open after release");
     assert_eq!(log.turn_count(), 1, "history survives the refused open");
+}
+
+#[test]
+fn exclusive_open_rejects_unusable_lock_and_recovers() {
+    let dir = TempDir::new().expect("tempdir");
+    drop(open_exclusive(dir.path(), "bad-lock", DEFAULT_MAX_EVENTS).expect("create session"));
+    let session_dir = sessions_root(dir.path()).join("bad-lock");
+    let lock_path = session_dir.join("session.lock");
+    let events_before = fs::read(session_dir.join("events.jsonl")).expect("read events");
+    fs::remove_file(&lock_path).expect("remove lock");
+    fs::create_dir(&lock_path).expect("block lock with directory");
+
+    let err = open_exclusive(dir.path(), "bad-lock", DEFAULT_MAX_EVENTS)
+        .map(|_| ())
+        .expect_err("exclusive open must reject an unusable lock");
+    assert!(matches!(err, SessionStoreError::Io { ref path, .. } if path == &lock_path), "{err}");
+    assert_eq!(fs::read(session_dir.join("events.jsonl")).expect("read events"), events_before);
+
+    let reader = open(dir.path(), "bad-lock", DEFAULT_MAX_EVENTS).expect("shared open remains best effort");
+    let err = open_exclusive(dir.path(), "bad-lock", DEFAULT_MAX_EVENTS)
+        .map(|_| ())
+        .expect_err("upgrading a degraded shared open must also fail");
+    assert!(matches!(err, SessionStoreError::Io { ref path, .. } if path == &lock_path), "{err}");
+    fs::remove_dir(&lock_path).expect("remove invalid lock");
+    let writer = open_exclusive(dir.path(), "bad-lock", DEFAULT_MAX_EVENTS).expect("upgrade after repair");
+    assert!(lock_is_held_externally(dir.path(), "bad-lock"));
+    drop((reader, writer));
 }
 
 #[test]

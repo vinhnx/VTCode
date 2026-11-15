@@ -1,5 +1,5 @@
 use super::*;
-use vtcode_exec_events::{ThreadEvent, ThreadStartedEvent};
+use vtcode_exec_events::{ThreadEvent, ThreadStartedEvent, TurnCompletedEvent, TurnStartedEvent, Usage};
 
 #[test]
 fn failed_sync_is_retried_before_metadata_without_reappending() {
@@ -93,4 +93,77 @@ fn successful_rollback_keeps_buffer_available_for_retry() {
             .event_count(),
         1
     );
+}
+
+#[test]
+fn unavailable_event_file_rejects_append_and_empty_flush() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut log = SessionEventLog::open_exclusive(dir.path(), "missing-handle", 0).unwrap();
+    let events_path = log.events_path.clone();
+    let blocked_path = dir.path().join("not-a-file");
+    std::fs::create_dir(&blocked_path).unwrap();
+    log.events_path = blocked_path;
+    assert!(log.replace_event_file_contents(b"replacement\n").is_err());
+    assert!(log.shared.file.lock().unwrap().is_none(), "failed reopen leaves no live handle");
+    let event = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "first".into() });
+    assert!(log.append(&event).is_err());
+    assert_eq!(log.event_count(), 0, "refused append must not advance the manifest");
+    assert!(log.flush().is_err(), "an empty buffer must not hide the missing file");
+    log.events_path = events_path;
+    *log.shared.file.lock().unwrap() = Some(log.open_event_file().unwrap());
+    log.append(&event).unwrap();
+    log.flush().unwrap();
+    assert_eq!(log.event_count(), 1);
+}
+
+#[test]
+fn failed_cap_metadata_publication_quarantines_shared_writer_until_reopen() {
+    for blocked_relative in ["index/turns.json", "manifest.json"] {
+        let dir = tempfile::tempdir().unwrap();
+        let session = "cap-metadata-failure";
+        let session_path = session_dir(dir.path(), session);
+        let index_path = session_path.join(blocked_relative);
+        let blocked_index = index_path.clone();
+        let hook: EvictionSummaryHook = Arc::new(move |_| {
+            std::fs::remove_file(&blocked_index).unwrap();
+            std::fs::create_dir(&blocked_index).unwrap();
+            Ok(())
+        });
+        let log = SessionEventLog::open_with_eviction_summary(dir.path(), session, 2, hook).unwrap();
+        log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default())).unwrap();
+        log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
+            completed_at: None,
+            usage: Usage::default(),
+            in_progress_exec_sessions: Vec::new(),
+        }))
+        .unwrap();
+        let uncapped = SessionEventLog::open(dir.path(), session, 0).unwrap();
+
+        assert!(log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default())).is_err());
+        let marker = session_path.join("index/pending-cap-rewrite.json");
+        assert!(marker.exists());
+        let rewritten = std::fs::read(session_path.join("events.jsonl")).unwrap();
+        let later = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "later".into() });
+        assert!(uncapped.append(&later).is_err(), "another handle must not invalidate the marker");
+        assert!(uncapped.flush().is_err());
+        assert_eq!(std::fs::read(session_path.join("events.jsonl")).unwrap(), rewritten);
+        std::fs::remove_dir(&index_path).unwrap();
+        drop(uncapped);
+        drop(log);
+
+        let recovered = SessionEventLog::open(dir.path(), session, 0).unwrap();
+        assert!(!marker.exists());
+        assert!(recovered.reconstruct_turn(1).is_err());
+        recovered
+            .append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
+                completed_at: None,
+                usage: Usage::default(),
+                in_progress_exec_sessions: Vec::new(),
+            }))
+            .unwrap();
+        assert_eq!(recovered.turn_count(), 2);
+        assert_eq!(recovered.reconstruct_turn(2).unwrap().len(), 2);
+    }
 }

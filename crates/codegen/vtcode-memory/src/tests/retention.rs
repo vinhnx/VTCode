@@ -28,6 +28,88 @@ fn retention_evicts_zero_turn_completed_stores_immediately() {
 }
 
 #[test]
+fn retention_preserves_degraded_shared_handle_after_foreign_lock_releases() {
+    let dir = TempDir::new().expect("tempdir");
+    let initial = open_exclusive(dir.path(), "shared-live", DEFAULT_MAX_EVENTS).expect("open");
+    for event in &sample_zero_turn_completion() {
+        initial.append(event).expect("append");
+    }
+    initial.complete().expect("complete");
+    drop(initial);
+    let session = sessions_root(dir.path()).join("shared-live");
+    let foreign = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(session.join("session.lock"))
+        .expect("lock");
+    foreign.try_lock().expect("hold foreign lock");
+    let reader = open(dir.path(), "shared-live", DEFAULT_MAX_EVENTS).expect("degraded shared open");
+    drop(foreign);
+    let policy = crate::retention::RetentionPolicy { max_sessions: 50, max_age_days: 30 };
+    assert_eq!(apply_retention(dir.path(), policy).expect("retain"), 0);
+    assert!(session.join("events.jsonl").exists());
+    drop(reader);
+    assert_eq!(apply_retention(dir.path(), policy).expect("retain after close"), 1);
+    assert!(!session.exists());
+}
+
+#[test]
+fn session_open_waits_for_retention_guard_before_creating_store() {
+    let dir = TempDir::new().expect("tempdir");
+    let guard = crate::session_guard::try_exclusive(dir.path(), std::ffi::OsStr::new("racing"))
+        .expect("guard")
+        .expect("exclusive guard");
+    let workspace = dir.path().to_path_buf();
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (opened_tx, opened_rx) = std::sync::mpsc::channel();
+    let task = std::thread::spawn(move || {
+        started_tx.send(()).expect("signal start");
+        let log = open_exclusive(&workspace, "racing", DEFAULT_MAX_EVENTS).expect("open after retention");
+        opened_tx.send(()).expect("signal open");
+        drop(log);
+    });
+    started_rx.recv().expect("started");
+    assert!(opened_rx.recv_timeout(std::time::Duration::from_millis(100)).is_err());
+    assert!(!sessions_root(dir.path()).join("racing").exists());
+    drop(guard);
+    opened_rx
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("open completes");
+    task.join().expect("open thread");
+}
+
+#[test]
+fn pin_waits_for_retention_and_does_not_recreate_removed_session() {
+    let dir = TempDir::new().expect("tempdir");
+    let session = sessions_root(dir.path()).join("racing-pin");
+    fs::create_dir_all(&session).expect("session dir");
+    let guard = crate::session_guard::try_exclusive(dir.path(), std::ffi::OsStr::new("racing-pin"))
+        .expect("guard")
+        .expect("exclusive guard");
+    let target = session.clone();
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+    let task = std::thread::spawn(move || {
+        started_tx.send(()).expect("signal start");
+        finished_tx
+            .send(crate::retention::pin_session_retention(&target, "blocked"))
+            .expect("signal completion");
+    });
+    started_rx.recv().expect("started");
+    assert!(finished_rx.recv_timeout(std::time::Duration::from_millis(100)).is_err());
+    fs::remove_dir(&session).expect("retention removes session");
+    drop(guard);
+    assert!(
+        finished_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("pin completes")
+            .is_err()
+    );
+    assert!(!session.exists(), "failed pin must not recreate removed session");
+    task.join().expect("pin thread");
+}
+
+#[test]
 fn evict_zero_turn_completed_store_is_a_noop_for_real_sessions() {
     let dir = TempDir::new().expect("tempdir");
     let worked = open(dir.path(), "worked", DEFAULT_MAX_EVENTS).expect("open");
@@ -81,6 +163,70 @@ fn evict_zero_turn_completed_store_skips_live_and_pinned() {
     assert!(sessions_root(dir.path()).join("pinned-empty").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn retention_preserves_unknown_lock_state_but_reclaims_missing_legacy_lock() {
+    use std::os::unix::fs::symlink;
+
+    let workspace = TempDir::new().expect("workspace");
+    for id in ["invalid-lock", "legacy"] {
+        let log = open(workspace.path(), id, DEFAULT_MAX_EVENTS).expect("open");
+        for event in &sample_zero_turn_completion() {
+            log.append(event).expect("append");
+        }
+        log.complete().expect("complete");
+    }
+    let root = sessions_root(workspace.path());
+    let invalid = root.join("invalid-lock");
+    let legacy = root.join("legacy");
+    fs::remove_file(invalid.join("session.lock")).expect("remove lock");
+    symlink("missing-target", invalid.join("session.lock")).expect("create dangling lock symlink");
+    fs::remove_file(legacy.join("session.lock")).expect("remove legacy lock");
+
+    assert!(!crate::retention::session_dir_is_live(&invalid), "invalid lock does not prove liveness");
+    assert!(!crate::retention::evict_zero_turn_completed_store(workspace.path(), "invalid-lock").expect("evict"));
+    assert_eq!(
+        apply_retention(workspace.path(), crate::retention::RetentionPolicy { max_sessions: 50, max_age_days: 30 })
+            .expect("retention"),
+        1
+    );
+    assert!(invalid.join("events.jsonl").exists(), "unknown lock must protect history");
+    assert!(!legacy.exists(), "missing legacy lock remains reclaimable");
+}
+
+#[cfg(unix)]
+#[test]
+fn retention_preserves_invalid_pin_markers_but_reclaims_unpinned_sessions() {
+    use std::os::unix::fs::symlink;
+
+    let workspace = TempDir::new().expect("workspace");
+    for id in ["dangling-pin", "directory-pin", "unpinned"] {
+        let log = open(workspace.path(), id, DEFAULT_MAX_EVENTS).expect("open");
+        for event in &sample_zero_turn_completion() {
+            log.append(event).expect("append");
+        }
+        log.complete().expect("complete");
+    }
+    let root = sessions_root(workspace.path());
+    let pin_name = crate::retention::RETENTION_PIN_FILE;
+    symlink("missing-target", root.join("dangling-pin").join(pin_name)).expect("dangling pin");
+    fs::create_dir(root.join("directory-pin").join(pin_name)).expect("directory pin");
+
+    let pinned = crate::retention::retention_pinned_session_ids(workspace.path());
+    assert!(pinned.iter().any(|id| id == "dangling-pin"));
+    assert!(pinned.iter().any(|id| id == "directory-pin"));
+    assert!(!pinned.iter().any(|id| id == "unpinned"));
+    assert!(!crate::retention::evict_zero_turn_completed_store(workspace.path(), "dangling-pin").expect("evict"));
+    assert_eq!(
+        apply_retention(workspace.path(), crate::retention::RetentionPolicy { max_sessions: 50, max_age_days: 30 })
+            .expect("retention"),
+        1
+    );
+    assert!(root.join("dangling-pin/events.jsonl").exists());
+    assert!(root.join("directory-pin/events.jsonl").exists());
+    assert!(!root.join("unpinned").exists());
+}
+
 #[test]
 fn retention_removes_oldest_sessions() {
     let dir = TempDir::new().expect("tempdir");
@@ -128,6 +274,31 @@ fn retention_pinned_session_ids_lists_only_real_pinned_dirs() {
     // Missing sessions root yields an empty list, not an error.
     let empty = TempDir::new().expect("tempdir");
     assert!(crate::retention::retention_pinned_session_ids(empty.path()).is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn retention_pin_rejects_symlink_and_writes_private_file() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let workspace = TempDir::new().expect("workspace");
+    let session = sessions_root(workspace.path()).join("session");
+    fs::create_dir_all(&session).expect("session directory");
+    let outside = workspace.path().join("outside");
+    fs::write(&outside, "preserve this file").expect("outside file");
+    let pin = session.join(crate::retention::RETENTION_PIN_FILE);
+    symlink(&outside, &pin).expect("planted pin symlink");
+
+    assert!(crate::retention::pin_session_retention(&session, "blocked").is_err());
+    assert_eq!(fs::read_to_string(&outside).expect("outside file"), "preserve this file");
+    fs::remove_file(&pin).expect("remove symlink");
+    crate::retention::pin_session_retention(&session, "blocked").expect("write pin");
+    assert_eq!(fs::metadata(&pin).expect("pin metadata").permissions().mode() & 0o777, 0o600);
+    let saved: serde_json::Value = serde_json::from_slice(&fs::read(&pin).expect("read pin")).expect("parse pin");
+    assert_eq!(saved["reason"], "blocked");
+    let missing = sessions_root(workspace.path()).join("missing");
+    assert!(crate::retention::pin_session_retention(&missing, "blocked").is_err());
+    assert!(!missing.exists());
 }
 
 #[test]
@@ -399,6 +570,11 @@ fn retention_skips_symlink_sessions_root() {
         .to_string(),
     )
     .expect("write linked manifest");
+    let active_session = real_root.join("active-session");
+    fs::create_dir_all(&active_session).expect("create active session");
+    let active_manifest = active_session.join("manifest.json");
+    let original_active = r#"{"session_id":"active-session","status":"active","updated_at":"2020-01-01T00:00:00Z","turn_count":1,"event_count":1}"#;
+    fs::write(&active_manifest, original_active).expect("write active manifest");
 
     let sessions_parent = dir.path().join(".vtcode");
     fs::create_dir_all(&sessions_parent).expect("create sessions parent");
@@ -410,4 +586,8 @@ fn retention_skips_symlink_sessions_root() {
         0
     );
     assert!(linked_session.exists());
+    assert!(!crate::retention::evict_zero_turn_completed_store(dir.path(), "linked-session").expect("evict"));
+    assert!(linked_session.join("manifest.json").exists());
+    assert_eq!(crate::retention::mark_abandoned_active_sessions(dir.path(), 30, None).expect("mark"), 0);
+    assert_eq!(fs::read_to_string(active_manifest).expect("read active manifest"), original_active);
 }

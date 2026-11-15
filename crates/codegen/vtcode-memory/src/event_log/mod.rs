@@ -140,7 +140,7 @@ struct LogState {
     write_buf: Vec<u8>,
     /// Written event bytes still require a successful sync before metadata.
     needs_sync: bool,
-    /// A partial write could not be rolled back; state must be rebuilt on reopen.
+    /// A failed rollback or cap-rewrite publication requires recovery on reopen.
     write_failed: bool,
     /// An existing final record lacks its newline delimiter.
     needs_separator: bool,
@@ -397,7 +397,7 @@ fn shared_session(
         .map_err(|error| SessionStoreError::io(events_path.to_path_buf(), std::io::Error::other(error)))?;
     let liveness_lock = match mode {
         OpenMode::Shared => acquire_liveness_lock(events_path, session_id),
-        OpenMode::Exclusive => acquire_liveness_lock_strict(events_path, session_id)?,
+        OpenMode::Exclusive => Some(acquire_liveness_lock_strict(events_path, session_id)?),
     };
     let shared = Arc::new(SessionShared {
         file: Mutex::new(Some(file)),
@@ -419,33 +419,32 @@ fn shared_session(
 /// behavior) instead of failing the session open or swallowing a persistence
 /// error. The fd is released automatically when the shared handle drops.
 fn acquire_liveness_lock(events_path: &Path, session_id: &str) -> Option<File> {
-    acquire_liveness_lock_strict(events_path, session_id).unwrap_or(None)
+    acquire_liveness_lock_strict(events_path, session_id).ok()
 }
 
 /// Strict liveness claim for the session's single writer.
 ///
 /// A `WouldBlock` contention proves another process holds the session open
-/// and fails with [`SessionStoreError::SessionBusy`]; every other failure
-/// (exotic filesystems, permissions) degrades to unlocked exactly like the
-/// best-effort path so a missing lock never blocks a session by itself.
-fn acquire_liveness_lock_strict(events_path: &Path, session_id: &str) -> Result<Option<File>, SessionStoreError> {
-    let Some(dir) = events_path.parent() else {
-        return Ok(None);
-    };
+/// and fails with [`SessionStoreError::SessionBusy`]; other failures are
+/// returned because an unlocked writer cannot guarantee exclusive access.
+fn acquire_liveness_lock_strict(events_path: &Path, session_id: &str) -> Result<File, SessionStoreError> {
+    let dir = events_path
+        .parent()
+        .ok_or_else(|| SessionStoreError::io(events_path, std::io::Error::other("event path has no parent")))?;
     let lock_path = dir.join(SESSION_LOCK_FILE);
-    if VtCodePaths::write_private_file_atomic_if_absent(&lock_path, b"").is_err() {
-        return Ok(None);
-    }
-    let file = match std::fs::OpenOptions::new().read(true).write(true).open(&lock_path) {
-        Ok(file) => file,
-        Err(_) => return Ok(None),
-    };
+    VtCodePaths::write_private_file_atomic_if_absent(&lock_path, b"")
+        .map_err(|error| SessionStoreError::io(&lock_path, std::io::Error::other(error)))?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|error| SessionStoreError::io(&lock_path, error))?;
     match file.try_lock().map_err(std::io::Error::from) {
-        Ok(()) => Ok(Some(file)),
+        Ok(()) => Ok(file),
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
             Err(SessionStoreError::SessionBusy { session: session_id.to_owned() })
         }
-        Err(_) => Ok(None),
+        Err(error) => Err(SessionStoreError::io(lock_path, error)),
     }
 }
 
@@ -456,7 +455,7 @@ impl SessionShared {
     fn ensure_exclusive_liveness(&self, events_path: &Path, session_id: &str) -> Result<(), SessionStoreError> {
         let mut slot = self.liveness_lock.lock().map_err(poison)?;
         if slot.is_none() {
-            *slot = acquire_liveness_lock_strict(events_path, session_id)?;
+            *slot = Some(acquire_liveness_lock_strict(events_path, session_id)?);
         }
         Ok(())
     }
@@ -468,6 +467,7 @@ impl SessionShared {
 /// state is never read back into context from here; the log is only consumed
 /// for revert, compaction, analytics, and long-term-learning queries.
 pub struct SessionEventLog {
+    _retention_guard: File,
     events_path: PathBuf,
     manifest_store: ManifestStore,
     shared: Arc<SessionShared>,
@@ -520,6 +520,10 @@ impl SessionEventLog {
         mode: OpenMode,
     ) -> Result<Self, SessionStoreError> {
         let dir = session_dir(workspace, session_id);
+        let name = dir
+            .file_name()
+            .ok_or_else(|| SessionStoreError::io(&dir, std::io::Error::other("missing session name")))?;
+        let retention_guard = crate::session_guard::shared(workspace, name)?;
         crate::ensure_private_directory(&crate::sessions_root(workspace))?;
         crate::ensure_private_directory(&dir)?;
         crate::ensure_private_directory(&dir.join(crate::DERIVED_DIR))?;
@@ -529,6 +533,7 @@ impl SessionEventLog {
         let pending_rewrite = manifest_store.load_pending_cap_rewrite()?;
         let shared = shared_session(&events_path, session_id, mode)?;
         let log = Self {
+            _retention_guard: retention_guard,
             events_path: events_path.clone(),
             manifest_store,
             shared,
@@ -867,11 +872,11 @@ impl SessionEventLog {
         if st.write_failed {
             return Err(self.event_write_failed());
         }
+        let mut file_slot = self.shared.file.lock().map_err(poison)?;
+        let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
         if st.write_buf.is_empty() && !st.needs_sync {
             return Ok(());
         }
-        let mut file_slot = self.shared.file.lock().map_err(poison)?;
-        let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
         if !st.write_buf.is_empty() {
             let previous_len = file.metadata().map_err(|e| SessionStoreError::io(&self.events_path, e))?.len();
             if let Err(error) = write(file, &st.write_buf) {
@@ -944,13 +949,6 @@ impl SessionEventLog {
 
     fn event_file_unavailable(&self) -> SessionStoreError {
         SessionStoreError::io(&self.events_path, std::io::Error::other("event log file is unavailable"))
-    }
-
-    fn event_write_failed(&self) -> SessionStoreError {
-        SessionStoreError::io(
-            &self.events_path,
-            std::io::Error::other("event log write rollback failed; reopen required"),
-        )
     }
 }
 

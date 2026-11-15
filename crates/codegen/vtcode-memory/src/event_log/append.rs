@@ -6,6 +6,15 @@
 use super::*;
 
 impl SessionEventLog {
+    pub(super) fn event_write_failed(&self) -> SessionStoreError {
+        SessionStoreError::io(
+            &self.events_path,
+            std::io::Error::other(
+                "event log writer quarantined after persistence failure; close all handles and reopen",
+            ),
+        )
+    }
+
     /// Append an event to the log and update the in-memory index/manifest.
     pub fn append(&self, event: &ThreadEvent) -> Result<(), SessionStoreError> {
         let _eviction_guard = self.shared.eviction_lock.lock().map_err(poison)?;
@@ -13,6 +22,9 @@ impl SessionEventLog {
 
         if st.write_failed {
             return Err(self.event_write_failed());
+        }
+        if self.shared.file.lock().map_err(poison)?.is_none() {
+            return Err(self.event_file_unavailable());
         }
 
         if st.needs_separator {
@@ -165,7 +177,12 @@ impl SessionEventLog {
         st.manifest.event_count += checkpoint_count;
         // The rewrite changed byte offsets and retained counts; persist the
         // derived metadata before exposing the append as successful.
-        self.persist_meta_locked(&mut st)?;
+        if let Err(error) = self.persist_meta_locked(&mut st) {
+            // Keep the marker's recorded file length valid until reopen can
+            // rebuild the derived metadata from the rewritten log.
+            st.write_failed = true;
+            return Err(error);
+        }
         self.manifest_store.clear_pending_cap_rewrite()?;
         Ok(())
     }

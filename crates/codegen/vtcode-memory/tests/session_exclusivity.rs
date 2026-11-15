@@ -33,7 +33,12 @@ fn e2e_mem_holder() -> TestResult {
         return Ok(());
     };
     // Render failures with Display (what a user would see), not Debug.
-    let _log = match open_exclusive(&workspace, &session, DEFAULT_MAX_EVENTS) {
+    let result = if std::env::var_os("VTMEM_SHARED").is_some() {
+        open(&workspace, &session, DEFAULT_MAX_EVENTS)
+    } else {
+        open_exclusive(&workspace, &session, DEFAULT_MAX_EVENTS)
+    };
+    let _log = match result {
         Ok(log) => log,
         Err(err) => {
             eprintln!("child open failed: {err}");
@@ -43,6 +48,46 @@ fn e2e_mem_holder() -> TestResult {
     std::fs::write(&ready_file, b"ready")?;
     std::thread::sleep(Duration::from_secs(hold_secs));
     // `_log` drops here, releasing the session lock.
+    Ok(())
+}
+
+#[test]
+fn retention_preserves_degraded_shared_session_in_another_process() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let workspace = dir.path();
+    let log = open_exclusive(workspace, "degraded", DEFAULT_MAX_EVENTS)?;
+    drop(log);
+    let session = vtcode_memory::session_directory(workspace, "degraded");
+    let manifest_path = session.join("manifest.json");
+    let mut manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest_path)?)?;
+    manifest["status"] = serde_json::json!("completed");
+    std::fs::write(manifest_path, serde_json::to_vec(&manifest)?)?;
+    let foreign = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(session.join("session.lock"))?;
+    foreign.try_lock()?;
+    let ready = workspace.join("shared-ready");
+    let mut child = Command::new(std::env::current_exe()?)
+        .arg("e2e_mem_holder")
+        .arg("--exact")
+        .arg("--nocapture")
+        .env("VTMEM_WORKSPACE", workspace)
+        .env("VTMEM_SESSION", "degraded")
+        .env("VTMEM_HOLD_SECS", "3")
+        .env("VTMEM_READY_FILE", &ready)
+        .env("VTMEM_SHARED", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    wait_for_ready(&ready)?;
+    drop(foreign);
+    let policy = vtcode_memory::RetentionPolicy { max_sessions: 50, max_age_days: 30 };
+    assert_eq!(vtcode_memory::apply_retention(workspace, policy)?, 0);
+    assert!(session.join("events.jsonl").exists());
+    assert!(child.wait()?.success());
+    assert_eq!(vtcode_memory::apply_retention(workspace, policy)?, 1);
+    assert!(!session.exists());
     Ok(())
 }
 

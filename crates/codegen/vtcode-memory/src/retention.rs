@@ -51,12 +51,7 @@ pub fn apply_retention_preserving(
     preserve_session_id: Option<&str>,
 ) -> Result<usize, SessionStoreError> {
     let root = sessions_root(workspace);
-    let root_metadata = match std::fs::symlink_metadata(&root) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
-        Err(error) => return Err(SessionStoreError::io(root.clone(), error)),
-    };
-    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+    if !is_sessions_root(&root)? {
         return Ok(0);
     }
     // Crashed/killed threads never emit thread.completed; surface those
@@ -74,8 +69,7 @@ pub fn apply_retention_preserving(
         .into_iter()
         .partition(|s| s.summary.turn_count == 0 && s.summary.status != "active");
     for s in &empty {
-        remove_session(&root, &s.path)?;
-        removed += 1;
+        removed += usize::from(remove_candidate(workspace, &root, s)?);
     }
 
     // Phase 1: evict oldest sessions beyond the count cap.
@@ -83,8 +77,7 @@ pub fn apply_retention_preserving(
         sessions.sort_by(|a, b| a.summary.updated_at.cmp(&b.summary.updated_at));
         let to_remove = sessions.len() - policy.max_sessions;
         for s in sessions.iter().take(to_remove) {
-            remove_session(&root, &s.path)?;
-            removed += 1;
+            removed += usize::from(remove_candidate(workspace, &root, s)?);
         }
         // Drop evicted entries so phase 2 doesn't double-remove.
         sessions.drain(..to_remove);
@@ -94,8 +87,7 @@ pub fn apply_retention_preserving(
     let cutoff = age_cutoff(policy.max_age_days);
     for s in &sessions {
         if older_than(s.summary.updated_at.as_str(), cutoff) {
-            remove_session(&root, &s.path)?;
-            removed += 1;
+            removed += usize::from(remove_candidate(workspace, &root, s)?);
         }
     }
 
@@ -115,11 +107,18 @@ pub const RETENTION_PIN_FILE: &str = "retention-pin.json";
 /// Returns whether the store was removed.
 pub fn evict_zero_turn_completed_store(workspace: &Path, session_id: &str) -> Result<bool, SessionStoreError> {
     let root = sessions_root(workspace);
+    if !is_sessions_root(&root)? {
+        return Ok(false);
+    }
     let dir = crate::session_dir(workspace, session_id);
     if dir.parent() != Some(&root) {
         return Ok(false);
     }
-    if session_retention_pinned(&dir) || session_dir_is_live(&dir) {
+    let Some(name) = dir.file_name() else { return Ok(false) };
+    let Some(_guard) = crate::session_guard::try_exclusive(workspace, name)? else {
+        return Ok(false);
+    };
+    if session_retention_pinned(&dir) || session_dir_may_be_live(&dir) {
         return Ok(false);
     }
     let manifest_path = dir.join("manifest.json");
@@ -136,10 +135,13 @@ pub fn evict_zero_turn_completed_store(workspace: &Path, session_id: &str) -> Re
     Ok(true)
 }
 
-/// Whether a session directory is pinned against ordinary retention eviction.
+/// Whether a session is pinned or its pin marker cannot be safely inspected.
 #[must_use]
 pub fn session_retention_pinned(session_dir: &Path) -> bool {
-    session_dir.join(RETENTION_PIN_FILE).is_file()
+    match std::fs::symlink_metadata(session_dir.join(RETENTION_PIN_FILE)) {
+        Ok(_) => true,
+        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+    }
 }
 
 /// Whether a live process still holds the session's event-log handles open.
@@ -147,21 +149,40 @@ pub fn session_retention_pinned(session_dir: &Path) -> bool {
 /// `session.lock` is flock-held for as long as any event-log handle to the
 /// session exists (see `event_log::acquire_liveness_lock`). `WouldBlock`
 /// proves a live holder; a missing lock file (older or crashed sessions) or
-/// an acquirable lock means nothing alive keeps the session open. Unreadable
-/// lock files count as live: deletion paths must not evict what they cannot
-/// inspect.
+/// an acquirable lock means nothing alive keeps the session open. Invalid or
+/// unreadable lock files do not establish liveness.
 pub(crate) fn session_dir_is_live(session_dir: &Path) -> bool {
+    matches!(session_lock_state(session_dir), SessionLockState::Live)
+}
+
+fn session_dir_may_be_live(session_dir: &Path) -> bool {
+    !matches!(session_lock_state(session_dir), SessionLockState::Inactive)
+}
+
+enum SessionLockState {
+    Live,
+    Inactive,
+    Unknown,
+}
+
+fn session_lock_state(session_dir: &Path) -> SessionLockState {
     use crate::event_log::SESSION_LOCK_FILE;
 
     let lock_path = session_dir.join(SESSION_LOCK_FILE);
+    match std::fs::symlink_metadata(&lock_path) {
+        Ok(metadata) if metadata.file_type().is_file() => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return SessionLockState::Inactive,
+        _ => return SessionLockState::Unknown,
+    }
     let file = match std::fs::OpenOptions::new().read(true).write(true).open(&lock_path) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return false,
-        Err(_) => return true,
+        Err(_) => return SessionLockState::Unknown,
     };
-    file.try_lock()
-        .map_err(std::io::Error::from)
-        .is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
+    match file.try_lock().map_err(std::io::Error::from) {
+        Ok(()) => SessionLockState::Inactive,
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => SessionLockState::Live,
+        Err(_) => SessionLockState::Unknown,
+    }
 }
 
 /// Session ids whose stores are retention-pinned against ordinary eviction.
@@ -183,18 +204,25 @@ pub fn retention_pinned_session_ids(workspace: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Write a retention pin for a session (best-effort path check by caller).
+/// Atomically write a private retention pin for an existing session directory.
 pub fn pin_session_retention(session_dir: &Path, reason: &str) -> Result<(), SessionStoreError> {
+    let _guard = crate::session_guard::shared_for_session_dir(session_dir)?;
     let path = session_dir.join(RETENTION_PIN_FILE);
+    let metadata = std::fs::symlink_metadata(session_dir).map_err(|error| SessionStoreError::io(session_dir, error))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(SessionStoreError::io(session_dir, std::io::Error::other("session is not a directory")));
+    }
     let body = serde_json::json!({
         "reason": reason,
         "pinned_at": chrono::Utc::now().to_rfc3339(),
     });
-    std::fs::write(&path, body.to_string()).map_err(|e| SessionStoreError::io(path, e))
+    vtcode_commons::VtCodePaths::write_private_file_atomic(&path, body.to_string().as_bytes())
+        .map_err(|error| SessionStoreError::io(path, std::io::Error::other(error)))
 }
 
 /// Remove a retention pin if present.
 pub fn unpin_session_retention(session_dir: &Path) -> Result<bool, SessionStoreError> {
+    let _guard = crate::session_guard::shared_for_session_dir(session_dir)?;
     let path = session_dir.join(RETENTION_PIN_FILE);
     if !path.is_file() {
         return Ok(false);
@@ -229,7 +257,7 @@ fn retention_candidates(
         // A session still open in a live process must not be evicted even
         // when its manifest says completed: the user may resume or keep
         // reading it.
-        if session_dir_is_live(&path) {
+        if session_dir_may_be_live(&path) {
             continue;
         }
         let manifest_path = path.join("manifest.json");
@@ -264,6 +292,9 @@ pub fn mark_abandoned_active_sessions(
         return Ok(0);
     }
     let root = sessions_root(workspace);
+    if !is_sessions_root(&root)? {
+        return Ok(0);
+    }
     let preserve_path = preserve_session_id.map(|session_id| crate::session_dir(workspace, session_id));
     let Ok(entries) = std::fs::read_dir(&root) else {
         return Ok(0);
@@ -284,13 +315,17 @@ pub fn mark_abandoned_active_sessions(
         if preserve_path.as_deref() == Some(path.as_path()) {
             continue;
         }
+        let Some(name) = path.file_name() else { continue };
+        let Some(_guard) = crate::session_guard::try_exclusive(workspace, name)? else {
+            continue;
+        };
         if session_retention_pinned(&path) {
             continue;
         }
         // A live process still holds this session open (open-but-idle):
         // marking it completed would let phase-2 evict a session the user
         // may still resume.
-        if session_dir_is_live(&path) {
+        if session_dir_may_be_live(&path) {
             continue;
         }
         let manifest_path = path.join("manifest.json");
@@ -335,6 +370,12 @@ pub fn mark_abandoned_active_sessions(
 /// Returns the number of bytes freed. The legacy `checkpoints/` directory is
 /// intentionally left in place until `/revert` is rewired to the unified
 /// store; callers should confirm revert behavior before deleting it manually.
+///
+/// Deprecated: this removes whole directories, including files migration never
+/// imports (unrelated, nested, and symlinked entries). Re-run
+/// [`crate::migrate_legacy`] with `remove_legacy = true` instead: retries reuse
+/// exact imports and remove only verified sources.
+#[deprecated(note = "removes files migration never imports; re-run `migrate_legacy(workspace, true)` instead")]
 pub fn gc_legacy(workspace: &Path) -> Result<u64, SessionStoreError> {
     let vt = workspace.join(".vtcode");
     let mut freed = 0u64;
@@ -346,6 +387,34 @@ pub fn gc_legacy(workspace: &Path) -> Result<u64, SessionStoreError> {
         }
     }
     Ok(freed)
+}
+
+fn is_sessions_root(root: &Path) -> Result<bool, SessionStoreError> {
+    match std::fs::symlink_metadata(root) {
+        Ok(metadata) => Ok(!metadata.file_type().is_symlink() && metadata.is_dir()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(SessionStoreError::io(root.to_path_buf(), error)),
+    }
+}
+
+fn remove_candidate(workspace: &Path, root: &Path, candidate: &RetentionCandidate) -> Result<bool, SessionStoreError> {
+    let Some(name) = candidate.path.file_name() else {
+        return Ok(false);
+    };
+    let Some(_guard) = crate::session_guard::try_exclusive(workspace, name)? else {
+        return Ok(false);
+    };
+    if session_retention_pinned(&candidate.path) || session_dir_may_be_live(&candidate.path) {
+        return Ok(false);
+    }
+    let Ok(bytes) = std::fs::read(candidate.path.join("manifest.json")) else {
+        return Ok(false);
+    };
+    if serde_json::from_slice::<SessionSummary>(&bytes).ok().as_ref() != Some(&candidate.summary) {
+        return Ok(false);
+    }
+    remove_session(root, &candidate.path)?;
+    Ok(true)
 }
 
 fn remove_session(root: &Path, dir: &Path) -> Result<(), SessionStoreError> {
@@ -390,4 +459,32 @@ fn older_than(rfc3339: &str, cutoff: SystemTime) -> bool {
         .map(|d| d.as_secs() as i64)
         .unwrap_or(i64::MAX);
     dt.timestamp() < cutoff_secs
+}
+
+#[cfg(test)]
+mod candidate_tests {
+    use super::*;
+
+    #[test]
+    fn stale_candidate_is_rechecked_before_removal() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let root = sessions_root(workspace.path());
+        let dir = root.join("candidate");
+        std::fs::create_dir_all(&dir).expect("session dir");
+        let manifest = dir.join("manifest.json");
+        let mut summary = SessionSummary {
+            session_id: "candidate".to_string(),
+            turn_count: 1,
+            event_count: 2,
+            status: "completed".to_string(),
+            updated_at: "2020-01-01T00:00:00Z".to_string(),
+        };
+        std::fs::write(&manifest, serde_json::to_vec(&summary).expect("serialize")).expect("manifest");
+        let candidates = retention_candidates(&root, None).expect("candidates");
+        assert_eq!(candidates.len(), 1);
+        summary.turn_count = 2;
+        std::fs::write(&manifest, serde_json::to_vec(&summary).expect("serialize")).expect("update manifest");
+        assert!(!remove_candidate(workspace.path(), &root, &candidates[0]).expect("recheck"));
+        assert!(manifest.exists());
+    }
 }

@@ -36,7 +36,7 @@ pub async fn handle_session_store_command(command: SessionStoreCommand) -> Resul
                 report.sessions_created, report.memory_imported, report.trajectory_imported, report.bytes_migrated
             );
             if remove_legacy {
-                println!("Removed legacy history/ and logs/ directories.");
+                println!("Removed imported legacy source files; other files were preserved.");
             }
         }
         SessionStoreCommand::Gc { max_sessions, max_age_days } => {
