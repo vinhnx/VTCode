@@ -157,6 +157,13 @@ impl DesktopView {
                         // retired itself. Never banner for bookkeeping.
                         return;
                     }
+                    if method == protocol::method::UPDATE_CHECK && self.update_backfill_in_flight {
+                        // Best-effort backfill, never user-visible: an offline
+                        // launch must not paint an error for a quiet refresh.
+                        self.update_request_pending = false;
+                        self.update_backfill_in_flight = false;
+                        return;
+                    }
                     if method == protocol::method::UPDATE_STATUS || method == protocol::method::UPDATE_CHECK {
                         self.update_request_pending = false;
                     }

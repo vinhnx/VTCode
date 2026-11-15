@@ -157,6 +157,10 @@ where
             .context("desktop install task panicked")??;
 
     tracing::info!("desktop app installed to {}", installed.path.display());
+    // Seed the shared update cache like the CLI installer does, so the first
+    // launch of the new bundle finds its notes instead of a stale check slot
+    // (the N vs N+1 race when a newer release lands between check and install).
+    super::seed_release_notes_for_installed_version(&release.version, &release.release_notes);
     Ok(DesktopInstallOutcome::Installed {
         version: release.version.to_string(),
         path: installed.path,

@@ -170,7 +170,7 @@ impl DesktopView {
                         if view.can_offer_update_install() {
                             view.request_update_install();
                         } else {
-                            view.request_update_check();
+                            let _ = view.request_update_check();
                         }
                         cx.notify();
                     })),

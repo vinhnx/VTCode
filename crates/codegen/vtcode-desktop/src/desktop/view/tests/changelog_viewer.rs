@@ -438,6 +438,89 @@ fn release_notes_banner_waits_for_notes_and_stays_unrecorded(cx: &mut TestAppCon
     .unwrap();
 }
 
+/// Launch-time shape after an upgrade the cache never saw: the running
+/// version's notes are unseen, but no highlights are cached for them.
+fn unseen_without_notes_payload() -> serde_json::Value {
+    let mut payload = status_payload("0.182.0", None, false, &[], None);
+    let _ = payload
+        .as_object_mut()
+        .unwrap()
+        .insert("currentReleaseSeen".into(), json!(false));
+    payload
+}
+
+/// A desktop-only install never warms the update cache, so the launch-time
+/// status can carry unseen-but-empty notes. The client backfills with one live
+/// check instead of staying quiet on its first launch after an upgrade.
+#[gpui_kit::test]
+fn launch_status_without_notes_triggers_one_live_backfill(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    seed_status(&view, unseen_without_notes_payload(), cx);
+    let BackendCommand::Request { method, .. } = requests.try_recv().expect("backfill was requested") else {
+        panic!("unseen-but-empty notes must trigger update/check");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::UPDATE_CHECK);
+    assert!(requests.try_recv().is_err(), "exactly one backfill check");
+    // The live check lands with notes: the banner arms without any auto-opened
+    // dialog (the backfill arrives after launch settles, so it stays passive).
+    view.update(cx, |view, _| {
+        view.handle_update_check_response(post_update_payload());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).release_notes_banner_visible(), "backfilled notes arm the banner");
+        assert!(!view.read(cx).changelog_open, "the backfill never auto-opens the dialog");
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "served notes never re-trigger");
+}
+
+/// The notes backfill is best-effort: an offline launch must not paint an
+/// error for a quiet refresh, and the banner simply stays hidden.
+#[gpui_kit::test]
+fn notes_backfill_failure_stays_silent(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    seed_status(&view, unseen_without_notes_payload(), cx);
+    let _ = requests.try_recv().expect("backfill was requested");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::UPDATE_CHECK.into(),
+                    result: None,
+                    error: Some("network unreachable".into()),
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).error.is_none(), "a failed backfill stays silent");
+        assert!(!view.read(cx).release_notes_banner_visible(), "and the banner stays hidden");
+    })
+    .unwrap();
+}
+
+/// Notes present at launch need no backfill: the status already arms the
+/// banner (and the launch path auto-opens the dialog).
+#[gpui_kit::test]
+fn launch_status_with_notes_skips_the_backfill(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    seed_status(&view, post_update_payload(), cx);
+    assert!(requests.try_recv().is_err(), "served notes need no live check");
+}
+
 #[gpui_kit::test]
 fn release_notes_banner_view_opens_current_changelog(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

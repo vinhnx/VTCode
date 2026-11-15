@@ -305,7 +305,7 @@ impl DesktopView {
                         let view = view.clone();
                         move |_, _: &mut Window, cx: &mut App| {
                             view.update(cx, |view, cx| {
-                                view.request_update_check();
+                                let _ = view.request_update_check();
                                 cx.notify();
                             });
                         }

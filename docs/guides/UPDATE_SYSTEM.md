@@ -358,6 +358,15 @@ To disable automatic checks:
 check_interval_hours = 0
 ```
 
+### First-Launch Release Notes
+
+After any update, the first launch of the new version announces itself once: the CLI prints a "What's new"
+transcript banner on the first TUI launch, and the desktop app shows an inline banner (opening the changelog
+viewer) on its first launch. `vtcode update` also prints the highlights immediately, but the first app launch
+still announces them. The announcement is shared across surfaces — whichever shows first records it, so the
+other stays quiet. A launch with no cached notes retries later instead of marking the release seen; the desktop
+additionally runs one silent live check when its launch-time status carries no notes.
+
 ## Troubleshooting
 
 ### Update Fails to Download

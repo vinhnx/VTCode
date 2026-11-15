@@ -377,6 +377,24 @@ pub(crate) fn cached_latest_release() -> Option<(Version, Vec<String>)> {
     Some((version.clone(), parse_highlights(&version, &release_notes).items))
 }
 
+/// Resolve the release notes to announce on this launch.
+///
+/// Prefers the highlights captured during session hydration, but re-reads the
+/// live cache when hydration found nothing: the preflight fetch often lands
+/// between hydration and the transcript banner (first launch after an external
+/// update), and serving it now beats deferring the notes to a second launch.
+pub(crate) fn resolve_release_notes_for_display(
+    bootstrap: Option<(Version, Vec<String>)>,
+) -> Option<(Version, Vec<String>)> {
+    if bootstrap.is_some() {
+        return bootstrap;
+    }
+    if !should_show_release_notes_for_current_version() {
+        return None;
+    }
+    cached_current_release_highlights()
+}
+
 fn parse_cached_highlights(info: Option<(Version, String)>) -> Option<(Version, Vec<String>)> {
     let (version, release_notes) = info?;
     let parsed = parse_highlights(&version, &release_notes);
@@ -410,10 +428,10 @@ pub(crate) fn seed_release_notes_for_installed_version(version: &Version, releas
 
 /// Record that a version's release notes have been shown.
 ///
-/// Called by every surface that announced the notes: `vtcode update` (for the
-/// version it just installed, so the next launch stays quiet — the running
-/// process still reports the old `CARGO_PKG_VERSION`), the TUI transcript
-/// banner, and the desktop banner via `update/acknowledge`.
+/// Called by every surface that announced the notes: the TUI transcript
+/// banner and the desktop banner via `update/acknowledge`. `vtcode update`
+/// prints the installed release's notes as immediate feedback but leaves the
+/// marker alone, so the first app launch still announces them.
 pub(crate) fn record_version_notes_seen(version: &Version) {
     let _ = cache::record_seen_version(version);
 }
@@ -649,6 +667,59 @@ mod tests {
 
         record_current_version_seen();
         assert!(!should_show_release_notes_for_current_version(), "notes must show once, then be marked seen");
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn display_prefers_the_hydrated_snapshot() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // Hydration already decided: the snapshot wins without consulting the
+        // live cache, even on a fresh cache that knows nothing.
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        let bootstrap = Some((current.clone(), vec!["Hydrated note".to_string()]));
+        assert_eq!(resolve_release_notes_for_display(bootstrap), Some((current, vec!["Hydrated note".to_string()])));
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn display_backfills_when_hydration_found_no_notes() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // Hydration ran before the preflight fetch landed (empty snapshot);
+        // the display-time re-read must serve the notes that arrived since.
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        assert!(resolve_release_notes_for_display(None).is_none(), "nothing cached yet");
+        seed_release_notes_for_installed_version(&current, "### Highlights\n- Late feature (abc1234)\n");
+
+        let served = resolve_release_notes_for_display(None).expect("late notes must be served");
+        assert_eq!(served.0, current);
+        assert_eq!(served.1, vec!["Late feature".to_string()]);
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn display_stays_quiet_without_notes_or_once_seen() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        assert!(resolve_release_notes_for_display(None).is_none(), "a fresh cache announces nothing");
+
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        seed_release_notes_for_installed_version(&current, "### Highlights\n- Fresh feature (abc1234)\n");
+        record_current_version_seen();
+        assert!(resolve_release_notes_for_display(None).is_none(), "a seen release never re-announces");
 
         cache::set_cache_dir_override_for_tests(previous);
     }

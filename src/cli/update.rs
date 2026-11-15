@@ -335,9 +335,9 @@ async fn print_installed_release_notes(version: &Version, release_notes: &str) {
         }
     }
     println!("{} {}", "→".cyan(), Updater::release_url(version).cyan());
-    // `vtcode update` just announced this release in full. Mark it seen so the
-    // next launch (TUI transcript or desktop banner) does not repeat it.
-    crate::updater::record_version_notes_seen(version);
+    // Deliberately not marking the release seen: this print is immediate
+    // feedback, but the first app launch (TUI transcript or desktop banner)
+    // is the durable announcement and must still show these notes.
 }
 
 async fn install_update(
@@ -576,5 +576,26 @@ mod tests {
             .await
             .expect_err("must fail, not skip");
         assert!(error.to_string().contains("--with-desktop requires macOS"), "{error:#}");
+    }
+
+    /// `vtcode update` prints the installed release's notes as immediate
+    /// feedback, but the first app launch (TUI transcript or desktop banner)
+    /// is the durable announcement and must still show them.
+    #[tokio::test]
+    async fn installed_notes_do_not_suppress_the_first_launch_banner() {
+        let cache_dir = tempfile::tempdir().expect("cache");
+        let previous = crate::updater::set_test_update_cache_dir(Some(cache_dir.path().to_path_buf()));
+
+        let version = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        let body = "### Highlights\n- Fresh feature (abc1234)\n";
+        crate::updater::seed_release_notes_for_installed_version(&version, body);
+        print_installed_release_notes(&version, body).await;
+
+        assert!(
+            crate::updater::should_show_release_notes_for_current_version(),
+            "`vtcode update` must leave the first-launch banner armed"
+        );
+
+        crate::updater::set_test_update_cache_dir(previous);
     }
 }

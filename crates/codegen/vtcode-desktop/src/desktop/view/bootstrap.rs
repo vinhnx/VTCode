@@ -667,6 +667,7 @@ impl DesktopView {
             webmcp_notice: None,
             update_status: None,
             update_request_pending: false,
+            update_backfill_in_flight: false,
             update_install_state: protocol::UpdateInstallState::Idle,
             cli_config_settings: None,
             config_catalog_cache: None,

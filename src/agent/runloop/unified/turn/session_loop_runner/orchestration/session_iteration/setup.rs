@@ -728,9 +728,13 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     // terminal renders the transcript banner: a host session (desktop app)
     // discards terminal output and shows its own inline release-notes banner,
     // so printing here would mark the release seen without anyone seeing it.
+    // The bootstrap snapshot is re-resolved live: the preflight fetch often
+    // lands between hydration and this display point (first launch after an
+    // external update), and serving it now beats deferring to a second launch.
     if terminal_enabled
         && !startup_update_requested_restart
-        && let Some((ref version, ref highlights)) = session_bootstrap.release_highlights
+        && let Some((ref version, ref highlights)) =
+            crate::updater::resolve_release_notes_for_display(session_bootstrap.release_highlights.clone())
     {
         crate::updater::display_release_notes(&handle, version, highlights);
         crate::updater::record_current_version_seen();

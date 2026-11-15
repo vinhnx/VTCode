@@ -796,6 +796,10 @@ struct DesktopView {
     webmcp_notice: Option<webmcp::WebmcpNotice>,
     update_status: Option<protocol::UpdateStatusSnapshot>,
     update_request_pending: bool,
+    /// Whether the in-flight `update/check` is an automatic release-notes
+    /// backfill rather than a manual "Check for updates": its failures stay
+    /// silent instead of painting the generic error banner.
+    update_backfill_in_flight: bool,
     /// Live install state, updated by `update/installProgress`. Kept beside
     /// the cached snapshot rather than inside it: progress is ephemeral and
     /// must survive a status refresh that carries no install field.

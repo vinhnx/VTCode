@@ -27,13 +27,40 @@ impl DesktopView {
     /// `update/status` is read-only, so the old "Check for updates" button
     /// returned an identical snapshot and looked inert. This one does network
     /// I/O and reports the refreshed result, which is what the label promises.
-    pub(super) fn request_update_check(&mut self) {
+    /// Returns whether the check was actually sent.
+    pub(super) fn request_update_check(&mut self) -> bool {
         if self.update_request_pending {
-            return;
+            return false;
         }
         self.update_request_pending = true;
         if !self.request(protocol::method::UPDATE_CHECK, json!({})) {
             self.update_request_pending = false;
+            return false;
+        }
+        true
+    }
+
+    /// Fetch the running version's notes when a status response carries none.
+    ///
+    /// `update/status` only reads the local cache, so a desktop-only install —
+    /// which never runs the CLI's startup refresh — would otherwise stay quiet
+    /// on its first launch after an external upgrade. One live `update/check`
+    /// backfills the cache; its response re-renders through the normal path
+    /// and arms the banner, staying passive (no auto-opened dialog: the
+    /// backfill lands after launch settles). Best-effort: failures stay silent
+    /// (see the `update/check` error path), and opted-out checks are a service
+    /// no-op that simply re-serves the quiet state. Check responses never
+    /// re-trigger this — status responses only — so it cannot loop.
+    fn maybe_backfill_release_notes(&mut self) {
+        let needs_backfill = self
+            .update_status
+            .as_ref()
+            .is_some_and(|status| !status.current_release_seen && status.current_release_highlights.is_empty());
+        if !needs_backfill {
+            return;
+        }
+        if self.request_update_check() {
+            self.update_backfill_in_flight = true;
         }
     }
 
@@ -68,12 +95,14 @@ impl DesktopView {
     pub(super) fn handle_update_status_response(&mut self, result: Value) {
         self.update_request_pending = false;
         self.apply_update_status(result);
+        self.maybe_backfill_release_notes();
     }
 
     /// `update/check` and `update/status` share a snapshot shape, so one
     /// applier serves both: the live check simply refreshes what is displayed.
     pub(super) fn handle_update_check_response(&mut self, result: Value) {
         self.update_request_pending = false;
+        self.update_backfill_in_flight = false;
         self.apply_update_status(result);
     }
 
@@ -113,10 +142,11 @@ impl DesktopView {
 
     /// Whether the stored status carries unseen notes for the running
     /// version. The seen marker lives in the shared update cache (served as
-    /// `current_release_seen`), so notes the CLI already printed are never
-    /// repeated here, and the desktop records the same marker back. Versions
-    /// without notes never record, so a notes-less launch retries instead of
-    /// marking seen.
+    /// `current_release_seen`), so notes the TUI transcript already announced
+    /// are never repeated here, and the desktop records the same marker back.
+    /// (`vtcode update` prints notes without marking, so the first app launch
+    /// still announces them.) Versions without notes never record, so a
+    /// notes-less launch retries instead of marking seen.
     fn should_show_release_notes_banner(&self) -> bool {
         let Some(status) = self.update_status.as_ref() else {
             return false;
