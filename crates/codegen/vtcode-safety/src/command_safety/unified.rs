@@ -12,7 +12,6 @@ use crate::command_safety::{
     command_might_be_dangerous, parse_bash_lc_commands,
 };
 use anyhow::Result;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Detailed reason for evaluation result
@@ -56,8 +55,6 @@ pub struct EvaluationResult {
     pub primary_reason: EvaluationReason,
     /// Secondary reasons (e.g., policy rule that matched)
     pub(crate) secondary_reasons: Vec<String>,
-    /// Resolved command path (if available)
-    resolved_path: Option<PathBuf>,
 }
 
 /// Unified command evaluator combining policies and safety rules
@@ -102,7 +99,6 @@ impl UnifiedCommandEvaluator {
                 allowed: false,
                 primary_reason: EvaluationReason::SafetyDeny("empty command".into()),
                 secondary_reasons: vec![],
-                resolved_path: None,
             });
         }
 
@@ -117,7 +113,6 @@ impl UnifiedCommandEvaluator {
                 allowed: cached_decision.is_safe,
                 primary_reason: reason,
                 secondary_reasons: vec![],
-                resolved_path: None,
             });
         }
 
@@ -127,7 +122,6 @@ impl UnifiedCommandEvaluator {
                 allowed: false,
                 primary_reason: EvaluationReason::DangerousCommand("matches dangerous patterns".into()),
                 secondary_reasons: vec![],
-                resolved_path: None,
             };
             self.log_audit_entry(command, false, "matches dangerous patterns", "Dangerous")
                 .await;
@@ -145,7 +139,6 @@ impl UnifiedCommandEvaluator {
                     allowed: false,
                     primary_reason: EvaluationReason::SafetyDeny(reason.clone()),
                     secondary_reasons: vec!["registry rule".into()],
-                    resolved_path: None,
                 };
                 self.log_audit_entry(command, false, reason.clone(), "Deny").await;
                 self.cache.put(command_text.clone(), false, reason.clone()).await;
@@ -178,7 +171,6 @@ impl UnifiedCommandEvaluator {
                             script.join(" ")
                         )),
                         secondary_reasons: vec![],
-                        resolved_path: None,
                     };
                     self.cache
                         .put(command_text.clone(), false, result.primary_reason.to_string())
@@ -192,7 +184,6 @@ impl UnifiedCommandEvaluator {
                         allowed: false,
                         primary_reason: EvaluationReason::SafetyDeny(format!("sub-command denied: {reason}")),
                         secondary_reasons: vec![],
-                        resolved_path: None,
                     };
                     self.cache
                         .put(command_text.clone(), false, result.primary_reason.to_string())
@@ -207,7 +198,6 @@ impl UnifiedCommandEvaluator {
             allowed: true,
             primary_reason: EvaluationReason::SafetyAllow,
             secondary_reasons: vec!["passed all safety checks".into()],
-            resolved_path: None,
         };
         self.log_audit_entry(command, true, "passed all safety checks", "Allow").await;
         self.cache.put(command_text, true, "passed all safety checks".into()).await;
@@ -233,7 +223,6 @@ impl UnifiedCommandEvaluator {
                 allowed: false,
                 primary_reason: EvaluationReason::PolicyDeny(policy_reason.into()),
                 secondary_reasons: vec![],
-                resolved_path: None,
             });
         }
 

@@ -12,7 +12,6 @@ pub struct ColorPalette {
     pub warning: Color, // Yellow
     pub info: Color,    // Cyan
     pub accent: Color,  // Magenta
-    primary: Color,     // Cyan
     pub muted: Color,   // Gray/Dim
 }
 
@@ -24,7 +23,6 @@ impl Default for ColorPalette {
             warning: Color::Ansi(AnsiColor::Yellow),
             info: Color::Ansi(AnsiColor::Cyan),
             accent: Color::Ansi(AnsiColor::Magenta),
-            primary: Color::Ansi(AnsiColor::Cyan),
             muted: Color::Ansi(AnsiColor::BrightBlack),
         }
     }
@@ -109,22 +107,16 @@ pub fn dimmed_color(color: AnsiColor) -> Style {
 #[derive(Debug, Clone, Copy)]
 pub struct DiffColorPalette {
     pub added_fg: Color,
-    added_bg: Color,
     pub removed_fg: Color,
-    removed_bg: Color,
     pub header_fg: Color,
-    header_bg: Color,
 }
 
 impl Default for DiffColorPalette {
     fn default() -> Self {
         Self {
             added_fg: Color::Ansi(AnsiColor::Green),
-            added_bg: Color::Ansi(AnsiColor::Green),
             removed_fg: Color::Ansi(AnsiColor::Red),
-            removed_bg: Color::Ansi(AnsiColor::Red),
             header_fg: Color::Ansi(AnsiColor::Cyan),
-            header_bg: Color::Ansi(AnsiColor::Cyan),
         }
     }
 }

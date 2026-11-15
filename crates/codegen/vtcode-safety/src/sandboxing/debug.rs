@@ -16,14 +16,8 @@ use super::{CommandSpec, LinuxSandboxLauncher, SandboxManager, SandboxPolicy, Sa
 pub struct SandboxDebugResult {
     /// Whether the command succeeded.
     success: bool,
-    /// Exit code if available.
-    exit_code: Option<i32>,
-    /// Standard output.
-    stdout: String,
     /// Standard error.
     stderr: String,
-    /// The sandbox type used.
-    sandbox_type: SandboxType,
     /// Whether the sandbox was actually applied.
     sandbox_active: bool,
 }
@@ -33,10 +27,7 @@ impl SandboxDebugResult {
     fn unavailable(sandbox_type: SandboxType) -> Self {
         Self {
             success: false,
-            exit_code: None,
-            stdout: String::new(),
             stderr: format!("Sandbox type {sandbox_type:?} is not available on this platform"),
-            sandbox_type,
             sandbox_active: false,
         }
     }
@@ -84,10 +75,7 @@ pub async fn debug_sandbox(
 
     Ok(SandboxDebugResult {
         success: output.status.success(),
-        exit_code: output.status.code(),
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-        sandbox_type: exec_env.sandbox_type,
         sandbox_active: exec_env.sandbox_active,
     })
 }

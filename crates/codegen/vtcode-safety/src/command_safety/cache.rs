@@ -83,15 +83,7 @@ impl SafetyDecisionCache {
         let total_accesses: u64 = cache.values().map(|d| d.access_count).sum();
         let entry_count = cache.len();
 
-        CacheStats {
-            entry_count,
-            total_accesses,
-            avg_access_per_entry: if entry_count > 0 {
-                total_accesses / entry_count as u64
-            } else {
-                0
-            },
-        }
+        CacheStats { entry_count, total_accesses }
     }
 }
 
@@ -109,7 +101,6 @@ impl Clone for SafetyDecisionCache {
 pub struct CacheStats {
     entry_count: usize,
     total_accesses: u64,
-    avg_access_per_entry: u64,
 }
 
 #[cfg(test)]

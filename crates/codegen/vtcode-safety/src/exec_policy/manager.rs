@@ -57,9 +57,6 @@ pub struct ExecPolicyConfig {
 
     /// Whether to apply heuristics for unknown commands.
     use_heuristics: bool,
-
-    /// Maximum command length before requiring confirmation.
-    max_auto_approve_length: usize,
 }
 
 impl Default for ExecPolicyConfig {
@@ -68,7 +65,6 @@ impl Default for ExecPolicyConfig {
             default_sandbox_policy: SandboxPolicy::read_only(),
             default_approval: AskForApproval::UnlessTrusted,
             use_heuristics: true,
-            max_auto_approve_length: 256,
         }
     }
 }

@@ -23,7 +23,6 @@ mod ast;
 
 use anyhow::Result;
 
-use ast::parse_bash_tree;
 pub use ast::{BashNode, BashTree, prewarm_bash_parser};
 
 /// Parses a shell script into individual commands using tree-sitter bash grammar

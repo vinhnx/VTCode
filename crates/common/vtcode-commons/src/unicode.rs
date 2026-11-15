@@ -9,7 +9,6 @@ use hashbrown::HashMap;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::time::Instant;
 
 /// Global unicode monitoring statistics
 #[derive(Debug, Default)]
@@ -100,7 +99,6 @@ impl UnicodeMonitor {
 
 /// Unicode validation context for tracking processing of individual buffers
 pub struct UnicodeValidationContext {
-    start_time: Instant,
     unicode_detected: bool,
     errors: Vec<String>,
 }
@@ -108,11 +106,7 @@ pub struct UnicodeValidationContext {
 impl UnicodeValidationContext {
     /// Create a new validation context
     pub fn new(_buffer_size: usize) -> Self {
-        Self {
-            start_time: Instant::now(),
-            unicode_detected: false,
-            errors: Vec::new(),
-        }
+        Self { unicode_detected: false, errors: Vec::new() }
     }
 
     /// Record that unicode was detected in this buffer

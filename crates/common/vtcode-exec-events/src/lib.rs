@@ -18,7 +18,6 @@
 //! for tracking AI-generated code attribution. See the [`trace`] module for details.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 pub mod atif;
 pub mod diagnostic;
@@ -92,7 +91,7 @@ where
 }
 
 #[cfg(feature = "serde-json")]
-pub(crate) mod json;
+pub mod json;
 
 #[cfg(feature = "telemetry-log")]
 mod log_support;

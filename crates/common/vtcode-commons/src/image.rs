@@ -227,7 +227,6 @@ pub async fn read_image_file_any_path<P: AsRef<Path>>(file_path: P) -> Result<Im
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
 
     const PNG_MAGIC: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 

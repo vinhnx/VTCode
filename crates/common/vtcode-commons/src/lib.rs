@@ -142,8 +142,5 @@ pub use vtcode_paths::{
     MigrationEntry, MigrationFailure, MigrationReport, MigrationSkip, MigrationSkipReason, VtCodePaths,
 };
 
-// Re-export key thread safety primitives.
-pub(crate) use thread_safety::RelaxedAtomic;
-
 /// Canonical runtime diagnostic sanitization.
 pub mod diagnostics;

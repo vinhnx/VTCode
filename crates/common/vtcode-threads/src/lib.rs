@@ -1,4 +1,4 @@
-#![allow(missing_docs, clippy::expect_used, dead_code, reason = "Extracted identifiers")]
+#![allow(missing_docs, clippy::expect_used, reason = "Extracted identifiers")]
 //! Thread identifiers extracted from `vtcode-core`.
 //!
 //! `ThreadId` and `SubmissionId` live here so downstream crates (`vtcode-acp`
