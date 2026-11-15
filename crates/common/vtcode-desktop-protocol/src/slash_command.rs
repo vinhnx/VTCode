@@ -162,3 +162,80 @@ mod tests {
         }
     }
 }
+
+/// Usage summary shared by the CLI and desktop `/goal` surfaces.
+pub const GOAL_SLASH_HELP: &str =
+    "/goal [<objective>] shows the thread goal, or sets it; verbs: status, edit, pause, resume, clear";
+
+/// A parsed `/goal` slash command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GoalSlashCommand {
+    /// Show the thread's saved goal (status, objective, elapsed, usage).
+    Status,
+    /// Set (or replace) the thread goal objective.
+    Set {
+        /// New objective text, trimmed.
+        objective: String,
+    },
+    /// Open the saved objective in an editor.
+    Edit,
+    /// Pause the active goal loop.
+    Pause,
+    /// Resume a paused goal loop.
+    Resume,
+    /// Clear the thread goal entirely.
+    Clear,
+}
+
+/// Parse the arguments written after `/goal`.
+///
+/// A single token matching a verb (`status`, `edit`, `pause`, `resume`,
+/// `clear`, ASCII case-insensitive) selects that verb; anything else —
+/// including multi-word input starting with a verb word — is the new
+/// objective. The empty string shows the goal status. Every input maps to a
+/// command, so no error case exists.
+pub fn parse_goal_slash_command(arguments: &str) -> GoalSlashCommand {
+    let arguments = arguments.trim();
+    if arguments.is_empty() {
+        return GoalSlashCommand::Status;
+    }
+    if !arguments.contains(char::is_whitespace) {
+        match arguments.to_ascii_lowercase().as_str() {
+            "status" => return GoalSlashCommand::Status,
+            "edit" => return GoalSlashCommand::Edit,
+            "pause" => return GoalSlashCommand::Pause,
+            "resume" => return GoalSlashCommand::Resume,
+            "clear" => return GoalSlashCommand::Clear,
+            _ => {}
+        }
+    }
+    GoalSlashCommand::Set { objective: arguments.to_owned() }
+}
+
+#[cfg(test)]
+mod goal_tests {
+    use super::*;
+
+    #[test]
+    fn parses_goal_status_and_verbs() {
+        assert_eq!(parse_goal_slash_command(""), GoalSlashCommand::Status);
+        assert_eq!(parse_goal_slash_command("  status  "), GoalSlashCommand::Status);
+        assert_eq!(parse_goal_slash_command("Pause"), GoalSlashCommand::Pause);
+        assert_eq!(parse_goal_slash_command("RESUME"), GoalSlashCommand::Resume);
+        assert_eq!(parse_goal_slash_command("clear"), GoalSlashCommand::Clear);
+        assert_eq!(parse_goal_slash_command("edit"), GoalSlashCommand::Edit);
+    }
+
+    #[test]
+    fn parses_goal_objectives_including_verb_prefixes() {
+        assert_eq!(
+            parse_goal_slash_command("ship the release"),
+            GoalSlashCommand::Set { objective: "ship the release".into() }
+        );
+        assert_eq!(
+            parse_goal_slash_command("pause the deploy pipeline"),
+            GoalSlashCommand::Set { objective: "pause the deploy pipeline".into() }
+        );
+        assert_eq!(parse_goal_slash_command("cleanup"), GoalSlashCommand::Set { objective: "cleanup".into() });
+    }
+}
