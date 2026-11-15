@@ -151,6 +151,18 @@ impl SandboxManager {
         policy: &SandboxPolicy,
         sandbox_cwd: &Path,
     ) -> Result<String, SandboxTransformError> {
+        fn seatbelt_path(path: &Path) -> Result<&str, SandboxTransformError> {
+            let path = path.to_str().ok_or_else(|| {
+                SandboxTransformError::InvalidPolicy("Seatbelt paths must be valid UTF-8".to_string())
+            })?;
+            if path.chars().any(|ch| ch == '"' || ch == '\\' || ch.is_control()) {
+                return Err(SandboxTransformError::InvalidPolicy(
+                    "Seatbelt path contains unsupported characters".to_string(),
+                ));
+            }
+            Ok(path)
+        }
+
         fn append_network_rules(
             profile: &mut String,
             network_access: bool,
@@ -188,7 +200,7 @@ impl SandboxManager {
         let sensitive_paths = policy.sensitive_paths_for_execution(sandbox_cwd);
         for sp in &sensitive_paths {
             let expanded = sp.expand_path();
-            let path_str = expanded.display();
+            let path_str = seatbelt_path(&expanded)?;
             if sp.block_read {
                 profile.push_str(&format!("(deny file-read* (subpath \"{path_str}\"))\n"));
             }
@@ -208,7 +220,7 @@ impl SandboxManager {
             }
             SandboxPolicy::WorkspaceWrite { network_access, network_allowlist, .. } => {
                 for root in policy.get_writable_roots_with_cwd(sandbox_cwd) {
-                    let path = root.root.display();
+                    let path = seatbelt_path(&root.root)?;
                     profile.push_str(&format!("(allow file-write* (subpath \"{path}\"))\n"));
                 }
                 append_network_rules(&mut profile, *network_access, network_allowlist)?;
@@ -366,6 +378,49 @@ mod tests {
         let result = manager.build_seatbelt_profile(&policy, Path::new("/tmp"));
 
         assert!(matches!(result, Err(SandboxTransformError::InvalidPolicy(message)) if message.contains("hostname")));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn seatbelt_rejects_profile_metacharacters_in_paths() {
+        let manager = SandboxManager::new();
+        let injected = Path::new("/tmp/\")(allow file-write*) ;");
+        let policy = SandboxPolicy::workspace_write(vec![injected.to_path_buf()]);
+        assert!(matches!(
+            manager.build_seatbelt_profile(&policy, Path::new("/tmp/safe")),
+            Err(SandboxTransformError::InvalidPolicy(_))
+        ));
+        assert!(matches!(
+            manager.build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![]), injected),
+            Err(SandboxTransformError::InvalidPolicy(_))
+        ));
+        let mut sensitive_policy = SandboxPolicy::workspace_write(vec![]);
+        if let SandboxPolicy::WorkspaceWrite { ref mut sensitive_paths, .. } = sensitive_policy {
+            *sensitive_paths = Some(vec![super::super::policy::SensitivePath::new("/tmp/\") (allow network*) ;")]);
+        }
+        assert!(matches!(
+            manager.build_seatbelt_profile(&sensitive_policy, Path::new("/tmp/safe")),
+            Err(SandboxTransformError::InvalidPolicy(_))
+        ));
+        for path in ["/tmp/back\\slash", "/tmp/new\nline"] {
+            assert!(matches!(
+                manager
+                    .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![path.into()]), Path::new("/tmp/safe")),
+                Err(SandboxTransformError::InvalidPolicy(_))
+            ));
+        }
+        use std::os::unix::ffi::OsStringExt;
+        let non_utf8 = OsString::from_vec(b"/tmp/invalid-\xff".to_vec());
+        assert!(matches!(
+            manager
+                .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![non_utf8.into()]), Path::new("/tmp/safe")),
+            Err(SandboxTransformError::InvalidPolicy(_))
+        ));
+        assert!(
+            manager
+                .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![]), Path::new("/tmp/safe"))
+                .is_ok()
+        );
     }
 
     /// Windows restricted-token sandbox is not yet implemented, so

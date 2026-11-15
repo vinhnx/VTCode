@@ -12,7 +12,7 @@
 
 ## Rules
 
-- `SandboxPermissions::resolve_request` is the canonical mode/additional/justification validation boundary and `derive_mcp_sandbox_policy` the canonical MCP narrowing boundary, so callers must not duplicate either rule.
+- `SandboxPermissions::resolve_request` is the canonical mode/additional/justification validation boundary; `derive_mcp_sandbox_policy` rejects overrides it cannot safely represent. MCP's command-only wrapper rejects workspace-write policies because it cannot enforce their timeout.
 - Keep the vtcode-core re-export facades (`command_safety/mod.rs`, `exec_policy/mod.rs`, `sandboxing/mod.rs`) in sync with this crate.
 - Parsing must fail closed: malformed or unresolved scripts, `find` expansion, and cache hits in `parse_bash_tree` (which must recompute `has_error`) all reject or require approval rather than pass.
 - Keep hard rejection (`command_might_be_dangerous`) separate from inline-code admission (`command_requires_approval`), and let interpreter `-c`/`-e` forms run only under enforceable sandbox policy or explicit approval.

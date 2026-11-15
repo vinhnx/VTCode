@@ -19,6 +19,8 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-safety/`, moved verbat
 
 - `exec_policy::manager` imports `command_safety::command_might_be_dangerous` and `sandboxing::SandboxPolicy` — these form a tightly coupled safety subsystem. Re-export facades in vtcode-core (`command_safety/mod.rs`, `exec_policy/mod.rs`, `sandboxing/mod.rs`) must stay in sync. `SandboxPermissions::resolve_request` is the canonical boundary for mode/additional/justification validation (modular proof); `normalized_for` stays the normalization primitive — callers must not duplicate either rule. `derive_mcp_sandbox_policy` is the canonical MCP narrowing boundary. The `BashParser` singleton (`once_cell::Lazy`) is safe across crates — read-after-init pattern.
 
+- MCP sandbox derivation returns an error for restrictions the policy cannot represent safely; explicit workspace roots and restricted network entries require exact parent matches, and resource caps never loosen parent limits. The launch working directory is still writable under workspace-write policies. The command-only stdio wrapper rejects workspace-write policies because it cannot enforce their wall-clock timeout (including the default when zero); supporting them requires an owning child lifecycle and platform-specific resource enforcement. Seatbelt does not apply the resource fields.
+
 ## Gotchas
 
 - Zero-token execution-policy rules and trusted amendments never match; insertion/loading rejects them. Preserve exact ordered matching for nonempty patterns and atomic reloads. Layer deduplication must preserve vector order and existing duplicate precedence.
