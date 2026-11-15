@@ -248,6 +248,40 @@ end run
     assert!(script.contains("with title"));
 }
 
+#[tokio::test]
+async fn forced_send_delivers_while_focused_without_mutating_config() {
+    let manager = NotificationManager::new();
+    manager.set_terminal_focused(true);
+    let event = NotificationEvent::Error {
+        message: "File not found".to_string(),
+        context: Some("read_file".to_string()),
+    };
+
+    manager.send_notification_forced(event.clone()).await.unwrap();
+
+    // Delivered: the repeat window now counts this fingerprint.
+    let config = manager.get_config_sync();
+    assert!(matches!(manager.repeat_decision(&event, &config), RepeatDecision::Suppress));
+    // The force path must not rewrite shared config (the old global round-trip raced).
+    assert!(manager.get_config_sync().suppress_when_focused);
+}
+
+#[tokio::test]
+async fn normal_send_suppresses_while_focused() {
+    let manager = NotificationManager::new();
+    manager.set_terminal_focused(true);
+    let event = NotificationEvent::Error {
+        message: "File not found".to_string(),
+        context: Some("read_file".to_string()),
+    };
+
+    manager.send_notification(event.clone()).await.unwrap();
+
+    // Suppressed: the repeat window consumed nothing.
+    let config = manager.get_config_sync();
+    assert!(matches!(manager.repeat_decision(&event, &config), RepeatDecision::Deliver));
+}
+
 #[test]
 fn session_completion_format_message_reads_naturally() {
     let manager = NotificationManager::new();

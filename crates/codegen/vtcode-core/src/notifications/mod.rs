@@ -249,6 +249,19 @@ impl NotificationManager {
 
     /// Send a notification for an event
     pub async fn send_notification(&self, event: NotificationEvent) -> Result<()> {
+        self.send_notification_inner(event, false).await
+    }
+
+    /// Send a notification for an event, ignoring terminal focus state.
+    ///
+    /// The bypass is a call-time flag, never a config rewrite: toggling the
+    /// shared config around the send would race with concurrent sends and
+    /// clobber unrelated settings updates.
+    pub async fn send_notification_forced(&self, event: NotificationEvent) -> Result<()> {
+        self.send_notification_inner(event, true).await
+    }
+
+    async fn send_notification_inner(&self, event: NotificationEvent, forced: bool) -> Result<()> {
         let config = self.config.read().clone();
 
         // Check if terminal notifications are enabled globally first
@@ -260,10 +273,11 @@ impl NotificationManager {
         // `Unfocused` (default): only deliver when terminal is not focused
         // `Always`: deliver regardless of focus state
         let is_terminal_active = self.terminal_focused.load(Ordering::Relaxed);
-        let should_suppress_for_focus = match config.notification_condition {
-            NotificationCondition::Unfocused => is_terminal_active && config.suppress_when_focused,
-            NotificationCondition::Always | NotificationCondition::Unknown => false,
-        };
+        let should_suppress_for_focus = !forced
+            && match config.notification_condition {
+                NotificationCondition::Unfocused => is_terminal_active && config.suppress_when_focused,
+                NotificationCondition::Always | NotificationCondition::Unknown => false,
+            };
         if should_suppress_for_focus {
             return Ok(());
         }
@@ -704,20 +718,11 @@ pub async fn send_global_notification(event: NotificationEvent) -> Result<(), an
 /// Send a notification immediately, even when the terminal is currently focused.
 pub async fn send_global_notification_force(event: NotificationEvent) -> Result<(), anyhow::Error> {
     if let Some(manager) = get_global_notification_manager() {
-        let original = manager.get_config().await;
-        let mut forced = original.clone();
-        forced.suppress_when_focused = false;
-        manager.update_config(forced).await;
-        let result = manager.send_notification(event).await;
-        manager.update_config(original).await;
-        result
+        manager.send_notification_forced(event).await
     } else {
-        let config = NotificationConfig {
-            suppress_when_focused: false,
-            ..NotificationConfig::default()
-        };
-        let manager = NotificationManager::with_config(config);
-        manager.send_notification(event).await
+        // If global manager isn't initialized, create a temporary one for this notification
+        let manager = NotificationManager::new();
+        manager.send_notification_forced(event).await
     }
 }
 
