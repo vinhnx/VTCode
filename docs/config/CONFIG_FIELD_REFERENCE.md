@@ -318,12 +318,12 @@ python3 scripts/generate_config_field_reference.py
 | `dotfile_protection.audit_logging_enabled` | `boolean` | no | `true` | Enable immutable audit logging of all dotfile access attempts. |
 | `dotfile_protection.backup_directory` | `string` | no | `"~/Library/Application Support/com.vinhnx.vtcode/state/backups/dotfiles"` | Directory for storing dotfile backups. |
 | `dotfile_protection.block_during_automation` | `boolean` | no | `true` | Block modifications during automated operations. |
-| `dotfile_protection.blocked_operations` | `array` | no | `["dependency_installation", "code_formatting", "git_operations", "project_initialization", "build_operations", "test_...` | Operations that trigger extra protection. |
+| `dotfile_protection.blocked_operations` | `array` | no | `["dependency_installation", "code_formatting", "git_operations", "project_initialization", "build_operations", "test_...` | Operations that trigger extra protection. NOTE: reserved for future use — no enforcement reads this list yet. |
 | `dotfile_protection.blocked_operations[]` | `string` | no | `-` | - |
 | `dotfile_protection.create_backups` | `boolean` | no | `true` | Create backup before any permitted modification. |
 | `dotfile_protection.enabled` | `boolean` | no | `true` | Enable dotfile protection globally. |
 | `dotfile_protection.max_backups_per_file` | `integer` | no | `10` | Maximum number of backups to retain per file. |
-| `dotfile_protection.preserve_permissions` | `boolean` | no | `true` | Preserve original file permissions and ownership. |
+| `dotfile_protection.preserve_permissions` | `boolean` | no | `true` | Preserve original file permissions and ownership. NOTE: reserved for future use — restore currently always preserves permissions on Unix regardless of this setting. |
 | `dotfile_protection.prevent_cascading_modifications` | `boolean` | no | `true` | Prevent cascading modifications (one dotfile change triggering others). |
 | `dotfile_protection.require_explicit_confirmation` | `boolean` | no | `true` | Require explicit user confirmation for any dotfile modification. |
 | `dotfile_protection.require_secondary_auth_for_whitelist` | `boolean` | no | `true` | Secondary authentication required for whitelisted files. |
@@ -470,6 +470,12 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.providers[].oauth.scopes[]` | `string` | no | `-` | - |
 | `mcp.providers[].oauth.token_url` | `string` | no | `""` | OAuth token endpoint. Must be an http(s) URL with a host. |
 | `mcp.providers[].protocol_version` | `string` | no | `"2025-11-25"` | Protocol version |
+| `mcp.providers[].sandbox` | `McpSandboxOverrideConfig \| null` | no | `null` | Per-server sandbox overrides, narrowed from the session sandbox policy. Absent means inherit the session policy unchanged. |
+| `mcp.providers[].sandbox.cpu_time_secs` | `integer \| null` | no | `null` | CPU time budget in seconds. |
+| `mcp.providers[].sandbox.max_memory_mb` | `integer \| null` | no | `null` | Memory cap (MB) applied to this server's child processes. |
+| `mcp.providers[].sandbox.max_pids` | `integer \| null` | no | `null` | Maximum number of processes / pids in this server's sandbox. |
+| `mcp.providers[].sandbox.timeout_secs` | `integer \| null` | no | `null` | Wall-clock timeout in seconds. |
+| `mcp.providers[].sandbox.writable_root` | `null \| string` | no | `null` | Optional writable root, which must match every explicit parent root. |
 | `mcp.providers[].startup_timeout_ms` | `integer \| null` | no | `null` | Startup timeout in milliseconds for this provider |
 | `mcp.providers[].working_directory` | `null \| string` | no | `null` | Working directory for the command |
 | `mcp.request_timeout_seconds` | `integer` | no | `30` | Timeout (seconds) for a single MCP tool call. Distinct from `connection_timeout_seconds`, which bounds the connect-and-handshake phase during startup. |
@@ -493,7 +499,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.182.1"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.182.4"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
