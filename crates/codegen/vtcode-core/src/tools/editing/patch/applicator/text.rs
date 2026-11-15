@@ -237,6 +237,20 @@ async fn compute_replacements_with_inspection(
     }
 
     replacements.sort_by_key(|(idx, _, _)| *idx);
+    // Line-number hints can move the search backward, so two chunks may match
+    // overlapping ranges. Rendering those would silently double-apply; fail
+    // loud instead. Zero-length insertions at the same point are unambiguous
+    // and stay allowed.
+    let mut covered_end = 0usize;
+    for (start_idx, old_len, _) in &replacements {
+        if *start_idx < covered_end {
+            return Err(PatchError::InvalidOperation {
+                path: path.to_string(),
+                reason: "patch chunks match overlapping file ranges; disambiguate the context lines".to_string(),
+            });
+        }
+        covered_end = start_idx.saturating_add(*old_len);
+    }
     Ok(ReplacementPlan { replacements, required_ranges: inspected })
 }
 

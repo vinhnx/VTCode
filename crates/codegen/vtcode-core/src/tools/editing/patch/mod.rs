@@ -228,6 +228,54 @@ mod tests {
         assert_eq!(written, "content\n");
     }
 
+    #[tokio::test]
+    async fn blank_line_removal_without_a_blank_line_fails_loud() {
+        let patch = Patch::parse("*** Begin Patch\n*** Update File: f.txt\n@@ a\n-\n+X\n*** End Patch\n")
+            .expect("patch parses");
+        let chunks = match &patch.operations()[0] {
+            PatchOperation::UpdateFile { chunks, .. } => chunks.clone(),
+            other => panic!("expected update, got {other:?}"),
+        };
+        // No blank line exists after the "a" anchor: this must fail with a
+        // segment error, never silently insert "X" at the anchor.
+        let error = render_patch_update_content(Path::new("f.txt"), "a\nb\n", &chunks, "f.txt")
+            .await
+            .expect_err("missing blank line must fail, not silently insert");
+        assert!(error.to_string().contains("failed to locate expected lines"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn blank_line_removal_still_matches_a_real_blank_line() {
+        let patch =
+            Patch::parse("*** Begin Patch\n*** Update File: f.txt\n@@\n-\n+X\n*** End Patch\n").expect("patch parses");
+        let chunks = match &patch.operations()[0] {
+            PatchOperation::UpdateFile { chunks, .. } => chunks.clone(),
+            other => panic!("expected update, got {other:?}"),
+        };
+        let rendered = render_patch_update_content(Path::new("f.txt"), "a\n\nb\n", &chunks, "f.txt")
+            .await
+            .expect("blank line exists and must match");
+        assert_eq!(rendered, "a\nX\nb\n");
+    }
+
+    #[tokio::test]
+    async fn overlapping_chunk_matches_are_rejected() {
+        let patch = Patch::parse(
+            "*** Begin Patch\n*** Update File: f.txt\n@@ -1,2\n-a\n-b\n+X\n@@ -1,2\n-a\n-b\n+Y\n*** End Patch\n",
+        )
+        .expect("patch parses");
+        let chunks = match &patch.operations()[0] {
+            PatchOperation::UpdateFile { chunks, .. } => chunks.clone(),
+            other => panic!("expected update, got {other:?}"),
+        };
+        // Both chunks match lines 0..2: applying both would silently garble
+        // the file, so the render must fail instead.
+        let error = render_patch_update_content(Path::new("f.txt"), "a\nb\n", &chunks, "f.txt")
+            .await
+            .expect_err("overlapping replacements must fail, not double-apply");
+        assert!(error.to_string().contains("overlapping"), "{error}");
+    }
+
     // -----------------------------------------------------------------------
     // Shape-detection primitives
     // -----------------------------------------------------------------------

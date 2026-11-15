@@ -91,7 +91,11 @@ pub(crate) fn seek_segment(
 ) -> Option<usize> {
     let mut found = matcher.seek(old_segment, start, eof);
 
-    if found.is_none() && old_segment.last().is_some_and(|line| line.is_empty()) {
+    // A trailing blank old line is sloppiness tolerance, but popping the
+    // only old line would leave an empty pattern, which always "matches" at
+    // the search start and silently converts a failed removal into an
+    // insertion. Keep single-line segments intact so they fail loud.
+    if found.is_none() && old_segment.len() > 1 && old_segment.last().is_some_and(|line| line.is_empty()) {
         old_segment.pop();
         if new_segment.last().is_some_and(|line| line.is_empty()) {
             new_segment.pop();
