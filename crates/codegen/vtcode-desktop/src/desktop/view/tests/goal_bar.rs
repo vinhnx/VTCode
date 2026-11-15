@@ -98,6 +98,7 @@ fn goal_execute_sends_rpc_and_applies_response(cx: &mut TestAppContext) {
 
         // A mutating response refreshes the bar without a notice or a turn.
         let response = vtcode_desktop_protocol::GoalExecuteResult {
+            session_id: "session".into(),
             lines: vec!["Goal paused.".into()],
             mutated: true,
             submit: None,
@@ -120,6 +121,7 @@ fn goal_execute_sends_rpc_and_applies_response(cx: &mut TestAppContext) {
 
         // A read-only response surfaces its lines as a transcript notice.
         let response = vtcode_desktop_protocol::GoalExecuteResult {
+            session_id: "session".into(),
             lines: vec!["Goal [Paused]: Ship it".into()],
             mutated: false,
             submit: None,
@@ -142,6 +144,7 @@ fn goal_execute_sends_rpc_and_applies_response(cx: &mut TestAppContext) {
 
         // A submit response starts a normal turn with the objective.
         let response = vtcode_desktop_protocol::GoalExecuteResult {
+            session_id: "session".into(),
             lines: vec!["Goal set: Ship it".into()],
             mutated: true,
             submit: Some("Ship it".into()),
@@ -162,6 +165,26 @@ fn goal_execute_sends_rpc_and_applies_response(cx: &mut TestAppContext) {
         };
         assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
         assert_eq!(params["prompt"], "Ship it");
+
+        // A stale response for another session changes nothing.
+        let stale = vtcode_desktop_protocol::GoalExecuteResult {
+            session_id: "other".into(),
+            lines: vec!["Goal cleared.".into()],
+            mutated: true,
+            submit: None,
+            goal: None,
+        };
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::GOAL_EXECUTE.into(),
+                    result: Some(serde_json::to_value(stale).unwrap()),
+                    error: None,
+                },
+                cx,
+            );
+            assert!(view.goal_snapshot.is_some(), "stale clear must not wipe the bar");
+        });
     })
     .unwrap();
 }

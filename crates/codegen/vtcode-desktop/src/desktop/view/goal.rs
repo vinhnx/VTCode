@@ -46,6 +46,9 @@ impl DesktopView {
             cx.notify();
             return;
         };
+        if self.selected_session_id.as_deref() != Some(response.session_id.as_str()) {
+            return;
+        }
         self.goal_snapshot = response.goal;
         if let Some(prompt) = response.submit {
             let draft = SubmissionDraft {

@@ -24,6 +24,8 @@ pub struct GoalExecuteParams {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoalExecuteResult {
+    /// Session that executed the command, echoed so clients discard stale responses.
+    pub session_id: String,
     /// Status lines to show the user, in order.
     pub lines: Vec<String>,
     /// Whether the tracker changed (persisted; bar refreshes from `goal`).
@@ -53,6 +55,7 @@ mod tests {
     #[test]
     fn goal_execute_result_round_trips_and_omits_empty_fields() {
         let full = GoalExecuteResult {
+            session_id: "s".into(),
             lines: vec!["Goal set: Ship it".into()],
             mutated: true,
             submit: Some("Ship it".into()),
@@ -71,12 +74,14 @@ mod tests {
         assert_eq!(restored, full);
 
         let minimal = GoalExecuteResult {
+            session_id: "s".into(),
             lines: vec![],
             mutated: false,
             submit: None,
             goal: None,
         };
         let json = serde_json::to_value(&minimal).unwrap();
+        assert_eq!(json["sessionId"], "s");
         assert!(json.get("submit").is_none());
         assert!(json.get("goal").is_none());
     }
