@@ -121,7 +121,8 @@ where
 
         let invocation =
             CommandInvocation::new(self.shell_kind, command, CommandCategory::ListDirectory, self.working_dir.clone())
-                .with_paths(vec![target]);
+                .with_paths(vec![target])
+                .with_show_hidden(show_hidden);
 
         let output = self.expect_success(invocation)?;
         Ok(output.stdout)
@@ -209,7 +210,8 @@ where
 
         let invocation =
             CommandInvocation::new(self.shell_kind, command, CommandCategory::Remove, self.working_dir.clone())
-                .with_paths(vec![target]);
+                .with_paths(vec![target])
+                .with_recursive(options.recursive);
 
         self.expect_success(invocation).map(|_| ())
     }
@@ -236,7 +238,8 @@ where
 
         let invocation =
             CommandInvocation::new(self.shell_kind, command, CommandCategory::Copy, self.working_dir.clone())
-                .with_paths(vec![source_path, dest_path]);
+                .with_paths(vec![source_path, dest_path])
+                .with_recursive(recursive);
 
         self.expect_success(invocation).map(|_| ())
     }
