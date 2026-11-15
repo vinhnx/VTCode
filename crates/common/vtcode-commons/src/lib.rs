@@ -50,6 +50,7 @@ pub mod lexical;
 pub mod line_framing;
 pub mod llm;
 pub mod lr_map;
+pub mod mcp_tool_names;
 pub mod memory;
 pub mod message_metadata;
 pub mod message_timestamp;
