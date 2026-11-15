@@ -60,6 +60,7 @@ pub(crate) type StopHandles = (Arc<CtrlCState>, Arc<Notify>);
 pub(crate) struct HostStopHandles {
     handles: std::sync::OnceLock<StopHandles>,
     exec_sessions: std::sync::OnceLock<vtcode_core::tools::exec_session::ExecSessionManager>,
+    goal_tracker: std::sync::OnceLock<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker>,
     ready: std::sync::atomic::AtomicBool,
     ready_notify: Notify,
 }
@@ -95,6 +96,23 @@ pub(crate) fn host_exec_sessions(
     slot: &StopHandleSlot,
 ) -> Option<vtcode_core::tools::exec_session::ExecSessionManager> {
     slot.exec_sessions.get().cloned()
+}
+
+/// Publish the runloop's goal tracker for host-side `goal/execute` calls.
+/// Called once the tracker is restored; a repeated publish keeps the first.
+pub(crate) fn publish_goal_tracker(
+    slot: &StopHandleSlot,
+    tracker: &crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker,
+) {
+    let _kept_first = slot.goal_tracker.set(tracker.clone());
+}
+
+/// Clone the published goal tracker, if initialization got far enough to
+/// restore one. `None` before that.
+pub(crate) fn host_goal_tracker(
+    slot: &StopHandleSlot,
+) -> Option<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker> {
+    slot.goal_tracker.get().cloned()
 }
 
 pub(crate) fn mark_host_turns_ready(slot: &StopHandleSlot) {

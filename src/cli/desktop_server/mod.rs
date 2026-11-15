@@ -57,6 +57,7 @@ use dispatch::{
     ensure_no_active_turn, handle_request, join_host_command_bridge, parse_params, protocol_interaction_kind,
     send_notification, shutdown_current_session,
 };
+mod goal;
 mod interaction_respond;
 use interaction_respond::dispatch_interaction_response;
 mod pump;

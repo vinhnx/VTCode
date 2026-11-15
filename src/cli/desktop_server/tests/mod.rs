@@ -231,6 +231,7 @@ mod cancel_watchdog;
 mod config_auth;
 mod config_restart;
 mod exec_commands;
+mod goal;
 mod model_review;
 mod recent_prompts;
 mod secret_store;
