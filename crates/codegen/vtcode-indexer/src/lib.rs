@@ -298,13 +298,22 @@ impl SimpleIndexer {
         let cache_key = file_path.to_string_lossy().into_owned();
 
         if self.storage.prefers_snapshot_persistence() {
+            let previous_content = self.content_cache.remove(cache_key.as_str());
             let next_entry = if file_path.exists() && self.should_process_file_path(file_path) {
-                self.build_file_index(file_path)?
+                match self.build_file_index(file_path) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        if let Some(content) = previous_content {
+                            self.content_cache.insert(cache_key, content);
+                        }
+                        return Err(err);
+                    }
+                }
             } else {
                 None
             };
 
-            self.apply_snapshot_file_update(cache_key, next_entry)?;
+            self.apply_snapshot_file_update(cache_key, next_entry, previous_content)?;
             return Ok(());
         }
 
@@ -809,13 +818,16 @@ impl SimpleIndexer {
             .retain(|path, _| !Path::new(path).starts_with(dir_path) || self.index_cache.contains_key(path.as_str()));
     }
 
-    fn apply_snapshot_file_update(&mut self, cache_key: String, next_entry: Option<FileIndex>) -> Result<()> {
+    fn apply_snapshot_file_update(
+        &mut self,
+        cache_key: String,
+        next_entry: Option<FileIndex>,
+        previous_content: Option<(String, Arc<str>)>,
+    ) -> Result<()> {
         let previous_entry = match next_entry {
             Some(entry) => self.index_cache.insert(cache_key.clone(), entry),
             None => self.index_cache.remove(cache_key.as_str()),
         };
-        let previous_content = self.content_cache.remove(cache_key.as_str());
-
         if let Err(err) = self.persist_current_snapshot() {
             match previous_entry {
                 Some(entry) => {
@@ -825,6 +837,7 @@ impl SimpleIndexer {
                     self.index_cache.remove(cache_key.as_str());
                 }
             }
+            self.content_cache.remove(cache_key.as_str());
             if let Some(content) = previous_content {
                 self.content_cache.insert(cache_key, content);
             }
@@ -938,5 +951,7 @@ fn metadata_modified_time(metadata: &fs::Metadata) -> Result<std::time::Duration
     Ok(metadata.modified()?.duration_since(SystemTime::UNIX_EPOCH)?)
 }
 
+#[cfg(test)]
+mod snapshot_update_tests;
 #[cfg(test)]
 mod tests;
