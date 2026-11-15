@@ -667,7 +667,7 @@ impl SimpleIndexer {
 
     #[inline]
     fn get_modified_time(&self, file_path: &Path) -> Result<std::time::Duration> {
-        metadata_modified_time(&fs::metadata(file_path)?)
+        snapshot::metadata_modified_time(&fs::metadata(file_path)?)
     }
 
     #[inline]
@@ -724,7 +724,7 @@ impl SimpleIndexer {
             }
         };
 
-        let modified = metadata_modified_time(metadata)?;
+        let modified = snapshot::metadata_modified_time(metadata)?;
         Ok(Some(self.finish_file_index(file_path, content, modified)))
     }
 
@@ -942,13 +942,6 @@ fn should_visit_entry(
 #[inline]
 fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
-}
-
-/// Full mtime shared by the index builder and the unchanged
-/// screen so both observe the same clock reading for one stat.
-#[inline]
-fn metadata_modified_time(metadata: &fs::Metadata) -> Result<std::time::Duration> {
-    Ok(metadata.modified()?.duration_since(SystemTime::UNIX_EPOCH)?)
 }
 
 #[cfg(test)]

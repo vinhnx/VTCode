@@ -18,6 +18,11 @@ use crate::FileIndex;
 use crate::SimpleIndexerConfig;
 use crate::atomic_write;
 
+/// Full mtime shared by index building and unchanged-file screening.
+pub(crate) fn metadata_modified_time(metadata: &fs::Metadata) -> anyhow::Result<std::time::Duration> {
+    Ok(metadata.modified()?.duration_since(std::time::SystemTime::UNIX_EPOCH)?)
+}
+
 impl FileIndex {
     /// Crate-internal constructor so the snapshot parser (a sibling module)
     /// can rebuild entries from disk; fields stay private to this module.
