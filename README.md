@@ -36,7 +36,7 @@
 
 ## Overview
 
-VT Code is a terminal-first coding agent for your repo, in the CLI and as a native macOS app.
+VT Code brings an agentic coding loop to your repo, in the terminal and as a native macOS app.
 Context, tool calls, and execution policy stay auditable and resumable across long tasks.
 It is open source under **MIT OR Apache-2.0**; see [Contributing](#contributing) and [License](#license).
 
@@ -48,7 +48,7 @@ It is open source under **MIT OR Apache-2.0**; see [Contributing](#contributing)
 | **Extensions** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [hooks](./docs/guides/hooks-guide.md), editor bridges; [A2A](./docs/a2a/README.md), [ACP](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), [Companion](./docs/user-guide/vtcode-companion.md). |
 | **Models**     | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task; [evals](./docs/guides/eval.md) measure behavior before release.                                                                                                                                                                                                   |
 
-Details live in [Documentation](#documentation); the table above is the short map.
+The full entry-point map is in [Documentation](#documentation).
 
 ## Quick start
 
@@ -83,22 +83,20 @@ methods and desktop flags.
 
 ### 2. Configure your project
 
-In your project directory, scaffold config and add credentials:
+From your project directory, scaffold config and store credentials:
 
 ```bash
 cd path/to/your/project
 vtcode init                # scaffolds config + AGENTS.md; review before committing
-vtcode secret add openai   # stores your OpenAI API key in secure storage
+vtcode secret add openai   # replace `openai` with your provider
 ```
 
-Replace `openai` with your provider. Keys use secure storage (OS keyring or encrypted file); environment
-variables, a workspace `.env` file, or `vtcode login` work where supported. See
-[getting started](./docs/user-guide/getting-started.md) and the [provider guides](./docs/providers/PROVIDER_GUIDES.md).
+Keys use secure storage (OS keyring or encrypted file); environment variables, a workspace `.env` file, or
+`vtcode login` work where supported. See [getting started](./docs/user-guide/getting-started.md) and the
+[provider guides](./docs/providers/PROVIDER_GUIDES.md). ChatGPT users can use in-process OAuth via
+`vtcode login openai` (or `--from-codex` to reuse the Codex CLI login); GitHub Copilot uses the official
+`copilot` CLI — see [OAuth authentication](./docs/guides/oauth-authentication.md).
 
-> **Note:** ChatGPT users can also run `vtcode login openai` for in-process OAuth, or reuse the Codex CLI
-> login with `vtcode login openai --from-codex`; GitHub Copilot uses the official `copilot` CLI. See
-> [OAuth authentication](./docs/guides/oauth-authentication.md).
->
 > **Caution:** Keep API keys out of Git and `vtcode.toml`; never commit a workspace `.env` file.
 
 ### 3. Run your first task
@@ -132,8 +130,8 @@ summary without another model call. See the [interactive guide](./docs/user-guid
 ### Modes
 
 - **`ask`** is tool-free: it prints one reply and exits.
-- **`exec`** runs the full tool loop and needs explicit workspace trust (approve the TTY prompt or set
-  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs; `deny` refuses trust instead of prompting).
+- **`exec`** runs the full tool loop and needs explicit workspace trust: approve the TTY prompt, or set
+  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses trust instead of prompting).
   `[automation.full_auto]` allow-lists, denies, and execution policy still apply.
 - **`review`** inspects uncommitted changes without running the agent loop.
 
@@ -143,20 +141,19 @@ and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
-The native macOS app shares the CLI runloop, providers, tool policy, sandboxing, sessions, configuration, and
-credentials. Configure a provider first (see [Quick start](#quick-start)).
+The native macOS app (macOS 15+, Apple Silicon or Intel) shares the CLI runloop, providers, tool policy,
+sandboxing, sessions, configuration, and credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
-
-On macOS 15+ (Apple Silicon or Intel; update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
 
 ```bash
 brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
-Without Homebrew, use the [latest release](https://github.com/vinhnx/vtcode/releases/latest) or
-`vtcode desktop --install`, then launch with `vtcode desktop` or from Finder.
+Update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. Without Homebrew, use the
+[latest release](https://github.com/vinhnx/vtcode/releases/latest) or `vtcode desktop --install`, then launch
+with `vtcode desktop` or from Finder.
 
 > [!WARNING]
 > **First launch needs a one-time approval** for ad hoc-signed builds (Homebrew cask included): open once,
@@ -214,7 +211,7 @@ graph LR
     CORE --> UI["vtcode-ui"]
 ```
 
-Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.1).
+Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.3).
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git
