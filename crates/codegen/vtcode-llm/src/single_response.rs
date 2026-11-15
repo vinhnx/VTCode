@@ -70,3 +70,170 @@ pub async fn collect_single_response(
     }
     Ok(response)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::collect_single_response;
+    use crate::provider::{
+        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+        NormalizedStreamEvent, ReasoningSource, Usage,
+    };
+    use async_trait::async_trait;
+    use futures::stream;
+
+    #[derive(Clone)]
+    struct StreamingOnlyProvider;
+
+    #[async_trait]
+    impl LLMProvider for StreamingOnlyProvider {
+        fn name(&self) -> &str {
+            "test"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        fn supports_non_streaming(&self, _model: &str) -> bool {
+            false
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("generate should not be called for streaming-only provider")
+        }
+
+        async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![
+                Ok(LLMStreamEvent::Token { delta: "hello ".to_string() }),
+                Ok(LLMStreamEvent::Token { delta: "world".to_string() }),
+                Ok(LLMStreamEvent::Completed {
+                    response: Box::new(LLMResponse {
+                        content: None,
+                        model: "gpt-5.2-codex".to_string(),
+                        tool_calls: None,
+                        usage: None,
+                        finish_reason: FinishReason::Stop,
+                        reasoning: None,
+                        reasoning_details: None,
+                        organization_id: None,
+                        request_id: None,
+                        tool_references: Vec::new(),
+                        compaction: None,
+                    }),
+                }),
+            ])))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.2-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn collect_single_response_uses_stream_when_non_streaming_is_unsupported() {
+        let provider = StreamingOnlyProvider;
+        let response = collect_single_response(
+            &provider,
+            LLMRequest {
+                model: "gpt-5.2-codex".to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("stream collection should succeed");
+
+        assert_eq!(response.content.as_deref(), Some("hello world"));
+    }
+
+    #[derive(Clone)]
+    struct NormalizedOnlyProvider;
+
+    #[async_trait]
+    impl LLMProvider for NormalizedOnlyProvider {
+        fn name(&self) -> &str {
+            "test"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        fn supports_non_streaming(&self, _model: &str) -> bool {
+            false
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("generate should not be called for streaming-only provider")
+        }
+
+        async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
+            panic!("legacy stream should not be used when normalized stream is available")
+        }
+
+        async fn stream_normalized(&self, _request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![
+                Ok(NormalizedStreamEvent::TextDelta { delta: "hello ".to_string() }),
+                Ok(NormalizedStreamEvent::ReasoningDelta {
+                    delta: "thinking ".to_string(),
+                    source: ReasoningSource::ProviderSummary,
+                }),
+                Ok(NormalizedStreamEvent::Usage {
+                    usage: Usage {
+                        prompt_tokens: 10,
+                        completion_tokens: 2,
+                        total_tokens: 12,
+                        cached_prompt_tokens: None,
+                        cache_creation_tokens: None,
+                        cache_read_tokens: None,
+                        iterations: None,
+                    },
+                }),
+                Ok(NormalizedStreamEvent::Done {
+                    response: Box::new(LLMResponse {
+                        content: None,
+                        model: "gpt-5.2-codex".to_string(),
+                        tool_calls: None,
+                        usage: None,
+                        finish_reason: FinishReason::Stop,
+                        reasoning: None,
+                        reasoning_details: None,
+                        organization_id: None,
+                        request_id: None,
+                        tool_references: Vec::new(),
+                        compaction: None,
+                    }),
+                }),
+            ])))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.2-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn collect_single_response_prefers_normalized_stream() {
+        let provider = NormalizedOnlyProvider;
+        let response = collect_single_response(
+            &provider,
+            LLMRequest {
+                model: "gpt-5.2-codex".to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("normalized stream collection should succeed");
+
+        assert_eq!(response.content.as_deref(), Some("hello "));
+        assert_eq!(response.reasoning.as_deref(), Some("thinking "));
+        assert_eq!(response.usage.as_ref().map(|usage| usage.total_tokens), Some(12));
+    }
+}

@@ -103,6 +103,25 @@ fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
     println!("{rendered}");
 }
 
+/// Escape the five HTML-significant characters in untrusted display strings.
+///
+/// Tool names can originate from remote MCP servers, so every interpolated
+/// string in the HTML report passes through here.
+fn html_escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_names: &[String]) {
     println!("<!DOCTYPE html>");
     println!("<html><head><title>vtcode Statistics</title></head><body>");
@@ -110,8 +129,8 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
 
     println!("<h2>Configuration</h2>");
     println!("<ul>");
-    println!("<li><strong>Model:</strong> {}</li>", config.model);
-    println!("<li><strong>Workspace:</strong> {}</li>", config.workspace.display());
+    println!("<li><strong>Model:</strong> {}</li>", html_escape(&config.model));
+    println!("<li><strong>Workspace:</strong> {}</li>", html_escape(&config.workspace.display().to_string()));
     println!("<li><strong>Verbose Mode:</strong> {}</li>", if config.verbose { "Enabled" } else { "Disabled" });
     println!("</ul>");
 
@@ -119,7 +138,7 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
     println!("<p><strong>Available Tools:</strong> {}</p>", tool_names.len());
     println!("<ul>");
     for tool_name in tool_names {
-        println!("<li>{tool_name}</li>");
+        println!("<li>{}</li>", html_escape(tool_name));
     }
     println!("</ul>");
 
@@ -137,4 +156,28 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
     println!("</ul>");
 
     println!("</body></html>");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::html_escape;
+
+    #[test]
+    fn plain_text_passes_through_unescaped() {
+        assert_eq!(html_escape("gpt-5.2-codex"), "gpt-5.2-codex");
+        assert_eq!(html_escape(""), "");
+    }
+
+    #[test]
+    fn markup_significant_characters_are_escaped() {
+        assert_eq!(
+            html_escape("<script>alert('x') & \"y\"</script>"),
+            "&lt;script&gt;alert(&#39;x&#39;) &amp; &quot;y&quot;&lt;/script&gt;"
+        );
+    }
+
+    #[test]
+    fn ampersand_is_escaped_before_any_entity_like_text() {
+        assert_eq!(html_escape("&lt;"), "&amp;lt;");
+    }
 }

@@ -111,168 +111,51 @@ fn extract_code_only(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::collect_single_response;
-    use crate::llm::provider::{
-        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMResponse, LLMStream, LLMStreamEvent,
-        NormalizedStreamEvent, ReasoningSource, Usage,
-    };
-    use async_trait::async_trait;
-    use futures::stream;
 
-    #[derive(Clone)]
-    struct StreamingOnlyProvider;
-
-    #[async_trait]
-    impl LLMProvider for StreamingOnlyProvider {
-        fn name(&self) -> &str {
-            "test"
-        }
-
-        fn supports_streaming(&self) -> bool {
-            true
-        }
-
-        fn supports_non_streaming(&self, _model: &str) -> bool {
-            false
-        }
-
-        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            panic!("generate should not be called for streaming-only provider")
-        }
-
-        async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
-            Ok(Box::pin(stream::iter(vec![
-                Ok(LLMStreamEvent::Token { delta: "hello ".to_string() }),
-                Ok(LLMStreamEvent::Token { delta: "world".to_string() }),
-                Ok(LLMStreamEvent::Completed {
-                    response: Box::new(LLMResponse {
-                        content: None,
-                        model: "gpt-5.2-codex".to_string(),
-                        tool_calls: None,
-                        usage: None,
-                        finish_reason: FinishReason::Stop,
-                        reasoning: None,
-                        reasoning_details: None,
-                        organization_id: None,
-                        request_id: None,
-                        tool_references: Vec::new(),
-                        compaction: None,
-                    }),
-                }),
-            ])))
-        }
-
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.2-codex".to_string()]
-        }
-
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
+    #[test]
+    fn code_only_returns_none_without_fences() {
+        assert_eq!(extract_code_only("plain response text"), None);
     }
 
-    #[tokio::test]
-    async fn collect_single_response_uses_stream_when_non_streaming_is_unsupported() {
-        let provider = StreamingOnlyProvider;
-        let response = collect_single_response(
-            &provider,
-            LLMRequest {
-                model: "gpt-5.2-codex".to_string(),
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("stream collection should succeed");
-
-        assert_eq!(response.content.as_deref(), Some("hello world"));
+    #[test]
+    fn code_only_returns_none_for_unclosed_fence() {
+        assert_eq!(extract_code_only("```rust\nlet x = 1;\n"), None);
     }
 
-    #[derive(Clone)]
-    struct NormalizedOnlyProvider;
-
-    #[async_trait]
-    impl LLMProvider for NormalizedOnlyProvider {
-        fn name(&self) -> &str {
-            "test"
-        }
-
-        fn supports_streaming(&self) -> bool {
-            true
-        }
-
-        fn supports_non_streaming(&self, _model: &str) -> bool {
-            false
-        }
-
-        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            panic!("generate should not be called for streaming-only provider")
-        }
-
-        async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
-            panic!("legacy stream should not be used when normalized stream is available")
-        }
-
-        async fn stream_normalized(&self, _request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
-            Ok(Box::pin(stream::iter(vec![
-                Ok(NormalizedStreamEvent::TextDelta { delta: "hello ".to_string() }),
-                Ok(NormalizedStreamEvent::ReasoningDelta {
-                    delta: "thinking ".to_string(),
-                    source: ReasoningSource::ProviderSummary,
-                }),
-                Ok(NormalizedStreamEvent::Usage {
-                    usage: Usage {
-                        prompt_tokens: 10,
-                        completion_tokens: 2,
-                        total_tokens: 12,
-                        cached_prompt_tokens: None,
-                        cache_creation_tokens: None,
-                        cache_read_tokens: None,
-                        iterations: None,
-                    },
-                }),
-                Ok(NormalizedStreamEvent::Done {
-                    response: Box::new(LLMResponse {
-                        content: None,
-                        model: "gpt-5.2-codex".to_string(),
-                        tool_calls: None,
-                        usage: None,
-                        finish_reason: FinishReason::Stop,
-                        reasoning: None,
-                        reasoning_details: None,
-                        organization_id: None,
-                        request_id: None,
-                        tool_references: Vec::new(),
-                        compaction: None,
-                    }),
-                }),
-            ])))
-        }
-
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.2-codex".to_string()]
-        }
-
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
+    #[test]
+    fn code_only_returns_none_for_empty_block() {
+        assert_eq!(extract_code_only("```\n```"), None);
     }
 
-    #[tokio::test]
-    async fn collect_single_response_prefers_normalized_stream() {
-        let provider = NormalizedOnlyProvider;
-        let response = collect_single_response(
-            &provider,
-            LLMRequest {
-                model: "gpt-5.2-codex".to_string(),
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("normalized stream collection should succeed");
+    #[test]
+    fn code_only_terminates_output_with_newline() {
+        assert_eq!(extract_code_only("```\ncode\n```").as_deref(), Some("code\n"));
+    }
 
-        assert_eq!(response.content.as_deref(), Some("hello "));
-        assert_eq!(response.reasoning.as_deref(), Some("thinking "));
-        assert_eq!(response.usage.as_ref().map(|usage| usage.total_tokens), Some(12));
+    #[test]
+    fn code_only_strips_carriage_returns() {
+        assert_eq!(extract_code_only("```\r\ncode\r\n```\r\n").as_deref(), Some("code\n"));
+    }
+
+    #[test]
+    fn code_only_prefers_more_lines_over_language_tag() {
+        let text = "```rust\nlet x = 1;\n```\n\n```\nline one\nline two\nline three\n```";
+        assert_eq!(extract_code_only(text).as_deref(), Some("line one\nline two\nline three\n"));
+    }
+
+    #[test]
+    fn code_only_prefers_language_tag_on_line_tie_regardless_of_order() {
+        let plain_first = "```\nplain one\nplain two\n```\n\n```python\npy one\npy two\n```";
+        assert_eq!(extract_code_only(plain_first).as_deref(), Some("py one\npy two\n"));
+
+        let tagged_first = "```python\npy one\npy two\n```\n\n```\nplain one\nplain two\n```";
+        assert_eq!(extract_code_only(tagged_first).as_deref(), Some("py one\npy two\n"));
+    }
+
+    #[test]
+    fn code_only_ignores_blank_lines_when_scoring() {
+        let text = "```\n\n\n```\n\n```\ncode\n```";
+        assert_eq!(extract_code_only(text).as_deref(), Some("code\n"));
     }
 }
 

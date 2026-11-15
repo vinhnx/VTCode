@@ -177,8 +177,20 @@ fn read_text_file(path: &Path) -> Result<Option<String>> {
     }
 
     let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let was_truncated = bytes.len() > MAX_FILE_BYTES;
     let truncated = bytes.into_iter().take(MAX_FILE_BYTES).collect::<Vec<_>>();
-    Ok(Some(String::from_utf8_lossy(&truncated).into_owned()))
+    match std::str::from_utf8(&truncated) {
+        Ok(valid) => Ok(Some(valid.to_owned())),
+        // `take` can split a multibyte char at the cap; an incomplete tail
+        // (`error_len() == None`) on a truncated read is truncation damage, so
+        // drop it instead of surfacing U+FFFD. Any other invalid bytes —
+        // including a short file that genuinely ends mid-char — keep the
+        // honest lossy replacement.
+        Err(err) if was_truncated && err.error_len().is_none() => {
+            Ok(Some(String::from_utf8_lossy(&truncated[..err.valid_up_to()]).into_owned()))
+        }
+        Err(_) => Ok(Some(String::from_utf8_lossy(&truncated).into_owned())),
+    }
 }
 
 fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
@@ -558,4 +570,54 @@ impl ProjectAnalysis {
 
 fn normalize_grounding_value(value: Option<String>) -> Option<String> {
     value.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_bytes(dir: &tempfile::TempDir, name: &str, bytes: &[u8]) -> PathBuf {
+        let path = dir.path().join(name);
+        fs::write(&path, bytes).expect("write fixture");
+        path
+    }
+
+    #[test]
+    fn read_text_file_backs_off_a_char_split_by_the_byte_cap() {
+        let dir = tempfile::TempDir::new().expect("workspace");
+        let mut bytes = vec![b'a'; MAX_FILE_BYTES - 1];
+        bytes.extend_from_slice("é".as_bytes());
+        bytes.extend_from_slice(b"trailing");
+        let path = write_bytes(&dir, "sample.md", &bytes);
+
+        let content = read_text_file(&path).expect("read").expect("some");
+
+        let tail: String = content.chars().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect();
+        assert!(!content.contains('\u{FFFD}'), "split char must not become U+FFFD (tail: {tail:?})");
+        assert_eq!(content.len(), MAX_FILE_BYTES - 1);
+    }
+
+    #[test]
+    fn read_text_file_marks_a_short_file_ending_mid_char() {
+        let dir = tempfile::TempDir::new().expect("workspace");
+        let path = write_bytes(&dir, "sample.md", b"ab\xc3");
+
+        let content = read_text_file(&path).expect("read").expect("some");
+
+        assert_eq!(content, "ab\u{FFFD}");
+    }
+
+    #[test]
+    fn read_text_file_keeps_a_multibyte_char_inside_the_cap() {
+        let dir = tempfile::TempDir::new().expect("workspace");
+        let mut bytes = vec![b'a'; MAX_FILE_BYTES - 2];
+        bytes.extend_from_slice("é".as_bytes());
+        bytes.extend_from_slice(b"trailing");
+        let path = write_bytes(&dir, "sample.md", &bytes);
+
+        let content = read_text_file(&path).expect("read").expect("some");
+
+        assert!(content.ends_with('é'));
+        assert!(!content.contains('\u{FFFD}'));
+    }
 }
