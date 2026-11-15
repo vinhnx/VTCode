@@ -61,6 +61,21 @@ See the [fast mode guide](../development/fast-mode.md).
 The TUI reminds you once per session about `/fast on` when using an eligible native API-key route and
 fast mode is off. Using `/fast` dismisses the reminder. Claude speed changes affect prompt-cache reuse.
 
+## Goal loop (`/goal`)
+
+Set a persistent thread goal and let the agent keep working across turns until it is paused, cleared, or done. The goal survives restarts (restored paused, never self-driving) and accrues elapsed time and token usage while active.
+
+| Command | Purpose |
+| --- | --- |
+| `/goal` | Show the thread goal (status, objective, elapsed time, token usage) |
+| `/goal <objective>` | Set (or replace) the goal and start working on it immediately |
+| `/goal pause` | Pause the loop (the clock stops) |
+| `/goal resume` | Resume a paused goal and continue working |
+| `/goal edit` | Show the saved objective (`/goal <text>` replaces it) |
+| `/goal clear` | Clear the goal entirely |
+
+While a goal is active, completed turns automatically continue toward the objective (up to the cross-turn budget; type `continue` to resume after it exhausts). Pausing, clearing, stopping, hard budget stops, and turns that ask for input all idle the loop instead of continuing. In VT Code Desktop the same commands run through the goal bar above the composer, which shows the `Pursuing goal` / `Paused goal` status with pause/resume, clear, and expand actions.
+
 ## Execution explanations
 
 Enter these slash commands in the interactive VT Code chat input. They summarize recorded execution without another
