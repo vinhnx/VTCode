@@ -130,6 +130,16 @@ fn consume_sed_address(chars: &[char], start: usize) -> Option<usize> {
         }
         '$' => Some(start + 1),
         '/' => find_unescaped_sed_delimiter(chars, start + 1, '/').map(|index| index + 1),
+        // GNU `\cregexpc` addresses use any non-blank delimiter. Without this
+        // arm the whole address is skipped as an unknown command and a write
+        // command later on the same line is never inspected.
+        '\\' => {
+            let delimiter = *chars.get(start + 1)?;
+            if delimiter.is_whitespace() {
+                return None;
+            }
+            find_unescaped_sed_delimiter(chars, start + 2, delimiter).map(|index| index + 1)
+        }
         _ => None,
     }
 }
@@ -164,10 +174,19 @@ fn sed_substitution_may_write(chars: &[char], start: usize) -> bool {
     while chars.get(index).is_some_and(|character| character.is_whitespace()) {
         index += 1;
     }
-    matches!(chars.get(index), Some('e' | 'w'))
-        && chars
-            .get(index + 1)
-            .is_none_or(|character| character.is_whitespace() || *character == ';')
+    // Substitution flags combine (`gw`, `pe`, `2w`), so every flag character
+    // up to the next command separator must be inspected; checking only the
+    // first one misses a write/execute hiding behind `g`, `p`, or a number.
+    while let Some(&flag) = chars.get(index) {
+        if flag == ';' || flag == '\n' {
+            break;
+        }
+        if flag == 'e' || flag == 'w' {
+            return true;
+        }
+        index += 1;
+    }
+    false
 }
 
 /// Return whether an `awk` invocation uses an option or program shape that can

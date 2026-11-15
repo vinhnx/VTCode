@@ -569,7 +569,17 @@ pub(crate) fn command_uses_source_repair(words: &[String]) -> bool {
         }
         "ruff" => {
             words.iter().skip(1).take_while(|word| word.as_str() != "--").any(|word| {
-                matches!(word.split('=').next(), Some("--fix" | "--fix-only" | "--add-noqa" | "--add-ignore"))
+                // `--unsafe-fixes` enables rewriting fixes, `-o`/`--output-file`
+                // writes the report, and `--add-noqa`/`--add-ignore` edit
+                // sources. `-o` also matches attached values (`-oFILE`); no
+                // other ruff short flag starts with `-o`, and `--output-*`
+                // long flags start with `--`, never `-o`.
+                word.split('=').next().is_some_and(|flag| {
+                    matches!(
+                        flag,
+                        "--fix" | "--fix-only" | "--unsafe-fixes" | "--output-file" | "--add-noqa" | "--add-ignore"
+                    ) || flag.starts_with("-o")
+                })
             })
         }
         "uv" => uv_run_command_words(words).is_some_and(command_uses_source_repair),

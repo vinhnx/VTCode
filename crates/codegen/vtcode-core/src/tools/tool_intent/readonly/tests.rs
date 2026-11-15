@@ -590,3 +590,25 @@ fn shared_prologue_keeps_classifier_gates_distinct() {
     assert!(!is_parallel_safe_command_session_command(&conflicted));
     assert!(!is_spool_file_read_command("exec_command", &conflicted));
 }
+
+#[test]
+fn sed_combined_substitution_flags_with_write_or_execute_are_mutating() {
+    // Verified against real sed: `s/a/b/gw FILE` writes on BSD and GNU,
+    // `s/marker/id/pe` executes on GNU. Only the first flag character was
+    // inspected, so combined flags slipped through as read-only.
+    assert!(!is_readonly_command_session_command(&run_cmd("sed 's/a/b/gw /tmp/x' f")));
+    assert!(!is_readonly_command_session_command(&run_cmd("sed 's/a/b/2w /tmp/x' f")));
+    assert!(!is_readonly_command_session_command(&run_cmd("sed 's/marker/id/pe' f")));
+    // Benign combined flags stay read-only: no over-tightening.
+    assert!(is_readonly_command_session_command(&run_cmd("sed 's/a/b/gp' f")));
+    assert!(is_readonly_command_session_command(&run_cmd("sed 's/a/b/2' f")));
+}
+
+#[test]
+fn sed_backslash_delimiter_addresses_do_not_hide_write_commands() {
+    // GNU accepts `\c...c` regex addresses; the analyzer skipped the whole
+    // line when it failed to parse one, hiding a trailing `w` command.
+    assert!(!is_readonly_command_session_command(&run_cmd("sed '\\%e%w /tmp/x' f")));
+    // A print command under a backslash address stays read-only.
+    assert!(is_readonly_command_session_command(&run_cmd("sed '\\%e%p' f")));
+}

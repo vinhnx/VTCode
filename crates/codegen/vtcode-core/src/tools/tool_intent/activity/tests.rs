@@ -939,3 +939,38 @@ fn quoted_file_tests_preserve_evidence_without_admitting_effects() {
         &json!({"exit_code":0,"modified_files":["README.md"]})
     ));
 }
+
+#[test]
+fn ruff_check_write_flags_are_mutations_not_verification() {
+    // Plain and display-only forms verify.
+    for command in [
+        "ruff check src/",
+        "ruff check --diff src/",
+        "ruff check --output-format=json src/",
+    ] {
+        assert_eq!(
+            classify_shell_activity(tools::EXEC_COMMAND, &exec_command(command)),
+            ShellActivity::Verification,
+            "{command}"
+        );
+    }
+    // Write-capable flags (verified against `ruff check --help`) mutate:
+    // --fix/--fix-only rewrite sources, -o/--output-file writes the report,
+    // --add-noqa/--add-ignore edit sources. Like `eslint --fix`, these must
+    // not count as verification.
+    for command in [
+        "ruff check --fix src/",
+        "ruff check --fix-only src/",
+        "ruff check --unsafe-fixes src/",
+        "ruff check -o out.txt src/",
+        "ruff check --output-file=out.txt src/",
+        "ruff check --add-noqa src/",
+        "ruff check --add-ignore=reason src/",
+    ] {
+        assert_eq!(
+            classify_shell_activity(tools::EXEC_COMMAND, &exec_command(command)),
+            ShellActivity::Mutation,
+            "{command}"
+        );
+    }
+}
