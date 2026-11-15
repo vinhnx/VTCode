@@ -7,9 +7,31 @@
 
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
+use super::worktree::git_command_at;
 use super::{DiffVerifier, WorktreeManager};
+
+/// Reject branch/revision inputs that could escape their git argv slot.
+///
+/// Refs flow verbatim into `git diff/log/merge` argv, where a leading `-`
+/// parses as a flag (`--output=` is a file-write primitive). Only the strict
+/// subset needed for branch names, tags, and SHAs is accepted.
+fn validate_git_ref(value: &str, role: &str) -> Result<()> {
+    let bad = value.is_empty()
+        || value == "."
+        || value.starts_with('-')
+        || value.starts_with('/')
+        || value.starts_with("./")
+        || value.contains("..")
+        || value.ends_with('/')
+        || value.ends_with(".lock")
+        || value.chars().any(|c| c.is_whitespace() || c.is_control())
+        || value.chars().any(|c| matches!(c, ':' | '?' | '*' | '[' | '~' | '^' | '\\'));
+    if bad {
+        return Err(anyhow!("invalid git {role}: {value:?}"));
+    }
+    Ok(())
+}
 
 // ─── ReconcileResult ────────────────────────────────────────────────────────
 
@@ -30,9 +52,9 @@ pub struct ReconcileResult {
 
 /// Orchestrates the diff → verify → merge cycle for a completed worktree.
 ///
-/// The reconciler is internal infrastructure and uses `Command::new("git")`
-/// directly (consistent with `WorktreeManager`), bypassing the tool safety
-/// layer.
+/// The reconciler is internal infrastructure: git runs through the shared
+/// handle-bound [`git_command_at`] helper (same as `WorktreeManager`), and
+/// every ref input is validated before reaching argv.
 pub struct WorktreeReconciler {
     workspace_root: PathBuf,
     main_branch: String,
@@ -62,16 +84,15 @@ impl WorktreeReconciler {
 
     /// Run a `git diff` variant with extra args and return stdout.
     fn run_git_diff(&self, base: &str, head: &str, extra_args: &[&str]) -> Result<String> {
+        validate_git_ref(base, "base")?;
+        validate_git_ref(head, "head")?;
         let range = format!("{base}...{head}");
         let mut args = vec!["diff"];
         args.extend_from_slice(extra_args);
         args.push(&range);
 
-        let output = Command::new("git")
-            .args(&args)
-            .current_dir(&self.workspace_root)
-            .output()
-            .context("Failed to run git diff")?;
+        let (_dir_handle, mut command) = git_command_at(&self.workspace_root)?;
+        let output = command.args(&args).output().context("Failed to run git diff")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -103,10 +124,12 @@ impl WorktreeReconciler {
 
     /// Check whether a branch has any commits ahead of the base.
     pub fn branch_has_commits(&self, base: &str, head: &str) -> Result<bool> {
+        validate_git_ref(base, "base")?;
+        validate_git_ref(head, "head")?;
         let range = format!("{base}..{head}");
-        let output = Command::new("git")
+        let (_dir_handle, mut command) = git_command_at(&self.workspace_root)?;
+        let output = command
             .args(["log", "--oneline", &range])
-            .current_dir(&self.workspace_root)
             .output()
             .context("Failed to run git log")?;
 
@@ -121,10 +144,11 @@ impl WorktreeReconciler {
     /// Merge a branch into the workspace. Prefers `--ff-only`; falls back
     /// to a standard merge if fast-forward is not possible.
     pub fn git_merge(&self, branch: &str) -> Result<()> {
+        validate_git_ref(branch, "branch")?;
         // Try fast-forward first.
-        let ff_output = Command::new("git")
+        let (_dir_handle, mut command) = git_command_at(&self.workspace_root)?;
+        let ff_output = command
             .args(["merge", "--ff-only", branch])
-            .current_dir(&self.workspace_root)
             .output()
             .context("Failed to run git merge --ff-only")?;
 
@@ -133,18 +157,13 @@ impl WorktreeReconciler {
         }
 
         // Fall back to standard merge.
-        let output = Command::new("git")
-            .args(["merge", branch])
-            .current_dir(&self.workspace_root)
-            .output()
-            .context("Failed to run git merge")?;
+        let (_dir_handle, mut command) = git_command_at(&self.workspace_root)?;
+        let output = command.args(["merge", branch]).output().context("Failed to run git merge")?;
 
         if !output.status.success() {
             // Abort the failed merge to leave the repo clean.
-            let abort_output = Command::new("git")
-                .args(["merge", "--abort"])
-                .current_dir(&self.workspace_root)
-                .output();
+            let (_dir_handle, mut command) = git_command_at(&self.workspace_root)?;
+            let abort_output = command.args(["merge", "--abort"]).output();
             match abort_output {
                 Ok(o) if !o.status.success() => {
                     tracing::warn!(
@@ -166,9 +185,10 @@ impl WorktreeReconciler {
 
     /// Delete a local branch (must be fully merged).
     pub fn git_branch_delete(&self, branch: &str) -> Result<()> {
-        let output = Command::new("git")
+        validate_git_ref(branch, "branch")?;
+        let (_dir_handle, mut command) = git_command_at(&self.workspace_root)?;
+        let output = command
             .args(["branch", "-d", branch])
-            .current_dir(&self.workspace_root)
             .output()
             .context("Failed to run git branch -d")?;
 
@@ -182,9 +202,9 @@ impl WorktreeReconciler {
 
     /// Check whether a worktree working directory is clean (no uncommitted changes).
     pub fn is_worktree_clean(&self, worktree_path: &Path) -> Result<bool> {
-        let output = Command::new("git")
+        let (_dir_handle, mut command) = git_command_at(worktree_path)?;
+        let output = command
             .args(["status", "--porcelain"])
-            .current_dir(worktree_path)
             .output()
             .context("Failed to run git status")?;
 
@@ -217,6 +237,7 @@ impl WorktreeReconciler {
         verifier: &(dyn DiffVerifier + Send + Sync),
     ) -> Result<ReconcileResult> {
         let branch = Self::branch_name(worktree_name);
+        validate_git_ref(&branch, "branch")?;
 
         // 1. Pre-flight: worktree must be clean.
         if !self.is_worktree_clean(worktree_path)? {
@@ -299,5 +320,115 @@ mod tests {
     fn reconciler_custom_main_branch() {
         let r = WorktreeReconciler::new("/tmp/ws", "develop");
         assert_eq!(r.main_branch, "develop");
+    }
+
+    #[test]
+    fn git_ref_validation_accepts_branches_tags_and_shas() {
+        for valid in ["main", "loop/worker-1", "feature/x", "v1.2.3", "abc123def456"] {
+            validate_git_ref(valid, "test").expect("valid ref accepted");
+        }
+    }
+
+    #[test]
+    fn git_ref_validation_rejects_flag_injection_and_traversal() {
+        for invalid in [
+            "",
+            ".",
+            "./x",
+            "--output=x",
+            "-h",
+            "../escape",
+            "a b",
+            "a\tb",
+            "a:b",
+            "a?b",
+            "a*b",
+            "a~b",
+            "a^b",
+            "a.lock",
+            "trail/",
+        ] {
+            assert!(validate_git_ref(invalid, "test").is_err(), "{invalid:?} must be rejected");
+        }
+    }
+
+    #[cfg(unix)]
+    mod integration {
+        use super::super::WorktreeReconciler;
+        use crate::git::{HeuristicDiffVerifier, WorktreeManager};
+        use std::process::Command as ProcCommand;
+        use tempfile::TempDir;
+        use vtcode_commons::canonicalize;
+
+        fn git(dir: &std::path::Path, args: &[&str]) {
+            let output = ProcCommand::new("git").args(args).current_dir(dir).output().expect("spawn git");
+            assert!(output.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        fn commit_all(dir: &std::path::Path, message: &str) {
+            git(dir, &["add", "."]);
+            git(
+                dir,
+                &[
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.invalid",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    message,
+                ],
+            );
+        }
+
+        fn init_repo() -> TempDir {
+            let dir = TempDir::new().expect("temp dir");
+            git(dir.path(), &["init", "--quiet", "-b", "main"]);
+            std::fs::write(dir.path().join("README.md"), "seed\n").expect("write seed");
+            commit_all(dir.path(), "seed");
+            dir
+        }
+
+        #[test]
+        fn reconcile_merges_benign_worktree_change() {
+            let repo = init_repo();
+            let root = canonicalize(repo.path()).expect("canonicalize repo");
+            let manager = WorktreeManager::new(&root);
+            let worktree_path = manager.create("loop-ok").expect("create");
+
+            std::fs::write(worktree_path.join("feature.txt"), "benign\n").expect("write feature");
+            commit_all(&worktree_path, "add feature");
+
+            let reconciler = WorktreeReconciler::new(&root, "main");
+            let result = reconciler
+                .reconcile("loop-ok", &worktree_path, &HeuristicDiffVerifier)
+                .expect("reconcile");
+
+            assert!(result.approved, "benign diff must be approved: {:?}", result.issues);
+            assert!(result.merged);
+            assert_eq!(std::fs::read_to_string(root.join("feature.txt")).expect("read merged"), "benign\n");
+        }
+
+        #[test]
+        fn reconcile_rejects_dangerous_worktree_change_without_merging() {
+            let repo = init_repo();
+            let root = canonicalize(repo.path()).expect("canonicalize repo");
+            let manager = WorktreeManager::new(&root);
+            let worktree_path = manager.create("loop-bad").expect("create");
+
+            std::fs::write(worktree_path.join("cleanup.sh"), "rm -rf /tmp/build\n").expect("write script");
+            commit_all(&worktree_path, "add cleanup");
+
+            let reconciler = WorktreeReconciler::new(&root, "main");
+            let result = reconciler
+                .reconcile("loop-bad", &worktree_path, &HeuristicDiffVerifier)
+                .expect("reconcile");
+
+            assert!(!result.approved, "dangerous diff must be rejected");
+            assert!(!result.merged);
+            assert!(!result.issues.is_empty());
+            assert!(!root.join("cleanup.sh").exists(), "rejected change must not reach main");
+        }
     }
 }
