@@ -37,10 +37,73 @@ fn explanation_file_attribution_ignores_noops_failures_and_unrelated_reads() {
         )
         .is_none()
     );
+    let output = json!({"success":true,"diff":[
+        {"path":"a","content":"+a\n"}, {"content":"+b\n"}
+    ]});
+    let ThreadEvent::ItemCompleted(event) =
+        file_change_completed_event("call", "apply_patch", &json!({}), &output).expect("file change")
+    else {
+        panic!("completed item")
+    };
+    let ThreadItemDetails::FileChange(change) = event.item.details else {
+        panic!("file change")
+    };
+    assert_eq!(change.changes.len(), 1);
+    assert_eq!(change.diff_incomplete, Some(true));
 }
 use serde_json::json;
 
 use super::*;
+
+#[test]
+fn missing_file_mutation_previews_emit_incomplete_evidence() {
+    for (tool, args, output, expected) in [
+        (
+            "delete_file",
+            json!({"path":"gone"}),
+            json!({"success":true,"deleted":true,"path":"gone"}),
+            vec!["gone"],
+        ),
+        (
+            "move_file",
+            json!({"path":"old","destination":"new"}),
+            json!({"success":true,"from":"old","to":"new"}),
+            vec!["old", "new"],
+        ),
+        (
+            "copy_file",
+            json!({"path":"old","destination":"new"}),
+            json!({"success":true,"from":"old","to":"new"}),
+            vec!["old", "new"],
+        ),
+        (
+            crate::config::constants::tools::UNIFIED_FILE,
+            json!({"action":"delete","path":"gone"}),
+            json!({"success":true,"deleted":true,"path":"gone"}),
+            vec!["gone"],
+        ),
+    ] {
+        let ThreadEvent::ItemCompleted(event) =
+            file_change_completed_event("call", tool, &args, &output).expect("refusal marker")
+        else {
+            panic!("completed item")
+        };
+        let ThreadItemDetails::FileChange(change) = event.item.details else {
+            panic!("file change")
+        };
+        assert_eq!(change.diff_incomplete, Some(true));
+        assert_eq!(change.changes.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>(), expected);
+    }
+    assert!(
+        file_change_completed_event(
+            "call",
+            "delete_file",
+            &json!({"path":"gone"}),
+            &json!({"success":true,"deleted":false,"skipped":true})
+        )
+        .is_none()
+    );
+}
 
 #[test]
 fn tool_started_event_omits_arguments_when_absent() {

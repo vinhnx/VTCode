@@ -6,10 +6,6 @@ use anyhow::Result;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-#[cfg(target_os = "macos")]
-use std::io::Write;
-#[cfg(target_os = "macos")]
-use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -20,6 +16,9 @@ use vtcode_config::{
     NotificationBackend, NotificationCondition, NotificationDeliveryMode, TerminalNotificationMethod,
     TuiNotificationEvent, TuiNotificationsConfig,
 };
+
+#[cfg(target_os = "macos")]
+mod macos;
 
 /// Types of important events that trigger notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -538,7 +537,7 @@ impl NotificationManager {
 
     #[cfg(target_os = "macos")]
     fn send_osascript_notification(&self, message: &str) -> bool {
-        match send_macos_osascript_notification(crate::config::constants::app::DISPLAY_NAME, message) {
+        match macos::send_macos_osascript_notification(crate::config::constants::app::DISPLAY_NAME, message) {
             Ok(()) => true,
             Err(error) => {
                 tracing::warn!(error = %error, "Failed to send macOS osascript notification");
@@ -790,41 +789,6 @@ pub async fn notify_human_in_the_loop(prompt: &str, context: &str) -> Result<(),
         context: context.to_string(),
     };
     send_global_notification(event).await
-}
-
-#[cfg(target_os = "macos")]
-fn send_macos_osascript_notification(title: &str, message: &str) -> Result<()> {
-    let mut child = Command::new("/usr/bin/osascript")
-        .arg("-")
-        .arg(message)
-        .arg(title)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let script = r#"on run argv
-display notification (item 1 of argv) with title (item 2 of argv)
-end run
-"#;
-
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("failed to open osascript stdin"))?;
-    stdin.write_all(script.as_bytes())?;
-    drop(stdin);
-
-    let output = child.wait_with_output()?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if stderr.is_empty() {
-            anyhow::bail!("osascript exited with status {}", output.status);
-        }
-        anyhow::bail!("osascript exited with status {}: {}", output.status, stderr);
-    }
 }
 
 #[cfg(test)]

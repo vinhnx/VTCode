@@ -16,6 +16,7 @@ fn writes_current_and_archived_blocked_handoffs() {
         write_blocked_handoff(temp.path(), "session-a", "blocked", "first", &[]).expect("write first handoff");
 
     assert!(artifacts.archive_path.is_file());
+    assert!(artifacts.retention_warning.is_none());
     let stem = artifacts.archive_path.file_stem().unwrap().to_string_lossy().to_string();
     let forensics = artifacts
         .archive_path
@@ -32,6 +33,35 @@ fn writes_current_and_archived_blocked_handoffs() {
     let artifacts2 =
         write_blocked_handoff(temp.path(), "session-a", "blocked", "second", &[]).expect("write second handoff");
     assert_ne!(artifacts.archive_path, artifacts2.archive_path);
+}
+
+#[test]
+fn handoff_preserves_artifacts_and_reports_retention_pin_failure() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let session_dir = vtcode_memory::session_directory(temp.path(), "session-pin-failure");
+    fs::create_dir_all(session_dir.join(vtcode_memory::RETENTION_PIN_FILE)).expect("block pin path");
+
+    let artifacts = write_blocked_handoff(temp.path(), "session-pin-failure", "blocked", "stall", &[])
+        .expect("handoff artifacts remain available");
+    assert!(artifacts.current_path.is_file());
+    assert!(artifacts.archive_path.is_file());
+    let warning = artifacts.retention_warning.expect("pin failure must be visible");
+    assert!(warning.contains("session-pin-failure"));
+    assert!(warning.contains("retention"));
+}
+
+#[test]
+fn handoff_distinguishes_missing_and_invalid_session_entries() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let missing = write_blocked_handoff(temp.path(), "missing", "blocked", "stall", &[]).expect("missing session");
+    assert!(missing.retention_warning.is_none());
+    let invalid = vtcode_memory::session_directory(temp.path(), "invalid");
+    fs::create_dir_all(invalid.parent().expect("session root")).expect("create root");
+    fs::write(&invalid, "not a directory").expect("invalid session entry");
+    let handoff = write_blocked_handoff(temp.path(), "invalid", "blocked", "stall", &[]).expect("handoff");
+    assert!(handoff.current_path.is_file());
+    assert!(handoff.archive_path.is_file());
+    assert!(handoff.retention_warning.expect("invalid entry must warn").contains("invalid"));
 }
 
 #[test]
@@ -52,6 +82,22 @@ fn resolution_clears_retention_pin_when_no_other_open_blocker() {
 }
 
 #[test]
+fn resolution_keeps_pin_when_an_archive_cannot_be_inspected() {
+    let temp = tempfile::TempDir::new().expect("temp");
+    let session_dir = vtcode_memory::session_directory(temp.path(), "session-pin");
+    fs::create_dir_all(&session_dir).expect("session dir");
+    let artifacts = write_blocked_handoff(temp.path(), "session-pin", "blocked", "stall", &[]).expect("handoff");
+    let invalid_archive = artifacts.archive_path.parent().expect("blockers dir").join("unreadable.md");
+    fs::write(&invalid_archive, [0xff]).expect("invalid utf8");
+
+    assert!(clear_current_blocked_handoff_for_session(temp.path(), "session-pin").expect("resolve"));
+    assert!(vtcode_memory::session_retention_pinned(&session_dir), "uncertain archive must preserve pin");
+    fs::remove_file(invalid_archive).expect("remove invalid archive");
+    unpin_resolved_blocker_session(temp.path(), "session-pin");
+    assert!(!vtcode_memory::session_retention_pinned(&session_dir), "verified resolution can release pin");
+}
+
+#[test]
 fn blocked_handoff_archives_have_unique_paths() {
     let temp = tempfile::tempdir().expect("temp dir");
 
@@ -67,6 +113,20 @@ fn blocked_handoff_archives_have_unique_paths() {
             .expect("read first archive")
             .contains("first")
     );
+}
+
+#[test]
+fn archived_blocker_lookup_skips_invalid_entries() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let artifacts =
+        write_blocked_handoff(temp.path(), "session-a", "blocked", "recoverable", &[]).expect("write handoff");
+    let blockers = artifacts.archive_path.parent().expect("blockers directory");
+    fs::write(blockers.join("session-a-invalid.md"), "not a handoff").expect("invalid archive");
+    fs::create_dir(blockers.join("session-a-forensics")).expect("forensics directory");
+
+    let found = find_latest_archived_blocker_for_session(temp.path(), "session-a").expect("valid archive");
+    assert_eq!(found.session_id, "session-a");
+    assert_eq!(found.blocker_summary, "recoverable");
 }
 
 #[test]

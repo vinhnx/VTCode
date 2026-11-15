@@ -486,10 +486,7 @@ pub(super) fn write_blocked_handoff_after_checkpoint(
         planning_active,
     ) {
         Ok(artifacts) => {
-            // Strict 2-line TUI diagnostic contract (spec tui-diagnostics-cleanup):
-            // line 1 = short stop marker (no repeat of an assistant-published
-            // reason), line 2 = one combined action including durable archive
-            // pointer (live current_blocked.md is cleared on recovery).
+            // Keep the stop marker and durable archive action on two lines.
             let status = blocked_status_label(blocker_summary);
             let _ = renderer.line(MessageStyle::Warning, &status);
             let is_verification_block = is_verification_pending_block(blocker_summary);
@@ -497,7 +494,7 @@ pub(super) fn write_blocked_handoff_after_checkpoint(
                 BlockedHandoffResume::Available(id) => Some(id.as_str()),
                 BlockedHandoffResume::Unavailable(_) => None,
             };
-            let action = blocked_action_line(
+            let mut action = blocked_action_line(
                 workspace,
                 &artifacts.current_path,
                 &artifacts.archive_path,
@@ -506,6 +503,9 @@ pub(super) fn write_blocked_handoff_after_checkpoint(
                 is_plan_mode_mutation_block(blocker_summary),
                 is_verification_block,
             );
+            if artifacts.retention_warning.is_some() {
+                action.push_str(" Session history could not be protected from retention; see logs.");
+            }
             let _ = renderer.line(MessageStyle::Info, &action);
 
             if let Some(handle) = handle {

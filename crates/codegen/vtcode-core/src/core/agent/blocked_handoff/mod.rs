@@ -34,6 +34,8 @@ pub struct BlockedHandoffArtifacts {
     pub current_path: PathBuf,
     /// Path to the archived blocked handoff markdown file.
     pub archive_path: PathBuf,
+    /// Failure to protect an existing session from retention, if any.
+    pub retention_warning: Option<String>,
 }
 
 /// Resume metadata for a blocked handoff.
@@ -119,9 +121,9 @@ pub fn write_blocked_handoff_with_resume(
     // Preserve forensic artifacts and pin the session so ordinary retention
     // cannot erase evidence while this blocker remains unresolved.
     copy_blocker_session_forensics(&workspace, session_id, &archive_path);
-    pin_blocker_session_retention(&workspace, session_id);
+    let retention_warning = pin_blocker_session_retention(&workspace, session_id);
 
-    Ok(BlockedHandoffArtifacts { current_path, archive_path })
+    Ok(BlockedHandoffArtifacts { current_path, archive_path, retention_warning })
 }
 
 /// Copy session `events.jsonl` / ATIF into a forensics dir beside the archive.
@@ -156,12 +158,18 @@ fn copy_forensics_from_dir(session_dir: &Path, archive_path: &Path) {
 }
 
 /// Pin the session directory against retention while the blocker is open.
-fn pin_blocker_session_retention(workspace: &Path, session_id: &str) {
+fn pin_blocker_session_retention(workspace: &Path, session_id: &str) -> Option<String> {
     let session_dir = vtcode_memory::session_directory(workspace, session_id);
-    if !session_dir.is_dir() {
-        return;
+    if fs::symlink_metadata(&session_dir).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) {
+        return None;
     }
-    let _ = vtcode_memory::pin_session_retention(&session_dir, "unresolved-blocker");
+    vtcode_memory::pin_session_retention(&session_dir, "unresolved-blocker")
+        .err()
+        .map(|error| {
+            let warning = format!("Could not protect session {} from retention: {error}", session_dir.display());
+            tracing::warn!(%warning);
+            warning
+        })
 }
 
 /// Clear retention pins when a blocker archive for `session_id` is resolved.
@@ -170,22 +178,26 @@ fn unpin_resolved_blocker_session(workspace: &Path, session_id: &str) {
     let Ok((_, _, blockers_dir)) = safe_handoff_directories(workspace) else {
         return;
     };
-    if let Ok(entries) = fs::read_dir(&blockers_dir) {
-        let resolution_marker = format!("resolved_by_session: {session_id}");
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                continue;
-            }
-            let Ok(content) = fs::read_to_string(&path) else {
-                continue;
-            };
-            if parse_blocked_handoff_content(&content).is_some_and(|info| info.session_id == session_id)
-                && !content.lines().any(|line| line.trim() == resolution_marker)
-            {
-                // Another unresolved archive still references this session.
-                return;
-            }
+    let Ok(entries) = fs::read_dir(&blockers_dir) else {
+        return;
+    };
+    let resolution_marker = format!("resolved_by_session: {session_id}");
+    for entry in entries {
+        let Ok(entry) = entry else { return };
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        if ensure_not_symlink(&path).is_err() {
+            return;
+        }
+        let Ok(content) = fs::read_to_string(&path) else { return };
+        let Some(info) = parse_blocked_handoff_content(&content) else {
+            return;
+        };
+        if info.session_id == session_id && !content.lines().any(|line| line.trim() == resolution_marker) {
+            // Another unresolved archive still references this session.
+            return;
         }
     }
     let session_dir = vtcode_memory::session_directory(workspace, session_id);
@@ -222,7 +234,10 @@ pub fn find_latest_archived_blocker_for_session(workspace: &Path, session_id: &s
     let mut best: Option<(std::time::SystemTime, BlockedHandoffInfo)> = None;
     for entry in entries.flatten() {
         let path = entry.path();
-        let file_name = path.file_name()?.to_string_lossy().to_ascii_lowercase();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("md") {
+            continue;
+        }
+        let file_name = entry.file_name().to_string_lossy().to_ascii_lowercase();
         if !file_name.contains(&needle) && !needle.contains(file_name.as_str()) {
             // Also match sanitized session prefix (blocker files lowercase the id).
             if !file_name.contains("session-") {
@@ -230,16 +245,24 @@ pub fn find_latest_archived_blocker_for_session(workspace: &Path, session_id: &s
             }
             // Fall through to content check: session_id is in front-matter.
         }
-        ensure_not_symlink(&path).ok()?;
-        let content = fs::read_to_string(&path).ok()?;
-        let info = parse_blocked_handoff_content(&content)?;
+        if ensure_not_symlink(&path).is_err() {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(info) = parse_blocked_handoff_content(&content) else {
+            continue;
+        };
         if info.session_id != session_id
             && !session_id.contains(&info.session_id)
             && !info.session_id.contains(session_id)
         {
             continue;
         }
-        let modified = entry.metadata().and_then(|meta| meta.modified()).ok()?;
+        let Ok(modified) = entry.metadata().and_then(|meta| meta.modified()) else {
+            continue;
+        };
         let replace = best.as_ref().is_none_or(|(best_time, _)| modified > *best_time);
         if replace {
             best = Some((modified, info));

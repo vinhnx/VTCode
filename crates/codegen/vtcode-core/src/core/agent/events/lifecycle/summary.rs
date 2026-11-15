@@ -1,4 +1,5 @@
 use super::*;
+use crate::tools::file_ops::canonical_diff_previews;
 
 fn pluralize<'a>(count: u64, singular: &'a str, plural: &'a str) -> &'a str {
     if count == 1 { singular } else { plural }
