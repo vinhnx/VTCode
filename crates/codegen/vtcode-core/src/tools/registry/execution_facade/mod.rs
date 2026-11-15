@@ -328,12 +328,6 @@ impl ToolRegistry {
         };
         let full_auto_denied = full_auto_denied.await;
         if full_auto_denied {
-            let _error = ToolExecutionError::new(
-                tool_name_owned.clone(),
-                ToolErrorType::PolicyViolation,
-                super::execution_stages::full_auto_denial_message(&tool_name, &display_name),
-            );
-
             record_failure(
                 tool_name_owned.clone(),
                 false,
@@ -379,9 +373,6 @@ impl ToolRegistry {
                 }
                 _ => format!("Tool '{display_name}' execution denied by policy"),
             };
-
-            let _error =
-                ToolExecutionError::new(tool_name_owned.clone(), ToolErrorType::PolicyViolation, error_msg.clone());
 
             record_failure(
                 tool_name_owned.clone(),
@@ -777,8 +768,6 @@ impl ToolRegistry {
                     if is_mcp_tool {
                         self.mcp_circuit_breaker.record_failure_category(ErrorCategory::Timeout);
                     }
-                    // A timed-out mutating tool may have partially mutated:
-                    // drop cached reads conservatively, as on the error path.
                     if !readonly_classification {
                         self.invalidate_mutated_reads(&tool_name_owned, &args_for_recording);
                     }
@@ -905,9 +894,6 @@ impl ToolRegistry {
                     return Err(err);
                 }
 
-                // A failed mutating tool may have partially mutated: drop
-                // cached reads conservatively so replays never serve
-                // pre-mutation content.
                 if !readonly_classification {
                     self.invalidate_mutated_reads(&tool_name_owned, &args_for_recording);
                 }
