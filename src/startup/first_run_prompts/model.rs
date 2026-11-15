@@ -7,7 +7,7 @@ use vtcode_core::llm::lightweight_model_choices;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::interactive_list::SelectionEntry;
 
-use super::common::{prompt_with_placeholder, run_selection};
+use super::common::{prompt_with_placeholder, run_selection, select_numbered_option};
 
 pub(crate) fn prompt_model(
     renderer: &mut AnsiRenderer,
@@ -233,9 +233,7 @@ fn prompt_lightweight_model_text(renderer: &mut AnsiRenderer, options: &[Lightwe
             .map(|option| option.value.clone())
             .unwrap_or_default());
     }
-    if let Ok(index) = trimmed.parse::<usize>()
-        && let Some(option) = options.get(index.saturating_sub(1))
-    {
+    if let Some(option) = select_numbered_option(options, trimmed) {
         return Ok(option.value.clone());
     }
 

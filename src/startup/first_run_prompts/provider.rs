@@ -7,7 +7,7 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::interactive_list::SelectionEntry;
 
-use super::common::{prompt_with_placeholder, run_selection};
+use super::common::{prompt_with_placeholder, run_selection, select_numbered_option};
 
 /// Pick the initial provider for the wizard.
 ///
@@ -221,9 +221,7 @@ fn prompt_provider_text(
             return Ok(default);
         }
 
-        if let Ok(index) = trimmed.parse::<usize>()
-            && let Some(provider) = providers.get(index - 1)
-        {
+        if let Some(provider) = select_numbered_option(providers, trimmed) {
             return Ok(*provider);
         }
 

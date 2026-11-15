@@ -3,7 +3,7 @@ use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::interactive_list::SelectionEntry;
 
-use super::common::{prompt_with_placeholder, run_selection};
+use super::common::{prompt_with_placeholder, run_selection, select_numbered_option};
 
 pub(crate) fn prompt_reasoning_effort(
     renderer: &mut AnsiRenderer,
@@ -71,9 +71,7 @@ fn prompt_reasoning_effort_text(
             return Ok(default);
         }
 
-        if let Ok(index) = trimmed.parse::<usize>()
-            && let Some((level, _)) = levels.get(index - 1)
-        {
+        if let Some((level, _)) = select_numbered_option(levels, trimmed) {
             return Ok(*level);
         }
 
