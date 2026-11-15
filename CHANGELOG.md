@@ -5,6 +5,53 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.182.4 - 2026-11-15
+
+### Highlights
+
+#### Bug Fixes
+
+- Tab-to-queue, queue button, and pending-list reconcile (b90a15a8)
+- Honor analyze format, escape stats HTML, harden ask/init (74de0db0)
+- Fail-closed merges, exact backup matching, icon facade (927a034d)
+- Separator-safe matching, pending audit, backup hardening (6d91169e)
+- Validate reconciler refs and bind git cwd (043cf037)
+- Contain manifest agent paths, drop placeholder test (aa90838e)
+- BOM frontmatter and bounded rule reads (5832bf76)
+- Race-free forced delivery (c3132b86)
+- Overflow, resilience, traversal, input validation (4c382fe9)
+- Canonical patch targets, legacy MCP matching (82a59bea)
+- Preserve argument boundaries in caches (23aeb646)
+- Keep token truncation on valid UTF-8 boundaries (bc58f594)
+- Store subsecond mtimes so same-second rewrites invalidate cache (0f171e4f)
+- Non-blocking OAuth callbacks, honest keyring errors (9123b9f3)
+- Harden snapshot reads, retention, guards, migration (7f171460)
+- Fail-closed handoffs, incomplete-change markers, macOS split (1fd40585)
+- Require evidence before destructive undo (35530d84)
+- Share numbered-option selection, fix zero panic (50aa83b4)
+- Read pure-rust flags from invocation, not command text (a39e8791)
+- Fail loud on degenerate patch matches (3524f8cb)
+- Unlink symlinks on delete, single conflict check on write (5cd317e9)
+- Mtime-keyed listing cache, saturating line range (37d9d55c)
+- Invalidate replay reads on failed and timed-out mutations (2894efb7)
+- Close sed and ruff classifier gaps (5dad9e56)
+- Saturate loop-detector hard-limit math (f6d94d07)
+
+#### Documentation
+
+- Refine hero, quick start, and desktop sections (3e6f235d)
+
+#### Features
+
+- Show release notes on first launch after update for CLI and desktop (715d4574)
+
+### Other Changes
+
+#### Refactors
+
+- Split oversized files and restore the complexity lint (c83d10e8)
+- Move MCP tool-name parsing to vtcode-commons (85bf8844)
+
 ## 0.182.3 - 2026-11-14
 
 ### Highlights
