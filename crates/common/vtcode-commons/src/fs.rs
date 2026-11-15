@@ -404,3 +404,123 @@ pub fn trim_trailing_image_path_str(raw: &str) -> &str {
         has_supported_image_extension(Path::new(path_str))
     })
 }
+
+/// Durably sync a directory so recently created, renamed, or removed entries
+/// survive a crash.
+///
+/// Syncing a file is not enough: the directory entry pointing at it must be
+/// synced too. Pair with synced file writes in leaf-up order: sync each file,
+/// rename it into place, then sync the parent directory. Errors propagate to
+/// the caller; a failed sync must never be silently ignored, or durability is
+/// lost without notice.
+///
+/// # Platform notes
+///
+/// Unix opens directories with a plain read-only handle. Windows requires
+/// `FILE_FLAG_BACKUP_SEMANTICS` to open a directory at all, set here via
+/// [`OpenOptionsExt::custom_flags`](std::os::windows::fs::OpenOptionsExt).
+///
+/// # Errors
+///
+/// Returns an error when the directory cannot be opened or synced.
+pub fn sync_dir(path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+
+    #[cfg(not(windows))]
+    let file = std::fs::File::open(path).with_context(|| format!("open directory {}", path.display()))?;
+    #[cfg(windows)]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+            .with_context(|| format!("open directory {}", path.display()))?
+    };
+    file.sync_all().with_context(|| format!("sync directory {}", path.display()))?;
+    Ok(())
+}
+
+/// Rename a file or directory and durably sync the affected parents.
+///
+/// A bare rename can vanish on power loss even when the file contents were
+/// synced. This syncs the source parent and the destination parent (once when
+/// they are the same directory) so the namespace change survives a crash.
+/// Cross-filesystem renames fail, like [`std::fs::rename`].
+///
+/// # Errors
+///
+/// Returns an error when the rename fails or either parent cannot be synced.
+/// Callers must treat a failed rename as "unknown state" and re-inspect both
+/// paths rather than assuming either outcome.
+pub fn rename_synced(source: &Path, destination: &Path) -> Result<()> {
+    std::fs::rename(source, destination)
+        .with_context(|| format!("rename {} to {}", source.display(), destination.display()))?;
+    let source_parent = source
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("rename source {} has no parent", source.display()))?;
+    let destination_parent = destination
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("rename destination {} has no parent", destination.display()))?;
+    sync_dir(source_parent).with_context(|| format!("sync rename source parent {}", source_parent.display()))?;
+    if source_parent != destination_parent {
+        sync_dir(destination_parent)
+            .with_context(|| format!("sync rename destination parent {}", destination_parent.display()))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_dir_succeeds_on_existing_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        sync_dir(dir.path()).expect("sync tempdir");
+    }
+
+    #[test]
+    fn sync_dir_fails_on_missing_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let missing = dir.path().join("no-such-dir");
+        let err = sync_dir(&missing).expect_err("missing dir must fail");
+        assert!(err.to_string().contains("no-such-dir"), "unexpected error: {err:#}");
+    }
+
+    #[test]
+    fn rename_synced_moves_within_one_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = dir.path().join("before.txt");
+        let destination = dir.path().join("after.txt");
+        std::fs::write(&source, "payload").expect("write source");
+        rename_synced(&source, &destination).expect("rename within dir");
+        assert!(!source.exists());
+        assert_eq!(std::fs::read_to_string(&destination).expect("read"), "payload");
+    }
+
+    #[test]
+    fn rename_synced_moves_across_directories() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let from_dir = root.path().join("from");
+        let to_dir = root.path().join("to");
+        std::fs::create_dir_all(&from_dir).expect("create from");
+        std::fs::create_dir_all(&to_dir).expect("create to");
+        let source = from_dir.join("file.txt");
+        let destination = to_dir.join("file.txt");
+        std::fs::write(&source, "payload").expect("write source");
+        rename_synced(&source, &destination).expect("rename across dirs");
+        assert!(!source.exists());
+        assert_eq!(std::fs::read_to_string(&destination).expect("read"), "payload");
+    }
+
+    #[test]
+    fn rename_synced_fails_on_missing_source() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let err = rename_synced(&dir.path().join("absent.txt"), &dir.path().join("dest.txt"))
+            .expect_err("missing source must fail");
+        assert!(err.to_string().contains("absent.txt"), "unexpected error: {err:#}");
+        assert!(!dir.path().join("dest.txt").exists());
+    }
+}
