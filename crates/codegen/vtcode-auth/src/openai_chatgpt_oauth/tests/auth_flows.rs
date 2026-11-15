@@ -457,6 +457,16 @@ fn clear_openai_chatgpt_session_removes_file_and_keyring_sessions() {
     let session = sample_session();
     save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save file session");
 
+    if crate::credentials::keyring::entry("vtcode", "openai_chatgpt_session").is_err() {
+        assert!(clear_openai_chatgpt_session().is_err(), "unavailable keyring cannot confirm deletion");
+        assert!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+                .expect("load file")
+                .is_none()
+        );
+        return;
+    }
+
     if save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::Keyring).is_err() {
         clear_openai_chatgpt_session().expect("clear session");
         assert!(

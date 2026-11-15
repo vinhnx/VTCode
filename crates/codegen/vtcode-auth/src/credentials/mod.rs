@@ -177,21 +177,26 @@ impl CustomApiKeyStorage {
 
     /// Clear (delete) a stored API key.
     pub fn clear(&self, mode: AuthCredentialsStoreMode) -> Result<()> {
-        self.storage.clear_with_mode(mode)?;
-        if self.identity.is_none() {
-            legacy::clear_for_provider(&self.provider).context("failed to remove legacy plaintext credential")?;
-        }
-        Ok(())
+        let secure = self.storage.clear_with_mode(mode);
+        let legacy = if self.identity.is_none() {
+            legacy::clear_for_provider(&self.provider).context("failed to remove legacy plaintext credential")
+        } else {
+            Ok(())
+        };
+        merge_clear_results(secure, legacy)
     }
 
     /// Clear this key-scoped credential and optionally its provider-only
     /// legacy fallback.
     pub fn clear_with_legacy_fallback(&self, mode: AuthCredentialsStoreMode, clear_legacy: bool) -> Result<()> {
-        self.clear(mode)?;
-        if clear_legacy && self.identity.is_some() && !legacy_provider_account_is_ambiguous(&self.provider) {
-            Self::new(&self.provider).clear(mode)?;
-        }
-        Ok(())
+        let current = self.clear(mode);
+        let legacy = if clear_legacy && self.identity.is_some() && !legacy_provider_account_is_ambiguous(&self.provider)
+        {
+            Self::new(&self.provider).clear(mode)
+        } else {
+            Ok(())
+        };
+        merge_clear_results(current, legacy)
     }
 
     fn store_value(&self, api_key: &str, mode: AuthCredentialsStoreMode) -> Result<()> {
@@ -222,6 +227,14 @@ impl CustomApiKeyStorage {
 
         tracing::warn!(self.provider);
         self.load(mode)
+    }
+}
+
+fn merge_clear_results(first: Result<()>, second: Result<()>) -> Result<()> {
+    match (first, second) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+        (Err(first), Err(second)) => Err(anyhow::anyhow!("{first:#}; {second:#}")),
     }
 }
 
@@ -278,13 +291,18 @@ pub fn load_custom_api_keys(providers: &[String], mode: AuthCredentialsStoreMode
 
 /// Clear all custom API keys from secure storage.
 pub fn clear_custom_api_keys(providers: &[String], mode: AuthCredentialsStoreMode) -> Result<()> {
+    let mut errors = Vec::new();
     for provider in providers {
         let storage = CustomApiKeyStorage::new(provider);
-        if let Err(e) = storage.clear(mode) {
-            tracing::warn!("Failed to clear API key for provider '{provider}': {e}");
+        if let Err(error) = storage.clear(mode) {
+            errors.push(format!("{provider}: {error:#}"));
         }
     }
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        bail!("failed to clear API keys: {}", errors.join("; "))
+    }
 }
 
 #[cfg(test)]
@@ -379,6 +397,71 @@ mod tests {
                 .as_deref(),
             Some("test-stepfun-key")
         );
+    }
+
+    #[test]
+    #[serial]
+    fn exact_keyring_operations_report_unavailable_backend() {
+        let env = vtcode_commons::env_lock::lock();
+        let previous = std::env::var_os("VTCODE_DISABLE_KEYRING");
+        env.set_var("VTCODE_DISABLE_KEYRING", "1");
+        let storage = CredentialStorage::new("vtcode-test", "unavailable");
+        let load = storage.load_exact_with_mode(ResolvedStoreMode::Keyring);
+        let clear = storage.clear_exact_with_mode(ResolvedStoreMode::Keyring);
+        match previous {
+            Some(value) => env.set_var("VTCODE_DISABLE_KEYRING", value),
+            None => env.remove_var("VTCODE_DISABLE_KEYRING"),
+        }
+        assert!(load.is_err(), "unavailable keyring is not a missing credential");
+        assert!(clear.is_err(), "unavailable keyring cannot confirm deletion");
+    }
+
+    #[test]
+    #[serial]
+    fn bulk_clear_attempts_all_backends_and_reports_keyring_failure() {
+        let guard = TestAuthDirGuard::new();
+        let root = guard.temp_dir.as_ref().expect("auth dir").path();
+        let env = vtcode_commons::env_lock::lock();
+        let old_disable = std::env::var_os("VTCODE_DISABLE_KEYRING");
+        let old_config = std::env::var_os("VTCODE_CONFIG");
+        let old_home = std::env::var_os("VTCODE_HOME");
+        env.set_var("VTCODE_DISABLE_KEYRING", "1");
+        env.set_var("VTCODE_CONFIG", root);
+        env.set_var("VTCODE_HOME", root);
+        let names = vec!["audit-alpha".to_string(), "audit-beta".to_string()];
+        for name in &names {
+            CustomApiKeyStorage::new(name)
+                .store("fixture", AuthCredentialsStoreMode::File)
+                .expect("store");
+        }
+        let scoped = CustomApiKeyStorage::for_provider_key("audit-gamma", "AUDIT_GAMMA_KEY").expect("scoped");
+        let provider = CustomApiKeyStorage::new("audit-gamma");
+        scoped.store("scoped", AuthCredentialsStoreMode::File).expect("store scoped");
+        provider
+            .store("provider", AuthCredentialsStoreMode::File)
+            .expect("store provider");
+        let legacy_path = root.join("auth.json");
+        std::fs::write(&legacy_path, r#"{"mode":"api_key","provider":"audit-alpha","api_key":"fixture"}"#)
+            .expect("legacy fixture");
+        let result = clear_custom_api_keys(&names, AuthCredentialsStoreMode::Keyring);
+        let scoped_result = scoped.clear_with_legacy_fallback(AuthCredentialsStoreMode::Keyring, true);
+        for name in &names {
+            assert!(
+                CustomApiKeyStorage::new(name)
+                    .load(AuthCredentialsStoreMode::File)
+                    .expect("load")
+                    .is_none(),
+                "{name}"
+            );
+        }
+        assert!(!legacy_path.exists(), "legacy cleanup must run after a keyring error");
+        assert!(scoped.load(AuthCredentialsStoreMode::File).expect("load scoped").is_none());
+        assert!(provider.load(AuthCredentialsStoreMode::File).expect("load provider").is_none());
+        env.restore_var("VTCODE_DISABLE_KEYRING", old_disable);
+        env.restore_var("VTCODE_CONFIG", old_config);
+        env.restore_var("VTCODE_HOME", old_home);
+        assert!(result.is_err(), "cannot report that unavailable keyring was cleared");
+        assert!(scoped_result.is_err(), "both attempted keyring clears must be reported");
     }
 
     #[test]

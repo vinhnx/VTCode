@@ -204,10 +204,7 @@ impl CredentialStorage {
     }
 
     fn load_keyring(&self) -> Result<Option<String>> {
-        let entry = match keyring::entry(&self.service, &self.user) {
-            Ok(e) => e,
-            Err(_) => return Ok(None),
-        };
+        let entry = keyring::entry(&self.service, &self.user).context("Failed to access OS keyring")?;
 
         match entry.get_password() {
             Ok(value) => Ok(Some(value)),
@@ -217,10 +214,7 @@ impl CredentialStorage {
     }
 
     fn clear_keyring(&self) -> Result<()> {
-        let entry = match keyring::entry(&self.service, &self.user) {
-            Ok(e) => e,
-            Err(_) => return Ok(()),
-        };
+        let entry = keyring::entry(&self.service, &self.user).context("Failed to access OS keyring")?;
 
         match entry.delete_credential() {
             Ok(_) => {

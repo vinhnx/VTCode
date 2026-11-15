@@ -229,6 +229,9 @@ impl AuthCodeCallbackServer {
             }
         };
 
+        // No callback after the selected outcome can be consumed; close the
+        // receiver before yielding to graceful shutdown.
+        self.result_rx.close();
         self.shutdown().await;
         Ok(result)
     }
@@ -303,9 +306,7 @@ async fn handle_callback(
         match params.state.as_deref() {
             Some(actual_state) if actual_state == expected_state => {}
             _ => {
-                let message = "OAuth error: state mismatch".to_string();
-                drop(state.result_tx.send(AuthCallbackOutcome::Error(message.clone())).await);
-                return Html(error_html(state.page, &message));
+                return Html(error_html(state.page, "OAuth error: state mismatch"));
             }
         }
     }
@@ -317,23 +318,27 @@ async fn handle_callback(
             }
             _ => format!("OAuth error: {error}"),
         };
-        drop(state.result_tx.send(AuthCallbackOutcome::Error(message.clone())).await);
-        return Html(error_html(state.page, &message));
+        return finish_callback(&state, AuthCallbackOutcome::Error(message.clone()), error_html(state.page, &message));
     }
 
     let Some(code) = params.code else {
         let message = "Missing authorization code".to_string();
-        drop(state.result_tx.send(AuthCallbackOutcome::Error(message.clone())).await);
-        return Html(error_html(state.page, &message));
+        return finish_callback(&state, AuthCallbackOutcome::Error(message.clone()), error_html(state.page, &message));
     };
 
-    drop(state.result_tx.send(AuthCallbackOutcome::Code(code)).await);
-    Html(success_html(state.page))
+    finish_callback(&state, AuthCallbackOutcome::Code(code), success_html(state.page))
 }
 
 async fn handle_cancel(State(state): State<Arc<AuthCallbackState>>) -> Html<String> {
-    drop(state.result_tx.send(AuthCallbackOutcome::Cancelled).await);
-    Html(cancelled_html(state.page))
+    finish_callback(&state, AuthCallbackOutcome::Cancelled, cancelled_html(state.page))
+}
+
+fn finish_callback(state: &AuthCallbackState, outcome: AuthCallbackOutcome, page: String) -> Html<String> {
+    if state.result_tx.try_send(outcome).is_ok() {
+        Html(page)
+    } else {
+        Html(error_html(state.page, "OAuth callback is no longer accepting results"))
+    }
 }
 
 fn success_html(page: OAuthCallbackPage) -> String {
@@ -546,25 +551,86 @@ mod tests {
             result_tx,
         });
 
-        let html = handle_callback(
+        for rejected_state in [None, Some("wrong-state".to_string())] {
+            let html = handle_callback(
+                State(Arc::clone(&state)),
+                Query(AuthCallbackParams {
+                    code: Some("auth-code".to_string()),
+                    error: None,
+                    error_description: None,
+                    state: rejected_state,
+                }),
+            )
+            .await;
+            assert!(html.0.contains("Authentication Failed"));
+            assert!(matches!(result_rx.try_recv(), Err(mpsc::error::TryRecvError::Empty)));
+        }
+        let valid = handle_callback(
             State(state),
             Query(AuthCallbackParams {
-                code: Some("auth-code".to_string()),
+                code: Some("valid-code".to_string()),
                 error: None,
                 error_description: None,
-                state: Some("wrong-state".to_string()),
+                state: Some("expected-state".to_string()),
             }),
         )
         .await;
+        assert!(valid.0.contains("Authentication Successful"));
+        assert!(matches!(result_rx.recv().await, Some(AuthCallbackOutcome::Code(code)) if code == "valid-code"));
+    }
 
-        let outcome = result_rx.recv().await.expect("callback outcome");
-        match outcome {
-            AuthCallbackOutcome::Error(message) => {
-                assert!(message.contains("state mismatch"));
-            }
-            _ => panic!("expected error outcome"),
-        }
-        assert!(html.0.contains("Authentication Failed"));
+    #[tokio::test]
+    async fn callbacks_do_not_block_when_result_channel_is_full() {
+        let (result_tx, mut result_rx) = mpsc::channel(1);
+        result_tx
+            .try_send(AuthCallbackOutcome::Code("first".into()))
+            .expect("fill channel");
+        let state = Arc::new(AuthCallbackState {
+            page: OAuthCallbackPage::new(OAuthProvider::OpenAi),
+            expected_state: Some("expected".into()),
+            result_tx,
+        });
+        let callback = handle_callback(
+            State(Arc::clone(&state)),
+            Query(AuthCallbackParams {
+                code: Some("second".into()),
+                error: None,
+                error_description: None,
+                state: Some("expected".into()),
+            }),
+        );
+        let page = tokio::time::timeout(Duration::from_secs(1), callback)
+            .await
+            .expect("callback must not block");
+        assert!(page.0.contains("no longer accepting results"));
+        let page = tokio::time::timeout(Duration::from_secs(1), handle_cancel(State(state)))
+            .await
+            .expect("cancel must not block");
+        assert!(page.0.contains("no longer accepting results"));
+        assert!(matches!(result_rx.recv().await, Some(AuthCallbackOutcome::Code(code)) if code == "first"));
+        assert!(result_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn wait_closes_result_channel_before_server_shutdown() {
+        let (result_tx, result_rx) = mpsc::channel(1);
+        result_tx
+            .try_send(AuthCallbackOutcome::Code("first".into()))
+            .expect("queue result");
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (observed_tx, observed_rx) = oneshot::channel();
+        let server_handle = tokio::spawn(async move {
+            shutdown_rx.await.expect("shutdown signal");
+            observed_tx.send(result_tx.is_closed()).expect("shutdown observer");
+        });
+        let server = AuthCodeCallbackServer {
+            timeout: Duration::from_secs(1),
+            result_rx,
+            shutdown_tx: Some(shutdown_tx),
+            server_handle: Some(server_handle),
+        };
+        assert!(matches!(server.wait().await.expect("wait"), AuthCallbackOutcome::Code(code) if code == "first"));
+        assert!(observed_rx.await.expect("shutdown observation"));
     }
 
     #[tokio::test]

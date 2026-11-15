@@ -220,7 +220,15 @@ pub fn load_oauth_token_with_mode(mode: AuthCredentialsStoreMode) -> Result<Opti
 pub fn load_oauth_token() -> Result<Option<OpenRouterToken>> {
     let storage = OpenRouterTokenStorage::new();
     for mode in [AuthCredentialsStoreMode::Keyring, AuthCredentialsStoreMode::File] {
-        let Some(token) = storage.load(mode)? else {
+        let token = match storage.load(mode) {
+            Ok(token) => token,
+            Err(error) if mode == AuthCredentialsStoreMode::Keyring => {
+                tracing::debug!(%error, "optional keyring token lookup unavailable; trying file storage");
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        let Some(token) = token else {
             continue;
         };
 
@@ -506,6 +514,25 @@ mod tests {
             .expect("load default token")
             .expect("token should be present");
         assert_eq!(loaded.api_key, token.api_key);
+    }
+
+    #[test]
+    #[serial]
+    fn explicit_keyring_reports_unavailability_while_default_falls_back() {
+        let _guard = TestAuthDirGuard::new();
+        let env = vtcode_commons::env_lock::lock();
+        let previous = std::env::var_os("VTCODE_DISABLE_KEYRING");
+        env.set_var("VTCODE_DISABLE_KEYRING", "1");
+        let default_load = load_oauth_token();
+        let exact_load = load_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);
+        let exact_clear = clear_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);
+        match previous {
+            Some(value) => env.set_var("VTCODE_DISABLE_KEYRING", value),
+            None => env.remove_var("VTCODE_DISABLE_KEYRING"),
+        }
+        assert!(matches!(default_load, Ok(None)), "default lookup may fall back to file storage");
+        assert!(exact_load.is_err());
+        assert!(exact_clear.is_err());
     }
 
     #[test]

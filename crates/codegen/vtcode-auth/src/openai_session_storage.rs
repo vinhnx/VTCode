@@ -41,14 +41,17 @@ impl OpenAiSessionStorage {
     pub(crate) fn load(&self, mode: AuthCredentialsStoreMode) -> Result<Option<OpenAIChatGptSession>> {
         let effective_mode = mode.effective_mode();
         let session = match effective_mode {
-            ResolvedStoreMode::Keyring => self
-                .backend
-                .load_json_exact_with_mode(ResolvedStoreMode::Keyring)?
-                .or(self.backend.load_json_exact_with_mode(ResolvedStoreMode::File)?),
-            ResolvedStoreMode::File => self
-                .backend
-                .load_json_exact_with_mode(ResolvedStoreMode::File)?
-                .or(self.backend.load_json_exact_with_mode(ResolvedStoreMode::Keyring)?),
+            ResolvedStoreMode::Keyring => self.backend.load_json(mode)?,
+            ResolvedStoreMode::File => match self.backend.load_json_exact_with_mode(ResolvedStoreMode::File)? {
+                Some(session) => Some(session),
+                None => match self.backend.load_json_exact_with_mode(ResolvedStoreMode::Keyring) {
+                    Ok(session) => session,
+                    Err(error) => {
+                        tracing::debug!(%error, "optional keyring session lookup unavailable");
+                        None
+                    }
+                },
+            },
         };
 
         if let Some(session) = session {
