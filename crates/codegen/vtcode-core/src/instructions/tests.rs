@@ -378,6 +378,33 @@ async fn ignores_rules_readme_files() -> Result<()> {
 }
 
 #[test]
+fn rule_frontmatter_survives_leading_byte_order_mark() -> Result<()> {
+    use super::matching::{parse_rule_frontmatter, strip_rule_frontmatter};
+
+    let contents = "\u{FEFF}---\npaths:\n  - src/**\n---\nRule body\n";
+    assert_eq!(strip_rule_frontmatter(contents), "Rule body\n");
+    let frontmatter = parse_rule_frontmatter(contents, Path::new("rule.md"))?;
+    assert_eq!(frontmatter.paths, vec!["src/**".to_string()]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn rule_descriptor_ignores_body_beyond_frontmatter() -> Result<()> {
+    let workspace = tempdir()?;
+    let rules_dir = workspace.path().join(".vtcode/rules");
+    let body = "x".repeat(200 * 1024);
+    write_rule(&rules_dir, "big.md", &format!("---\npaths:\n  - src/**\n---\n{body}\n"))?;
+
+    let match_paths = vec![workspace.path().join("src/main.rs")];
+    let options = default_options(workspace.path(), workspace.path(), None, &match_paths);
+    let sources = discover_instruction_sources(&options).await?;
+    let rule = sources.iter().find(|s| s.path.ends_with("big.md")).expect("rule discovered");
+    assert!(rule.matched, "frontmatter paths must survive the bounded read");
+
+    Ok(())
+}
+
+#[test]
 fn highlight_fallback_uses_non_bullet_content() {
     let segments = vec![InstructionSegment {
         source: InstructionSource {

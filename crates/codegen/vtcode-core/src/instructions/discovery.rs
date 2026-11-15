@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow};
 use glob::{Pattern, glob};
 use hashbrown::HashSet;
-use tokio::io;
+use tokio::io::{self, AsyncReadExt};
 use tracing::warn;
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::canonicalize;
@@ -453,9 +453,21 @@ async fn discover_rule_sources(
 }
 
 async fn read_rule_descriptor(path: &Path) -> Result<RuleDescriptor> {
-    let contents = tokio::fs::read_to_string(path)
+    // Frontmatter is a small header by definition: read a bounded prefix so a
+    // giant rule body cannot exhaust memory during discovery. A fence that
+    // never closes inside the prefix degrades to no frontmatter (the rule
+    // still loads, unconditionally) instead of failing discovery.
+    const FRONTMATTER_PREFIX_BYTES: usize = 64 * 1024;
+    let mut file = tokio::fs::File::open(path)
         .await
         .with_context(|| format!("Failed to read instruction rule {}", path.display()))?;
+    let mut prefix = Vec::new();
+    (&mut file)
+        .take(FRONTMATTER_PREFIX_BYTES as u64)
+        .read_to_end(&mut prefix)
+        .await
+        .with_context(|| format!("Failed to read instruction rule {}", path.display()))?;
+    let contents = String::from_utf8_lossy(&prefix);
     let frontmatter = parse_rule_frontmatter(&contents, path)?;
     let specificity = frontmatter
         .paths

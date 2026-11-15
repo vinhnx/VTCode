@@ -26,6 +26,9 @@ pub(super) fn strip_rule_frontmatter(contents: &str) -> String {
 }
 
 fn split_frontmatter(contents: &str) -> Option<(&str, &str)> {
+    // A leading BOM would otherwise break the opening-fence match and leak
+    // the frontmatter block into the prompt as visible text.
+    let contents = contents.strip_prefix('\u{FEFF}').unwrap_or(contents);
     let mut lines = contents.split_inclusive('\n');
     let first = lines.next()?;
     if first.trim_end() != "---" {
