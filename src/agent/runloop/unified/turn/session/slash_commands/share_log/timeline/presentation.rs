@@ -63,6 +63,34 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                 pretty_json_string(&record.event),
                 false,
             ),
+            ThreadEvent::GoalUpdated(event) => timeline_row(
+                record.sequence,
+                TIMELINE_SOURCE_THREAD_EVENTS,
+                "goal.updated",
+                None,
+                "goal",
+                Some(match &event.goal {
+                    Some(snapshot) => match snapshot.state {
+                        vtcode_core::exec::events::goal::GoalState::Active => "in_progress",
+                        vtcode_core::exec::events::goal::GoalState::Paused => "paused",
+                        vtcode_core::exec::events::goal::GoalState::Complete => "completed",
+                        vtcode_core::exec::events::goal::GoalState::Blocked
+                        | vtcode_core::exec::events::goal::GoalState::BudgetLimited => "failed",
+                        vtcode_core::exec::events::goal::GoalState::Unknown => "pending",
+                    },
+                    None => "cancelled",
+                }),
+                record.turn_id.as_deref(),
+                record.submission_id.as_ref().map(|value| value.as_str()),
+                match &event.goal {
+                    Some(snapshot) => format!("Goal {}: {}", snapshot.state.as_str(), snapshot.objective),
+                    None => "Goal cleared".to_string(),
+                },
+                String::new(),
+                String::new(),
+                pretty_json_string(&record.event),
+                false,
+            ),
             ThreadEvent::ThreadStarted(event) => timeline_row(
                 record.sequence,
                 TIMELINE_SOURCE_THREAD_EVENTS,

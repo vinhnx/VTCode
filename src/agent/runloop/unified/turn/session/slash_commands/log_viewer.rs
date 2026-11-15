@@ -269,6 +269,13 @@ fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static s
         vtcode_core::exec::events::ThreadEvent::TrackerUpdated(snapshot) => {
             ("tracker.updated", format!("{}: {}/{}", snapshot.title, snapshot.completed, snapshot.total))
         }
+        vtcode_core::exec::events::ThreadEvent::GoalUpdated(event) => (
+            "goal.updated",
+            match &event.goal {
+                Some(snapshot) => format!("{}: {}", snapshot.state.as_str(), snapshot.objective),
+                None => "cleared".to_string(),
+            },
+        ),
         vtcode_core::exec::events::ThreadEvent::Unknown => ("unknown", String::new()),
     }
 }

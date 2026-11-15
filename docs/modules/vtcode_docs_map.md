@@ -1889,7 +1889,7 @@ below based on the topic area.
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: Core command reference, Fast mode, Execution explanations, Headless / CI, Search
+  - **Topics**: Core command reference, Fast mode, Goal loop (`/goal`), Execution explanations, Headless / CI
   - **User Questions**: "What can you tell me about Command Reference?", "How does Core command reference work?", "How
     does Fast mode work?"
 

@@ -181,7 +181,8 @@ impl ResponseBuilder {
             | ThreadEvent::PermissionResolved(_)
             | ThreadEvent::Interjected(_)
             | ThreadEvent::MatrixUpdated(_)
-            | ThreadEvent::TrackerUpdated(_) => {}
+            | ThreadEvent::TrackerUpdated(_)
+            | ThreadEvent::GoalUpdated(_) => {}
         }
     }
 

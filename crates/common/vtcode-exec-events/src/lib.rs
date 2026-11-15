@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 pub mod atif;
 pub mod diagnostic;
 pub use diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity};
+pub mod goal;
 pub mod items;
 pub use items::{
     AgentMessageItem, AppPreviewItem, AppUiPosture, CommandExecutionItem, CommandExecutionStatus, DecisionItem,
@@ -35,7 +36,7 @@ pub mod trace;
 pub mod tracker;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.28.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.29.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -125,6 +126,9 @@ pub enum ThreadEvent {
     /// Bounded task-tracker checklist snapshot after a mutation.
     #[serde(rename = "tracker.updated")]
     TrackerUpdated(Box<tracker::TrackerSnapshot>),
+    /// Bounded thread-goal snapshot after a mutation (`None` signals a clear).
+    #[serde(rename = "goal.updated")]
+    GoalUpdated(Box<goal::GoalUpdatedEvent>),
     /// Indicates that a new execution thread has started.
     #[serde(rename = "thread.started")]
     ThreadStarted(ThreadStartedEvent),

@@ -12,7 +12,7 @@ Detailed contracts and gotchas for `crates/common/vtcode-exec-events/`, moved ve
 
 ## ThreadEvent Variants
 
-`thread.started` | `thread.completed` | `thread.compact_boundary` | `context.reset` | `turn.started` | `turn.completed` | `turn.failed` | `turn.blocked` | `item.started` | `item.updated` | `item.completed` | `app.sandbox_denied` | `background_subprocess_completed` | `plan.delta` | `plan.approval.requested` | `plan.approval.resolved` | `matrix.updated` | `tracker.updated` | `error`
+`thread.started` | `thread.completed` | `thread.compact_boundary` | `context.reset` | `turn.started` | `turn.completed` | `turn.failed` | `turn.blocked` | `item.started` | `item.updated` | `item.completed` | `app.sandbox_denied` | `background_subprocess_completed` | `plan.delta` | `plan.approval.requested` | `plan.approval.resolved` | `matrix.updated` | `tracker.updated` | `goal.updated` | `error`
 
 ## Rules
 
@@ -34,3 +34,5 @@ Schema `0.26.0` adds optional `ToolOutputItem.is_delta`: `true` marks an increme
 Schema `0.27.0` adds boxed `tracker.updated` (`TrackerSnapshot`: raw title, explicit-or-derived completed/total, ordered `TrackerItemState` rows with dotted index paths, short descriptions, and canonical statuses); unknown-to-old-reader variant, ATIF skips it like matrix checkpoints. Emitted from structured `task_tracker` output by `ExecutionContextTracker::tracker_status_event` via both recorder fan-outs.
 
 Schema `0.28.0` adds optional `PlanningRecoverySnapshot.previous_response_class` (omitted when unset) for repeated-identical-failure detection; legacy checkpoints without the field decode to `None` (no false repeat).
+
+Schema `0.29.0` adds boxed `goal.updated` (`GoalUpdatedEvent.goal`: `Some(GoalSnapshot)` after a mutation, `None` on clear); unknown-to-old-reader variant, ATIF skips it like matrix/tracker checkpoints.
