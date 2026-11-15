@@ -62,15 +62,27 @@ impl CommandsHandler {
 pub struct AgentsHandler;
 
 impl AgentsHandler {
-    /// Process plugin agents from the plugin directory
+    /// Process plugin agents from the plugin directory.
+    ///
+    /// Manifest entries must stay inside the plugin root: absolute paths and
+    /// parent-directory escapes are skipped, and symlinks are never followed,
+    /// so a crafted manifest cannot smuggle outside files into agent specs.
     pub async fn process_agents(plugin_path: &Path, manifest_agents: Option<Vec<String>>) -> Result<Vec<PathBuf>> {
         let mut agent_files = Vec::new();
 
         // Add agents from manifest paths
         if let Some(manifest_paths) = manifest_agents {
             for path in manifest_paths {
-                let full_path = plugin_path.join(&path);
-                if fs::metadata(&full_path)
+                let relative = Path::new(&path);
+                if relative.is_absolute()
+                    || relative
+                        .components()
+                        .any(|component| matches!(component, std::path::Component::ParentDir))
+                {
+                    continue;
+                }
+                let full_path = plugin_path.join(relative);
+                if fs::symlink_metadata(&full_path)
                     .await
                     .map(|metadata| metadata.is_file())
                     .unwrap_or(false)
@@ -82,7 +94,7 @@ impl AgentsHandler {
 
         // Also look for agents in the default agents/ directory
         let default_agents_dir = plugin_path.join("agents");
-        if fs::metadata(&default_agents_dir)
+        if fs::symlink_metadata(&default_agents_dir)
             .await
             .map(|metadata| metadata.is_dir())
             .unwrap_or(false)
@@ -90,7 +102,10 @@ impl AgentsHandler {
             let mut entries = fs::read_dir(&default_agents_dir).await?;
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
-                if fs::metadata(&path).await.map(|metadata| metadata.is_file()).unwrap_or(false)
+                if fs::symlink_metadata(&path)
+                    .await
+                    .map(|metadata| metadata.is_file())
+                    .unwrap_or(false)
                     && path.extension().is_some_and(|ext| ext == "md")
                 {
                     agent_files.push(path);
@@ -328,4 +343,75 @@ pub struct PluginComponents {
     pub hooks: Option<PathBuf>,
     pub mcp_servers: Option<PathBuf>,
     pub lsp_servers: Option<PathBuf>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Plugin root at `<dir>/plugin` with a sibling file outside it, so
+    /// `../sibling.md` escapes the root while staying inside the temp dir.
+    async fn plugin_fixture() -> (TempDir, PathBuf) {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path().join("plugin");
+        fs::create_dir_all(root.join("agents")).await.expect("agents dir");
+        fs::create_dir_all(root.join("nested")).await.expect("nested dir");
+        fs::write(root.join("agents").join("ok.md"), "ok").await.expect("write ok");
+        fs::write(root.join("agents").join("notes.txt"), "not markdown")
+            .await
+            .expect("write txt");
+        fs::write(root.join("nested").join("custom.md"), "custom")
+            .await
+            .expect("write custom");
+        fs::write(dir.path().join("sibling.md"), "outside")
+            .await
+            .expect("write sibling");
+        (dir, root)
+    }
+
+    #[tokio::test]
+    async fn manifest_agent_paths_stay_contained() {
+        let (_dir, root) = plugin_fixture().await;
+        let outside = _dir.path().join("sibling.md");
+
+        let files = AgentsHandler::process_agents(
+            &root,
+            Some(vec![
+                "nested/custom.md".to_string(),
+                "../sibling.md".to_string(),
+                outside.to_string_lossy().into_owned(),
+                "missing.md".to_string(),
+            ]),
+        )
+        .await
+        .expect("process");
+
+        assert!(files.iter().all(|p| p.starts_with(&root)), "all results stay under the plugin root: {files:?}");
+        assert!(files.contains(&root.join("nested/custom.md")), "legit nested entry kept: {files:?}");
+        assert!(files.contains(&root.join("agents/ok.md")), "default dir scan kept: {files:?}");
+        assert!(
+            !files.iter().any(|p| p.ends_with("sibling.md")),
+            "traversal and absolute entries dropped: {files:?}"
+        );
+        assert!(!files.iter().any(|p| p.ends_with("notes.txt")), "non-markdown default files skipped: {files:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn manifest_agent_symlinks_are_skipped() {
+        let (_dir, root) = plugin_fixture().await;
+        let outside = _dir.path().join("sibling.md");
+        std::os::unix::fs::symlink(&outside, root.join("agents").join("link.md")).expect("symlink");
+
+        let files = AgentsHandler::process_agents(&root, Some(vec!["agents/link.md".to_string()]))
+            .await
+            .expect("process");
+
+        assert!(
+            !files.iter().any(|p| p.ends_with("link.md")),
+            "symlinked entries must not escape via following: {files:?}"
+        );
+        assert!(files.contains(&root.join("agents/ok.md")), "regular files still collected: {files:?}");
+    }
 }

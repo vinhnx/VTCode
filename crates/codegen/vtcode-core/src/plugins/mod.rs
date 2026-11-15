@@ -47,16 +47,6 @@ pub(crate) fn validate_plugin_component(value: &str) -> PluginResult<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    // Intentionally empty test module for compilation check
-
-    #[test]
-    fn test_plugin_system_compilation() {
-        // This test just verifies that the plugin system compiles
-    }
-}
-
 /// Plugin error types
 #[derive(Debug, thiserror::Error)]
 pub enum PluginError {
