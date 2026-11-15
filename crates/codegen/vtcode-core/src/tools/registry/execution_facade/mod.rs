@@ -777,6 +777,11 @@ impl ToolRegistry {
                     if is_mcp_tool {
                         self.mcp_circuit_breaker.record_failure_category(ErrorCategory::Timeout);
                     }
+                    // A timed-out mutating tool may have partially mutated:
+                    // drop cached reads conservatively, as on the error path.
+                    if !readonly_classification {
+                        self.invalidate_mutated_reads(&tool_name_owned, &args_for_recording);
+                    }
                     record_failure(
                         tool_name_owned,
                         is_mcp_tool,
@@ -898,6 +903,13 @@ impl ToolRegistry {
                 // failure and can react appropriately.
                 if err.to_string().contains("tool reentrancy blocked") {
                     return Err(err);
+                }
+
+                // A failed mutating tool may have partially mutated: drop
+                // cached reads conservatively so replays never serve
+                // pre-mutation content.
+                if !readonly_classification {
+                    self.invalidate_mutated_reads(&tool_name_owned, &args_for_recording);
                 }
 
                 let error = ToolExecutionError::from_anyhow(

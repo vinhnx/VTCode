@@ -182,6 +182,42 @@ async fn failed_apply_patch_does_not_report_modified_files() -> Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn failed_mutation_still_invalidates_cached_reads() -> Result<()> {
+    use std::time::Duration;
+
+    let temp_dir = TempDir::new()?;
+    fs::write(temp_dir.path().join("target.txt"), "before\n")?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    registry.allow_all_tools().await?;
+
+    // Seed a replayable read record for the target file.
+    let read_args = json!({"path": "target.txt"});
+    registry.execute_tool(tools::READ_FILE, read_args.clone()).await?;
+    assert!(
+        registry
+            .execution_history
+            .find_recent_successful_by_read_target(tools::READ_FILE, &read_args, Duration::from_secs(600))
+            .is_some(),
+        "seeded read must be replayable before the mutation"
+    );
+
+    // A patch that fails hard (unmatched hunk) may still have partially
+    // mutated, so cached reads of its target must be dropped anyway.
+    let bad_patch = "*** Begin Patch\n*** Update File: target.txt\n@@\n-no-such-line\n+new\n*** End Patch\n";
+    let outcome = registry.execute_tool(tools::APPLY_PATCH, json!({ "input": bad_patch })).await?;
+    assert_ne!(outcome.get("success").and_then(Value::as_bool), Some(true));
+
+    assert!(
+        registry
+            .execution_history
+            .find_recent_successful_by_read_target(tools::READ_FILE, &read_args, Duration::from_secs(600))
+            .is_none(),
+        "failed mutation must invalidate the cached read of its target"
+    );
+    Ok(())
+}
 #[tokio::test]
 async fn apply_patch_accepts_input_payload() -> Result<()> {
     let temp_dir = TempDir::new()?;
