@@ -13,6 +13,8 @@
 - `.env`, `.git`, `.DS_Store` are always skipped (`should_index_file()`); config excludes `target/`,
   `node_modules/`, `.vtcode/index/`.
 - `storage.rs` writes the single-file `index.md` snapshot; `snapshot.rs` only parses it, strictly.
+- Cache reuse requires size and full mtime; legacy snapshots without subseconds rebuild. Matching metadata can miss
+  preserved timestamps.
 - All writes go through `atomic_write`; key-derived names use `contained_record_path`.
 - Directory walks stat once per file: new logic uses the `*_with_metadata` variants.
 

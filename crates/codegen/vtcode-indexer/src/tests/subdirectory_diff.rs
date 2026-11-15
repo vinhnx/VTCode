@@ -4,7 +4,7 @@
 use super::super::*;
 
 fn cached_entry(path: &str) -> FileIndex {
-    FileIndex::from_parts(path.to_string(), String::from("hash"), 0, 0, String::from("txt"), Vec::new())
+    FileIndex::from_parts(path.to_string(), String::from("hash"), 0, None, 0, String::from("txt"), Vec::new())
 }
 
 /// Independent oracle for [`SimpleIndexer::cached_subdirectory_differs`]: set

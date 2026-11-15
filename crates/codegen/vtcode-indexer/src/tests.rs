@@ -981,4 +981,11 @@ fn parse_snapshot_rejects_malformed_snapshots() {
         ))
         .is_none()
     );
+    let with_nanos = |nanos: &str| {
+        format!("# Workspace File Index\n\n- **Entries**: 1\n\n{}", entry(&hash))
+            .replace("- **Size**:", &format!("- **Modified nanos**: {nanos}\n- **Size**:"))
+    };
+    assert_eq!(snapshot::parse_snapshot(&with_nanos("999999999")).unwrap()[0].modified_nanos, Some(999_999_999));
+    assert!(snapshot::parse_snapshot(&with_nanos("1000000000")).is_none());
+    assert!(snapshot::parse_snapshot(&with_nanos("invalid")).is_none());
 }

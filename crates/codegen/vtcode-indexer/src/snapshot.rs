@@ -18,6 +18,30 @@ use crate::FileIndex;
 use crate::SimpleIndexerConfig;
 use crate::atomic_write;
 
+impl FileIndex {
+    /// Crate-internal constructor so the snapshot parser (a sibling module)
+    /// can rebuild entries from disk; fields stay private to this module.
+    pub(crate) fn from_parts(
+        path: String,
+        hash: String,
+        modified: u64,
+        modified_nanos: Option<u32>,
+        size: u64,
+        language: String,
+        tags: Vec<String>,
+    ) -> Self {
+        Self {
+            path,
+            hash,
+            modified,
+            modified_nanos,
+            size,
+            language,
+            tags,
+        }
+    }
+}
+
 /// Name of the snapshot record inside the index directory.
 const SNAPSHOT_FILE: &str = "index.md";
 /// Header line written by the snapshot persistence path.
@@ -55,7 +79,7 @@ pub(crate) fn load_snapshot_entries(index_dir: &Path) -> Vec<FileIndex> {
 /// blocks with fixed-order field bullets. Returns `None` on any deviation so
 /// a partial load can never happen.
 pub(crate) fn parse_snapshot(text: &str) -> Option<Vec<FileIndex>> {
-    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
+    let mut lines = text.lines().filter(|line| !line.trim().is_empty()).peekable();
 
     if lines.next()? != SNAPSHOT_HEADER {
         return None;
@@ -76,6 +100,15 @@ pub(crate) fn parse_snapshot(text: &str) -> Option<Vec<FileIndex>> {
             return None;
         }
         let modified: u64 = bullet_value(lines.next()?, "Modified")?.parse().ok()?;
+        let modified_nanos = if lines.peek().is_some_and(|line| bullet_value(line, "Modified nanos").is_some()) {
+            let nanos: u32 = bullet_value(lines.next()?, "Modified nanos")?.parse().ok()?;
+            if nanos >= 1_000_000_000 {
+                return None;
+            }
+            Some(nanos)
+        } else {
+            None
+        };
         let size: u64 = bullet_value(lines.next()?, "Size")?.strip_suffix(" bytes")?.parse().ok()?;
         let language = bullet_value(lines.next()?, "Language")?.to_owned();
         let tags = match bullet_value(lines.next()?, "Tags")? {
@@ -83,7 +116,15 @@ pub(crate) fn parse_snapshot(text: &str) -> Option<Vec<FileIndex>> {
             joined => joined.split(", ").map(str::to_owned).collect::<Vec<_>>(),
         };
 
-        entries.push(FileIndex::from_parts(path.to_owned(), hash.to_owned(), modified, size, language, tags));
+        entries.push(FileIndex::from_parts(
+            path.to_owned(),
+            hash.to_owned(),
+            modified,
+            modified_nanos,
+            size,
+            language,
+            tags,
+        ));
     }
 
     (entries.len() == expected).then_some(entries)

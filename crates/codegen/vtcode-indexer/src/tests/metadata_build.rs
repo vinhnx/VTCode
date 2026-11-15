@@ -2,14 +2,16 @@
 //! must agree with the plain path-based builders on every input class.
 
 use super::super::*;
+use super::{counting_indexer, persist_call_count, snapshot_text};
 use std::fs;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tempfile::tempdir;
 
 fn assert_same_entry(left: &FileIndex, right: &FileIndex) {
     assert_eq!(left.path, right.path);
     assert_eq!(left.hash, right.hash);
     assert_eq!(left.modified, right.modified);
+    assert_eq!(left.modified_nanos, right.modified_nanos);
     assert_eq!(left.size, right.size);
     assert_eq!(left.language, right.language);
     assert_eq!(left.tags, right.tags);
@@ -153,5 +155,64 @@ fn reindex_serves_unchanged_entries_and_rebuilds_only_changed_files() -> Result<
     assert_ne!(edited.hash, before.iter().find(|entry| entry.path.ends_with("edited.txt")).unwrap().hash);
     assert_eq!(edited.size, "version one plus much more content".len() as u64);
 
+    Ok(())
+}
+
+#[test]
+fn same_second_same_size_edit_rebuilds_after_hydration() -> Result<()> {
+    use std::fs::{File, FileTimes};
+    use std::time::{Duration, UNIX_EPOCH};
+
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    let path = workspace.join("alpha.txt");
+    let set_mtime = |nanos| -> Result<()> {
+        let modified = UNIX_EPOCH + Duration::new(1_735_689_600, nanos);
+        File::options()
+            .write(true)
+            .open(&path)?
+            .set_times(FileTimes::new().set_modified(modified))?;
+        Ok(())
+    };
+    fs::write(&path, "first")?;
+    set_mtime(100_000_000)?;
+    let calls = Arc::new(Mutex::new(0));
+    let mut indexer = counting_indexer(workspace, &calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+
+    fs::write(&path, "other")?;
+    set_mtime(800_000_000)?;
+    let mut indexer = counting_indexer(workspace, &calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 1);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&calls), 2);
+    assert!(snapshot_text(&indexer)?.contains(&vtcode_commons::utils::calculate_sha256(b"other")));
+    Ok(())
+}
+
+#[test]
+fn legacy_snapshot_without_subseconds_is_rebuilt() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    fs::write(workspace.join("alpha.txt"), "content")?;
+    let calls = Arc::new(Mutex::new(0));
+    let mut indexer = counting_indexer(workspace, &calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+    let legacy = snapshot_text(&indexer)?
+        .lines()
+        .filter(|line| !line.starts_with("- **Modified nanos**:"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(indexer.index_dir().join("index.md"), legacy)?;
+
+    let mut indexer = counting_indexer(workspace, &calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 1);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&calls), 2);
+    assert!(snapshot_text(&indexer)?.contains("- **Modified nanos**:"));
     Ok(())
 }

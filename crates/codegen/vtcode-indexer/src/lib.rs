@@ -177,27 +177,15 @@ pub struct FileIndex {
     hash: String,
     /// Last modified timestamp.
     modified: u64,
+    /// Subsecond part of the modification time; absent in legacy entries.
+    #[serde(default)]
+    modified_nanos: Option<u32>,
     /// File size.
     size: u64,
     /// Language/extension.
     language: String,
     /// Simple tags.
     tags: Vec<String>,
-}
-
-impl FileIndex {
-    /// Crate-internal constructor so the snapshot parser (a sibling module)
-    /// can rebuild entries from disk; fields stay private to this module.
-    pub(crate) fn from_parts(
-        path: String,
-        hash: String,
-        modified: u64,
-        size: u64,
-        language: String,
-        tags: Vec<String>,
-    ) -> Self {
-        Self { path, hash, modified, size, language, tags }
-    }
 }
 
 /// Simple search result.
@@ -380,8 +368,8 @@ impl SimpleIndexer {
     /// hydrated entry, avoiding a full read + SHA-256 per unchanged file;
     /// otherwise build. Sets `rebuilt_any` when a file is built so the caller
     /// can skip no-op snapshot rewrites (entry-set drops are caught by the
-    /// caller's directory diff). `modified` is second-granularity: a
-    /// same-second, same-size rewrite is picked up by the next run.
+    /// caller's directory diff). Matching metadata is a heuristic: changes
+    /// that preserve both size and the filesystem timestamp can be missed.
     fn cached_or_built_index(&mut self, file_path: &Path, rebuilt_any: &mut bool) -> Result<Option<FileIndex>> {
         // Stat once and reuse the metadata for the unchanged screen, the
         // traversal filter, and the rebuilt entry instead of stat-ing up to
@@ -404,6 +392,7 @@ impl SimpleIndexer {
             && let Ok(modified) = metadata.modified()
             && let Ok(elapsed) = modified.duration_since(SystemTime::UNIX_EPOCH)
             && elapsed.as_secs() == cached.modified
+            && cached.modified_nanos == Some(elapsed.subsec_nanos())
             && metadata.len() == cached.size
         {
             return Ok(Some(cached.clone()));
@@ -668,8 +657,8 @@ impl SimpleIndexer {
     }
 
     #[inline]
-    fn get_modified_time(&self, file_path: &Path) -> Result<u64> {
-        metadata_modified_secs(&fs::metadata(file_path)?)
+    fn get_modified_time(&self, file_path: &Path) -> Result<std::time::Duration> {
+        metadata_modified_time(&fs::metadata(file_path)?)
     }
 
     #[inline]
@@ -726,17 +715,18 @@ impl SimpleIndexer {
             }
         };
 
-        let modified = metadata_modified_secs(metadata)?;
+        let modified = metadata_modified_time(metadata)?;
         Ok(Some(self.finish_file_index(file_path, content, modified)))
     }
 
     /// Assemble a [`FileIndex`] from already-read content and mtime, and cache
     /// the content for hash-verified searches.
-    fn finish_file_index(&mut self, file_path: &Path, content: String, modified: u64) -> FileIndex {
+    fn finish_file_index(&mut self, file_path: &Path, content: String, modified: std::time::Duration) -> FileIndex {
         let index = FileIndex {
             path: file_path.to_string_lossy().into_owned(),
             hash: calculate_hash(&content),
-            modified,
+            modified: modified.as_secs(),
+            modified_nanos: Some(modified.subsec_nanos()),
             size: content.len() as u64,
             language: self.detect_language(file_path),
             tags: vec![],
@@ -941,11 +931,11 @@ fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
 }
 
-/// Second-granularity mtime shared by the index builder and the unchanged
+/// Full mtime shared by the index builder and the unchanged
 /// screen so both observe the same clock reading for one stat.
 #[inline]
-fn metadata_modified_secs(metadata: &fs::Metadata) -> Result<u64> {
-    Ok(metadata.modified()?.duration_since(SystemTime::UNIX_EPOCH)?.as_secs())
+fn metadata_modified_time(metadata: &fs::Metadata) -> Result<std::time::Duration> {
+    Ok(metadata.modified()?.duration_since(SystemTime::UNIX_EPOCH)?)
 }
 
 #[cfg(test)]

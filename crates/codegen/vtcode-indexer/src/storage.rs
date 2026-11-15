@@ -138,6 +138,9 @@ fn write_markdown_fields(writer: &mut impl Write, entry: &FileIndex) -> std::io:
     writeln!(writer, "- **Path**: {}", entry.path)?;
     writeln!(writer, "- **Hash**: {}", entry.hash)?;
     writeln!(writer, "- **Modified**: {}", entry.modified)?;
+    if let Some(nanos) = entry.modified_nanos {
+        writeln!(writer, "- **Modified nanos**: {nanos}")?;
+    }
     writeln!(writer, "- **Size**: {} bytes", entry.size)?;
     writeln!(writer, "- **Language**: {}", entry.language)?;
     writeln!(writer, "- **Tags**: {}", entry.tags.join(", "))?;
