@@ -22,6 +22,7 @@ use vtcode_config::auth::McpOAuthService;
 use vtcode_config::mcp::{McpAllowListConfig, McpHttpHandshakeMode, McpProviderConfig, McpTransportConfig};
 use vtcode_utility_tool_specs::parse_mcp_tool;
 
+use super::sandbox_context::resolve_provider_sandbox_context;
 use super::{McpClient, McpSandboxContext, RmcpClient};
 use super::{
     McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo,
@@ -66,6 +67,9 @@ impl McpProvider {
         if config.name.trim().is_empty() {
             return Err(anyhow!("MCP provider name cannot be empty"));
         }
+
+        let sandbox_context = resolve_provider_sandbox_context(sandbox_context, config.sandbox.as_ref())
+            .with_context(|| format!("MCP provider '{}' has unsatisfiable sandbox overrides", config.name))?;
 
         let max_requests = std::cmp::max(1, config.max_concurrent_requests);
 
@@ -807,7 +811,7 @@ mod tests {
 
     use rmcp::model::{ProtocolVersion, ServerCapabilities, ServerPeerInfo};
     use rmcp::service::ClientLifecycleMode;
-    use vtcode_config::mcp::{McpHttpHandshakeMode, McpProviderConfig};
+    use vtcode_config::mcp::{McpHttpHandshakeMode, McpProviderConfig, McpSandboxOverrideConfig};
 
     async fn stdio_provider(name: &str) -> super::McpProvider {
         let config = McpProviderConfig {
@@ -837,6 +841,30 @@ mod tests {
         super::McpProvider::connect(config, None, None, false)
             .await
             .expect("http provider connects")
+    }
+
+    #[tokio::test]
+    async fn connect_rejects_sandbox_overrides_without_session_context() {
+        let mut config = McpProviderConfig {
+            name: "sandboxed".to_string(),
+            transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+                command: "true".to_string(),
+                args: Vec::new(),
+                working_directory: None,
+            }),
+            ..McpProviderConfig::default()
+        };
+        config.sandbox = Some(McpSandboxOverrideConfig {
+            max_memory_mb: Some(256),
+            ..McpSandboxOverrideConfig::default()
+        });
+        let err = super::McpProvider::connect(config, None, None, false)
+            .await
+            .err()
+            .expect("overrides without session context must fail before spawn");
+        let message = format!("{err:#}");
+        assert!(message.contains("unsatisfiable sandbox overrides"), "unexpected error: {message}");
+        assert!(message.contains("session sandboxing is disabled"), "unexpected error: {message}");
     }
 
     #[tokio::test]

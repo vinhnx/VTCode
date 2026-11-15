@@ -26,28 +26,28 @@ pub struct McpSandboxOverrides {
     /// When true, [`derive_mcp_sandbox_policy`] applies the conservative
     /// resource caps below without relaxing tighter parent limits. Default `true`.
     #[serde(default = "default_true")]
-    enforce_conservative_limits: bool,
+    pub enforce_conservative_limits: bool,
     /// Memory cap (MB) applied to MCP child processes. Default `512`.
     #[serde(default = "default_memory_mb")]
-    max_memory_mb: u64,
+    pub max_memory_mb: u64,
     /// Maximum number of processes / pids in the sandbox. Default `64`.
     #[serde(default = "default_max_pids")]
-    max_pids: u64,
+    pub max_pids: u64,
     /// CPU time budget in seconds. Default `60`.
     #[serde(default = "default_cpu_secs")]
-    cpu_time_secs: u64,
+    pub cpu_time_secs: u64,
     /// Wall-clock timeout in seconds. Default `120`.
     #[serde(default = "default_timeout_secs")]
-    timeout_secs: u64,
+    pub timeout_secs: u64,
     /// Optional writable root. With a workspace-write parent it must match
     /// every explicit parent root; the launch working directory remains writable.
     /// When unset, the sandbox inherits the parent's writable set.
     #[serde(default)]
-    writable_root: Option<PathBuf>,
+    pub writable_root: Option<PathBuf>,
     /// Network allow-list override. With a restricted parent, entries must
     /// exactly match parent entries; otherwise derivation fails.
     #[serde(default)]
-    allowed_endpoints: Vec<NetworkAllowlistEntry>,
+    pub allowed_endpoints: Vec<NetworkAllowlistEntry>,
 }
 
 impl Default for McpSandboxOverrides {

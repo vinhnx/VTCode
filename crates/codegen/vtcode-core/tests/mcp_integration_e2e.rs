@@ -66,6 +66,7 @@ fn build_mock_mcp_config(script_path: &std::path::Path) -> McpClientConfig {
         enabled: true,
         max_concurrent_requests: 1,
         startup_timeout_ms: Some(5_000),
+        sandbox: None,
     }];
 
     mcp_config
@@ -99,6 +100,7 @@ mod tests {
             enabled: true,
             max_concurrent_requests: 3,
             startup_timeout_ms: None,
+            sandbox: None,
         };
 
         // Create MCP configuration for time server
@@ -295,6 +297,7 @@ max_concurrent_requests = 1
             enabled: true,
             max_concurrent_requests: 1,
             startup_timeout_ms: None,
+            sandbox: None,
         };
 
         assert_eq!(provider_config.env.len(), 2);
@@ -330,6 +333,7 @@ max_concurrent_requests = 1
             enabled: true,
             max_concurrent_requests: 1,
             startup_timeout_ms: Some(5_000),
+            sandbox: None,
         }];
 
         let mut mcp_client = McpClient::new(mcp_config);
@@ -393,6 +397,7 @@ max_concurrent_requests = 1
                 enabled: true,
                 max_concurrent_requests: 1,
                 startup_timeout_ms: Some(1_000),
+                sandbox: None,
             }],
             ..Default::default()
         };

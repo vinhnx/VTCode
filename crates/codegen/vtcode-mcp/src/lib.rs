@@ -459,6 +459,7 @@ mod tests {
             enabled: true,
             max_concurrent_requests: 0,
             startup_timeout_ms: None,
+            sandbox: None,
         };
 
         let provider = McpProvider::connect(config, None, None, false).await.unwrap();

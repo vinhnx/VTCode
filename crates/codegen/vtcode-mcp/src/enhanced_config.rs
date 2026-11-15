@@ -202,6 +202,7 @@ mod tests {
                 enabled: true,
                 max_concurrent_requests: 5,
                 startup_timeout_ms: None,
+                sandbox: None,
             }],
             server: McpServerConfig {
                 enabled: true,

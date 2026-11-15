@@ -140,6 +140,33 @@ impl Default for McpHttpServerConfig {
     }
 }
 
+/// Per-server sandbox overrides, narrowed from the session sandbox policy.
+///
+/// Every field is optional: unset fields inherit the parent policy, and an
+/// absent `sandbox` section leaves the session policy unchanged. Setting any
+/// resource limit opts the server into the conservative cap family for the
+/// unset siblings; limits require a workspace-write session policy, since a
+/// read-only policy carries nothing to intersect.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct McpSandboxOverrideConfig {
+    /// Memory cap (MB) applied to this server's child processes.
+    #[serde(default)]
+    pub max_memory_mb: Option<u64>,
+    /// Maximum number of processes / pids in this server's sandbox.
+    #[serde(default)]
+    pub max_pids: Option<u64>,
+    /// CPU time budget in seconds.
+    #[serde(default)]
+    pub cpu_time_secs: Option<u64>,
+    /// Wall-clock timeout in seconds.
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+    /// Optional writable root, which must match every explicit parent root.
+    #[serde(default)]
+    pub writable_root: Option<std::path::PathBuf>,
+}
+
 /// Configuration for a single MCP provider
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
@@ -167,6 +194,11 @@ pub struct McpProviderConfig {
     /// Startup timeout in milliseconds for this provider
     #[serde(default)]
     pub startup_timeout_ms: Option<u64>,
+
+    /// Per-server sandbox overrides, narrowed from the session sandbox policy.
+    /// Absent means inherit the session policy unchanged.
+    #[serde(default)]
+    pub sandbox: Option<McpSandboxOverrideConfig>,
 }
 
 impl<'de> Deserialize<'de> for McpProviderConfig {
@@ -218,6 +250,7 @@ impl<'de> Deserialize<'de> for McpProviderConfig {
             enabled: wire.enabled,
             max_concurrent_requests: wire.max_concurrent_requests,
             startup_timeout_ms: wire.startup_timeout_ms,
+            sandbox: wire.sandbox,
         })
     }
 }
@@ -262,6 +295,8 @@ struct McpProviderConfigWire {
     max_concurrent_requests: usize,
     #[serde(default)]
     startup_timeout_ms: Option<u64>,
+    #[serde(default)]
+    sandbox: Option<McpSandboxOverrideConfig>,
 }
 
 impl Default for McpProviderConfig {
@@ -273,6 +308,7 @@ impl Default for McpProviderConfig {
             enabled: default_provider_enabled(),
             max_concurrent_requests: default_provider_max_concurrent(),
             startup_timeout_ms: None,
+            sandbox: None,
         }
     }
 }
@@ -374,6 +410,37 @@ working_directory = "/tmp"
             }
             McpTransportConfig::Http(_) => panic!("expected stdio transport"),
         }
+    }
+
+    #[test]
+    fn test_mcp_provider_config_sandbox_absent_by_default() {
+        let toml_str = r#"
+name = "plain"
+command = "uvx"
+args = ["mcp-server-time"]
+"#;
+        let provider: McpProviderConfig = toml::from_str(toml_str).expect("provider without sandbox must parse");
+        assert!(provider.sandbox.is_none());
+    }
+
+    #[test]
+    fn test_mcp_provider_config_sandbox_overrides_parse() {
+        let toml_str = r#"
+name = "capped"
+command = "uvx"
+args = ["mcp-server-time"]
+
+[sandbox]
+max_memory_mb = 256
+timeout_secs = 30
+writable_root = "/tmp/work"
+"#;
+        let provider: McpProviderConfig = toml::from_str(toml_str).expect("provider with sandbox must parse");
+        let sandbox = provider.sandbox.expect("sandbox section must parse");
+        assert_eq!(sandbox.max_memory_mb, Some(256));
+        assert_eq!(sandbox.timeout_secs, Some(30));
+        assert_eq!(sandbox.max_pids, None);
+        assert_eq!(sandbox.writable_root.as_deref(), Some(std::path::Path::new("/tmp/work")));
     }
 
     #[test]

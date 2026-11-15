@@ -21,6 +21,7 @@ fn test_provider_with_custom_startup_timeout() {
         enabled: true,
         max_concurrent_requests: 3,
         startup_timeout_ms: Some(30000), // 30 seconds
+        sandbox: None,
     };
 
     assert_eq!(provider.startup_timeout_ms, Some(30000));
@@ -39,6 +40,7 @@ fn test_provider_with_default_timeout() {
         enabled: true,
         max_concurrent_requests: 3,
         startup_timeout_ms: None, // Will use global default
+        sandbox: None,
     };
 
     assert_eq!(provider.startup_timeout_ms, None);
@@ -57,6 +59,7 @@ fn test_provider_with_no_timeout() {
         enabled: true,
         max_concurrent_requests: 3,
         startup_timeout_ms: Some(0), // No timeout (infinite)
+        sandbox: None,
     };
 
     assert_eq!(provider.startup_timeout_ms, Some(0));
@@ -83,6 +86,7 @@ async fn test_unreachable_provider_does_not_block_initialization() {
             enabled: true,
             max_concurrent_requests: 1,
             startup_timeout_ms: Some(500),
+            sandbox: None,
         }],
         startup_timeout_seconds: Some(1),
         tool_timeout_seconds: Some(1),
@@ -137,6 +141,7 @@ async fn test_partial_provider_failures_still_keep_healthy_provider() {
                 enabled: true,
                 max_concurrent_requests: 1,
                 startup_timeout_ms: Some(500),
+                sandbox: None,
             },
             McpProviderConfig {
                 name: "mock".to_string(),
@@ -151,6 +156,7 @@ async fn test_partial_provider_failures_still_keep_healthy_provider() {
                 // CI and full-suite runs can delay Python startup enough that a
                 // 2s budget flakes even though the provider is otherwise healthy.
                 startup_timeout_ms: Some(10_000),
+                sandbox: None,
             },
         ],
         startup_timeout_seconds: Some(10),

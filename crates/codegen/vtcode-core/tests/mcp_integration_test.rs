@@ -107,6 +107,7 @@ max_concurrent_requests = 1
             enabled: true,
             max_concurrent_requests: 2,
             startup_timeout_ms: None,
+            sandbox: None,
         };
 
         assert_eq!(provider_config.name, "context7");
@@ -337,6 +338,7 @@ max_concurrent_requests = 1
             enabled: true,
             max_concurrent_requests: 1,
             startup_timeout_ms: None,
+            sandbox: None,
         };
 
         assert_eq!(provider_config.env.len(), 2);

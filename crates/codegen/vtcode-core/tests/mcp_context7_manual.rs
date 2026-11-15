@@ -21,6 +21,7 @@ async fn context7_list_tools_smoke() {
         enabled: true,
         max_concurrent_requests: 1,
         startup_timeout_ms: None,
+        sandbox: None,
     };
 
     let config = McpClientConfig {

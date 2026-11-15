@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 mod transport;
 pub use transport::{
     MCP_LEGACY_PROTOCOL_VERSION, MCP_STABLE_PROTOCOL_VERSION, McpHttpHandshakeMode, McpHttpServerConfig,
-    McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
+    McpProviderConfig, McpSandboxOverrideConfig, McpStdioServerConfig, McpTransportConfig,
 };
 
 /// Top-level MCP configuration
