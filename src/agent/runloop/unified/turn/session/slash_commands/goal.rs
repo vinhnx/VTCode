@@ -170,9 +170,6 @@ pub(crate) async fn handle_goal_command(
             extra.push((MessageStyle::Error, format!("Could not emit goal event: {err:#}")));
         }
     }
-    if effect.submit.is_some() {
-        ctx.session_stats.reset_goal_continuation_budget();
-    }
     drop(tracker);
     for (style, line) in effect.lines.into_iter().chain(extra) {
         ctx.renderer.line(style, &line)?;

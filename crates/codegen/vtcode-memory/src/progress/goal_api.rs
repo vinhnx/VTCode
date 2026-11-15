@@ -86,6 +86,23 @@ impl GoalTracker {
         self.orchestration.as_ref().map_or(0, |o| o.tokens_used_high_water)
     }
 
+    /// Consumed auto-continue turns this episode. Zero without a goal.
+    #[must_use]
+    pub fn auto_continue_turns(&self) -> u8 {
+        self.orchestration.as_ref().map_or(0, |o| o.auto_continue_turns)
+    }
+
+    /// Atomically reserve one auto-continue turn when budget remains,
+    /// returning the 1-based turn number. `None` leaves state untouched.
+    pub fn claim_auto_continue_turn(&mut self, max_turns: u8) -> Option<u8> {
+        let o = self.orchestration.as_mut()?;
+        if o.auto_continue_turns >= max_turns {
+            return None;
+        }
+        o.auto_continue_turns = o.auto_continue_turns.saturating_add(1);
+        Some(o.auto_continue_turns)
+    }
+
     /// Fold a session token-total observation into the high-water mark.
     /// Monotonic, and a no-op without a goal.
     pub fn record_token_observation(&mut self, session_total: i64) {

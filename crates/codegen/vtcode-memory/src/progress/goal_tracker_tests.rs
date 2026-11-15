@@ -419,6 +419,34 @@ fn account_elapsed_flushes_baseline_without_double_counting() {
 }
 
 #[test]
+fn claim_auto_continue_turn_reserves_until_capped() {
+    let mut t = make_tracker();
+    assert_eq!(t.claim_auto_continue_turn(2), None, "no goal claims nothing");
+    activate_tracker(&mut t);
+    assert_eq!(t.auto_continue_turns(), 0);
+    assert_eq!(t.claim_auto_continue_turn(2), Some(1));
+    assert_eq!(t.claim_auto_continue_turn(2), Some(2));
+    assert_eq!(t.claim_auto_continue_turn(2), None, "cap must hold");
+    assert_eq!(t.auto_continue_turns(), 2, "failed claim must not consume");
+}
+
+#[test]
+fn set_and_resume_reset_auto_continue_budget() {
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    assert_eq!(t.claim_auto_continue_turn(1), Some(1));
+    assert_eq!(t.claim_auto_continue_turn(1), None);
+
+    t.pause(GoalPauseReason::User);
+    assert!(t.resume(), "resume must succeed");
+    assert_eq!(t.auto_continue_turns(), 0, "resume restores the budget");
+    assert_eq!(t.claim_auto_continue_turn(1), Some(1));
+
+    activate_tracker(&mut t);
+    assert_eq!(t.auto_continue_turns(), 0, "replacement starts fresh");
+}
+
+#[test]
 fn record_token_observation_tracks_monotonic_high_water() {
     let mut t = make_tracker();
     activate_tracker(&mut t);

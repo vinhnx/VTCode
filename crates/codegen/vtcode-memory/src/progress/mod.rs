@@ -529,6 +529,12 @@ pub struct GoalOrchestration {
     /// Consecutive not-achieved verdicts.
     #[serde(default)]
     consecutive_not_achieved: u32,
+    /// Consumed goal-loop auto-continue turns this episode. Reset by
+    /// [`GoalTracker::create_goal`](GoalTracker::create_goal) and
+    /// [`GoalTracker::resume`](GoalTracker::resume) so every fresh or resumed
+    /// goal gets a full budget on every frontend.
+    #[serde(default)]
+    auto_continue_turns: u8,
     /// Turn at which the strategist last fired.
     #[serde(default)]
     last_strategist_fired_at: u32,
@@ -713,6 +719,7 @@ impl GoalTracker {
             classifier_runs_attempted: 0,
             rounds_since_verify: 0,
             consecutive_not_achieved: 0,
+            auto_continue_turns: 0,
             last_strategist_fired_at: 0,
             strategist_cap_bonus: 0,
             last_strategy_path: None,
@@ -787,6 +794,7 @@ impl GoalTracker {
             o.pause_message = None;
             o.classifier_runs_attempted = 0;
             o.rounds_since_verify = 0;
+            o.auto_continue_turns = 0;
             o.reset_strategist_fields();
             o.reset_classifier_stall_fields();
             self.active_since = Some(Instant::now());

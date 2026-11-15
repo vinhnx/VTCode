@@ -96,9 +96,6 @@ pub(crate) struct SessionStats {
     /// Bounded plan-mode auto-continue turns (recoverable blocked planning
     /// ends when no plan is approval-ready). Independent of tracker budget.
     plan_continuation_turns: u8,
-    /// Bounded goal-loop auto-continue turns. Independent of tracker budget;
-    /// reset whenever a goal is set or resumed.
-    goal_continuation_turns: u8,
     /// Consecutive failed harness auto-verifications this stall episode.
     /// Incremented by [`Self::record_verification_auto_failure`], reset by
     /// [`Self::record_verification_auto_success`] and every

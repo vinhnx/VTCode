@@ -454,7 +454,7 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
         return Ok(idle(false));
     }
     match run_goal_auto_continue(GoalAutoContinue {
-        session_stats,
+        goal_tracker,
         runtime,
         renderer,
         ctrl_c_state,
@@ -475,7 +475,7 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
 
 /// Inputs for one goal auto-continue attempt.
 struct GoalAutoContinue<'a> {
-    session_stats: &'a mut SessionStats,
+    goal_tracker: &'a SharedGoalTracker,
     runtime: &'a mut AgentRuntime,
     renderer: &'a mut AnsiRenderer,
     ctrl_c_state: &'a Arc<CtrlCState>,
@@ -494,42 +494,34 @@ enum GoalContinueOutcome {
 /// Queue one goal-loop follow-up within budget, mirroring the tracker branch.
 async fn run_goal_auto_continue(gate: GoalAutoContinue<'_>) -> Result<GoalContinueOutcome> {
     let GoalAutoContinue {
-        session_stats,
+        goal_tracker,
         runtime,
         renderer,
         ctrl_c_state,
         objective,
         max_turns,
     } = gate;
-    if session_stats.goal_continuation_turns() >= max_turns {
+    // Reserve budget first: a failed queue consumes one turn rather than looping.
+    let Some(turn_no) = goal_tracker.lock().await.claim_auto_continue_turn(max_turns) else {
         let _ = renderer.line(
             MessageStyle::Info,
             "[i] Goal auto-continue budget exhausted; the goal stays active. Type `continue` to resume it.",
         );
         return Ok(GoalContinueOutcome::Idle { exhausted: true });
-    }
+    };
     if crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_some() {
         return Ok(GoalContinueOutcome::Idle { exhausted: false });
     }
     let follow_up = format!(
         "Continue working toward the active thread goal: \"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently."
     );
-    let directive = format!(
-        "Goal auto-continue (turn {} of {}): keep pursuing \"{objective}\".",
-        session_stats.goal_continuation_turns().saturating_add(1),
-        max_turns
-    );
+    let directive = format!("Goal auto-continue (turn {turn_no} of {max_turns}): keep pursuing \"{objective}\".");
     match runtime.try_queue_synthetic_follow_up_input(follow_up) {
         Ok(()) => {
-            session_stats.record_goal_continuation_turn_with_limit(max_turns);
             Arc::make_mut(&mut runtime.state.messages).push(vtcode_core::llm::provider::Message::system(directive));
             // Queued auto-continue stays quiet like tracker/plan: the next
             // turn starts immediately.
-            tracing::debug!(
-                goal_turn = session_stats.goal_continuation_turns(),
-                max_turns,
-                "Queued goal auto-continue without TUI echo"
-            );
+            tracing::debug!(goal_turn = turn_no, max_turns, "Queued goal auto-continue without TUI echo");
             Ok(GoalContinueOutcome::Queued)
         }
         Err(err) => {
@@ -669,7 +661,7 @@ mod tests {
         .unwrap();
 
         assert!(matches!(flow, CorrectiveFlow::ContinueLoop));
-        assert_eq!(stats.goal_continuation_turns(), 1);
+        assert_eq!(goal_tracker.lock().await.auto_continue_turns(), 1);
         let queued = runtime.run_until_idle().expect("goal follow-up must be queued");
         assert!(queued.contains("Ship the release"), "follow-up must carry the objective: {queued}");
         assert!(
@@ -766,18 +758,18 @@ mod tests {
         let workspace = tempfile::tempdir().unwrap();
         let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
         let max_turns = tracker_continue::tracker_cross_turn_turns(None);
-        let mut stats = SessionStats::default();
+        let (_dir, goal_tracker) = active_goal_tracker("Ship it").await;
         for _ in 0..max_turns {
-            assert!(stats.record_goal_continuation_turn_with_limit(max_turns));
+            assert!(goal_tracker.lock().await.claim_auto_continue_turn(max_turns).is_some());
         }
-        assert!(!stats.record_goal_continuation_turn_with_limit(max_turns), "counter must cap at max");
+        assert_eq!(goal_tracker.lock().await.claim_auto_continue_turn(max_turns), None, "counter must cap at max");
 
+        let mut stats = SessionStats::default();
         let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
         let mut renderer = AnsiRenderer::stdout();
         let plan = PlanningWorkflowSessionState::default();
         let outcome = completed_turn();
         let ctrl_c = Arc::new(CtrlCState::new());
-        let (_dir, goal_tracker) = active_goal_tracker("Ship it").await;
 
         let flow = run_corrective_gate(CorrectiveGate {
             session_stats: &mut stats,
@@ -800,6 +792,6 @@ mod tests {
 
         assert!(matches!(flow, CorrectiveFlow::Proceed { .. }), "exhausted budget must idle");
         assert!(!runtime.has_pending_follow_up_inputs(), "exhausted budget must not queue");
-        assert_eq!(stats.goal_continuation_turns(), max_turns);
+        assert_eq!(goal_tracker.lock().await.auto_continue_turns(), max_turns);
     }
 }
