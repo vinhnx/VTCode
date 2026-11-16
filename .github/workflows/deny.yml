@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -54,7 +54,7 @@ jobs:
       # --locked keeps cargo-deny from re-resolving Cargo.lock during graph
       # generation, so the audit always reflects the committed lockfile.
       - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           command: check
           arguments: --locked
@@ -65,17 +65,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.100.0
 
       - name: Install cargo-vet
-        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        uses: taiki-e/install-action@v2.90.5
         with:
           tool: cargo-vet
 

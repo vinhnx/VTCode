@@ -6,7 +6,40 @@ This document describes the CI/CD pipeline and code quality tools used in the vt
 
 The project runs these GitHub Actions workflows: `build-linux-windows.yml` (release
 binaries), `webmcp.yml` (Pages deploy), `hotpath-benchmark.yml` + `hotpath-relay.yml`
-(benchmarks), `desktop-macos.yml` (desktop validation), and `deny.yml` (dependency audit).
+(benchmarks), `desktop-macos.yml` (desktop validation), `deny.yml` (dependency audit),
+and `verify-lockfile.yml` (action pin verification). See [action lockfiles](#action-lockfiles)
+for how `uses:` refs are pinned.
+
+### Action lockfiles
+
+Workflows reference actions by symbolic tag or branch (`actions/checkout@v7.0.1`); the committed
+`.github/workflows/actions.lock` records the exact commit SHA and owner/repository IDs that the
+Actions runner executes. This keeps `uses:` lines readable while still rejecting mutable or
+tampered pins. A bare 40-character SHA is allowed inline only where the lockfile format cannot
+cover it — reusable workflow calls at `jobs.<id>.uses`, such as `hotpath-relay.yml`.
+
+After adding or changing any `uses:` ref, regenerate the lockfile:
+
+```bash
+gh extension install github/gh-actions-lock   # once
+gh actions-lock
+```
+
+Commit the workflow and `actions.lock` changes together. Verification runs at two levels:
+
+- **Offline / local:** `./scripts/check.sh workflow-security` checks trigger policy and that every
+  symbolic ref has a lockfile entry with a 40-character commit. `gh actions-lock --verify-local`
+  is an equivalent offline coverage check.
+- **CI:** `verify-lockfile.yml` installs a pinned `gh-actions-lock` extension and runs
+  `gh actions-lock --verify`, which additionally re-resolves every ref upstream and fails when a
+  pin is stale or unreachable.
+
+Two pins were orphaned when their upstream moving refs advanced and had to be moved to live refs
+during onboarding: `dtolnay/rust-toolchain@stable` and `taiki-e/install-action@v2.90.5`. Every other
+action resolves to the exact commit it was previously pinned to. Full semver tags are preferred
+for actions with moving major tags; see the
+[install-action security guidance](https://github.com/taiki-e/install-action#security). Dependabot
+updates refs and the lockfile together with a 7-day `cooldown` so fresh releases settle first.
 
 ### 1. Build Linux & Windows (`build-linux-windows.yml`)
 
@@ -15,10 +48,10 @@ binaries), `webmcp.yml` (Pages deploy), `hotpath-benchmark.yml` + `hotpath-relay
 - Manual `workflow_dispatch` with release tag input
 - Dispatched from `scripts/release.sh` Step 3.5 via `gh workflow run`
 
-**Rust toolchain:** all four Rust setup steps (three in this workflow, one in `desktop-macos.yml`) explicitly select
-the version in
-`rust-toolchain.toml`, currently 1.100.0. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
-otherwise defaults to floating `stable`; pinning its commit alone does not pin the compiler.
+**Rust toolchain:** every Rust setup step (three in this workflow, two in `hotpath-benchmark.yml`, one each in
+`deny.yml` and `desktop-macos.yml`) explicitly selects the version in `rust-toolchain.toml`, currently 1.100.0.
+The [setup action](https://github.com/dtolnay/rust-toolchain/blob/stable/action.yml#L12) otherwise defaults to
+floating `stable`: `actions.lock` pins the action commit, but that does not pin the compiler.
 Update the workflow inputs alongside the canonical toolchain version, following
 [Rust Toolchain and MSRV](./toolchain-updates.md).
 `cargo nextest run --locked -p vtcode --test toolchain_pins_test` checks active
@@ -375,13 +408,17 @@ call the shared functions in `scripts/common.sh`, so the fast gate and the relea
 | --- | --- | --- |
 | `run_repo_governance_gates` | file length, docs/AGENTS.md links, top-level docs placement, tracked file sizes | `check-dev.sh`, `check.sh` |
 | `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Node: `npm install`) | `check-dev.sh --lints`, `check.sh` |
-| `run_cargo_machete` | unused dependencies (`cargo machete`, plain mode — never touches Cargo.lock) | `check-dev.sh`, `check.sh` |
+| `run_check` / `run_clippy` | compilation plus Cargo's built-in `unused_dependencies` manifest lint (warn-level, configured in root `Cargo.toml`) | `check-dev.sh`, `check.sh` |
 
-`run_cargo_machete` is warn-and-skip when `cargo-machete` is not installed (same convention as
-`run_cargo_deny`). It has known false positives for cfg-gated and re-exported dependencies — verify
-with `rg '<dep>' crates/<crate>/src` plus a `lib.rs` `pub use` check before removing, or record a
-justified ignore in that manifest's `[package.metadata.cargo-machete]` list. See
-[dependency-bloat-audit](dependency-bloat-audit.md) for the audit this gate came from.
+Unused dependencies are reported by Cargo 1.100's built-in `cargo::unused_dependencies` manifest
+lint — no external tool. It is `warn` (not `deny`) because the root binary's mutually exclusive
+allocator features make an `--all-features` build compile neither allocator static; the full
+rationale is in root `Cargo.toml`. The lint surfaces in the existing `cargo check` and
+`cargo clippy --all-targets --all-features` gates, so review those warnings rather than expecting a
+separate gate step. A dependency whose only call site is feature-gated must be declared
+`optional = true` with `dep:<name>` added to that feature, otherwise the lint flags it in builds
+where the feature is off. See [dependency-bloat-audit](dependency-bloat-audit.md) for the audit that
+introduced and later retired the external check.
 
 Do not describe these checks as CI-enforced. If a CI job is added later, it should call the same
 `scripts/common.sh` functions rather than re-implementing the checks in workflow YAML.

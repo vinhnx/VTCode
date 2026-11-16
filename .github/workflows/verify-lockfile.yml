@@ -1,0 +1,44 @@
+# Fails when .github/workflows/actions.lock is out of sync with the
+# workflows or a locked pin no longer verifies upstream.
+
+name: Verify Actions Lockfile
+
+permissions: {}
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+concurrency:
+  group: verify-lockfile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify workflow lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Keep the extension version pinned; Dependabot does not manage `run:`
+      # commands, so bump this deliberately alongside lockfile refreshes.
+      - name: Install gh-actions-lock
+        run: gh extension install github/gh-actions-lock --pin v0.4.1
+
+      # Frozen check: recomputes every pin and fails if the committed lockfile
+      # is stale, incomplete, or no longer verifies upstream.
+      - name: Verify lockfile
+        run: gh actions-lock --verify

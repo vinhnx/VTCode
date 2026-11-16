@@ -79,10 +79,14 @@ VT Code includes several built-in security features:
 VT Code enforces the following CI/CD security controls for GitHub Actions:
 
 - **Forbidden trigger policy**: `pull_request_target` and `workflow_run` are blocked by policy checks.
-- **Immutable action pinning**: every third-party and first-party action in workflows is pinned to a full 40-character
-  commit SHA.
-- **Workflow policy check in CI**: `scripts/check_workflow_security.sh` runs in CI and can be run locally via
-  `./scripts/check.sh workflow-security`.
+- **Immutable action pinning via lockfile**: workflows reference actions by symbolic tag/branch
+  (`.github/workflows/actions.lock`), and the lockfile pins each ref to a verified 40-character commit SHA.
+  An action ref without a lockfile entry is rejected. See [action lockfiles](development/ci-cd.md#action-lockfiles).
+- **Lockfile verification in CI**: `verify-lockfile.yml` runs `gh actions-lock --verify` to fail when the
+  lockfile is stale, incomplete, or a pin no longer verifies upstream. Dependabot updates workflow refs
+  and the lockfile together, with a 7-day cooldown for fresh releases.
+- **Workflow policy check in CI**: `scripts/check_workflow_security.sh` enforces trigger bans and lockfile
+  coverage offline; run it locally via `./scripts/check.sh workflow-security`.
 - **Least-privilege token permissions**: workflows default to `permissions: {}` and grant only job-level minimum
   permissions.
 - **Checkout credential hardening**: all `actions/checkout` usage sets `persist-credentials: false` unless explicitly
