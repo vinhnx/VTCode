@@ -130,7 +130,7 @@ impl DesktopView {
     /// transcript revision so chatty outputs are not rescanned every frame.
     pub(super) fn expanded_tool_tail(&mut self, index: usize) -> Option<gpui_kit::SharedString> {
         let item = self.transcript.get(index)?;
-        if !(item.is_tool() && item.expanded) {
+        if !(item.is_tool() && item.expanded) || item.has_output() || item.has_archived_output() {
             return None;
         }
         let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());

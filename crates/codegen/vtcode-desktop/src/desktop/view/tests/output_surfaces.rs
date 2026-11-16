@@ -28,7 +28,7 @@ fn output_surfaces_show_clean_terminal_text_and_copy_the_capture(cx: &mut TestAp
         });
         window.render_frame(cx);
         assert_eq!(window.find("output-body").label(), Some("first error\nsecond"));
-        assert_eq!(window.find("tool-output-ansi-output").label(), Some("first error\nsecond"));
+        assert!(window.try_find("tool-output-ansi-output").is_none());
         window.click("copy-output", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(raw));
     })
@@ -52,14 +52,14 @@ fn empty_tool_capture_does_not_fall_back_to_metadata(cx: &mut TestAppContext) {
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
         });
         window.render_frame(cx);
-        assert_eq!(window.find("tool-output-empty-output").label().unwrap_or_default(), "");
+        assert!(window.try_find("tool-output-empty-output").is_none());
         assert_eq!(window.find("output-body").label().unwrap_or_default(), "");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn transcript_output_is_compact_and_inspector_retains_full_capture(cx: &mut TestAppContext) {
+fn transcript_opens_full_capture_in_inspector(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -70,10 +70,7 @@ fn transcript_output_is_compact_and_inspector_retains_full_capture(cx: &mut Test
             view.inspector_open = false;
         });
         window.render_frame(cx);
-        let preview_element = window.find("tool-output-compact");
-        let preview = preview_element.label().unwrap();
-        assert!(preview.contains("output line 19"));
-        assert!(!preview.contains("output line 0\n"));
+        assert!(window.try_find("tool-output-compact").is_none());
         assert!(window.find("tool-open-output-compact").visible());
         focus_element_by_tab(window, "tool-open-output-compact", cx);
         window.press("enter", cx);
@@ -82,6 +79,86 @@ fn transcript_output_is_compact_and_inspector_retains_full_capture(cx: &mut Test
         let full = full_element.label().unwrap();
         assert!(full.contains("output line 0\n"));
         assert!(full.contains("output line 19"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn long_output_stays_out_of_transcript_and_remains_available(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 800., 900.);
+    let output = format!("start {} end", "long output ".repeat(150));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item = TranscriptItem::new("long-preview".into(), "tool".into(), "Command".into(), "done".into());
+            item.output = Some(output.clone().into());
+            item.expanded = true;
+            view.transcript.push(item);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("tool-output-long-preview").is_none());
+        window.click("tool-open-output-long-preview", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("output-body").label(), Some(output.as_str()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn long_command_wraps_and_copies_without_overlaying_code(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1000., 1400.);
+    let command = format!("printf '%s' {}", "argument ".repeat(30));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            let mut item =
+                TranscriptItem::new("long-command".into(), "tool".into(), "Run command".into(), "done".into());
+            item.command = Some(command.clone().into());
+            item.expanded = true;
+            view.transcript.push(item);
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| {
+            view.keyboard_focused_message = Some("long-command".into());
+            cx.notify();
+        });
+        window.render_frame(cx);
+        let code = window.find("tool-command-surface-long-command");
+        assert_eq!(code.label(), Some(command.as_str()));
+        assert!(code.bounds().size.height > px(60.), "long command wraps inside its surface");
+        let copy = window.find("copy-tool-command-long-command");
+        assert!(
+            copy.visible(),
+            "copy {:?}, code {:?}, selected {:?}",
+            copy.bounds(),
+            code.bounds(),
+            view.read(cx).keyboard_focused_message
+        );
+        assert!(copy.bounds().bottom() <= code.bounds().top());
+        window.click("copy-tool-command-long-command", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(command.as_str()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn keyboard_can_expand_tool_and_copy_command_without_row_selection(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item =
+                TranscriptItem::new("keyboard-command".into(), "tool".into(), "Command".into(), "done".into());
+            item.command = Some("printf 'a b'".into());
+            view.transcript.push(item);
+        });
+        window.render_frame(cx);
+        focus_element_by_tab(window, "tool-keyboard-command", cx);
+        window.press("enter", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).keyboard_focused_message.is_none());
+        focus_element_by_tab(window, "copy-tool-command-keyboard-command", cx);
+        window.press("enter", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("printf 'a b'"));
     })
     .unwrap();
 }
@@ -118,7 +195,7 @@ fn output_surfaces_never_show_the_structured_envelope(cx: &mut TestAppContext) {
         assert!(window.try_find("tool-output-structured-command-structured").is_none());
         // …and labels plus copies carry the same human text.
         assert_eq!(window.find("output-body").label(), Some("command output"));
-        assert_eq!(window.find("tool-output-structured-command").label(), Some("command output"));
+        assert!(window.try_find("tool-output-structured-command").is_none());
         window.click("copy-output", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("command output"));
     })
@@ -143,7 +220,7 @@ fn output_surfaces_leave_truncated_structured_json_as_plain_text(cx: &mut TestAp
         assert!(window.try_find("output-body-structured").is_none());
         assert!(window.try_find("tool-output-truncated-output-structured").is_none());
         assert_eq!(window.find("output-body").label(), Some(output));
-        assert_eq!(window.find("tool-output-truncated-output").label(), Some(output));
+        assert!(window.try_find("tool-output-truncated-output").is_none());
     })
     .unwrap();
 }

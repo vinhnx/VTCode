@@ -216,16 +216,19 @@ pub(super) fn render_markdown_with_style(
 /// Read-only code preview for one non-markdown text file: the bounded text
 /// renders as a single fenced code block through the shared Markdown
 /// pipeline, so Kit's syntax highlighter paints it with the app theme while
-/// the transcript hardening keeps links inert. The 8-backtick fence only
-/// closes on a longer run inside the file, so code containing ordinary
-/// ``` fences stays one block.
+/// the transcript hardening keeps links inert. The fence is longer than any
+/// backtick run in the source, so even nested fences remain in one block.
 pub(super) fn render_code_preview(id: String, rel_path: &str, text: SharedString, cx: &gpui_kit::App) -> TextView {
-    const FENCE: &str = "````````";
-    let source: SharedString = match code_fence_language(rel_path) {
-        Some(language) => format!("{FENCE}{language}\n{text}\n{FENCE}").into(),
-        None => format!("{FENCE}\n{text}\n{FENCE}").into(),
-    };
-    render_markdown_with_style(id, source, false, markdown_style(cx))
+    render_markdown_with_style(id, code_preview_markdown(rel_path, &text).into(), false, markdown_style(cx))
+}
+
+fn code_preview_markdown(rel_path: &str, text: &str) -> String {
+    let longest_run = text.split(|character| character != '`').map(str::len).max().unwrap_or(0);
+    let fence = "`".repeat(longest_run.saturating_add(1).max(8));
+    match code_fence_language(rel_path) {
+        Some(language) => format!("{fence}{language}\n{text}\n{fence}"),
+        None => format!("{fence}\n{text}\n{fence}"),
+    }
 }
 
 /// Fence language token for a file extension. Kit's highlighter resolves
@@ -422,6 +425,14 @@ mod tests {
         AppContext, Context, InteractiveElement, IntoElement, ParentElement, Render, Styled, TestAppContext,
         TestSupportExt, Window, WindowOptions,
     };
+
+    #[test]
+    fn code_preview_fence_preserves_long_backtick_runs() {
+        let command = "printf 'start'\n``````````\nprintf 'end'";
+        let markdown = super::code_preview_markdown("command.sh", command);
+        assert_eq!(markdown, format!("```````````bash\n{command}\n```````````"));
+        assert_eq!(super::code_preview_markdown("file.txt", "plain"), "````````\nplain\n````````");
+    }
 
     struct ThemeFixture;
 

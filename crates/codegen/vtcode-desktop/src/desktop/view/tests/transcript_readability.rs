@@ -97,23 +97,8 @@ fn unbreakable_text_stays_inside_transcript_bodies(cx: &mut TestAppContext) {
             let notice_label = notice.label().unwrap_or_default();
             assert!(notice_label.contains(&token), "{mode} notice accessible text keeps the token");
 
-            let tool_column = window.find("transcript-content-tool-token").bounds();
-            let tool = window.find("tool-output-tool-token");
-            let tool_overhang = tool.bounds().right() - tool_column.right();
-            assert!(
-                tool_overhang <= px(1.),
-                "{mode} tool output must not escape the conversation column: body={:?} column={tool_column:?}",
-                tool.bounds()
-            );
-            // Mono 14px at default leading (~23px/line) plus 16px of vertical
-            // padding: a clipped single line clears ~39px, the token ~106px.
-            assert!(
-                tool.bounds().size.height > px(60.),
-                "{mode} tool token must wrap to multiple lines, not clip: height={:?}",
-                tool.bounds().size.height
-            );
-            let tool_label = tool.label().unwrap_or_default();
-            assert!(tool_label.contains(&token), "{mode} tool accessible text keeps the token");
+            assert!(window.try_find("tool-output-tool-token").is_none());
+            assert!(window.find("tool-open-output-tool-token").visible());
         }
     })
     .unwrap();

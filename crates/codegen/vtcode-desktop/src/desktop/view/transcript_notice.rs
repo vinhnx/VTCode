@@ -66,6 +66,9 @@ impl DesktopView {
                                 .flex()
                                 .items_center()
                                 .gap_1()
+                                .text_xs()
+                                .italic()
+                                .text_color(themes::muted_text(&colors))
                                 .child(toggle)
                                 .child(transcript_chevron_lane(item.expanded)),
                         )
@@ -88,15 +91,14 @@ impl DesktopView {
             .child(header);
         if item.collapsible_details {
             if item.expanded {
-                // Evidence renders as Markdown so fenced blocks land on the
-                // code surface; severity stays on the header marker while the
-                // body keeps the neutral foreground for theme-safe contrast.
+                // Evidence renders as Markdown so fenced blocks keep their
+                // code treatment, with quieter body text than conversation.
                 panel = panel.child(
                     div()
                         .id(format!("notice-details-body-{}", item.id))
                         .test_support()
                         .text_sm()
-                        .text_color(colors.foreground)
+                        .text_color(themes::muted_text(&colors))
                         .child(render_markdown_with_style(
                             format!("notice-details-markdown-{}", item.id),
                             item.text.clone(),
@@ -111,7 +113,7 @@ impl DesktopView {
                     .id(format!("notice-text-{}", item.id))
                     .test_support()
                     .text_sm()
-                    .text_color(colors.foreground)
+                    .text_color(themes::muted_text(&colors))
                     .child(item.text.clone()),
             );
         }

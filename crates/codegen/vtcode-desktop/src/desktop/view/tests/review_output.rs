@@ -539,10 +539,8 @@ fn output_tab_bounds_rendered_large_output_but_copies_the_full_capture(cx: &mut 
         assert!(rendered.starts_with("… Earlier output truncated"));
         assert!(rendered.len() <= 135_000, "the accessible output excerpt is byte-bounded");
         assert!(rendered.ends_with("界"));
-        let tool_body = window.find("tool-output-large-output");
-        let tool_excerpt = tool_body.label().unwrap();
-        assert!(tool_excerpt.starts_with("… Earlier output truncated"));
-        assert!(tool_excerpt.len() <= 135_000, "expanded tool details use the same byte bound");
+        assert!(window.try_find("tool-output-large-output").is_none());
+        assert!(window.find("tool-open-output-large-output").visible());
 
         window.click("copy-output", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(output.as_str()));

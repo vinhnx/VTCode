@@ -73,6 +73,8 @@ pub(in super::super) fn prepare_session_history(
             );
             if role == TranscriptRole::User.as_str() {
                 text = strip_file_reference_metadata(&text).to_owned();
+            } else if role == TranscriptRole::Tool.as_str() {
+                text = human_output_text(&text);
             }
             // Preserve collapsed archive tool text without inventing activity status.
             let mut item = TranscriptItem::new(id, role, title.into(), text);

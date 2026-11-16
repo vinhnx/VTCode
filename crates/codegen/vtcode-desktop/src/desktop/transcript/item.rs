@@ -131,6 +131,11 @@ impl TranscriptItem {
         self.output.is_some()
     }
 
+    /// Older archive rows retain tool results as their message text.
+    pub(crate) fn has_archived_output(&self) -> bool {
+        self.is_tool() && !self.has_activity_status && !self.text.trim().is_empty()
+    }
+
     /// Notice row (runtime errors, compaction/reset notices, run status) with
     /// its severity set at construction.
     pub fn notice(id: String, title: SharedString, text: String, severity: NoticeSeverity) -> Self {

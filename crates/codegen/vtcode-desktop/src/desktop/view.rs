@@ -182,6 +182,7 @@ mod tabs;
 mod terminal_panel;
 mod transcript_activity;
 mod transcript_changes_card;
+mod transcript_command;
 mod transcript_diff;
 mod transcript_nav;
 mod transcript_notice;

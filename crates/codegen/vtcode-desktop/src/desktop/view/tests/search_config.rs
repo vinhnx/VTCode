@@ -918,7 +918,12 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
         assert!(window.try_find(target_row_id.clone()).is_some());
         let tool = view_state.transcript.get(0).unwrap();
         assert!(tool.expanded);
-        assert!(window.try_find(format!("tool-output-{}", tool.id)).is_some());
+        assert!(window.try_find(format!("tool-output-{}", tool.id)).is_none());
+        let output_button = format!("tool-open-output-{}", tool.id);
+        assert!(window.try_find(output_button.clone()).is_some());
+        window.click(output_button, cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("output-body").label(), Some("Archived tool entry contains the needle"));
     })
     .unwrap();
 }

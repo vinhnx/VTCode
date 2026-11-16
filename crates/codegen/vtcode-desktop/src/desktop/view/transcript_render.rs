@@ -923,24 +923,15 @@ impl DesktopView {
         if item.expanded {
             let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());
             let full_output = inspector::output_with_truncation_notice(&output, item.output_truncated);
-            // Pre-resolved by the row through the revision-keyed tail cache;
-            // the direct computation only runs if a future caller passes `None`.
-            let output_excerpt = inspector::output_with_truncation_notice(
-                &tool_tail.unwrap_or_else(|| inspector::compact_output_tail(&output)),
-                item.output_truncated,
-            );
             panel = panel.child(
                 div()
+                    .w_full()
+                    .min_w_0()
                     .flex()
                     .flex_col()
                     .gap_1()
                     .when_some(item.command.as_ref(), |panel, command| {
-                        panel.child(div().ml_6().child(render_code_preview(
-                            format!("tool-command-{}", item.id),
-                            "command.sh",
-                            command.clone(),
-                            cx,
-                        )))
+                        panel.child(self.render_tool_command(item, command, cx))
                     })
                     .child(
                         div()
@@ -968,24 +959,32 @@ impl DesktopView {
                                         super::super::notifications::copied_to_clipboard(window, app);
                                     }),
                             )
-                            .when(item.has_output(), |row| row.child(Self::tool_output_cta(item, cx))),
+                            .when(item.has_output() || item.has_archived_output(), |row| {
+                                row.child(Self::tool_output_cta(item, cx))
+                            }),
                     )
-                    .child(
-                        div()
-                            .id(format!("tool-output-{}", item.id))
-                            .role(gpui_kit::Role::Label)
-                            .aria_label(output_excerpt.clone())
-                            .test_support()
-                            // Align under the title: status icon plus the row gap.
-                            .ml_6()
-                            .px_3()
-                            .py_2()
-                            .rounded_md()
-                            .bg(colors.secondary)
-                            .font_family(cx.theme().mono_font_family.clone())
-                            .text_size(cx.theme().mono_font_size)
-                            .child(render_output_text(&output_excerpt)),
-                    )
+                    .when(!item.has_output() && !item.has_archived_output(), |panel| {
+                        let output_excerpt = inspector::output_with_truncation_notice(
+                            &tool_tail.unwrap_or_else(|| inspector::compact_output_tail(&output)),
+                            item.output_truncated,
+                        );
+                        panel.child(
+                            div()
+                                .id(format!("tool-output-{}", item.id))
+                                .role(gpui_kit::Role::Label)
+                                .aria_label(output_excerpt.clone())
+                                .test_support()
+                                // Align under the title: status icon plus the row gap.
+                                .ml_6()
+                                .px_3()
+                                .py_2()
+                                .rounded_md()
+                                .bg(colors.secondary)
+                                .font_family(cx.theme().mono_font_family.clone())
+                                .text_size(cx.theme().mono_font_size)
+                                .child(render_output_text(&output_excerpt)),
+                        )
+                    })
                     .child(self.render_mcp_app_previews(item, cx)),
             );
         }

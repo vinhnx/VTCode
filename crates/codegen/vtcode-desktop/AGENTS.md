@@ -5,7 +5,7 @@
 
 ## Modules
 
-- `src/desktop/view/` screens, overlays, and routing (`components.rs` + `glass_buttons.rs` shared builders, plus per-dialog modules); `appearance_themes.rs` owns custom-theme editing, `appearance_theme_picker.rs` the virtualized swatch rows; Kit host: `settings_kit.rs`.
+- `src/desktop/view/` screens, overlays and routing; `components.rs` and `glass_buttons.rs` share builders, `transcript_command.rs` renders commands, appearance modules edit and select themes, and `settings_kit.rs` hosts Kit settings.
 - `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` tokens (`custom.rs`, `glass.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` projections: row type in `item.rs`, turn grouping in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.

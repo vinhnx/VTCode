@@ -150,8 +150,8 @@ impl DesktopView {
 
     /// Jump button beside an expanded tool row's copy action, opening that
     /// exact capture in Output. Same affordance as the Activity tab's per-row
-    /// output action; callers gate on [`TranscriptItem::has_output`] so the
-    /// CTA never lands on an unrelated fallback.
+    /// output action; callers gate on captured or archived output so the CTA
+    /// never lands on an unrelated fallback.
     pub(super) fn tool_output_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
         let output_id = item.id.clone();
         let output_title = item.title.to_string();

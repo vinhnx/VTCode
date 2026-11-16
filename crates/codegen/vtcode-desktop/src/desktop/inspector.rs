@@ -332,7 +332,17 @@ pub(super) fn output_for(
                         .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
                 })
         })
-        .and_then(output_view)
+        .and_then(|item| {
+            output_view(item).or_else(|| {
+                item.has_archived_output().then(|| OutputView {
+                    id: item.id.to_string(),
+                    title: item.title.clone(),
+                    text: super::output_sections::human_output_text(&item.text).into(),
+                    truncated: false,
+                    running: false,
+                })
+            })
+        })
         .or_else(|| restored.iter().chain(transcript.items()).rev().find_map(output_view))
 }
 

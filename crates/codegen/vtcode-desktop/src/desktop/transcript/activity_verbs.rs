@@ -286,17 +286,16 @@ mod tests {
     }
 
     #[test]
-    fn gist_previews_multiline_commands_like_cli_compact_rows() {
+    fn gist_uses_compact_cli_headlines_for_multiline_commands() {
         use serde_json::json;
         let gist = |arguments: serde_json::Value| gist_with("exec_command", Some(arguments), None);
-        // The session's 3-line pipeline titles with its first line: separator
-        // echoes in later lines never reach a single-line title.
+        // Arguments and later pipeline commands stay out of the compact title.
         assert_eq!(
             gist(json!({"command": "sed -n '194,230p' README.md | head -n 40\necho \"---NUM---\"\nnl -ba README.md"})),
-            "Ran sed -n '194,230p' README.md | head -n 40"
+            "Ran sed README.md"
         );
-        // Script-runner prefixes still fold in content instead of dangling.
-        assert_eq!(gist(json!({"command": "python3 -c \"\nimport json"})), "Ran python3 -c \"import json");
+        // Script content stays in the command details rather than the title.
+        assert_eq!(gist(json!({"command": "python3 -c \"\nimport json"})), "Ran python3");
     }
 
     #[test]

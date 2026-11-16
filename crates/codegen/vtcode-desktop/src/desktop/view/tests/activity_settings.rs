@@ -30,7 +30,8 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         assert_eq!(window.find("tool-read").label(), Some("Show details for Read Cargo.toml, status: completed"));
         window.click("tool-build", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("tool-output-build").label(), Some("compiler error: missing name"));
+        assert!(window.try_find("tool-output-build").is_none());
+        assert!(window.find("tool-open-output-build").visible());
         window.click("copy-tool-output-build", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("compiler error: missing name"));
         view.update(cx, |view, _| {
