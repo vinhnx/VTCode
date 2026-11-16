@@ -367,6 +367,8 @@ pub enum GoalPauseReason {
     Infra,
     /// Paused because the model reported an external blocker it cannot resolve.
     ModelBlocked,
+    /// Paused because the driving session ended. Resume clears it.
+    SessionEnd,
 }
 
 impl GoalPauseReason {
@@ -378,6 +380,7 @@ impl GoalPauseReason {
             Self::Verification => GoalStatus::Blocked,
             Self::Infra => GoalStatus::InfraPaused,
             Self::ModelBlocked => GoalStatus::Blocked,
+            Self::SessionEnd => GoalStatus::UserPaused,
         }
     }
 
@@ -389,6 +392,7 @@ impl GoalPauseReason {
             Self::Verification => "blocked",
             Self::Infra => "infra",
             Self::ModelBlocked => "model_blocked",
+            Self::SessionEnd => "session_end",
         }
     }
 }

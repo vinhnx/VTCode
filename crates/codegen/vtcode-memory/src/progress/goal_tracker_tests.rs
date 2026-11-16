@@ -147,6 +147,11 @@ fn pause_reason_maps_to_correct_status() {
     assert!(t.pause_with_message(GoalPauseReason::ModelBlocked, "Waiting on API keys".into()));
     assert_eq!(t.status(), Some(GoalStatus::Blocked));
     assert_eq!(t.pause_message(), Some("Waiting on API keys"));
+
+    t.resume();
+    assert!(t.pause_with_message(GoalPauseReason::SessionEnd, "Session ended".into()));
+    assert_eq!(t.status(), Some(GoalStatus::UserPaused));
+    assert_eq!(t.pause_message(), Some("Session ended"));
 }
 
 #[test]

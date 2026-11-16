@@ -34,7 +34,10 @@ mod explain;
 mod handlers;
 mod outcome_router;
 pub mod secrets;
-pub(crate) use handlers::{GoalSeed, SharedGoalTracker, apply_goal_command, goal_indicator_line};
+pub(crate) use handlers::{
+    GOAL_AUTO_CONTINUE_PREFIX, GOAL_COMPLETION_CONTRACT, GoalSeed, SharedGoalTracker, apply_goal_command,
+    goal_indicator_line, pause_goal_at_session_end,
+};
 
 #[cfg(test)]
 mod headless_tests;

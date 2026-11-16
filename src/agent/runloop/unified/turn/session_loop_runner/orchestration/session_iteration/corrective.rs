@@ -339,7 +339,6 @@ pub(super) async fn run_corrective_gate(gate: CorrectiveGate<'_>) -> Result<Corr
         vt_cfg,
         outcome_result,
         ctrl_c_state,
-        next_turn_input,
         turn_refused,
         refused_turn_rolled_back,
         session_end_reason,
@@ -377,7 +376,6 @@ struct GoalGateTail<'a> {
     vt_cfg: &'a Option<VTCodeConfig>,
     outcome_result: &'a RunLoopTurnLoopResult,
     ctrl_c_state: &'a Arc<CtrlCState>,
-    next_turn_input: &'a str,
     turn_refused: bool,
     refused_turn_rolled_back: bool,
     session_end_reason: SessionEndReason,
@@ -399,7 +397,6 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
         vt_cfg,
         outcome_result,
         ctrl_c_state,
-        next_turn_input,
         turn_refused,
         refused_turn_rolled_back,
         session_end_reason,
@@ -493,7 +490,9 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
             crate::agent::runloop::unified::turn::tool_outcomes::helpers::is_pending_verification_block
         ))
         && !turn_refused
-        && next_turn_input.is_empty();
+        // Already-queued input runs first; the gate re-runs after that
+        // turn, so idling here only defers the follow-up by one turn.
+        && !runtime.has_pending_follow_up_inputs();
     if !should_queue {
         return Ok(idle(false));
     }
@@ -557,7 +556,9 @@ async fn run_goal_auto_continue(gate: GoalAutoContinue<'_>) -> Result<GoalContin
         return Ok(GoalContinueOutcome::Idle { exhausted: false });
     }
     let follow_up = format!(
-        "Continue working toward the active thread goal: \"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently. If the goal is fully achieved and verified against current evidence, end your turn without further tool calls and with a final message whose first line is exactly \"GOAL ACHIEVED:\" followed by a one-line summary."
+        "{}\"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently. {}",
+        crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX,
+        crate::agent::runloop::unified::turn::session::slash_commands::GOAL_COMPLETION_CONTRACT
     );
     let directive = format!("Goal auto-continue (turn {turn_no} of {max_turns}): keep pursuing \"{objective}\".");
     match runtime.try_queue_synthetic_follow_up_input(follow_up) {
@@ -736,9 +737,15 @@ mod tests {
         outcome: RunLoopTurnLoopResult,
         next_input: &str,
         refused: bool,
+        seed_pending: bool,
     ) -> (bool, bool) {
         let mut stats = SessionStats::default();
         let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
+        if seed_pending {
+            runtime
+                .try_queue_synthetic_follow_up_input("already queued".to_string())
+                .unwrap();
+        }
         let mut renderer = AnsiRenderer::stdout();
         let plan = PlanningWorkflowSessionState::default();
         let ctrl_c = Arc::new(CtrlCState::new());
@@ -774,7 +781,7 @@ mod tests {
 
         let noop = noop_goal_tracker();
         assert_eq!(
-            goal_gate_queues(&registry, &noop, completed_turn(), "", false).await,
+            goal_gate_queues(&registry, &noop, completed_turn(), "", false, false).await,
             (false, false),
             "no goal must idle"
         );
@@ -782,7 +789,7 @@ mod tests {
         let (_dir, paused) = active_goal_tracker("Ship it").await;
         assert!(paused.lock().await.pause(vtcode_memory::GoalPauseReason::User));
         assert_eq!(
-            goal_gate_queues(&registry, &paused, completed_turn(), "", false).await,
+            goal_gate_queues(&registry, &paused, completed_turn(), "", false, false).await,
             (false, false),
             "paused goal must idle"
         );
@@ -792,20 +799,38 @@ mod tests {
             reason: Some("Tool loop budget exhausted (60/60).".into()),
         };
         assert_eq!(
-            goal_gate_queues(&registry, &active, blocked, "", false).await,
+            goal_gate_queues(&registry, &active, blocked, "", false, false).await,
             (false, false),
             "budget stop must idle, never auto-continue"
         );
         assert_eq!(
-            goal_gate_queues(&registry, &active, completed_turn(), "user typed this", false).await,
-            (false, false),
-            "pending user input must idle"
-        );
-        assert_eq!(
-            goal_gate_queues(&registry, &active, completed_turn(), "", true).await,
+            goal_gate_queues(&registry, &active, completed_turn(), "", true, false).await,
             (false, false),
             "refused turn must idle"
         );
+    }
+
+    #[tokio::test]
+    async fn active_goal_queues_despite_turn_input_but_idles_on_pending_queue() {
+        let workspace = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+        let (_dir, active) = active_goal_tracker("Ship it").await;
+
+        // `next_turn_input` is the just-finished turn's own prompt, which is
+        // non-empty for every user turn: it must never block auto-continue.
+        assert_eq!(
+            goal_gate_queues(&registry, &active, completed_turn(), "user typed this", false, false).await,
+            (true, true),
+            "non-empty turn input must still queue"
+        );
+        // A queued follow-up already waiting does block: the gate re-runs
+        // after that turn, so idling here loses nothing.
+        assert_eq!(
+            goal_gate_queues(&registry, &active, completed_turn(), "", false, true).await,
+            (false, true),
+            "pending follow-up must idle with the queue intact"
+        );
+        assert_eq!(active.lock().await.auto_continue_turns(), 1, "only the queued attempt may consume budget");
     }
 
     #[tokio::test]

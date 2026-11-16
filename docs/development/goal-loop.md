@@ -21,7 +21,8 @@ live stream, and desktop restore seeding in agreement.
 
 CLI input parses to `SlashCommandOutcome::GoalCommand` and applies the pure
 `apply_goal_command` core: `Set` replaces any goal and submits the objective
-as a turn, successful `Resume` submits a continue prompt, and `Pause`, `Clear`,
+plus the `GOAL ACHIEVED:` completion contract as a turn, successful `Resume`
+submits a continue prompt carrying the same contract, and `Pause`, `Clear`,
 `Status`, and `Edit` render without starting turns. Desktop executes the same
 core through quiet `goal/execute` RPC — never as turn text, which would wedge
 awaiting a terminal event a non-turn command never emits. Responses refresh
@@ -38,7 +39,10 @@ inspector pane mirrors the snapshot.
 The CLI prints a one-line indicator (`[i] Pursuing goal: …` / `[i] Paused
 goal: …`) at every turn boundary while a goal is active or paused; terminal
 states stay quiet because their transitions already printed. The desktop
-composer bar renders the same states live above the draft input.
+composer bar renders the same states live above the draft input, ticking its
+elapsed label every second from the last snapshot's arrival stamp while
+Active (snapshots only arrive on turn boundaries and mutations); the
+Utilities pane mirrors the same live label.
 
 ## Turn boundary and auto-continue
 
@@ -47,13 +51,23 @@ high-water mark, persists, and — while Active — emits for live surfaces. An
 Active goal then auto-continues Completed turns through the existing synthetic
 follow-up queue under its tracker-owned counter against the shared cross-turn
 budget (every Set and successful Resume restores a full budget on all
-frontends). A final message whose first line is exactly `GOAL ACHIEVED:`
-completes an Active goal on completed or blocked turns — same trust class as
-the gate's other final-text classifiers, and a spurious claim completes
-visibly and can be re-set in one command.
+frontends). The follow-up re-teaches the same `GOAL_COMPLETION_CONTRACT` the
+Set/Resume prompts carry, so every goal-driven turn knows the sentinel.
+Goal follow-ups open with `GOAL_AUTO_CONTINUE_PREFIX`, which
+`is_internal_harness_follow_up` matches so goal turns preserve recovery
+budgets instead of reading as fresh user requests. A
+final message whose first line is exactly `GOAL ACHIEVED:` completes an
+Active goal on completed or blocked turns — same trust class as the gate's
+other final-text classifiers, and a spurious claim completes visibly and can
+be re-set in one command.
 Completed-only continuation keeps hard budget stops idle; pauses, clears,
-stops, pending input, refusals, verification blocks, and planning mode idle
-the loop instead. Setting or resuming a goal resets its budget.
+stops, an already-queued follow-up, refusals, verification blocks, and
+planning mode idle the loop instead (idling on a queued follow-up only defers
+by one turn: the gate re-runs after it). Setting or resuming a goal resets
+its budget. Session teardown pauses any Active goal before the terminal event
+so the persisted snapshot, the event stream, and the desktop bar never read
+stuck-Active after the session is gone; resume behavior is unchanged because
+restore demotes leftover Active goals to paused anyway.
 
 ## Model tools
 

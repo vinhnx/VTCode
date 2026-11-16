@@ -43,6 +43,12 @@ fn preflight_internal_followups_preserve_episode_and_user_input_resets_it() {
     stats.register_follow_up_prompt("The task tracker still has incomplete steps: verify");
     assert!(stats.preflight_recovery.exhausted());
     assert_eq!(stats.tracker_continuation_turns(), 1);
+    stats.register_follow_up_prompt(&format!(
+        "{}\"Ship it\". Build on prior turns.",
+        crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX
+    ));
+    assert!(stats.preflight_recovery.exhausted(), "goal turns preserve the episode");
+    assert_eq!(stats.tracker_continuation_turns(), 1);
     stats.register_follow_up_prompt("continue");
     assert!(!stats.preflight_recovery.exhausted());
     assert!(stats.preflight_recovery.is_clear());

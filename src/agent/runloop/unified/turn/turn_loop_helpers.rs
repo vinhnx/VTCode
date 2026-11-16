@@ -246,6 +246,7 @@ async fn record_planning_steering_revision(ctx: &mut TurnLoopContext<'_>, user_i
 /// TUI. Matches the stable openings of every harness-queued follow-up so a
 /// reworded tail cannot reintroduce transcript noise.
 pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
+    use crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX;
     use crate::agent::runloop::unified::turn::session_loop::{
         BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, MONITOR_CONTINUATION_PROMPT_PREFIX,
         VERIFICATION_AUTO_RECOVERY_PREFIX,
@@ -262,6 +263,7 @@ pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
         || input.starts_with(BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX)
         || input.starts_with(MONITOR_CONTINUATION_PROMPT_PREFIX)
         || input.starts_with(VERIFICATION_AUTO_RECOVERY_PREFIX)
+        || input.starts_with(GOAL_AUTO_CONTINUE_PREFIX)
 }
 
 const FRESH_TURN_TOOL_GUIDANCE: &str = "Fresh turn: the previous turn's preview budget and tool-free recovery restrictions have expired. Tools are available subject to this turn's catalog, planning mode, safety, verification, and permission checks. Older recovery messages do not disable tools in this turn. If earlier file contents were cleared, recover the needed context with a targeted read or small spool range before editing; do not repeat broad inspections.";

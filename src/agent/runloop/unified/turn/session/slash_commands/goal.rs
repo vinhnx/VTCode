@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::Mutex;
+
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_desktop_protocol::slash_command::{GOAL_SLASH_HELP, GoalSlashCommand};
 use vtcode_memory::{GoalPauseReason, GoalTracker};
@@ -16,6 +18,19 @@ use super::{SlashCommandContext, SlashCommandControl};
 
 /// Shareable handle to the session's loop-lived goal tracker.
 pub(crate) type SharedGoalTracker = Arc<Mutex<GoalTracker>>;
+
+/// Completion contract taught to the model in every goal (re)start prompt:
+/// the `GOAL ACHIEVED:` first-line sentinel the turn-boundary gate accepts.
+/// Shared by `Set`, `Resume`, and the auto-continue follow-up so all three
+/// teach one vocabulary.
+pub(crate) const GOAL_COMPLETION_CONTRACT: &str = "If the goal is fully achieved and verified against current evidence, end your turn without further tool calls and with a final message whose first line is exactly \"GOAL ACHIEVED:\" followed by a one-line summary.";
+
+/// Stable opening of the machine-queued goal auto-continue follow-up.
+/// Shared with `is_internal_harness_follow_up` so goal turns preserve
+/// recovery budgets instead of reading as fresh user requests. Deliberately
+/// distinct from the user-initiated Resume prompt (`Continue working toward
+/// the goal: ...`), which stays a user boundary.
+pub(crate) const GOAL_AUTO_CONTINUE_PREFIX: &str = "Continue working toward the active thread goal: ";
 
 /// Seed for a freshly set goal (id + creation timestamp).
 pub(crate) struct GoalSeed<'a> {
@@ -65,7 +80,7 @@ pub(crate) fn apply_goal_command(
             GoalCommandEffect {
                 lines,
                 mutated: true,
-                submit: Some(objective.clone()),
+                submit: Some(format!("{objective}\n\n{GOAL_COMPLETION_CONTRACT}")),
             }
         }
         GoalSlashCommand::Pause => {
@@ -85,7 +100,7 @@ pub(crate) fn apply_goal_command(
                 let mut lines = vec![(MessageStyle::Info, "Goal resumed.".to_string())];
                 lines.extend(status_lines(tracker));
                 let objective = tracker.objective().unwrap_or_default();
-                let submit = format!("Continue working toward the goal: \"{objective}\".");
+                let submit = format!("Continue working toward the goal: \"{objective}\". {GOAL_COMPLETION_CONTRACT}");
                 GoalCommandEffect { lines, mutated: true, submit: Some(submit) }
             } else if !tracker.has_goal() {
                 effect(no_goal_lines(), false)
@@ -227,6 +242,31 @@ pub(crate) async fn handle_goal_command(
     Ok(SlashCommandControl::Continue)
 }
 
+/// Pause message left on the goal when its driving session ends.
+const SESSION_END_PAUSE_MESSAGE: &str = "Session ended; resume to continue.";
+
+/// Pause an Active goal at session teardown so neither the persisted
+/// snapshot nor the live UI claims a dead session is still pursuing it.
+/// Non-Active goals and lock contention fail closed (`false`): restore
+/// demotes any leftover Active goal to paused anyway.
+pub(crate) fn pause_goal_at_session_end(tracker: &SharedGoalTracker, emitter: Option<&HarnessEventEmitter>) -> bool {
+    let Ok(mut guard) = tracker.try_lock() else {
+        return false;
+    };
+    if !guard.pause_with_message(GoalPauseReason::SessionEnd, SESSION_END_PAUSE_MESSAGE.to_string()) {
+        return false;
+    }
+    if let Err(err) = guard.persist() {
+        tracing::warn!("goal snapshot persist failed: {err:#}");
+    }
+    if let Some(emitter) = emitter
+        && let Err(err) = emitter.emit(guard.to_goal_updated_event())
+    {
+        tracing::warn!("goal event emit failed: {err:#}");
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,7 +303,12 @@ mod tests {
         assert!(first.mutated);
         assert!(texts(&first).iter().any(|l| l.contains("Goal set: Ship it")));
         assert!(!texts(&first).iter().any(|l| l.contains("Replaced")));
-        assert_eq!(first.submit.as_deref(), Some("Ship it"), "Set must submit the objective as a turn");
+        let submit = first.submit.as_deref().expect("Set must submit a turn");
+        assert!(submit.starts_with("Ship it"), "submit must lead with the objective: {submit}");
+        assert!(
+            submit.contains("GOAL ACHIEVED:"),
+            "submit must teach the completion contract from the first turn: {submit}"
+        );
 
         let second = apply_goal_command(&mut tracker, &set, 200, &seed());
         assert!(second.mutated);
@@ -286,10 +331,12 @@ mod tests {
 
         let resumed = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0, &seed());
         assert!(resumed.mutated);
-        assert!(
-            resumed.submit.as_deref().is_some_and(|p| p.contains("Ship it")),
-            "successful Resume must submit a continue prompt"
-        );
+        let submit = resumed
+            .submit
+            .as_deref()
+            .expect("successful Resume must submit a continue prompt");
+        assert!(submit.contains("Ship it"), "resume prompt must name the objective: {submit}");
+        assert!(submit.contains("GOAL ACHIEVED:"), "resume prompt must re-teach the completion contract: {submit}");
 
         let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0, &seed());
         assert!(!repeat.mutated);
@@ -401,6 +448,55 @@ mod tests {
         let shown = apply_goal_command(&mut tracker, &GoalSlashCommand::Edit, 0, &seed());
         assert!(!shown.mutated);
         assert!(texts(&shown).iter().any(|l| l.contains("Current objective: Ship it")));
+    }
+
+    #[tokio::test]
+    async fn session_end_pauses_active_goal_persists_and_emits() {
+        let dir = tempfile::tempdir().unwrap();
+        let tracker: SharedGoalTracker = Arc::new(Mutex::new(GoalTracker::new(dir.path().join("session-1"))));
+        tracker.lock().await.create_goal(
+            "goal-1".into(),
+            "Ship it".into(),
+            None,
+            0,
+            "2026-01-01T00:00:00Z".into(),
+            None,
+        );
+        let events_path = dir.path().join("events.jsonl");
+        let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
+
+        assert!(pause_goal_at_session_end(&tracker, Some(&emitter)));
+        assert_eq!(tracker.lock().await.status(), Some(vtcode_memory::GoalStatus::UserPaused));
+        assert_eq!(tracker.lock().await.pause_message(), Some("Session ended; resume to continue."));
+        assert!(dir.path().join("session-1").join("goal").join("goal.json").exists(), "teardown pause must persist");
+        let log = std::fs::read_to_string(&events_path).unwrap();
+        assert!(log.contains("\"goal.updated\""), "teardown pause must emit: {log}");
+        assert!(log.contains("\"paused\""), "emit must carry the paused state: {log}");
+
+        assert!(!pause_goal_at_session_end(&tracker, Some(&emitter)), "repeat pause must no-op");
+    }
+
+    #[tokio::test]
+    async fn session_end_leaves_settled_missing_and_locked_goals_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let tracker: SharedGoalTracker = Arc::new(Mutex::new(GoalTracker::new(dir.path().join("session-1"))));
+        assert!(!pause_goal_at_session_end(&tracker, None), "no goal must no-op");
+
+        tracker.lock().await.create_goal(
+            "goal-1".into(),
+            "Ship it".into(),
+            None,
+            0,
+            "2026-01-01T00:00:00Z".into(),
+            None,
+        );
+        {
+            let _held = tracker.lock().await;
+            assert!(!pause_goal_at_session_end(&tracker, None), "contended lock must fail closed");
+        }
+
+        assert!(tracker.lock().await.complete());
+        assert!(!pause_goal_at_session_end(&tracker, None), "complete goal must no-op");
     }
 
     #[test]

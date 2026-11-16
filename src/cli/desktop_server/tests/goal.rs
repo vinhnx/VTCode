@@ -66,7 +66,9 @@ async fn goal_execute_set_starts_work_and_returns_snapshot() {
     let result = harness.execute("session", "Ship the release").await;
 
     assert!(result.mutated);
-    assert_eq!(result.submit.as_deref(), Some("Ship the release"));
+    let submit = result.submit.as_deref().expect("set must submit a turn");
+    assert!(submit.starts_with("Ship the release"), "{submit}");
+    assert!(submit.contains("GOAL ACHIEVED:"), "submit must teach the completion contract: {submit}");
     assert!(result.lines.iter().any(|l| l.contains("Goal set: Ship the release")), "{:?}", result.lines);
     let snapshot = result.goal.expect("set must return a snapshot");
     assert_eq!(snapshot.objective, "Ship the release");
@@ -89,7 +91,9 @@ async fn goal_execute_pause_and_resume_round_trip() {
 
     let resumed = harness.execute("session", "resume").await;
     assert!(resumed.mutated);
-    assert!(resumed.submit.as_deref().is_some_and(|p| p.contains("Ship it")));
+    let submit = resumed.submit.as_deref().expect("resume must submit a turn");
+    assert!(submit.contains("Ship it"), "{submit}");
+    assert!(submit.contains("GOAL ACHIEVED:"), "resume must re-teach the completion contract: {submit}");
 }
 
 #[tokio::test]
@@ -139,8 +143,8 @@ async fn goal_execute_steers_live_turn_instead_of_queueing() {
     assert!(result.submit.is_none(), "steered submit must not queue a turn");
     let steered = steer_rx.try_recv().expect("steering message");
     assert!(
-        matches!(steered, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text == "Ship it"),
-        "objective must steer the live turn"
+        matches!(steered, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text.starts_with("Ship it") && text.contains("GOAL ACHIEVED:")),
+        "objective plus completion contract must steer the live turn"
     );
 }
 
@@ -153,7 +157,8 @@ async fn goal_execute_falls_back_to_submit_without_steering_channel() {
     }
 
     let result = harness.execute("session", "Ship it").await;
-    assert_eq!(result.submit.as_deref(), Some("Ship it"));
+    let submit = result.submit.as_deref().expect("fallback must submit a turn");
+    assert!(submit.starts_with("Ship it"), "{submit}");
 }
 
 #[tokio::test]

@@ -731,6 +731,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         turn_run_id: &turn_run_id,
         turn_id: &turn_id,
         harness_emitter: &harness_emitter,
+        goal_tracker: &goal_tracker,
         active_primary_agent: &active_primary_agent,
         loaded_skills: &loaded_skills,
         session_stats: &session_stats,

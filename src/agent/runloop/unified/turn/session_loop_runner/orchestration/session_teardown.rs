@@ -303,6 +303,7 @@ pub(super) struct SessionTailContext<'a> {
     pub turn_run_id: &'a TurnRunId,
     pub turn_id: &'a str,
     pub harness_emitter: &'a Option<HarnessEventEmitter>,
+    pub goal_tracker: &'a crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker,
     pub active_primary_agent: &'a ActivePrimaryAgentState,
     pub loaded_skills: &'a Arc<RwLock<HashMap<String, Skill>>>,
     pub session_stats: &'a SessionStats,
@@ -348,6 +349,7 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
         turn_run_id,
         turn_id,
         harness_emitter,
+        goal_tracker,
         active_primary_agent,
         loaded_skills,
         session_stats,
@@ -400,6 +402,13 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
             )
         }));
     }
+    // Settle the goal before the terminal event: an Active goal whose session
+    // is gone must read Paused in the snapshot, the event stream, and the
+    // desktop bar — never stuck Active with a frozen timer.
+    crate::agent::runloop::unified::turn::session::slash_commands::pause_goal_at_session_end(
+        goal_tracker,
+        harness_emitter.as_ref(),
+    );
     let (outcome_code, subtype) = resolve_thread_completion_status(
         &session_end_reason,
         session_stats.budget_limit().is_some(),
