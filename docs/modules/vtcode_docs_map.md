@@ -109,13 +109,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Allocator & Memory Behavior?", "How does The problem work?", "How
     does Allocator selection work?"
 
-- **File**: `docs/development/extended_thinking.md`
-  - **Content**: Anthropic Thinking in VT Code
-  - **Topics**: Compact Runtime Matrix, Turning up-front thinking off, Configuration, Adaptive Thinking Behavior,
-    Feature Compatibility
-  - **User Questions**: "What can you tell me about Anthropic Thinking in VT Code?", "How does Compact Runtime Matrix
-    work?", "How does Turning up-front thinking off work?"
-
 - **File**: `docs/development/stdio-line-framing.md`
   - **Content**: Bounded subprocess line framing
   - **Topics**: Verification
@@ -158,12 +151,6 @@ below based on the topic area.
     navigation, Verification
   - **User Questions**: "What can you tell me about Configuration reset and live reload?", "How does Loader and
     persistence ownership work?", "How does Shared reset service work?"
-
-- **File**: `docs/development/cgp_architecture.md`
-  - **Content**: Context-Generic Programming (CGP) in VT Code
-  - **Topics**: Overview, Core Concepts, Architecture, Runtime Contexts, Provider Traits
-  - **User Questions**: "What can you tell me about Context-Generic Programming (CGP) in VT Code?", "How does Overview
-    work?", "How does Core Concepts work?"
 
 - **File**: `docs/development/copilot-runtime-ownership.md`
   - **Content**: Copilot runtime ownership
@@ -314,18 +301,6 @@ below based on the topic area.
     catalog review, Verification boundaries
   - **User Questions**: "What can you tell me about GPUI Kit desktop guide review?", "How does Scope and method work?",
     "How does Confirmed findings and changes work?"
-
-- **File**: `docs/development/goal-loop.md`
-  - **Content**: Goal loop contract
-  - **Topics**: Ownership and persistence, Command flow, Surfaces, Turn boundary and auto-continue, Model tools
-  - **User Questions**: "What can you tell me about Goal loop contract?", "How does Ownership and persistence work?",
-    "How does Command flow work?"
-
-- **File**: `docs/development/harness-simplification-audit.md`
-  - **Content**: Harness simplification audit
-  - **Topics**: Prompt baseline, Offline tool catalog baseline, Full-request census, Ownership and findings
-  - **User Questions**: "What can you tell me about Harness simplification audit?", "How does Prompt baseline work?",
-    "How does Offline tool catalog baseline work?"
 
 - **File**: `docs/development/hypothesis-revision-validation.md`
   - **Content**: Hypothesis revision validation
@@ -607,13 +582,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about vtcode Binary Gotchas?", "How does Startup, updates, and allocation
     work?", "How does Tool-budget and recovery contracts work?"
 
-- **File**: `docs/development/vtcode-crate-audit.md`
-  - **Content**: vtcode-\* Crate Audit Report
-  - **Topics**: Workspace Overview, MERGE RECOMMENDATIONS, RE-EXPORT CLEANUP (in vtcode-core), TEST DUPLICATES TO
-    ELIMINATE, IMPLEMENTATION ORDER
-  - **User Questions**: "What can you tell me about vtcode-\* Crate Audit Report?", "How does Workspace Overview work?",
-    "How does MERGE RECOMMENDATIONS work?"
-
 ### Editor Integrations
 
 - **File**: `docs/ide/downloads.md`
@@ -724,18 +692,7 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about WebMCP Browser Bridge User Guide?", "How does Execution explanations
     work?", "How does Two integration paths work?"
 
-- **File**: `docs/user-guide/webmcp-demo.md`
-  - **Content**: WebMCP browser bridge guide (legacy link)
-  - **User Questions**: "What can you tell me about WebMCP browser bridge guide (legacy link)?"
-
 ### Integrations & Tooling
-
-- **File**: `docs/guides/acp-registry-release-checklist.md`
-  - **Content**: ACP Registry Release Checklist
-  - **Topics**: Preconditions, 1) Build and publish a macOS asset (local), 2) Build Linux assets (GitHub Actions), 3)
-    (Optional) Build Windows asset, 4) Update ACP registry entry
-  - **User Questions**: "What can you tell me about ACP Registry Release Checklist?", "How does Preconditions work?",
-    "How does 1) Build and publish a macOS asset (local) work?"
 
 - **File**: `docs/guides/agent-capability-composition.md`
   - **Content**: Agent Capability as a Composed System
@@ -743,12 +700,6 @@ below based on the topic area.
     reinforce each other
   - **User Questions**: "What can you tell me about Agent Capability as a Composed System?", "How does The seven
     components work?", "How does The three environmental constraints work?"
-
-- **File**: `docs/guides/init_command_guide.md`
-  - **Content**: Agent Initialization Guide
-  - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Relationship to Rules and Memory
-  - **User Questions**: "What can you tell me about Agent Initialization Guide?", "How does Overview work?", "How does
-    Key Features work?"
 
 - **File**: `docs/guides/agent-loop-contract.md`
   - **Content**: Agent Loop Contract
@@ -762,12 +713,6 @@ below based on the topic area.
   - **Topics**: Directory layout, Manifest, Discovery roots, Example usage, Skills
   - **User Questions**: "What can you tell me about Agent Plugins?", "How does Directory layout work?", "How does
     Manifest work?"
-
-- **File**: `docs/guides/cargo-unmaintained.md`
-  - **Content**: Cargo-Unmaintained
-  - **Topics**: Overview, Usage, Configuration, Exit Codes, Common Options
-  - **User Questions**: "What can you tell me about Cargo-Unmaintained?", "How does Overview work?", "How does Usage
-    work?"
 
 - **File**: `docs/guides/cohesivity-mcp.md`
   - **Content**: Cohesivity MCP
@@ -813,12 +758,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Guidance and Persistent Memory for VT Code?", "How does Authored
     Guidance work?", "How does Persistent Memory work?"
 
-- **File**: `docs/guides/inline-ui.md`
-  - **Content**: Inline UI session architecture
-  - **Topics**: Core components, Rendering pipeline, Status line customization
-  - **User Questions**: "What can you tell me about Inline UI session architecture?", "How does Core components work?",
-    "How does Rendering pipeline work?"
-
 - **File**: `docs/guides/lifecycle-hooks.md`
   - **Content**: Lifecycle Hooks
   - **Topics**: Configuration Overview, Matchers, Hook Execution Model, Event Reference, Interpreting Hook Results
@@ -857,12 +796,6 @@ below based on the topic area.
     agent policy, Disconnect
   - **User Questions**: "What can you tell me about Memcode MCP?", "How does 1. Register VT Code as an OAuth client
     work?", "How does 2. Configure the provider work?"
-
-- **File**: `docs/guides/minimax-integration.md`
-  - **Content**: MiniMax Integration Guide
-  - **Topics**: Overview, Configuration Options, Supported Features, Limitations, Example Usage
-  - **User Questions**: "What can you tell me about MiniMax Integration Guide?", "How does Overview work?", "How does
-    Configuration Options work?"
 
 - **File**: `docs/guides/oauth-authentication.md`
   - **Content**: OAuth Authentication Guide
@@ -906,12 +839,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Sem local code discovery?", "How does Setup work?", "How does Try a
     bounded review work?"
 
-- **File**: `docs/guides/tui-library.md`
-  - **Content**: TUI Library Guide
-  - **Topics**: What It Provides, Current Architecture, Usage, Host Traits
-  - **User Questions**: "What can you tell me about TUI Library Guide?", "How does What It Provides work?", "How does
-    Current Architecture work?"
-
 - **File**: `docs/guides/color_guidelines.md`
   - **Content**: Terminal Color Guidelines
   - **Topics**: Standards Implemented, Configuration Reference, Light/Dark Mode Detection, Bold-is-Bright Compatibility,
@@ -952,23 +879,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about VT Code Hooks System Documentation?", "How does Overview work?",
     "How does Configuration work?"
 
-- **File**: `docs/guides/output_styles.md`
-  - **Content**: VT Code Output Styles Feature
-  - **Topics**: Overview, How It Works, Configuration, Available Styles, Creating Custom Styles
-  - **User Questions**: "What can you tell me about VT Code Output Styles Feature?", "How does Overview work?", "How
-    does How It Works work?"
-
 - **File**: `docs/guides/tui-event-handling.md`
   - **Content**: VT Code TUI Event Handling Guide
   - **Topics**: Overview, Key Implementation Details, Event Types, Configuration, Integration with VT Code
   - **User Questions**: "What can you tell me about VT Code TUI Event Handling Guide?", "How does Overview work?", "How
     does Key Implementation Details work?"
-
-- **File**: `docs/guides/terminal-optimization.md`
-  - **Content**: VT Code Terminal Optimization Guide
-  - **Topics**: Theme and Appearance, Profile Icon, Program Status, Line Break Options, Paste Handling
-  - **User Questions**: "What can you tell me about VT Code Terminal Optimization Guide?", "How does Theme and
-    Appearance work?", "How does Profile Icon work?"
 
 - **File**: `docs/guides/update_system.md`
   - **Content**: VT Code Update System Guide
@@ -995,12 +910,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about deed.page MCP?", "How does Configure the provider work?", "How does
     Verify and use work?"
 
-- **File**: `docs/guides/macos-alt-shortcut-troubleshooting.md`
-  - **Content**: macOS Alt Shortcut Troubleshooting Guide
-  - **Topics**: Overview, Common Symptoms, Root Causes, Solutions, Platform-Specific Guidance
-  - **User Questions**: "What can you tell me about macOS Alt Shortcut Troubleshooting Guide?", "How does Overview
-    work?", "How does Common Symptoms work?"
-
 ### LLM Providers & Models
 
 - **File**: `docs/providers/atlascloud.md`
@@ -1014,18 +923,6 @@ below based on the topic area.
   - **Topics**: What You Need, If `copilot` Is Missing, If `gh` Is Missing, Troubleshooting
   - **User Questions**: "What can you tell me about GitHub Copilot Managed Auth?", "How does What You Need work?", "How
     does If `copilot` Is Missing work?"
-
-- **File**: `docs/providers/lmstudio-quick-reference.md`
-  - **Content**: LM Studio Client Quick Reference
-  - **Topics**: Module, Common Tasks, API Reference, Error Handling, CLI Tool Discovery
-  - **User Questions**: "What can you tell me about LM Studio Client Quick Reference?", "How does Module work?", "How
-    does Common Tasks work?"
-
-- **File**: `docs/providers/lmstudio_integration.md`
-  - **Content**: LM Studio Integration for VT Code
-  - **Topics**: Overview, Architecture, API Reference, Configuration, Error Handling
-  - **User Questions**: "What can you tell me about LM Studio Integration for VT Code?", "How does Overview work?", "How
-    does Architecture work?"
 
 - **File**: `docs/providers/lmstudio.md`
   - **Content**: LM Studio Provider Guide
@@ -1057,19 +954,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Meta AI Integration Guide?", "How does Quickstart work?", "How does
     Curated models work?"
 
-- **File**: `docs/providers/meta-quick-reference.md`
-  - **Content**: Meta AI Quick Reference
-  - **User Questions**: "What can you tell me about Meta AI Quick Reference?"
-
 - **File**: `docs/providers/nvidia.md`
   - **Content**: NVIDIA NIM Provider Guide
   - **Topics**: Setup, Curated models, Reasoning and tools, References
   - **User Questions**: "What can you tell me about NVIDIA NIM Provider Guide?", "How does Setup work?", "How does
     Curated models work?"
-
-- **File**: `docs/providers/nvidia-quick-reference.md`
-  - **Content**: NVIDIA NIM Quick Reference
-  - **User Questions**: "What can you tell me about NVIDIA NIM Quick Reference?"
 
 - **File**: `docs/providers/ollama_index.md`
   - **Content**: Ollama Integration Documentation Index
@@ -1149,19 +1038,6 @@ below based on the topic area.
 
 ### Modules & Implementation
 
-- **File**: `docs/modules/println_tui_audit.md`
-  - **Content**: Audit: Raw println!/print! calls that could leak into the TUI
-  - **Topics**: Summary, Current Status: All Known Issues Fixed, Remaining Low-Risk Items, Safe I/O Patterns (Verified),
-    Recommendations
-  - **User Questions**: "What can you tell me about Audit: Raw println!/print! calls that could leak into the TUI?",
-    "How does Summary work?", "How does Current Status: All Known Issues Fixed work?"
-
-- **File**: `docs/modules/vtcode_llm_environment.md`
-  - **Content**: LLM Environment
-  - **Topics**: `vtcode-llm` Environment Configuration Guide
-  - **User Questions**: "What can you tell me about LLM Environment?", "How does `vtcode-llm` Environment Configuration
-    Guide work?"
-
 - **File**: `docs/modules/vtcode_config_migration.md`
   - **Content**: Migrating to the `vtcode-config` Crate
   - **Topics**: Migration Checklist, Rolling Adoption Strategy, Additional Resources
@@ -1199,12 +1075,6 @@ below based on the topic area.
   - **Topics**: Event taxonomy, Versioning and compatibility, Feature flags, Integrating with VT Code runtimes, Examples
   - **User Questions**: "What can you tell me about `vtcode-exec-events`?", "How does Event taxonomy work?", "How does
     Versioning and compatibility work?"
-
-- **File**: `docs/modules/vtcode_markdown_store.md`
-  - **Content**: `vtcode-markdown-store`
-  - **Topics**: Storage building blocks, Feature flags, Usage examples, Concurrency guarantees
-  - **User Questions**: "What can you tell me about `vtcode-markdown-store`?", "How does Storage building blocks work?",
-    "How does Feature flags work?"
 
 - **File**: `docs/modules/vtcode_a2a.md`
   - **Content**: vtcode-a2a
@@ -1250,12 +1120,6 @@ below based on the topic area.
 
 ### Other
 
-- **File**: `docs/a2a/a2a-protocol.md`
-  - **Content**: A2A Protocol Support for VT Code
-  - **Topics**: Overview, Architecture, Core Types, Task Manager API, Server API (HTTP Endpoints)
-  - **User Questions**: "What can you tell me about A2A Protocol Support for VT Code?", "How does Overview work?", "How
-    does Architecture work?"
-
 - **File**: `docs/acp/acp_integration.md`
   - **Content**: ACP (Agent Communication Protocol) Integration Guide
   - **Topics**: Overview, Architecture, Module Structure, Usage Examples, Initialization
@@ -1268,12 +1132,6 @@ below based on the topic area.
     Agent (Async)
   - **User Questions**: "What can you tell me about ACP Quick Reference?", "How does Initialize ACP Client work?", "How
     does Register Remote Agent work?"
-
-- **File**: `docs/ansi/ansi_stripping_guide.md`
-  - **Content**: ANSI Code Stripping in Tool Output
-  - **Topics**: Overview, Configuration, What Gets Stripped, Examples, Affected Tools
-  - **User Questions**: "What can you tell me about ANSI Code Stripping in Tool Output?", "How does Overview work?",
-    "How does Configuration work?"
 
 - **File**: `docs/reference/README.md`
   - **Content**: ANSI Escape Sequences Documentation Index
@@ -1311,19 +1169,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Agent Skills Guide?", "How does Discovery work?", "How does Skill
     Structure work?"
 
-- **File**: `docs/skills/agent_skills_spec_implementation.md`
-  - **Content**: Agent Skills Spec Implementation
-  - **Topics**: Implemented Behavior, Supported `SKILL.md` Fields, Validation Rules, Discovery Precedence, Deliberate
-    Non-Support
-  - **User Questions**: "What can you tell me about Agent Skills Spec Implementation?", "How does Implemented Behavior
-    work?", "How does Supported `SKILL.md` Fields work?"
-
-- **File**: `docs/protocols/atif_trajectory_format.md`
-  - **Content**: Agent Trajectory Interchange Format (ATIF)
-  - **Topics**: Overview, Configuration, Schema, VT Code Event Mapping, Implementation
-  - **User Questions**: "What can you tell me about Agent Trajectory Interchange Format (ATIF)?", "How does Overview
-    work?", "How does Configuration work?"
-
 - **File**: `docs/a2a/README.md`
   - **Content**: Agent2Agent (A2A) Protocol Support
   - **Topics**: Overview, Architecture, Usage, JSON-RPC API Reference, Error Handling
@@ -1355,13 +1200,6 @@ below based on the topic area.
   - **Content**: Background Subagent Demo
   - **User Questions**: "What can you tell me about Background Subagent Demo?"
 
-- **File**: `docs/blog/building-vt-code-a-year-in.md`
-  - **Content**: Building VT Code, a year in
-  - **Topics**: The model shelf, September 2026, Benchmarks, with honest framing, The roadmap shipped, The harness
-    matters more than the model, Context engineering got real numbers
-  - **User Questions**: "What can you tell me about Building VT Code, a year in?", "How does The model shelf, September
-    2026 work?", "How does Benchmarks, with honest framing work?"
-
 - **File**: `docs/project/code-review-action-plan.md`
   - **Content**: Code Review Action Plan
   - **Topics**: MEDIUM SEVERITY, LOW SEVERITY, STYLE / QUALITY (bulk fixes), PRIORITY ORDER
@@ -1387,12 +1225,6 @@ below based on the topic area.
   - **Topics**: Why Exec Plans?, Exec Plans vs Planning Workflow, Directory Structure, Mandatory Sections, Template
   - **User Questions**: "What can you tell me about Execution Plans?", "How does Why Exec Plans? work?", "How does Exec
     Plans vs Planning Workflow work?"
-
-- **File**: `docs/features/file_reference.md`
-  - **Content**: File Reference Feature (@-Symbol)
-  - **Topics**: Overview, Usage, UI Design, Implementation Details, Benefits
-  - **User Questions**: "What can you tell me about File Reference Feature (@-Symbol)?", "How does Overview work?", "How
-    does Usage work?"
 
 - **File**: `docs/features/gpu_pod_manager.md`
   - **Content**: GPU Pod Manager
@@ -1423,12 +1255,6 @@ below based on the topic area.
   - **Topics**: Overview, Platform Detection, Release Binaries, GitHub Releases Setup, Testing Installers
   - **User Questions**: "What can you tell me about Installer Development Guide?", "How does Overview work?", "How does
     Platform Detection work?"
-
-- **File**: `docs/protocols/kitty_keyboard_protocol_restoration.md`
-  - **Content**: Kitty Keyboard Protocol Restoration
-  - **Topics**: Overview, Architecture, Files Modified/Restored, Configuration, Data Flow
-  - **User Questions**: "What can you tell me about Kitty Keyboard Protocol Restoration?", "How does Overview work?",
-    "How does Architecture work?"
 
 - **File**: `docs/protocols/language_support.md`
   - **Content**: Language Support in VT Code
@@ -1466,24 +1292,6 @@ below based on the topic area.
   - **Topics**: Principles, Lifecycle, Evidence-bounded replanning, Cross-references
   - **User Questions**: "What can you tell me about PLAN Loop Engineering?", "How does Principles work?", "How does
     Lifecycle work?"
-
-- **File**: `docs/project/plan-compaction-summary-fix.md`
-  - **Content**: PLAN: `/compact` "Failed to generate compaction summary"
-  - **Topics**: Root cause, Evidence, Changes applied, Remaining work, Gotchas discovered
-  - **User Questions**: "What can you tell me about PLAN: `/compact` \"Failed to generate compaction summary\"?", "How
-    does Root cause work?", "How does Evidence work?"
-
-- **File**: `docs/pty/pty_ansi_handling.md`
-  - **Content**: PTY Output ANSI Handling
-  - **Topics**: Overview, Architecture, ANSI Parser Implementation, Data Flow, Testing
-  - **User Questions**: "What can you tell me about PTY Output ANSI Handling?", "How does Overview work?", "How does
-    Architecture work?"
-
-- **File**: `docs/pty/pty_pipe_infrastructure.md`
-  - **Content**: PTY and Pipe Infrastructure
-  - **Topics**: Overview, Module Structure, Usage Examples, Process Group Management, Security Features
-  - **User Questions**: "What can you tell me about PTY and Pipe Infrastructure?", "How does Overview work?", "How does
-    Module Structure work?"
 
 - **File**: `docs/harness/prompt-architecture.md`
   - **Content**: Prompt Architecture
@@ -1527,30 +1335,6 @@ below based on the topic area.
     hid the draft in desktop and retry never rearmed work?", "How does 2026-10-11 | Semantic operation identity bounds
     repeated preflight rejections across turns work?"
 
-- **File**: `docs/features/shell_snapshot.md`
-  - **Content**: Shell Environment Snapshot
-  - **Topics**: Problem, Solution, Usage, Architecture, Excluded Environment Variables
-  - **User Questions**: "What can you tell me about Shell Environment Snapshot?", "How does Problem work?", "How does
-    Solution work?"
-
-- **File**: `docs/skills/skill_authoring_guide.md`
-  - **Content**: Skill Authoring Guide
-  - **Topics**: Create a Skill, Write `SKILL.md`, Purpose, Workflow, Resources
-  - **User Questions**: "What can you tell me about Skill Authoring Guide?", "How does Create a Skill work?", "How does
-    Write `SKILL.md` work?"
-
-- **File**: `docs/skills/container_guide.md`
-  - **Content**: Skill Container API Guide
-  - **Topics**: Basic Usage, Advanced Usage, Builder Pattern, Validation, Serialization
-  - **User Questions**: "What can you tell me about Skill Container API Guide?", "How does Basic Usage work?", "How does
-    Advanced Usage work?"
-
-- **File**: `docs/skills/skill_tool_usage.md`
-  - **Content**: Skill Tool Usage
-  - **Topics**: Discovery Queries, Prompt Integration, Resource Loading, Storage Locations
-  - **User Questions**: "What can you tell me about Skill Tool Usage?", "How does Discovery Queries work?", "How does
-    Prompt Integration work?"
-
 - **File**: `docs/styling/styling_integration.md`
   - **Content**: Styling Integration: anstyle-crossterm
   - **Topics**: Overview, Architecture, Components, Usage Examples, Benefits
@@ -1581,37 +1365,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about VT Code Allowed Commands Reference?", "How does Overview work?",
     "How does Command Categories work?"
 
-- **File**: `docs/environment/environment_setup_guide.md`
-  - **Content**: VT Code Environment Setup and PATH Visibility Guide
-  - **Topics**: Overview, VT Code storage environment, How VT Code Manages Environment Variables, Command Execution
-    Paths, Verifying Your Environment Setup
-  - **User Questions**: "What can you tell me about VT Code Environment Setup and PATH Visibility Guide?", "How does
-    Overview work?", "How does VT Code storage environment work?"
-
-- **File**: `docs/styling/ratatui_faq_integration.md`
-  - **Content**: VT Code Integration of Ratatui FAQ Best Practices
-  - **Topics**: Overview, FAQ Topics Applied, New Documentation, Code Comments, Testing Improvements
-  - **User Questions**: "What can you tell me about VT Code Integration of Ratatui FAQ Best Practices?", "How does
-    Overview work?", "How does FAQ Topics Applied work?"
-
-- **File**: `docs/project/vtcode-project-info.md`
-  - **Content**: VT Code Project Info
-  - **Topics**: What is VT Code?, Architecture
-  - **User Questions**: "What can you tell me about VT Code Project Info?", "How does What is VT Code? work?", "How does
-    Architecture work?"
-
-- **File**: `docs/sandbox/sandbox_deep_dive.md`
-  - **Content**: VT Code Sandbox Deep Dive
-  - **Topics**: Design Philosophy, Sandbox Policies, Platform-Specific Implementations, Security Features, Debug Tooling
-  - **User Questions**: "What can you tell me about VT Code Sandbox Deep Dive?", "How does Design Philosophy work?",
-    "How does Sandbox Policies work?"
-
-- **File**: `docs/sandbox/sandbox_field_guide.md`
-  - **Content**: VT Code Sandbox Field Guide
-  - **Topics**: The Three-Question Model, Boundaries, Policy, Lifecycle, Platform-Specific Implementation
-  - **User Questions**: "What can you tell me about VT Code Sandbox Field Guide?", "How does The Three-Question Model
-    work?", "How does Boundaries work?"
-
 - **File**: `docs/styling/index.md`
   - **Content**: VT Code Styling System - Complete Documentation Index
   - **Topics**: Quick Navigation, Implementation Status, Document Guide, Quick Reference, Key Crates
@@ -1637,12 +1390,6 @@ below based on the topic area.
     checklist
   - **User Questions**: "What can you tell me about WebMCP deployment reference?", "How does Select a deployment work?",
     "How does Pair either published page work?"
-
-- **File**: `docs/protocols/zed_extension_file_search.md`
-  - **Content**: Zed Extension File Search Integration
-  - **Topics**: Overview, New Commands, Architecture, File Structure, API Reference
-  - **User Questions**: "What can you tell me about Zed Extension File Search Integration?", "How does Overview work?",
-    "How does New Commands work?"
 
 - **File**: `docs/harness/zen_alignment.md`
   - **Content**: Zen Alignment for VT Code
@@ -1754,12 +1501,6 @@ below based on the topic area.
 
 ### Performance & Optimization
 
-- **File**: `docs/benchmarks/chart_guide.md`
-  - **Content**: Benchmark Chart Quick Reference
-  - **Topics**: Current Chart, Chart Breakdown, Key Insights, Generating Your Own Charts, Comparing Models
-  - **User Questions**: "What can you tell me about Benchmark Chart Quick Reference?", "How does Current Chart work?",
-    "How does Chart Breakdown work?"
-
 - **File**: `docs/benchmarks/comparison.md`
   - **Content**: Benchmark Comparison
   - **Topics**: Current Results, Planned Comparisons, Expected Performance Ranges, How to Add New Results, Analysis
@@ -1784,12 +1525,6 @@ below based on the topic area.
   - **Topics**: Executive Summary, Configuration, Results, Methodology, Analysis
   - **User Questions**: "What can you tell me about HumanEval Benchmark Results - October 22, 2025?", "How does
     Executive Summary work?", "How does Configuration work?"
-
-- **File**: `docs/benchmarks/plan-vtcode-swebench-lite.md`
-  - **Content**: Plan: Evaluate VT Code on SWE-bench Lite
-  - **Topics**: Goal, Benchmark choice, Phases, Cost controls, Success criteria
-  - **User Questions**: "What can you tell me about Plan: Evaluate VT Code on SWE-bench Lite?", "How does Goal work?",
-    "How does Benchmark choice work?"
 
 - **File**: `docs/benchmarks/README.md`
   - **Content**: VT Code Benchmarks
@@ -1838,12 +1573,6 @@ below based on the topic area.
 
 ### Tools & Functionality
 
-- **File**: `docs/tools/justification_system.md`
-  - **Content**: Agent Justification System
-  - **Topics**: Overview, Architecture, Data Flow, Data Persistence, Integration Points
-  - **User Questions**: "What can you tell me about Agent Justification System?", "How does Overview work?", "How does
-    Architecture work?"
-
 - **File**: `docs/tools/editor_config.md`
   - **Content**: External Editor Configuration
   - **Topics**: Overview, Configuration, Editor Detection Order, Usage Examples, Setting Your Preferred Editor
@@ -1856,42 +1585,17 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Git Command Execution Policy?", "How does Overview work?", "How does
     Supported Operations work?"
 
-- **File**: `docs/tools/git_quick_reference.md`
-  - **Content**: Git Commands - Quick Reference
-  - **Topics**: Allowed Operations, Blocked Operations, Common Workflows, Error Messages, Notes
-  - **User Questions**: "What can you tell me about Git Commands - Quick Reference?", "How does Allowed Operations
-    work?", "How does Blocked Operations work?"
-
-- **File**: `docs/tools/max_tokens_support.md`
-  - **Content**: Per-Call Output Limits
-  - **Topics**: Overview, Supported Public Tools, Examples, Result Shape, Recommended Budgets
-  - **User Questions**: "What can you tell me about Per-Call Output Limits?", "How does Overview work?", "How does
-    Supported Public Tools work?"
-
 - **File**: `docs/tools/prompt_caching_guide.md`
   - **Content**: Prompt Caching Guide
   - **Topics**: Global Settings, Provider Overrides, Prefix Stability Rules, Usage Telemetry, Validation & Testing
   - **User Questions**: "What can you tell me about Prompt Caching Guide?", "How does Global Settings work?", "How does
     Provider Overrides work?"
 
-- **File**: `docs/tools/tool_search.md`
-  - **Content**: Tool Search Integration
-  - **Topics**: Overview, Anthropic configuration, Tool Search Algorithms, API Usage, Response Block Types
-  - **User Questions**: "What can you tell me about Tool Search Integration?", "How does Overview work?", "How does
-    Anthropic configuration work?"
-
 - **File**: `docs/tools/tool_specs.md`
   - **Content**: VT Code Tool Specifications
   - **Topics**: Public Profiles, Default Tools, Advanced Code Search, File Inspection, Platform Profiles
   - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Public Profiles work?",
     "How does Default Tools work?"
-
-- **File**: `docs/tools/web_fetch_security.md`
-  - **Content**: Web Fetch Tool Security Configuration
-  - **Topics**: Security Modes, Dynamic Configuration Files, Inline Configuration, HTTPS Enforcement, Security Best
-    Practices
-  - **User Questions**: "What can you tell me about Web Fetch Tool Security Configuration?", "How does Security Modes
-    work?", "How does Dynamic Configuration Files work?"
 
 - **File**: `docs/tools/web_search.md`
   - **Content**: Web Search Tool
