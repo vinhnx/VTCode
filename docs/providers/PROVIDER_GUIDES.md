@@ -153,7 +153,9 @@ Run a simple request after configuration:
 vtcode ask "Summarize this repository"
 ```
 
-Worked examples: [Atlas Cloud](./atlascloud.md), [OmniRoute](./omniroute.md), and [OpenLLM](./openllm.md). See the
+Worked examples: [Atlas Cloud](./atlascloud.md), [OmniRoute](./omniroute.md),
+[OpenLLM](./openllm.md), and [Tsubasa](./tsubasa.md) (single-prompt text requests).
+See the
 [Configuration guide](../config/models.md#custom_providers) for the complete field reference and precedence rules.
 
 ## Collapsed tool-result disclosure
