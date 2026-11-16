@@ -29,6 +29,7 @@ use super::super::super::handoff::{
 };
 use super::super::super::turn_tail::{TurnPersistenceTail, complete_turn_persistence_tail};
 use super::super::session_bootstrap::persist_primary_agent;
+use super::finalize_harness_on_err;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget;
@@ -105,22 +106,6 @@ pub(super) async fn run_plan_handoff(gate: PlanHandoff<'_>) -> Result<bool> {
         next_checkpoint_turn,
         plan_skip_confirmations,
     } = gate;
-    // Same early-exit contract as the iteration root: finalize canonical
-    // persistence before leaving on errors.
-    macro_rules! harness_try {
-        ($expression:expr) => {{
-            match $expression {
-                Ok(value) => value,
-                Err(error) => {
-                    let error: anyhow::Error = error.into();
-                    if let Some(emitter) = harness_emitter.as_ref() {
-                        emitter.finish_after_unexpected_exit().await;
-                    }
-                    return Err(error);
-                }
-            }
-        }};
-    }
     let requested_agent_for_handoff = plan_execution_target
         .map(|target| target.agent_name().to_owned())
         .or(switch_primary_agent);
@@ -165,10 +150,14 @@ pub(super) async fn run_plan_handoff(gate: PlanHandoff<'_>) -> Result<bool> {
                             error = %err,
                             "Plan-entry runtime sync failed; header will still show Plan and planning stays active"
                         );
-                        harness_try!(renderer.line(
-                            MessageStyle::Warning,
-                            &format!("Plan mode is active, but runtime sync failed: {err}"),
-                        ));
+                        finalize_harness_on_err(
+                            harness_emitter.as_ref(),
+                            renderer.line(
+                                MessageStyle::Warning,
+                                &format!("Plan mode is active, but runtime sync failed: {err}"),
+                            ),
+                        )
+                        .await?;
                     }
                     handle.set_primary_agent(Some(agent_display), color);
                     tracing::info!(
@@ -186,10 +175,14 @@ pub(super) async fn run_plan_handoff(gate: PlanHandoff<'_>) -> Result<bool> {
                         error = %err,
                         "Could not select plan primary agent after planning entry; planning stays active"
                     );
-                    harness_try!(renderer.line(
-                        MessageStyle::Warning,
-                        &format!("Could not select plan primary agent after planning entry: {err}"),
-                    ));
+                    finalize_harness_on_err(
+                        harness_emitter.as_ref(),
+                        renderer.line(
+                            MessageStyle::Warning,
+                            &format!("Could not select plan primary agent after planning entry: {err}"),
+                        ),
+                    )
+                    .await?;
                 }
             }
         } else {
@@ -214,7 +207,7 @@ pub(super) async fn run_plan_handoff(gate: PlanHandoff<'_>) -> Result<bool> {
                 Ok(agent) => agent,
                 Err(err) => {
                     let msg = report_plan_approval_selection_failure(&requested_agent, &err);
-                    harness_try!(renderer.line(MessageStyle::Error, &msg));
+                    finalize_harness_on_err(harness_emitter.as_ref(), renderer.line(MessageStyle::Error, &msg)).await?;
                     // This site runs after the turn's work. Persist
                     // the real turn tail before abandoning the
                     // iteration so the just-finished turn is
@@ -248,10 +241,14 @@ pub(super) async fn run_plan_handoff(gate: PlanHandoff<'_>) -> Result<bool> {
                     resolved_agent = %execution_agent,
                     "Approved plan requested a non-executable primary agent; using a write-capable agent"
                 );
-                harness_try!(renderer.line(
-                    MessageStyle::Info,
-                    &format!("Approved plan requires a write-capable agent; switching to {}.", execution_agent),
-                ));
+                finalize_harness_on_err(
+                    harness_emitter.as_ref(),
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Approved plan requires a write-capable agent; switching to {}.", execution_agent),
+                    ),
+                )
+                .await?;
             }
             // The approval choice, rather than the destination agent
             // name, owns confirmation policy. This keeps a manual
@@ -283,10 +280,12 @@ pub(super) async fn run_plan_handoff(gate: PlanHandoff<'_>) -> Result<bool> {
                     error = %err,
                     "Approved-plan runtime sync failed; plan remains approved and can be retried"
                 );
-                harness_try!(
+                finalize_harness_on_err(
+                    harness_emitter.as_ref(),
                     renderer
-                        .line(MessageStyle::Error, &format!("Approved plan is ready, but mode switch failed: {err}"),)
-                );
+                        .line(MessageStyle::Error, &format!("Approved plan is ready, but mode switch failed: {err}")),
+                )
+                .await?;
             }
             let agent_display = active_primary_agent.active().display_name.clone();
             let color = active_primary_agent.active().color.clone().filter(|c| !c.trim().is_empty());

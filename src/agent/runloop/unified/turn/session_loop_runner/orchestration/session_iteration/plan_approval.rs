@@ -30,6 +30,7 @@ use super::super::super::handoff::{
 use super::super::super::plan_seed::load_active_plan_seed;
 use super::super::super::support::force_reload_workspace_config_for_execution;
 use super::super::session_bootstrap::record_plan_selection_failure_tail;
+use super::finalize_harness_on_err;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -124,20 +125,6 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
         target,
     } = gate;
 
-    macro_rules! harness_try {
-        ($expression:expr) => {{
-            match $expression {
-                Ok(value) => value,
-                Err(error) => {
-                    let error: anyhow::Error = error.into();
-                    if let Some(emitter) = harness_emitter.as_ref() {
-                        emitter.finish_after_unexpected_exit().await;
-                    }
-                    return Err(error);
-                }
-            }
-        }};
-    }
     // This approval path starts the implementation turn in
     // the same outer iteration, so mark it before the
     // HarnessTurnState is constructed below. The queued
@@ -149,10 +136,16 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
         Ok(plan) => plan,
         Err(error) => {
             handle.set_activity_state(ActivityState::Idle);
-            harness_try!(renderer.line(
-                MessageStyle::Error,
-                &format!("Approved-plan execution is blocked: {error}. The plan was retained; please retry approval."),
-            ));
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!(
+                        "Approved-plan execution is blocked: {error}. The plan was retained; please retry approval."
+                    ),
+                ),
+            )
+            .await?;
             transition_to_planning_workflow(
                 tool_registry,
                 session_stats,
@@ -178,10 +171,14 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
     .await
     {
         handle.set_activity_state(ActivityState::Idle);
-        harness_try!(renderer.line(
-            MessageStyle::Error,
-            &format!("Approved-plan execution is blocked: {error}. The plan was retained; please retry approval."),
-        ));
+        finalize_harness_on_err(
+            harness_emitter.as_ref(),
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Approved-plan execution is blocked: {error}. The plan was retained; please retry approval."),
+            ),
+        )
+        .await?;
         transition_to_planning_workflow(
             tool_registry,
             session_stats,
@@ -214,10 +211,14 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
     let plan_seed = load_active_plan_seed(tool_registry).await;
     if fresh_context && plan_seed.is_none() {
         handle.set_activity_state(ActivityState::Idle);
-        harness_try!(renderer.line(
-                    MessageStyle::Error,
-                    "Fresh execution could not start because the approved plan was not found. The plan was retained; please retry approval.",
-                ));
+        finalize_harness_on_err(
+            harness_emitter.as_ref(),
+            renderer.line(
+                MessageStyle::Error,
+                "Fresh execution could not start because the approved plan was not found. The plan was retained; please retry approval.",
+            ),
+        )
+        .await?;
         transition_to_planning_workflow(
             tool_registry,
             session_stats,
@@ -263,9 +264,11 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
         Ok(agent) => agent,
         Err(err) if fresh_context => {
             handle.set_activity_state(ActivityState::Idle);
-            harness_try!(
-                renderer.line(MessageStyle::Error, &format!("Fresh execution could not select a build agent: {err}"),)
-            );
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
+                renderer.line(MessageStyle::Error, &format!("Fresh execution could not select a build agent: {err}")),
+            )
+            .await?;
             transition_to_planning_workflow(
                 tool_registry,
                 session_stats,
@@ -295,7 +298,7 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
         }
         Err(err) => {
             let msg = report_plan_approval_selection_failure(requested_agent, &err);
-            harness_try!(renderer.line(MessageStyle::Error, &msg));
+            finalize_harness_on_err(harness_emitter.as_ref(), renderer.line(MessageStyle::Error, &msg)).await?;
             let session_id = tool_registry.harness_context_snapshot().session_id;
             record_plan_selection_failure_tail(
                 runtime,
@@ -318,10 +321,14 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
             resolved_agent = ?resolved_execution_agent,
             "Approved plan requested a non-executable primary agent; using a write-capable agent"
         );
-        harness_try!(renderer.line(
-            MessageStyle::Info,
-            &format!("Approved plan requires a write-capable agent; switching to {}.", resolved_execution_agent),
-        ));
+        finalize_harness_on_err(
+            harness_emitter.as_ref(),
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Approved plan requires a write-capable agent; switching to {}.", resolved_execution_agent),
+            ),
+        )
+        .await?;
     }
     if let Err(err) = force_reload_workspace_config_for_execution(
         config.workspace.as_path(),
@@ -333,7 +340,11 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
     .await
     {
         tracing::warn!("Failed to reload workspace configuration at plan approval: {}", err);
-        harness_try!(renderer.line(MessageStyle::Error, &format!("Failed to reload configuration: {err}")));
+        finalize_harness_on_err(
+            harness_emitter.as_ref(),
+            renderer.line(MessageStyle::Error, &format!("Failed to reload configuration: {err}")),
+        )
+        .await?;
     }
 
     sync_primary_agent_permissions(&mut *vt_cfg, active_primary_agent.active());
@@ -355,10 +366,12 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
     if let Err(err) = sync_primary_agent_runtime(&mut runtime_sync).await {
         if fresh_context {
             handle.set_activity_state(ActivityState::Idle);
-            harness_try!(
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
                 renderer
-                    .line(MessageStyle::Error, &format!("Fresh execution could not restore the build runtime: {err}"),)
-            );
+                    .line(MessageStyle::Error, &format!("Fresh execution could not restore the build runtime: {err}")),
+            )
+            .await?;
             transition_to_planning_workflow(
                 tool_registry,
                 session_stats,
@@ -399,7 +412,8 @@ pub(super) async fn handle_plan_approval(gate: PlanApprovalGate<'_>) -> Result<P
     if fresh_context {
         handle.set_activity_state(ActivityState::StartingBuild);
     }
-    harness_try!(renderer.line(MessageStyle::Info, "Executing approved plan..."));
+    finalize_harness_on_err(harness_emitter.as_ref(), renderer.line(MessageStyle::Info, "Executing approved plan..."))
+        .await?;
 
     let execution_directive = build_approved_plan_execution_prompt(execution_context, plan_seed.as_deref());
     runtime

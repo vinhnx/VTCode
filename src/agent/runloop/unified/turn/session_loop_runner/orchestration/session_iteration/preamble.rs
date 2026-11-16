@@ -27,6 +27,7 @@ use super::super::super::handoff::{
 };
 use super::super::super::support::force_reload_workspace_config_for_execution;
 use super::super::session_bootstrap::record_plan_selection_failure_tail;
+use super::finalize_harness_on_err;
 use super::skip_confirmations::effective_session_skip_confirmations;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -96,22 +97,6 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
         next_checkpoint_turn,
         max_tool_wall_clock_secs,
     } = gate;
-    // Same early-exit contract as the iteration root: finalize canonical
-    // persistence before leaving on errors.
-    macro_rules! harness_try {
-        ($expression:expr) => {{
-            match $expression {
-                Ok(value) => value,
-                Err(error) => {
-                    let error: anyhow::Error = error.into();
-                    if let Some(emitter) = harness_emitter.as_ref() {
-                        emitter.finish_after_unexpected_exit().await;
-                    }
-                    return Err(error);
-                }
-            }
-        }};
-    }
     // The approval turn may have ended before the handoff state
     // was fully applied (for example after recovery or a stale
     // primary-agent catalog). Re-establish the execution boundary
@@ -127,10 +112,11 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
                     Ok(plan) => plan,
                     Err(error) => {
                         *pending_approved_plan_execution_input = false;
-                        harness_try!(
-                            renderer
-                                .line(MessageStyle::Error, &format!("Approved-plan execution is blocked: {error}"),)
-                        );
+                        finalize_harness_on_err(
+                            harness_emitter.as_ref(),
+                            renderer.line(MessageStyle::Error, &format!("Approved-plan execution is blocked: {error}")),
+                        )
+                        .await?;
                         return Ok(true);
                     }
                 };
@@ -146,9 +132,11 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
             )
             .await
             {
-                harness_try!(
-                    renderer.line(MessageStyle::Error, &format!("Approved-plan execution is blocked: {error}"))
-                );
+                finalize_harness_on_err(
+                    harness_emitter.as_ref(),
+                    renderer.line(MessageStyle::Error, &format!("Approved-plan execution is blocked: {error}")),
+                )
+                .await?;
                 *pending_approved_plan_execution_input = false;
                 return Ok(true);
             }
@@ -172,7 +160,7 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
             Ok(agent) => agent,
             Err(err) => {
                 let msg = report_plan_approval_selection_failure(&current_agent, &err);
-                harness_try!(renderer.line(MessageStyle::Error, &msg));
+                finalize_harness_on_err(harness_emitter.as_ref(), renderer.line(MessageStyle::Error, &msg)).await?;
                 *pending_approved_plan_execution_input = false;
                 let session_id = tool_registry.harness_context_snapshot().session_id;
                 record_plan_selection_failure_tail(
@@ -191,10 +179,14 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
             }
         };
         if current_agent != execution_agent {
-            harness_try!(renderer.line(
-                MessageStyle::Info,
-                &format!("Approved plan requires a write-capable agent; switching to {execution_agent}."),
-            ));
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Approved plan requires a write-capable agent; switching to {execution_agent}."),
+                ),
+            )
+            .await?;
         }
         if let Err(err) = force_reload_workspace_config_for_execution(
             config.workspace.as_path(),
@@ -206,7 +198,11 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
         .await
         {
             tracing::warn!(error = %err, "Failed to reload workspace configuration before approved-plan execution");
-            harness_try!(renderer.line(MessageStyle::Error, &format!("Failed to reload configuration: {err}")));
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
+                renderer.line(MessageStyle::Error, &format!("Failed to reload configuration: {err}")),
+            )
+            .await?;
         }
         sync_primary_agent_permissions(&mut *vt_cfg, active_primary_agent.active());
         apply_primary_agent_tool_policy_overrides(tool_registry, active_primary_agent.active()).await;
@@ -224,7 +220,7 @@ pub(super) async fn run_approved_plan_preamble(gate: Preamble<'_>) -> Result<boo
             pending_mcp_refresh: &mut *pending_mcp_refresh,
             provider_client,
         };
-        harness_try!(sync_primary_agent_runtime(&mut runtime_sync).await);
+        finalize_harness_on_err(harness_emitter.as_ref(), sync_primary_agent_runtime(&mut runtime_sync).await).await?;
         let display = active_primary_agent.active().display_name.clone();
         let color = active_primary_agent.active().color.clone().filter(|c| !c.trim().is_empty());
         handle.set_primary_agent(Some(display), color);

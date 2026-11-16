@@ -37,6 +37,7 @@ use super::super::super::support::{
 use super::super::super::turn_tail::{TurnPersistenceTail, complete_turn_persistence_tail};
 use super::super::super::{blocked_handoff, verification_recovery};
 use super::super::session_bootstrap::persist_primary_agent;
+use super::finalize_harness_on_err;
 use super::{corrective, plan_handoff};
 use crate::agent::runloop::git::normalize_workspace_path;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
@@ -360,15 +361,14 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
         let mut plan_seed = load_active_plan_seed(tool_registry).await;
         if fresh_context && plan_seed.is_none() {
             handle.set_activity_state(ActivityState::Idle);
-            if let Err(error) = renderer.line(
-                MessageStyle::Error,
-                "Fresh execution could not start because the approved plan was not found. The plan was retained; please retry approval.",
-            ) {
-                if let Some(emitter) = harness_emitter.as_ref() {
-                    emitter.finish_after_unexpected_exit().await;
-                }
-                return Err(error);
-            }
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
+                renderer.line(
+                    MessageStyle::Error,
+                    "Fresh execution could not start because the approved plan was not found. The plan was retained; please retry approval.",
+                ),
+            )
+            .await?;
             return Ok(OutcomeFlow::ContinueLoop);
         }
         if fresh_context {

@@ -18,6 +18,7 @@ use super::super::harness;
 use super::*;
 
 mod corrective;
+mod harness_finalize;
 mod initialization;
 mod outcome;
 mod plan_approval;
@@ -27,6 +28,8 @@ mod resume;
 mod setup;
 mod skip_confirmations;
 mod turn_prep;
+
+pub(super) use harness_finalize::finalize_harness_on_err;
 
 /// Cross-iteration state owned by the unified loop, borrowed for one session.
 ///
@@ -161,23 +164,6 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         startup_update_requested_restart,
     } = *setup;
     let mut turn_id = turn_run_id.0.clone();
-
-    // Twin of the setup-internal `harness_try!`: the interaction loop below
-    // still needs early-error finalization after setup returns.
-    macro_rules! harness_try {
-        ($expression:expr) => {{
-            match $expression {
-                Ok(value) => value,
-                Err(error) => {
-                    let error: anyhow::Error = error.into();
-                    if let Some(emitter) = harness_emitter.as_ref() {
-                        emitter.finish_after_unexpected_exit().await;
-                    }
-                    return Err(error);
-                }
-            }
-        }};
-    }
 
     let mut cross_turn_tracker = crate::agent::runloop::unified::run_loop_context::CrossTurnTracker::new();
     let mut approved_plan_execution_turn = false;
@@ -400,13 +386,15 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                         ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
                         inline_prompt_cost_notice_shown: &mut inline_prompt_cost_notice_shown,
                     };
-                harness_try!(
+                finalize_harness_on_err(
+                    harness_emitter.as_ref(),
                     crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
                         &mut interaction_ctx,
                         &mut interaction_state,
                     )
-                    .await
+                    .await,
                 )
+                .await?
             };
             // User-driven mode switches are applied inside the interaction
             // loop. Capture them before any turn outcome can block or

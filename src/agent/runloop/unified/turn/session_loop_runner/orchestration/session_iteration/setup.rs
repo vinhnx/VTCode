@@ -248,25 +248,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         harness::initialize_harness(&config.workspace, vt_cfg.as_ref(), &config.model, &turn_run_id, event_sender)
             .await?;
 
-    // Once canonical persistence is open, every fallible operation must
-    // finalize it before leaving this session iteration. The normal path
-    // emits `thread.completed`; this macro emits an error terminal event
-    // and drains the canonical sink for early error exits.
-    macro_rules! harness_try {
-        ($expression:expr) => {{
-            match $expression {
-                Ok(value) => value,
-                Err(error) => {
-                    let error: anyhow::Error = error.into();
-                    if let Some(emitter) = harness_emitter.as_ref() {
-                        emitter.finish_after_unexpected_exit().await;
-                    }
-                    return Err(error);
-                }
-            }
-        }};
-    }
-
+    // Once canonical persistence is open, every fallible operation below goes
+    // through `finalize_harness_on_err` so early error exits still emit the
+    // terminal events and drain the canonical sink.
     let session_ui_phase = vtcode_commons::startup_trace::phase_started();
     let ui_setup = initialize_session_ui(
         config,
@@ -293,7 +277,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         },
     )
     .await;
-    let Some(mut ui_setup) = harness_try!(ui_setup) else {
+    let Some(mut ui_setup) = finalize_harness_on_err(harness_emitter.as_ref(), ui_setup).await? else {
         return Ok(SetupFlow::Break);
     };
     let initialization_progress = ui_setup
@@ -301,7 +285,8 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         .resume_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     vtcode_commons::startup_trace::record_phase("session_setup_ui", session_ui_phase);
 
-    if let ControlFlow::Break(()) = harness_try!(
+    if let ControlFlow::Break(()) = finalize_harness_on_err(
+        harness_emitter.as_ref(),
         initialization::complete_session_initialization(
             &mut session_state,
             &mut ui_setup,
@@ -318,8 +303,10 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
                 session_started_at,
             },
         )
-        .await
-    ) {
+        .await,
+    )
+    .await?
+    {
         return Ok(SetupFlow::Break);
     }
 
@@ -360,8 +347,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     if resume_ref.is_some()
         && let Some(emitter) = harness_emitter.as_ref()
     {
-        for diagnostic in harness_try!(emitter.diagnostics().await) {
-            harness_try!(renderer.restore_diagnostic(&diagnostic));
+        let diagnostics = finalize_harness_on_err(harness_emitter.as_ref(), emitter.diagnostics().await).await?;
+        for diagnostic in diagnostics {
+            finalize_harness_on_err(harness_emitter.as_ref(), renderer.restore_diagnostic(&diagnostic)).await?;
         }
     }
     let mut session_end_reason = ui_setup.session_end_reason;
@@ -416,7 +404,8 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed(&runtime.state.messages),
     );
     tool_registry.restore_completion_verification_from_history(&runtime.state.messages);
-    harness_try!(
+    finalize_harness_on_err(
+        harness_emitter.as_ref(),
         resume::restore_session_follow_ups(
             &mut runtime,
             &tool_registry,
@@ -428,8 +417,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
                 renderer: &mut renderer,
             },
         )
-        .await
-    );
+        .await,
+    )
+    .await?;
     let tool_result_cache = execution.tool_result_cache;
     let tool_permission_cache = execution.tool_permission_cache;
     let permissions_state = execution.permissions_state;
@@ -485,11 +475,15 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         )
         .await;
         apply_startup_plan_agent_selection(&mut active_primary_agent, &tool_registry, config, &handle).await;
-        harness_try!(render_planning_workflow_next_step_hint(&mut renderer));
+        finalize_harness_on_err(harness_emitter.as_ref(), render_planning_workflow_next_step_hint(&mut renderer))
+            .await?;
         // No researching indicator here: startup entry has no request yet.
     } else if planning_entry_source.requires_startup_prompt() && resume_ref.is_none() {
-        let should_enter =
-            harness_try!(prompt_startup_planning_workflow(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify).await);
+        let should_enter = finalize_harness_on_err(
+            harness_emitter.as_ref(),
+            prompt_startup_planning_workflow(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify).await,
+        )
+        .await?;
         if should_enter {
             transition_to_planning_workflow(
                 &tool_registry,
@@ -504,7 +498,8 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
             )
             .await;
             apply_startup_plan_agent_selection(&mut active_primary_agent, &tool_registry, config, &handle).await;
-            harness_try!(render_planning_workflow_next_step_hint(&mut renderer));
+            finalize_harness_on_err(harness_emitter.as_ref(), render_planning_workflow_next_step_hint(&mut renderer))
+                .await?;
             // No researching indicator here: no request exists yet.
         }
     }
@@ -522,7 +517,8 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         && tool_registry.is_planning_active()
         && let Some(emitter) = harness_emitter.as_ref()
     {
-        let saved_recovery = harness_try!(emitter.planning_recovery().await);
+        let saved_recovery =
+            finalize_harness_on_err(harness_emitter.as_ref(), emitter.planning_recovery().await).await?;
         let legacy_progress = saved_recovery.is_none()
             && runtime
                 .state
@@ -537,17 +533,19 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
                     &config.model,
                 )
             });
-            harness_try!(
+            finalize_harness_on_err(
+                harness_emitter.as_ref(),
                 emitter
                     .persist_checkpoint(
                         &crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
                             &plan_session.recovery,
                             thread_handle.thread_id().as_str(),
                             "planning-resume",
-                        )
+                        ),
                     )
-                    .await
-            );
+                    .await,
+            )
+            .await?;
             if matches!(
                 plan_session.recovery.outcome,
                 vtcode_core::exec::events::planning::PlanningOutcome::Synthesizing
@@ -575,7 +573,8 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         .map(|controller| controller.subscribe_parent_background_completions());
     let _matrix_interrupt_guard = if let Some(controller) = tool_registry.subagent_controller() {
         if let Some(persistence) = harness_emitter.as_ref().and_then(|emitter| emitter.matrix_persistence()) {
-            harness_try!(controller.set_matrix_persistence(persistence).await);
+            finalize_harness_on_err(harness_emitter.as_ref(), controller.set_matrix_persistence(persistence).await)
+                .await?;
         }
         let interrupt_state = Arc::clone(&ctrl_c_state);
         // Abort the interrupt poller when this scope ends.
@@ -615,7 +614,8 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let last_mcp_refresh = Instant::now();
     let startup_update_requested_restart = if let Some(notice) = startup_update_cached_notice.as_ref() {
         display_update_notice(&handle, &mut header_context, notice);
-        let update_outcome = harness_try!(
+        let update_outcome = finalize_harness_on_err(
+            harness_emitter.as_ref(),
             run_inline_update_prompt(
                 &mut renderer,
                 &handle,
@@ -625,8 +625,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
                 config.workspace.as_path(),
                 notice,
             )
-            .await
-        );
+            .await,
+        )
+        .await?;
         matches!(update_outcome, InlineUpdateOutcome::RestartRequested)
     } else {
         false
