@@ -16,6 +16,14 @@ impl Transcript {
             let is_user = rows.get(index).is_some_and(TranscriptItem::is_user);
             let is_assistant = rows.get(index).is_some_and(TranscriptItem::is_assistant);
             if is_user {
+                // A new user row proves the previous turn ended. Turns that
+                // finish without an explicit `final_answer` (plan-approval
+                // exits, user interrupts) still need a work log: mirror the
+                // live path's `resolve_turn_final` by collapsing around the
+                // newest assistant row so it stays visible after the group.
+                if let Some(start_index) = start.take() {
+                    close_archive_turn(&mut rows, start_index, index, None);
+                }
                 start = Some(index);
                 ambiguous = false;
             } else if is_assistant {
@@ -23,26 +31,16 @@ impl Transcript {
                     Some("commentary") => {}
                     Some("final_answer") if start.is_some() && !ambiguous => {
                         if let Some(start_index) = start.take() {
-                            let Some(turn_row) = rows.get(start_index) else {
-                                continue;
-                            };
-                            let turn_id = format!("archive-{}", turn_row.id);
-                            if let Some(span) = rows.get_mut(start_index + 1..=index) {
-                                for row in span {
-                                    if row.is_assistant() || row.is_tool() {
-                                        row.turn_id = Some(turn_id.clone().into());
-                                    }
-                                }
-                            }
-                            if let Some(final_row) = rows.get_mut(index) {
-                                final_row.archived_final = true;
-                            }
+                            close_archive_turn(&mut rows, start_index, index.saturating_add(1), Some(index));
                         }
                     }
                     _ => ambiguous = true,
                 }
             }
         }
+        // The trailing window is intentionally left open: it may be the turn
+        // that is still active when the session is resumed, and the live path
+        // collapses it on TurnCompleted.
         rows
     }
 
@@ -332,6 +330,37 @@ impl Transcript {
         self.bump_revision();
         self.layout_changes
             .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+    }
+}
+
+/// Close an archived turn window `[start_index, end)` so `group_archived_prefix`
+/// collapses its work into one "Activity" group. `final_index`, when supplied,
+/// names an explicit `final_answer` row; turns without one collapse around
+/// their newest assistant row, which stays visible after the group.
+fn close_archive_turn(rows: &mut [TranscriptItem], start_index: usize, end: usize, final_index: Option<usize>) {
+    let Some(user_row) = rows.get(start_index) else {
+        return;
+    };
+    let turn_id: SharedString = format!("archive-{}", user_row.id).into();
+    let survivor = final_index
+        .filter(|index| *index < end && rows.get(*index).is_some_and(TranscriptItem::is_assistant))
+        .or_else(|| {
+            (start_index + 1..end)
+                .rev()
+                .find(|index| rows.get(*index).is_some_and(TranscriptItem::is_assistant))
+        });
+    let Some(survivor) = survivor else {
+        return;
+    };
+    for index in start_index + 1..end {
+        if let Some(row) = rows.get_mut(index)
+            && (row.is_assistant() || row.is_tool())
+        {
+            row.turn_id = Some(turn_id.clone());
+        }
+    }
+    if let Some(row) = rows.get_mut(survivor) {
+        row.archived_final = true;
     }
 }
 

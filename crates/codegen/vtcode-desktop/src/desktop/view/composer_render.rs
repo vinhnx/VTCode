@@ -123,8 +123,26 @@ impl DesktopView {
         // while the button frames below start on it too and their ghost
         // labels inset by button padding (matching transcript tool rows).
         let composer_size = gpui_kit::component::Size::default();
-        let input = Textarea::new(&self.composer)
-            .accessibility_id("composer")
+        // `EditorState` (unlike `TextareaState`) can host the token highlighter,
+        // but it has no `auto_grow`: size it from the draft's line count (1-6
+        // rows) the way the composer's old textarea did.
+        let lines = self.composer.read(cx).value().lines().count().clamp(1, 6);
+        let line_height = self
+            .composer
+            .read(cx)
+            .line_height()
+            .filter(|height| height.as_f32() > 0.)
+            .unwrap_or(cx.theme().font_size * 1.25);
+        let composer_height = px(line_height.as_f32() * lines as f32);
+        // Strip the editor's code-editor chrome (border, background, mono font,
+        // taller leading) so it renders like the Textarea it replaced.
+        let input = Editor::new(&self.composer)
+            .bordered(false)
+            .appearance(false)
+            .h(composer_height)
+            .font_family(cx.theme().font_family.clone())
+            .text_size(cx.theme().font_size)
+            .line_height(gpui_kit::rems(1.25))
             .aria_label(rust_i18n::t!("app.composer.input_label").to_string())
             // Kit insets multiline editor text by the size input token
             // with no override (`set_editor_paddings` is crate-private
@@ -154,7 +172,9 @@ impl DesktopView {
                 }
                 true
             })
-            .min_h(px(32.));
+            .min_h(px(32.))
+            .into_input()
+            .accessibility_id("composer");
 
         if let Some(draft) = self.retained_submission.as_ref() {
             let prompt = draft.prompt.clone();

@@ -295,6 +295,12 @@ Footer controls wrap when space is limited; long model names are bounded. Empty 
 sent. Enter/Shift+Enter behavior, attachment delivery, approval requests, cancellation, and uncertain-delivery
 draft recovery retain their existing ownership and safeguards.
 
+The draft text is decorated as you type: leading slash commands, `@agent-…` references, `@file` mentions, and
+backtick-delimited code spans each use a distinct foreground color (plus bold or underline) drawn from the active
+theme's text colors. Decoration is presentation-only — it does not change tokenizing for completion, submission, or
+history — and updates in place when the theme changes. The composer uses Kit's `EditorState` solely to host this
+highlighter; it is styled borderless with the UI font and emulates the one-to-six-line growth of the old textarea.
+
 ### Composer context and runtime controls
 
 **Add files** (the composer + button) opens a tabbed tree picker anchored above the composer: the **VT Code**
@@ -924,7 +930,10 @@ log over that turn's assistant/tool rows (counts in the header, collapsed by
 default, keyboard and screen-reader accessible), and the final response with
 its completion time — with no dividers between messages. Grouping keys on
 canonical turn identity, so it survives restore, and search reveals collapsed
-groups before navigating. Failed, blocked, cancelled, and interrupted turns
+groups before navigating. A restored turn that has no recorded `final_answer`
+row (for example a plan-approval exit) is closed when the next user message
+arrives and collapses around its newest assistant row, which stays visible as
+the turn's summary. Failed, blocked, cancelled, and interrupted turns
 keep their work visible with its status instead of grouping it as a success.
 Turns that changed files add a file summary to the final response (first
 three files, kind and +/− counts, partial marker, Changes-button deeplink);

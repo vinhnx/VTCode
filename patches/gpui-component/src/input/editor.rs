@@ -60,6 +60,29 @@ impl Editor {
         self
     }
 
+    /// The [`Input`] this editor renders, for compound controls such as
+    /// `InputGroup` that frame a text input. Mirrors `Textarea::into_input`;
+    /// the caller owns the text style (the editor defaults to a code font).
+    pub fn into_input(self) -> Input {
+        Input::from_state(self.state.clone())
+            .appearance(self.appearance)
+            .bordered(self.bordered)
+            .disabled(self.disabled)
+            .readonly(self.readonly)
+            .tab_index(self.tab_index)
+            .role(self.role)
+            .with_size(self.size)
+            .when_some(self.height, |this, height| this.h(height))
+            .when_some(self.aria_label, |this, label| this.aria_label(label))
+            .when_some(self.context_menu_builder, |this, build| {
+                this.context_menu(move |menu, window, cx| build(menu, window, cx))
+            })
+            .when_some(self.paste_handler, |this, handler| {
+                this.on_paste(move |item, window, cx| handler(item, window, cx))
+            })
+            .refine_style(&self.style)
+    }
+
     pub fn appearance(mut self, appearance: bool) -> Self {
         self.appearance = appearance;
         self

@@ -318,15 +318,26 @@ impl DesktopView {
                 view.rebuild_picker_tree(cx);
             }
         });
+        let composer_highlight_styles =
+            Rc::new(RefCell::new(composer_highlight::ComposerHighlightStyles::from_colors(&cx.theme().colors)));
         let composer = cx.new(|cx| {
-            TextareaState::new(window, cx)
+            let styles = composer_highlight_styles.clone();
+            let mut state = EditorState::new(window, cx)
                 .placeholder(rust_i18n::t!(i18n::COMPOSER_INPUT_PLACEHOLDER).to_string())
-                .auto_grow(1, 6)
                 .submit_on_enter(true)
+                // The composer is prose, not source: no line numbers, folding,
+                // auto-indent or bracket pairing. Only the token highlighter
+                // styles runs of text.
+                .line_number(false)
+                .folding(false)
+                .auto_close(false)
+                .language(composer_highlight::PROMPT_LANGUAGE)
                 // Pinned, not defaulted: off-macOS Kit binds ctrl-f to Search
                 // on the deeper input context, and only a non-searchable input
                 // propagates it back out to our fixed ctrl-f caret binding.
-                .searchable(false)
+                .searchable(false);
+            state.set_highlighter_factory(composer_highlight::prompt_highlighter_factory(styles), cx);
+            state
         });
         composer.read(cx).focus_handle(cx).focus(window, cx);
         let composer_subscription = cx.subscribe_in(&composer, window, |view, _, event, window, cx| {
@@ -533,6 +544,7 @@ impl DesktopView {
             interaction_immediate_choice_id: None,
             interaction_plan_expanded: false,
             composer,
+            composer_highlight_styles,
             _composer_subscription: composer_subscription,
             ui_language_select,
             _ui_language_subscription: ui_language_subscription,

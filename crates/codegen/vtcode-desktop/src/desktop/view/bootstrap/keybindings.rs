@@ -35,6 +35,14 @@ pub(crate) const FIXED_RESERVED_CHORDS: &[&str] = &[
 pub(crate) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
     bind_configurable_shortcuts(cx, &preferences.shortcuts);
     cx.bind_keys([
+        // The composer is a Kit `Editor` so it can host token decoration. That
+        // adds an inner `Input mode=editor` context whose defaults (`ToggleCodeActions`,
+        // `Outdent`, `Indent`) would swallow these app-wide chords while the
+        // composer has focus. Re-bind them at that same context so the global
+        // behavior wins without changing editing keys in other inputs.
+        KeyBinding::new("cmd-.", CancelRun, Some("Input && mode == editor")),
+        KeyBinding::new("cmd-[", NavigateBack, Some("Input && mode == editor")),
+        KeyBinding::new("cmd-]", NavigateForward, Some("Input && mode == editor")),
         KeyBinding::new("cmd-w", CloseWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-m", MinimizeWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, Some(key_context::DESKTOP)),

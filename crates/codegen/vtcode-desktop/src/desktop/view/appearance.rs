@@ -452,9 +452,21 @@ impl DesktopView {
             self.refresh_dock_icon();
         }
         self.apply_typography(cx);
+        self.refresh_composer_highlight(cx);
         self.transcript.remeasure();
         self.save_preferences();
         cx.notify();
+    }
+
+    /// Repaint composer tokens with the newly applied palette. The highlighter
+    /// reads its colors through the shared cell, so resetting the language is
+    /// enough to force a retokenize with the new theme.
+    fn refresh_composer_highlight(&mut self, cx: &mut Context<Self>) {
+        *self.composer_highlight_styles.borrow_mut() =
+            composer_highlight::ComposerHighlightStyles::from_colors(&cx.theme().colors);
+        self.composer.update(cx, |composer, cx| {
+            composer.set_highlighter(composer_highlight::PROMPT_LANGUAGE, cx);
+        });
     }
 
     pub(super) fn apply_typography(&mut self, cx: &mut Context<Self>) {

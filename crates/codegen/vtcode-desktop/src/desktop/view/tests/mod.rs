@@ -728,6 +728,7 @@ mod changelog_viewer;
 mod cli_handoff;
 mod composer_alignment;
 mod composer_font_scale;
+mod composer_highlight;
 mod composer_keys;
 mod config_catalog;
 mod config_deep_links;

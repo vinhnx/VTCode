@@ -32,9 +32,9 @@ use gpui_kit::component::empty::{
 };
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
-    Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Enter,
-    IndentInline, Input, InputEvent, InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp, OutdentInline,
-    Paste, Position, Redo, SelectAll, Textarea, TextareaState, Undo,
+    Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Editor,
+    EditorState, Enter, IndentInline, Input, InputEvent, InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp,
+    OutdentInline, Paste, Position, Redo, SelectAll, Textarea, TextareaState, Undo,
 };
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
@@ -124,6 +124,7 @@ mod components;
 mod composer_actions;
 mod composer_attachments;
 mod composer_controls;
+mod composer_highlight;
 mod composer_history;
 mod composer_render;
 mod config_editor_copy;
@@ -655,7 +656,12 @@ struct DesktopView {
     /// Whether the approval panel shows the full plan proposal. Reset on
     /// every new interaction and when the interaction clears.
     interaction_plan_expanded: bool,
-    composer: Entity<TextareaState>,
+    /// The composer is an `EditorState` (not a `TextareaState`) so it can host
+    /// the token highlighter; it is styled to match the surrounding input.
+    composer: Entity<EditorState>,
+    /// Theme-derived colors shared with the composer highlighter, refreshed on
+    /// theme change without rebuilding the editor state.
+    composer_highlight_styles: composer_highlight::SharedComposerHighlightStyles,
     _composer_subscription: Subscription,
     ui_language_select: Entity<UiLanguageSelectState>,
     _ui_language_subscription: Subscription,

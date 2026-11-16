@@ -312,6 +312,48 @@ fn restored_explicit_commentary_groups_only_with_recorded_final(cx: &mut TestApp
 }
 
 #[gpui_kit::test]
+fn archived_turn_without_final_answer_groups_around_newest_assistant(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::SessionHistoryMessage;
+    let message = |index, role: &str, text: &str, phase: Option<&str>| SessionHistoryMessage {
+        event_item_id: None,
+        hidden: false,
+        archive_index: Some(index),
+        role: role.into(),
+        text: text.into(),
+        phase: phase.map(str::to_owned),
+    };
+    // Turn 1 ends via a plan-approval exit: no `final_answer` row. Turn 2
+    // starts with a new user row, which proves turn 1 ended and should give it
+    // a work-log group whose newest assistant row stays visible.
+    let history = super::super::sessions::prepare_session_history(
+        "session",
+        vec![
+            message(0, "user", "first", None),
+            message(1, "assistant", "plan", Some("commentary")),
+            message(2, "tool", "tool result", None),
+            message(3, "assistant", "exit summary", None),
+            message(4, "user", "second", None),
+            message(5, "assistant", "working", Some("commentary")),
+            message(6, "tool", "tool result", None),
+            message(7, "assistant", "answer", Some("final_answer")),
+        ],
+    );
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.load_history(history);
+        assert!(view.transcript.get(1).unwrap().turn_group_head);
+        assert!(view.transcript.get(2).unwrap().turn_grouped);
+        // Newest assistant row of the open-ended turn survives the collapse.
+        assert!(!view.transcript.get(3).unwrap().turn_grouped);
+        assert!(view.transcript.get(3).unwrap().archived_final);
+        // The explicit-final turn keeps its own group and visible answer.
+        assert!(view.transcript.get(5).unwrap().turn_group_head);
+        assert!(view.transcript.get(6).unwrap().turn_grouped);
+        assert!(!view.transcript.get(7).unwrap().turn_grouped);
+    });
+}
+
+#[gpui_kit::test]
 fn conflicting_turn_cannot_overwrite_existing_transcript_item(cx: &mut TestAppContext) {
     use vtcode_exec_events::{AgentMessageItem, ThreadItem, ThreadItemDetails};
     let (_window, view) = open_desktop(cx);
