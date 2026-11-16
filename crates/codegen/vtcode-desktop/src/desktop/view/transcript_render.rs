@@ -961,9 +961,12 @@ impl DesktopView {
                             )
                             .when(item.has_output() || item.has_archived_output(), |row| {
                                 row.child(Self::tool_output_cta(item, cx))
+                            })
+                            .when(item.is_running_tool() && item.activity_category == Some(ToolCategory::Run), |row| {
+                                row.child(Self::tool_terminal_cta(item, cx))
                             }),
                     )
-                    .when(!item.has_output() && !item.has_archived_output(), |panel| {
+                    .when(item.shows_inline_tail(), |panel| {
                         let output_excerpt = inspector::output_with_truncation_notice(
                             &tool_tail.unwrap_or_else(|| inspector::compact_output_tail(&output)),
                             item.output_truncated,

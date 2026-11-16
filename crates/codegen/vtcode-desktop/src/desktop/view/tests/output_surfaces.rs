@@ -70,7 +70,12 @@ fn transcript_opens_full_capture_in_inspector(cx: &mut TestAppContext) {
             view.inspector_open = false;
         });
         window.render_frame(cx);
-        assert!(window.try_find("tool-output-compact").is_none());
+        // Running rows preview the live tail inline (last N lines only);
+        // the full capture stays one jump away in the Output tab.
+        let excerpt = window.find("tool-output-compact");
+        let preview = excerpt.label().unwrap();
+        assert!(preview.contains("output line 19"), "live tail keeps the newest line: {preview}");
+        assert!(!preview.contains("output line 0\n"), "live tail drops the oldest lines: {preview}");
         assert!(window.find("tool-open-output-compact").visible());
         focus_element_by_tab(window, "tool-open-output-compact", cx);
         window.press("enter", cx);

@@ -2,6 +2,10 @@ use vtcode_commons::tool_headlines::strip_mcp_prefix;
 
 use super::*;
 
+/// Label for the running-command terminal CTA. English literal: the repo
+/// does not add locale keys without full native-quality translations.
+const TERMINAL_CTA_LABEL: &str = "Open the built-in terminal";
+
 impl DesktopView {
     /// A small, theme-colored dotted rule under an actionable filename.
     pub(super) fn filename_dotted_underline(color: gpui_kit::Hsla) -> impl IntoElement {
@@ -165,6 +169,33 @@ impl DesktopView {
             .tooltip(rust_i18n::t!("app.inspector.view_captured_output").to_string())
             .on_click(cx.listener(move |view, _, window, cx| {
                 view.select_activity_output(output_id.clone(), window, cx);
+            }))
+    }
+
+    /// Show the built-in terminal panel without toggling it off when it
+    /// is already visible. Powers the running-command "open in terminal" CTA.
+    fn open_terminal_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.terminal_visible {
+            self.toggle_terminal(window, cx);
+        } else {
+            self.terminal_focus.focus(window, cx);
+            cx.notify();
+        }
+    }
+
+    /// Button beside the Output CTA on an expanded running command row,
+    /// opening the built-in terminal panel so the user can monitor the
+    /// command from a shell. English literal: the repo does not add locale
+    /// keys without full native-quality translations.
+    pub(super) fn tool_terminal_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
+        desktop_button(format!("tool-open-terminal-{}", item.id))
+            .icon(IconName::SquareTerminal)
+            .ghost()
+            .xsmall()
+            .accessibility_label(TERMINAL_CTA_LABEL.to_string())
+            .tooltip(TERMINAL_CTA_LABEL.to_string())
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.open_terminal_panel(window, cx);
             }))
     }
 

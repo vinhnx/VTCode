@@ -6,7 +6,8 @@ use super::super::markdown::prepare_markdown;
 use super::activity_verbs::ToolCategory;
 use super::user_attachments::UserAttachment;
 use super::{
-    ActivityGroupSummary, AppPreviewItem, DiffCard, NoticeSeverity, ToolActivityStatus, TranscriptRole, TurnFile,
+    ActivityGroupSummary, ActivityState, AppPreviewItem, DiffCard, NoticeSeverity, ToolActivityStatus, TranscriptRole,
+    TurnFile,
 };
 
 /// Per-call added/deleted line counts stamped onto an edit row. `Copy` so
@@ -131,6 +132,30 @@ impl TranscriptItem {
         self.output.is_some()
     }
 
+    /// Whether this tool row is still running, so live output may keep
+    /// arriving. Shared by the live-tail projection and the transcript render
+    /// so the two can never disagree on which rows are live.
+    pub(crate) fn is_running_tool(&self) -> bool {
+        self.is_tool()
+            && self.has_activity_status
+            && ActivityState::from_status(self.text.lines().next().unwrap_or_default()) == ActivityState::Running
+    }
+
+    /// Whether the expanded row renders an inline output excerpt. Rows
+    /// without captured output always do; running rows keep a live
+    /// last-N-lines preview while output streams in, and settled rows with
+    /// captured output leave the excerpt to the Output tab. An empty live
+    /// capture renders no excerpt box at all.
+    pub(crate) fn shows_inline_tail(&self) -> bool {
+        if !self.is_tool() || self.has_archived_output() {
+            return false;
+        }
+        if !self.has_output() {
+            return true;
+        }
+        self.is_running_tool() && self.output.as_deref().is_some_and(|output| !output.is_empty())
+    }
+
     /// Older archive rows retain tool results as their message text.
     pub(crate) fn has_archived_output(&self) -> bool {
         self.is_tool() && !self.has_activity_status && !self.text.trim().is_empty()
@@ -227,5 +252,45 @@ impl TranscriptItem {
         self.accessibility_text = prepared.accessible_text;
         self.append_attachment_accessibility_suffix();
         self.has_list = prepared.has_list;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tool_row(text: &str) -> TranscriptItem {
+        TranscriptItem::new("row".to_string(), "tool".to_string(), "Ran cargo".into(), text.to_string())
+    }
+
+    #[test]
+    fn inline_tail_matrix_running_live_settled_to_output() {
+        let mut running = tool_row("in progress\ncargo check");
+        running.output = Some("live".into());
+        assert!(running.is_running_tool());
+        assert!(running.shows_inline_tail(), "live rows preview the tail inline");
+
+        let mut settled = tool_row("completed");
+        settled.output = Some("done".into());
+        assert!(!settled.is_running_tool());
+        assert!(!settled.shows_inline_tail(), "settled output belongs to the Output tab");
+
+        let pending = tool_row("started");
+        assert!(pending.is_running_tool());
+        assert!(pending.shows_inline_tail(), "rows without output always excerpt");
+
+        let mut empty_live = tool_row("in progress");
+        empty_live.output = Some("".into());
+        assert!(empty_live.is_running_tool());
+        assert!(!empty_live.shows_inline_tail(), "empty live capture renders no excerpt");
+
+        let mut archived = tool_row("old result");
+        archived.has_activity_status = false;
+        assert!(!archived.is_running_tool());
+        assert!(!archived.shows_inline_tail());
+
+        let user = TranscriptItem::new("user".to_string(), "user".to_string(), "You".into(), "in progress".to_string());
+        assert!(!user.is_running_tool(), "status text alone never marks a non-tool row live");
+        assert!(!user.shows_inline_tail(), "the tail predicate is tool-only");
     }
 }

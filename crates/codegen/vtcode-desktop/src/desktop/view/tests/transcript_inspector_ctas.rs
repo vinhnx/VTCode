@@ -654,3 +654,66 @@ fn diff_changes_cta_stays_visible_without_hover_or_focus(cx: &mut TestAppContext
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn running_command_row_shows_live_tail_and_terminal_cta(cx: &mut TestAppContext) {
+    use crate::desktop::transcript::ToolCategory;
+
+    let (window, view) = open_desktop(cx);
+    let dir = tempfile::tempdir().unwrap();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(dir.path().to_path_buf());
+            // Asymmetric pair: the running command streams 12 lines (only
+            // the last 8 may show inline), while the settled sibling with
+            // output shows no inline excerpt at all.
+            let live_lines: Vec<String> = (0..12).map(|n| format!("live-line-{n}")).collect();
+            view.transcript.push(TranscriptItem::new(
+                "live".into(),
+                "tool".into(),
+                "Ran cargo".into(),
+                "in progress\ncargo check".into(),
+            ));
+            view.transcript.set_output("live", Some(live_lines.join("\n").into()));
+            view.transcript.set_activity_category("live", ToolCategory::Run);
+            view.transcript.push(TranscriptItem::new(
+                "gap".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Working.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "settled".into(),
+                "tool".into(),
+                "Ran cargo".into(),
+                "completed".into(),
+            ));
+            view.transcript.set_output("settled", Some("settled-output-marker".into()));
+            view.transcript.set_activity_category("settled", ToolCategory::Run);
+        });
+        window.render_frame(cx);
+
+        window.click("tool-live", cx);
+        window.render_frame(cx);
+        let excerpt = window.find("tool-output-live");
+        let body = excerpt.label().unwrap();
+        assert!(body.contains("live-line-11"), "live tail keeps the newest line: {body}");
+        assert!(body.contains("live-line-4"), "live tail keeps 8 lines: {body}");
+        assert!(!body.contains("live-line-3\n"), "live tail drops the oldest lines: {body}");
+        let cta = window.find("tool-open-terminal-live");
+        assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
+        window.click("tool-open-terminal-live", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).terminal_visible, "CTA opens the built-in terminal");
+        assert!(view.read(cx).terminal.is_some(), "CTA spawns the shell");
+
+        // Settled rows with captured output keep no inline excerpt and no
+        // terminal CTA: the Output tab owns them.
+        window.click("tool-settled", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tool-output-settled").is_none());
+        assert!(window.try_find("tool-open-terminal-settled").is_none());
+        assert!(window.try_find("tool-open-output-settled").is_some());
+    })
+    .unwrap();
+}
