@@ -38,6 +38,11 @@ pub(super) struct TerminalScreen {
     events: TerminalEvents,
 }
 
+/// Test-only grid probes (see the module docs for why they address cells
+/// instead of scanning for a marker character).
+#[cfg(test)]
+mod probe;
+
 impl TerminalScreen {
     pub(super) fn new(columns: u16, rows: u16, scrollback: usize) -> Self {
         let events = TerminalEvents::default();

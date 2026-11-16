@@ -134,6 +134,20 @@ impl TerminalTab {
         self.screen.display_rows(&self.palette)
     }
 
+    /// Visible cell of the cursor in the live session. Test-only: a
+    /// palette probe records it before writing its marker cell.
+    #[cfg(test)]
+    pub(super) fn visible_cursor_cell(&self) -> Option<(usize, usize)> {
+        self.screen.visible_cursor_cell()
+    }
+
+    /// Resolved foreground of one visible grid cell in the live session,
+    /// against the session's current palette. Test-only probe.
+    #[cfg(test)]
+    pub(super) fn visible_cell_fg(&self, row: usize, column: usize) -> Option<Rgba> {
+        self.screen.visible_cell_fg(row, column, &self.palette)
+    }
+
     pub(super) fn in_alternate_screen(&self) -> bool {
         self.screen.in_alternate_screen()
     }
