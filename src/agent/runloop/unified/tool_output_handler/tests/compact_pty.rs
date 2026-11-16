@@ -163,7 +163,7 @@ async fn compact_command_output_emits_group_metadata_and_complete_capture() {
     let activity = activity.expect("compact command activity should be emitted");
     assert_eq!(activity.review_anchor, Some(capture_id));
     assert_eq!(activity.hidden_line_count, 2);
-    assert_eq!(activity.display_text(), "• Ran printf · … +2 lines");
+    assert_eq!(activity.display_text(), "• Ran 1 command · … +2 lines");
     assert!(
         commands
             .iter()

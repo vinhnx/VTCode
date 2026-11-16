@@ -7,7 +7,6 @@
 use std::sync::Arc;
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
-use vtcode_commons::formatting::{RAN_COMMAND_CONTINUATION_WIDTH, RAN_COMMAND_FIRST_WIDTH};
 use vtcode_commons::ui_protocol::{InlineSegment, InlineTextStyle, convert_style};
 
 use crate::tui::ui::syntax_highlight;
@@ -323,7 +322,7 @@ pub fn line_to_compact_segments(
     metadata: &vtcode_commons::ui_protocol::CompactActivityMetadata,
     styles: &ShellLineStyles,
 ) -> Vec<InlineSegment> {
-    // • Ran <command>  (single) or • Ran N commands (grouped)
+    // • Ran N command(s): one count form for single and grouped rows.
     let mut segments = Vec::new();
     segments.push(InlineSegment {
         text: "• ".to_string(),
@@ -338,72 +337,22 @@ pub fn line_to_compact_segments(
         style: Arc::clone(&styles.output),
     });
 
-    if metadata.command_count > 1 {
-        // Grouped: bold accent count matches the verb so `Ran 4 commands`
-        // stays prominent instead of washing out.
-        segments.push(InlineSegment {
-            text: format!("{} commands", metadata.command_count),
-            style: Arc::clone(&styles.count),
-        });
-    } else if let Some(cmd) = metadata.command.as_deref() {
-        // Long single-command rows wrap with explicit `\` continuations so a
-        // chained `git add … && git commit … && git log …` reads as one shell
-        // command instead of terminal-reflow word wrap. Short rows stay
-        // single-line; `\n` splits are honored by transcript reflow.
-        const COMPACT_CONT_INDENT: &str = "\n      ";
-        let needs_wrap = cmd.chars().count() > RAN_COMMAND_FIRST_WIDTH;
-        if needs_wrap {
-            // Operator-aware (same `&&`/`||`/`|` chunking as the expanded
-            // `• Ran` headers): each chain/pipe stage starts on a fresh row.
-            // The wrapper already appends ` \\` to non-final rows; strip it
-            // here so the marker is emitted once with separator styling.
-            let wrapped = vtcode_commons::formatting::wrap_shell_command_with_continuations(
-                cmd,
-                RAN_COMMAND_FIRST_WIDTH,
-                RAN_COMMAND_CONTINUATION_WIDTH,
-            );
-            if wrapped.len() > 1 {
-                for (idx, line) in wrapped.iter().enumerate() {
-                    // First wrapped line uses command-position highlighting;
-                    // continuations highlight as args (no leading command word).
-                    let expect_command = idx == 0;
-                    let is_final_line = idx + 1 == wrapped.len();
-                    // The wrapper appends ` \` to non-final rows only, so on
-                    // the final row a trailing ` \` is the command's own text
-                    // (a real line continuation) and must be kept verbatim.
-                    let body = if is_final_line {
-                        line.as_str()
-                    } else {
-                        line.trim_suffix(" \\")
-                    };
-                    segments.extend(shell_syntax_segments(body, styles, expect_command));
-                    if idx + 1 < wrapped.len() {
-                        segments.push(InlineSegment {
-                            text: " \\".to_string(),
-                            style: Arc::clone(&styles.separator),
-                        });
-                        segments.push(InlineSegment {
-                            text: COMPACT_CONT_INDENT.to_string(),
-                            style: Arc::clone(&styles.output),
-                        });
-                    }
-                }
-            } else {
-                segments.extend(shell_syntax_segments(cmd, styles, true));
-            }
-        } else {
-            segments.extend(shell_syntax_segments(cmd, styles, true));
-        }
-        if metadata.hidden_line_count > 0 {
-            segments.push(InlineSegment {
-                text: format!(" · … +{} lines", metadata.hidden_line_count),
-                style: Arc::clone(&styles.truncation),
-            });
-        }
+    // One count form for single and grouped rows alike: bold accent count
+    // matches the verb so `Ran 1 command` stays prominent instead of
+    // washing out. Must stay byte-identical with `display_text`.
+    let noun = if metadata.command_count == 1 {
+        "command"
     } else {
+        "commands"
+    };
+    segments.push(InlineSegment {
+        text: format!("{} {noun}", metadata.command_count),
+        style: Arc::clone(&styles.count),
+    });
+    if metadata.hidden_line_count > 0 {
         segments.push(InlineSegment {
-            text: "command".to_string(),
-            style: Arc::clone(&styles.args),
+            text: format!(" · … +{} lines", metadata.hidden_line_count),
+            style: Arc::clone(&styles.truncation),
         });
     }
 
@@ -442,17 +391,14 @@ mod tests {
     }
 
     #[test]
-    fn single_command_row_carries_full_pipeline_without_truncation() {
-        // Screenshot 2026-09-24 16:37: a single-command `• Ran` compact row
-        // must carry the complete pipeline — `||` inside the quoted pattern,
-        // every `| grep -v` segment, and the `\.backup` arg — with no `…`.
-        // (Viewport-aware wrapping owns the overflow at render time.)
+    fn single_command_row_uses_count_form_like_grouped_rows() {
+        // Compact rows render one count form for one or many commands; the
+        // full pipeline stays in the review capture behind the row.
         let styles = ShellLineStyles::new();
-        let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
         let meta = vtcode_commons::ui_protocol::CompactActivityMetadata {
             group_id: 1,
             command_count: 1,
-            command: Some(command.into()),
+            command: Some("grep -rn pattern docs | grep -v node_modules".into()),
             hidden_line_count: 0,
             suffix: None,
             review_anchor: None,
@@ -460,55 +406,36 @@ mod tests {
         };
         let segs = line_to_compact_segments(&meta, &styles);
         let text: String = segs.iter().map(|s| s.text.as_str()).collect();
-        assert!(!text.contains('…'), "compact row must not truncate, got: {text:?}");
-        assert!(text.starts_with("• Ran "), "got: {text:?}");
-        assert_eq!(text.matches('|').count(), 6, "pattern pipes + shell pipes must survive: {text:?}");
-        for fragment in ["node_modules", "package-lock", "\\.backup"] {
-            assert!(text.contains(fragment), "missing {fragment:?} in {text:?}");
-        }
+        assert_eq!(text, "• Ran 1 command");
+        assert_eq!(text, meta.display_text(), "segments must match display_text");
+        // Asymmetric: the plural form keeps working.
+        let meta = vtcode_commons::ui_protocol::CompactActivityMetadata { command_count: 4, command: None, ..meta };
+        let text: String = line_to_compact_segments(&meta, &styles)
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect();
+        assert_eq!(text, "• Ran 4 commands");
+        assert_eq!(text, meta.display_text(), "segments must match display_text");
     }
 
     #[test]
-    fn compact_row_keeps_command_own_trailing_continuation_backslash() {
-        // The wrapper appends ` \` to non-final rows only, so on the final
-        // wrapped row a trailing ` \` belongs to the command itself (a real
-        // line continuation). Stripping it there would make the transcript
-        // diverge from what executed.
+    fn compact_row_count_form_carries_hidden_lines_and_suffix() {
         let styles = ShellLineStyles::new();
-        let with_continuation = "echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \\";
-        assert!(with_continuation.chars().count() > RAN_COMMAND_FIRST_WIDTH);
         let meta = vtcode_commons::ui_protocol::CompactActivityMetadata {
             group_id: 1,
             command_count: 1,
-            command: Some(with_continuation.into()),
-            hidden_line_count: 0,
-            suffix: None,
-            review_anchor: None,
-            review_anchors: vec![],
+            command: Some("cargo check".into()),
+            hidden_line_count: 3,
+            suffix: Some("output retained".into()),
+            review_anchor: Some(7),
+            review_anchors: vec![7],
         };
         let text: String = line_to_compact_segments(&meta, &styles)
             .iter()
             .map(|s| s.text.as_str())
             .collect();
-        assert!(text.ends_with(" \\"), "command's own trailing continuation must survive: {text:?}");
-
-        // Asymmetric check: a command that does not end in ` \` gains no
-        // marker on the final row either.
-        let without_continuation = "echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa target";
-        let meta = vtcode_commons::ui_protocol::CompactActivityMetadata {
-            group_id: 1,
-            command_count: 1,
-            command: Some(without_continuation.into()),
-            hidden_line_count: 0,
-            suffix: None,
-            review_anchor: None,
-            review_anchors: vec![],
-        };
-        let text: String = line_to_compact_segments(&meta, &styles)
-            .iter()
-            .map(|s| s.text.as_str())
-            .collect();
-        assert!(!text.ends_with(" \\"), "no continuation marker may appear on the final row: {text:?}");
+        assert_eq!(text, "• Ran 1 command · … +3 lines · output retained");
+        assert_eq!(text, meta.display_text(), "segments must match display_text");
     }
 
     #[test]

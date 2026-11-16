@@ -476,7 +476,7 @@ fn compact_command_summary_groups_contiguous_commands() {
         .collect::<Vec<_>>();
     assert_eq!(activities.len(), 2);
     assert_eq!(activities[0].command_count, 1);
-    assert_eq!(activities[0].display_text(), "• Ran printf");
+    assert_eq!(activities[0].display_text(), "• Ran 1 command");
     assert_eq!(activities[1].command_count, 2);
     assert_eq!(activities[1].display_text(), "• Ran 2 commands");
 }

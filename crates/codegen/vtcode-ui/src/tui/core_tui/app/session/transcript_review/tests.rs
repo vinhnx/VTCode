@@ -664,10 +664,10 @@ fn transcript_review_controls_follow_appearance_configuration() {
         review_anchors: vec![1],
     };
     let segs = compact_activity_segments(&session, &metadata);
-    // Single-command now tokenized: •, Ran, command tokens + hidden count.
+    // Unified count form: •, Ran, count + hidden count, no headline.
     assert!(segs.len() > 1);
     let text: String = segs.iter().map(|s| s.text.as_str()).collect();
-    assert!(text.contains("printf configured"));
+    assert_eq!(text, "• Ran 1 command · … +1 lines");
     assert!(!text.contains("Ctrl+T"));
 }
 
@@ -689,7 +689,7 @@ fn compact_activity_hint_updates_when_appearance_is_reloaded() {
             review_anchors: vec![48],
         },
     ));
-    // With shell syntax: •, Ran, command tokens, hidden count, plus 3 hint segments (separator, binding, rest).
+    // Count form: •, Ran, count, hidden count, plus 3 hint segments (separator, binding, rest).
     assert!(session.core.lines[0].segments.len() > 3);
     let hint_text: String = session.core.lines[0].segments.iter().map(|s| s.text.as_str()).collect();
     assert!(hint_text.contains("Ctrl+T"));
@@ -698,7 +698,7 @@ fn compact_activity_hint_updates_when_appearance_is_reloaded() {
     appearance.show_transcript_review_hints = false;
     session.handle_command(InlineCommand::SetAppearance { appearance });
 
-    // Without hint, still tokenized command segments remain.
+    // Without hint, the count-form segments remain.
     assert!(session.core.lines[0].segments.len() > 1);
     let plain_text: String = session.core.lines[0].segments.iter().map(|s| s.text.as_str()).collect();
     assert!(!plain_text.contains("click to expand"));
