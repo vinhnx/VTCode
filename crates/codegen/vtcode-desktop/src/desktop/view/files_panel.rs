@@ -369,22 +369,29 @@ impl DesktopView {
     }
 
     pub(super) fn open_file_preview(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(editor) = self.preferences.file_open_destination().external_editor() {
-            // External mode never shows the overlay: cancel an in-flight viewer
-            // load and drop a stale preview. Selection focus stays untouched.
-            self.preview_task = None;
-            self.file_preview = None;
-            self.preview_editor_error = None;
-            self.open_file_in_editor(&rel_path, editor, window, cx);
+        // Images stay in the app; every other file leaves through the
+        // preferred external destination (text previews were removed).
+        if files::is_image_path(&rel_path) {
+            self.open_image_viewer(rel_path, window, cx);
             return;
         }
-        self.open_file_preview_overlay(rel_path, window, cx);
+        // External mode never shows the overlay: cancel an in-flight viewer
+        // load and drop a stale preview. Selection focus stays untouched.
+        self.preview_task = None;
+        self.file_preview = None;
+        self.preview_editor_error = None;
+        let editor = self.preferences.file_open_destination().external_editor();
+        self.open_file_in_editor(&rel_path, editor, window, cx);
     }
 
-    /// In-app preview overlay for one workspace file (text or image),
-    /// bypassing the external-editor preference — the composer chips' and echo
-    /// cards' View actions use this so viewing stays in-app regardless of configuration.
-    pub(super) fn open_file_preview_overlay(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
+    /// In-app image viewer overlay for one workspace image, bypassing the
+    /// external-editor preference — the composer chips' and echo cards' View
+    /// actions use this so viewing stays in-app regardless of configuration.
+    /// Fail-closed on non-images: callers gate on [`files::is_image_path`].
+    pub(super) fn open_image_viewer(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
+        if !files::is_image_path(&rel_path) {
+            return;
+        }
         if self.current_route() == Route::Review {
             self.close_review(window, cx);
         }
@@ -397,70 +404,29 @@ impl DesktopView {
             return;
         };
         self.disarm_double_escape();
-        // Capture the restore target for both preview kinds, matching the text
-        // path, so Escape always returns focus to the opening surface.
+        // Capture the restore target so Escape always returns focus to the
+        // opening surface.
         if self.file_preview.is_none() {
             self.preview_return_focus = window.focused(cx);
         }
-        // Images take the image viewer: bounded bytes decode in the renderer,
-        // and text previews never apply.
-        if files::is_image_path(&rel_path) {
-            self.preview_task = Some(cx.spawn_in(window, async move |view, cx| {
-                let root = workspace.clone();
-                let path = rel_path.clone();
-                let image = cx.background_spawn(async move { files::read_image(&root, &path) }).await;
-                let _updated = view.update_in(cx, |view, window, cx| {
-                    if view.workspace.as_ref() != Some(&workspace) {
-                        return;
-                    }
-                    match image {
-                        Some(image) => {
-                            view.preview_editor_error = None;
-                            view.file_preview = Some(FilePreview {
-                                rel_path: rel_path.clone(),
-                                text: String::new(),
-                                truncated: false,
-                                image: Some(image),
-                                show_source: false,
-                                editing: false,
-                            });
-                            view.preview_focus.focus(window, cx);
-                            view.clear_error();
-                        }
-                        None => {
-                            view.error = Some(
-                                rust_i18n::t!("app.files.preview_unavailable", path = rel_path.as_str()).to_string(),
-                            )
-                        }
-                    }
-                    cx.notify();
-                });
-            }));
-            return;
-        }
-        if self.file_preview.is_none() {
-            self.preview_return_focus = window.focused(cx);
-        }
+        // Bounded bytes decode in the renderer.
         self.preview_task = Some(cx.spawn_in(window, async move |view, cx| {
             let root = workspace.clone();
             let path = rel_path.clone();
-            let preview = cx.background_spawn(async move { files::read_preview(&root, &path) }).await;
+            let image = cx.background_spawn(async move { files::read_image(&root, &path) }).await;
             let _updated = view.update_in(cx, |view, window, cx| {
                 if view.workspace.as_ref() != Some(&workspace) {
                     return;
                 }
-                match preview {
-                    Some(preview) => {
+                match image {
+                    Some(image) => {
                         view.preview_editor_error = None;
-                        // Markdown previews keep a highlighted source copy in
-                        // the persistent read-only editor; other text never
-                        // renders it, so only markdown pays the highlight.
-                        if files::is_markdown_path(&preview.rel_path) {
-                            view.file_preview_source.update(cx, |state, cx| {
-                                state.set_value(preview.text.clone(), window, cx);
-                            });
-                        }
-                        view.file_preview = Some(preview);
+                        view.file_preview = Some(FilePreview {
+                            rel_path: rel_path.clone(),
+                            text: String::new(),
+                            truncated: false,
+                            image: Some(image),
+                        });
                         view.preview_focus.focus(window, cx);
                         view.clear_error();
                     }
@@ -702,15 +668,10 @@ impl DesktopView {
         let Some(preview) = self.file_preview.as_ref() else {
             return div().into_any_element();
         };
-        let text = preview.text.clone();
         let mono = theme.mono_font_family.clone();
-        // Only complete markdown previews are editable: truncated ones hold
-        // just the file head in the editor, so saving would destroy the tail.
-        let editable = preview.image.is_none() && !preview.truncated && files::is_markdown_path(&preview.rel_path);
-        let dirty = preview.editing && self.file_preview_source.read(cx).value() != preview.text;
         // File commands ride a Kit toolbar: roving arrow keys across the
-        // actions plus one accessible group label. Membership matches the
-        // old button row exactly (toggle only for markdown, copy for text).
+        // actions plus one accessible group label. Text previews were
+        // removed: images view here, everything else opens externally.
         let mut actions = ToolbarGroup::new("file-preview-actions").label("File preview actions");
         actions = actions.child(
             desktop_button("open-preview-editor")
@@ -724,69 +685,6 @@ impl DesktopView {
         actions = actions.child(desktop_button("open-preview-vscode").label("VS Code").ghost().small().on_click(
             cx.listener(|view, _, window, cx| view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)),
         ));
-        if preview.image.is_none() && files::is_markdown_path(&preview.rel_path) {
-            actions = actions.child(
-                desktop_button("preview-source-toggle")
-                    .label(if preview.show_source { "Preview" } else { "Source" })
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(|view, _, _, cx| {
-                        if let Some(preview) = view.file_preview.as_mut() {
-                            preview.show_source.toggle();
-                            cx.notify();
-                        }
-                    })),
-            );
-        }
-        if preview.image.is_none() {
-            actions = actions.child(
-                desktop_button("copy-preview")
-                    .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
-                    .ghost()
-                    .small()
-                    .on_click(move |_, window, app| {
-                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
-                        super::super::notifications::copied_to_clipboard(window, app);
-                    }),
-            );
-        }
-        if editable {
-            actions = actions.child(
-                desktop_button("edit-preview-source")
-                    .label(if preview.editing { "Done" } else { "Edit" })
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        if let Some(preview) = view.file_preview.as_mut() {
-                            // Entering from the rendered arm jumps straight
-                            // into the source surface; Done just disarms.
-                            if !preview.show_source {
-                                preview.show_source = true;
-                            }
-                            preview.editing.toggle();
-                            // Entering edit mode hands focus to the source
-                            // editor so typing starts immediately; the
-                            // id-based handle resolves even though the
-                            // editor mounts on the next frame.
-                            if preview.editing {
-                                view.file_preview_source.read(cx).focus_handle(cx).focus(window, cx);
-                            }
-                            cx.notify();
-                        }
-                    })),
-            );
-        }
-        if preview.editing {
-            actions = actions.child(
-                desktop_button("save-preview-source")
-                    .tooltip_with_action("Save", &SavePreviewSource, Some(key_context::DESKTOP))
-                    .label("Save")
-                    .ghost()
-                    .small()
-                    .desktop_disabled(!dirty)
-                    .on_click(cx.listener(|view, _, window, cx| view.save_preview_source(window, cx))),
-            );
-        }
         actions = actions.child(
             desktop_button("close-preview")
                 .tooltip_with_action(
@@ -866,11 +764,12 @@ impl DesktopView {
                         panel.child(warning_alert("preview-editor-error", error.clone(), colors))
                     })
                     .child(match preview.image.clone() {
-                        // Image previews render the picture itself; markdown
-                        // previews reuse the shared viewer; everything else
-                        // keeps the bounded mono text surface.
+                        // The viewer only ever holds images: the open path
+                        // gates on the image allowlist, so the `None` arm
+                        // keeps the match total without rendering.
                         Some(image) => div()
                             .id("file-preview-body")
+                            .test_support()
                             .flex_1()
                             .min_h_0()
                             .flex()
@@ -886,73 +785,7 @@ impl DesktopView {
                                     .rounded_md(),
                             )
                             .into_any_element(),
-                        None if files::is_markdown_path(&preview.rel_path) && !preview.show_source => div()
-                            .id("file-preview-body")
-                            .flex_1()
-                            .min_h_0()
-                            .overflow_hidden()
-                            .child(render_markdown_view(
-                                "file-preview-markdown".to_string(),
-                                preview.text.clone().into(),
-                                MarkdownViewHeight::Fill,
-                                cx,
-                            ))
-                            .into_any_element(),
-                        // Markdown source renders in the persistent read-only
-                        // editor: syntect highlighting follows the app theme
-                        // and the text stays focusable and copyable.
-                        // `appearance(false)` keeps the borderless body look;
-                        // the height fits the document up to the row cap.
-                        None if files::is_markdown_path(&preview.rel_path) && preview.show_source => {
-                            let rows = preview
-                                .text
-                                .lines()
-                                .count()
-                                .clamp(file_preview::PREVIEW_SOURCE_MIN_ROWS, file_preview::PREVIEW_SOURCE_MAX_ROWS);
-                            let source_height =
-                                theme.mono_font_size * file_preview::PREVIEW_SOURCE_LINE_HEIGHT * rows as f32;
-                            div()
-                                .id("file-preview-body")
-                                .test_support()
-                                .flex_1()
-                                .min_h_0()
-                                .overflow_hidden()
-                                .p_3()
-                                .child(
-                                    div().id("file-preview-source").test_support().child(
-                                        Editor::new(&self.file_preview_source)
-                                            .readonly(!preview.editing)
-                                            .appearance(false)
-                                            .aria_label("Markdown source".to_string())
-                                            .h(source_height),
-                                    ),
-                                )
-                                .into_any_element()
-                        }
-                        None => div()
-                            .id("file-preview-body")
-                            .flex_1()
-                            .min_h_0()
-                            .lock_scroll_axis()
-                            .overflow_y_scrollbar()
-                            .p_3()
-                            .child(render_code_preview(
-                                "file-preview-code".to_string(),
-                                &preview.rel_path,
-                                preview.text.clone().into(),
-                                cx,
-                            ))
-                            .into_any_element(),
-                    })
-                    .when(preview.truncated && preview.image.is_none(), |panel| {
-                        panel.child(
-                            div()
-                                .px_3()
-                                .py_2()
-                                .text_xs()
-                                .text_color(colors.muted_foreground)
-                                .child(rust_i18n::t!("app.file_preview.truncated", size = "64 KiB").to_string()),
-                        )
+                        None => div().into_any_element(),
                     }),
             )
             .fade_in("file-preview-fade", cx.theme())

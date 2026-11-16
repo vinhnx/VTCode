@@ -4,7 +4,7 @@
 use super::super::output_sections::human_output_option;
 use super::*;
 use vtcode_commons::formatting::collapse_whitespace;
-use vtcode_commons::tool_headlines::{command_text, compact_command_headline};
+use vtcode_commons::tool_headlines::{command_text, compact_command_headline, relativize_to_workspace};
 
 /// Retain a bounded, UTF-8-safe tail of live deltas. Completion replaces this
 /// preview with the runtime's final snapshot, which can include a spool path.
@@ -660,6 +660,17 @@ impl DesktopView {
         self.show_change(path, file, None, cx);
     }
 
+    /// Jump to one file's diff in Changes, or the tab alone when the file
+    /// has no preview. Shared by the turn-files card rows and their View
+    /// changes CTA so the fallback cannot drift between them.
+    pub(super) fn open_change_or_tab(&mut self, path: String, cx: &mut Context<Self>) {
+        if self.changes.has_preview(&path) {
+            self.select_change(path, cx);
+        } else {
+            self.open_inspector_tab(InspectorTab::Changes, cx);
+        }
+    }
+
     /// Open the exact patch captured by a transcript change card.
     pub(super) fn select_change_from_item(&mut self, item_id: &str, path: &str, cx: &mut Context<Self>) -> bool {
         let file = self
@@ -821,10 +832,21 @@ fn describe_activity(
         }
         ThreadItemDetails::Harness(event) => {
             let label = event.message.clone().unwrap_or_else(|| "harness activity".to_string());
+            // Verification commands title like execution rows (`Ran <program>
+            // <file>`), never as the raw shell expression; artifact paths
+            // relativize to the workspace. Blank commands fall through so the
+            // row never titles empty.
             let title = event
                 .command
-                .clone()
-                .or_else(|| event.path.clone())
+                .as_deref()
+                .filter(|command| !command.trim().is_empty())
+                .map(|command| format!("Ran {}", compact_command_headline(command)))
+                .or_else(|| {
+                    event
+                        .path
+                        .as_deref()
+                        .map(|path| relativize_to_workspace(path, workspace_root).into_owned())
+                })
                 .unwrap_or_else(|| "Harness".to_string());
             (title, label)
         }

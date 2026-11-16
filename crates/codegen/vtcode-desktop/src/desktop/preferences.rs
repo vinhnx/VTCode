@@ -191,12 +191,14 @@ impl TypographySettings<'_> {
 }
 
 /// Where files open when selected in the sidebar, palettes, review views, or attached sources.
+///
+/// Images always open in the built-in viewer; every other file leaves the
+/// app through one of these destinations. Saved `viewer` ids predate the
+/// text-preview removal and fall back to the default through [`Self::from_saved`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum FileOpenDestination {
-    /// Built-in read-only preview overlay.
-    #[default]
-    Viewer,
     /// The system default application for the file type.
+    #[default]
     System,
     /// Visual Studio Code.
     VsCode,
@@ -217,8 +219,7 @@ pub(super) enum FileOpenDestination {
 }
 
 impl FileOpenDestination {
-    pub(super) const ALL: [Self; 10] = [
-        Self::Viewer,
+    pub(super) const ALL: [Self; 9] = [
         Self::System,
         Self::VsCode,
         Self::Sublime,
@@ -230,13 +231,12 @@ impl FileOpenDestination {
         Self::Ghostty,
     ];
 
-    /// Destinations needing no install detection: the viewer plus macOS apps
-    /// that ship on the sealed system volume and cannot be uninstalled.
-    pub(super) const ALWAYS_AVAILABLE: [Self; 4] = [Self::Viewer, Self::System, Self::Finder, Self::Terminal];
+    /// Destinations needing no install detection: macOS apps that ship on the
+    /// sealed system volume and cannot be uninstalled.
+    pub(super) const ALWAYS_AVAILABLE: [Self; 3] = [Self::System, Self::Finder, Self::Terminal];
 
     pub(super) const fn id(self) -> &'static str {
         match self {
-            Self::Viewer => "viewer",
             Self::System => "system",
             Self::VsCode => "vscode",
             Self::Sublime => "sublime",
@@ -249,19 +249,19 @@ impl FileOpenDestination {
         }
     }
 
-    /// The external application for this destination, if it leaves the viewer.
-    pub(super) const fn external_editor(self) -> Option<ExternalEditor> {
+    /// The external application for this destination. Total: every
+    /// destination leaves the app (images bypass preferences entirely).
+    pub(super) const fn external_editor(self) -> ExternalEditor {
         match self {
-            Self::Viewer => None,
-            Self::System => Some(ExternalEditor::System),
-            Self::VsCode => Some(ExternalEditor::VsCode),
-            Self::Sublime => Some(ExternalEditor::Sublime),
-            Self::Xcode => Some(ExternalEditor::Xcode),
-            Self::AndroidStudio => Some(ExternalEditor::AndroidStudio),
-            Self::Finder => Some(ExternalEditor::Finder),
-            Self::Terminal => Some(ExternalEditor::Terminal),
-            Self::ITerm2 => Some(ExternalEditor::ITerm2),
-            Self::Ghostty => Some(ExternalEditor::Ghostty),
+            Self::System => ExternalEditor::System,
+            Self::VsCode => ExternalEditor::VsCode,
+            Self::Sublime => ExternalEditor::Sublime,
+            Self::Xcode => ExternalEditor::Xcode,
+            Self::AndroidStudio => ExternalEditor::AndroidStudio,
+            Self::Finder => ExternalEditor::Finder,
+            Self::Terminal => ExternalEditor::Terminal,
+            Self::ITerm2 => ExternalEditor::ITerm2,
+            Self::Ghostty => ExternalEditor::Ghostty,
         }
     }
 
@@ -274,7 +274,7 @@ impl FileOpenDestination {
             .filter(|destination| {
                 Self::ALWAYS_AVAILABLE.contains(destination)
                     || *destination == saved
-                    || destination.external_editor().is_some_and(|editor| detected.contains(&editor))
+                    || detected.contains(&destination.external_editor())
             })
             .collect()
     }
@@ -283,7 +283,6 @@ impl FileOpenDestination {
     /// localized; editor brand names are proper nouns and stay as-is.
     pub(super) fn label(self) -> String {
         match self {
-            Self::Viewer => rust_i18n::t!("app.settings.files.destination.viewer").to_string(),
             Self::System => rust_i18n::t!("app.settings.files.destination.system").to_string(),
             Self::VsCode => "VS Code".to_string(),
             Self::Sublime => "Sublime Text".to_string(),

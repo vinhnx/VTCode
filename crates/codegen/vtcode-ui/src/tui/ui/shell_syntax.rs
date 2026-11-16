@@ -26,8 +26,8 @@ pub struct ShellLineStyles {
     /// Structural tokens (`|`, `;`, `&&`, redirections) — muted so command
     /// words and args carry the color hierarchy.
     pub separator: Arc<InlineTextStyle>,
-    /// Grouped `N commands` counts — bold accent matching the verb so the
-    /// collapsed row stays prominent instead of washing out.
+    /// Grouped `N commands` counts — dimmed like the verb so collapsed
+    /// rows recede; the green bullet keeps the success signal.
     pub count: Arc<InlineTextStyle>,
 }
 
@@ -36,26 +36,28 @@ impl ShellLineStyles {
     /// when no session is available). The binary's PTY stream reuses this type.
     pub fn new() -> Self {
         let theme_styles = crate::theme::active_styles();
-        Self::from_ansi_styles(theme_styles.primary, theme_styles.pty_output)
+        Self::from_ansi_styles(theme_styles.pty_output)
     }
 
     /// Styles derived from a session's resolved theme — preferred inside
     /// `AppSession`/`Session` where `InlineTheme` is already available.
     pub fn from_session(_session: &crate::tui::core_tui::app::session::AppSession) -> Self {
         let theme_styles = crate::theme::active_styles();
-        // Keep verb synced with the session's primary, body with pty_output
-        // so compact rows track theme changes (e.g. catppuccin-latte).
-        Self::from_ansi_styles(theme_styles.primary, theme_styles.pty_output)
+        // Body-derived tones so compact rows track theme changes
+        // (e.g. catppuccin-latte).
+        Self::from_ansi_styles(theme_styles.pty_output)
     }
 
-    fn from_ansi_styles(primary: AnsiStyle, pty_output: AnsiStyle) -> Self {
+    fn from_ansi_styles(pty_output: AnsiStyle) -> Self {
         let output = Arc::new(convert_style(pty_output));
         let magenta_bold = Arc::new(convert_style(
             AnsiStyle::new()
                 .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)))
                 .effects(Effects::BOLD),
         ));
-        let accent_bold = Arc::new(convert_style(primary | Effects::BOLD));
+        // Compact-row headers recede to dimmed body text (Codex-style):
+        // success rows are glanceable, failures render expanded and loud.
+        let dimmed = Arc::new(convert_style(pty_output | Effects::DIMMED));
         let yellow = Arc::new(convert_style(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow)))));
         // Args use the themed body color (opaque) instead of hardcoded dimmed
         // white so paths/args stay legible on light themes; separators stay
@@ -66,7 +68,7 @@ impl ShellLineStyles {
             output: Arc::clone(&output),
             bullet: Arc::new(convert_style(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Green))))),
             glyph: Arc::clone(&output),
-            verb: accent_bold,
+            verb: Arc::clone(&dimmed),
             command: Arc::new(convert_style(
                 AnsiStyle::new()
                     .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Green)))
@@ -77,9 +79,9 @@ impl ShellLineStyles {
             variable: Arc::clone(&yellow),
             string: yellow,
             option: Arc::new(convert_style(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Red))))),
-            truncation: Arc::new(convert_style(pty_output | Effects::DIMMED)),
-            separator: Arc::new(convert_style(pty_output | Effects::DIMMED)),
-            count: Arc::new(convert_style(primary | Effects::BOLD)),
+            truncation: Arc::clone(&dimmed),
+            separator: Arc::clone(&dimmed),
+            count: dimmed,
         }
     }
 }
@@ -337,9 +339,9 @@ pub fn line_to_compact_segments(
         style: Arc::clone(&styles.output),
     });
 
-    // One count form for single and grouped rows alike: bold accent count
-    // matches the verb so `Ran 1 command` stays prominent instead of
-    // washing out. Must stay byte-identical with `display_text`.
+    // One count form for single and grouped rows alike, dimmed with the
+    // verb so success rows recede. Must stay byte-identical with
+    // `display_text`.
     let noun = if metadata.command_count == 1 {
         "command"
     } else {
@@ -457,10 +459,14 @@ mod tests {
     }
 
     #[test]
-    fn grouped_count_stays_bold_instead_of_dimmed() {
+    fn grouped_headers_stay_dimmed_with_a_green_bullet() {
         let styles = ShellLineStyles::new();
-        assert!(styles.count.effects.contains(Effects::BOLD));
-        assert!(!styles.count.effects.contains(Effects::DIMMED));
+        for style in [&styles.count, &styles.verb] {
+            assert!(style.effects.contains(Effects::DIMMED), "headers recede");
+            assert!(!style.effects.contains(Effects::BOLD), "headers never shout");
+        }
+        assert_eq!(styles.bullet.color, styles.command.color, "success keeps its green signal");
+        assert!(!styles.bullet.effects.contains(Effects::DIMMED), "the signal stays vivid");
     }
 
     #[test]

@@ -167,14 +167,14 @@ fn user_bubble_grows_with_multiline_content_without_clipping(cx: &mut TestAppCon
 fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppContext) {
     let first = tempfile::TempDir::new().unwrap();
     let second = tempfile::TempDir::new().unwrap();
-    std::fs::write(first.path().join("old.txt"), "old workspace").unwrap();
-    std::fs::write(second.path().join("new.txt"), "new workspace").unwrap();
+    std::fs::write(first.path().join("old.png"), TINY_PNG).unwrap();
+    std::fs::write(second.path().join("new.png"), TINY_PNG).unwrap();
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.workspace = Some(first.path().to_path_buf());
             view.refresh_files(cx);
-            view.open_file_preview("old.txt".to_string(), window, cx);
+            view.open_file_preview("old.png".to_string(), window, cx);
             view.workspace = Some(second.path().to_path_buf());
         });
     })
@@ -186,8 +186,8 @@ fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppCon
             assert!(view.file_preview.is_none());
             assert!(view.error.is_none());
             view.refresh_files(cx);
-            view.open_file_preview("missing.txt".to_string(), window, cx);
-            view.open_file_preview("new.txt".to_string(), window, cx);
+            view.open_file_preview("missing.png".to_string(), window, cx);
+            view.open_file_preview("new.png".to_string(), window, cx);
         });
     })
     .unwrap();
@@ -195,8 +195,10 @@ fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppCon
     cx.update_window(window, |_, _, cx| {
         let view = view.read(cx);
         assert_eq!(view.files.len(), 1);
-        assert_eq!(view.files[0].rel_path, "new.txt");
-        assert_eq!(view.file_preview.as_ref().unwrap().text, "new workspace");
+        assert_eq!(view.files[0].rel_path, "new.png");
+        let preview = view.file_preview.as_ref().expect("preview state");
+        assert_eq!(preview.rel_path, "new.png");
+        assert!(preview.image.is_some(), "the viewer holds the decoded image");
         assert!(view.error.is_none(), "superseded read cannot publish an error");
     })
     .unwrap();
@@ -207,6 +209,7 @@ fn file_selection_with_external_destination_launches_without_preview_overlay(cx:
     let workspace = tempfile::TempDir::new().unwrap();
     std::fs::write(workspace.path().join("notes.txt"), "notes").unwrap();
     std::fs::write(workspace.path().join("other.txt"), "other").unwrap();
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).unwrap();
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
@@ -242,17 +245,18 @@ fn file_selection_with_external_destination_launches_without_preview_overlay(cx:
                 ]
             );
 
-            // Switching back to the viewer restores the overlay path.
-            view.preferences.set_file_open_destination(FileOpenDestination::Viewer);
-            view.open_file_preview("notes.txt".to_string(), window, cx);
+            // Images bypass the external destination and still open the viewer.
+            view.open_file_preview("shot.png".to_string(), window, cx);
         });
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, _, cx| {
         let view = view.read(cx);
-        assert_eq!(view.file_preview.as_ref().unwrap().rel_path, "notes.txt");
-        assert_eq!(view.test_launch_intercept.as_ref().unwrap().calls.len(), 2, "viewer mode launches nothing");
+        let preview = view.file_preview.as_ref().expect("image viewer opens");
+        assert_eq!(preview.rel_path, "shot.png");
+        assert!(preview.image.is_some());
+        assert_eq!(view.test_launch_intercept.as_ref().unwrap().calls.len(), 2, "images launch nothing");
     })
     .unwrap();
 }
@@ -309,17 +313,16 @@ fn external_launch_ignores_results_after_workspace_change(cx: &mut TestAppContex
 #[gpui_kit::test]
 fn external_destination_cancels_in_flight_and_open_previews(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().unwrap();
-    std::fs::write(workspace.path().join("notes.txt"), "notes").unwrap();
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).unwrap();
     std::fs::write(workspace.path().join("other.txt"), "other").unwrap();
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
-            view.preferences.set_file_open_destination(FileOpenDestination::Viewer);
-            view.open_file_preview("notes.txt".to_string(), window, cx);
+            view.open_file_preview("shot.png".to_string(), window, cx);
             assert!(view.preview_task.is_some(), "viewer load starts in the background");
 
-            // Switching destinations mid-load cancels the viewer read: the late
+            // An external open mid-load cancels the viewer read: the late
             // result must never pop the overlay open after an external launch.
             view.preferences.set_file_open_destination(FileOpenDestination::VsCode);
             view.test_launch_intercept = Some(TestLaunchIntercept::default());
@@ -336,8 +339,7 @@ fn external_destination_cancels_in_flight_and_open_previews(cx: &mut TestAppCont
             assert!(view.file_preview.is_none(), "a cancelled load publishes no overlay");
 
             // An already-open overlay is dropped when selection goes external.
-            view.preferences.set_file_open_destination(FileOpenDestination::Viewer);
-            view.open_file_preview("notes.txt".to_string(), window, cx);
+            view.open_file_preview("shot.png".to_string(), window, cx);
         });
     })
     .unwrap();
@@ -371,8 +373,8 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
         scroll_settings_by(window, px(-1000.), cx);
         window.render_frame(cx);
         assert_eq!(window.find_all("file-open-destination-select").len(), 1);
-        assert_eq!(window.find("file-open-destination-select").value(), Some("File viewer"));
-        assert_eq!(view.read(cx).preferences.file_open_destination(), FileOpenDestination::Viewer);
+        assert_eq!(window.find("file-open-destination-select").value(), Some("System default"));
+        assert_eq!(view.read(cx).preferences.file_open_destination(), FileOpenDestination::System);
     })
     .unwrap();
 
@@ -425,14 +427,14 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
 
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
-            view.set_file_open_destination(FileOpenDestination::Viewer, cx);
-            assert_eq!(view.preferences.file_open_destination(), FileOpenDestination::Viewer);
+            view.set_file_open_destination(FileOpenDestination::System, cx);
+            assert_eq!(view.preferences.file_open_destination(), FileOpenDestination::System);
         });
     })
     .unwrap();
     assert_eq!(
         crate::desktop::preferences::Preferences::load().file_open_destination(),
-        FileOpenDestination::Viewer
+        FileOpenDestination::System
     );
 }
 

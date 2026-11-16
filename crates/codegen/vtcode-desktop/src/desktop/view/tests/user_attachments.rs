@@ -94,17 +94,18 @@ fn attachment_filenames_match_palette_conversation_search(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn echo_card_view_action_opens_the_file_preview(cx: &mut TestAppContext) {
+fn echo_cards_view_images_and_open_text_externally(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
-    std::fs::write(workspace.path().join("notes.md"), "# Notes\n").unwrap();
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).unwrap();
     std::fs::write(workspace.path().join("todo.txt"), "plain text body").unwrap();
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
+        view.test_launch_intercept = Some(TestLaunchIntercept::default());
         view.push_submission_echo(&SubmissionDraft {
             prompt: "Review these files".into(),
             attachments: vec![
-                vtcode_desktop_protocol::TurnAttachment { path: "notes.md".into(), text: "# Notes\n".into() },
+                vtcode_desktop_protocol::TurnAttachment { path: "shot.png".into(), text: String::new() },
                 vtcode_desktop_protocol::TurnAttachment {
                     path: "todo.txt".into(),
                     text: "plain text body".into(),
@@ -116,22 +117,45 @@ fn echo_card_view_action_opens_the_file_preview(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        // Asymmetric: both cards expose distinct View actions.
-        let notes_id = opaque_path_element_id("view-echo-attachment", "notes.md");
-        let todo_id = opaque_path_element_id("view-echo-attachment", "todo.txt");
-        assert_ne!(notes_id, todo_id);
-        assert!(window.try_find(notes_id.clone()).is_some(), "first card exposes View");
-        assert!(window.try_find(todo_id).is_some(), "second card exposes View");
-        window.click(notes_id, cx);
+        // Asymmetric: only the image card exposes View; both expose Open.
+        let shot_id = opaque_path_element_id("view-echo-attachment", "shot.png");
+        assert!(window.try_find(shot_id.clone()).is_some(), "image card exposes View");
+        assert!(
+            window
+                .try_find(opaque_path_element_id("view-echo-attachment", "todo.txt"))
+                .is_none(),
+            "text card carries no View action"
+        );
+        assert!(
+            window
+                .try_find(opaque_path_element_id("open-echo-attachment", "todo.txt"))
+                .is_some(),
+            "text card exposes Open"
+        );
+        window.click(shot_id, cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("file-preview").is_some(), "View opens the in-app preview");
-        assert_eq!(view.read(cx).file_preview.as_ref().expect("preview state").rel_path, "notes.md");
+        assert!(window.try_find("file-preview").is_some(), "View opens the in-app viewer");
+        assert_eq!(view.read(cx).file_preview.as_ref().expect("preview state").rel_path, "shot.png");
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.click(opaque_path_element_id("open-echo-attachment", "todo.txt"), cx);
     })
     .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert!(view.read(cx).file_preview.is_none(), "Open never shows the viewer");
+        assert_eq!(
+            view.read(cx).test_launch_intercept.as_ref().expect("intercept").calls,
+            vec![ExternalLaunchCall {
+                rel_path: "todo.txt".into(),
+                editor: ExternalEditor::System
+            }]
+        );
+    });
 }
 
 #[gpui_kit::test]

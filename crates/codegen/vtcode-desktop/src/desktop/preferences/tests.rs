@@ -89,10 +89,14 @@ fn app_icon_round_trips_and_invalid_values_fall_back_to_dynamic() {
 }
 
 #[test]
-fn file_open_destination_round_trips_and_invalid_values_fall_back_to_viewer() {
-    assert_eq!(FileOpenDestination::default(), FileOpenDestination::Viewer);
+fn file_open_destination_round_trips_and_invalid_values_fall_back_to_system() {
+    assert_eq!(FileOpenDestination::default(), FileOpenDestination::System);
     let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
-    assert_eq!(legacy.file_open_destination(), FileOpenDestination::Viewer);
+    assert_eq!(legacy.file_open_destination(), FileOpenDestination::System);
+    // The removed in-app viewer predates the text-preview removal: a saved
+    // `viewer` id migrates to the default instead of breaking selection.
+    let migrated: Preferences = serde_json::from_str(r#"{"fileOpenDestination":"viewer"}"#).unwrap();
+    assert_eq!(migrated.file_open_destination(), FileOpenDestination::System);
 
     for destination in FileOpenDestination::ALL {
         let mut preferences = Preferences::default();
@@ -113,7 +117,8 @@ fn file_open_destination_round_trips_and_invalid_values_fall_back_to_viewer() {
     for (saved, expected) in [
         ("VSCode", FileOpenDestination::VsCode),
         ("  system", FileOpenDestination::System),
-        ("viewer\t", FileOpenDestination::Viewer),
+        // The removed in-app viewer migrates to the default.
+        ("viewer\t", FileOpenDestination::System),
     ] {
         assert_eq!(FileOpenDestination::from_saved(Some(saved)), expected, "parse {saved:?}");
     }
@@ -122,14 +127,13 @@ fn file_open_destination_round_trips_and_invalid_values_fall_back_to_viewer() {
     for saved in ["emacs", "", "   "] {
         let content = format!(r#"{{"theme":"ciapre","fileOpenDestination":{saved:?}}}"#);
         let loaded: Preferences = serde_json::from_str(&content).unwrap();
-        assert_eq!(loaded.file_open_destination(), FileOpenDestination::Viewer, "saved {saved:?}");
+        assert_eq!(loaded.file_open_destination(), FileOpenDestination::System, "saved {saved:?}");
         assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
     }
 }
 
 #[test]
 fn file_open_destination_maps_each_id_to_its_external_editor() {
-    assert_eq!(FileOpenDestination::Viewer.external_editor(), None);
     for (destination, expected) in [
         (FileOpenDestination::System, ExternalEditor::System),
         (FileOpenDestination::VsCode, ExternalEditor::VsCode),
@@ -141,30 +145,22 @@ fn file_open_destination_maps_each_id_to_its_external_editor() {
         (FileOpenDestination::ITerm2, ExternalEditor::ITerm2),
         (FileOpenDestination::Ghostty, ExternalEditor::Ghostty),
     ] {
-        assert_eq!(destination.external_editor(), Some(expected), "map {destination:?}");
+        assert_eq!(destination.external_editor(), expected, "map {destination:?}");
         assert!(FileOpenDestination::ALL.contains(&destination));
     }
-    assert_eq!(FileOpenDestination::ALL.len(), 10, "extend this table when adding a destination");
+    assert_eq!(FileOpenDestination::ALL.len(), 9, "extend this table when adding a destination");
 }
 
 #[test]
 fn offered_destinations_combine_always_available_detected_and_saved() {
     use FileOpenDestination as Destination;
 
-    let base = Destination::offered(Destination::Viewer, &[]);
-    assert_eq!(
-        base,
-        vec![
-            Destination::Viewer,
-            Destination::System,
-            Destination::Finder,
-            Destination::Terminal
-        ]
-    );
+    let base = Destination::offered(Destination::System, &[]);
+    assert_eq!(base, vec![Destination::System, Destination::Finder, Destination::Terminal]);
 
     // Detected editors join in canonical order, not detection order.
     let detected = Destination::offered(
-        Destination::Viewer,
+        Destination::System,
         &[
             ExternalEditor::Ghostty,
             ExternalEditor::VsCode,
@@ -174,7 +170,6 @@ fn offered_destinations_combine_always_available_detected_and_saved() {
     assert_eq!(
         detected,
         vec![
-            Destination::Viewer,
             Destination::System,
             Destination::VsCode,
             Destination::AndroidStudio,
@@ -190,7 +185,6 @@ fn offered_destinations_combine_always_available_detected_and_saved() {
     assert_eq!(
         missing,
         vec![
-            Destination::Viewer,
             Destination::System,
             Destination::VsCode,
             Destination::Xcode,
@@ -202,7 +196,7 @@ fn offered_destinations_combine_always_available_detected_and_saved() {
     // A saved choice that is also detected appears exactly once.
     let present = Destination::offered(Destination::Sublime, &[ExternalEditor::Sublime]);
     assert_eq!(present.iter().filter(|d| **d == Destination::Sublime).count(), 1);
-    assert_eq!(Destination::offered(Destination::Viewer, &ExternalEditor::DETECTABLE).len(), 10);
+    assert_eq!(Destination::offered(Destination::System, &ExternalEditor::DETECTABLE).len(), 9);
 }
 
 #[test]
@@ -332,21 +326,19 @@ fn offered_terminals_combine_always_available_detected_and_saved() {
 
 #[test]
 fn destination_availability_matches_editor_availability() {
-    // The viewer has no editor; every other always-available destination
-    // maps to an always-available editor, and vice versa.
+    // Every always-available destination maps to an always-available
+    // editor, and vice versa.
     for destination in FileOpenDestination::ALWAYS_AVAILABLE {
-        match destination.external_editor() {
-            None => assert_eq!(destination, FileOpenDestination::Viewer),
-            Some(editor) => assert!(
-                ExternalEditor::ALWAYS_AVAILABLE.contains(&editor),
-                "{destination:?} maps to detected-only {editor:?}"
-            ),
-        }
+        let editor = destination.external_editor();
+        assert!(
+            ExternalEditor::ALWAYS_AVAILABLE.contains(&editor),
+            "{destination:?} maps to detected-only {editor:?}"
+        );
     }
     assert_eq!(
         FileOpenDestination::ALWAYS_AVAILABLE.len(),
-        ExternalEditor::ALWAYS_AVAILABLE.len() + 1,
-        "the viewer is the only destination without an editor"
+        ExternalEditor::ALWAYS_AVAILABLE.len(),
+        "every destination has an editor"
     );
 }
 

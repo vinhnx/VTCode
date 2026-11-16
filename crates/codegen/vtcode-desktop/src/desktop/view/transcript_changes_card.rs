@@ -1,7 +1,7 @@
 //! Turn files-changes card: the per-turn edited-files summary appended to
 //! the final assistant response. Icon badge + title/totals header, per-file
-//! rows that open the in-app preview, per-turn undo, and the show-more
-//! expander past three rows.
+//! rows that jump to the file's diff in Changes, per-turn undo, and the
+//! show-more expander past three rows.
 
 use super::files_panel::file_row_menu;
 use super::turn_undo::{TurnUndoState, undo_turn_id};
@@ -11,9 +11,9 @@ use gpui_kit::component::menu::ContextMenuExt;
 /// Per-turn edited-files card under the final assistant response. The header
 /// pairs one icon badge with the "Edited N files" title and the turn's
 /// additive totals beside the Undo / View changes actions; each file row
-/// splits a dimmed directory from its basename and opens the in-app preview
-/// on click with the shared file menu on right-click; past three rows the
-/// expander pages through the rest (3 then 50, `Transcript::toggle_turn_files`).
+/// splits a dimmed directory from its basename and jumps to the file's diff
+/// in Changes on click with the shared file menu on right-click; past three
+/// rows the expander pages through the rest (3 then 50, `Transcript::toggle_turn_files`).
 pub(super) fn render_turn_files_card(
     view: &DesktopView,
     item: &TranscriptItem,
@@ -52,12 +52,9 @@ pub(super) fn render_turn_files_card(
     let changes_cta = desktop_default_button(format!("turn-changes-{}", item.id))
         .label(rust_i18n::t!("app.transcript.turn_view_changes").to_string())
         .small()
-        .on_click(cx.listener(move |view, _, _, cx| {
-            if let Some(path) = first_path.as_ref().filter(|path| view.changes.has_preview(path)) {
-                view.select_change(path.clone(), cx);
-            } else {
-                view.open_inspector_tab(InspectorTab::Changes, cx);
-            }
+        .on_click(cx.listener(move |view, _, _, cx| match first_path.clone() {
+            Some(path) => view.open_change_or_tab(path, cx),
+            None => view.open_inspector_tab(InspectorTab::Changes, cx),
         }));
 
     let title = if item.turn_files.len() == 1 {
@@ -174,9 +171,7 @@ pub(super) fn render_turn_files_card(
                         .min_w_0()
                         .on_click({
                             let path = path.clone();
-                            cx.listener(move |view, _, window, cx| {
-                                view.open_file_preview_overlay(path.clone(), window, cx)
-                            })
+                            cx.listener(move |view, _, _, cx| view.open_change_or_tab(path.clone(), cx))
                         })
                         .child(
                             div()

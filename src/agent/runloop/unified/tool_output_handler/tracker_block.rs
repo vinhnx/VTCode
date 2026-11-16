@@ -42,6 +42,16 @@ pub(super) fn compact_run_completion_line(output: &serde_json::Value, status: To
     }
 }
 
+/// Status color for the run-completion line: failures read red, warnings
+/// amber, mirroring the desktop indicator semantics.
+pub(super) fn completion_line_style(status: ToolDisplayStatus) -> MessageStyle {
+    match status {
+        ToolDisplayStatus::Failure => MessageStyle::ToolError,
+        ToolDisplayStatus::Warning => MessageStyle::Warning,
+        ToolDisplayStatus::Success => MessageStyle::Status,
+    }
+}
+
 pub(super) fn has_renderable_stream_content(output: &serde_json::Value) -> bool {
     ["output", "stdout", "stderr", "content"].iter().any(|key| {
         output

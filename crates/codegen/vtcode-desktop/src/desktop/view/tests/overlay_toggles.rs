@@ -820,6 +820,7 @@ fn scrim_press_dismisses_clean_editors_and_holds_edited_ones(cx: &mut TestAppCon
 fn opening_a_modal_drops_the_attachment_picker(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     std::fs::write(workspace.path().join("notes.md"), "hello").expect("write file");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("write image");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
@@ -880,7 +881,7 @@ fn opening_a_modal_drops_the_attachment_picker(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| view.cancel_full_access_confirm(window, cx));
 
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
-        view.update(cx, |view, cx| view.open_file_preview_overlay("notes.md".to_string(), window, cx));
+        view.update(cx, |view, cx| view.open_image_viewer("shot.png".to_string(), window, cx));
     })
     .unwrap();
     cx.run_until_parked();

@@ -60,18 +60,18 @@ fn file_destination_dropdown_click_persists_and_relaunch_applies_it(cx: &mut Tes
 }
 
 #[gpui_kit::test]
-fn explicit_viewer_selection_writes_the_choice_to_disk(cx: &mut TestAppContext) {
+fn explicit_default_selection_writes_the_choice_to_disk(cx: &mut TestAppContext) {
     let prefs_path = crate::desktop::preferences::install_test_preferences_path();
     let (window, view) = open_desktop_with_preferences_path(cx, prefs_path.clone());
     cx.update_window(window, |_, _, cx| {
-        view.update(cx, |view, cx| view.set_file_open_destination(FileOpenDestination::Viewer, cx));
+        view.update(cx, |view, cx| view.set_file_open_destination(FileOpenDestination::System, cx));
     })
     .unwrap();
     let raw = std::fs::read_to_string(&prefs_path).expect("the selection writes the preferences file");
     let saved: serde_json::Value = serde_json::from_str(&raw).expect("preferences stay valid JSON");
     assert_eq!(
         saved.get("fileOpenDestination").and_then(serde_json::Value::as_str),
-        Some(FileOpenDestination::Viewer.id()),
-        "an explicit viewer selection persists even though it matches the default: {raw}"
+        Some(FileOpenDestination::System.id()),
+        "an explicit default selection persists even though it matches the default: {raw}"
     );
 }

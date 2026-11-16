@@ -417,13 +417,6 @@ impl DesktopView {
         });
         // Read before `preferences` moves into the struct below.
         let zen_mode = preferences.zen_mode();
-        let file_preview_source = cx.new(|cx| EditorState::new(window, cx).language("markdown"));
-        let preview_source_subscription = cx.subscribe_in(&file_preview_source, window, |_, _, event, _, cx| {
-            // Re-render so the Save action tracks the dirty state live.
-            if matches!(event, InputEvent::Change) {
-                cx.notify();
-            }
-        });
         // One native read at construction; render and scroll never touch the OS.
         let login_item_status = login_items::status(cx);
         Self {
@@ -569,8 +562,6 @@ impl DesktopView {
             attachments_task: None,
             external_launch_task: None,
             file_preview: None,
-            file_preview_source,
-            _preview_source_subscription: preview_source_subscription,
             preview_editor_error: None,
             #[cfg(test)]
             test_launch_intercept: None,

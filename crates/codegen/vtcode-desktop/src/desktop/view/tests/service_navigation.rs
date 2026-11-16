@@ -844,11 +844,9 @@ fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
         view.route_history.dismiss_to_workspace();
         view.file_preview = Some(crate::desktop::files::FilePreview {
             image: None,
-            rel_path: "src/app.rs".into(),
-            text: "preview".into(),
+            rel_path: "src/app.png".into(),
+            text: String::new(),
             truncated: false,
-            show_source: false,
-            editing: false,
         });
         assert!(!view.swipe_navigation_allowed());
         view.file_preview = None;
@@ -968,13 +966,13 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
 fn escape_closes_preview_and_returns_keyboard_input_to_composer(cx: &mut TestAppContext) {
     use gpui_kit::Focusable;
     let workspace = tempfile::TempDir::new().unwrap();
-    std::fs::write(workspace.path().join("notes.txt"), "Preview text").unwrap();
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).unwrap();
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.focus_composer(window, cx);
-            view.open_file_preview("notes.txt".into(), window, cx);
+            view.open_file_preview("shot.png".into(), window, cx);
         });
     })
     .unwrap();

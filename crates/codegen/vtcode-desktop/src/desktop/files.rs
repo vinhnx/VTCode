@@ -44,7 +44,8 @@ pub(super) struct FileEntry {
     pub is_dir: bool,
 }
 
-/// A bounded file preview.
+/// A bounded file preview: decoded text for attachments, or a decoded image
+/// for the in-app viewer (the only overlay preview that remains).
 pub(super) struct FilePreview {
     /// Display path: workspace-relative, or absolute for files read from
     /// anywhere else on disk.
@@ -55,12 +56,6 @@ pub(super) struct FilePreview {
     pub truncated: bool,
     /// Decoded-ready image bytes for image files; `None` for text previews.
     pub image: Option<Arc<gpui_kit::Image>>,
-    /// Markdown previews start rendered; the header toggle flips to the raw
-    /// source surface. Owned per preview so every open starts rendered.
-    pub show_source: bool,
-    /// The source surface is read-only until the Edit toggle arms it; edits
-    /// persist only through Save. Owned per preview like `show_source`.
-    pub editing: bool,
 }
 
 /// Whether a workspace-relative path points at an image the app can render
@@ -68,16 +63,6 @@ pub(super) struct FilePreview {
 /// is the single source of truth, mirroring `ContentPart::validate_image`.
 pub(super) fn is_image_path(rel_path: &str) -> bool {
     vtcode_commons::image::has_supported_image_extension(Path::new(rel_path))
-}
-
-/// Whether a workspace-relative path points at a markdown document the file
-/// preview renders through the shared markdown viewer. Mirrors the
-/// `md | markdown` pair the ast-grep project uses for language detection.
-pub(super) fn is_markdown_path(rel_path: &str) -> bool {
-    rel_path
-        .rsplit('.')
-        .next()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown"))
 }
 
 /// Map a provider-supported image extension to the renderer's decoders.
@@ -186,25 +171,7 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
         text: text.to_string(),
         truncated,
         image: None,
-        show_source: false,
-        editing: false,
     })
-}
-
-/// Persist edited preview text back to the previewed file. The caller owns
-/// dirty tracking and must refuse truncated previews (their editor holds
-/// only the head, so writing would destroy the tail); this only resolves,
-/// writes, and reports a display-ready error. Call from a background task.
-///
-/// The target resolves through the same confinement boundary as the read
-/// path, so traversal and symlink escapes fail closed and a file deleted
-/// after opening errors instead of being recreated. Absolute previews —
-/// which only arrive from explicit user attachments — resolve directly,
-/// mirroring [`read_preview`].
-pub(super) fn write_preview_text(root: &Path, rel_path: &str, text: &str) -> Result<(), String> {
-    let path = resolve_attachment_path(root, Path::new(rel_path))
-        .map_err(|()| format!("Could not save \"{rel_path}\": it is outside the workspace or no longer exists"))?;
-    fs::write(&path, text).map_err(|error| format!("Could not save \"{rel_path}\": {error}"))
 }
 
 /// External applications supported by the file preview.
@@ -480,16 +447,6 @@ mod tests {
             "noext",
         ] {
             assert!(!is_image_path(path), "{path} must not be an image");
-        }
-    }
-
-    #[test]
-    fn markdown_paths_route_to_the_shared_viewer() {
-        for path in ["notes.md", "README.MD", "guide.markdown", "docs/plan.Markdown"] {
-            assert!(is_markdown_path(path), "{path} must be markdown");
-        }
-        for path in ["main.rs", "notes.mdx", "archive.zip", "noext", "shot.png", "mddoc"] {
-            assert!(!is_markdown_path(path), "{path} must not be markdown");
         }
     }
 

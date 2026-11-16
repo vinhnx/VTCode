@@ -196,18 +196,25 @@ fn attachment_chip_actions_view_open_and_delete(cx: &mut TestAppContext) {
         assert_eq!(view.read(cx).attachments.len(), 2, "both files attach");
     });
 
-    // View opens the in-app overlay for the text chip; the read parks, so
-    // settle the async load before asserting.
+    // View opens the in-app viewer for the image chip only; text chips
+    // offer Open instead. The read parks, so settle the async load before
+    // asserting.
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click(opaque_path_element_id("view-attachment", "notes.txt"), cx);
+        assert!(
+            window
+                .try_find(opaque_path_element_id("view-attachment", "notes.txt"))
+                .is_none(),
+            "text chips carry no View action"
+        );
+        window.click(opaque_path_element_id("view-attachment", "shot.png"), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
-        let preview = view.read(cx).file_preview.as_ref().expect("view opens the overlay");
-        assert_eq!(preview.rel_path, "notes.txt");
-        assert!(preview.image.is_none());
+        let preview = view.read(cx).file_preview.as_ref().expect("view opens the viewer");
+        assert_eq!(preview.rel_path, "shot.png");
+        assert!(preview.image.is_some());
     });
 
     // Escape closes the overlay so the chips are clickable again.

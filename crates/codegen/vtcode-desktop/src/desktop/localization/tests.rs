@@ -614,7 +614,6 @@ fn workspace_file_browser_and_preview_copy_covers_every_language() {
         assert_translated!(locale, "app.file_preview.copy");
         assert_translated!(locale, "app.file_preview.close");
         assert_translated!(locale, "app.file_preview.close_tooltip");
-        assert_translated!(locale, "app.file_preview.truncated");
         assert_translated!(locale, "app.file_preview.editor_error");
 
         let file_label =
@@ -623,8 +622,6 @@ fn workspace_file_browser_and_preview_copy_covers_every_language() {
         let preview_title =
             rust_i18n::t!("app.file_preview.accessibility_title", locale = locale, path = "src/main.rs").to_string();
         assert!(preview_title.contains("src/main.rs"), "preview path was not interpolated in {locale}");
-        let truncated = rust_i18n::t!("app.file_preview.truncated", locale = locale, size = "64 KiB").to_string();
-        assert!(truncated.contains("64 KiB"), "truncation limit was not interpolated in {locale}");
         let editor_error =
             rust_i18n::t!("app.file_preview.editor_error", locale = locale, error = "editor unavailable").to_string();
         assert!(editor_error.contains("editor unavailable"), "editor error was lost in {locale}");
@@ -908,7 +905,6 @@ fn file_destination_copy_is_translated_for_every_language() {
     assert_catalog_key!("app.settings.files.group");
     assert_catalog_key!("app.settings.files.destination.label");
     assert_catalog_key!("app.settings.files.destination.description");
-    assert_catalog_key!("app.settings.files.destination.viewer");
     assert_catalog_key!("app.settings.files.destination.system");
 }
 

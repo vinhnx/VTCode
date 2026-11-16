@@ -115,7 +115,7 @@ impl DesktopView {
             let menu_path = path.clone();
             body = body.child(
                 div()
-                    .id(format!("diff-file-{}-{path}", item.id))
+                    .id(format!("diff-file-card-{}-{path}", item.id))
                     .test_support()
                     .context_menu(move |menu, _, _| file_row_menu(menu, &menu_path, false))
                     .child(
@@ -128,9 +128,12 @@ impl DesktopView {
                             .justify_start()
                             .min_w_0()
                             .on_click({
-                                let path = path.clone();
-                                cx.listener(move |view, _, window, cx| {
-                                    view.open_file_preview_overlay(path.clone(), window, cx)
+                                let toggle_id = item.id.clone();
+                                cx.listener(move |view, _, _, cx| {
+                                    // File rows reuse the Show/Hide diff
+                                    // toggle: the card expands inline.
+                                    view.transcript.toggle_diff(&toggle_id);
+                                    cx.notify();
                                 })
                             })
                             .child(
@@ -271,7 +274,9 @@ impl DesktopView {
                         .child(rust_i18n::t!("app.transcript.diff_truncated").to_string()),
                 );
             }
-            body = body.child(diff_view);
+            // The body mounts on expand, so the shared fade replays on every
+            // toggle; reduced motion renders the end state statically.
+            body = body.child(diff_view.fade_in(format!("diff-lines-{}-fade", item.id), cx.theme()));
         }
         panel = panel.child(body);
         panel.into_any_element()

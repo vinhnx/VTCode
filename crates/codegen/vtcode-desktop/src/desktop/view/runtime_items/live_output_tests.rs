@@ -1,6 +1,7 @@
 use super::{bounded_output_chunk, describe_activity};
 use vtcode_exec_events::{
-    CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem, WebSearchItem,
+    CommandExecutionItem, CommandExecutionStatus, HarnessEventItem, HarnessEventKind, ThreadItemDetails,
+    ToolCallStatus, ToolOutputItem, WebSearchItem,
 };
 
 // The legacy "Structured result with fields:" strip lives in the shared
@@ -76,6 +77,43 @@ fn multi_line_queries_collapse_to_single_line_titles() {
         results: None,
     }));
     assert_eq!(describe_activity(&search, None).0, "first line second line");
+}
+
+#[test]
+fn harness_rows_title_quietly_like_command_rows() {
+    // Harness verification commands title like execution rows (`Ran <program>
+    // <file>`), never as the raw shell expression; artifact paths relativize
+    // to the workspace; a bare event falls back to the kind label.
+    let command = ThreadItemDetails::Harness(Box::new(HarnessEventItem {
+        command: Some("sed -n '1,20p' src/main.rs | head -c 99".into()),
+        ..HarnessEventItem::new(HarnessEventKind::TurnBlocked)
+    }));
+    assert_eq!(describe_activity(&command, None).0, "Ran sed main.rs");
+
+    let workspace = std::path::Path::new("/work/vtcode");
+    let path = ThreadItemDetails::Harness(Box::new(HarnessEventItem {
+        path: Some("/work/vtcode/.vtcode/handoff.md".into()),
+        ..HarnessEventItem::new(HarnessEventKind::BlockedHandoffWritten)
+    }));
+    assert_eq!(describe_activity(&path, Some(workspace)).0, ".vtcode/handoff.md");
+
+    let bare = ThreadItemDetails::Harness(Box::new(HarnessEventItem::new(HarnessEventKind::TurnBlocked)));
+    assert_eq!(describe_activity(&bare, None).0, "Harness");
+
+    // Asymmetric: a command wins over a path, and a blank command falls
+    // through to the path instead of titling the row empty.
+    let both = ThreadItemDetails::Harness(Box::new(HarnessEventItem {
+        command: Some("cargo check --locked".into()),
+        path: Some("target/debug/vtcode".into()),
+        ..HarnessEventItem::new(HarnessEventKind::TurnBlocked)
+    }));
+    assert_eq!(describe_activity(&both, None).0, "Ran cargo");
+    let blank = ThreadItemDetails::Harness(Box::new(HarnessEventItem {
+        command: Some("   ".into()),
+        path: Some("target/debug/vtcode".into()),
+        ..HarnessEventItem::new(HarnessEventKind::TurnBlocked)
+    }));
+    assert_eq!(describe_activity(&blank, None).0, "target/debug/vtcode");
 }
 
 #[test]

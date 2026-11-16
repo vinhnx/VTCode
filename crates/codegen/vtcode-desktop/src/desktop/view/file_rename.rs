@@ -199,7 +199,13 @@ impl DesktopView {
                     .as_ref()
                     .and_then(|preview| rebased_path(old_rel, &new_rel, &preview.rel_path));
                 if let Some(next) = repoint {
-                    self.open_file_preview_overlay(next, window, cx);
+                    // The viewer only holds images: a rename onto an image
+                    // repoints it, anything else closes the stale view.
+                    if files::is_image_path(&next) {
+                        self.open_image_viewer(next, window, cx);
+                    } else {
+                        self.close_file_preview(window, cx);
+                    }
                 }
                 self.close_file_rename(window, cx);
                 // Keep the selection on the renamed entry across the rebuild.

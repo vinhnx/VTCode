@@ -1,7 +1,7 @@
 use super::*;
 
 #[gpui_kit::test]
-fn file_tree_menu_copies_path_and_opens_preview(cx: &mut TestAppContext) {
+fn file_tree_menu_copies_path_and_opens_externally(cx: &mut TestAppContext) {
     use super::super::files_panel::{CopyFilePath, OpenFilePath, RevealFilePath};
 
     let workspace = tempfile::TempDir::new().expect("temp workspace");
@@ -42,7 +42,14 @@ fn file_tree_menu_copies_path_and_opens_preview(cx: &mut TestAppContext) {
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, _, cx| {
-        assert_eq!(view.read(cx).file_preview.as_ref().unwrap().text, "# Notes");
+        assert!(view.read(cx).file_preview.is_none(), "menu Open never shows the viewer for text");
+        assert_eq!(
+            view.read(cx).test_launch_intercept.as_ref().expect("intercept").calls,
+            vec![ExternalLaunchCall {
+                rel_path: "README.md".to_string(),
+                editor: ExternalEditor::System
+            }]
+        );
     })
     .unwrap();
     // Reveal routes through the shared external-launch interception channel
@@ -60,6 +67,10 @@ fn file_tree_menu_copies_path_and_opens_preview(cx: &mut TestAppContext) {
             vec![
                 ExternalLaunchCall {
                     rel_path: "README.md".to_string(),
+                    editor: ExternalEditor::System
+                },
+                ExternalLaunchCall {
+                    rel_path: "README.md".to_string(),
                     editor: ExternalEditor::Finder
                 },
                 ExternalLaunchCall {
@@ -73,11 +84,12 @@ fn file_tree_menu_copies_path_and_opens_preview(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
+fn workspace_files_open_images_and_launch_text_externally(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace").expect("write file");
     std::fs::create_dir_all(workspace.path().join("src/nested")).expect("create nested sources");
     std::fs::write(workspace.path().join("src/nested/mod.rs"), "pub fn nested() {}").expect("write nested source");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("write image");
     std::fs::create_dir_all(workspace.path().join("target/debug")).expect("skip dir");
     std::fs::write(workspace.path().join("target/debug/artifact"), b"binary").expect("write artifact");
 
@@ -85,6 +97,7 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
+            view.test_launch_intercept = Some(TestLaunchIntercept::default());
             view.refresh_files(cx);
             assert!(view.files.is_empty(), "scan does not block the UI callback");
         });
@@ -100,7 +113,7 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.within("inspector-tabs").click(1usize, cx);
         window.render_frame(cx);
-        assert_eq!(file_tree_paths(&view, cx), vec!["src", "README.md"]);
+        assert_eq!(file_tree_paths(&view, cx), vec!["src", "README.md", "shot.png"]);
         let directory_index = view.read(cx).file_directory_paths.clone();
         assert!(directory_index.contains("src"), "the retained tree index records directories");
         window.render_frame(cx);
@@ -196,27 +209,47 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("file-preview").label(), Some("File preview: src/nested/mod.rs"));
+        // Text selections leave the app instead of opening the viewer.
+        assert!(view.read(cx).file_preview.is_none());
+        assert_eq!(
+            view.read(cx).test_launch_intercept.as_ref().expect("intercept").calls,
+            vec![ExternalLaunchCall {
+                rel_path: "src/nested/mod.rs".into(),
+                editor: ExternalEditor::System
+            }]
+        );
+        view.update(cx, |view, cx| view.open_file_preview("shot.png".into(), window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("file-preview").label(), Some("File preview: shot.png"));
         assert_eq!(window.find("open-preview-editor").label(), Some("Open in editor"));
-        assert_eq!(window.find("copy-preview").label(), Some("Copy"));
+        assert!(window.find_all("copy-preview").is_empty(), "images have nothing to copy");
         assert_eq!(window.find("close-preview").label(), Some("Close"));
         assert_eq!(window.find("open-preview-editor").role(), Some(gpui_kit::Role::Button));
         assert_eq!(window.find("open-preview-vscode").role(), Some(gpui_kit::Role::Button));
-        window.click("copy-preview", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("pub fn nested() {}"));
         window.click("close-preview", cx);
         assert!(view.read(cx).file_preview.is_none(), "close dismisses the preview");
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
         window.click("workspace-file-README.md", cx);
-        assert!(view.read(cx).file_preview.is_none(), "mouse activation also reads asynchronously");
+        assert!(view.read(cx).file_preview.is_none(), "mouse activation never opens the viewer for text");
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, _, cx| {
-        let preview = view.read(cx).file_preview.as_ref().map(|preview| preview.text.clone());
-        assert_eq!(preview.as_deref(), Some("# Notes\n\nhello from the workspace"));
+        let calls = &view.read(cx).test_launch_intercept.as_ref().expect("intercept").calls;
+        assert_eq!(
+            calls.last(),
+            Some(&ExternalLaunchCall {
+                rel_path: "README.md".into(),
+                editor: ExternalEditor::System
+            }),
+            "mouse activation launches externally"
+        );
     })
     .unwrap();
 }
@@ -430,13 +463,13 @@ fn file_rename_round_trip_refreshes_tree_repoints_preview_and_remaps_attachments
     use super::super::files_panel::RenameFilePath;
 
     let workspace = tempfile::TempDir::new().expect("temp workspace");
-    std::fs::write(workspace.path().join("README.md"), "# Notes").expect("write file");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("write file");
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.attachments
-                .push(vtcode_desktop_protocol::TurnAttachment { path: "README.md".into(), text: "# Notes".into() });
+                .push(vtcode_desktop_protocol::TurnAttachment { path: "shot.png".into(), text: String::new() });
             view.refresh_files(cx);
         });
     })
@@ -445,12 +478,12 @@ fn file_rename_round_trip_refreshes_tree_repoints_preview_and_remaps_attachments
     // Preview the file first: a rename must repoint the open preview instead
     // of leaving it on a path that no longer exists.
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.open_file_preview_overlay("README.md".to_string(), window, cx));
+        view.update(cx, |view, cx| view.open_image_viewer("shot.png".to_string(), window, cx));
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        window.dispatch_action(Box::new(RenameFilePath { path: "README.md".into() }), cx);
+        window.dispatch_action(Box::new(RenameFilePath { path: "shot.png".into() }), cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -458,24 +491,24 @@ fn file_rename_round_trip_refreshes_tree_repoints_preview_and_remaps_attachments
         window.render_frame(cx);
         let dialog = window.find("file-rename-dialog");
         assert_eq!(dialog.role(), Some(gpui_kit::Role::Dialog));
-        assert_eq!(dialog.label(), Some("Rename “README.md”"));
+        assert_eq!(dialog.label(), Some("Rename “shot.png”"));
         // Typing replaces the prefill outright: the dialog focuses the input
         // with the whole base name selected. The renamed file below is the
         // oracle — without select-all the name would append to the prefill.
-        window.input("NOTES.md", cx);
+        window.input("renamed.png", cx);
         window.render_frame(cx);
         window.click("file-rename-commit", cx);
     })
     .unwrap();
     cx.run_until_parked();
-    assert!(!workspace.path().join("README.md").exists());
-    assert_eq!(std::fs::read_to_string(workspace.path().join("NOTES.md")).unwrap(), "# Notes");
+    assert!(!workspace.path().join("shot.png").exists());
+    assert!(workspace.path().join("renamed.png").exists());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let state = view.read(cx);
         assert!(state.file_rename.is_none(), "success closes the dialog");
-        assert!(file_tree_paths(&view, cx).contains(&"NOTES.md".to_string()));
-        assert!(!file_tree_paths(&view, cx).contains(&"README.md".to_string()));
+        assert!(file_tree_paths(&view, cx).contains(&"renamed.png".to_string()));
+        assert!(!file_tree_paths(&view, cx).contains(&"shot.png".to_string()));
         assert_eq!(
             state
                 .file_tree
@@ -483,12 +516,12 @@ fn file_rename_round_trip_refreshes_tree_repoints_preview_and_remaps_attachments
                 .selected_item()
                 .map(|item| item.id.to_string())
                 .as_deref(),
-            Some("NOTES.md"),
+            Some("renamed.png"),
             "the tree selection follows the rename"
         );
         assert_eq!(
             state.file_preview.as_ref().map(|preview| preview.rel_path.as_str()),
-            Some("NOTES.md"),
+            Some("renamed.png"),
             "the open preview follows the rename"
         );
         assert_eq!(
@@ -497,7 +530,7 @@ fn file_rename_round_trip_refreshes_tree_repoints_preview_and_remaps_attachments
                 .iter()
                 .map(|attachment| attachment.path.as_str())
                 .collect::<Vec<_>>(),
-            ["NOTES.md"],
+            ["renamed.png"],
             "composer attachments follow the rename"
         );
     })
@@ -510,7 +543,7 @@ fn file_rename_of_a_directory_rebases_descendants_and_keeps_expansion(cx: &mut T
 
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     std::fs::create_dir_all(workspace.path().join("src/nested")).expect("create nested");
-    std::fs::write(workspace.path().join("src/nested/deep.rs"), "deep").expect("write nested");
+    std::fs::write(workspace.path().join("src/nested/deep.png"), TINY_PNG).expect("write nested");
     std::fs::write(workspace.path().join("src/top.rs"), "top").expect("write top");
     std::fs::create_dir_all(workspace.path().join("src2")).expect("create sibling");
     std::fs::write(workspace.path().join("src2/other.rs"), "other").expect("write sibling");
@@ -519,8 +552,8 @@ fn file_rename_of_a_directory_rebases_descendants_and_keeps_expansion(cx: &mut T
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.attachments.push(vtcode_desktop_protocol::TurnAttachment {
-                path: "src/nested/deep.rs".into(),
-                text: "deep".into(),
+                path: "src/nested/deep.png".into(),
+                text: String::new(),
             });
             view.attachments
                 .push(vtcode_desktop_protocol::TurnAttachment { path: "src2/other.rs".into(), text: "other".into() });
@@ -537,7 +570,7 @@ fn file_rename_of_a_directory_rebases_descendants_and_keeps_expansion(cx: &mut T
         window.render_frame(cx);
         window.click("workspace-file-src/nested", cx);
         window.render_frame(cx);
-        view.update(cx, |view, cx| view.open_file_preview_overlay("src/nested/deep.rs".to_string(), window, cx));
+        view.update(cx, |view, cx| view.open_image_viewer("src/nested/deep.png".to_string(), window, cx));
     })
     .unwrap();
     cx.run_until_parked();
@@ -556,11 +589,11 @@ fn file_rename_of_a_directory_rebases_descendants_and_keeps_expansion(cx: &mut T
     .unwrap();
     cx.run_until_parked();
     assert!(!workspace.path().join("src").exists());
-    assert!(workspace.path().join("lib/nested/deep.rs").exists());
+    assert!(workspace.path().join("lib/nested/deep.png").exists());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let paths = file_tree_paths(&view, cx);
-        assert!(paths.contains(&"lib/nested/deep.rs".to_string()));
+        assert!(paths.contains(&"lib/nested/deep.png".to_string()));
         assert!(paths.contains(&"lib/top.rs".to_string()), "descendants move with the directory");
         assert!(!paths.iter().any(|path| path == "src" || path.starts_with("src/")));
         assert!(paths.contains(&"src2".to_string()));
@@ -582,12 +615,12 @@ fn file_rename_of_a_directory_rebases_descendants_and_keeps_expansion(cx: &mut T
                 .iter()
                 .map(|attachment| attachment.path.as_str())
                 .collect::<Vec<_>>(),
-            ["lib/nested/deep.rs", "src2/other.rs"],
+            ["lib/nested/deep.png", "src2/other.rs"],
             "attachments under the renamed directory are rebased, lookalikes untouched"
         );
         assert_eq!(
             state.file_preview.as_ref().map(|preview| preview.rel_path.as_str()),
-            Some("lib/nested/deep.rs"),
+            Some("lib/nested/deep.png"),
             "a preview under the renamed directory is repointed"
         );
     })
@@ -653,7 +686,7 @@ fn file_delete_stays_confirm_gated_and_trashes_after_confirm(cx: &mut TestAppCon
 
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     let sink = tempfile::TempDir::new().expect("trash sink");
-    std::fs::write(workspace.path().join("doomed.md"), "doomed").expect("write file");
+    std::fs::write(workspace.path().join("doomed.png"), TINY_PNG).expect("write file");
     std::fs::write(workspace.path().join("spared.md"), "spared").expect("write file");
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, _, cx| {
@@ -667,34 +700,34 @@ fn file_delete_stays_confirm_gated_and_trashes_after_confirm(cx: &mut TestAppCon
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.open_file_preview_overlay("doomed.md".to_string(), window, cx));
+        view.update(cx, |view, cx| view.open_image_viewer("doomed.png".to_string(), window, cx));
     })
     .unwrap();
     cx.run_until_parked();
     // Dispatching alone changes nothing: the native warning prompt is the
     // gate, and headless it never answers — mirroring the thread-delete test.
     cx.update_window(window, |_, window, cx| {
-        window.dispatch_action(Box::new(DeleteFilePath { path: "doomed.md".into() }), cx);
+        window.dispatch_action(Box::new(DeleteFilePath { path: "doomed.png".into() }), cx);
     })
     .unwrap();
     cx.run_until_parked();
-    assert!(workspace.path().join("doomed.md").exists(), "delete waits for the warning prompt answer");
+    assert!(workspace.path().join("doomed.png").exists(), "delete waits for the warning prompt answer");
     // The post-confirm path is driven directly: the file leaves the tree,
     // the open preview closes, and the sibling is untouched.
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             let root = view.workspace.clone().expect("workspace");
-            view.delete_file_after_confirm(root, "doomed.md".to_string(), window, cx);
+            view.delete_file_after_confirm(root, "doomed.png".to_string(), window, cx);
         });
     })
     .unwrap();
     cx.run_until_parked();
-    assert!(!workspace.path().join("doomed.md").exists());
-    assert_eq!(std::fs::read_to_string(sink.path().join("doomed.md")).unwrap(), "doomed");
+    assert!(!workspace.path().join("doomed.png").exists());
+    assert_eq!(std::fs::read(sink.path().join("doomed.png")).unwrap(), TINY_PNG);
     assert_eq!(std::fs::read_to_string(workspace.path().join("spared.md")).unwrap(), "spared");
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(!file_tree_paths(&view, cx).contains(&"doomed.md".to_string()));
+        assert!(!file_tree_paths(&view, cx).contains(&"doomed.png".to_string()));
         assert!(file_tree_paths(&view, cx).contains(&"spared.md".to_string()));
         assert!(view.read(cx).file_preview.is_none(), "deleting the previewed file closes its preview");
     })
@@ -831,7 +864,7 @@ fn truncation_notice_names_the_snapshot_bound(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn clicking_outside_closes_the_file_preview(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
-    std::fs::write(workspace.path().join("README.md"), "# Notes").expect("write file");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("write file");
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, _, cx| {
@@ -843,7 +876,7 @@ fn clicking_outside_closes_the_file_preview(cx: &mut TestAppContext) {
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.open_file_preview_overlay("README.md".to_string(), window, cx));
+        view.update(cx, |view, cx| view.open_image_viewer("shot.png".to_string(), window, cx));
     })
     .unwrap();
     cx.run_until_parked();

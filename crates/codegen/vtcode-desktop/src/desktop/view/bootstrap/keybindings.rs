@@ -82,10 +82,6 @@ pub(crate) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         // draft (Ctrl+C stays Kit's Copy in the input context, so it cannot be
         // claimed here without also hijacking Cmd+C).
         KeyBinding::new("ctrl-g", CancelPromptHistory, Some(key_context::DESKTOP)),
-        // Fixed like window chords: the app has exactly one saveable
-        // surface, so Cmd+S always means "save the preview draft" and the
-        // root handler no-ops unless an edit session is armed.
-        KeyBinding::new("cmd-s", SavePreviewSource, Some(key_context::DESKTOP)),
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("home", TranscriptFirst, Some(key_context::TRANSCRIPT)),

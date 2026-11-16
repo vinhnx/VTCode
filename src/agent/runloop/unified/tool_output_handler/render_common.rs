@@ -156,7 +156,7 @@ pub(super) async fn render_tool_output_common(
         if !matches!(status, ToolDisplayStatus::Success) {
             if let Some(completion) = compact_run_completion_line(output, status) {
                 let indented = format!("    {}", completion);
-                renderer.line(MessageStyle::Status, &indented)?;
+                renderer.line(completion_line_style(status), &indented)?;
                 transcript::append(&completion);
             }
         }

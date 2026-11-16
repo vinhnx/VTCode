@@ -31,24 +31,26 @@ impl DesktopView {
                     attachment_cards::base_attachment_card(&attachment.path, attachment.text.len(), is_image, thumbnail)
                         .actions(
                             AttachmentActions::new()
-                                .child({
-                                    let view_path = path.clone();
-                                    desktop_button(opaque_path_element_id("view-attachment", &path))
-                                        .icon(IconName::Eye)
-                                        .accessibility_label(rust_i18n::t!("app.composer.view_attachment").to_string())
-                                        .ghost()
-                                        .xsmall()
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.open_file_preview_overlay(view_path.clone(), window, cx);
-                                        }))
+                                // In-app viewing is images-only now; text
+                                // attachments open through Open below.
+                                .when(is_image, |actions| {
+                                    actions.child({
+                                        let view_path = path.clone();
+                                        desktop_button(opaque_path_element_id("view-attachment", &path))
+                                            .icon(IconName::Eye)
+                                            .accessibility_label(
+                                                rust_i18n::t!("app.composer.view_attachment").to_string(),
+                                            )
+                                            .ghost()
+                                            .xsmall()
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.open_image_viewer(view_path.clone(), window, cx);
+                                            }))
+                                    })
                                 })
                                 .child({
                                     let open_path = path.clone();
-                                    let editor = self
-                                        .preferences
-                                        .file_open_destination()
-                                        .external_editor()
-                                        .unwrap_or(files::ExternalEditor::System);
+                                    let editor = self.preferences.file_open_destination().external_editor();
                                     desktop_button(opaque_path_element_id("open-attachment", &path))
                                         .icon(IconName::ExternalLink)
                                         .accessibility_label(rust_i18n::t!("app.composer.open_attachment").to_string())

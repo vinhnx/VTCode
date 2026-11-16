@@ -787,3 +787,69 @@ fn changes_inspector_fails_closed_on_invalid_hunk_prefixes_but_keeps_valid_unico
     })
     .unwrap();
 }
+
+const ROW_CLICK_PATCH: &str =
+    "diff --git a/src/main.rs b/src/main.rs\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n";
+
+#[gpui_kit::test]
+fn diff_file_row_click_toggles_the_inline_patch(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.upsert_diff_card("change-1".into(), &restored_file_change("src/main.rs", ROW_CLICK_PATCH));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("diff-lines-change-1").is_none(), "diff collapsed by default");
+        window.click("diff-file-change-1-src/main.rs", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "file row expands like Show diff");
+        assert!(window.try_find("diff-lines-change-1").is_some(), "the patch renders inline");
+        assert!(view.read(cx).file_preview.is_none(), "no overlay opens");
+        window.click("diff-file-change-1-src/main.rs", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).transcript.get(0).unwrap().expanded, "second click collapses");
+        assert!(window.try_find("diff-lines-change-1").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn turn_file_row_click_jumps_to_the_change(cx: &mut TestAppContext) {
+    use crate::desktop::transcript::{DiffFileKind, TurnFile};
+
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.upsert_diff_card("change-1".into(), &restored_file_change("src/main.rs", ROW_CLICK_PATCH));
+        let mut turn = TranscriptItem::new("turn-1".into(), "assistant".into(), "Done".into(), String::new());
+        turn.turn_files = vec![
+            TurnFile {
+                file: crate::desktop::transcript::DiffFile {
+                    path: "src/main.rs".into(),
+                    kind: DiffFileKind::Update,
+                },
+                counts: Some((1, 1)),
+            },
+            TurnFile {
+                file: crate::desktop::transcript::DiffFile { path: "missing.rs".into(), kind: DiffFileKind::Add },
+                counts: None,
+            },
+        ];
+        view.transcript.push(turn);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // A file without a preview still lands on the tab, like View changes.
+        window.click("turn-file-turn-1-missing.rs", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
+        assert_eq!(view.read(cx).selected_change.as_deref(), None);
+        assert!(view.read(cx).file_preview.is_none(), "no overlay opens");
+
+        window.click("turn-file-turn-1-src/main.rs", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/main.rs"));
+        assert!(view.read(cx).file_preview.is_none(), "no overlay opens");
+    })
+    .unwrap();
+}

@@ -66,19 +66,36 @@ impl DesktopView {
             .gap_2()
             .children(attachments.iter().map(|attachment| {
                 let view_path = attachment.path.clone();
+                let open_path = attachment.path.clone();
+                let editor = self.preferences.file_open_destination().external_editor();
                 base_attachment_card(&attachment.path, attachment.byte_len, attachment.is_image, None)
                     .max_w_full()
                     .actions(
-                        AttachmentActions::new().child(
-                            desktop_button(opaque_path_element_id("view-echo-attachment", &attachment.path))
-                                .icon(IconName::Eye)
-                                .accessibility_label(rust_i18n::t!("app.composer.view_attachment").to_string())
-                                .ghost()
-                                .xsmall()
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_file_preview_overlay(view_path.clone(), window, cx);
-                                })),
-                        ),
+                        AttachmentActions::new()
+                            // Mirrors the composer chips: images view
+                            // in-app, everything else opens externally.
+                            .when(attachment.is_image, |actions| {
+                                actions.child(
+                                    desktop_button(opaque_path_element_id("view-echo-attachment", &attachment.path))
+                                        .icon(IconName::Eye)
+                                        .accessibility_label(rust_i18n::t!("app.composer.view_attachment").to_string())
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_image_viewer(view_path.clone(), window, cx);
+                                        })),
+                                )
+                            })
+                            .child(
+                                desktop_button(opaque_path_element_id("open-echo-attachment", &attachment.path))
+                                    .icon(IconName::ExternalLink)
+                                    .accessibility_label(rust_i18n::t!("app.composer.open_attachment").to_string())
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.open_file_in_editor(&open_path, editor, window, cx);
+                                    })),
+                            ),
                     )
             }))
             .into_any_element()

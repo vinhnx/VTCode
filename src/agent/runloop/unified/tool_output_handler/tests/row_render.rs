@@ -206,6 +206,13 @@ fn tool_call_visual_status_colors_success_failure_and_warning() {
     );
     assert!(compact_run_completion_line(&serde_json::json!({}), ToolDisplayStatus::Success).is_none());
 }
+
+#[test]
+fn completion_line_style_matches_status_severity() {
+    assert_eq!(completion_line_style(ToolDisplayStatus::Failure), MessageStyle::ToolError);
+    assert_eq!(completion_line_style(ToolDisplayStatus::Warning), MessageStyle::Warning);
+    assert_eq!(completion_line_style(ToolDisplayStatus::Success), MessageStyle::Status);
+}
 #[test]
 fn compact_hidden_line_count_excludes_distinct_stderr() {
     let output = serde_json::json!({
