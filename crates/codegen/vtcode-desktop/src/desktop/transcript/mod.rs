@@ -592,6 +592,9 @@ impl Transcript {
             if item.activity_category.is_none() {
                 item.activity_category = existing.activity_category;
             }
+            if item.command.is_none() {
+                item.command.clone_from(&existing.command);
+            }
             let remeasure_row = role_changed
                 || title_changed
                 || has_activity_status_changed
@@ -698,6 +701,16 @@ impl Transcript {
                     self.bump_revision();
                 }
             }
+        }
+    }
+
+    pub fn set_command(&mut self, id: &str, command: &str) {
+        if let Some(index) = self.position_by_id(id)
+            && let Some(item) = self.items.get_mut(index)
+            && item.command.as_deref() != Some(command)
+        {
+            item.command = Some(command.to_owned().into());
+            self.bump_revision();
         }
     }
 

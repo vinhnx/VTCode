@@ -74,6 +74,8 @@ pub(crate) struct TranscriptItem {
     /// search matches snake_case queries the prettified title cannot. `None`
     /// for rows without an invoking tool (messages, executions, diffs).
     pub tool_name: Option<SharedString>,
+    /// Full shell command, retained separately from its compact title and output.
+    pub command: Option<SharedString>,
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
     pub output: Option<SharedString>,
@@ -186,6 +188,7 @@ impl TranscriptItem {
             activity_category: None,
             edit_totals: None,
             tool_name: None,
+            command: None,
             diff: None,
             output: None,
             output_item_id: None,

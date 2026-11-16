@@ -348,7 +348,7 @@ fn expanded_tool_rows_show_argument_gists_not_registry_names(cx: &mut TestAppCon
         window.click("activity-group-read-1", cx);
         window.render_frame(cx);
         assert_eq!(window.find("tool-read-1").label(), Some("Show details for Read Cargo.toml, status: completed"));
-        assert_eq!(window.find("tool-exec-1").label(), Some("Show details for Ran cargo check, status: completed"));
+        assert_eq!(window.find("tool-exec-1").label(), Some("Show details for Ran cargo, status: completed"));
     })
     .unwrap();
 }

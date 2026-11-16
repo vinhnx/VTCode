@@ -571,8 +571,8 @@ pub fn unified_exec_action_label(args: &Value) -> &'static str {
 ///
 /// Falls back to the prettified tool name ([`humanize_tool_name`]) when the
 /// call has no ownable headline — never a raw identifier. `command` preview:
-/// first line, full length, via [`preview_full_command`], matching the
-/// completed-row preview. `workspace_root` relativizes `list_files` and
+/// compact executable and file target, matching the completed-row preview.
+/// `workspace_root` relativizes `list_files` and
 /// `grep_file` path headlines exactly as those describers do.
 #[must_use]
 pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Option<&Path>) -> String {
@@ -608,7 +608,7 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
         }
         "exec_command" | "run_pty_cmd" | "create_pty_session" | "shell" | "bash" => {
             if let Some(command) = command_text(args) {
-                return format!("Ran {command}");
+                return format!("Ran {}", compact_command_headline(&command));
             }
         }
         "code_search" | "grep" | "grep_file" => {
@@ -622,7 +622,7 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
                 return unified_exec_action_label(args).to_string();
             }
             if let Some(command) = command_text(args) {
-                return format!("Ran {command}");
+                return format!("Ran {}", compact_command_headline(&command));
             }
         }
         "file_operation_internal" => {
@@ -684,16 +684,55 @@ fn headline_basename(args: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Command text (string or array form) previewed like completed rows.
-fn command_text(args: &Value) -> Option<String> {
-    let text = if let Some(text) = lookup_first_string(args, &["command", "cmd", "raw_command", "bash_command"]) {
-        text
+/// Full command text from a launch's string or argument-array form.
+#[must_use]
+pub fn command_text(args: &Value) -> Option<String> {
+    let text = if let Some(text) = ["command", "cmd", "raw_command", "bash_command"]
+        .iter()
+        .filter_map(|key| args.get(key).and_then(Value::as_str))
+        .find(|text| !text.trim().is_empty())
+    {
+        text.to_owned()
     } else {
         let parts: Vec<&str> = args.get("command")?.as_array()?.iter().filter_map(Value::as_str).collect();
-        let joined = parts.join(" ");
-        (!joined.trim().is_empty()).then(|| joined.trim().to_string())?
+        if parts.iter().all(|part| part.trim().is_empty()) {
+            return None;
+        }
+        let joined = shell_words::join(parts);
+        (!joined.trim().is_empty()).then_some(joined)?
     };
-    Some(preview_full_command(&text))
+    Some(text)
+}
+
+/// A quiet command headline that never exposes the full shell expression.
+#[must_use]
+pub fn compact_command_headline(command: &str) -> String {
+    let line = command.lines().next().unwrap_or_default().trim();
+    let words = shell_words::split(line).unwrap_or_default();
+    let program = words
+        .first()
+        .map(String::as_str)
+        .or_else(|| line.split_whitespace().next())
+        .unwrap_or("command");
+    let program = program
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|part| !part.is_empty())
+        .unwrap_or("command");
+    let target = words
+        .iter()
+        .skip(1)
+        .take_while(|word| !matches!(word.as_str(), "|" | "||" | "&&" | ";"))
+        .filter(|word| !word.starts_with('-'))
+        .find_map(|word| {
+            let base = word.rsplit(['/', '\\']).next()?;
+            (base.contains('.')
+                && !base.starts_with('.')
+                && !base.ends_with('.')
+                && base.chars().all(|ch| ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-')))
+            .then_some(base)
+        });
+    target.map_or_else(|| program.to_string(), |target| format!("{program} {target}"))
 }
 /// otherwise input sniffing decides send vs read so pure waits never
 /// misrender as sends.

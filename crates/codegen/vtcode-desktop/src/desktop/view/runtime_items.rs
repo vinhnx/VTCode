@@ -4,11 +4,23 @@
 use super::super::output_sections::human_output_option;
 use super::*;
 use vtcode_commons::formatting::collapse_whitespace;
-use vtcode_commons::tool_headlines::preview_full_command;
+use vtcode_commons::tool_headlines::{command_text, compact_command_headline};
 
 /// Retain a bounded, UTF-8-safe tail of live deltas. Completion replaces this
 /// preview with the runtime's final snapshot, which can include a spool path.
 pub(super) const LIVE_OUTPUT_LIMIT: usize = 64 * 1024;
+
+fn activity_capture_output(raw: &str, category: Option<ToolCategory>) -> Option<String> {
+    let raw = if category == Some(ToolCategory::Tracker) {
+        raw.strip_prefix("Structured result with fields:")
+            .and_then(|rest| rest.split_once('\n').map(|(_, remaining)| remaining))
+            .or_else(|| raw.starts_with("Structured result with fields:").then_some(""))
+            .unwrap_or(raw)
+    } else {
+        raw
+    };
+    human_output_option(raw)
+}
 
 pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
     let chunk_start = chunk.ceil_char_boundary(chunk.len().saturating_sub(LIVE_OUTPUT_LIMIT));
@@ -22,10 +34,18 @@ pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
 
 #[cfg(test)]
 mod live_output_tests {
-    use super::{bounded_output_chunk, describe_activity};
+    use super::{ToolCategory, activity_capture_output, bounded_output_chunk, describe_activity};
     use vtcode_exec_events::{
         CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem, WebSearchItem,
     };
+
+    #[test]
+    fn tracker_capture_hides_structured_field_list_but_keeps_message() {
+        let raw = "Structured result with fields: status, message, checklist\nChecklist updated";
+        assert_eq!(activity_capture_output(raw, Some(ToolCategory::Tracker)).as_deref(), Some("Checklist updated"));
+        assert_eq!(activity_capture_output(raw, Some(ToolCategory::Run)).as_deref(), Some(raw));
+        assert_eq!(activity_capture_output("Structured result with fields: status", Some(ToolCategory::Tracker)), None);
+    }
 
     #[test]
     fn live_output_chunks_keep_order_and_bound_utf8() {
@@ -108,7 +128,7 @@ mod live_output_tests {
             exit_code: Some(0),
             status: CommandExecutionStatus::Completed,
         }));
-        assert_eq!(describe_activity(&execution, None).0, "Ran sed -n '1p' README.md");
+        assert_eq!(describe_activity(&execution, None).0, "Ran sed README.md");
     }
 }
 
@@ -407,7 +427,7 @@ impl DesktopView {
                 // Identity implies output: `output_for` resolves a selection by
                 // identity and falls back to the newest capture when the row is
                 // output-less, so a blank merge must not plant an identity.
-                if let Some(human) = human_output_option(&output.output) {
+                if let Some(human) = activity_capture_output(&output.output, row.activity_category) {
                     row.output = Some(human.into());
                     row.output_item_id = Some(item.id.clone());
                 } else {
@@ -427,13 +447,14 @@ impl DesktopView {
                     .and_then(|index| self.transcript.get(index))
             {
                 let title = row.title.to_string();
+                let category = row.activity_category;
                 let payload = activity_payload(&row.text);
                 let status = describe_activity(&item.details, None).1;
                 let text = activity_text(&status, payload);
                 self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                 // Identity implies output (see the historical merge above): a
                 // blank capture stores no output and plants no identity.
-                if let Some(human) = human_output_option(&output.output) {
+                if let Some(human) = activity_capture_output(&output.output, category) {
                     self.transcript.set_output(&row_id, Some(human.into()));
                     self.transcript.set_output_identity(&row_id, &item.id);
                 } else {
@@ -512,6 +533,17 @@ impl DesktopView {
                 // Keep the human-projected output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
                 let output = activity_output_text(details).map(gpui_kit::SharedString::from);
+                let command = match details {
+                    ThreadItemDetails::ToolInvocation(tool)
+                        if ToolCategory::from_details(details) == Some(ToolCategory::Run) =>
+                    {
+                        tool.arguments.as_ref().and_then(command_text)
+                    }
+                    ThreadItemDetails::CommandExecution(command) if !command.command.trim().is_empty() => {
+                        Some(command.command.clone())
+                    }
+                    _ => None,
+                };
                 let app_previews = match details {
                     ThreadItemDetails::ToolOutput(tool_output) => tool_output.app_previews.clone(),
                     _ => Vec::new(),
@@ -526,6 +558,7 @@ impl DesktopView {
                     item.app_previews = app_previews;
                     item.activity_category = ToolCategory::from_details(details);
                     item.tool_name = invocation_tool_name(details).map(Into::into);
+                    item.command = command.map(Into::into);
                     self.push_restored_activity(item);
                 } else {
                     // Carry stamped edit totals across re-projections: the fresh
@@ -543,6 +576,9 @@ impl DesktopView {
                         None => title,
                     };
                     self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
+                    if let Some(command) = command.as_deref() {
+                        self.transcript.set_command(&id, command);
+                    }
                     if output.is_some() {
                         self.transcript.set_output(&id, output);
                     }
@@ -782,7 +818,7 @@ fn describe_activity(
             let title = if command.command.trim().is_empty() {
                 "Ran command".to_string()
             } else {
-                format!("Ran {}", preview_full_command(&command.command))
+                format!("Ran {}", compact_command_headline(&command.command))
             };
             (title, label)
         }

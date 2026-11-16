@@ -737,7 +737,7 @@ impl DesktopView {
             rust_i18n::t!("app.transcript.archived_output").to_string()
         };
         let state = ActivityState::from_status(&status);
-        let icon_color = Self::transcript_tool_icon_color(colors);
+        let icon_color = Self::activity_status_color(state, colors);
         let kind_icon = Self::transcript_tool_kind_icon(item.tool_name.as_deref(), item.activity_category);
         let mut panel = div().w_full().max_w(px(self.content_width())).flex().flex_col().gap_1().child(
             desktop_button(format!("tool-{}", item.id))
@@ -782,10 +782,8 @@ impl DesktopView {
                             Self::tool_row_title_color(state, colors),
                             cx.theme().mono_font_family.clone(),
                         ))
-                        // Completed rows drop the redundant label: they are
-                        // the only rows with a bare kind icon, which reads
-                        // as done. Other states keep spinner/cross/label and
-                        // the chevron stays docked.
+                        // Completed rows drop the redundant visible label;
+                        // the accessible name retains status for every row.
                         .when(state != ActivityState::Completed, |row| {
                             row.child(
                                 div()
@@ -836,6 +834,14 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
+                    .when_some(item.command.as_ref(), |panel, command| {
+                        panel.child(div().ml_6().child(render_code_preview(
+                            format!("tool-command-{}", item.id),
+                            "command.sh",
+                            command.clone(),
+                            cx,
+                        )))
+                    })
                     .child(
                         div()
                             .flex()

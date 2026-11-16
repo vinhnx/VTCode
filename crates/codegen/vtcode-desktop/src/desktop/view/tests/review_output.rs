@@ -69,7 +69,8 @@ fn shell_invocations_share_rows_with_interleaved_output(cx: &mut TestAppContext)
             }
             assert_eq!(view.transcript.items().filter(|row| row.role == "tool").count(), 2);
             let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
-            assert_eq!(row.title, "Ran echo alpha");
+            assert_eq!(row.title, "Ran echo");
+            assert_eq!(row.command.as_deref(), Some("echo alpha"));
             assert_eq!(row.output.as_deref(), Some("alpha tail"));
             assert_eq!(row.output_item_id.as_deref(), Some("out-a"));
             assert_eq!(output_inspector::output_for(&view.transcript, &[], Some("out-b")).unwrap().text, "beta");
@@ -77,6 +78,7 @@ fn shell_invocations_share_rows_with_interleaved_output(cx: &mut TestAppContext)
                 item: shell_output("out-a", "call-a", "final", ToolCallStatus::Failed, false),
             })));
             let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
+            assert_eq!(row.command.as_deref(), Some("echo alpha"));
             assert_eq!(row.output.as_deref(), Some("final"));
             assert!(row.text.starts_with("failed"));
         });
@@ -461,10 +463,10 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(warning.label(), Some("Saved tool history is partial. Some output may be missing or shortened."));
         assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::ListItem));
-        assert_eq!(window.find("activity-saved-command").label(), Some("Ran cargo check --locked"));
+        assert_eq!(window.find("activity-saved-command").label(), Some("Ran cargo"));
         let output_action = window.find("activity-output-finished-command");
         assert_eq!(output_action.role(), Some(gpui_kit::Role::Button));
-        assert_eq!(output_action.label(), Some("View output: Ran previous command"));
+        assert_eq!(output_action.label(), Some("View output: Ran previous"));
         window.click("activity-output-finished-command", cx);
         window.render_frame(cx);
         let warning = window.find("activity-history-warning");

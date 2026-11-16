@@ -455,7 +455,7 @@ fn verb_callout_headlines_mirror_completed_rows() {
     // Read/Edit verb the basename, runs lead with Ran, searches phrase the query.
     assert_eq!(call("read_file", json!({"path": "src/main.rs"})), "Read main.rs");
     assert_eq!(call("edit_file", json!({"path": "/ws/src/main.rs"})), "Edited main.rs");
-    assert_eq!(call("exec_command", json!({"command": "cargo check"})), "Ran cargo check");
+    assert_eq!(call("exec_command", json!({"command": "cargo check"})), "Ran cargo");
     assert_eq!(call("code_search", json!({"query": "Widget"})), "Search code for Widget");
     assert_eq!(call("grep_file", json!({"pattern": "TODO", "path": "src"})), "Grep TODO in src");
     assert_eq!(call("list_files", json!({"path": "checkpoints"})), "List files in checkpoints");
@@ -482,6 +482,17 @@ fn verb_callout_headlines_mirror_completed_rows() {
         ),
         "Grep TODO in src/main.rs"
     );
+}
+
+#[test]
+fn compact_command_headline_hides_arguments_and_directories() {
+    assert_eq!(compact_command_headline("sed -n '1,20p' /work/src/main.rs | head -c 99"), "sed main.rs");
+    assert_eq!(compact_command_headline("cargo check --locked"), "cargo");
+    assert_eq!(compact_command_headline("echo hello && cat secret.txt"), "echo");
+    assert_eq!(compact_command_headline("python3 -c 'unfinished"), "python3");
+    assert_eq!(compact_command_headline("python3 -c 'print(\"secret.txt\")'"), "python3");
+    assert_eq!(compact_command_headline(""), "command");
+    assert_eq!(command_text(&json!({"cmd": "echo first\necho second"})).as_deref(), Some("echo first\necho second"));
 }
 
 #[test]

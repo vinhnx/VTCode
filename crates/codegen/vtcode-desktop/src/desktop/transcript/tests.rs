@@ -808,7 +808,7 @@ fn tool_row_gist_key_order_matches_service_precedence() {
     assert_eq!(gist("read_file", json!({"file_path": "b.rs", "filepath": "c.rs"})), "Read b.rs");
     assert_eq!(gist("read_file", json!({"filepath": "c.rs", "target_path": "d.rs"})), "Read c.rs");
     assert_eq!(gist("code_search", json!({"query": "Widget", "pattern": "Widg.*"})), "Search code for Widget");
-    assert_eq!(gist("exec_command", json!({"command": "cargo check", "cmd": "cargo build"})), "Ran cargo check");
+    assert_eq!(gist("exec_command", json!({"command": "cargo check", "cmd": "cargo build"})), "Ran cargo");
     // A blank winner does not shadow a usable fallback key.
     assert_eq!(gist("read_file", json!({"path": "  ", "file_path": "fallback.rs"})), "Read fallback.rs");
 }
@@ -816,10 +816,10 @@ fn tool_row_gist_key_order_matches_service_precedence() {
 #[test]
 fn tool_row_gist_leads_runs_and_searches_with_verbs() {
     use serde_json::json;
-    assert_eq!(gist("exec_command", json!({"cmd": "cargo check --all"})), "Ran cargo check --all");
-    assert_eq!(gist("exec_command", json!({"command": "  make test  "})), "Ran make test");
-    assert_eq!(gist("exec_command", json!({"command": ["cargo", "check", "--all"]})), "Ran cargo check --all");
-    assert_eq!(gist("exec_command", json!({"command": ["echo", 42, true, "hi"]})), "Ran echo hi");
+    assert_eq!(gist("exec_command", json!({"cmd": "cargo check --all"})), "Ran cargo");
+    assert_eq!(gist("exec_command", json!({"command": "  make test  "})), "Ran make");
+    assert_eq!(gist("exec_command", json!({"command": ["cargo", "check", "--all"]})), "Ran cargo");
+    assert_eq!(gist("exec_command", json!({"command": ["echo", 42, true, "hi"]})), "Ran echo");
     assert_eq!(gist("code_search", json!({"query": "Widget"})), "Search code for Widget");
     // Grep phrases the pattern; its scope stays in the detail lines.
     assert_eq!(gist("grep", json!({"pattern": "TODO", "path": "src"})), "Search files for TODO");
@@ -831,7 +831,7 @@ fn tool_row_gist_renders_all_launch_tools_like_exec_command() {
     // Mirrors `tool_intent::is_command_run_tool_call`: every launch tool shows its
     // command with the `Ran` verb and classifies Run so its output merges into its row.
     for name in ["run_pty_cmd", "create_pty_session", "shell", "bash"] {
-        assert_eq!(gist(name, json!({"command": "cargo check"})), "Ran cargo check");
+        assert_eq!(gist(name, json!({"command": "cargo check"})), "Ran cargo");
         let details =
             ThreadItemDetails::ToolInvocation(Box::new(invocation_item(name, Some(json!({"command": "cargo check"})))));
         assert_eq!(ToolCategory::from_details(&details), Some(ToolCategory::Run), "{name}");
