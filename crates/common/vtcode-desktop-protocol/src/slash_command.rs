@@ -164,8 +164,7 @@ mod tests {
 }
 
 /// Usage summary shared by the CLI and desktop `/goal` surfaces.
-pub const GOAL_SLASH_HELP: &str =
-    "/goal [<objective>] shows the thread goal, or sets it; verbs: status, edit, pause, resume, clear";
+pub const GOAL_SLASH_HELP: &str = "/goal [<objective>] shows the thread goal, or sets it; verbs: status, edit, pause, resume, clear, budget [<tokens>|0 to clear]";
 
 /// A parsed `/goal` slash command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,6 +184,18 @@ pub enum GoalSlashCommand {
     Resume,
     /// Clear the thread goal entirely.
     Clear,
+    /// Show (`None`) or set (`Some`) the token budget. `Some(0)` clears it.
+    Budget {
+        /// New token cap, or `None` to show the current budget.
+        limit: Option<i64>,
+    },
+}
+
+/// Parse failure for `/goal` arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GoalSlashCommandParseError {
+    /// A `budget` tail that is neither empty nor a non-negative integer.
+    InvalidBudget,
 }
 
 /// Parse the arguments written after `/goal`.
@@ -192,50 +203,88 @@ pub enum GoalSlashCommand {
 /// A single token matching a verb (`status`, `edit`, `pause`, `resume`,
 /// `clear`, ASCII case-insensitive) selects that verb; anything else —
 /// including multi-word input starting with a verb word — is the new
-/// objective. The empty string shows the goal status. Every input maps to a
-/// command, so no error case exists.
-pub fn parse_goal_slash_command(arguments: &str) -> GoalSlashCommand {
+/// objective. The empty string shows the goal status. `budget` is the one
+/// verb that takes an argument: bare it shows the budget, otherwise the tail
+/// must be a non-negative integer (`0` clears), else parsing fails rather
+/// than silently replacing the goal with a mistyped budget.
+pub fn parse_goal_slash_command(arguments: &str) -> Result<GoalSlashCommand, GoalSlashCommandParseError> {
+    use GoalSlashCommandParseError::InvalidBudget;
+
     let arguments = arguments.trim();
     if arguments.is_empty() {
-        return GoalSlashCommand::Status;
+        return Ok(GoalSlashCommand::Status);
     }
     if !arguments.contains(char::is_whitespace) {
         match arguments.to_ascii_lowercase().as_str() {
-            "status" => return GoalSlashCommand::Status,
-            "edit" => return GoalSlashCommand::Edit,
-            "pause" => return GoalSlashCommand::Pause,
-            "resume" => return GoalSlashCommand::Resume,
-            "clear" => return GoalSlashCommand::Clear,
+            "status" => return Ok(GoalSlashCommand::Status),
+            "edit" => return Ok(GoalSlashCommand::Edit),
+            "pause" => return Ok(GoalSlashCommand::Pause),
+            "resume" => return Ok(GoalSlashCommand::Resume),
+            "clear" => return Ok(GoalSlashCommand::Clear),
+            "budget" => return Ok(GoalSlashCommand::Budget { limit: None }),
             _ => {}
         }
+    } else {
+        let mut parts = arguments.splitn(2, char::is_whitespace);
+        if parts.next().is_some_and(|verb| verb.eq_ignore_ascii_case("budget")) {
+            let tail = parts.next().unwrap_or("").trim();
+            return match tail.parse::<i64>() {
+                Ok(limit) if limit >= 0 => Ok(GoalSlashCommand::Budget { limit: Some(limit) }),
+                _ => Err(InvalidBudget),
+            };
+        }
     }
-    GoalSlashCommand::Set { objective: arguments.to_owned() }
+    Ok(GoalSlashCommand::Set { objective: arguments.to_owned() })
 }
 
 #[cfg(test)]
 mod goal_tests {
     use super::*;
 
+    fn parse(arguments: &str) -> GoalSlashCommand {
+        parse_goal_slash_command(arguments).expect("valid goal input")
+    }
+
     #[test]
     fn parses_goal_status_and_verbs() {
-        assert_eq!(parse_goal_slash_command(""), GoalSlashCommand::Status);
-        assert_eq!(parse_goal_slash_command("  status  "), GoalSlashCommand::Status);
-        assert_eq!(parse_goal_slash_command("Pause"), GoalSlashCommand::Pause);
-        assert_eq!(parse_goal_slash_command("RESUME"), GoalSlashCommand::Resume);
-        assert_eq!(parse_goal_slash_command("clear"), GoalSlashCommand::Clear);
-        assert_eq!(parse_goal_slash_command("edit"), GoalSlashCommand::Edit);
+        assert_eq!(parse(""), GoalSlashCommand::Status);
+        assert_eq!(parse("  status  "), GoalSlashCommand::Status);
+        assert_eq!(parse("Pause"), GoalSlashCommand::Pause);
+        assert_eq!(parse("RESUME"), GoalSlashCommand::Resume);
+        assert_eq!(parse("clear"), GoalSlashCommand::Clear);
+        assert_eq!(parse("edit"), GoalSlashCommand::Edit);
     }
 
     #[test]
     fn parses_goal_objectives_including_verb_prefixes() {
+        assert_eq!(parse("ship the release"), GoalSlashCommand::Set { objective: "ship the release".into() });
         assert_eq!(
-            parse_goal_slash_command("ship the release"),
-            GoalSlashCommand::Set { objective: "ship the release".into() }
-        );
-        assert_eq!(
-            parse_goal_slash_command("pause the deploy pipeline"),
+            parse("pause the deploy pipeline"),
             GoalSlashCommand::Set { objective: "pause the deploy pipeline".into() }
         );
-        assert_eq!(parse_goal_slash_command("cleanup"), GoalSlashCommand::Set { objective: "cleanup".into() });
+        assert_eq!(parse("cleanup"), GoalSlashCommand::Set { objective: "cleanup".into() });
+    }
+
+    #[test]
+    fn parses_budget_show_set_and_clear() {
+        assert_eq!(parse("budget"), GoalSlashCommand::Budget { limit: None });
+        assert_eq!(parse("Budget"), GoalSlashCommand::Budget { limit: None });
+        assert_eq!(parse("budget 100000"), GoalSlashCommand::Budget { limit: Some(100_000) });
+        assert_eq!(parse("  budget   42  "), GoalSlashCommand::Budget { limit: Some(42) });
+        assert_eq!(parse("budget 0"), GoalSlashCommand::Budget { limit: Some(0) });
+    }
+
+    #[test]
+    fn rejects_malformed_budget_tails() {
+        use GoalSlashCommandParseError::InvalidBudget;
+        for input in [
+            "budget foo",
+            "budget -5",
+            "budget 10x",
+            "budget 1 2",
+            "budget the sprint",
+        ] {
+            assert_eq!(parse_goal_slash_command(input), Err(InvalidBudget), "accepted {input:?}");
+        }
     }
 }

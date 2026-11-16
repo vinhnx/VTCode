@@ -28,6 +28,13 @@ awaiting a terminal event a non-turn command never emits. Responses refresh
 the composer bar from the returned snapshot, surface read-only output as
 transcript notices, and submit follow-up turns normally.
 
+## Surfaces
+
+The CLI prints a one-line indicator (`[i] Pursuing goal: …` / `[i] Paused
+goal: …`) at every turn boundary while a goal is active or paused; terminal
+states stay quiet because their transitions already printed. The desktop
+composer bar renders the same states live above the draft input.
+
 ## Turn boundary and auto-continue
 
 Every turn boundary flushes elapsed time, folds session tokens into the
@@ -35,14 +42,23 @@ high-water mark, persists, and — while Active — emits for live surfaces. An
 Active goal then auto-continues Completed turns through the existing synthetic
 follow-up queue under its tracker-owned counter against the shared cross-turn
 budget (every Set and successful Resume restores a full budget on all
-frontends).
+frontends). A final message whose first line is exactly `GOAL ACHIEVED:`
+completes an Active goal on completed or blocked turns — same trust class as
+the gate's other final-text classifiers, and a spurious claim completes
+visibly and can be re-set in one command.
 Completed-only continuation keeps hard budget stops idle; pauses, clears,
 stops, pending input, refusals, verification blocks, and planning mode idle
 the loop instead. Setting or resuming a goal resets its budget.
 
+## Model tools
+
+Session setup registers `get_goal` (read-only snapshot) and `update_goal`
+(`complete` after verifying against evidence, `block` for genuine external
+blockers, `pause` only on explicit user request) with the live tracker and
+runloop emitter, so model-driven mutations persist and stream exactly like
+user-driven ones. Both are `Allow`: session-local, visible, recoverable.
+The `GOAL ACHIEVED:` first-line claim remains as a zero-tool fallback.
+
 ## Non-goals (v1)
 
-Model-driven completion and blocking (`create/update/get_goal` tools plus
-steering), a token-budget setting surface (budgets exist in state only), and
-a persistent terminal indicator (the CLI reports via `/goal`; only desktop
-has a status bar).
+Model-created goals (no `create_goal`; the user sets goals).

@@ -142,6 +142,11 @@ fn pause_reason_maps_to_correct_status() {
     t.resume();
     assert!(t.pause_with_message(GoalPauseReason::Infra, "Turn failed: rate limit".into()));
     assert_eq!(t.status(), Some(GoalStatus::InfraPaused));
+
+    t.resume();
+    assert!(t.pause_with_message(GoalPauseReason::ModelBlocked, "Waiting on API keys".into()));
+    assert_eq!(t.status(), Some(GoalStatus::Blocked));
+    assert_eq!(t.pause_message(), Some("Waiting on API keys"));
 }
 
 #[test]
@@ -462,6 +467,40 @@ fn record_token_observation_tracks_monotonic_high_water() {
     activate_tracker(&mut fresh);
     fresh.record_token_observation(-50);
     assert_eq!(fresh.tokens_used(), 0, "usage floors at zero");
+}
+
+#[test]
+fn set_token_budget_stores_clears_and_rejects_without_goal() {
+    let mut t = make_tracker();
+    assert!(!t.set_token_budget(Some(100)));
+    activate_tracker(&mut t);
+    assert!(t.set_token_budget(Some(100_000)));
+    assert_eq!(t.token_budget(), Some(100_000));
+    assert!(t.set_token_budget(None));
+    assert_eq!(t.token_budget(), None);
+}
+
+#[test]
+fn enforce_budget_limits_only_over_budget_active_goals() {
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    assert!(!t.enforce_budget(), "no budget means no enforcement");
+
+    t.set_token_budget(Some(1000));
+    t.record_token_observation(500);
+    assert!(!t.enforce_budget(), "under budget stays active");
+    t.record_token_observation(1000);
+    assert!(t.enforce_budget(), "at-cap must limit");
+    assert_eq!(t.status(), Some(GoalStatus::BudgetLimited));
+
+    // A paused over-budget goal keeps the user's explicit state.
+    let mut t = make_tracker();
+    activate_tracker(&mut t);
+    t.set_token_budget(Some(100));
+    t.record_token_observation(500);
+    assert!(t.pause(GoalPauseReason::User));
+    assert!(!t.enforce_budget());
+    assert_eq!(t.status(), Some(GoalStatus::UserPaused));
 }
 
 #[test]

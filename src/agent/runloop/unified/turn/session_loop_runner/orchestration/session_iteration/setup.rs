@@ -63,7 +63,10 @@ use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 use crate::agent::runloop::unified::session_settings::{SessionSettingsControl, SharedSettingsSnapshot};
-use crate::agent::runloop::unified::session_setup::{EditorOpenDispatcher, EditorOpenRequestSender};
+use crate::agent::runloop::unified::session_setup::{
+    EditorOpenDispatcher, EditorOpenRequestSender, active_deferred_tool_policy, refresh_tool_snapshot,
+    register_goal_tools,
+};
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
@@ -385,7 +388,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     } = session_state;
     // `complete_session_registry` already ran after first paint; the
     // interaction loop requires the concrete registry.
-    let tool_registry = tool_registry_opt.expect("tool registry completed before interaction");
+    let mut tool_registry = tool_registry_opt.expect("tool registry completed before interaction");
     // `initialize_session_ui` may move the archive through setup. Persist
     // again after extracting the live state so every subsequent switch is
     // anchored to the same archive metadata instance.
@@ -666,6 +669,21 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         if let Some(emitter) = harness_emitter.as_ref() {
             crate::agent::runloop::unified::stop_requests::publish_goal_emitter(slot, emitter);
         }
+    }
+    register_goal_tools(&mut tool_registry, goal_tracker.clone(), harness_emitter.clone()).await?;
+    {
+        let tool_documentation_mode = vt_cfg.as_ref().map(|cfg| cfg.agent.tool_documentation_mode).unwrap_or_default();
+        let deferred_tool_policy = active_deferred_tool_policy(config, vt_cfg.as_ref(), &*provider_client);
+        refresh_tool_snapshot(
+            &tool_registry,
+            &tools,
+            &tool_catalog,
+            config,
+            vt_cfg.as_ref(),
+            tool_documentation_mode,
+            &deferred_tool_policy,
+        )
+        .await;
     }
     Ok(SetupFlow::Proceed(Box::new(Setup {
         config,

@@ -219,8 +219,8 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!("pause", "Pause the active turn at the next safe boundary", "/pause", "status"),
     built_in_command_spec!(
         "goal",
-        "Set, pause, resume, or clear the thread goal loop (usage: /goal [<objective>|status|edit|pause|resume|clear])",
-        "/goal [<objective>|status|edit|pause|resume|clear]",
+        "Set, pause, resume, clear, or budget the thread goal loop (usage: /goal [<objective>|status|edit|pause|resume|clear|budget [<tokens>|0 to clear]])",
+        "/goal [<objective>|status|edit|pause|resume|clear|budget [<tokens>|0 to clear]]",
         "status"
     ),
     built_in_command_spec!(

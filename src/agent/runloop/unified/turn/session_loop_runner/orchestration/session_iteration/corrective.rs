@@ -435,6 +435,50 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
     } else {
         latest_assistant_result_text(&runtime.state.messages)
     };
+    let completion_claimed = goal_claims_completion(final_text.as_deref())
+        && matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. } | RunLoopTurnLoopResult::Blocked { .. })
+        && !turn_refused;
+    if completion_claimed {
+        let mut tracker = goal_tracker.lock().await;
+        if tracker.complete() {
+            if let Err(err) = tracker.persist() {
+                tracing::warn!("goal snapshot persist failed: {err:#}");
+            }
+            if let Some(emitter) = harness_emitter
+                && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
+            {
+                tracing::warn!("goal event emit failed: {err:#}");
+            }
+            let done = format!("[i] Goal complete: {}", tracker.objective().unwrap_or_default());
+            let _ = renderer.line(MessageStyle::Info, &done);
+        }
+        return Ok(idle(false));
+    }
+    {
+        let mut tracker = goal_tracker.lock().await;
+        if tracker.enforce_budget() {
+            if let Err(err) = tracker.persist() {
+                tracing::warn!("goal snapshot persist failed: {err:#}");
+            }
+            if let Some(emitter) = harness_emitter
+                && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
+            {
+                tracing::warn!("goal event emit failed: {err:#}");
+            }
+            let _ = renderer.line(
+                MessageStyle::Info,
+                "[i] Goal hit its token budget and is now limited. Clear it or set a new goal to continue.",
+            );
+            return Ok(idle(false));
+        }
+    }
+    {
+        let tracker = goal_tracker.lock().await;
+        if let Some(line) = crate::agent::runloop::unified::turn::session::slash_commands::goal_indicator_line(&tracker)
+        {
+            let _ = renderer.line(MessageStyle::Info, &line);
+        }
+    }
     let should_queue = auto_continue_kill_switch(outcome_result, ctrl_c_state, vt_cfg.as_ref(), session_stats)
         && !tool_registry.is_planning_active()
         && turn_completed
@@ -513,7 +557,7 @@ async fn run_goal_auto_continue(gate: GoalAutoContinue<'_>) -> Result<GoalContin
         return Ok(GoalContinueOutcome::Idle { exhausted: false });
     }
     let follow_up = format!(
-        "Continue working toward the active thread goal: \"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently."
+        "Continue working toward the active thread goal: \"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently. If the goal is fully achieved and verified against current evidence, end your turn without further tool calls and with a final message whose first line is exactly \"GOAL ACHIEVED:\" followed by a one-line summary."
     );
     let directive = format!("Goal auto-continue (turn {turn_no} of {max_turns}): keep pursuing \"{objective}\".");
     match runtime.try_queue_synthetic_follow_up_input(follow_up) {
@@ -533,6 +577,19 @@ async fn run_goal_auto_continue(gate: GoalAutoContinue<'_>) -> Result<GoalContin
             Ok(GoalContinueOutcome::Idle { exhausted: true })
         }
     }
+}
+
+/// Whether the model's final text claims the active goal is achieved: the
+/// first non-empty line starts with the exact `GOAL ACHIEVED:` sentinel.
+/// Same trust class as the sibling final-text classifiers; a spurious claim
+/// completes visibly and the user can re-set in one command.
+fn goal_claims_completion(final_text: Option<&str>) -> bool {
+    final_text.is_some_and(|text| {
+        text.lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+            .is_some_and(|line| line.starts_with("GOAL ACHIEVED:"))
+    })
 }
 
 fn planning_budget_exhausted(planning_budget_exhausted: bool, blocked_reason: Option<&str>) -> bool {
@@ -752,6 +809,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn goal_token_budget_limits_and_idles_without_queueing() {
+        let workspace = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+        let mut stats = SessionStats::default();
+        let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
+        let mut renderer = AnsiRenderer::stdout();
+        let plan = PlanningWorkflowSessionState::default();
+        let outcome = completed_turn();
+        let ctrl_c = Arc::new(CtrlCState::new());
+        let (goal_dir, goal_tracker) = active_goal_tracker("Ship it").await;
+        goal_tracker.lock().await.set_token_budget(Some(100));
+        goal_tracker.lock().await.record_token_observation(500);
+        let events_path = goal_dir.path().join("events.jsonl");
+        let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
+
+        let flow = run_corrective_gate(CorrectiveGate {
+            session_stats: &mut stats,
+            runtime: &mut runtime,
+            renderer: &mut renderer,
+            tool_registry: &registry,
+            plan_session: &plan,
+            goal_tracker: &goal_tracker,
+            harness_emitter: Some(&emitter),
+            vt_cfg: &None,
+            outcome_result: &outcome,
+            ctrl_c_state: &ctrl_c,
+            next_turn_input: "",
+            turn_refused: false,
+            refused_turn_rolled_back: false,
+            session_end_reason: SessionEndReason::Completed,
+        })
+        .await
+        .unwrap();
+
+        assert!(matches!(flow, CorrectiveFlow::Proceed { .. }), "limited goal must idle");
+        assert!(!runtime.has_pending_follow_up_inputs(), "limited goal must not queue");
+        assert_eq!(goal_tracker.lock().await.status(), Some(vtcode_memory::GoalStatus::BudgetLimited));
+        let log = std::fs::read_to_string(&events_path).unwrap();
+        assert!(log.contains("budget_limited"), "limit must emit: {log}");
+    }
+
+    #[tokio::test]
     async fn goal_budget_exhaustion_idles_without_queueing() {
         use crate::agent::runloop::unified::turn::tool_outcomes::helpers as tracker_continue;
 
@@ -793,5 +892,60 @@ mod tests {
         assert!(matches!(flow, CorrectiveFlow::Proceed { .. }), "exhausted budget must idle");
         assert!(!runtime.has_pending_follow_up_inputs(), "exhausted budget must not queue");
         assert_eq!(goal_tracker.lock().await.auto_continue_turns(), max_turns);
+    }
+
+    #[test]
+    fn goal_claims_completion_matches_exact_first_line_only() {
+        assert!(goal_claims_completion(Some("GOAL ACHIEVED: all widgets shipped")));
+        assert!(goal_claims_completion(Some("\n\n  GOAL ACHIEVED: done\nmore detail")));
+        assert!(!goal_claims_completion(None));
+        assert!(!goal_claims_completion(Some("")));
+        assert!(!goal_claims_completion(Some("goal achieved: done")), "case-sensitive");
+        assert!(!goal_claims_completion(Some("Done.\nGOAL ACHIEVED: x")), "first line only");
+        assert!(!goal_claims_completion(Some("GOAL ACHIEVED")), "colon required");
+        assert!(!goal_claims_completion(Some("I will write GOAL ACHIEVED: later")), "prefix, not contains");
+    }
+
+    #[tokio::test]
+    async fn goal_completion_claim_completes_and_idles_without_queueing() {
+        let workspace = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+        let mut stats = SessionStats::default();
+        let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
+        Arc::make_mut(&mut runtime.state.messages)
+            .push(vtcode_core::llm::provider::Message::assistant("GOAL ACHIEVED: all widgets shipped".into()));
+        let mut renderer = AnsiRenderer::stdout();
+        let plan = PlanningWorkflowSessionState::default();
+        let outcome = completed_turn();
+        let ctrl_c = Arc::new(CtrlCState::new());
+        let (goal_dir, goal_tracker) = active_goal_tracker("Ship it").await;
+        let events_path = goal_dir.path().join("events.jsonl");
+        let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
+
+        let flow = run_corrective_gate(CorrectiveGate {
+            session_stats: &mut stats,
+            runtime: &mut runtime,
+            renderer: &mut renderer,
+            tool_registry: &registry,
+            plan_session: &plan,
+            goal_tracker: &goal_tracker,
+            harness_emitter: Some(&emitter),
+            vt_cfg: &None,
+            outcome_result: &outcome,
+            ctrl_c_state: &ctrl_c,
+            next_turn_input: "",
+            turn_refused: false,
+            refused_turn_rolled_back: false,
+            session_end_reason: SessionEndReason::Completed,
+        })
+        .await
+        .unwrap();
+
+        assert!(matches!(flow, CorrectiveFlow::Proceed { .. }), "completion must idle, not continue");
+        assert!(!runtime.has_pending_follow_up_inputs(), "completion must not queue");
+        assert_eq!(goal_tracker.lock().await.status(), Some(vtcode_memory::GoalStatus::Complete));
+        let log = std::fs::read_to_string(&events_path).unwrap();
+        assert!(log.contains("\"goal.updated\""), "completion must emit: {log}");
+        assert!(log.contains("\"complete\""), "emitted state must be complete: {log}");
     }
 }

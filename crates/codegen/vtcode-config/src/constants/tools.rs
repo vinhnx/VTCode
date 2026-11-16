@@ -60,6 +60,14 @@ pub const LOAD_SKILL: &str = "load_skill";
 pub const LOAD_SKILL_RESOURCE: &str = "load_skill_resource";
 
 // ============================================================
+// GOAL LOOP TOOLS
+// ============================================================
+/// Read the current thread goal loop state.
+pub const GET_GOAL: &str = "get_goal";
+/// Complete, block, or pause the active thread goal loop.
+pub const UPDATE_GOAL: &str = "update_goal";
+
+// ============================================================
 // INTERNAL EXECUTION HELPERS
 // ============================================================
 pub const RUN_PTY_CMD: &str = "run_pty_cmd";

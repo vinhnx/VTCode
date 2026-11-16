@@ -110,6 +110,24 @@ pub(crate) fn apply_goal_command(
             tracker.clear();
             effect(vec![(MessageStyle::Info, "Goal cleared.".to_string())], true)
         }
+        GoalSlashCommand::Budget { limit } => {
+            if !tracker.has_goal() {
+                return effect(no_goal_lines(), false);
+            }
+            match limit {
+                None => effect(budget_lines(tracker), false),
+                Some(0) => {
+                    tracker.set_token_budget(None);
+                    effect(vec![(MessageStyle::Info, "Budget cleared.".to_string())], true)
+                }
+                Some(cap) => {
+                    tracker.set_token_budget(Some(*cap));
+                    let mut lines = vec![(MessageStyle::Info, format!("Budget set: {cap} tokens."))];
+                    lines.extend(status_lines(tracker));
+                    effect(lines, true)
+                }
+            }
+        }
         GoalSlashCommand::Edit => match tracker.objective() {
             Some(objective) => effect(
                 vec![
@@ -127,11 +145,40 @@ fn effect(lines: Vec<(MessageStyle, String)>, mutated: bool) -> GoalCommandEffec
     GoalCommandEffect { lines, mutated, submit: None }
 }
 
+/// One-line TUI indicator for the goal loop, printed once per turn boundary
+/// while a goal is active or paused. Terminal states return `None`: their
+/// transitions already printed.
+#[must_use]
+pub(crate) fn goal_indicator_line(tracker: &GoalTracker) -> Option<String> {
+    let snapshot = tracker.goal_snapshot()?;
+    use vtcode_core::exec::events::goal::GoalState;
+    let label = match snapshot.state {
+        GoalState::Active => "Pursuing goal",
+        GoalState::Paused | GoalState::Unknown => "Paused goal",
+        GoalState::Complete | GoalState::Blocked | GoalState::BudgetLimited => return None,
+    };
+    Some(format!("[i] {label}: {} ({})", snapshot.objective, snapshot.elapsed_label()))
+}
+
 fn no_goal_lines() -> Vec<(MessageStyle, String)> {
     vec![
         (MessageStyle::Info, "No thread goal.".to_string()),
         (MessageStyle::Info, GOAL_SLASH_HELP.to_string()),
     ]
+}
+
+fn budget_lines(tracker: &GoalTracker) -> Vec<(MessageStyle, String)> {
+    match tracker.goal_snapshot() {
+        Some(snapshot) => match snapshot.token_budget {
+            Some(_) => {
+                vec![(MessageStyle::Info, format!("Budget: {} used.", snapshot.tokens_label()))]
+            }
+            None => {
+                vec![(MessageStyle::Info, format!("No budget set ({} tokens used).", snapshot.tokens_used))]
+            }
+        },
+        None => no_goal_lines(),
+    }
 }
 
 fn status_lines(tracker: &GoalTracker) -> Vec<(MessageStyle, String)> {
@@ -251,6 +298,25 @@ mod tests {
     }
 
     #[test]
+    fn goal_indicator_line_covers_active_paused_and_terminal() {
+        let (_dir, mut tracker) = test_tracker();
+        assert_eq!(goal_indicator_line(&tracker), None);
+
+        tracker.create_goal("goal-1".into(), "Ship it".into(), None, 0, "2026-01-01T00:00:00Z".into(), None);
+        let active = goal_indicator_line(&tracker).expect("active goal shows");
+        assert!(active.starts_with("[i] Pursuing goal: Ship it ("), "{active}");
+        assert!(active.ends_with(")"), "{active}");
+
+        assert!(tracker.pause(GoalPauseReason::User));
+        let paused = goal_indicator_line(&tracker).expect("paused goal shows");
+        assert!(paused.starts_with("[i] Paused goal: Ship it ("), "{paused}");
+
+        assert!(tracker.resume());
+        assert!(tracker.complete());
+        assert_eq!(goal_indicator_line(&tracker), None, "terminal states stay quiet");
+    }
+
+    #[test]
     fn only_set_and_successful_resume_submit_a_turn() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
@@ -292,6 +358,35 @@ mod tests {
         let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Clear, 0, &seed());
         assert!(!repeat.mutated);
         assert!(texts(&repeat).iter().any(|l| l.contains("No thread goal")));
+    }
+
+    #[test]
+    fn budget_shows_sets_and_clears() {
+        use vtcode_desktop_protocol::slash_command::GoalSlashCommand;
+
+        let (_dir, mut tracker) = test_tracker();
+        let show = GoalSlashCommand::Budget { limit: None };
+        let effect = apply_goal_command(&mut tracker, &show, 0, &seed());
+        assert!(!effect.mutated);
+        assert!(texts(&effect).iter().any(|l| l.contains("No thread goal")));
+
+        let set = GoalSlashCommand::Set { objective: "Ship it".into() };
+        apply_goal_command(&mut tracker, &set, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &show, 0, &seed());
+        assert!(!effect.mutated);
+        assert!(texts(&effect).iter().any(|l| l.contains("No budget set")));
+
+        let set_budget = GoalSlashCommand::Budget { limit: Some(100_000) };
+        let effect = apply_goal_command(&mut tracker, &set_budget, 0, &seed());
+        assert!(effect.mutated);
+        assert!(texts(&effect).iter().any(|l| l.contains("Budget set: 100000 tokens")));
+        assert_eq!(tracker.token_budget(), Some(100_000));
+
+        let clear = GoalSlashCommand::Budget { limit: Some(0) };
+        let effect = apply_goal_command(&mut tracker, &clear, 0, &seed());
+        assert!(effect.mutated);
+        assert!(texts(&effect).iter().any(|l| l.contains("Budget cleared")));
+        assert_eq!(tracker.token_budget(), None);
     }
 
     #[test]

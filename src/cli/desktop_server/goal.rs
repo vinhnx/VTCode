@@ -7,7 +7,7 @@
 //! a `submit` prompt starts a real turn when set.
 
 use super::*;
-use vtcode_desktop_protocol::slash_command::parse_goal_slash_command;
+use vtcode_desktop_protocol::slash_command::{GoalSlashCommandParseError, parse_goal_slash_command};
 
 use crate::agent::runloop::unified::stop_requests;
 use crate::agent::runloop::unified::turn::session::slash_commands::{GoalSeed, apply_goal_command};
@@ -38,7 +38,12 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
             stop_requests::host_goal_tracker(&runtime.stop).ok_or_else(|| anyhow!("session is still starting"))?;
         (tracker, stop_requests::host_goal_emitter(&runtime.stop))
     };
-    let command = parse_goal_slash_command(&params.args);
+    let command = match parse_goal_slash_command(&params.args) {
+        Ok(command) => command,
+        Err(GoalSlashCommandParseError::InvalidBudget) => {
+            bail!("invalid budget: expected /goal budget [<tokens>|0 to clear]");
+        }
+    };
     let now = chrono::Utc::now();
     let id = format!("goal-{}", now.timestamp_millis());
     let created_at = now.to_rfc3339();

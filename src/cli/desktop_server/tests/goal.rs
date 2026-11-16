@@ -104,6 +104,26 @@ async fn goal_execute_emits_canonical_event_on_mutation() {
 }
 
 #[tokio::test]
+async fn goal_execute_budget_sets_shows_and_rejects_garbage() {
+    let harness = GoalHarness::new().await;
+    harness.execute("session", "Ship it").await;
+
+    let set = harness.execute("session", "budget 5000").await;
+    assert!(set.mutated);
+    assert!(set.lines.iter().any(|l| l.contains("Budget set: 5000 tokens")), "{:?}", set.lines);
+
+    let shown = harness.execute("session", "budget").await;
+    assert!(!shown.mutated);
+    assert!(shown.lines.iter().any(|l| l.contains("Budget:")), "{:?}", shown.lines);
+
+    let request = harness.request("session", "budget lots");
+    let err = handle_request(&harness.context, &request)
+        .await
+        .expect_err("garbage budget must fail");
+    assert!(err.to_string().contains("invalid budget"), "{err:#}");
+}
+
+#[tokio::test]
 async fn goal_execute_rejects_unknown_session_and_unready_runtime() {
     let harness = GoalHarness::new().await;
     let request = harness.request("other-session", "pause");

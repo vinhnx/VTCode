@@ -113,6 +113,25 @@ impl GoalTracker {
         }
     }
 
+    /// Replace the token budget in place (`None` clears it). Returns `false`
+    /// when no goal exists.
+    pub fn set_token_budget(&mut self, budget: Option<i64>) -> bool {
+        if let Some(o) = self.orchestration.as_mut() {
+            o.token_budget = budget;
+            return true;
+        }
+        false
+    }
+
+    /// Mark an Active goal budget-limited when usage reached its cap.
+    /// Paused goals keep the user's explicit state. Returns `true` if applied.
+    pub fn enforce_budget(&mut self) -> bool {
+        let over = self.orchestration.as_ref().is_some_and(|o| {
+            o.status == GoalStatus::Active && o.token_budget.is_some_and(|b| o.tokens_used_high_water >= b)
+        });
+        if over { self.budget_limit() } else { false }
+    }
+
     /// Replace the objective in place, preserving elapsed time and history.
     /// Returns `false` when no goal exists.
     pub fn set_objective(&mut self, objective: &str) -> bool {

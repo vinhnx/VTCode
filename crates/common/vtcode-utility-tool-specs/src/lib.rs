@@ -5,12 +5,13 @@
     reason = "Intentional compatibility, platform, or test-only suppression."
 )]
 
-//! Passive JSON schemas for utility, file, scheduling, and collaboration tool surfaces.
+//! Passive JSON schemas for utility, file, scheduling, collaboration, and goal tool surfaces.
 
 #![recursion_limit = "256"]
 use serde_json::{Value, json};
 
 mod collaboration;
+mod goal;
 mod json_schema;
 mod matrix;
 #[cfg(feature = "mcp")]
@@ -25,6 +26,7 @@ pub use collaboration::{
     resume_agent_parameters, send_input_parameters, spawn_agent_parameters, spawn_background_subprocess_parameters,
     wait_agent_parameters,
 };
+pub use goal::{get_goal_description, get_goal_parameters, update_goal_description, update_goal_parameters};
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters};
 #[cfg(feature = "mcp")]

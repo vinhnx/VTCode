@@ -365,6 +365,8 @@ pub enum GoalPauseReason {
     Verification,
     /// Paused due to an infrastructure error.
     Infra,
+    /// Paused because the model reported an external blocker it cannot resolve.
+    ModelBlocked,
 }
 
 impl GoalPauseReason {
@@ -375,6 +377,7 @@ impl GoalPauseReason {
             Self::NoProgress => GoalStatus::NoProgressPaused,
             Self::Verification => GoalStatus::Blocked,
             Self::Infra => GoalStatus::InfraPaused,
+            Self::ModelBlocked => GoalStatus::Blocked,
         }
     }
 
@@ -385,6 +388,7 @@ impl GoalPauseReason {
             Self::NoProgress => "no_progress",
             Self::Verification => "blocked",
             Self::Infra => "infra",
+            Self::ModelBlocked => "model_blocked",
         }
     }
 }

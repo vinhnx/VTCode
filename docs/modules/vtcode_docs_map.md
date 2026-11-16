@@ -311,7 +311,7 @@ below based on the topic area.
 
 - **File**: `docs/development/goal-loop.md`
   - **Content**: Goal loop contract
-  - **Topics**: Ownership and persistence, Command flow, Turn boundary and auto-continue, Non-goals (v1)
+  - **Topics**: Ownership and persistence, Command flow, Surfaces, Turn boundary and auto-continue, Model tools
   - **User Questions**: "What can you tell me about Goal loop contract?", "How does Ownership and persistence work?",
     "How does Command flow work?"
 

@@ -12056,6 +12056,7 @@ dependencies = [
  "vtcode-memory",
  "vtcode-safety",
  "vtcode-ui",
+ "vtcode-utility-tool-specs",
  "vtcode-webmcp",
  "webbrowser",
  "zip",

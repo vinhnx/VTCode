@@ -473,8 +473,18 @@ fn handle_vim_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
     }
 }
 
-fn handle_goal_command(args: &str) -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::GoalCommand { command: parse_goal_slash_command(args) })
+fn handle_goal_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    let command = match parse_goal_slash_command(args) {
+        Ok(command) => command,
+        Err(_) => {
+            renderer.line(
+                MessageStyle::Error,
+                "Usage: /goal [<objective>|status|edit|pause|resume|clear|budget [<tokens>|0 to clear]]",
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+    Ok(SlashCommandOutcome::GoalCommand { command })
 }
 
 fn handle_webmcp_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
@@ -542,7 +552,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "splash" => Ok(SlashCommandOutcome::ShowSplash),
         "stop" => Ok(SlashCommandOutcome::StopAgent),
-        "goal" => handle_goal_command(args),
+        "goal" => handle_goal_command(args, renderer),
         "pause" => handle_pause_command(renderer),
         "update" => handle_update_command(args),
         "mcp" => handle_mcp_command(args, renderer),

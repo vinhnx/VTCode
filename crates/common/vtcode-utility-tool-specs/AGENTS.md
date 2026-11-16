@@ -2,7 +2,7 @@
 <!-- markdownlint-disable MD013 -->
 # vtcode-utility-tool-specs
 
-[Root AGENTS.md](../../../AGENTS.md) | Passive JSON schemas for VT Code utility, file, scheduling, and collaboration tool surfaces. Defines the wire format for tool invocations and results.
+[Root AGENTS.md](../../../AGENTS.md) | Passive JSON schemas for VT Code utility, file, scheduling, collaboration, and goal tool surfaces. Defines the wire format for tool invocations and results.
 
 ## Conventions
 
@@ -16,7 +16,7 @@
 
 | Area | Modules |
 | --- | --- |
-| Schemas | `collaboration/`, `matrix.rs`, `json_schema/`, `responses_api/`, `mcp_tool/` |
+| Schemas | `collaboration/`, `matrix.rs`, `json_schema/`, `responses_api/`, `mcp_tool/`, `goal.rs` |
 | Taxonomy | `tool_kind/` (`ToolKind`, `ToolNamespace`, `CanonicalToolMeta`, `TokenBucket`) |
 
 ## Dependencies

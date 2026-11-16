@@ -37,6 +37,30 @@ async fn goal_verbs_dispatch_asymmetrically_from_objectives() {
         );
     }
 
+    for (input, limit) in [
+        ("goal budget", None),
+        ("goal budget 25000", Some(25_000)),
+        ("goal budget 0", Some(0)),
+    ] {
+        let outcome = handle_slash_command(input, &mut renderer, workspace.path())
+            .await
+            .expect("goal budget should parse");
+        assert!(
+            matches!(outcome, SlashCommandOutcome::GoalCommand {
+                command: GoalSlashCommand::Budget { limit: ref got }
+            } if *got == limit),
+            "{input:?} must dispatch to Budget({limit:?})"
+        );
+    }
+
+    let outcome = handle_slash_command("goal budget soon", &mut renderer, workspace.path())
+        .await
+        .expect("invalid budget dispatches to an error outcome");
+    assert!(
+        matches!(outcome, SlashCommandOutcome::Handled),
+        "malformed budget must render usage, not set an objective"
+    );
+
     // Same leading words with more text are objectives, not verbs.
     for (input, objective) in [
         ("goal pause the deploy", "pause the deploy"),
