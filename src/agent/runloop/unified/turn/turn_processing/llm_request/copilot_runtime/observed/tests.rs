@@ -129,7 +129,7 @@ async fn state_publishes_snapshots_once_and_streams_only_appended_output_before_
             .map(|line| line.iter().map(|segment| segment.text.as_str()).collect::<String>())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(text.starts_with("• Ran printf observed\n"), "{text}");
+        assert!(text.starts_with("• Ran printf\n"), "{text}");
         assert!(text.find("A界").unwrap() < text.find("B尾").unwrap());
         assert_eq!(text.matches("A界").count(), 1);
         assert_eq!(text.matches("B尾").count(), 1);

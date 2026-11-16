@@ -227,10 +227,13 @@ struct ToolsCacheEntry {
 /// map (the same trick rustc uses for its repeated parent-span lookups). The
 /// map stays as the fallback for the uncommon case of multiple catalogs on one
 /// core.
+/// A cached catalog paired with its serialized wire payload.
+type CachedTools = (Arc<Vec<ToolDefinition>>, Arc<Vec<Value>>);
+
 #[derive(Default)]
 struct ToolsCache {
     last: Option<ToolsCacheEntry>,
-    map: HashMap<usize, (Arc<Vec<ToolDefinition>>, Arc<Vec<Value>>)>,
+    map: HashMap<usize, CachedTools>,
 }
 
 impl ToolsCache {

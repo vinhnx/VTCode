@@ -95,7 +95,6 @@ crates/codegen/vtcode-desktop/src/desktop/view/components.rs=996
 crates/codegen/vtcode-desktop/src/desktop/view/configuration.rs=976
 crates/codegen/vtcode-desktop/src/desktop/view/configuration_render.rs=981
 crates/codegen/vtcode-desktop/src/desktop/view/deeplinks.rs=947
-crates/codegen/vtcode-desktop/src/desktop/view/files_panel.rs=961
 crates/codegen/vtcode-desktop/src/desktop/view/inspector_changes.rs=881
 crates/codegen/vtcode-desktop/src/desktop/view/overlays.rs=840
 crates/codegen/vtcode-desktop/src/desktop/view/palette.rs=953

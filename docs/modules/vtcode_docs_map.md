@@ -222,6 +222,12 @@ below based on the topic area.
   - **Content**: Desktop component review
   - **User Questions**: "What can you tell me about Desktop component review?"
 
+- **File**: `docs/development/desktop-shell-and-icons.md`
+  - **Content**: Desktop shell and app icon
+  - **Topics**: Concept workspace layout
+  - **User Questions**: "What can you tell me about Desktop shell and app icon?", "How does Concept workspace layout
+    work?"
+
 - **File**: `docs/development/desktop-shortcut-parity.md`
   - **Content**: Desktop⇄CLI Shortcut Parity Matrix
   - **Topics**: Dispatch rules (verified against vendored source), Kit-native input keys (macOS, `Input` context),

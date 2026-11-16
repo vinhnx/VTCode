@@ -57,7 +57,9 @@ async fn finish_drains_queued_output_and_preserves_status_colors() {
         let commands = collect_commands_until_closed(&mut receiver).await;
         let block = final_pty_block(&commands);
         let text = block_text(block);
-        assert!(text.starts_with("• Ran printf ordered\n"), "{text}");
+        // The compact headline intentionally hides arguments (canonical
+        // `compact_command_headline`); the full command stays in the viewer.
+        assert!(text.starts_with("• Ran printf\n"), "{text}");
         assert!(text.contains("first界\n"), "{text}");
         assert!(text.contains("second尾"), "{text}");
         assert!(text.find("first界").unwrap() < text.find("second尾").unwrap());
@@ -93,7 +95,7 @@ async fn finish_retains_configured_tail_and_empty_output_header() {
         let commands = collect_commands_until_closed(&mut receiver).await;
         let block = final_pty_block(&commands);
         let text = block_text(block);
-        assert!(text.starts_with("• Ran printf bounded"), "{text}");
+        assert!(text.starts_with("• Ran printf"), "{text}");
         assert!(!text.contains("discard-"), "{text}");
         if output.is_empty() {
             assert_eq!(block.len(), 1);
@@ -125,7 +127,7 @@ async fn dropping_active_presentation_releases_tasks_without_completing_progress
     })
     .await
     .expect("runtime must start before cancellation");
-    assert!(block_text(final_pty_block(&commands)).contains("• Ran printf cancelled"));
+    assert!(block_text(final_pty_block(&commands)).contains("• Ran printf"));
     drop(handle);
     drop(stream);
 

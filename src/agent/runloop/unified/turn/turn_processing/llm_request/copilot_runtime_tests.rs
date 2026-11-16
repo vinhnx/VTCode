@@ -442,7 +442,10 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let inline_output = collect_inline_output(&mut command_rx);
-    assert!(inline_output.contains("• Ran cd /tmp && cargo check 2>&1"));
+    // The compact headline hides arguments; the canonical helper owns its
+    // exact shape, so assert against it rather than re-pinning the format.
+    let headline = vtcode_commons::tool_headlines::compact_command_headline("cd /tmp && cargo check 2>&1");
+    assert!(inline_output.contains(&format!("• Ran {headline}")));
     assert!(inline_output.contains("Checking vtcode-core"));
     assert!(inline_output.contains("Finished `dev` profile"));
 }
@@ -669,8 +672,10 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
         "successful command output should be compacted in the live transcript: {stripped_text:?}"
     );
     assert!(
-        stripped_text.contains("Ran cat") || stripped_text.contains("Run command"),
-        "expected command preview in transcript, got: {stripped_text}"
+        stripped_text.contains("Ran cat")
+            || stripped_text.contains("Ran 1 command")
+            || stripped_text.contains("Run command"),
+        "expected a compact command preview in transcript, got: {stripped_text}"
     );
 }
 
