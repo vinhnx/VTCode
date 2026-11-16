@@ -40,13 +40,15 @@ VT Code runs an auditable, resumable agentic coding loop in your repo — termin
 Open source under **MIT OR Apache-2.0**; see [Contributing](#contributing) and [License](#license).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
-| At a glance | What you get |
-| ----------- | ------------ |
-| **Plan** | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md). |
-| **Safety** | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing. |
+
+| At a glance   | What you get                                                                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Plan**      | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md).                                        |
+| **Safety**    | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                                                        |
 | **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md), [subagents](./docs/user-guide/subagents.md). |
-| **Extend** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), editor bridges. |
-| **Models** | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task. |
+| **Extend**    | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), editor bridges.          |
+| **Models**    | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.                                                                            |
+
 <!-- markdownlint-enable MD060 -->
 
 Full map in [Documentation](#documentation).
@@ -113,17 +115,17 @@ session commands.
 
 Common commands (full list in [command reference](./docs/user-guide/commands.md)):
 
-| Goal | Command |
-| ---- | ------- |
-| Start the TUI | `vtcode` |
-| Ask without tools | `vtcode ask "explain Rc vs Arc"` |
-| Run a task headlessly | `vtcode exec "refactor main.rs"` |
-| Review pending changes | `vtcode review` |
+| Goal                    | Command                                            |
+| ----------------------- | -------------------------------------------------- |
+| Start the TUI           | `vtcode`                                           |
+| Ask without tools       | `vtcode ask "explain Rc vs Arc"`                   |
+| Run a task headlessly   | `vtcode exec "refactor main.rs"`                   |
+| Review pending changes  | `vtcode review`                                    |
 | Schedule recurring work | `vtcode schedule create --prompt "..." --every 1h` |
-| Resume the last session | `vtcode continue` |
-| Resume a headless run | `vtcode exec resume --last "prompt"` |
-| Roll back a snapshot | `vtcode snapshots` / `vtcode revert` |
-| Inspect a run log | `vtcode trajectory` |
+| Resume the last session | `vtcode continue`                                  |
+| Resume a headless run   | `vtcode exec resume --last "prompt"`               |
+| Roll back a snapshot    | `vtcode snapshots` / `vtcode revert`               |
+| Inspect a run log       | `vtcode trajectory`                                |
 
 For larger tasks, start read-only, review the turn diff, and use `/explain` for a summary
 without another model call. See [interactive mode](./docs/user-guide/interactive-mode.md).
@@ -258,7 +260,7 @@ Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
 Thank you to everyone below. You are the reason this project keeps moving.
 
-<details>
+<details open> <!-- NOTE: keep open by default. DO NOT CLOSE this -->
 <!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (31)</summary><!-- CONTRIBUTORS-COUNT:END -->
 
 <!-- CONTRIBUTORS:START -->
