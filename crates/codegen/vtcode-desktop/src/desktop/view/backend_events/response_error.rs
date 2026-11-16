@@ -150,7 +150,17 @@ impl DesktopView {
         } else if method == protocol::method::TURN_QUEUE_TAKE_LATEST {
             self.take_latest_pending = false;
         }
-        self.status = rust_i18n::t!("app.service.request_failed").to_string();
+        // A busy thread is actionable, not generic: surface the close-and-reload /
+        // fork remedy in the status line too, so it survives banner dismissal.
+        // Detection shares the service's marker so the two cannot drift.
+        self.status = if method == protocol::method::SESSION_LOAD
+            && let Some(message) = self.error.as_deref()
+            && protocol::is_session_busy_message(message)
+        {
+            message.to_owned()
+        } else {
+            rust_i18n::t!("app.service.request_failed").to_string()
+        };
         if gate_freed {
             // A failed request still frees the transition gate:
             // retry a waiting handoff now that error state is

@@ -286,6 +286,7 @@ pub use review::{
 };
 
 pub mod session;
+pub mod session_lock;
 pub use session::{
     AgentModeInfo, MAX_RECENT_PROMPTS, MAX_SESSION_HISTORY_PAGE_MESSAGES, MAX_SESSION_LIST_LIMIT,
     MAX_SESSION_OUTPUT_PAGE_BYTES, PermissionMode, RESTORED_OUTPUT_TRUNCATION_SUFFIX, RecentPrompt,
@@ -294,6 +295,7 @@ pub use session::{
     SessionOptionsSnapshot, SessionOutputCursor, SessionOutputPage, SessionOutputReadParams, SessionSummary,
     ThemePreferenceSelectParams,
 };
+pub use session_lock::{SESSION_BUSY_MARKER, is_session_busy_message, session_busy_message};
 
 pub mod turn;
 pub use turn::{

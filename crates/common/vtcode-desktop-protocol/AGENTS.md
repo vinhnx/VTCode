@@ -20,6 +20,7 @@
 - Hidden model-only history rows retain archive indices; only system rows may be omitted from the visible transcript.
 - Shared scalar wire values (method names, sentinel ids like `SESSION_START_TURN_ID`) live as `pub const` here
   so the service and client reference one definition.
+- `session_lock` owns the session-busy text: the service builds it, the app detects it; never retype the marker.
 - Bump `PROTOCOL_VERSION` minor for additive methods/fields (range-negotiated); major only for breaking changes.
 - `session/recent_prompts` returns newest-first prompts bounded by `MAX_RECENT_PROMPTS`,
   echoing the scope so clients discard stale responses.

@@ -110,21 +110,24 @@ fn contended_handoff_load_surfaces_the_close_and_reload_error(cx: &mut TestAppCo
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
 
     // The service fail-fast probe rejects the load while the CLI holds the
-    // session; the banner must carry the remedy, not a generic failure.
+    // session; the banner must carry the remedy, not a generic failure. The
+    // message comes from the shared builder so the UI detector cannot drift.
+    let busy = vtcode_desktop_protocol::session_busy_message("live-session");
     view.update(cx, |view, cx| {
         view.handle_backend_event(
             BackendEvent::Response {
                 method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
                 result: None,
-                error: Some(
-                    "session live-session is already open in another process; close it there and reload".into(),
-                ),
+                error: Some(busy.clone()),
             },
             cx,
         );
-        assert_eq!(
-            view.error.as_deref(),
-            Some("session live-session is already open in another process; close it there and reload")
+        assert_eq!(view.error.as_deref(), Some(busy.as_str()));
+        assert_eq!(view.status, busy, "the busy remedy survives banner dismissal via the status line");
+        assert!(
+            view.error
+                .as_deref()
+                .is_some_and(|message| message.contains("vtcode --fork-session live-session"))
         );
         assert!(view.session_request.is_none(), "a failed load must not block retry");
         assert!(view.backend.is_some(), "the service connection survives a rejected load");

@@ -94,9 +94,8 @@ pub(super) async fn ensure_session_not_held_elsewhere(workspace: &Path, session_
         Err(vtcode_memory::SessionStoreError::SessionBusy { session }) => {
             // Name the remedy that works from either side: the holder can
             // release it, and a reader who wants its own copy can fork.
-            bail!(
-                "session {session} is already open in another process; close it there and reload, or open a copy with vtcode --fork-session {session}"
-            )
+            // Shared with the desktop UI detector so the wording cannot drift.
+            bail!("{}", protocol::session_busy_message(&session))
         }
         Err(error) => Err(error.into()),
     }

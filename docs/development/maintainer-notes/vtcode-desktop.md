@@ -81,6 +81,8 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-desktop/`, moved verba
 
 - Goal controls (`view/goal.rs` bar + native `/goal` route) execute through the quiet `goal/execute` RPC against the runloop-published tracker, never as turn text: a non-turn slash submitted as a turn wedges the client's pending turn waiting for a terminal event that never comes. The bar renders `goal.updated` snapshots (live events plus newest-checkpoint seeding at load, cleared on session switch/disconnect); `Set`/`Resume` responses carry a `submit` prompt that starts a real turn, read-only responses surface as transcript notices, and mutating responses stay quiet because the bar flip is the feedback.
 
+- Busy-thread loads surface the shared remedy in banner and status: the service builds `session_busy_message` (`vtcode-desktop-protocol::session_lock`), and `handle_response_error` detects it for `SESSION_LOAD` and copies it to `status` so it survives banner dismissal. Never retype the marker.
+
 ## Embedded terminal
 
 - One login shell per workspace (`terminal_process.rs` spawn/close, `terminal_screen.rs` Rio grid wrapper, `terminal_tab.rs` retained session, `view/terminal_panel.rs` toggle/pump/render/input). User guide: [desktop-terminal](../desktop-terminal.md) + [quick reference](../desktop-terminal-quick-reference.md). Not an agent tool: no harness events, no `ThreadEvent`, no sandbox relationship — keystrokes are the user's, output is untrusted.
