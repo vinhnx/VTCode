@@ -19,18 +19,18 @@ SCRIPT_START=$(date +%s)
 
 # Timing helper
 print_timing() {
-    local end
-    end=$(date +%s)
-    local duration=$((end - SCRIPT_START))
-    if [ $duration -lt 60 ]; then
-        echo ""
-        print_status "Completed in ${duration}s"
-    else
-        local minutes=$((duration / 60))
-        local seconds=$((duration % 60))
-        echo ""
-        print_status "Completed in ${minutes}m ${seconds}s"
-    fi
+	local end
+	end=$(date +%s)
+	local duration=$((end - SCRIPT_START))
+	if [ $duration -lt 60 ]; then
+		echo ""
+		print_status "Completed in ${duration}s"
+	else
+		local minutes=$((duration / 60))
+		local seconds=$((duration % 60))
+		echo ""
+		print_status "Completed in ${minutes}m ${seconds}s"
+	fi
 }
 
 echo "Running VT Code Full Quality Gate..."
@@ -41,241 +41,241 @@ echo "========================================"
 
 # Check rustfmt availability
 check_rustfmt() {
-    if cargo fmt --version > /dev/null 2>&1; then
-        return 0
-    else
-        print_error "rustfmt is not available. Install it with 'rustup component add rustfmt'."
-        return 1
-    fi
+	if cargo fmt --version >/dev/null 2>&1; then
+		return 0
+	else
+		print_error "rustfmt is not available. Install it with 'rustup component add rustfmt'."
+		return 1
+	fi
 }
 
 # Check clippy availability
 check_clippy() {
-    if cargo clippy --version > /dev/null 2>&1; then
-        return 0
-    else
-        print_error "clippy is not available. Install it with 'rustup component add clippy'."
-        return 1
-    fi
+	if cargo clippy --version >/dev/null 2>&1; then
+		return 0
+	else
+		print_error "clippy is not available. Install it with 'rustup component add clippy'."
+		return 1
+	fi
 }
 
 run_vtcode_command() {
-    if [ -n "${VTCODE_CHECK_SCRIPT_VTCODE_BIN:-}" ] && [ -x "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" ]; then
-        "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" "$@"
-        return $?
-    fi
+	if [ -n "${VTCODE_CHECK_SCRIPT_VTCODE_BIN:-}" ] && [ -x "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" ]; then
+		"${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" "$@"
+		return $?
+	fi
 
-    if [ -x "./target/debug/vtcode" ]; then
-        ./target/debug/vtcode "$@"
-        return $?
-    fi
+	if [ -x "./target/debug/vtcode" ]; then
+		./target/debug/vtcode "$@"
+		return $?
+	fi
 
-    if command -v cargo > /dev/null 2>&1 && [ -f "Cargo.toml" ]; then
-        RUSTC_WRAPPER='' cargo run --quiet --bin vtcode -- "$@"
-        return $?
-    fi
+	if command -v cargo >/dev/null 2>&1 && [ -f "Cargo.toml" ]; then
+		RUSTC_WRAPPER='' cargo run --quiet --bin vtcode -- "$@"
+		return $?
+	fi
 
-    if command -v vtcode > /dev/null 2>&1; then
-        vtcode "$@"
-        return $?
-    fi
+	if command -v vtcode >/dev/null 2>&1; then
+		vtcode "$@"
+		return $?
+	fi
 
-    print_error "VT Code is not available. Install it or build the local binary before running '$0'."
-    return 1
+	print_error "VT Code is not available. Install it or build the local binary before running '$0'."
+	return 1
 }
 
 # Function to run rustfmt check
 run_rustfmt() {
-    print_status "Running rustfmt check..."
-    if cargo fmt --all -- --check; then
-        print_success "Code formatting is correct!"
-        return 0
-    else
-        print_error "Code formatting issues found. Run 'cargo fmt --all' to fix."
-        return 1
-    fi
+	print_status "Running rustfmt check..."
+	if cargo fmt --all -- --check; then
+		print_success "Code formatting is correct!"
+		return 0
+	else
+		print_error "Code formatting issues found. Run 'cargo fmt --all' to fix."
+		return 1
+	fi
 }
 
 # Run clippy
 run_clippy() {
-    print_status "Running clippy..."
-    if cargo clippy --locked --workspace --all-targets --all-features -- -D warnings; then
-        print_success "No clippy warnings found!"
-        return 0
-    else
-        print_error "Clippy found issues. Please fix them."
-        return 1
-    fi
+	print_status "Running clippy..."
+	if cargo clippy --locked --workspace --all-targets --all-features -- -D warnings; then
+		print_success "No clippy warnings found!"
+		return 0
+	else
+		print_error "Clippy found issues. Please fix them."
+		return 1
+	fi
 }
 
 # Verify the headless vtcode-core contract (no TUI stack)
 run_headless_check() {
-    print_status "Checking headless vtcode-core (no default features)..."
-    if RUSTFLAGS="-D warnings" cargo clippy --locked -p vtcode-core --no-default-features --all-targets; then
-        print_success "Headless vtcode-core compiles warning-free!"
-        return 0
-    else
-        print_error "Headless vtcode-core check failed. vtcode-acp depends on it."
-        return 1
-    fi
+	print_status "Checking headless vtcode-core (no default features)..."
+	if RUSTFLAGS="-D warnings" cargo clippy --locked -p vtcode-core --no-default-features --all-targets; then
+		print_success "Headless vtcode-core compiles warning-free!"
+		return 0
+	else
+		print_error "Headless vtcode-core check failed. vtcode-acp depends on it."
+		return 1
+	fi
 }
 
 # Run tests
 run_tests() {
-    print_status "Running tests..."
-    local test_exit=0
+	print_status "Running tests..."
+	local test_exit=0
 
-    if cargo nextest --version &> /dev/null; then
-        local test_profile="default"
-        if nextest_profile_available ci; then
-            test_profile="ci"
-        else
-            print_warning "nextest profile 'ci' is unavailable; using the default profile."
-        fi
-        print_status "Using cargo-nextest (${test_profile} profile)..."
-        cargo nextest run --profile "$test_profile" || test_exit=$?
-    else
-        print_warning "cargo-nextest not found. Falling back to cargo test."
-        cargo test --workspace || test_exit=$?
-    fi
+	if cargo nextest --version &>/dev/null; then
+		local test_profile="default"
+		if nextest_profile_available ci; then
+			test_profile="ci"
+		else
+			print_warning "nextest profile 'ci' is unavailable; using the default profile."
+		fi
+		print_status "Using cargo-nextest (${test_profile} profile)..."
+		cargo nextest run --profile "$test_profile" || test_exit=$?
+	else
+		print_warning "cargo-nextest not found. Falling back to cargo test."
+		cargo test --workspace || test_exit=$?
+	fi
 
-    if [ $test_exit -eq 0 ]; then
-        print_success "All tests passed!"
-        return 0
-    else
-        print_error "Some tests failed."
-        return 1
-    fi
+	if [ $test_exit -eq 0 ]; then
+		print_success "All tests passed!"
+		return 0
+	else
+		print_error "Some tests failed."
+		return 1
+	fi
 }
 
 # Run build
 run_build() {
-    print_status "Building project..."
-    if cargo build --workspace; then
-        print_success "Build successful!"
-        return 0
-    else
-        print_error "Build failed."
-        return 1
-    fi
+	print_status "Building project..."
+	if cargo build --workspace; then
+		print_success "Build successful!"
+		return 0
+	else
+		print_error "Build failed."
+		return 1
+	fi
 }
 
 # Check documentation
 run_docs() {
-    print_status "Checking documentation..."
-    if cargo doc --workspace --no-deps; then
-        print_success "Documentation generated successfully!"
-    else
-        print_error "Documentation generation failed."
-        return 1
-    fi
-    # nextest never runs doctests and `cargo doc` never compiles them, so
-    # doc-example rot (e.g. references to private APIs) is otherwise invisible.
-    print_status "Running doctests..."
-    if cargo test --workspace --locked --doc; then
-        print_success "All doctests passed!"
-        return 0
-    else
-        print_error "Doctests failed."
-        return 1
-    fi
+	print_status "Checking documentation..."
+	if cargo doc --workspace --no-deps; then
+		print_success "Documentation generated successfully!"
+	else
+		print_error "Documentation generation failed."
+		return 1
+	fi
+	# nextest never runs doctests and `cargo doc` never compiles them, so
+	# doc-example rot (e.g. references to private APIs) is otherwise invisible.
+	print_status "Running doctests..."
+	if cargo test --workspace --locked --doc; then
+		print_success "All doctests passed!"
+		return 0
+	else
+		print_error "Doctests failed."
+		return 1
+	fi
 }
 
 # Run structured logging lint
 run_structured_logging_lint() {
-    print_status "Running structured logging lint..."
-    if ./scripts/lint_structured_logging.sh; then
-        print_success "Structured logging is correct!"
-        return 0
-    else
-        print_error "Structured logging violations found. See ARCHITECTURAL_INVARIANTS.md #4."
-        return 1
-    fi
+	print_status "Running structured logging lint..."
+	if ./scripts/lint_structured_logging.sh; then
+		print_success "Structured logging is correct!"
+		return 0
+	else
+		print_error "Structured logging violations found. See ARCHITECTURAL_INVARIANTS.md #4."
+		return 1
+	fi
 }
 
 run_workflow_security_lint() {
-    print_status "Running workflow security policy checks..."
-    if ./scripts/check_workflow_security.sh; then
-        print_success "Workflow security policy checks passed!"
-        return 0
-    else
-        print_error "Workflow security policy checks failed."
-        return 1
-    fi
+	print_status "Running workflow security policy checks..."
+	if ./scripts/check_workflow_security.sh; then
+		print_success "Workflow security policy checks passed!"
+		return 0
+	else
+		print_error "Workflow security policy checks failed."
+		return 1
+	fi
 }
 
 # Release-artifact contract tests. These were only run by the
 # (now removed) ci.yml workflow, so keep them reachable from the local gate.
 run_release_contract_tests() {
-    print_status "Running release contract tests..."
-    local failed=0
-    if python3 scripts/tests/test_ci_load.py; then
-        print_success "CI-load contract tests passed."
-    else
-        print_error "CI-load contract tests failed."
-        failed=1
-    fi
-    if python3 scripts/tests/test_package_vtcode_companion.py; then
-        print_success "Companion packaging contract tests passed."
-    else
-        print_error "Companion packaging contract tests failed."
-        failed=1
-    fi
-    if python3 scripts/tests/test_homebrew_formula.py; then
-        print_success "Homebrew formula contract tests passed."
-    else
-        print_error "Homebrew formula contract tests failed."
-        failed=1
-    fi
-    if python3 scripts/tests/test_homebrew_cask.py; then
-        print_success "Homebrew cask contract tests passed."
-    else
-        print_error "Homebrew cask contract tests failed."
-        failed=1
-    fi
-    if bash scripts/tests/test_release_assets.sh; then
-        print_success "Release-assets contract tests passed."
-    else
-        print_error "Release-assets contract tests failed."
-        failed=1
-    fi
-    if [ "$failed" -eq 0 ]; then
-        print_success "Release contract tests passed."
-        return 0
-    else
-        print_error "Release contract tests failed."
-        return 1
-    fi
+	print_status "Running release contract tests..."
+	local failed=0
+	if python3 scripts/tests/test_ci_load.py; then
+		print_success "CI-load contract tests passed."
+	else
+		print_error "CI-load contract tests failed."
+		failed=1
+	fi
+	if python3 scripts/tests/test_package_vtcode_companion.py; then
+		print_success "Companion packaging contract tests passed."
+	else
+		print_error "Companion packaging contract tests failed."
+		failed=1
+	fi
+	if python3 scripts/tests/test_homebrew_formula.py; then
+		print_success "Homebrew formula contract tests passed."
+	else
+		print_error "Homebrew formula contract tests failed."
+		failed=1
+	fi
+	if python3 scripts/tests/test_homebrew_cask.py; then
+		print_success "Homebrew cask contract tests passed."
+	else
+		print_error "Homebrew cask contract tests failed."
+		failed=1
+	fi
+	if bash scripts/tests/test_release_assets.sh; then
+		print_success "Release-assets contract tests passed."
+	else
+		print_error "Release-assets contract tests failed."
+		failed=1
+	fi
+	if [ "$failed" -eq 0 ]; then
+		print_success "Release contract tests passed."
+		return 0
+	else
+		print_error "Release contract tests failed."
+		return 1
+	fi
 }
 
 # Run focused harness regression tests called out in docs/harness/QUALITY_SCORE.md.
 run_harness_regression_tests() {
-    print_status "Running harness PTY/TUI regression tests..."
+	print_status "Running harness PTY/TUI regression tests..."
 
-    if cargo nextest run -p vtcode-core -E 'binary(/pty_tests/)' \
-        && cargo nextest run -p vtcode-bash-runner -E 'binary(/pipe_tests/)' \
-        && cargo nextest run -p vtcode -E 'test(/inline_events/)'; then
-        print_success "Harness PTY/TUI regression tests passed!"
-        return 0
-    else
-        print_error "Harness PTY/TUI regression tests failed."
-        return 1
-    fi
+	if cargo nextest run -p vtcode-core -E 'binary(/pty_tests/)' &&
+		cargo nextest run -p vtcode-bash-runner -E 'binary(/pipe_tests/)' &&
+		cargo nextest run -p vtcode -E 'test(/inline_events/)'; then
+		print_success "Harness PTY/TUI regression tests passed!"
+		return 0
+	else
+		print_error "Harness PTY/TUI regression tests failed."
+		return 1
+	fi
 }
 
 # Run Zen governance checks. The unwrap/expect scan is enforced (the allowlist
 # is clean and every entry names a current finding); allowlist hygiene stays
 # warn-first so refactors surface stale entries without blocking.
 run_zen_governance() {
-    print_status "Running Zen governance checks (unwrap enforced, hygiene warn)..."
-    if python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt \
-        && python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt; then
-        print_success "Zen governance checks completed."
-        return 0
-    else
-        print_error "Zen governance checks failed (see findings above)."
-        return 1
-    fi
+	print_status "Running Zen governance checks (unwrap enforced, hygiene warn)..."
+	if python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt &&
+		python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt; then
+		print_success "Zen governance checks completed."
+		return 0
+	else
+		print_error "Zen governance checks failed (see findings above)."
+		return 1
+	fi
 }
 
 # Tiered Rust file-length enforcement: production src fails at 800 lines
@@ -283,71 +283,71 @@ run_zen_governance() {
 # tests/benches/fuzz/examples fail at 1000. The soft warn-500 signal runs in
 # run_repo_governance_gates so check-dev.sh sees it without blocking.
 run_rust_length_gate() {
-    print_status "Running Rust file length gate (src 800, tests 1000)..."
-    if python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet; then
-        print_success "Rust file lengths within tiered budgets!"
-        return 0
-    else
-        print_error "Rust file length violations found. Split the file or see scripts/rust_length_baseline.txt rules."
-        return 1
-    fi
+	print_status "Running Rust file length gate (src 800, tests 1000)..."
+	if python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet; then
+		print_success "Rust file lengths within tiered budgets!"
+		return 0
+	else
+		print_error "Rust file length violations found. Split the file or see scripts/rust_length_baseline.txt rules."
+		return 1
+	fi
 }
 
 # Catch platform-gated `unsafe` drift that host-only clippy cannot see: every
 # `unsafe` needs a `SAFETY:` marker and an `unsafe_code` allowance, even in code
 # that only compiles for another `#[cfg(target_os)]`.
 run_unsafe_docs_gate() {
-    print_status "Running unsafe-docs gate (enforce)..."
-    if python3 scripts/check_unsafe_docs.py --mode enforce --allowlist scripts/unsafe_allowlist.txt; then
-        print_success "unsafe-docs gate passed."
-        return 0
-    else
-        print_error "unsafe-docs gate failed (see findings above)."
-        return 1
-    fi
+	print_status "Running unsafe-docs gate (enforce)..."
+	if python3 scripts/check_unsafe_docs.py --mode enforce --allowlist scripts/unsafe_allowlist.txt; then
+		print_success "unsafe-docs gate passed."
+		return 0
+	else
+		print_error "unsafe-docs gate failed (see findings above)."
+		return 1
+	fi
 }
 
 # run_cargo_deny is provided by scripts/common.sh (shared with check-dev.sh).
 
 run_agent_legibility_checks() {
-    print_status "Running agent legibility checks (warn mode)..."
-    if python3 scripts/check_agent_legibility.py --mode warn; then
-        print_success "Agent legibility checks completed."
-        return 0
-    else
-        print_error "Agent legibility checks failed unexpectedly."
-        return 1
-    fi
+	print_status "Running agent legibility checks (warn mode)..."
+	if python3 scripts/check_agent_legibility.py --mode warn; then
+		print_success "Agent legibility checks completed."
+		return 0
+	else
+		print_error "Agent legibility checks failed unexpectedly."
+		return 1
+	fi
 }
 
 run_shell_scripts_lint() {
-    print_status "Running shell script lint (bash -n + nfo typo check)..."
-    local failed=0
-    local script
-    for script in scripts/*.sh scripts/**/*.sh; do
-        [ -f "$script" ] || continue
-        if ! bash -n "$script" 2>&1; then
-            print_error "bash -n failed for $script"
-            failed=1
-        fi
-        if grep -Eq '^[[:space:]]*nfo\b' "$script"; then
-            print_error "Found truncated 'nfo' command in $script (should be print_info):"
-            grep -n '^[[:space:]]*nfo\b' "$script" >&2
-            failed=1
-        fi
-        if command -v shellcheck >/dev/null 2>&1; then
-            if ! shellcheck "$script" >/dev/null 2>&1; then
-                print_warning "shellcheck warnings in $script (run shellcheck $script for details)"
-            fi
-        fi
-    done
-    if [ $failed -eq 0 ]; then
-        print_success "Shell scripts passed lint!"
-        return 0
-    else
-        print_error "Shell script lint failed."
-        return 1
-    fi
+	print_status "Running shell script lint (bash -n + nfo typo check)..."
+	local failed=0
+	local script
+	for script in scripts/*.sh scripts/**/*.sh; do
+		[ -f "$script" ] || continue
+		if ! bash -n "$script" 2>&1; then
+			print_error "bash -n failed for $script"
+			failed=1
+		fi
+		if grep -Eq '^[[:space:]]*nfo\b' "$script"; then
+			print_error "Found truncated 'nfo' command in $script (should be print_info):"
+			grep -n '^[[:space:]]*nfo\b' "$script" >&2
+			failed=1
+		fi
+		if command -v shellcheck >/dev/null 2>&1; then
+			if ! shellcheck "$script" >/dev/null 2>&1; then
+				print_warning "shellcheck warnings in $script (run shellcheck $script for details)"
+			fi
+		fi
+	done
+	if [ $failed -eq 0 ]; then
+		print_success "Shell scripts passed lint!"
+		return 0
+	else
+		print_error "Shell script lint failed."
+		return 1
+	fi
 }
 
 # Run Miri (detect undefined behavior)
@@ -358,182 +358,182 @@ run_shell_scripts_lint() {
 # crate(s) that contain pure-Rust unsafe code. Pass extra crate names as args
 # to widen the scope, e.g. `./scripts/check.sh miri vtcode-skills`.
 run_miri() {
-    print_status "Running Miri (Tree Borrows aliasing model, detecting UB/aliasing issues)..."
-    print_warning "Miri interprets code and is slow. Scoped to pure-Rust unsafe by default."
-    print_warning "Requires the miri component: 'rustup component add miri' (or 'rustup +nightly component add miri' if the stable toolchain rejects -Z flags)."
+	print_status "Running Miri (Tree Borrows aliasing model, detecting UB/aliasing issues)..."
+	print_warning "Miri interprets code and is slow. Scoped to pure-Rust unsafe by default."
+	print_warning "Requires the miri component: 'rustup component add miri' (or 'rustup +nightly component add miri' if the stable toolchain rejects -Z flags)."
 
-    # Tree Borrows avoids the false positives of the older Stacked Borrows
-    # model; disable-isolation lets env/fs-touching tests run under miri.
-    #
-    # Default to the crate(s) with pure-Rust unsafe (miri cannot run FFI/syscalls).
-    # Extra args widen the scope, e.g. `./scripts/check.sh miri vtcode-skills`.
-    # Use one `-p` per crate: `cargo test -p a b` treats `b` as a test-name filter.
-    local -a crates=("$@")
-    if [ "${#crates[@]}" -eq 0 ]; then
-        crates=("vtcode-commons")
-    fi
-    local -a pkg_args=()
-    local c
-    for c in "${crates[@]}"; do
-        pkg_args+=(-p "$c")
-    done
+	# Tree Borrows avoids the false positives of the older Stacked Borrows
+	# model; disable-isolation lets env/fs-touching tests run under miri.
+	#
+	# Default to the crate(s) with pure-Rust unsafe (miri cannot run FFI/syscalls).
+	# Extra args widen the scope, e.g. `./scripts/check.sh miri vtcode-skills`.
+	# Use one `-p` per crate: `cargo test -p a b` treats `b` as a test-name filter.
+	local -a crates=("$@")
+	if [ "${#crates[@]}" -eq 0 ]; then
+		crates=("vtcode-commons")
+	fi
+	local -a pkg_args=()
+	local c
+	for c in "${crates[@]}"; do
+		pkg_args+=(-p "$c")
+	done
 
-    if MIRIFLAGS="-Zmiri-tree-borrows -Zmiri-disable-isolation" cargo miri test --locked "${pkg_args[@]}"; then
-        print_success "Miri found no Undefined Behavior (Tree Borrows)!"
-        return 0
-    else
-        print_error "Miri detected issues! Check output for Tree Borrows/aliasing violations."
-        return 1
-    fi
+	if MIRIFLAGS="-Zmiri-tree-borrows -Zmiri-disable-isolation" cargo miri test --locked "${pkg_args[@]}"; then
+		print_success "Miri found no Undefined Behavior (Tree Borrows)!"
+		return 0
+	else
+		print_error "Miri detected issues! Check output for Tree Borrows/aliasing violations."
+		return 1
+	fi
 }
 
 # Main function
 main() {
-    local failed_checks=0
+	local failed_checks=0
 
-    echo ""
-    echo "Starting comprehensive code quality checks..."
-    echo ""
+	echo ""
+	echo "Starting comprehensive code quality checks..."
+	echo ""
 
-    # Check prerequisites
-    check_rustfmt || ((failed_checks++))
-    check_clippy || ((failed_checks++))
+	# Check prerequisites
+	check_rustfmt || ((failed_checks++))
+	check_clippy || ((failed_checks++))
 
-    if [ $failed_checks -gt 0 ]; then
-        print_error "Prerequisites not met. Exiting."
-        exit 1
-    fi
+	if [ $failed_checks -gt 0 ]; then
+		print_error "Prerequisites not met. Exiting."
+		exit 1
+	fi
 
-    echo ""
-    echo "Running checks..."
-    echo ""
+	echo ""
+	echo "Running checks..."
+	echo ""
 
-    # Run all checks
-    run_rustfmt || ((failed_checks++))
-    run_shell_scripts_lint || ((failed_checks++))
-    run_workflow_security_lint || ((failed_checks++))
-    run_release_contract_tests || ((failed_checks++))
-    run_structured_logging_lint || ((failed_checks++))
-    run_zen_governance || ((failed_checks++))
-    run_repo_governance_gates || ((failed_checks++))
-    run_rust_length_gate || ((failed_checks++))
-    run_markdown_lint_gate || ((failed_checks++))
-    run_unsafe_docs_gate || ((failed_checks++))
-    run_cargo_deny || ((failed_checks++))
-    run_cargo_vet || ((failed_checks++))
-    run_agent_legibility_checks || ((failed_checks++))
-    run_clippy || ((failed_checks++))
-    run_headless_check || ((failed_checks++))
-    run_build || ((failed_checks++))
-    run_tests || ((failed_checks++))
-    run_harness_regression_tests || ((failed_checks++))
-    run_docs || ((failed_checks++))
+	# Run all checks
+	run_rustfmt || ((failed_checks++))
+	run_shell_scripts_lint || ((failed_checks++))
+	run_workflow_security_lint || ((failed_checks++))
+	run_release_contract_tests || ((failed_checks++))
+	run_structured_logging_lint || ((failed_checks++))
+	run_zen_governance || ((failed_checks++))
+	run_repo_governance_gates || ((failed_checks++))
+	run_rust_length_gate || ((failed_checks++))
+	run_markdown_lint_gate || ((failed_checks++))
+	run_unsafe_docs_gate || ((failed_checks++))
+	run_cargo_deny || ((failed_checks++))
+	run_cargo_vet || ((failed_checks++))
+	run_agent_legibility_checks || ((failed_checks++))
+	run_clippy || ((failed_checks++))
+	run_headless_check || ((failed_checks++))
+	run_build || ((failed_checks++))
+	run_tests || ((failed_checks++))
+	run_harness_regression_tests || ((failed_checks++))
+	run_docs || ((failed_checks++))
 
-    echo ""
-    echo "========================================"
-    print_timing
+	echo ""
+	echo "========================================"
+	print_timing
 
-    if [ $failed_checks -eq 0 ]; then
-        print_success "All checks passed! Your code is ready for release/merge."
-        echo ""
-        echo "Tips:"
-        echo "  • Run 'cargo fmt --all' to auto-format your code"
-        echo "  • Run 'cargo clippy' to see clippy suggestions"
-        echo "  • Run 'cargo doc --open' to view documentation"
-        echo ""
-        exit 0
-    else
-        print_error "$failed_checks check(s) failed. Please fix the issues above."
-        echo ""
-        echo "Quick fixes:"
-        echo "  • Format code: cargo fmt --all"
-        echo "  • Fix clippy: cargo clippy --fix"
-        echo "  • Run again: ./scripts/check.sh"
-        echo ""
-        exit 1
-    fi
+	if [ $failed_checks -eq 0 ]; then
+		print_success "All checks passed! Your code is ready for release/merge."
+		echo ""
+		echo "Tips:"
+		echo "  • Run 'cargo fmt --all' to auto-format your code"
+		echo "  • Run 'cargo clippy' to see clippy suggestions"
+		echo "  • Run 'cargo doc --open' to view documentation"
+		echo ""
+		exit 0
+	else
+		print_error "$failed_checks check(s) failed. Please fix the issues above."
+		echo ""
+		echo "Quick fixes:"
+		echo "  • Format code: cargo fmt --all"
+		echo "  • Fix clippy: cargo clippy --fix"
+		echo "  • Run again: ./scripts/check.sh"
+		echo ""
+		exit 1
+	fi
 }
 
 # Parse command line arguments
 case "${1:-}" in
-    "fmt"|"format")
-        check_rustfmt && run_rustfmt
-        ;;
-    "clippy"|"lint")
-        check_clippy && run_clippy
-        ;;
-    "headless")
-        check_clippy && run_headless_check
-        ;;
-    "test")
-        run_tests
-        ;;
-    "harness")
-        run_harness_regression_tests
-        ;;
-    "build")
-        run_build
-        ;;
-    "docs"|"doc")
-        run_docs
-        ;;
-    "help"|"-h"|"--help")
-        echo "VT Code Code Quality Check Script"
-        echo ""
-        echo "Usage: $0 [COMMAND]"
-        echo ""
-        echo "Commands:"
-        echo "  fmt     - Check code formatting with rustfmt"
-        echo "  clippy  - Run clippy lints"
-        echo "  headless - Verify headless vtcode-core compiles (vtcode-acp contract)"
-        echo "  test    - Run tests"
-        echo "  harness - Run focused PTY/TUI harness regression tests"
-        echo "  build   - Build the project"
-        echo "  docs    - Generate documentation and run doctests"
-        echo "  legibility - Run agent legibility hotspot checks"
-        echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
-        echo "  contracts - Run release-artifact contract tests"
-        echo "  zen     - Run Zen governance checks (unwrap enforced, hygiene warn)"
-        echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
-        echo "  rust-length - Gate tiered Rust file lengths: src 800, tests 1000 (enforce)"
-        echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
-        echo "  deny    - Audit dependencies (cargo-deny advisories/licenses/bans/sources + cargo-vet audit provenance)"
-        echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
-        echo "  help    - Show this help message"
-        echo ""
-        echo "If no command is specified, runs all checks."
-        ;;
-    "zen")
-        run_zen_governance
-        ;;
-    "file-length")
-        run_file_length_gate
-        ;;
-    "rust-length")
-        run_rust_length_gate
-        ;;
-    "unsafe-docs")
-        run_unsafe_docs_gate
-        ;;
-    "deny")
-        deny_failed=0
-        run_cargo_deny required || deny_failed=1
-        run_cargo_vet required || deny_failed=1
-        exit "$deny_failed"
-        ;;
-    "legibility")
-        run_agent_legibility_checks
-        ;;
-    "workflow-security")
-        run_workflow_security_lint
-        ;;
-    "contracts")
-        run_release_contract_tests
-        ;;
-    "miri")
-        run_miri "${@:2}"
-        ;;
-    *)
-        main
-        ;;
+"fmt" | "format")
+	check_rustfmt && run_rustfmt
+	;;
+"clippy" | "lint")
+	check_clippy && run_clippy
+	;;
+"headless")
+	check_clippy && run_headless_check
+	;;
+"test")
+	run_tests
+	;;
+"harness")
+	run_harness_regression_tests
+	;;
+"build")
+	run_build
+	;;
+"docs" | "doc")
+	run_docs
+	;;
+"help" | "-h" | "--help")
+	echo "VT Code Code Quality Check Script"
+	echo ""
+	echo "Usage: $0 [COMMAND]"
+	echo ""
+	echo "Commands:"
+	echo "  fmt     - Check code formatting with rustfmt"
+	echo "  clippy  - Run clippy lints"
+	echo "  headless - Verify headless vtcode-core compiles (vtcode-acp contract)"
+	echo "  test    - Run tests"
+	echo "  harness - Run focused PTY/TUI harness regression tests"
+	echo "  build   - Build the project"
+	echo "  docs    - Generate documentation and run doctests"
+	echo "  legibility - Run agent legibility hotspot checks"
+	echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
+	echo "  contracts - Run release-artifact contract tests"
+	echo "  zen     - Run Zen governance checks (unwrap enforced, hygiene warn)"
+	echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
+	echo "  rust-length - Gate tiered Rust file lengths: src 800, tests 1000 (enforce)"
+	echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
+	echo "  deny    - Audit dependencies (cargo-deny advisories/licenses/bans/sources + cargo-vet audit provenance)"
+	echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
+	echo "  help    - Show this help message"
+	echo ""
+	echo "If no command is specified, runs all checks."
+	;;
+"zen")
+	run_zen_governance
+	;;
+"file-length")
+	run_file_length_gate
+	;;
+"rust-length")
+	run_rust_length_gate
+	;;
+"unsafe-docs")
+	run_unsafe_docs_gate
+	;;
+"deny")
+	deny_failed=0
+	run_cargo_deny required || deny_failed=1
+	run_cargo_vet required || deny_failed=1
+	exit "$deny_failed"
+	;;
+"legibility")
+	run_agent_legibility_checks
+	;;
+"workflow-security")
+	run_workflow_security_lint
+	;;
+"contracts")
+	run_release_contract_tests
+	;;
+"miri")
+	run_miri "${@:2}"
+	;;
+*)
+	main
+	;;
 esac

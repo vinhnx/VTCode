@@ -863,5 +863,121 @@ async fn primary_agent_hooks_dispatch_after_global_hooks() {
     assert_eq!(order, "global\nprimary\n");
 }
 
+/// Poll (bounded) for `pid` to disappear. SIGKILL delivery races teardown under
+/// parallel-suite load, so death assertions must poll rather than single-shot.
+#[cfg(unix)]
+async fn pid_exited(pid: i32) -> bool {
+    for _ in 0..100 {
+        if nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_err() {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    false
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn session_end_timeout_kills_hook_process_group() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+    let group_file = workspace.join("hook_group");
+    let grandchild_file = workspace.join("grandchild_pid");
+    // The hook backgrounds a long sleep (the grandchild), records its pid and
+    // the hook shell's own pid/pgid, then waits so the per-command timeout fires.
+    let command = format!(
+        "sleep 117 & echo $! > '{}'; pgid=$(ps -o pgid= -p $$ | tr -d ' '); echo \"$$ $pgid\" > '{}'; wait",
+        grandchild_file.display(),
+        group_file.display()
+    );
+    let hooks_config = LifecycleHooksConfig {
+        session_end: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command,
+                timeout_seconds: Some(2),
+            }],
+        }],
+        ..Default::default()
+    };
+    let config = HooksConfig { lifecycle: hooks_config };
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("hook engine");
+
+    // Bounded: without group cleanup, the orphaned grandchild holds the output
+    // pipes open and the drain below the per-command timeout never completes.
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        engine.run_session_end("turn-1", SessionEndReason::Completed),
+    )
+    .await
+    .expect("session-end run must finish despite the hung hook");
+    outcome.expect("run_session_end failed");
+
+    // Setup proof: the hook ran in its own process group.
+    let group = std::fs::read_to_string(&group_file).expect("hook must record its pid/pgid");
+    let mut parts = group.split_whitespace();
+    let pid: i32 = parts.next().expect("pid").parse().expect("pid int");
+    let pgid: i32 = parts.next().expect("pgid").parse().expect("pgid int");
+    assert_eq!(pgid, pid, "hook must run in its own process group");
+
+    // Kill proof: the grandchild is gone.
+    let grandchild: i32 = std::fs::read_to_string(&grandchild_file)
+        .expect("hook must record grandchild pid")
+        .trim()
+        .parse()
+        .expect("grandchild pid int");
+    assert!(pid_exited(grandchild).await, "timed-out hook must not leave its grandchild running");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn session_end_abort_kills_hook_process_group() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+    let grandchild_file = workspace.join("grandchild_pid");
+    let command = format!("sleep 118 & echo $! > '{}'; wait", grandchild_file.display());
+    let hooks_config = LifecycleHooksConfig {
+        session_end: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command,
+                timeout_seconds: Some(60),
+            }],
+        }],
+        ..Default::default()
+    };
+    let config = HooksConfig { lifecycle: hooks_config };
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("hook engine");
+
+    let handle = tokio::spawn(async move { engine.run_session_end("turn-1", SessionEndReason::Completed).await });
+    // Wait for the hook to spawn its grandchild before aborting, so the abort
+    // provably races a live descendant rather than a not-yet-spawned hook.
+    let mut spawned = false;
+    for _ in 0..100 {
+        if grandchild_file.exists() {
+            spawned = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(spawned, "hook must spawn its grandchild before abort");
+    handle.abort();
+    let join_result = handle.await;
+    assert!(join_result.is_err() && join_result.unwrap_err().is_cancelled(), "run must end via abort");
+
+    let grandchild: i32 = std::fs::read_to_string(&grandchild_file)
+        .expect("hook must record grandchild pid")
+        .trim()
+        .parse()
+        .expect("grandchild pid int");
+    assert!(pid_exited(grandchild).await, "aborted hook must not leave its grandchild running");
+}
+
 mod hook_tooling;
 mod workspace_hook_approval;
