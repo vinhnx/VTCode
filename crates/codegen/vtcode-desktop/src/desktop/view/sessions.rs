@@ -764,7 +764,7 @@ impl DesktopView {
         self.restored_activity_history_incomplete = false;
         self.restored_timeline = Arc::new(Vec::new());
         self.tracker_snapshot = None;
-        self.goal_snapshot = None;
+        self.set_goal_snapshot(None);
         self.goal_expanded = false;
         self.goal_notified = None;
         self.reset_hidden_inspector_tab_if_stranded();

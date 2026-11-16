@@ -656,7 +656,7 @@ impl DesktopView {
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
                 self.tracker_snapshot = None;
-                self.goal_snapshot = None;
+                self.set_goal_snapshot(None);
                 self.goal_expanded = false;
                 self.goal_notified = None;
                 self.reset_hidden_inspector_tab_if_stranded();
@@ -715,7 +715,7 @@ impl DesktopView {
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
                 self.tracker_snapshot = None;
-                self.goal_snapshot = None;
+                self.set_goal_snapshot(None);
                 self.goal_expanded = false;
                 self.goal_notified = None;
                 self.reset_hidden_inspector_tab_if_stranded();

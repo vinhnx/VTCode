@@ -12,6 +12,46 @@ use vtcode_exec_events::goal::{GoalSnapshot, GoalState};
 /// Max objective chars shown before the bar truncates with `…`.
 const GOAL_OBJECTIVE_PREVIEW_CHARS: usize = 60;
 
+/// Goal timer cadence: the bar re-renders each second while Active.
+pub(super) const GOAL_TICK_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Live elapsed label for the bar and Utilities pane: wall-clock past the
+/// snapshot while Active (snapshots only arrive on turn boundaries and
+/// mutations), frozen otherwise. A missing arrival stamp falls back to the
+/// snapshot so direct assignments never panic.
+pub(super) fn goal_live_elapsed_label(snapshot: &GoalSnapshot, arrived_at: Option<Instant>) -> String {
+    let elapsed_ms = match (snapshot.state, arrived_at) {
+        (GoalState::Active, Some(at)) => snapshot
+            .elapsed_ms
+            .saturating_add(u64::try_from(at.elapsed().as_millis()).unwrap_or(u64::MAX)),
+        _ => snapshot.elapsed_ms,
+    };
+    GoalSnapshot::elapsed_label_for(elapsed_ms)
+}
+
+/// Distinctive goal identity mark: a bullseye tinted by goal state, so goal
+/// surfaces scan apart from every other UI. The state label text always
+/// names the state; the tint is supplemental, never the sole meaning.
+pub(super) fn goal_state_icon(
+    id: impl Into<gpui_kit::ElementId>,
+    state: GoalState,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    let tint = match state {
+        GoalState::Active => colors.primary,
+        GoalState::Paused | GoalState::Unknown => colors.muted_foreground,
+        GoalState::Complete => colors.success,
+        GoalState::Blocked => colors.danger,
+        GoalState::BudgetLimited => colors.warning,
+    };
+    div()
+        .id(id)
+        .test_support()
+        .flex_shrink_0()
+        .child(Icon::new(IconName::Target).size_4().text_color(tint))
+        .into_any_element()
+}
+
 /// Localized state label shared by the goal bar, transition notices, and
 /// the Utilities pane.
 pub(super) fn goal_state_label(state: GoalState) -> String {
@@ -25,10 +65,46 @@ pub(super) fn goal_state_label(state: GoalState) -> String {
 }
 
 impl DesktopView {
+    /// Start the always-on 1s ticker that re-renders only while a goal is
+    /// Active, so the bar ticks between snapshots without any per-event task
+    /// lifecycle. Idempotent, mirroring the event drain starter.
+    pub(super) fn start_goal_ticker(&mut self, cx: &mut Context<Self>) {
+        if self.goal_tick_task.is_some() {
+            return;
+        }
+        self.goal_tick_task = Some(cx.spawn(async move |weak_view, cx| {
+            loop {
+                let alive = weak_view
+                    .update(cx, |view, cx| {
+                        if view
+                            .goal_snapshot
+                            .as_ref()
+                            .is_some_and(|snapshot| snapshot.state == GoalState::Active)
+                        {
+                            cx.notify();
+                        }
+                    })
+                    .is_ok();
+                if !alive {
+                    break;
+                }
+                cx.background_executor().timer(GOAL_TICK_INTERVAL).await;
+            }
+        }));
+    }
+
+    /// Store a goal snapshot and stamp its arrival for the live timer.
+    /// Sole production writer so the stamp can never drift; tests assign the
+    /// field directly to cover the unstamped fallback.
+    pub(super) fn set_goal_snapshot(&mut self, snapshot: Option<GoalSnapshot>) {
+        self.goal_snapshot_at = snapshot.as_ref().map(|_| Instant::now());
+        self.goal_snapshot = snapshot;
+    }
+
     /// Seed the goal bar from the newest `goal.updated` checkpoint in the
     /// restored timeline, mirroring the tracker snapshot restore.
     pub(super) fn restore_goal_snapshot(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
-        self.goal_snapshot = events
+        let snapshot = events
             .iter()
             .rev()
             .find_map(|event| match event.event() {
@@ -36,6 +112,7 @@ impl DesktopView {
                 _ => None,
             })
             .flatten();
+        self.set_goal_snapshot(snapshot);
         self.goal_notified = self.goal_snapshot.as_ref().map(|snapshot| snapshot.state);
     }
 
@@ -87,7 +164,7 @@ impl DesktopView {
         if self.selected_session_id.as_deref() != Some(response.session_id.as_str()) {
             return;
         }
-        self.goal_snapshot = response.goal;
+        self.set_goal_snapshot(response.goal);
         if let Some(prompt) = response.submit {
             let draft = SubmissionDraft {
                 prompt,
@@ -134,6 +211,9 @@ impl DesktopView {
         } else {
             snapshot.short_objective(GOAL_OBJECTIVE_PREVIEW_CHARS)
         };
+        let elapsed = goal_live_elapsed_label(snapshot, self.goal_snapshot_at);
+        // The accessible summary stays on the snapshot cadence: a ticking
+        // live region would announce every second while Active.
         let summary = format!("{label}: {objective}, {}", snapshot.elapsed_label());
         let mut row = div()
             .id("goal-bar")
@@ -150,6 +230,7 @@ impl DesktopView {
             .flex()
             .items_center()
             .gap_2()
+            .child(goal_state_icon("goal-state-icon", snapshot.state, &colors))
             .child(div().text_sm().text_color(colors.foreground).child(label))
             .child(
                 div()
@@ -159,12 +240,7 @@ impl DesktopView {
                     .text_color(colors.muted_foreground)
                     .child(objective),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(colors.muted_foreground)
-                    .child(snapshot.elapsed_label()),
-            );
+            .child(div().text_sm().text_color(colors.muted_foreground).child(elapsed));
         row = row.child(
             div().flex().items_center().gap_1().child(
                 desktop_button("goal-clear")

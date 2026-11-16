@@ -1,4 +1,4 @@
-use super::goal::goal_state_label;
+use super::goal::{goal_live_elapsed_label, goal_state_icon, goal_state_label};
 use super::*;
 
 impl DesktopView {
@@ -88,9 +88,16 @@ impl DesktopView {
                             .test_support()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .text_color(colors.foreground)
-                                    .child(goal_state_label(snapshot.state)),
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(goal_state_icon("utilities-goal-state-icon", snapshot.state, &colors))
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(colors.foreground)
+                                            .child(goal_state_label(snapshot.state)),
+                                    ),
                             )
                             .child(
                                 div()
@@ -100,7 +107,7 @@ impl DesktopView {
                             )
                             .child(div().text_xs().text_color(colors.muted_foreground).child(format!(
                                 "{} · {}",
-                                snapshot.elapsed_label(),
+                                goal_live_elapsed_label(snapshot, self.goal_snapshot_at),
                                 snapshot.tokens_label()
                             )))
                             .into_any_element(),

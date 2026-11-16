@@ -607,6 +607,12 @@ struct DesktopView {
     /// Latest `goal.updated` snapshot. Feeds the composer goal bar; reset on
     /// session switch and disconnect so another conversation cannot inherit it.
     goal_snapshot: Option<vtcode_exec_events::goal::GoalSnapshot>,
+    /// When the current snapshot arrived, so the bar ticks live past it while
+    /// Active. Always set/cleared together with `goal_snapshot`.
+    goal_snapshot_at: Option<Instant>,
+    /// Retained 1s goal-timer loop. Dropping a GPUI `Task` cancels it, so a
+    /// missing retention would freeze the bar exactly like the snapshots do.
+    goal_tick_task: Option<Task<()>>,
     /// Whether the goal bar shows the full objective instead of truncating it.
     goal_expanded: bool,
     /// Last goal state surfaced as a transcript notice; dedupes repeated snapshots.

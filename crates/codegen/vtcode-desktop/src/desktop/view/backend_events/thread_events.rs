@@ -274,7 +274,7 @@ impl DesktopView {
                 self.tracker_snapshot = Some(snapshot.as_ref().clone());
             }
             ThreadEvent::GoalUpdated(event) => {
-                self.goal_snapshot = event.goal.clone();
+                self.set_goal_snapshot(event.goal.clone());
                 self.note_goal_transition(event.goal.as_ref());
             }
             _ => {}

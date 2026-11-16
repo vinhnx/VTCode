@@ -1,4 +1,6 @@
 use super::*;
+use crate::desktop::view::goal::goal_live_elapsed_label;
+use std::time::{Duration, Instant};
 use vtcode_desktop_protocol::ThreadEventNotification;
 use vtcode_exec_events::{
     ThreadEvent, VersionedThreadEvent,
@@ -264,12 +266,17 @@ fn goal_utilities_section_renders_with_and_without_snapshot(cx: &mut TestAppCont
         });
         window.render_frame(cx);
         assert!(window.try_find("utilities-goal").is_some());
+        assert!(
+            window.try_find("utilities-goal-state-icon").is_some(),
+            "goal identity mark must render with the snapshot"
+        );
 
         view.update(cx, |view, _| {
             view.goal_snapshot = None;
         });
         window.render_frame(cx);
         assert!(window.try_find("utilities-goal").is_some(), "empty state still renders");
+        assert!(window.try_find("utilities-goal-state-icon").is_none(), "no snapshot means no mark");
     })
     .unwrap();
 }
@@ -366,6 +373,7 @@ fn goal_bar_renders_with_snapshot_and_hides_without(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         assert!(window.try_find("goal-bar").is_some(), "bar must render with a snapshot");
+        assert!(window.try_find("goal-state-icon").is_some(), "active bar carries the mark");
         assert!(window.try_find("goal-pause").is_some(), "active goal offers pause");
         assert!(window.try_find("goal-resume").is_none(), "active goal hides resume");
 
@@ -373,6 +381,7 @@ fn goal_bar_renders_with_snapshot_and_hides_without(cx: &mut TestAppContext) {
             view.goal_snapshot = Some(snapshot("Ship the release", GoalState::Paused));
         });
         window.render_frame(cx);
+        assert!(window.try_find("goal-state-icon").is_some(), "paused bar keeps the mark");
         assert!(window.try_find("goal-resume").is_some(), "paused goal offers resume");
         assert!(window.try_find("goal-pause").is_none(), "paused goal hides pause");
 
@@ -381,6 +390,72 @@ fn goal_bar_renders_with_snapshot_and_hides_without(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         assert!(window.try_find("goal-bar").is_none(), "bar must hide without a snapshot");
+        assert!(window.try_find("goal-state-icon").is_none(), "no bar means no mark");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn goal_ticker_task_is_retained_once_started(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        assert!(view.goal_tick_task.is_none());
+        view.start_goal_ticker(cx);
+        assert!(view.goal_tick_task.is_some(), "dropping the task would freeze the bar");
+        view.start_goal_ticker(cx);
+        assert!(view.goal_tick_task.is_some(), "restart must stay idempotent");
+    });
+}
+
+#[gpui_kit::test]
+fn goal_snapshot_setter_stamps_arrival_and_clears_it(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        assert!(view.goal_snapshot_at.is_none());
+        view.set_goal_snapshot(Some(snapshot("Ship it", GoalState::Active)));
+        assert!(view.goal_snapshot_at.is_some(), "set must stamp arrival for the live timer");
+        view.set_goal_snapshot(None);
+        assert!(view.goal_snapshot_at.is_none(), "clear must drop the stamp");
+    });
+}
+
+#[test]
+fn goal_live_label_ticks_while_active_and_freezes_otherwise() {
+    let active = GoalSnapshot {
+        elapsed_ms: 11_000,
+        ..snapshot("Ship it", GoalState::Active)
+    };
+    let minute_ago = Instant::now().checked_sub(Duration::from_secs(61)).unwrap();
+    assert_eq!(
+        goal_live_elapsed_label(&active, Some(minute_ago)),
+        "1m 12s",
+        "active label must add wall-clock since arrival"
+    );
+    let boundary = GoalSnapshot {
+        elapsed_ms: 59_900,
+        ..snapshot("Ship it", GoalState::Active)
+    };
+    let half_second_ago = Instant::now().checked_sub(Duration::from_millis(500)).unwrap();
+    assert_eq!(
+        goal_live_elapsed_label(&boundary, Some(half_second_ago)),
+        "1m 0s",
+        "active label must cross the minute boundary without a new snapshot"
+    );
+    assert_eq!(goal_live_elapsed_label(&active, None), "11s", "missing stamp must fall back to the snapshot");
+
+    let hour_ago = Instant::now().checked_sub(Duration::from_secs(3600)).unwrap();
+    for state in [
+        GoalState::Paused,
+        GoalState::Unknown,
+        GoalState::Complete,
+        GoalState::Blocked,
+        GoalState::BudgetLimited,
+    ] {
+        let settled = GoalSnapshot { elapsed_ms: 11_000, ..snapshot("Ship it", state) };
+        assert_eq!(
+            goal_live_elapsed_label(&settled, Some(hour_ago)),
+            "11s",
+            "{state:?} must freeze even an hour after arrival"
+        );
+    }
 }

@@ -78,7 +78,14 @@ impl GoalSnapshot {
     /// Compact elapsed label (`17m 11s`) shared by the CLI and desktop bar.
     #[must_use]
     pub fn elapsed_label(&self) -> String {
-        let secs = self.elapsed_ms / 1000;
+        Self::elapsed_label_for(self.elapsed_ms)
+    }
+
+    /// Label for an explicit millisecond count, so live-ticking surfaces can
+    /// render wall-clock time past the last snapshot without cloning one.
+    #[must_use]
+    pub fn elapsed_label_for(elapsed_ms: u64) -> String {
+        let secs = elapsed_ms / 1000;
         if secs < 60 {
             return format!("{secs}s");
         }
@@ -151,6 +158,14 @@ mod tests {
         let state: GoalState = serde_json::from_str("\"quarantined\"").unwrap();
         assert_eq!(state, GoalState::Unknown);
         assert_eq!(GoalState::Paused.as_str(), "paused");
+    }
+
+    #[test]
+    fn elapsed_label_for_matches_the_method() {
+        for ms in [0, 999, 1000, 59_000, 60_000, 1_031_000, 3_600_000, 90_000_000] {
+            let snapshot = GoalSnapshot { elapsed_ms: ms, ..snapshot() };
+            assert_eq!(GoalSnapshot::elapsed_label_for(ms), snapshot.elapsed_label(), "{ms}ms");
+        }
     }
 
     #[test]

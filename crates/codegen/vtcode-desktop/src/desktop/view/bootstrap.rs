@@ -213,6 +213,7 @@ pub(super) fn open_or_activate_main_window(
         }
     }
     view.update(cx, |view, cx| view.start_event_drain(cx));
+    view.update(cx, |view, cx| view.start_goal_ticker(cx));
     cx.activate(true);
     Ok(window)
 }
@@ -502,6 +503,8 @@ impl DesktopView {
             background_activity_count: 0,
             tracker_snapshot: None,
             goal_snapshot: None,
+            goal_snapshot_at: None,
+            goal_tick_task: None,
             goal_expanded: false,
             goal_notified: None,
             error: None,
