@@ -446,6 +446,58 @@ fn completed_turn_work_log_expands_without_hiding_final(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn completed_turn_without_final_groups_around_newest_message(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::{PlanDeltaEvent, ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        for (id, role, turn) in [
+            ("work", "tool", "plan-turn"),
+            ("canonical-plan", "assistant", "plan-turn"),
+            ("other-work", "tool", "other"),
+            ("other-plan", "assistant", "other"),
+            ("later-commentary", "assistant", "other"),
+        ] {
+            view.transcript
+                .push(TranscriptItem::new(id.into(), role.into(), "Title".into(), "content".into()));
+            view.transcript.set_item_turn(id, turn);
+        }
+        for (turn, canonical) in [("plan-turn", "canonical"), ("other", "other")] {
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some(turn.into()),
+                event: VersionedThreadEvent::new(ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+                    thread_id: "session".into(),
+                    turn_id: canonical.into(),
+                    item_id: format!("{canonical}-plan"),
+                    delta: " plan".into(),
+                    recovery: None,
+                }))),
+            });
+        }
+        for turn in ["plan-turn", "other"] {
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some(turn.into()),
+                event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
+                    completed_at: None,
+                    usage: Usage::default(),
+                    in_progress_exec_sessions: Vec::new(),
+                })),
+            });
+        }
+        assert!(view.transcript.get(0).unwrap().turn_grouped);
+        assert!(!view.transcript.get(1).unwrap().turn_grouped);
+        // The unidentified turn collapses around its newest message: earlier
+        // work groups, the later commentary stays visible.
+        assert!(view.transcript.get(2).unwrap().turn_grouped);
+        assert!(view.transcript.get(3).unwrap().turn_grouped);
+        assert!(!view.transcript.get(4).unwrap().turn_grouped);
+    });
+}
+
+#[gpui_kit::test]
 fn completed_turn_shows_time_only_on_identified_message(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
@@ -569,6 +621,73 @@ fn assistant_bodies_share_the_header_title_spine(cx: &mut TestAppContext) {
         assert_eq!(first_body_x, header_x, "first assistant body shares the header spine");
         assert_eq!(second_body_x, header_x, "second assistant body shares the header spine");
         assert_eq!(single_x, header_x, "single tool titles share the header spine");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn completed_turn_without_identified_final_still_collapses(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+    let completed = |turn: &str, final_id: Option<&str>| ThreadEventNotification {
+        session_id: "session".into(),
+        turn_id: Some(turn.into()),
+        event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: final_id.map(|id| Box::new(id.to_owned())),
+            completed_at: None,
+            usage: Usage::default(),
+            in_progress_exec_sessions: Vec::new(),
+        })),
+    };
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            // Asymmetric turns: the earlier turn exits without an identified
+            // final response (plan-approval gate, exit path) while the later
+            // turn reports one. Both turns' work must collapse.
+            for (id, role, text, turn) in [
+                ("ask-a", "user", "first", "turn-a"),
+                ("progress-a", "assistant", "Working", "turn-a"),
+                ("work-a", "tool", "Read Cargo.toml", "turn-a"),
+                ("final-a", "assistant", "Done first", "turn-a"),
+                ("ask-b", "user", "second", "turn-b"),
+                ("progress-b", "assistant", "Working", "turn-b"),
+                ("work-b", "tool", "Run tests", "turn-b"),
+                ("final-b", "assistant", "Done second", "turn-b"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), role.into(), "Title".into(), text.into()));
+                view.transcript.set_item_turn(id, turn);
+            }
+            view.handle_thread_event(completed("turn-a", None));
+            view.handle_thread_event(completed("turn-b", Some("final-b")));
+        });
+        window.render_frame(cx);
+        for turn in ["turn-a", "turn-b"] {
+            assert_eq!(
+                window.find(format!("turn-work-{turn}")).label(),
+                Some("Expand Activity"),
+                "{turn} earns a collapsed work disclosure",
+            );
+        }
+        for id in ["progress-a", "progress-b"] {
+            assert!(
+                window.try_find(format!("message-body-{id}")).is_none(),
+                "{id} collapses into its turn group",
+            );
+        }
+        for id in ["work-a", "work-b"] {
+            assert!(
+                window.try_find(format!("tool-title-{id}")).is_none(),
+                "{id} collapses into its turn group",
+            );
+        }
+        for id in ["final-a", "final-b"] {
+            assert!(
+                window.try_find(format!("message-body-{id}")).is_some(),
+                "{id} stays visible as its turn survivor",
+            );
+        }
     })
     .unwrap();
 }

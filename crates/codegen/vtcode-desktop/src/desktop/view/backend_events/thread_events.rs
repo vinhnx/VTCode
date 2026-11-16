@@ -102,22 +102,24 @@ impl DesktopView {
                 self.status = rust_i18n::t!("app.service.running").to_string();
             }
             ThreadEvent::TurnCompleted(event) => {
-                if let (Some(turn_id), Some(final_id)) =
-                    (notification.turn_id.as_deref(), event.final_response_item_id.as_deref())
-                {
+                let resolved_final = notification.turn_id.as_deref().and_then(|turn_id| {
+                    let preferred = event.final_response_item_id.as_deref().map(String::as_str);
+                    self.transcript.resolve_turn_final(turn_id, preferred)
+                });
+                if let (Some(turn_id), Some(final_id)) = (notification.turn_id.as_deref(), resolved_final.as_deref()) {
                     self.transcript.complete_turn_group(turn_id, final_id);
                 }
                 let elapsed = self
                     .active_turn_started_at
                     .take()
                     .map(|started| humanize_elapsed(started.elapsed().as_secs().cast_signed()));
-                if let (Some(turn_id), Some(id), Some(timestamp)) =
-                    (notification.turn_id.as_deref(), &event.final_response_item_id, &event.completed_at)
+                if let (Some(turn_id), Some(final_id), Some(timestamp)) =
+                    (notification.turn_id.as_deref(), resolved_final.as_deref(), &event.completed_at)
                     && let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(timestamp)
                 {
                     let local_time = timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string();
                     self.transcript
-                        .set_completion_time(turn_id, id, local_time.into(), elapsed.map(Into::into));
+                        .set_completion_time(turn_id, final_id, local_time.into(), elapsed.map(Into::into));
                 }
                 self.pending_submission = None;
                 self.pending_first_submission = false;
@@ -150,6 +152,7 @@ impl DesktopView {
                     if let Some(turn_id) = notification.turn_id.as_deref() {
                         self.transcript.set_item_turn(&delta.item_id, turn_id);
                     }
+                    self.transcript.set_item_canonical_turn(&delta.item_id, &delta.turn_id);
                 } else {
                     // Conflicting turn identity: the stale update is dropped.
                 }

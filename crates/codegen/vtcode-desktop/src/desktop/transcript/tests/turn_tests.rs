@@ -150,6 +150,41 @@ fn completed_turn_groups_matching_work_around_final() {
 }
 
 #[test]
+fn turn_final_prefers_reported_identity_then_newest_message() {
+    let mut transcript = Transcript::default();
+    for (id, role, turn) in [
+        (1, "user", "a"),
+        (2, "assistant", "a"),
+        (3, "tool", "a"),
+        (4, "assistant", "a"),
+        (5, "assistant", "b"),
+    ] {
+        transcript.push(item(id, role, "content"));
+        transcript.set_item_turn(&id.to_string(), turn);
+    }
+    assert_eq!(transcript.resolve_turn_final("a", Some("2")).as_deref(), Some("2"));
+    assert_eq!(transcript.resolve_turn_final("a", None).as_deref(), Some("4"));
+    assert_eq!(transcript.resolve_turn_final("a", Some("missing")).as_deref(), Some("4"));
+    assert_eq!(transcript.resolve_turn_final("a", Some("5")).as_deref(), Some("4"));
+    assert_eq!(transcript.resolve_turn_final("a", Some("1")).as_deref(), Some("4"));
+    assert_eq!(transcript.resolve_turn_final("a", Some("3")).as_deref(), Some("4"));
+    assert_eq!(transcript.resolve_turn_final("b", None).as_deref(), Some("5"));
+    assert_eq!(transcript.resolve_turn_final("b", Some("4")).as_deref(), Some("5"));
+}
+
+#[test]
+fn turn_final_without_assistant_row_resolves_to_nothing() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "user", "question"));
+    transcript.set_item_turn("1", "a");
+    transcript.push(item(2, "tool", "work"));
+    transcript.set_item_turn("2", "a");
+    assert_eq!(transcript.resolve_turn_final("a", None), None);
+    assert_eq!(transcript.resolve_turn_final("a", Some("2")), None);
+    assert_eq!(transcript.resolve_turn_final("missing-turn", None), None);
+}
+
+#[test]
 fn missing_or_foreign_final_identity_does_not_hide_work() {
     let mut transcript = Transcript::default();
     transcript.push(item(1, "tool", "work"));

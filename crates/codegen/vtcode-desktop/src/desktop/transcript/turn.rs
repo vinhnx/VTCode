@@ -242,6 +242,27 @@ impl Transcript {
                 .is_some_and(|row| row.id == id)
     }
 
+    /// Row that stays visible when a turn collapses: the reported final when
+    /// it names this turn's assistant row, else the turn's newest assistant
+    /// row. Turns that complete without an identified final response
+    /// (plan-approval exits, user exits) still collapse around their latest
+    /// message instead of staying expanded forever; turns with no assistant
+    /// row name no survivor and stay ungrouped.
+    pub(in crate::desktop) fn resolve_turn_final(&self, turn_id: &str, preferred_id: Option<&str>) -> Option<String> {
+        if let Some(row) = preferred_id
+            .and_then(|id| self.position_by_id(id))
+            .and_then(|index| self.items.get(index))
+            .filter(|row| row.is_assistant() && row.turn_id.as_deref() == Some(turn_id))
+        {
+            return Some(row.id.clone());
+        }
+        self.items
+            .iter()
+            .rev()
+            .find(|row| row.is_assistant() && row.turn_id.as_deref() == Some(turn_id))
+            .map(|row| row.id.clone())
+    }
+
     pub(in crate::desktop) fn complete_turn_group(&mut self, turn_id: &str, final_id: &str) {
         let Some(final_index) = self.position_by_id(final_id) else {
             return;
