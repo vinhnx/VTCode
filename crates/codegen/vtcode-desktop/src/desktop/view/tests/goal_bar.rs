@@ -282,6 +282,31 @@ fn goal_utilities_section_renders_with_and_without_snapshot(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn inspector_goal_pin_shows_on_every_tab_and_opens_utilities(cx: &mut TestAppContext) {
+    use crate::desktop::inspector::InspectorTab;
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_tab = InspectorTab::Tasks;
+            view.goal_snapshot = Some(snapshot("Ship it", GoalState::Active));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("inspector-goal-pin").is_some(), "pin shows above the Tasks rail");
+        assert!(window.try_find("inspector-goal-pin-icon").is_some(), "pin carries the state mark");
+
+        window.click("inspector-goal-pin", cx);
+        view.update(cx, |view, _| {
+            assert_eq!(view.inspector_tab, InspectorTab::Utilities, "pin reveals full status in Utilities");
+            view.goal_snapshot = None;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("inspector-goal-pin").is_none(), "no goal means no pin");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn goal_bar_buttons_drive_live_loop_across_frames(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);

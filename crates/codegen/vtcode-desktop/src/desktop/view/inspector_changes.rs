@@ -164,6 +164,7 @@ impl DesktopView {
     /// tier while every tab body shares [`inspector_tab_body`].
     pub(super) fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        let goal_pin = self.render_inspector_goal_pin(cx);
         let panel = div()
             .id("inspector-panel")
             .test_support()
@@ -175,6 +176,7 @@ impl DesktopView {
             .flex_col()
             .rounded_lg()
             .bg(colors.background)
+            .when_some(goal_pin, |panel, pin| panel.child(pin))
             .child(self.render_inspector_tab_bar(cx));
 
         let content = match self.inspector_tab {

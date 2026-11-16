@@ -1,15 +1,17 @@
-//! Composer goal bar: live `/goal` loop status above the draft input.
+//! Goal status surfaces: the composer bar above the draft input and the
+//! pinned strip above the inspector tab rail.
 //!
-//! The bar renders the latest `goal.updated` snapshot (service-pushed on
-//! every mutation and every active turn). Its buttons execute through the
+//! Both render the latest `goal.updated` snapshot (service-pushed on every
+//! mutation and every active turn). The bar's buttons execute through the
 //! quiet `goal/execute` RPC — never as turn text, which would wedge waiting
-//! for a terminal turn event that a non-turn command never emits.
+//! for a terminal turn event that a non-turn command never emits. The pin is
+//! navigation only: it reveals the full status in Utilities.
 
 use super::*;
 use serde_json::{Value, json};
 use vtcode_exec_events::goal::{GoalSnapshot, GoalState};
 
-/// Max objective chars shown before the bar truncates with `…`.
+/// Max objective chars shown before a goal surface truncates with `…`.
 const GOAL_OBJECTIVE_PREVIEW_CHARS: usize = 60;
 
 /// Goal timer cadence: the bar re-renders each second while Active.
@@ -294,5 +296,65 @@ impl DesktopView {
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_goal_expanded(cx))),
         );
         Some(row.into_any_element())
+    }
+
+    /// Pinned goal strip above the inspector tab rail, or `None` without a goal.
+    ///
+    /// Visible on every tab while a goal runs so the right panel never hides
+    /// the active loop behind tab discovery; a press reveals the full status
+    /// in Utilities. A plain navigation button — the composer bar owns the
+    /// live status region, so this strip never double-announces — and absent
+    /// without a snapshot, since Utilities already owns the empty state. The
+    /// accessible summary stays on the snapshot cadence like the bar; only
+    /// the visible elapsed ticks.
+    pub(super) fn render_inspector_goal_pin(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let snapshot = self.goal_snapshot.as_ref()?;
+        let colors = cx.theme().colors;
+        let label = goal_state_label(snapshot.state);
+        let objective = snapshot.short_objective(GOAL_OBJECTIVE_PREVIEW_CHARS);
+        let elapsed = goal_live_elapsed_label(snapshot, self.goal_snapshot_at);
+        let summary = format!("{label}: {objective}, {}", snapshot.elapsed_label());
+        Some(
+            div()
+                .px_3()
+                .pt_3()
+                .child(
+                    desktop_button("inspector-goal-pin")
+                        .ghost()
+                        .w_full()
+                        .justify_start()
+                        .accessibility_label(summary)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .min_w_0()
+                                .w_full()
+                                .child(goal_state_icon("inspector-goal-pin-icon", snapshot.state, &colors))
+                                .child(div().flex_shrink_0().text_sm().text_color(colors.foreground).child(label))
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .truncate()
+                                        .text_sm()
+                                        .text_color(colors.muted_foreground)
+                                        .child(objective),
+                                )
+                                .child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .text_sm()
+                                        .text_color(colors.muted_foreground)
+                                        .child(elapsed),
+                                ),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.set_inspector_tab(InspectorTab::Utilities, cx);
+                        })),
+                )
+                .into_any_element(),
+        )
     }
 }
