@@ -17,6 +17,18 @@ pub(crate) fn resolve_renderer_profile(
     config.mcp.ui.renderer_for_tool(tool_name)
 }
 
+fn render_first_error_plus_overflow(renderer: &mut AnsiRenderer, errors: &[Value]) -> Result<()> {
+    for err in errors.iter().take(1) {
+        if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
+            renderer.line(MessageStyle::ToolError, &shorten(msg, 120))?;
+        }
+    }
+    if errors.len() > 1 {
+        renderer.line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
+    }
+    Ok(())
+}
+
 pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(meta) = val.get("meta").and_then(|value| value.as_object())
         && let Some(query) = meta.get("query").and_then(|value| value.as_str())
@@ -33,14 +45,7 @@ pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -
     if let Some(errors) = val.get("errors").and_then(|value| value.as_array())
         && !errors.is_empty()
     {
-        for err in errors.iter().take(1) {
-            if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
-                renderer.line(MessageStyle::ToolError, &shorten(msg, 120))?;
-            }
-        }
-        if errors.len() > 1 {
-            renderer.line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
-        }
+        render_first_error_plus_overflow(renderer, errors)?;
     }
 
     Ok(())
@@ -63,14 +68,7 @@ pub(crate) fn render_sequential_output(renderer: &mut AnsiRenderer, val: &Value)
     if let Some(errors) = val.get("errors").and_then(|value| value.as_array())
         && !errors.is_empty()
     {
-        for err in errors.iter().take(1) {
-            if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
-                renderer.line(MessageStyle::ToolError, &shorten(msg, 120))?;
-            }
-        }
-        if errors.len() > 1 {
-            renderer.line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
-        }
+        render_first_error_plus_overflow(renderer, errors)?;
     }
 
     Ok(())
