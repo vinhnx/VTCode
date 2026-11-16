@@ -9,6 +9,7 @@ icon_assets!(
     ExtraIcons,
     [
         Activity,
+        ALargeSmall,
         AtSign,
         Clock,
         CopyX,
@@ -75,6 +76,7 @@ mod tests {
 
     const DESKTOP_ICONS: &[IconName] = &[
         IconName::Activity,
+        IconName::ALargeSmall,
         IconName::ArrowDown,
         IconName::ArrowLeft,
         IconName::ArrowRight,
