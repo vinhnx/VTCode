@@ -5,6 +5,85 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.182.5 - 2026-11-16
+
+### Highlights
+
+#### Bug Fixes
+
+- Preserve content cache across snapshot updates (be1f65c4)
+- Correct editor URLs, UTF-8 drains, and relative-path checks (053fa0e9)
+- Harden Seatbelt profiles, MCP derivation, and stdio wrapper (38266fed)
+- Emit canonical goal events for RPC mutations (94ddbac8)
+- Discard stale goal responses by session (2dfa5dde)
+- Localize bar, steer live turns, add notices and utilities status (0a1b6a37)
+- Bundle goal bar icons and cover with interaction test (a5aa151a)
+- Auto-continue, completion contract, and session-end settling (9ab5faab)
+- Address terminal palette probes by cell position (7f92d81f)
+- Drop legacy structured field-list line everywhere (3746c932)
+- Collapse every completed turn's work log (eb43a15e)
+- Force-cancel kills exec sessions directly with observe cleanup (5fc5d8e6)
+- Avoid extra allocation in name canonicalization; prove cache fast path (1420cdff)
+
+#### Documentation
+
+- Sync release metadata and tighten onboarding copy (bc00170f)
+- Regenerate config field reference (00d50d33)
+- Document the /goal loop (e8cf2089)
+- Add goal-loop architecture contract (127ea643)
+- Tighten overview, usage, and desktop wording (27b9a99e)
+- Rewrap long lines and tighten overview wording (400cde58)
+
+#### Features
+
+- Add crash-durability fsync primitives (04f60999)
+- Transactional crash-safe imports with synced recovery (dcb70fd1)
+- Per-server sandbox overrides narrowed from session policy (3a7eb207)
+- Add shared /goal slash grammar (6d51de0c)
+- Open GoalTracker runtime API with persistence (46a4a07a)
+- Add goal.updated contract event (b9a8ca26)
+- Add /goal command with runloop loop (e1d078b1)
+- Add goal/execute RPC on published tracker (282cd41c)
+- Add goal status bar with native /goal route (17f31689)
+- Model completion, budget UI, and TUI indicator (73a09ffa)
+- Live goal timer and state identity mark (47f111f1)
+- Simplify command callouts (5210f444)
+- Compact command headlines with full command in viewer (a9747dd3)
+- Per-change diff selection and edit filename links (f74e9f37)
+- Pin goal strip above inspector tab rail (6e5a9b03)
+- Unify compact rows to Ran-N-commands form (077042eb)
+- Route captured tool output to the Output tab (398659d9)
+- Focus confirmation panel and composer for keyboard flows (7af14c2b)
+- Remove text file preview, quiet tool callouts (1e890faa)
+- Share session-busy remedy between service and app (0b0a219e)
+- Live tail preview and terminal CTA for running commands (682ec72a)
+- Decorate composer tokens and fix archived turn grouping (999c4ce9)
+
+### Other Changes
+
+#### CI
+
+- Lock workflow dependencies with actions.lock (a386b2f2)
+
+#### Performance
+
+- Single-entry tools cache and single-pass name canonicalization (c8f48ef7)
+
+#### Refactors
+
+- Share mtime helper through snapshot module (da0524e4)
+- Remove dead code found by blanket-allow audit (6165aaca)
+- Own auto-continue budget in tracker (df4ecfe7)
+- Dedupe MCP error-overflow rendering (412271e3)
+- Dedupe restart steps and backtick stripping (84015a84)
+- Migrate pointer casts to strict provenance APIs (7e561f10)
+- Extract shared harness error finalizer (d903d022)
+- Route setup remaining raw errors through harness finalizer (1381b138)
+
+#### Tests
+
+- Share assert_localized across localization test modules (689beb12)
+
 ## 0.182.4 - 2026-11-15
 
 ### Highlights
