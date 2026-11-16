@@ -72,22 +72,50 @@ pub(super) async fn check_for_updates() -> Result<()> {
 /// The check itself, with the deadline as a parameter so tests can pin the
 /// timeout path without waiting out the production bound.
 async fn check_for_updates_with_timeout(timeout: std::time::Duration) -> Result<()> {
-    let check = async {
-        let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
-        updater.refresh_startup_update_cache().await?;
+    // Reserve a slice of the overall deadline for the best-effort notes
+    // backfill. Its retry policy spans minutes, so sharing one deadline with
+    // the refresh could turn an already-successful check into a reported
+    // timeout when GitHub is throttled.
+    const NOTES_BACKFILL_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+    let refresh_budget = timeout.saturating_sub(NOTES_BACKFILL_BUDGET);
+    check_with_backfill(
+        refresh_budget,
+        NOTES_BACKFILL_BUDGET,
+        async {
+            let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
+            updater.refresh_startup_update_cache().await.map(|_| ())
+        },
         // External installs never seeded the running version's notes. Fetch
         // them into the install slot so the desktop "what's new" banner can
-        // arm even while the check slot names a newer release. Best-effort: a
-        // missing tag must not fail the check the user explicitly requested.
-        if let Err(err) = crate::updater::backfill_current_release_notes(10).await {
-            tracing::debug!("could not backfill current release notes: {err}");
-        }
-        Ok(())
-    };
-    match tokio::time::timeout(timeout, check).await {
-        Ok(result) => result,
+        // arm even while the check slot names a newer release.
+        crate::updater::backfill_current_release_notes(NOTES_BACKFILL_BUDGET.as_secs()),
+    )
+    .await
+}
+
+/// Run the live check and the notes backfill under separate budgets. Only the
+/// refresh can fail the check; the backfill is best-effort and bounded by its
+/// own slice, so a slow tag fetch can never consume the check's deadline.
+async fn check_with_backfill<F, B>(
+    refresh_budget: std::time::Duration,
+    backfill_budget: std::time::Duration,
+    refresh: F,
+    backfill: B,
+) -> Result<()>
+where
+    F: Future<Output = Result<()>>,
+    B: Future<Output = Result<()>>,
+{
+    match tokio::time::timeout(refresh_budget, refresh).await {
+        Ok(result) => result?,
         Err(_) => anyhow::bail!("update check timed out"),
     }
+    match tokio::time::timeout(backfill_budget, backfill).await {
+        Ok(Err(err)) => tracing::debug!("could not backfill current release notes: {err}"),
+        Err(_) => tracing::debug!("current release notes backfill timed out"),
+        Ok(Ok(())) => {}
+    }
+    Ok(())
 }
 
 /// Start installing the newest release, streaming progress to `context`.
@@ -254,5 +282,23 @@ mod tests {
         assert!(error.to_string().contains("timed out"), "{error:#}");
 
         crate::updater::set_test_update_cache_dir(previous);
+    }
+
+    /// A throttled notes backfill must not turn an already-successful check
+    /// into a reported timeout. The backfill has its own bounded slice, so the
+    /// check's result is decided before it is awaited.
+    #[tokio::test]
+    async fn a_slow_notes_backfill_does_not_fail_a_successful_check() {
+        let result = check_with_backfill(
+            std::time::Duration::from_secs(1),
+            std::time::Duration::from_millis(10),
+            async { Ok(()) },
+            async {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                Ok(())
+            },
+        )
+        .await;
+        assert!(result.is_ok(), "the backfill must be bounded independently: {result:?}");
     }
 }
