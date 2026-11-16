@@ -328,6 +328,7 @@ impl DesktopView {
                 // propagates it back out to our fixed ctrl-f caret binding.
                 .searchable(false)
         });
+        composer.read(cx).focus_handle(cx).focus(window, cx);
         let composer_subscription = cx.subscribe_in(&composer, window, |view, _, event, window, cx| {
             if matches!(event, InputEvent::Change) {
                 // Recall abandonment is NOT reset here: `Change` flushes after

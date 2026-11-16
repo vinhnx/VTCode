@@ -695,3 +695,22 @@ fn enter_at_tail_submits_and_empty_enter_stays_put(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(requests.try_recv().is_err(), "blank Enter sends nothing");
 }
+
+#[gpui_kit::test]
+fn new_thread_focuses_composer_only_when_started(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+        view.update(cx, |view, cx| {
+            view.focus_handle.focus(window, cx);
+            assert!(!view.create_session_from_ui(window, cx));
+            assert!(view.focus_handle.is_focused(window));
+            let (commands, _requests) = tokio::sync::mpsc::channel(4);
+            view.backend = Some(BackendHandle { commands });
+            assert!(view.create_session_from_ui(window, cx));
+            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
+        });
+    })
+    .unwrap();
+}

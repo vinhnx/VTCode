@@ -123,7 +123,28 @@ impl DesktopView {
         if (self.interaction.is_none() || interaction_replaced) && !self.question_answer.read(cx).value().is_empty() {
             self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
         }
-        let overlay_open = self.current_route() != Route::Workspace || self.palette.is_some();
+        let overlay_open = self.current_route() != Route::Workspace
+            || self.palette.is_some()
+            || self.file_preview.is_some()
+            || self.license_viewer.is_some()
+            || self.changelog_open
+            || self.attachment_picker.is_some()
+            || self.full_access_confirm.is_some()
+            || self.running_confirm.is_some()
+            || self.file_rename.is_some()
+            || self.about_open;
+        if interaction_replaced && !overlay_open && !self.terminal_focus.contains_focused(window, cx) {
+            if self.interaction.as_ref().is_some_and(|interaction| {
+                interaction.kind == protocol::InteractionKind::Question
+                    && interaction.steps.first().is_some_and(|step| step.allow_freeform)
+            }) {
+                self.question_answer.read(cx).focus_handle(cx).focus(window, cx);
+            } else if self.composer.read(cx).value().trim().is_empty() {
+                // Digit shortcuts commit approval choices, so a pending draft
+                // keeps focus: keystrokes mid-sentence must not become grants.
+                self.interaction_focus.focus(window, cx);
+            }
+        }
         if accepted_decision && self.interaction.is_none() && !overlay_open {
             self.focus_composer(window, cx);
         }

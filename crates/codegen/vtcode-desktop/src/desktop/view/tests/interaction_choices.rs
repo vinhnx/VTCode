@@ -174,6 +174,126 @@ fn digit_shortcut_commits_the_numbered_choice(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn arriving_approval_focuses_panel_and_accepts_digit(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".into());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.focus_composer(window, cx);
+            view.event_tx
+                .send(BackendEvent::Interaction(tool_loop_interaction(None)))
+                .unwrap();
+            let _ = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+        window.press("2", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { params, .. } = requests.try_recv().expect("digit submits the focused approval")
+    else {
+        panic!("expected interaction response");
+    };
+    assert_eq!(params["choiceId"], json!("grant-20"));
+}
+
+#[gpui_kit::test]
+fn arriving_approval_does_not_take_focus_from_modal(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| view.selected_session_id = Some("session".into()));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_about(window, cx);
+            view.event_tx
+                .send(BackendEvent::Interaction(tool_loop_interaction(None)))
+                .unwrap();
+            let _ = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).about_focus.contains_focused(window, cx));
+        assert!(!view.read(cx).interaction_focus.contains_focused(window, cx));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn arriving_freeform_question_focuses_answer_without_submitting_digits(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".into());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.event_tx
+                .send(BackendEvent::Interaction(question_interaction(true)))
+                .unwrap();
+            let _ = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+        window.press("2", cx);
+        assert_eq!(view.read(cx).question_answer.read(cx).value(), "2");
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "typing an answer must not choose or submit a row");
+}
+
+#[gpui_kit::test]
+fn arriving_approval_preserves_terminal_focus(cx: &mut TestAppContext) {
+    let (window, view, _workspace) = open_workspace_terminal(cx);
+    view.update(cx, |view, _| view.selected_session_id = Some("session".into()));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.terminal_focus.focus(window, cx);
+            view.event_tx
+                .send(BackendEvent::Interaction(tool_loop_interaction(None)))
+                .unwrap();
+            let _ = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).terminal_focus.contains_focused(window, cx));
+        assert!(!view.read(cx).interaction_focus.contains_focused(window, cx));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn arriving_approval_preserves_composer_draft_focus(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".into());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.focus_composer(window, cx);
+            view.composer
+                .update(cx, |state, cx| state.set_value("mid-sentence draft", window, cx));
+            view.composer
+                .read(cx)
+                .focus_handle(cx)
+                .dispatch_action(&gpui_kit::component::input::MoveToEnd, window, cx);
+            view.event_tx
+                .send(BackendEvent::Interaction(tool_loop_interaction(None)))
+                .unwrap();
+            let _ = view.drain_events(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+        assert!(!view.read(cx).interaction_focus.contains_focused(window, cx));
+        window.press("2", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "mid-sentence draft2");
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "digits mid-draft must not commit an approval choice");
+}
+
+#[gpui_kit::test]
 fn recommended_pill_marks_only_the_recommended_row(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     // Asymmetric pair: the first row is recommended, the second is not, so

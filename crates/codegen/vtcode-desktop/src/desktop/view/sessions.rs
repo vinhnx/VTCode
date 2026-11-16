@@ -243,7 +243,11 @@ impl DesktopView {
             self.open_running_confirm(RunningSwitchIntent::NewThread, window, cx);
             true
         } else {
-            self.begin_new_thread(cx)
+            let started = self.begin_new_thread(cx);
+            if started {
+                self.focus_composer(window, cx);
+            }
+            started
         }
     }
 
