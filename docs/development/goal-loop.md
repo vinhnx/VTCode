@@ -25,8 +25,13 @@ as a turn, successful `Resume` submits a continue prompt, and `Pause`, `Clear`,
 `Status`, and `Edit` render without starting turns. Desktop executes the same
 core through quiet `goal/execute` RPC — never as turn text, which would wedge
 awaiting a terminal event a non-turn command never emits. Responses refresh
-the composer bar from the returned snapshot, surface read-only output as
-transcript notices, and submit follow-up turns normally.
+the composer bar from the returned snapshot and surface read-only output as
+transcript notices. Follow-up prompts steer the live turn when one is running
+and start a normal turn when idle, so the goal takes effect immediately and
+no phantom queued turn appears; the elapsed clock therefore starts exactly
+when steering takes effect. Every goal state transition also surfaces once
+as a transcript notice (deduped by last-notified state), and the Utilities
+inspector pane mirrors the snapshot.
 
 ## Surfaces
 

@@ -503,6 +503,7 @@ impl DesktopView {
             tracker_snapshot: None,
             goal_snapshot: None,
             goal_expanded: false,
+            goal_notified: None,
             error: None,
             configuration: None,
             pending_permission_choice: None,

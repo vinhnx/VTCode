@@ -609,6 +609,8 @@ struct DesktopView {
     goal_snapshot: Option<vtcode_exec_events::goal::GoalSnapshot>,
     /// Whether the goal bar shows the full objective instead of truncating it.
     goal_expanded: bool,
+    /// Last goal state surfaced as a transcript notice; dedupes repeated snapshots.
+    goal_notified: Option<vtcode_exec_events::goal::GoalState>,
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,
     pending_permission_choice: Option<protocol::PermissionMode>,

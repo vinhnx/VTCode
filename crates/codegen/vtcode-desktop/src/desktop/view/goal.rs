@@ -7,9 +7,22 @@
 
 use super::*;
 use serde_json::{Value, json};
+use vtcode_exec_events::goal::{GoalSnapshot, GoalState};
 
 /// Max objective chars shown before the bar truncates with `…`.
 const GOAL_OBJECTIVE_PREVIEW_CHARS: usize = 60;
+
+/// Localized state label shared by the goal bar, transition notices, and
+/// the Utilities pane.
+pub(super) fn goal_state_label(state: GoalState) -> String {
+    match state {
+        GoalState::Active => rust_i18n::t!("app.composer.goal_pursuing").to_string(),
+        GoalState::Paused | GoalState::Unknown => rust_i18n::t!("app.composer.goal_paused").to_string(),
+        GoalState::Complete => rust_i18n::t!("app.composer.goal_complete").to_string(),
+        GoalState::Blocked => rust_i18n::t!("app.composer.goal_blocked").to_string(),
+        GoalState::BudgetLimited => rust_i18n::t!("app.composer.goal_budget").to_string(),
+    }
+}
 
 impl DesktopView {
     /// Seed the goal bar from the newest `goal.updated` checkpoint in the
@@ -23,6 +36,31 @@ impl DesktopView {
                 _ => None,
             })
             .flatten();
+        self.goal_notified = self.goal_snapshot.as_ref().map(|snapshot| snapshot.state);
+    }
+
+    /// Push a transcript notice when a live `goal.updated` event changes the
+    /// goal state. Repeated snapshots (per-turn refreshes) stay quiet, and
+    /// RPC responses never notice: the event is the single source, so each
+    /// transition surfaces exactly once.
+    pub(super) fn note_goal_transition(&mut self, goal: Option<&GoalSnapshot>) {
+        let state = goal.map(|snapshot| snapshot.state);
+        if state == self.goal_notified {
+            return;
+        }
+        self.goal_notified = state;
+        let body = match goal {
+            Some(snapshot) => {
+                format!("{}: {} ({})", goal_state_label(snapshot.state), snapshot.objective, snapshot.elapsed_label())
+            }
+            None => rust_i18n::t!("app.composer.goal_cleared").to_string(),
+        };
+        self.transcript.push(TranscriptItem::notice(
+            format!("goal-{}", uuid_like_id()),
+            rust_i18n::t!("app.composer.goal_notice_title").to_string().into(),
+            body,
+            NoticeSeverity::Info,
+        ));
     }
 
     /// Execute a `/goal` command quietly against the selected session.
@@ -88,17 +126,9 @@ impl DesktopView {
 
     /// Goal status bar above the draft input, or `None` without a goal.
     pub(super) fn render_goal_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        use vtcode_exec_events::goal::GoalState;
-
         let snapshot = self.goal_snapshot.as_ref()?;
         let colors = cx.theme().colors;
-        let label = match snapshot.state {
-            GoalState::Active => rust_i18n::t!("app.composer.goal_pursuing").to_string(),
-            GoalState::Paused | GoalState::Unknown => rust_i18n::t!("app.composer.goal_paused").to_string(),
-            GoalState::Complete => rust_i18n::t!("app.composer.goal_complete").to_string(),
-            GoalState::Blocked => rust_i18n::t!("app.composer.goal_blocked").to_string(),
-            GoalState::BudgetLimited => rust_i18n::t!("app.composer.goal_budget").to_string(),
-        };
+        let label = goal_state_label(snapshot.state);
         let objective = if self.goal_expanded {
             snapshot.objective.clone()
         } else {

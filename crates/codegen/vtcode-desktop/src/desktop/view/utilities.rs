@@ -1,3 +1,4 @@
+use super::goal::goal_state_label;
 use super::*;
 
 impl DesktopView {
@@ -75,6 +76,43 @@ impl DesktopView {
                                 view.set_inspector_tab(InspectorTab::Changes, cx);
                             })),
                     )
+                    .child(
+                        div()
+                            .pt_4()
+                            .pb_1()
+                            .child(eyebrow_label(rust_i18n::t!("app.utilities.goal_title"), &colors)),
+                    )
+                    .child(match self.goal_snapshot.as_ref() {
+                        Some(snapshot) => div()
+                            .id("utilities-goal")
+                            .test_support()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(colors.foreground)
+                                    .child(goal_state_label(snapshot.state)),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(colors.muted_foreground)
+                                    .child(snapshot.objective.clone()),
+                            )
+                            .child(div().text_xs().text_color(colors.muted_foreground).child(format!(
+                                "{} · {}",
+                                snapshot.elapsed_label(),
+                                snapshot.tokens_label()
+                            )))
+                            .into_any_element(),
+                        None => div()
+                            .id("utilities-goal")
+                            .test_support()
+                            .py_2()
+                            .text_sm()
+                            .text_color(colors.muted_foreground)
+                            .child(rust_i18n::t!("app.utilities.goal_empty").to_string())
+                            .into_any_element(),
+                    })
                     .child(
                         div()
                             .pt_4()

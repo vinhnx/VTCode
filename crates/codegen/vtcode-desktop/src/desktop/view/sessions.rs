@@ -766,6 +766,7 @@ impl DesktopView {
         self.tracker_snapshot = None;
         self.goal_snapshot = None;
         self.goal_expanded = false;
+        self.goal_notified = None;
         self.reset_hidden_inspector_tab_if_stranded();
         self.changes = ChangesProjection::default();
         self.selected_change = None;

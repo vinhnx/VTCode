@@ -160,6 +160,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let steering_sender_for_shell = if steering_receiver.is_none() {
         let (sender, receiver) = mpsc::unbounded_channel();
         *steering_receiver = Some(receiver);
+        if let Some(slot) = stop_slot.as_ref() {
+            crate::agent::runloop::unified::stop_requests::publish_steering_sender(slot, &sender);
+        }
         Some(sender)
     } else {
         None

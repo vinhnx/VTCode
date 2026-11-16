@@ -124,6 +124,39 @@ async fn goal_execute_budget_sets_shows_and_rejects_garbage() {
 }
 
 #[tokio::test]
+async fn goal_execute_steers_live_turn_instead_of_queueing() {
+    let harness = GoalHarness::new().await;
+    let (steer_tx, mut steer_rx) = mpsc::unbounded_channel();
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = Some("turn-1".into());
+        let runtime = state.runtime.as_ref().expect("runtime");
+        stop_requests::publish_steering_sender(&runtime.stop, &steer_tx);
+    }
+
+    let result = harness.execute("session", "Ship it").await;
+    assert!(result.mutated);
+    assert!(result.submit.is_none(), "steered submit must not queue a turn");
+    let steered = steer_rx.try_recv().expect("steering message");
+    assert!(
+        matches!(steered, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text == "Ship it"),
+        "objective must steer the live turn"
+    );
+}
+
+#[tokio::test]
+async fn goal_execute_falls_back_to_submit_without_steering_channel() {
+    let harness = GoalHarness::new().await;
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = Some("turn-1".into());
+    }
+
+    let result = harness.execute("session", "Ship it").await;
+    assert_eq!(result.submit.as_deref(), Some("Ship it"));
+}
+
+#[tokio::test]
 async fn goal_execute_rejects_unknown_session_and_unready_runtime() {
     let harness = GoalHarness::new().await;
     let request = harness.request("other-session", "pause");

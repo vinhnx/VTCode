@@ -275,6 +275,7 @@ impl DesktopView {
             }
             ThreadEvent::GoalUpdated(event) => {
                 self.goal_snapshot = event.goal.clone();
+                self.note_goal_transition(event.goal.as_ref());
             }
             _ => {}
         }

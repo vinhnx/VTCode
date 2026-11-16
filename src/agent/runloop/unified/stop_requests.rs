@@ -63,6 +63,8 @@ pub(crate) struct HostStopHandles {
     handles: std::sync::OnceLock<StopHandles>,
     exec_sessions: std::sync::OnceLock<vtcode_core::tools::exec_session::ExecSessionManager>,
     goal_tracker: std::sync::OnceLock<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker>,
+    steering_sender:
+        std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<vtcode_core::core::agent::steering::SteeringMessage>>,
     goal_emitter: std::sync::OnceLock<HarnessEventEmitter>,
     ready: std::sync::atomic::AtomicBool,
     ready_notify: Notify,
@@ -129,6 +131,25 @@ pub(crate) fn publish_goal_emitter(slot: &StopHandleSlot, emitter: &HarnessEvent
 /// create one. `None` before that.
 pub(crate) fn host_goal_emitter(slot: &StopHandleSlot) -> Option<HarnessEventEmitter> {
     slot.goal_emitter.get().cloned()
+}
+
+/// Publish the runloop steering sender for host-side follow-up injection.
+/// Called once when the runloop creates its steering pair; hosts that pass
+/// their own receiver keep their own sender, so a repeated publish keeps
+/// the first.
+pub(crate) fn publish_steering_sender(
+    slot: &StopHandleSlot,
+    sender: &tokio::sync::mpsc::UnboundedSender<vtcode_core::core::agent::steering::SteeringMessage>,
+) {
+    let _kept_first = slot.steering_sender.set(sender.clone());
+}
+
+/// Clone the published steering sender, if the runloop created its pair.
+/// `None` when the host owns steering or setup has not run yet.
+pub(crate) fn host_steering_sender(
+    slot: &StopHandleSlot,
+) -> Option<tokio::sync::mpsc::UnboundedSender<vtcode_core::core::agent::steering::SteeringMessage>> {
+    slot.steering_sender.get().cloned()
 }
 
 pub(crate) fn mark_host_turns_ready(slot: &StopHandleSlot) {

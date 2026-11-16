@@ -658,6 +658,7 @@ impl DesktopView {
                 self.tracker_snapshot = None;
                 self.goal_snapshot = None;
                 self.goal_expanded = false;
+                self.goal_notified = None;
                 self.reset_hidden_inspector_tab_if_stranded();
                 self.active_turn_id = None;
                 self.cancel_requested = false;
@@ -716,6 +717,7 @@ impl DesktopView {
                 self.tracker_snapshot = None;
                 self.goal_snapshot = None;
                 self.goal_expanded = false;
+                self.goal_notified = None;
                 self.reset_hidden_inspector_tab_if_stranded();
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;

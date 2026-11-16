@@ -25,6 +25,26 @@ fn goal_notification(goal: Option<GoalSnapshot>) -> ThreadEventNotification {
     }
 }
 
+#[test]
+fn goal_locale_keys_resolve_to_english() {
+    for (key, expected) in [
+        ("app.composer.goal_pursuing", "Pursuing goal"),
+        ("app.composer.goal_paused", "Paused goal"),
+        ("app.composer.goal_complete", "Goal complete"),
+        ("app.composer.goal_blocked", "Goal blocked"),
+        ("app.composer.goal_budget", "Goal over budget"),
+        ("app.composer.goal_pause", "Pause goal"),
+        ("app.composer.goal_resume", "Resume goal"),
+        ("app.composer.goal_clear", "Clear goal"),
+        ("app.composer.goal_expand", "Expand goal objective"),
+        ("app.composer.goal_collapse", "Collapse goal objective"),
+        ("app.composer.goal_notice_title", "Goal"),
+        ("app.composer.goal_cleared", "Goal cleared"),
+    ] {
+        assert_eq!(rust_i18n::t!(key).to_string(), expected, "missing locale: {key}");
+    }
+}
+
 #[gpui_kit::test]
 fn goal_updates_replace_the_bar_snapshot(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
@@ -41,6 +61,35 @@ fn goal_updates_replace_the_bar_snapshot(cx: &mut TestAppContext) {
         // A clear removes the bar.
         view.handle_thread_event(goal_notification(None));
         assert!(view.goal_snapshot.is_none());
+    });
+}
+
+#[gpui_kit::test]
+fn goal_transitions_notice_once_per_state_change(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some("session".into());
+        let base = view.transcript.len();
+
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Active))));
+        assert_eq!(view.transcript.len(), base + 1);
+
+        // Same-state refreshes (per-turn updates) stay quiet.
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Active))));
+        assert_eq!(view.transcript.len(), base + 1);
+
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Paused))));
+        assert_eq!(view.transcript.len(), base + 2);
+        let latest = view
+            .transcript
+            .items()
+            .rev()
+            .find(|item| item.title.as_ref() == "Goal")
+            .unwrap();
+        assert!(latest.text.contains("Paused goal: Ship it"), "{}", latest.text);
+
+        view.handle_thread_event(goal_notification(None));
+        assert_eq!(view.transcript.len(), base + 3);
     });
 }
 
@@ -185,6 +234,40 @@ fn goal_execute_sends_rpc_and_applies_response(cx: &mut TestAppContext) {
             );
             assert!(view.goal_snapshot.is_some(), "stale clear must not wipe the bar");
         });
+    })
+    .unwrap();
+}
+
+#[test]
+fn goal_state_labels_cover_every_wire_state() {
+    use super::super::goal::goal_state_label;
+
+    assert_eq!(goal_state_label(GoalState::Active), "Pursuing goal");
+    assert_eq!(goal_state_label(GoalState::Paused), "Paused goal");
+    assert_eq!(goal_state_label(GoalState::Complete), "Goal complete");
+    assert_eq!(goal_state_label(GoalState::Blocked), "Goal blocked");
+    assert_eq!(goal_state_label(GoalState::BudgetLimited), "Goal over budget");
+    assert_eq!(goal_state_label(GoalState::Unknown), "Paused goal");
+}
+
+#[gpui_kit::test]
+fn goal_utilities_section_renders_with_and_without_snapshot(cx: &mut TestAppContext) {
+    use crate::desktop::inspector::InspectorTab;
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_tab = InspectorTab::Utilities;
+            view.goal_snapshot = Some(snapshot("Ship it", GoalState::Active));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("utilities-goal").is_some());
+
+        view.update(cx, |view, _| {
+            view.goal_snapshot = None;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("utilities-goal").is_some(), "empty state still renders");
     })
     .unwrap();
 }

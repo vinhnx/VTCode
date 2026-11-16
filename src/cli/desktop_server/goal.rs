@@ -7,6 +7,7 @@
 //! a `submit` prompt starts a real turn when set.
 
 use super::*;
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_desktop_protocol::slash_command::{GoalSlashCommandParseError, parse_goal_slash_command};
 
 use crate::agent::runloop::unified::stop_requests;
@@ -25,7 +26,7 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
     if params.args.len() > MAX_GOAL_ARGS_BYTES {
         bail!("goal command arguments are too long");
     }
-    let (tracker, emitter) = {
+    let (tracker, emitter, turn_active, steering) = {
         let state = context.state.lock().await;
         if state.session_id.as_deref() != Some(params.session_id.as_str()) {
             bail!("goal commands are only available for the selected session");
@@ -36,7 +37,12 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
             .ok_or_else(|| anyhow!("selected session is not running"))?;
         let tracker =
             stop_requests::host_goal_tracker(&runtime.stop).ok_or_else(|| anyhow!("session is still starting"))?;
-        (tracker, stop_requests::host_goal_emitter(&runtime.stop))
+        (
+            tracker,
+            stop_requests::host_goal_emitter(&runtime.stop),
+            state.active_turn_id.is_some(),
+            stop_requests::host_steering_sender(&runtime.stop),
+        )
     };
     let command = match parse_goal_slash_command(&params.args) {
         Ok(command) => command,
@@ -66,11 +72,25 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
     drop(guard);
     let lines = effect.lines;
 
+    // A follow-up prompt while a turn runs steers the live turn instead of
+    // queueing behind it, so the goal takes effect immediately and no phantom
+    // queued turn appears. Without a steering channel, fall back to submit.
+    let submit = match effect.submit {
+        Some(prompt) if turn_active => match steering {
+            Some(sender) => match sender.send(SteeringMessage::FollowUpInput(prompt.clone())) {
+                Ok(()) => None,
+                Err(_) => Some(prompt),
+            },
+            None => Some(prompt),
+        },
+        submit => submit,
+    };
+
     let result = protocol::GoalExecuteResult {
         session_id: params.session_id,
         lines: lines.into_iter().map(|(_, line)| line).collect(),
         mutated: effect.mutated,
-        submit: effect.submit,
+        submit,
         goal: snapshot,
     };
     Ok((serde_json::to_value(result)?, false))
