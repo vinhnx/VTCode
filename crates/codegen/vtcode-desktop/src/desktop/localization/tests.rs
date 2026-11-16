@@ -1,3 +1,4 @@
+use super::test_support::assert_localized;
 use super::{UiLanguage, UiLanguageOption};
 
 #[test]
@@ -215,7 +216,6 @@ fn app_catalog_covers_language_controls_and_kit_overrides() {
     assert_eq!(rust_i18n::t!("gpui_component.Attachment.Retry", locale = "uk").to_string(), "Повторити");
 }
 
-#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn notification_and_about_settings_copy_covers_every_language() {
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "en").to_string(), "Notifications");
@@ -247,77 +247,52 @@ fn notification_and_about_settings_copy_covers_every_language() {
         "Bạn đang dùng bản mới nhất"
     );
 
-    macro_rules! assert_catalog_key {
-        ($key:literal) => {
-            for language in UiLanguage::ALL {
-                let locale = language.locale();
-                let translated = rust_i18n::t!($key, locale = locale).to_string();
-                assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
-                // French "Notifications" is a genuine cognate of the
-                // English group/tab title, not an untranslated entry.
-                let cognate = locale == "fr"
-                    && ($key == "app.settings.tab.notifications" || $key == "app.settings.notifications.group");
-                if language != UiLanguage::English && !cognate {
-                    assert_ne!(
-                        translated,
-                        rust_i18n::t!($key, locale = "en").to_string(),
-                        "{locale}/{} must be translated",
-                        $key
-                    );
-                }
-            }
-        };
-    }
-
-    assert_catalog_key!("app.settings.tab.notifications");
-    assert_catalog_key!("app.settings.notifications.group");
-    assert_catalog_key!("app.settings.notifications.enable");
-    assert_catalog_key!("app.settings.notifications.enable_description");
-    assert_catalog_key!("app.settings.notifications.turn_completion.title");
-    assert_catalog_key!("app.settings.notifications.turn_completion.description");
-    assert_catalog_key!("app.settings.notifications.turn_completion.always");
-    assert_catalog_key!("app.settings.notifications.turn_completion.unfocused");
-    assert_catalog_key!("app.settings.notifications.turn_completion.never");
-    assert_catalog_key!("app.settings.notifications.permission");
-    assert_catalog_key!("app.settings.notifications.permission_description");
-    assert_catalog_key!("app.settings.notifications.questions");
-    assert_catalog_key!("app.settings.notifications.questions_description");
-    assert_catalog_key!("app.settings.notifications.updates");
-    assert_catalog_key!("app.settings.notifications.updates_description");
-    assert_catalog_key!("app.settings.about.update_status");
-    assert_catalog_key!("app.settings.about.check_for_updates");
-    assert_catalog_key!("app.settings.about.up_to_date");
-    assert_catalog_key!("app.settings.about.update_available");
-    assert_catalog_key!("app.settings.about.status_unavailable");
+    assert_localized(
+        &[
+            "app.settings.tab.notifications",
+            "app.settings.notifications.group",
+            "app.settings.notifications.enable",
+            "app.settings.notifications.enable_description",
+            "app.settings.notifications.turn_completion.title",
+            "app.settings.notifications.turn_completion.description",
+            "app.settings.notifications.turn_completion.always",
+            "app.settings.notifications.turn_completion.unfocused",
+            "app.settings.notifications.turn_completion.never",
+            "app.settings.notifications.permission",
+            "app.settings.notifications.permission_description",
+            "app.settings.notifications.questions",
+            "app.settings.notifications.questions_description",
+            "app.settings.notifications.updates",
+            "app.settings.notifications.updates_description",
+            "app.settings.about.update_status",
+            "app.settings.about.check_for_updates",
+            "app.settings.about.up_to_date",
+            "app.settings.about.update_available",
+            "app.settings.about.status_unavailable",
+        ],
+        &[
+            // French "Notifications" is a genuine cognate of the
+            // English group/tab title, not an untranslated entry.
+            ("fr", "app.settings.tab.notifications"),
+            ("fr", "app.settings.notifications.group"),
+        ],
+    );
 }
 
 #[test]
 fn transcript_and_configuration_copy_are_localized_for_every_language() {
-    macro_rules! assert_catalog_key {
-        ($key:literal) => {
-            for language in UiLanguage::ALL {
-                let locale = language.locale();
-                let translated = rust_i18n::t!($key, locale = locale).to_string();
-                assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
-                if language != UiLanguage::English {
-                    assert_ne!(
-                        translated,
-                        rust_i18n::t!($key, locale = "en").to_string(),
-                        "{locale}/{} fell back to English",
-                        $key
-                    );
-                }
-            }
-        };
-    }
-
-    assert_catalog_key!("app.palette.title.configuration");
-    assert_catalog_key!("app.transcript.history_limit_reached");
-    assert_catalog_key!("app.transcript.load_earlier_tooltip");
-    assert_catalog_key!("app.transcript.compact_boundary_title");
-    assert_catalog_key!("app.transcript.compact_boundary_body");
-    assert_catalog_key!("app.transcript.context_reset_title");
-    assert_catalog_key!("app.transcript.context_reset_body");
+    assert_localized(
+        &[
+            "app.palette.title.configuration",
+            "app.transcript.history_limit_reached",
+            "app.transcript.load_earlier_tooltip",
+            "app.transcript.compact_boundary_title",
+            "app.transcript.compact_boundary_body",
+            "app.transcript.context_reset_title",
+            "app.transcript.context_reset_body",
+        ],
+        &[],
+    );
 
     for language in UiLanguage::ALL {
         let locale = language.locale();
@@ -348,57 +323,31 @@ fn transcript_and_configuration_copy_are_localized_for_every_language() {
 
 #[test]
 fn runtime_control_recovery_copy_is_localized_for_every_language() {
-    macro_rules! assert_catalog_key {
-        ($key:literal) => {
-            for language in UiLanguage::ALL {
-                let locale = language.locale();
-                let translated = rust_i18n::t!($key, locale = locale).to_string();
-                assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
-                if language != UiLanguage::English {
-                    assert_ne!(
-                        translated,
-                        rust_i18n::t!($key, locale = "en").to_string(),
-                        "{locale}/{} fell back to English",
-                        $key
-                    );
-                }
-            }
-        };
-    }
-
-    assert_catalog_key!("app.errors.fast_processing_unavailable");
-    assert_catalog_key!("app.errors.model_selection_runtime_changing");
-    assert_catalog_key!("app.errors.runtime_options_unavailable");
-    assert_catalog_key!("app.errors.desktop_command_unavailable");
-    assert_catalog_key!("app.errors.request_queue_unavailable");
+    assert_localized(
+        &[
+            "app.errors.fast_processing_unavailable",
+            "app.errors.model_selection_runtime_changing",
+            "app.errors.runtime_options_unavailable",
+            "app.errors.desktop_command_unavailable",
+            "app.errors.request_queue_unavailable",
+        ],
+        &[],
+    );
 }
 
 #[test]
 fn webmcp_notice_copy_is_translated_for_every_language() {
-    macro_rules! assert_catalog_key {
-        ($key:literal) => {
-            for language in UiLanguage::ALL {
-                let locale = language.locale();
-                let translated = rust_i18n::t!($key, locale = locale).to_string();
-                assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
-                if language != UiLanguage::English {
-                    assert_ne!(
-                        translated,
-                        rust_i18n::t!($key, locale = "en").to_string(),
-                        "{locale}/{} fell back to English",
-                        $key
-                    );
-                }
-            }
-        };
-    }
-
-    assert_catalog_key!("app.webmcp_notice.commands_help");
-    assert_catalog_key!("app.webmcp_notice.disconnected");
-    assert_catalog_key!("app.webmcp_notice.invalid_status");
-    assert_catalog_key!("app.webmcp_notice.pairing_created");
-    assert_catalog_key!("app.webmcp_notice.invalid_pairing");
-    assert_catalog_key!("app.webmcp_notice.stopped");
+    assert_localized(
+        &[
+            "app.webmcp_notice.commands_help",
+            "app.webmcp_notice.disconnected",
+            "app.webmcp_notice.invalid_status",
+            "app.webmcp_notice.pairing_created",
+            "app.webmcp_notice.invalid_pairing",
+            "app.webmcp_notice.stopped",
+        ],
+        &[],
+    );
 }
 
 #[test]
@@ -486,67 +435,60 @@ fn composer_placeholder_matches_cli_bootstrap_lead() {
     );
 }
 
-#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn workspace_review_surface_is_translated_and_interpolates_values() {
-    macro_rules! assert_translated {
-        ($locale:expr, $key:literal) => {{
-            let translated = rust_i18n::t!($key, locale = $locale).to_string();
-            assert!(!translated.is_empty(), "{}/{} is empty", $locale, $key);
-            if $locale != "en" {
-                let english = rust_i18n::t!($key, locale = "en").to_string();
-                assert_ne!(translated, english, "{}/{} fell back to English", $locale, $key);
-            }
-        }};
-    }
+    assert_localized(
+        &[
+            "app.workspace_review.review_working_tree",
+            "app.workspace_review.title",
+            "app.workspace_review.description",
+            "app.workspace_review.session_title",
+            "app.workspace_review.session_description",
+            "app.workspace_review.close_review",
+            "app.workspace_review.expanded_in_inspector",
+            "app.workspace_review.folder_optional",
+            "app.workspace_review.include_untracked",
+            "app.workspace_review.refresh_tooltip",
+            "app.workspace_review.refreshing",
+            "app.workspace_review.load_changes",
+            "app.workspace_review.refresh",
+            "app.workspace_review.diff_layout",
+            "app.workspace_review.unified",
+            "app.workspace_review.split",
+            "app.workspace_review.copy_preview",
+            "app.workspace_review.reading_git_changes",
+            "app.workspace_review.reading_git_changes_progress",
+            "app.workspace_review.capturing_snapshot",
+            "app.workspace_review.refreshing_status",
+            "app.workspace_review.changed_files_summary",
+            "app.workspace_review.changed_files_count",
+            "app.workspace_review.added_deleted_description",
+            "app.workspace_review.file_position",
+            "app.workspace_review.previous_file",
+            "app.workspace_review.choose_changed_file",
+            "app.workspace_review.next_file",
+            "app.workspace_review.git_review_unavailable",
+            "app.workspace_review.choose_what_to_review",
+            "app.workspace_review.choose_what_to_review_hint",
+            "app.workspace_review.folder_value",
+            "app.workspace_review.refresh_failed",
+            "app.workspace_review.repository_unavailable_hint",
+            "app.workspace_review.no_previewable_changes",
+            "app.workspace_review.no_tracked_changes",
+            "app.workspace_review.no_previewable_changes_hint",
+            "app.workspace_review.tracked_files_clean_hint",
+            "app.workspace_review.preview_incomplete",
+            "app.workspace_review.preview_truncated",
+            "app.workspace_review.structured_preview_unavailable",
+            "app.workspace_review.changed_files",
+            "app.workspace_review.files",
+            "app.errors.request_queue_unavailable",
+        ],
+        &[],
+    );
 
     for language in UiLanguage::ALL {
         let locale = language.locale();
-        assert_translated!(locale, "app.workspace_review.review_working_tree");
-        assert_translated!(locale, "app.workspace_review.title");
-        assert_translated!(locale, "app.workspace_review.description");
-        assert_translated!(locale, "app.workspace_review.session_title");
-        assert_translated!(locale, "app.workspace_review.session_description");
-        assert_translated!(locale, "app.workspace_review.close_review");
-        assert_translated!(locale, "app.workspace_review.expanded_in_inspector");
-        assert_translated!(locale, "app.workspace_review.folder_optional");
-        assert_translated!(locale, "app.workspace_review.include_untracked");
-        assert_translated!(locale, "app.workspace_review.refresh_tooltip");
-        assert_translated!(locale, "app.workspace_review.refreshing");
-        assert_translated!(locale, "app.workspace_review.load_changes");
-        assert_translated!(locale, "app.workspace_review.refresh");
-        assert_translated!(locale, "app.workspace_review.diff_layout");
-        assert_translated!(locale, "app.workspace_review.unified");
-        assert_translated!(locale, "app.workspace_review.split");
-        assert_translated!(locale, "app.workspace_review.copy_preview");
-        assert_translated!(locale, "app.workspace_review.reading_git_changes");
-        assert_translated!(locale, "app.workspace_review.reading_git_changes_progress");
-        assert_translated!(locale, "app.workspace_review.capturing_snapshot");
-        assert_translated!(locale, "app.workspace_review.refreshing_status");
-        assert_translated!(locale, "app.workspace_review.changed_files_summary");
-        assert_translated!(locale, "app.workspace_review.changed_files_count");
-        assert_translated!(locale, "app.workspace_review.added_deleted_description");
-        assert_translated!(locale, "app.workspace_review.file_position");
-        assert_translated!(locale, "app.workspace_review.previous_file");
-        assert_translated!(locale, "app.workspace_review.choose_changed_file");
-        assert_translated!(locale, "app.workspace_review.next_file");
-        assert_translated!(locale, "app.workspace_review.git_review_unavailable");
-        assert_translated!(locale, "app.workspace_review.choose_what_to_review");
-        assert_translated!(locale, "app.workspace_review.choose_what_to_review_hint");
-        assert_translated!(locale, "app.workspace_review.folder_value");
-        assert_translated!(locale, "app.workspace_review.refresh_failed");
-        assert_translated!(locale, "app.workspace_review.repository_unavailable_hint");
-        assert_translated!(locale, "app.workspace_review.no_previewable_changes");
-        assert_translated!(locale, "app.workspace_review.no_tracked_changes");
-        assert_translated!(locale, "app.workspace_review.no_previewable_changes_hint");
-        assert_translated!(locale, "app.workspace_review.tracked_files_clean_hint");
-        assert_translated!(locale, "app.workspace_review.preview_incomplete");
-        assert_translated!(locale, "app.workspace_review.preview_truncated");
-        assert_translated!(locale, "app.workspace_review.structured_preview_unavailable");
-        assert_translated!(locale, "app.workspace_review.changed_files");
-        assert_translated!(locale, "app.workspace_review.files");
-        assert_translated!(locale, "app.errors.request_queue_unavailable");
-
         let summary = rust_i18n::t!(
             "app.workspace_review.changed_files_summary",
             locale = locale,
@@ -584,38 +526,31 @@ fn workspace_review_surface_is_translated_and_interpolates_values() {
     }
 }
 
-#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn workspace_file_browser_and_preview_copy_covers_every_language() {
-    macro_rules! assert_translated {
-        ($locale:expr, $key:literal) => {{
-            let translated = rust_i18n::t!($key, locale = $locale).to_string();
-            assert!(!translated.is_empty(), "{}/{} is empty", $locale, $key);
-            if $locale != "en" && !($locale == "it" && $key == "app.files.file_accessibility") {
-                let english = rust_i18n::t!($key, locale = "en").to_string();
-                assert_ne!(translated, english, "{}/{} fell back to English", $locale, $key);
-            }
-        }};
-    }
+    assert_localized(
+        &[
+            "app.files.workspace_files",
+            "app.files.focus_tree",
+            "app.files.refresh",
+            "app.files.refresh_tooltip",
+            "app.files.scanning_description",
+            "app.files.file_accessibility",
+            "app.files.folder_accessibility",
+            "app.files.preview_unavailable",
+            "app.file_preview.accessibility_title",
+            "app.file_preview.accessibility_description",
+            "app.file_preview.open_in_editor",
+            "app.file_preview.copy",
+            "app.file_preview.close",
+            "app.file_preview.close_tooltip",
+            "app.file_preview.editor_error",
+        ],
+        &[("it", "app.files.file_accessibility")],
+    );
 
     for language in UiLanguage::ALL {
         let locale = language.locale();
-        assert_translated!(locale, "app.files.workspace_files");
-        assert_translated!(locale, "app.files.focus_tree");
-        assert_translated!(locale, "app.files.refresh");
-        assert_translated!(locale, "app.files.refresh_tooltip");
-        assert_translated!(locale, "app.files.scanning_description");
-        assert_translated!(locale, "app.files.file_accessibility");
-        assert_translated!(locale, "app.files.folder_accessibility");
-        assert_translated!(locale, "app.files.preview_unavailable");
-        assert_translated!(locale, "app.file_preview.accessibility_title");
-        assert_translated!(locale, "app.file_preview.accessibility_description");
-        assert_translated!(locale, "app.file_preview.open_in_editor");
-        assert_translated!(locale, "app.file_preview.copy");
-        assert_translated!(locale, "app.file_preview.close");
-        assert_translated!(locale, "app.file_preview.close_tooltip");
-        assert_translated!(locale, "app.file_preview.editor_error");
-
         let file_label =
             rust_i18n::t!("app.files.file_accessibility", locale = locale, path = "src/main.rs").to_string();
         assert!(file_label.contains("src/main.rs"), "file path was not interpolated in {locale}");
@@ -628,95 +563,107 @@ fn workspace_file_browser_and_preview_copy_covers_every_language() {
     }
 }
 
-#[expect(clippy::cognitive_complexity, reason = "locale coverage over 20 locales")]
 #[test]
 fn command_and_composer_palettes_are_translated_for_every_language() {
-    macro_rules! assert_translated {
-        ($locale:expr, $key:literal) => {{
-            let translated = rust_i18n::t!($key, locale = $locale).to_string();
-            assert!(!translated.is_empty(), "{}/{} is empty", $locale, $key);
-            if $locale != "en"
-                && $key != "app.palette.command.vtcode"
-                && !($locale == "fr" && $key == "app.palette.sections.session")
-                && !($locale == "fr" && $key == "app.palette.sections.conversation")
-            {
-                let english = rust_i18n::t!($key, locale = "en").to_string();
-                assert_ne!(translated, english, "{}/{} fell back to English", $locale, $key);
-            }
-        }};
-    }
+    assert_localized(
+        &[
+            "app.palette.title.conversation_search",
+            "app.palette.title.file_mention",
+            "app.palette.title.slash_commands",
+            "app.palette.title.prompt_history",
+            "app.palette.title.permissions",
+            "app.palette.title.modes",
+            "app.palette.title.ui_font",
+            "app.palette.title.code_font",
+            "app.palette.title.configuration",
+            "app.palette.title.changed_file",
+            "app.palette.title.commands",
+            "app.palette.sections.session",
+            "app.palette.sections.view",
+            "app.palette.sections.conversation",
+            "app.palette.sections.vtcode_commands",
+            "app.palette.sections.recent_sessions",
+            "app.palette.sections.files",
+            "app.palette.sections.loaded_messages",
+            "app.palette.sections.loaded_tool_output",
+            "app.palette.sections.this_thread",
+            "app.palette.sections.add",
+            "app.palette.sections.workspace_files",
+            "app.palette.sections.skills",
+            "app.palette.sections.plugins",
+            "app.palette.sections.commands",
+            "app.palette.command.new_session",
+            "app.palette.command.close_session",
+            "app.palette.command.switch_workspace",
+            "app.palette.command.refresh_recent_threads",
+            "app.palette.command.choose_model",
+            "app.palette.command.toggle_inspector",
+            "app.palette.command.toggle_zen_mode",
+            "app.palette.command.switch_dark_theme",
+            "app.palette.command.switch_light_theme",
+            "app.palette.command.find_in_conversation",
+            "app.palette.command.open_session",
+            "app.palette.command.open_file",
+            "app.palette.command.add_files",
+            "app.palette.command.workspace_file",
+            "app.palette.command.vtcode",
+            "app.palette.command.you",
+            "app.palette.command.tool_activity",
+            "app.palette.command.output",
+            "app.palette.command.use_plugin",
+            "app.palette.placeholder.configuration",
+            "app.palette.placeholder.fonts",
+            "app.palette.placeholder.workspace_files",
+            "app.palette.placeholder.commands",
+            "app.palette.placeholder.changed_files",
+            "app.palette.placeholder.conversation",
+            "app.palette.placeholder.modes",
+            "app.palette.placeholder.default",
+            "app.palette.conversation_search_header",
+            "app.palette.empty.no_models",
+            "app.palette.empty.models_reload",
+            "app.palette.empty.no_prompts",
+            "app.palette.empty.prompts_hint",
+            "app.palette.empty.modes_unavailable",
+            "app.palette.empty.modes_reload",
+            "app.palette.empty.no_loaded_match",
+            "app.palette.empty.older_history",
+            "app.palette.empty.no_results",
+            "app.palette.empty.try_different_search",
+            "app.palette.history.loading",
+            "app.palette.history.limit_reached",
+            "app.palette.history.retry",
+            "app.palette.history.load",
+            "app.palette.history.retry_hint",
+        ],
+        &[
+            ("fr", "app.palette.sections.session"),
+            ("fr", "app.palette.sections.conversation"),
+            // The "VT Code" brand name is identical in every locale.
+            ("vi", "app.palette.command.vtcode"),
+            ("es", "app.palette.command.vtcode"),
+            ("fr", "app.palette.command.vtcode"),
+            ("ja", "app.palette.command.vtcode"),
+            ("de", "app.palette.command.vtcode"),
+            ("it", "app.palette.command.vtcode"),
+            ("zh-CN", "app.palette.command.vtcode"),
+            ("zh-TW", "app.palette.command.vtcode"),
+            ("zh-HK", "app.palette.command.vtcode"),
+            ("pt-BR", "app.palette.command.vtcode"),
+            ("ko", "app.palette.command.vtcode"),
+            ("nl", "app.palette.command.vtcode"),
+            ("ru", "app.palette.command.vtcode"),
+            ("id", "app.palette.command.vtcode"),
+            ("tr", "app.palette.command.vtcode"),
+            ("pl", "app.palette.command.vtcode"),
+            ("hi", "app.palette.command.vtcode"),
+            ("uk", "app.palette.command.vtcode"),
+            ("sv", "app.palette.command.vtcode"),
+        ],
+    );
 
     for language in UiLanguage::ALL {
         let locale = language.locale();
-        assert_translated!(locale, "app.palette.title.conversation_search");
-        assert_translated!(locale, "app.palette.title.file_mention");
-        assert_translated!(locale, "app.palette.title.slash_commands");
-        assert_translated!(locale, "app.palette.title.prompt_history");
-        assert_translated!(locale, "app.palette.title.permissions");
-        assert_translated!(locale, "app.palette.title.modes");
-        assert_translated!(locale, "app.palette.title.ui_font");
-        assert_translated!(locale, "app.palette.title.code_font");
-        assert_translated!(locale, "app.palette.title.configuration");
-        assert_translated!(locale, "app.palette.title.changed_file");
-        assert_translated!(locale, "app.palette.title.commands");
-        assert_translated!(locale, "app.palette.sections.session");
-        assert_translated!(locale, "app.palette.sections.view");
-        assert_translated!(locale, "app.palette.sections.conversation");
-        assert_translated!(locale, "app.palette.sections.vtcode_commands");
-        assert_translated!(locale, "app.palette.sections.recent_sessions");
-        assert_translated!(locale, "app.palette.sections.files");
-        assert_translated!(locale, "app.palette.sections.loaded_messages");
-        assert_translated!(locale, "app.palette.sections.loaded_tool_output");
-        assert_translated!(locale, "app.palette.sections.this_thread");
-        assert_translated!(locale, "app.palette.sections.add");
-        assert_translated!(locale, "app.palette.sections.workspace_files");
-        assert_translated!(locale, "app.palette.sections.skills");
-        assert_translated!(locale, "app.palette.sections.plugins");
-        assert_translated!(locale, "app.palette.sections.commands");
-        assert_translated!(locale, "app.palette.command.new_session");
-        assert_translated!(locale, "app.palette.command.close_session");
-        assert_translated!(locale, "app.palette.command.switch_workspace");
-        assert_translated!(locale, "app.palette.command.refresh_recent_threads");
-        assert_translated!(locale, "app.palette.command.choose_model");
-        assert_translated!(locale, "app.palette.command.toggle_inspector");
-        assert_translated!(locale, "app.palette.command.toggle_zen_mode");
-        assert_translated!(locale, "app.palette.command.switch_dark_theme");
-        assert_translated!(locale, "app.palette.command.switch_light_theme");
-        assert_translated!(locale, "app.palette.command.find_in_conversation");
-        assert_translated!(locale, "app.palette.command.open_session");
-        assert_translated!(locale, "app.palette.command.open_file");
-        assert_translated!(locale, "app.palette.command.add_files");
-        assert_translated!(locale, "app.palette.command.workspace_file");
-        assert_translated!(locale, "app.palette.command.vtcode");
-        assert_translated!(locale, "app.palette.command.you");
-        assert_translated!(locale, "app.palette.command.tool_activity");
-        assert_translated!(locale, "app.palette.command.output");
-        assert_translated!(locale, "app.palette.command.use_plugin");
-        assert_translated!(locale, "app.palette.placeholder.configuration");
-        assert_translated!(locale, "app.palette.placeholder.fonts");
-        assert_translated!(locale, "app.palette.placeholder.workspace_files");
-        assert_translated!(locale, "app.palette.placeholder.commands");
-        assert_translated!(locale, "app.palette.placeholder.changed_files");
-        assert_translated!(locale, "app.palette.placeholder.conversation");
-        assert_translated!(locale, "app.palette.placeholder.modes");
-        assert_translated!(locale, "app.palette.placeholder.default");
-        assert_translated!(locale, "app.palette.conversation_search_header");
-        assert_translated!(locale, "app.palette.empty.no_models");
-        assert_translated!(locale, "app.palette.empty.models_reload");
-        assert_translated!(locale, "app.palette.empty.no_prompts");
-        assert_translated!(locale, "app.palette.empty.prompts_hint");
-        assert_translated!(locale, "app.palette.empty.modes_unavailable");
-        assert_translated!(locale, "app.palette.empty.modes_reload");
-        assert_translated!(locale, "app.palette.empty.no_loaded_match");
-        assert_translated!(locale, "app.palette.empty.older_history");
-        assert_translated!(locale, "app.palette.empty.no_results");
-        assert_translated!(locale, "app.palette.empty.try_different_search");
-        assert_translated!(locale, "app.palette.history.loading");
-        assert_translated!(locale, "app.palette.history.limit_reached");
-        assert_translated!(locale, "app.palette.history.retry");
-        assert_translated!(locale, "app.palette.history.load");
-        assert_translated!(locale, "app.palette.history.retry_hint");
-
         for (key, value) in [
             (
                 "app.palette.command.open_session",
@@ -884,28 +831,15 @@ fn settings_surface_translations_cover_every_supported_language() {
 
 #[test]
 fn file_destination_copy_is_translated_for_every_language() {
-    macro_rules! assert_catalog_key {
-        ($key:literal) => {
-            for language in UiLanguage::ALL {
-                let locale = language.locale();
-                let translated = rust_i18n::t!($key, locale = locale).to_string();
-                assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
-                if language != UiLanguage::English {
-                    assert_ne!(
-                        translated,
-                        rust_i18n::t!($key, locale = "en").to_string(),
-                        "{locale}/{} fell back to English",
-                        $key
-                    );
-                }
-            }
-        };
-    }
-
-    assert_catalog_key!("app.settings.files.group");
-    assert_catalog_key!("app.settings.files.destination.label");
-    assert_catalog_key!("app.settings.files.destination.description");
-    assert_catalog_key!("app.settings.files.destination.system");
+    assert_localized(
+        &[
+            "app.settings.files.group",
+            "app.settings.files.destination.label",
+            "app.settings.files.destination.description",
+            "app.settings.files.destination.system",
+        ],
+        &[],
+    );
 }
 
 #[test]
