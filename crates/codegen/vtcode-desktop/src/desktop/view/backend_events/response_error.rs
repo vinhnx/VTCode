@@ -152,6 +152,13 @@ impl DesktopView {
         } else if method == protocol::method::TURN_STEER {
             // Leave the row queued: a rejected steer must not lose the prompt.
             self.steer_pending_echo_id = None;
+        } else if method == protocol::method::TURN_QUEUE_EDIT {
+            // Restore the pre-edit prompt the service still holds.
+            if let Some((echo_id, original)) = self.queue_edit_pending.take()
+                && let Some(entry) = self.queued_submissions.iter_mut().find(|entry| entry.echo_id == echo_id)
+            {
+                entry.prompt = original;
+            }
         }
         // A busy thread is actionable, not generic: surface the close-and-reload /
         // fork remedy in the status line too, so it survives banner dismissal.

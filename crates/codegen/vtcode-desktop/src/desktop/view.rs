@@ -882,6 +882,16 @@ struct DesktopView {
     /// Echo id of the queued row whose steer request is in flight. The row
     /// stays visible until the service confirms it reached a live turn.
     steer_pending_echo_id: Option<String>,
+    /// Echo id of the queued row currently being edited inline, if any. Only
+    /// one row carries the shared edit input at a time.
+    editing_queue_echo_id: Option<String>,
+    /// Echo id and pre-edit prompt of an in-flight edit, so a rejected request
+    /// can restore the mirror to the text the service still holds.
+    queue_edit_pending: Option<(String, String)>,
+    /// Shared single-line input for the inline queue-prompt editor.
+    queue_edit_input: Entity<InputState>,
+    /// Enter-to-commit subscription for the shared queue edit input.
+    _queue_edit_subscription: Subscription,
     /// Take-latest text awaiting composer restore (applied with a window by
     /// `process_drained_event`).
     pending_composer_restore: Option<String>,

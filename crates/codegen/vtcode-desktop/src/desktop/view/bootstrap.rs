@@ -318,6 +318,15 @@ impl DesktopView {
                 view.rebuild_picker_tree(cx);
             }
         });
+        // The inline queue editor is shared: only one queued row edits at a
+        // time. Enter commits the row being edited (the click path shares the
+        // same commit method); Escape is handled on the row element.
+        let queue_edit_input = cx.new(|cx| InputState::new(window, cx));
+        let queue_edit_subscription = cx.subscribe_in(&queue_edit_input, window, |view, _, event, window, cx| {
+            if matches!(event, InputEvent::PressEnter { .. }) {
+                view.commit_queue_edit(window, cx);
+            }
+        });
         let composer_highlight_styles =
             Rc::new(RefCell::new(composer_highlight::ComposerHighlightStyles::from_colors(&cx.theme().colors)));
         let composer = cx.new(|cx| {
@@ -728,6 +737,10 @@ impl DesktopView {
             queue_dropped_total: 0,
             take_latest_pending: false,
             steer_pending_echo_id: None,
+            editing_queue_echo_id: None,
+            queue_edit_pending: None,
+            queue_edit_input,
+            _queue_edit_subscription: queue_edit_subscription,
             pending_composer_restore: None,
             session_request: None,
             pending_new_thread: false,

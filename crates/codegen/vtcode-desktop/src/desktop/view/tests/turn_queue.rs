@@ -608,41 +608,17 @@ fn queue_panel_state_tracks_entries_and_depth(cx: &mut TestAppContext) {
     });
 }
 
-#[gpui_kit::test]
-fn edit_newest_button_sends_take_latest(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.selected_session_id = Some("session".to_string());
-            view.running = true;
-            view.enqueue_queued_submission(queued_draft("older"), false, cx)
-                .expect("queue older");
-            view.enqueue_queued_submission(queued_draft("newer"), false, cx)
-                .expect("queue newer");
-            assert!(view.confirm_oldest_queued_submission());
-            assert!(view.confirm_oldest_queued_submission());
-        });
-        window.render_frame(cx);
-        window.click("edit-newest-queued", cx);
-        view.update(cx, |view, _| {
-            assert!(view.take_latest_pending);
-        });
-    })
-    .unwrap();
-    for _ in 0..2 {
-        assert!(requests.try_recv().is_ok(), "queued submits first");
+fn bound_queued_entry(prompt: &str) -> QueuedSubmission {
+    QueuedSubmission {
+        echo_id: format!("echo-{prompt}"),
+        entry_id: Some(format!("qe-{prompt}")),
+        prompt: prompt.to_string(),
+        acknowledged: true,
     }
-    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
-        panic!("expected take-latest request");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::TURN_QUEUE_TAKE_LATEST);
-    assert_eq!(params, serde_json::json!({ "sessionId": "session" }));
 }
 
 #[gpui_kit::test]
-fn edit_newest_button_stays_inert_with_a_live_draft(cx: &mut TestAppContext) {
+fn inline_edit_commits_a_queued_prompt_in_place(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -650,19 +626,75 @@ fn edit_newest_button_stays_inert_with_a_live_draft(cx: &mut TestAppContext) {
             view.backend = Some(BackendHandle { commands });
             view.selected_session_id = Some("session".to_string());
             view.running = true;
-            view.enqueue_queued_submission(queued_draft("queued"), false, cx)
-                .expect("queue");
-            view.composer.update(cx, |state, cx| state.set_value("live draft", window, cx));
+            view.queued_submissions.push(bound_queued_entry("old"));
+            view.start_queue_edit("echo-old", window, cx);
+            assert_eq!(view.editing_queue_echo_id.as_deref(), Some("echo-old"));
         });
         window.render_frame(cx);
-        window.click("edit-newest-queued", cx);
-        view.update(cx, |view, _| {
-            assert!(!view.take_latest_pending);
+        view.update(cx, |view, cx| {
+            view.queue_edit_input
+                .update(cx, |input, cx| input.set_value("revised", window, cx));
+        });
+        view.update(cx, |view, cx| view.commit_queue_edit(window, cx));
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("edit request") else {
+        panic!("expected queue edit request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_QUEUE_EDIT);
+    assert_eq!(params, serde_json::json!({ "sessionId": "session", "entryId": "qe-old", "prompt": "revised" }));
+    view.update(cx, |view, _| {
+        assert_eq!(view.queued_submissions[0].prompt, "revised", "mirror updates optimistically");
+        assert!(view.editing_queue_echo_id.is_none(), "editor closes after commit");
+        assert!(view.queue_edit_pending.is_some(), "pre-edit text retained for error rollback");
+        assert!(requests.try_recv().is_err());
+    });
+}
+
+#[gpui_kit::test]
+fn inline_edit_cancel_leaves_the_prompt_untouched(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".to_string());
+            view.running = true;
+            view.queued_submissions.push(bound_queued_entry("old"));
+            view.start_queue_edit("echo-old", window, cx);
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| {
+            view.queue_edit_input
+                .update(cx, |input, cx| input.set_value("discarded", window, cx));
+        });
+        view.update(cx, |view, cx| view.cancel_queue_edit(window, cx));
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert_eq!(view.queued_submissions[0].prompt, "old");
+        assert!(view.editing_queue_echo_id.is_none());
+        assert!(view.queue_edit_pending.is_none());
+    });
+    assert!(requests.try_recv().is_err(), "cancel sends no request");
+}
+
+#[gpui_kit::test]
+fn inline_edit_is_unavailable_for_unbound_rows(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: "echo-optimistic".into(),
+                entry_id: None,
+                prompt: "new".into(),
+                acknowledged: false,
+            });
+            view.start_queue_edit("echo-optimistic", window, cx);
+            assert!(view.editing_queue_echo_id.is_none(), "no wire id means no service address");
         });
     })
     .unwrap();
-    assert!(requests.try_recv().is_ok(), "queued submit");
-    assert!(requests.try_recv().is_err(), "no take-latest request sent");
 }
 
 #[gpui_kit::test]

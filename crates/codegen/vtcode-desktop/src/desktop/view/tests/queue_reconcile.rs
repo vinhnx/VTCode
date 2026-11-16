@@ -98,9 +98,11 @@ fn take_latest_waits_for_pending_acks(cx: &mut TestAppContext) {
         assert!(requests.try_recv().is_ok(), "queued submit sent");
         assert!(requests.try_recv().is_err(), "no take-latest while unacked");
         window.render_frame(cx);
-        assert_eq!(window.find("edit-newest-queued").disabled(), Some(true), "pop control waits for the ack");
-        assert!(window.try_find("edit-newest-queued-row").is_none(), "row pop hides while unacked");
         view.update(cx, |view, cx| {
+            // Editing is now inline per row: the unacked (unbound) row has no
+            // wire id, so it cannot open an editor until a snapshot binds it.
+            view.start_queue_edit("echo-flight", window, cx);
+            assert!(view.editing_queue_echo_id.is_none(), "unbound row has no inline editor");
             assert!(view.confirm_oldest_queued_submission());
             view.take_latest_queued(cx);
             assert!(view.take_latest_pending, "acked entries pop");

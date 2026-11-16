@@ -230,6 +230,33 @@ pub struct TurnQueueRemoveResult {
     pub queue_depth: usize,
 }
 
+/// Parameters for editing one queued message's prompt in place. The entry id
+/// comes from the latest `turn/queue-status` snapshot; the FIFO position and
+/// id are preserved so in-flight references stay valid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnQueueEditParams {
+    /// Session that owns the queue.
+    pub session_id: String,
+    /// Entry identity token from the latest `turn/queue-status` snapshot.
+    pub entry_id: String,
+    /// Replacement prompt text.
+    pub text: String,
+}
+
+/// Outcome of editing one queued message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnQueueEditResult {
+    /// Session that owns the queue.
+    pub session_id: String,
+    /// Whether the entry id matched a queued message and it was edited.
+    pub edited: bool,
+    /// Queue depth after the edit (unchanged).
+    #[serde(default)]
+    pub queue_depth: usize,
+}
+
 /// Parameters for steering the live turn with a prompt. When the prompt comes
 /// from a queued row, `entry_id` asks the service to remove that entry in the
 /// same request so it is never dispatched a second time.

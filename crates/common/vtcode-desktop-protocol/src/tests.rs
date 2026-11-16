@@ -5,6 +5,27 @@ use std::io;
 mod live_events;
 
 #[test]
+fn queue_edit_params_and_result_round_trip() {
+    let params = TurnQueueEditParams {
+        session_id: "session".into(),
+        entry_id: "qe-1".into(),
+        text: "revised prompt".into(),
+    };
+    let value = serde_json::to_value(&params).unwrap();
+    assert_eq!(value["entryId"], serde_json::json!("qe-1"));
+    assert_eq!(serde_json::from_value::<TurnQueueEditParams>(value).unwrap(), params);
+
+    let result = TurnQueueEditResult {
+        session_id: "session".into(),
+        edited: true,
+        queue_depth: 2,
+    };
+    let value = serde_json::to_value(&result).unwrap();
+    assert_eq!(value["edited"], serde_json::json!(true));
+    assert_eq!(serde_json::from_value::<TurnQueueEditResult>(value).unwrap(), result);
+}
+
+#[test]
 fn steer_params_and_result_round_trip() {
     let params = TurnSteerParams {
         session_id: "session".into(),

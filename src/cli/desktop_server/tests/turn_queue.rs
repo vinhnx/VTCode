@@ -736,3 +736,89 @@ async fn steer_request_without_a_live_turn_keeps_the_row_queued() {
     drop(exit_sender);
     runtime_task.abort();
 }
+
+#[tokio::test]
+async fn edit_request_replaces_one_queued_prompt_in_place() {
+    let directory = tempfile::tempdir().expect("workspace");
+    let workspace = directory.path().to_path_buf();
+    let (context, mut notifications) = test_service_context(test_startup_context(&workspace), workspace);
+    let (input, _input_receiver) = mpsc::unbounded_channel();
+    let (exit_sender, exit) = oneshot::channel();
+    let runtime_task = tokio::spawn(std::future::pending::<()>());
+    {
+        let mut state = context.state.lock().await;
+        state.initialized = true;
+        state.session_id = Some("session".into());
+        state.runtime = Some(RuntimeSession {
+            session_id: "session".into(),
+            input,
+            stop: stop_requests::new_stop_handle_slot(),
+            exit,
+            abort: runtime_task.abort_handle(),
+            command_forwarder: std::thread::spawn(|| {}),
+        });
+    }
+    let queueable = EnqueueMode::Queueable { batchable: false };
+    enqueue_turn(&context.state, &context.notifications, "session", "running".into(), Vec::new(), queueable)
+        .await
+        .expect("idle submit");
+    for prompt in ["oldest", "newest"] {
+        enqueue_turn(&context.state, &context.notifications, "session", prompt.into(), Vec::new(), queueable)
+            .await
+            .expect("queue behind the turn");
+    }
+    for _ in 0..3 {
+        notifications.recv().await.expect("drain setup notifications");
+    }
+    let entry_ids: Vec<String> = {
+        let state = context.state.lock().await;
+        state.queue.iter().map(|entry| entry.entry_id()).collect()
+    };
+
+    let edit = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::Number(1),
+        method: protocol::method::TURN_QUEUE_EDIT.into(),
+        params: serde_json::json!({
+            "sessionId": "session",
+            "entryId": entry_ids[0],
+            "text": "revised oldest",
+        }),
+    };
+    let (result, stop) = dispatch::handle_request_inner(&context, &edit).await.expect("edit");
+    assert!(!stop);
+    let edited: protocol::TurnQueueEditResult = serde_json::from_value(result).expect("edit result");
+    assert!(edited.edited);
+    assert_eq!(edited.queue_depth, 2);
+    let status = notifications.recv().await.expect("queue status on edit");
+    assert_eq!(status.method, protocol::method::TURN_QUEUE_STATUS);
+    assert_eq!(status.params["previews"][0], serde_json::json!("revised oldest"));
+    assert_eq!(status.params["previews"][1], serde_json::json!("newest"));
+    let published_ids: Vec<String> = status.params["entryIds"]
+        .as_array()
+        .expect("entry ids")
+        .iter()
+        .map(|value| value.as_str().expect("string").to_string())
+        .collect();
+    assert_eq!(published_ids, entry_ids, "editing keeps FIFO positions and wire ids");
+    let texts: Vec<String> = {
+        let state = context.state.lock().await;
+        state.queue.iter().map(|entry| entry.input.text.clone()).collect()
+    };
+    assert_eq!(texts, vec!["revised oldest", "newest"]);
+
+    // A stale id fails softly without publishing another status.
+    let stale = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::Number(2),
+        method: protocol::method::TURN_QUEUE_EDIT.into(),
+        params: serde_json::json!({ "sessionId": "session", "entryId": "qe-stale", "text": "ignored" }),
+    };
+    let (result, _) = dispatch::handle_request_inner(&context, &stale).await.expect("stale edit");
+    let stale_result: protocol::TurnQueueEditResult = serde_json::from_value(result).expect("stale result");
+    assert!(!stale_result.edited);
+    assert!(notifications.try_recv().is_err(), "a rejected edit publishes no status");
+
+    drop(exit_sender);
+    runtime_task.abort();
+}

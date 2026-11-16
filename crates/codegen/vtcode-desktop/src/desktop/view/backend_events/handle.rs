@@ -487,6 +487,28 @@ impl DesktopView {
                             self.truncate_dispatched_to_depth(removed.queue_depth);
                         }
                     }
+                    protocol::method::TURN_QUEUE_EDIT => {
+                        let pending = self.queue_edit_pending.take();
+                        let edited = serde_json::from_value::<protocol::TurnQueueEditResult>(result)
+                            .ok()
+                            .filter(|edited| self.selected_session_id.as_deref() == Some(edited.session_id.as_str()));
+                        match edited {
+                            Some(edited) if edited.edited => {
+                                self.truncate_dispatched_to_depth(edited.queue_depth);
+                            }
+                            _ => {
+                                // Stale id or rejected edit: restore the prompt
+                                // the service still holds for this row.
+                                if let Some((echo_id, original)) = pending
+                                    && let Some(entry) =
+                                        self.queued_submissions.iter_mut().find(|entry| entry.echo_id == echo_id)
+                                {
+                                    entry.prompt = original;
+                                }
+                                self.error = Some("The queued prompt could not be updated.".to_string());
+                            }
+                        }
+                    }
                     protocol::method::TURN_STEER => {
                         let pending_echo = self.steer_pending_echo_id.take();
                         let steered = serde_json::from_value::<protocol::TurnSteerResult>(result)

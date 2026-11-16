@@ -685,6 +685,46 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             .await?;
             Ok((serde_json::to_value(accepted)?, false))
         }
+        method::TURN_QUEUE_EDIT => {
+            let params: protocol::TurnQueueEditParams = parse_params(&request.params)?;
+            // Keep the wire bounded: a queued prompt uses the same per-message
+            // budget as the batch drain so one edit cannot grow the queue
+            // without limit.
+            const MAX_EDIT_BYTES: usize = 64 * 1024;
+            if params.entry_id.is_empty() || params.entry_id.len() > protocol::MAX_QUEUE_ENTRY_ID_LEN {
+                bail!("invalid queue entry identity");
+            }
+            if params.text.is_empty() || params.text.len() > MAX_EDIT_BYTES {
+                bail!("edited prompt is empty or too long");
+            }
+            let (result, status) = {
+                let mut state = context.state.lock().await;
+                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
+                    bail!("session is not selected");
+                }
+                let edited = state
+                    .queue
+                    .iter_mut()
+                    .find(|queued| queued.entry_id() == params.entry_id)
+                    .is_some_and(|queued| {
+                        queued.input.text = params.text.clone();
+                        true
+                    });
+                let status = edited.then(|| state.queue_status(&params.session_id));
+                (
+                    protocol::TurnQueueEditResult {
+                        session_id: params.session_id,
+                        edited,
+                        queue_depth: state.queue.len(),
+                    },
+                    status,
+                )
+            };
+            if let Some(status) = status {
+                publish_queue_status_sync(&context.notifications, &status);
+            }
+            Ok((serde_json::to_value(result)?, false))
+        }
         method::TURN_STEER => {
             let params: protocol::TurnSteerParams = parse_params(&request.params)?;
             if params.text.is_empty() {
