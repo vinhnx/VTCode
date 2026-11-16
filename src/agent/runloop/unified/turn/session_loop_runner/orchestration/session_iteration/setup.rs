@@ -654,8 +654,12 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     if let Some(slot) = stop_slot.as_ref() {
         // The exec-session handle lets a host escalation kill owned processes
         // directly when the runloop is wedged; sessions cannot predate the
-        // registry, so publishing at the ready-mark covers every turn.
+        // registry, so publishing at the ready-mark covers every turn. The
+        // registry clone shares session and verification state, so host-side
+        // direct kills retire the same bookkeeping as the runloop's own
+        // teardown instead of stranding it.
         crate::agent::runloop::unified::stop_requests::publish_exec_sessions(slot, &exec_session_manager);
+        crate::agent::runloop::unified::stop_requests::publish_exec_registry(slot, &tool_registry);
         crate::agent::runloop::unified::stop_requests::mark_host_turns_ready(slot);
     }
     let goal_session_dir = vtcode_memory::session_directory(&config.workspace, thread_handle.thread_id().as_str());

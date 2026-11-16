@@ -56,6 +56,18 @@ impl ExecHarness {
     }
 }
 
+/// Publish an empty exec-session manager covering the manager-direct
+/// fallback branch (no live sessions exist to kill).
+fn publish_empty_manager(stop: &StopHandleSlot) {
+    let workspace = std::env::temp_dir();
+    let pty_sessions = vtcode_core::tools::registry::PtySessionManager::new(
+        workspace.clone(),
+        vtcode_core::config::PtyConfig::default(),
+    );
+    let manager = vtcode_core::tools::exec_session::ExecSessionManager::new(workspace, pty_sessions);
+    assert!(stop_requests::publish_exec_sessions(stop, &manager));
+}
+
 #[tokio::test]
 async fn force_cancel_accepted_and_queued() {
     let mut harness = ExecHarness::new().await;
@@ -73,6 +85,7 @@ async fn force_cancel_accepted_and_queued() {
 async fn force_cancel_with_active_turn_fires_forced_stop_signal() {
     let mut harness = ExecHarness::new().await;
     let ctrl_c = harness.publish_active_turn().await;
+    publish_empty_manager(&harness.stop);
     let request = harness.request(protocol::method::EXEC_FORCE_CANCEL, "session");
     let (result, shutdown) = handle_request(&harness.context, &request).await.expect("accepted");
     assert!(!shutdown);
@@ -99,6 +112,57 @@ async fn force_cancel_without_active_turn_keeps_stop_signal_clear() {
     assert!(matches!(harness.input.recv().await, Some(InlineEvent::ForceCancelPtySession)));
     assert!(!ctrl_c.is_cancel_requested(), "no active turn must not consume the next one");
     assert!(!ctrl_c.is_force_kill());
+}
+
+/// Force-cancel kills owned processes directly even when the runloop never
+/// consumes the queued event (wedged in a tool wait) or the turn already
+/// ended (a stuck session outliving its turn). Verified compositionally: the
+/// kill mechanics are pinned in vtcode-core's
+/// `force_cancel_all_sessions_kills_background_too` (session creation is
+/// crate-private there); here a published manager must run the direct-kill
+/// branch and still accept, without firing a stop signal into the next turn.
+#[tokio::test]
+async fn force_cancel_with_published_manager_kills_directly_and_keeps_idle_signal_clear() {
+    let mut harness = ExecHarness::new().await;
+    let ctrl_c = Arc::new(CtrlCState::new());
+    let notify = Arc::new(Notify::new());
+    stop_requests::publish_stop_handles(&harness.stop, &ctrl_c, &notify);
+    stop_requests::mark_host_turns_ready(&harness.stop);
+    publish_empty_manager(&harness.stop);
+
+    let request = harness.request(protocol::method::EXEC_FORCE_CANCEL, "session");
+    let (result, shutdown) = handle_request(&harness.context, &request).await.expect("accepted");
+    assert!(!shutdown);
+    assert_eq!(result["accepted"], true);
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::ForceCancelPtySession)));
+    assert!(!ctrl_c.is_cancel_requested(), "idle direct kill must not consume the next turn");
+    assert!(!ctrl_c.is_force_kill());
+}
+
+/// The direct kill prefers the registry observe path so terminated mutators
+/// retire their verification boundary; with no sessions the kill is a no-op
+/// and forced-signal behavior is unchanged. Wiring-only: session creation is
+/// crate-private to vtcode-core (kill mechanics are pinned there); this pins
+/// publish, branch selection, and accept.
+#[tokio::test]
+async fn force_cancel_with_published_registry_prefers_observe_cleanup() {
+    let mut harness = ExecHarness::new().await;
+    let ctrl_c = harness.publish_active_turn().await;
+    let temp = tempfile::tempdir().expect("registry workspace");
+    let registry = vtcode_core::tools::registry::ToolRegistry::new(
+        vtcode_commons::canonicalize(temp.path()).expect("canonical workspace"),
+    )
+    .await;
+    assert!(stop_requests::publish_exec_registry(&harness.stop, &registry));
+    assert!(!stop_requests::publish_exec_registry(&harness.stop, &registry), "first publish wins");
+
+    let request = harness.request(protocol::method::EXEC_FORCE_CANCEL, "session");
+    let (result, shutdown) = handle_request(&harness.context, &request).await.expect("accepted");
+    assert!(!shutdown);
+    assert_eq!(result["accepted"], true);
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::ForceCancelPtySession)));
+    assert!(ctrl_c.is_cancel_requested(), "the forced fire must stop the running turn");
+    assert!(ctrl_c.is_force_kill(), "the forced fire must widen the session teardown to every session");
 }
 
 #[tokio::test]

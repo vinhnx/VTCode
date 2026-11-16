@@ -823,6 +823,9 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             if input.send(event).is_err() {
                 bail!("selected session runtime has stopped");
             }
+            if request.method == method::EXEC_FORCE_CANCEL {
+                cancel::spawn_direct_exec_kill(&stop, &params.session_id, turn_active);
+            }
             Ok((json!({ "accepted": true }), false))
         }
         method::TURN_QUEUE_TAKE_LATEST => {

@@ -62,6 +62,7 @@ pub(crate) type StopHandles = (Arc<CtrlCState>, Arc<Notify>);
 pub(crate) struct HostStopHandles {
     handles: std::sync::OnceLock<StopHandles>,
     exec_sessions: std::sync::OnceLock<vtcode_core::tools::exec_session::ExecSessionManager>,
+    exec_registry: std::sync::OnceLock<vtcode_core::tools::registry::ToolRegistry>,
     goal_tracker: std::sync::OnceLock<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker>,
     steering_sender:
         std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<vtcode_core::core::agent::steering::SteeringMessage>>,
@@ -101,6 +102,24 @@ pub(crate) fn host_exec_sessions(
     slot: &StopHandleSlot,
 ) -> Option<vtcode_core::tools::exec_session::ExecSessionManager> {
     slot.exec_sessions.get().cloned()
+}
+
+/// Publish the runloop's tool registry for host-side direct kills.
+/// Called once the registry exists; a repeated publish keeps the first.
+/// The clone shares exec-session and verification state, so the host's
+/// observe-cleanup path retires the same bookkeeping the runloop's own
+/// teardown would.
+pub(crate) fn publish_exec_registry(
+    slot: &StopHandleSlot,
+    registry: &vtcode_core::tools::registry::ToolRegistry,
+) -> bool {
+    slot.exec_registry.set(registry.clone()).is_ok()
+}
+
+/// Clone the published tool registry, if initialization got far
+/// enough to create one. `None` before that.
+pub(crate) fn host_exec_registry(slot: &StopHandleSlot) -> Option<vtcode_core::tools::registry::ToolRegistry> {
+    slot.exec_registry.get().cloned()
 }
 
 /// Publish the runloop's goal tracker for host-side `goal/execute` calls.

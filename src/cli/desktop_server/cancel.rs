@@ -61,6 +61,62 @@ pub(super) fn spawn_cancel_refire(
     });
 }
 
+/// Fire-and-forget direct kill of owned exec sessions after a force-cancel
+/// accept. A wedged runloop observes neither the queued event (consumed
+/// between turns) nor the stop signal (polled by cancel paths), so the
+/// button kills now instead of waiting out the watchdog grace period.
+/// `force` mirrors the queued handler's scope: a forced stop ends every
+/// session, while the idle hatch leaves user-owned background sessions
+/// alone. The registry path is preferred so terminated mutators retire
+/// their verification boundary (a raw manager close would strand it on a
+/// surviving runtime); the manager-direct path is the fallback when no
+/// registry was published yet, in which case no session can exist either.
+/// Concurrent drivers may each count a session the other closed; counts are
+/// debug telemetry, not an exact census.
+pub(super) fn spawn_direct_exec_kill(stop: &StopHandleSlot, session_id: &str, force: bool) {
+    let registry = stop_requests::host_exec_registry(stop);
+    let manager = stop_requests::host_exec_sessions(stop);
+    if registry.is_none() && manager.is_none() {
+        return;
+    }
+    let session_id = session_id.to_owned();
+    tokio::spawn(async move {
+        let outcome = timeout(ESCALATION_KILL_TIMEOUT, async {
+            if let Some(registry) = registry {
+                if force {
+                    registry.force_cancel_all_sessions_and_observe_cleanup().await
+                } else {
+                    registry.force_cancel_foreground_sessions_and_observe_cleanup().await
+                }
+            } else if let Some(manager) = manager {
+                if force {
+                    manager.force_cancel_all_sessions().await
+                } else {
+                    manager.force_cancel_foreground_sessions().await
+                }
+            } else {
+                (0, 0, 0)
+            }
+        })
+        .await;
+        match outcome {
+            Ok((stopped, closed, failed)) => {
+                tracing::debug!(
+                    target: "vtcode.desktop",
+                    %session_id,
+                    stopped,
+                    closed,
+                    failed,
+                    "force-cancel direct kill finished"
+                );
+            }
+            Err(_) => {
+                tracing::warn!(target: "vtcode.desktop", %session_id, "force-cancel direct kill timed out");
+            }
+        }
+    });
+}
+
 /// Bounded waits for one cancel escalation. Production reuses the shutdown
 /// path's bounds; tests inject short deterministic ones.
 #[derive(Debug, Clone, Copy)]
