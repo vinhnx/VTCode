@@ -24,7 +24,7 @@ actual feature selection — not from raw lock entries.
 After the applied changes below: release binary **30,124,576 bytes vs 30,124,592 baseline (−16 bytes —
 unchanged; fat LTO + strip had already dead-stripped everything removed here)**, closure 2186 → 2172
 nodes, duplicate groups 160 → 159. The honest read: this round's value is manifest honesty, resolved
-lint flags, per-crate feature correctness, and the machete regression gate — the size-relevant items
+lint flags, per-crate feature correctness, and the Cargo manifest-lint check — the size-relevant items
 (harmony/reqwest dual stack) are upstream-bound and listed under DEFERRED. Note `once_cell` remains in
 the closure as a *transitive* dep (jsonschema→ahash, color-eyre, better-panic) — unavoidable from our
 side; only our direct edges were removed.
@@ -41,16 +41,18 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
    0.9 → workspace 0.10); root `axum` made optional behind `anthropic-api`; `tokio-util`/`compat`
    dropped (only `CancellationToken` used); `itertools` removed (one call site inlined).
 2. **Unused deps removed**: `flate2` + `zip` from vtcode-core (skill packaging lives in
-   vtcode-skills, which declares its own `zip`; verified via `rg` + `cargo machete`).
+   vtcode-skills, which declares its own `zip`; verified via `rg` + Cargo's built-in
+   `unused_dependencies` manifest lint).
 3. **tokio "full" trimmed** (`6c1d696ce`): workspace entry is bare `tokio = "1.52"`; every
    workspace-inherited consumer declares its real feature subset (crate-ops rule). Lock drops
    tokio's `parking_lot 0.12.5` dep line. Compile-time win; LTO already dead-stripped most of it.
 4. **once_cell removed** (`0749f9868`): 40 files migrated to `std::sync::LazyLock`/`OnceLock`
    (MSRV 1.100; std types stable since 1.80; 262 files already used the std convention).
    once_cell dropped from `[workspace.dependencies]` + 6 crate manifests.
-5. **cargo-machete wired into the gates** (`run_cargo_machete` in `scripts/common.sh`; runs in the
-   `check-dev.sh` fast gate and `scripts/check.sh` release gate, warn-and-skip when the tool is
-   absent — mirroring `run_cargo_deny`).
+5. **Cargo 1.100 manifest-lint gate**: `unused_dependencies = "warn"` in root `Cargo.toml`, surfaced
+   by the existing `clippy --all-targets --all-features` step in `check-dev.sh` and `scripts/check.sh`
+   (plain `cargo check` without `--all-targets` does not reliably show it). This replaced the earlier
+   `cargo-machete` external gate (retired 2026-11-17 as a regex-based, less accurate duplicate).
 6. **Exec layer consolidated on tokio::process** (`8095f910e`): `exec/async_command.rs` replaced
    async-process with tokio::process + safe `process_group(0)`; timeout/cancellation kills now
    target the whole process group via vtcode-bash-runner's `kill_process_group_by_pid` (DRY reuse),
@@ -102,9 +104,13 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
 
 ## Ongoing policy
 
-- `cargo machete` now runs in the fast gate; keep `[package.metadata.cargo-machete] ignored` lists
-  justified. Machete false positives (cfg-gated deps, re-exports) must be verified with `rg` + a
-  `lib.rs` `pub use` check before removal (gotchas 2026-07-18, 2026-10-14).
+- Cargo's built-in `unused_dependencies` manifest lint is the sole unused-dependency check. It is
+  `warn`-level (the root allocator design prevents `deny`, see root `Cargo.toml`) and surfaces in the
+  `clippy --all-targets --all-features` gate (plain `cargo check` lacks `--all-targets`). Before
+  removing a flagged dep, verify the call site with `rg`; if it is feature-gated, declare the dep
+  `optional = true` with `dep:<name>` on that feature instead of deleting it (gotchas #2, #11). No
+  `ignored` allowlist exists — the built-in lint cannot be silenced per-manifest, which is why the
+  regex-based `cargo-machete` gate was retired.
 - Adding a dependency goes through `evaluate-crate` (redundancy check is step 1 there).
 - Manifest edits go through `crate-ops`: isolated `cargo check --locked -p <crate>` per touched
   crate — workspace-wide builds mask missing features via unification (observed twice in this

@@ -336,6 +336,10 @@ allow_attributes_without_reason = "warn"
 # sees each dep only on platforms where its gated call sites compile. The
 # unused-dependency warning only surfaces when every target that could use a
 # dep is built (e.g. `--all-targets`); it never covers dev-dependencies.
+# This built-in lint is the sole unused-dependency check: cargo-machete was
+# retired 2026-11-17 as a less accurate, regex-based duplicate. A dep whose
+# only call site is feature-gated must be `optional = true` with `dep:<name>`
+# on that feature, or the lint flags it when the feature is off.
 #
 # `unused_dependencies` stays at "warn" rather than deny for one structural
 # reason: the root binary's selectable global allocator (`mimalloc` default,
@@ -645,9 +649,6 @@ predicates = "3.1"
 insta = "1.39"
 serial_test = { workspace = true }
 fs2 = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = []
 
 [package.metadata.unmaintained]
 # Ignore known unmaintained packages (add packages as needed)

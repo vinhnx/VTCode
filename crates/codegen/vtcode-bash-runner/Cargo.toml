@@ -18,14 +18,14 @@ powershell-process = []
 dry-run = []
 pure-rust = []
 serde-errors = ["dep:serde"]
-exec-events = ["dep:vtcode-exec-events"]
+exec-events = ["dep:vtcode-exec-events", "dep:parking_lot"]
 
 [dependencies]
 anyhow = { workspace = true }
 bytes = "1.11"
 hashbrown = { workspace = true }
 memchr = { workspace = true }
-parking_lot = "0.13"
+parking_lot = { version = "0.13", optional = true }
 path-clean = { workspace = true }
 shell-escape = "0.1"
 shell-words = { workspace = true }
@@ -58,9 +58,6 @@ workspace = true
 
 [dev-dependencies]
 assert_fs = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["tokio-test", "winapi"]
 
 [[example]]
 name = "dry_run"

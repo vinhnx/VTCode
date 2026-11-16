@@ -5,9 +5,9 @@
 #
 # Default checks (fast):
 #   - rustfmt (formatting)
-#   - clippy (linting, default-members only)
+#   - clippy (linting, default-members only; its --all-targets run surfaces Cargo's
+#     built-in `unused_dependencies` manifest lint, configured in Cargo.toml [lints.cargo])
 #   - cargo check (compilation verification)
-#   - cargo-machete (unused dependencies; warn-and-skip when not installed)
 #   - file length gate (hard ceiling: 1000 lines per tracked text file)
 #   - Rust file length report (soft: src 500 / tests 800; check.sh enforces)
 #
@@ -155,8 +155,6 @@ run_check() {
 		return 1
 	fi
 }
-
-
 
 run_tests() {
 	local nextest_args=()
@@ -328,9 +326,9 @@ print_usage() {
 	echo ""
 	echo "Optimized for rapid development iterations. By default runs only:"
 	echo "  - rustfmt (formatting)"
-	echo "  - clippy (linting, default-members)"
+	echo "  - clippy (linting, default-members; its --all-targets run surfaces Cargo's"
+	echo "     built-in unused_dependencies lint)"
 	echo "  - cargo check (compilation)"
-	echo "  - cargo-machete (unused dependencies; skipped with a warning when the tool is absent)"
 	echo "Cargo checks, metadata, and tests use --locked to preserve Cargo.lock."
 	echo ""
 	echo "Options:"
@@ -420,7 +418,6 @@ main() {
 	run_rustfmt || ((FAILED_CHECKS++))
 	run_clippy || ((FAILED_CHECKS++))
 	run_check || ((FAILED_CHECKS++))
-	run_cargo_machete || ((FAILED_CHECKS++))
 	run_repo_governance_gates || ((FAILED_CHECKS++))
 
 	# Run extra lints if requested

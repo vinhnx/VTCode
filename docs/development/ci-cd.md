@@ -413,9 +413,10 @@ call the shared functions in `scripts/common.sh`, so the fast gate and the relea
 Unused dependencies are reported by Cargo 1.100's built-in `cargo::unused_dependencies` manifest
 lint — no external tool. It is `warn` (not `deny`) because the root binary's mutually exclusive
 allocator features make an `--all-features` build compile neither allocator static; the full
-rationale is in root `Cargo.toml`. The lint surfaces in the existing `cargo check` and
-`cargo clippy --all-targets --all-features` gates, so review those warnings rather than expecting a
-separate gate step. A dependency whose only call site is feature-gated must be declared
+rationale is in root `Cargo.toml`. The lint surfaces in the existing
+`cargo clippy --all-targets --all-features` gate (it needs `--all-targets` to see every target's
+usage), so review those warnings rather than expecting a separate gate step. Plain `cargo check`
+without `--all-targets` will not reliably surface them. A dependency whose only call site is feature-gated must be declared
 `optional = true` with `dep:<name>` added to that feature, otherwise the lint flags it in builds
 where the feature is off. See [dependency-bloat-audit](dependency-bloat-audit.md) for the audit that
 introduced and later retired the external check.
@@ -434,7 +435,7 @@ rustup component add rustfmt clippy
 # Install additional tools
 cargo install cargo-audit      # Security auditing
 cargo install cargo-outdated   # Dependency checking
-cargo install cargo-udeps      # Unused dependencies
+# Unused dependencies: use Cargo 1.100's built-in `unused_dependencies` lint (root Cargo.toml)
 cargo install cargo-msrv       # MSRV checking
 cargo install cargo-license    # License checking
 cargo install cargo-tarpaulin  # Code coverage
@@ -534,7 +535,8 @@ cargo msrv --workspace set 1.100.0  # Set specific version
 ```bash
 cargo update
 cargo outdated
-cargo udeps
+# Unused deps: Cargo 1.100's built-in lint reports them as warnings
+cargo check --workspace --all-targets
 ```
 
 ### Performance Optimization
