@@ -1,0 +1,17 @@
+# Opt-in SpecStream MCP over Streamable HTTP.
+# Merge these settings into your existing vtcode.toml; retain other providers.
+# Requires SPECSTREAM_API_KEY in your environment.
+[mcp]
+enabled = true
+experimental_use_rmcp_client = true
+
+[[mcp.providers]]
+name = "specstream"
+enabled = true
+endpoint = "https://api.specstream.ai/mcp"
+api_key_env = "SPECSTREAM_API_KEY"
+http_headers = { "User-Agent" = "VTCode/specstream-mcp" }
+
+# MCP tools reach the model under the advanced tool profile.
+[tools]
+profile = "advanced_vtcode"

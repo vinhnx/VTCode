@@ -212,6 +212,12 @@ permanent public URL, then update, roll back or delete them, over Streamable HTT
 [runnable TOML example](../examples/deedpage-mcp.toml) to add the anonymous endpoint alongside your existing providers.
 It requires no account or API key; free sites are public.
 
+### SpecStream web search and live web data
+
+[SpecStream MCP](specstream-mcp.md) provides opt-in live web search and structured web data retrieval over Streamable
+HTTP. Use the [runnable TOML example](../examples/specstream-mcp.toml) to add the endpoint alongside your existing
+providers. It requires a `SPECSTREAM_API_KEY` environment variable (new accounts start with $10 of credit).
+
 ### Memcode long-term memory over OAuth
 
 [Memcode](https://memcode.in) exposes an optional hosted Streamable HTTP server for persistent personal memory. VT Code

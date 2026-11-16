@@ -893,6 +893,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Sem local code discovery?", "How does Setup work?", "How does Try a
     bounded review work?"
 
+- **File**: `docs/guides/specstream-mcp.md`
+  - **Content**: SpecStream MCP
+  - **Topics**: Configure the provider, Verify and use, Troubleshooting and removal
+  - **User Questions**: "What can you tell me about SpecStream MCP?", "How does Configure the provider work?", "How does
+    Verify and use work?"
+
 - **File**: `docs/guides/tui-library.md`
   - **Content**: TUI Library Guide
   - **Topics**: What It Provides, Current Architecture, Usage, Host Traits
