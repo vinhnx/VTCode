@@ -606,3 +606,133 @@ async fn session_teardown_clears_ephemeral_queue_state() {
     drop(exit_sender);
     runtime_task.abort();
 }
+
+#[tokio::test]
+async fn steer_request_injects_into_the_live_turn_and_drops_only_the_addressed_row() {
+    let directory = tempfile::tempdir().expect("workspace");
+    let workspace = directory.path().to_path_buf();
+    let (context, mut notifications) = test_service_context(test_startup_context(&workspace), workspace);
+    let (input, _input_receiver) = mpsc::unbounded_channel();
+    let (exit_sender, exit) = oneshot::channel();
+    let runtime_task = tokio::spawn(std::future::pending::<()>());
+    let (steer_tx, mut steer_rx) = mpsc::unbounded_channel();
+    {
+        let mut state = context.state.lock().await;
+        state.initialized = true;
+        state.session_id = Some("session".into());
+        state.runtime = Some(RuntimeSession {
+            session_id: "session".into(),
+            input,
+            stop: stop_requests::new_stop_handle_slot(),
+            exit,
+            abort: runtime_task.abort_handle(),
+            command_forwarder: std::thread::spawn(|| {}),
+        });
+    }
+    let queueable = EnqueueMode::Queueable { batchable: false };
+    enqueue_turn(&context.state, &context.notifications, "session", "running".into(), Vec::new(), queueable)
+        .await
+        .expect("idle submit");
+    for prompt in ["older", "newer"] {
+        enqueue_turn(&context.state, &context.notifications, "session", prompt.into(), Vec::new(), queueable)
+            .await
+            .expect("queue behind the turn");
+    }
+    for _ in 0..3 {
+        notifications.recv().await.expect("drain setup notifications");
+    }
+    let entry_ids: Vec<String> = {
+        let state = context.state.lock().await;
+        state.queue.iter().map(|entry| entry.entry_id()).collect()
+    };
+    // The turn becomes active after the queue was built, as in real usage.
+    {
+        let mut state = context.state.lock().await;
+        state.active_turn_id = Some("turn-1".into());
+        let stop = &state.runtime.as_ref().expect("runtime").stop;
+        stop_requests::publish_steering_sender(stop, &steer_tx);
+    }
+
+    let steer = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::Number(1),
+        method: protocol::method::TURN_STEER.into(),
+        params: serde_json::json!({ "sessionId": "session", "text": "change of plan", "entryId": entry_ids[0] }),
+    };
+    let (result, stop) = dispatch::handle_request_inner(&context, &steer).await.expect("steer");
+    assert!(!stop);
+    let steered: protocol::TurnSteerResult = serde_json::from_value(result).expect("steer result");
+    assert!(steered.steered);
+    assert_eq!(steered.queue_depth, 1);
+    let message = steer_rx.try_recv().expect("steering message");
+    assert!(
+        matches!(message, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text == "change of plan"),
+        "the queued prompt must reach the live turn verbatim"
+    );
+    let status = notifications.recv().await.expect("queue status on steer");
+    assert_eq!(status.method, protocol::method::TURN_QUEUE_STATUS);
+    assert_eq!(status.params["queueDepth"], 1);
+    let remaining: Vec<String> = {
+        let state = context.state.lock().await;
+        state.queue.iter().map(|entry| entry.entry_id()).collect()
+    };
+    assert_eq!(remaining, vec![entry_ids[1].clone()], "only the addressed row is removed");
+    assert!(notifications.try_recv().is_err(), "one status per successful steer");
+
+    drop(exit_sender);
+    runtime_task.abort();
+}
+
+#[tokio::test]
+async fn steer_request_without_a_live_turn_keeps_the_row_queued() {
+    let directory = tempfile::tempdir().expect("workspace");
+    let workspace = directory.path().to_path_buf();
+    let (context, _notifications) = test_service_context(test_startup_context(&workspace), workspace);
+    let (input, _input_receiver) = mpsc::unbounded_channel();
+    let (exit_sender, exit) = oneshot::channel();
+    let runtime_task = tokio::spawn(std::future::pending::<()>());
+    {
+        let mut state = context.state.lock().await;
+        state.initialized = true;
+        state.session_id = Some("session".into());
+        state.runtime = Some(RuntimeSession {
+            session_id: "session".into(),
+            input,
+            stop: stop_requests::new_stop_handle_slot(),
+            exit,
+            abort: runtime_task.abort_handle(),
+            command_forwarder: std::thread::spawn(|| {}),
+        });
+    }
+    let queueable = EnqueueMode::Queueable { batchable: false };
+    enqueue_turn(&context.state, &context.notifications, "session", "running".into(), Vec::new(), queueable)
+        .await
+        .expect("idle submit");
+    enqueue_turn(&context.state, &context.notifications, "session", "waiting".into(), Vec::new(), queueable)
+        .await
+        .expect("queue behind the turn");
+    let entry_id: String = {
+        let state = context.state.lock().await;
+        state.queue.front().expect("queued entry").entry_id()
+    };
+
+    // No active turn id and no steering channel: the request must stay inert.
+    let steer = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::Number(1),
+        method: protocol::method::TURN_STEER.into(),
+        params: serde_json::json!({ "sessionId": "session", "text": "change of plan", "entryId": entry_id }),
+    };
+    let (result, stop) = dispatch::handle_request_inner(&context, &steer).await.expect("steer");
+    assert!(!stop);
+    let steered: protocol::TurnSteerResult = serde_json::from_value(result).expect("steer result");
+    assert!(!steered.steered);
+    assert_eq!(steered.queue_depth, 1);
+    let state = context.state.lock().await;
+    assert_eq!(state.queue.len(), 1, "the prompt stays queued for an ordinary submit");
+    assert_eq!(state.queue.front().expect("queued entry").entry_id(), entry_id);
+    drop(state);
+
+    drop(exit_sender);
+    runtime_task.abort();
+}
