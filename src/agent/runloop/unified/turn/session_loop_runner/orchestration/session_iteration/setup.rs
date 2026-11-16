@@ -558,10 +558,14 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
                     crate::agent::runloop::unified::turn::tool_outcomes::helpers::plan_mode_continue_follow_up(),
                 ) {
                     plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
-                    renderer.line(
-                        MessageStyle::Warning,
-                        &format!("Planning could not resume automatically. Research and draft are saved. {error}"),
-                    )?;
+                    finalize_harness_on_err(
+                        harness_emitter.as_ref(),
+                        renderer.line(
+                            MessageStyle::Warning,
+                            &format!("Planning could not resume automatically. Research and draft are saved. {error}"),
+                        ),
+                    )
+                    .await?;
                 }
             }
         }
@@ -678,7 +682,11 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
             crate::agent::runloop::unified::stop_requests::publish_goal_emitter(slot, emitter);
         }
     }
-    register_goal_tools(&mut tool_registry, goal_tracker.clone(), harness_emitter.clone()).await?;
+    finalize_harness_on_err(
+        harness_emitter.as_ref(),
+        register_goal_tools(&mut tool_registry, goal_tracker.clone(), harness_emitter.clone()).await,
+    )
+    .await?;
     {
         let tool_documentation_mode = vt_cfg.as_ref().map(|cfg| cfg.agent.tool_documentation_mode).unwrap_or_default();
         let deferred_tool_policy = active_deferred_tool_policy(config, vt_cfg.as_ref(), &*provider_client);
