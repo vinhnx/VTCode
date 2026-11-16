@@ -418,7 +418,7 @@ pub fn trim_trailing_image_path_str(raw: &str) -> &str {
 ///
 /// Unix opens directories with a plain read-only handle. Windows requires
 /// `FILE_FLAG_BACKUP_SEMANTICS` to open a directory at all, set here via
-/// [`OpenOptionsExt::custom_flags`](std::os::windows::fs::OpenOptionsExt).
+/// `OpenOptionsExt::custom_flags` from `std::os::windows::fs`.
 ///
 /// # Errors
 ///
