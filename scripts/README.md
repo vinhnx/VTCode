@@ -276,6 +276,6 @@ cargo test --workspace
 
 ## Related Documentation
 
-- [Development Setup](../docs/development/DEVELOPMENT_SETUP.md)
+- [Development Setup](../docs/development/development_setup.md)
 - [Testing Guide](../docs/development/testing.md)
 - [CI/CD Guide](../docs/development/ci-cd.md)

@@ -74,7 +74,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 | Gateways        | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute, **[OpenLLM](./providers/openllm.md)** |
 | Local inference | Ollama, LM Studio, llama.cpp                                                                                                                                                                                  |
 
-See the complete [Provider Guides](./providers/PROVIDER_GUIDES.md) index for authentication, endpoints, model catalogs,
+See the complete [Provider Guides](./providers/provider_guides.md) index for authentication, endpoints, model catalogs,
 and setup details.
 
 ## Documentation Overview
@@ -107,7 +107,7 @@ VT Code has undergone significant improvements:
 - **Context Clearing & Automatic Compaction** - Request-only clearing protects complete recent tool batches, and headless
   runs measure the cleared projection before summarizing. Both runloops share the compaction engine and memory envelope;
   canonical `ThreadEvent` history remains authoritative. See
-  [context architecture](./ARCHITECTURE.md#request-projection-and-context-budgets) and the
+  [context architecture](./architecture.md#request-projection-and-context-budgets) and the
   [Compaction Engine](./development/compaction.md).
 - **`/doctor` Command** - Setup diagnostics that surface reversible, confirm-before-apply optimizations, plus
   `/doctor prompt-audit` for read-only instruction, skill, and MCP context-cost auditing.
@@ -160,17 +160,17 @@ New to VT Code? Start with installation and basic usage:
 - **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
 - **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the
   OpenAI Responses API
-- **[External Editor Configuration](./tools/EDITOR_CONFIG.md)** - Setup and usage of the external editor (Ctrl+G) with
+- **[External Editor Configuration](./tools/editor_config.md)** - Setup and usage of the external editor (Ctrl+G) with
   your preferred editor
 
 ### For Developers
 
 Contributing to VT Code? Understand the architecture and development processes:
 
-- **[Architecture Overview](./ARCHITECTURE.md)** - System design and core components
+- **[Architecture Overview](./architecture.md)** - System design and core components
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Rust Toolchain and MSRV](./development/toolchain-updates.md)** - Pinned compiler, bump checklist, and gate fixes
-- **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
+- **[Tool Reference](./tools/tool_specs.md)** - Technical reference for built-in tools
 - **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the
   Codex-style default tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
@@ -182,11 +182,11 @@ Contributing to VT Code? Understand the architecture and development processes:
 
 Deploying VT Code in production? Focus on enterprise features:
 
-- **[Security Model](./security/SECURITY_MODEL.md)** - Multi-layered security architecture
-- **[Security Documentation Index](./security/SECURITY_DOCUMENTATION_INDEX.md)** - Security document map and references
-- **[Process Hardening](./development/PROCESS_HARDENING.md)** - Security controls and runtime hardening
+- **[Security Model](./security/security_model.md)** - Multi-layered security architecture
+- **[Security Documentation Index](./security/security_documentation_index.md)** - Security document map and references
+- **[Process Hardening](./development/process_hardening.md)** - Security controls and runtime hardening
 - **[Performance Analysis](./benchmarks/README.md)** - Optimization and benchmarking
-- **[Provider Guides](./providers/PROVIDER_GUIDES.md)** - LLM provider integration guides
+- **[Provider Guides](./providers/provider_guides.md)** - LLM provider integration guides
   - [OpenRouter Integration](./providers/openrouter.md)
   - [Vercel AI Gateway Integration](./providers/vercel-ai-gateway.md)
   - [Merge Gateway Integration](./providers/merge-gateway.md)
@@ -223,7 +223,7 @@ Deploying VT Code in production? Focus on enterprise features:
 - **Search & Analysis** - Fast shell search through `rg`, plus advanced bounded code search through `code_search`
 - **Batch Processing** - Efficient multi-file operations
 - **Configuration Management** - Dynamic TOML-based settings
-- **GPU Pod Manager** - Remote model pod lifecycle management over SSH ([feature guide](./features/GPU_POD_MANAGER.md))
+- **GPU Pod Manager** - Remote model pod lifecycle management over SSH ([feature guide](./features/gpu_pod_manager.md))
 
 ### Safety & Security
 
@@ -241,9 +241,9 @@ attacks:
 - **File Size Limits** - Configurable resource constraints
 - **API Key Security** - Secure credential management
 
-**[Security Documentation Index](./security/SECURITY_DOCUMENTATION_INDEX.md)** - Security docs at a glance
-**[Security Model](./security/SECURITY_MODEL.md)** - Complete security architecture
-**[Security Web Fetch](./security/SECURITY_WEB_FETCH.md)** - Web fetch security model and controls
+**[Security Documentation Index](./security/security_documentation_index.md)** - Security docs at a glance
+**[Security Model](./security/security_model.md)** - Complete security architecture
+**[Security Web Fetch](./security/security_web_fetch.md)** - Web fetch security model and controls
 **[Security Guide](./guides/security.md)** - Best practices and configuration
 **[Tool Policies](./modules/vtcode_tools_policy.md)** - Command execution policies
 
@@ -257,15 +257,15 @@ attacks:
 
 ### Quick Start for Developers
 
-1. **[Architecture Overview](./ARCHITECTURE.md)** - Understand the system design
+1. **[Architecture Overview](./architecture.md)** - Understand the system design
 2. **[Development Setup](./development/README.md)** - Configure development environment
 3. **[Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking)** - Learn decision
    tracking and context engineering
 
 ### Quick Start for Organizations
 
-1. **[Security Implementation](./development/PROCESS_HARDENING.md)** - Enterprise security features
-2. **[Provider Integration](./providers/PROVIDER_GUIDES.md)** - LLM provider setup (Gemini, OpenAI, Anthropic, Meta AI,
+1. **[Security Implementation](./development/process_hardening.md)** - Enterprise security features
+2. **[Provider Integration](./providers/provider_guides.md)** - LLM provider setup (Gemini, OpenAI, Anthropic, Meta AI,
    OpenRouter, Merge Gateway)
 3. **[Performance Tuning](./benchmarks/README.md)** - Optimization strategies
 
@@ -332,8 +332,8 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 | P90 Latency    | 1.363s            |
 | Cost           | $0.00 (free tier) |
 
-**[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**
-**[Model Comparison](./benchmarks/COMPARISON.md)** **[Run Your Own Benchmarks](./benchmarks/README.md)**
+**[View Full Benchmark Results](./benchmarks/humaneval_2025-10-22.md)**
+**[Model Comparison](./benchmarks/comparison.md)** **[Run Your Own Benchmarks](./benchmarks/README.md)**
 
 ### Running Benchmarks
 
@@ -383,14 +383,14 @@ cargo clippy && cargo fmt
 
 ### Current Status & Roadmap
 
-- **[Roadmap](./project/ROADMAP.md)** - Future development plans and milestones
+- **[Roadmap](./project/roadmap.md)** - Future development plans and milestones
 - **[Changelog](../CHANGELOG.md)** - Version history and release notes
 
 ### Development Resources
 
 - **[Contributing Guide](./CONTRIBUTING.md)** - How to contribute
 - **[Code Standards](../AGENTS.md)** - Coding guidelines
-- **[Architecture Decisions](./ARCHITECTURE.md)** - Design rationale
+- **[Architecture Decisions](./architecture.md)** - Design rationale
 
 ## Support & Community
 

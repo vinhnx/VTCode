@@ -84,19 +84,27 @@ impl LiveEventQueueInner {
         let slot_key = classified.as_ref().map(|(key, _)| key.clone());
         let slot_op = classified.as_ref().map_or(CoalesceOp::Replace, |(_, op)| *op);
         if let Some((key, op)) = classified {
+            // One slot per item, regardless of coalesce op. A delta and the
+            // terminal snapshot for the same long-running command must share
+            // a slot: with separate slots, saturation could evict the slot
+            // holding the accumulated output and the command's inline preview
+            // vanished until it settled.
             let pending_slot = queue
                 .iter()
-                .position(|slot| slot.key.as_deref() == Some(key.as_str()) && slot.op == op)
+                .position(|slot| slot.key.as_deref() == Some(key.as_str()))
                 .and_then(|index| queue.remove(index).map(|removed| (index, removed)));
-            if let Some((index, pending)) = pending_slot {
-                // Re-insert at the removed slot's position so the relative
-                // order of every other queued event is preserved.
-                let merged = match op {
-                    CoalesceOp::Replace => event,
-                    CoalesceOp::Merge => Self::merge_plan_deltas(pending.event, event),
-                    CoalesceOp::MergeOutput => Self::merge_tool_output_deltas(pending.event, event),
+            if let Some((_index, pending)) = pending_slot {
+                let (merged, merged_op) = match (pending.op, op) {
+                    // A full snapshot supersedes the pending delta; once a
+                    // snapshot is queued a later delta is already included.
+                    (_, CoalesceOp::Replace) => (event, CoalesceOp::Replace),
+                    (CoalesceOp::Replace, _) => (pending.event, CoalesceOp::Replace),
+                    (_, CoalesceOp::Merge) => (Self::merge_plan_deltas(pending.event, event), pending.op),
+                    (_, CoalesceOp::MergeOutput) => (Self::merge_tool_output_deltas(pending.event, event), pending.op),
                 };
-                queue.insert(index, LiveEventSlot { key: Some(key), op, event: merged });
+                // Move an actively streaming item to the back so front_eviction
+                // prefers quiet items; its accumulated text survives bursts.
+                queue.push_back(LiveEventSlot { key: Some(key), op: merged_op, event: merged });
                 drop(queue);
                 self.notify.notify_waiters();
                 return Ok(());
@@ -104,8 +112,8 @@ impl LiveEventQueueInner {
         }
         if queue.len() >= self.capacity {
             // Prefer displacing a stale streaming entry over dropping an
-            // ordered event: the latest snapshot for an item always arrives
-            // with its terminal `item.completed` event.
+            // ordered event. Active streams are at the back (see above), so a
+            // quiet item is the victim rather than a running command's tail.
             let victim = queue.iter().position(|slot| slot.key.is_some());
             match victim {
                 Some(index) => {

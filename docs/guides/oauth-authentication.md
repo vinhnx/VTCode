@@ -528,7 +528,7 @@ See `crates/codegen/vtcode-auth/src/openrouter_oauth.rs` for a reference impleme
 
 ## See Also
 
-- [Authentication Overview](../security/SECURITY_MODEL.md#authentication)
-- [Configuration Guide](../config/CONFIGURATION_PRECEDENCE.md)
-- [Provider Setup](../providers/PROVIDER_GUIDES.md)
+- [Authentication Overview](../security/security_model.md#authentication)
+- [Configuration Guide](../config/configuration_precedence.md)
+- [Provider Setup](../providers/provider_guides.md)
 - [PKCE RFC 7636](https://tools.ietf.org/html/rfc7636)

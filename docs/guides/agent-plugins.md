@@ -149,7 +149,7 @@ auto_reload = true
 ```
 
 `default_trust` accepts `sandbox` (default), `trusted`, or `untrusted`. See the
-[Configuration Field Reference](../config/CONFIG_FIELD_REFERENCE.md) for the full set of `tools.plugins.*` options.
+[Configuration Field Reference](../config/config_field_reference.md) for the full set of `tools.plugins.*` options.
 
 ## Conformance
 

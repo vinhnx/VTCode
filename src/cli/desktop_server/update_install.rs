@@ -75,6 +75,13 @@ async fn check_for_updates_with_timeout(timeout: std::time::Duration) -> Result<
     let check = async {
         let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
         updater.refresh_startup_update_cache().await?;
+        // External installs never seeded the running version's notes. Fetch
+        // them into the install slot so the desktop "what's new" banner can
+        // arm even while the check slot names a newer release. Best-effort: a
+        // missing tag must not fail the check the user explicitly requested.
+        if let Err(err) = crate::updater::backfill_current_release_notes(10).await {
+            tracing::debug!("could not backfill current release notes: {err}");
+        }
         Ok(())
     };
     match tokio::time::timeout(timeout, check).await {

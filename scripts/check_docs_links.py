@@ -30,11 +30,11 @@ ENTRYPOINT_DOCS = (
     "AGENTS.md",
     "README.md",
     "docs/README.md",
-    "docs/INDEX.md",
-    "docs/harness/INDEX.md",
-    "docs/harness/QUALITY_SCORE.md",
-    "docs/harness/TECH_DEBT_TRACKER.md",
-    "docs/harness/ARCHITECTURAL_INVARIANTS.md",
+    "docs/index.md",
+    "docs/harness/index.md",
+    "docs/harness/quality_score.md",
+    "docs/harness/tech_debt_tracker.md",
+    "docs/harness/architectural_invariants.md",
 )
 MAINTAINER_NOTES_DIR = "docs/development/maintainer-notes"
 MAX_MODULE_AGENTS_LINE_CHARS = 600

@@ -27,7 +27,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 - **Operating System**: macOS, Linux, or Windows (with WSL2)
 
 For contributor workflow setup (tooling, checks, and test loop), use the canonical
-[Development Setup](../development/DEVELOPMENT_SETUP.md) guide.
+[Development Setup](../development/development_setup.md) guide.
 
 ### API Requirements
 
@@ -49,13 +49,13 @@ Choose one of the supported LLM providers:
 
 - **xAI (Grok)**: `export XAI_API_KEY=your_key_here`
   - Get from the [xAI Console](https://console.x.ai/)
-  - Default model: `grok-4.6`; see the [xAI provider guide](../providers/PROVIDER_GUIDES.md#xai-grok)
+  - Default model: `grok-4.6`; see the [xAI provider guide](../providers/provider_guides.md#xai-grok)
 
 - **Anthropic**: `export ANTHROPIC_API_KEY=your_key_here`
   - Get from [Anthropic Console](https://console.anthropic.com/)
   - Curated models: `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-fable-5`, `claude-fable-5-1`,
     `claude-fable-5-2`, `claude-opus-5`, and `claude-opus-5-5`; see the
-    [Anthropic provider guide](../providers/PROVIDER_GUIDES.md#anthropic)
+    [Anthropic provider guide](../providers/provider_guides.md#anthropic)
 
 - **Meta AI**: `export MODEL_API_KEY=your_key_here` or `export META_API_KEY=your_key_here`
   - Get from the [Meta AI developer documentation](https://dev.meta.ai/docs/llms.txt)
@@ -72,7 +72,7 @@ Choose one of the supported LLM providers:
 - **Moonshot (Kimi)**: `export MOONSHOT_API_KEY=your_key_here`
   - Get from [Moonshot Platform](https://platform.moonshot.ai/docs)
   - Models: Kimi K3.1 Pro, K3, K2.7 Code, K2.5
-  - Default model: `kimi-k3`; see the [Moonshot provider guide](../providers/PROVIDER_GUIDES.md#moonshot-kimi)
+  - Default model: `kimi-k3`; see the [Moonshot provider guide](../providers/provider_guides.md#moonshot-kimi)
 
 - **StepFun**: `export STEPFUN_API_KEY=your_key_here`
   - Get from [StepFun Platform](https://platform.stepfun.ai/docs)
@@ -101,7 +101,7 @@ Choose one of the supported LLM providers:
   - Default model: `anthropic/claude-sonnet-5`; see the
     [Vercel AI Gateway provider guide](../providers/vercel-ai-gateway.md)
 
-For more providers, see the [Provider Guides](../providers/PROVIDER_GUIDES.md).
+For more providers, see the [Provider Guides](../providers/provider_guides.md).
 
 ### User data and configuration paths
 
@@ -558,7 +558,7 @@ VT Code is designed with security as a first-class concern:
 ### Learn More
 
 - **[Security Guide](../guides/security.md)** - Complete security documentation
-- **[Security Model](../security/SECURITY_MODEL.md)** - Architecture and threat model
+- **[Security Model](../security/security_model.md)** - Architecture and threat model
 - **[Tool Policies](../modules/vtcode_tools_policy.md)** - Command execution policies
 
 ## Next Steps
@@ -568,11 +568,11 @@ Now that you have VT Code running, explore:
 1. **[Security Guide](../guides/security.md)** - Understand security features
 2. **[Lifecycle Hooks Guide](../guides/lifecycle-hooks.md)** - Execute shell commands in response to agent events for
    context enrichment, policy enforcement, and automation
-3. **[Configuration Guide](../config/CONFIGURATION_PRECEDENCE.md)** - Advanced configuration options and precedence
+3. **[Configuration Guide](../config/configuration_precedence.md)** - Advanced configuration options and precedence
    rules
 4. **[Agent Plugins](agent-plugins.md)** - Install portable plugins that bundle Agent Skills and MCP servers
-5. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
-6. **[Provider Guides](../providers/PROVIDER_GUIDES.md)** - LLM provider integration
+5. **[Architecture Guide](../architecture.md)** - System design and components
+6. **[Provider Guides](../providers/provider_guides.md)** - LLM provider integration
    - [OpenRouter Integration](../providers/openrouter.md)
 
 ## Contributing

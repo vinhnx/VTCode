@@ -55,5 +55,5 @@ pub use theme::*;
 
 ## See Also
 
-- [Architecture Guide](../ARCHITECTURE.md) — TUI architecture section
+- [Architecture Guide](../architecture.md) — TUI architecture section
 - `vtcode-core::ui::tui` — canonical runtime type surface

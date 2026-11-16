@@ -56,4 +56,4 @@ not followed.
 ## See Also
 
 - [A2A Documentation](../a2a/) — protocol guides and examples
-- [Architecture Guide](../ARCHITECTURE.md) — explicit delegation model
+- [Architecture Guide](../architecture.md) — explicit delegation model

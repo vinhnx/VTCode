@@ -15,6 +15,7 @@ use semver::Version;
 use tracing::{debug, info};
 use vtcode_config::update::UpdateConfig;
 
+pub(crate) use release_notes::backfill_current_release_notes;
 use release_notes::record_fetched_release;
 
 pub(crate) use desktop::{

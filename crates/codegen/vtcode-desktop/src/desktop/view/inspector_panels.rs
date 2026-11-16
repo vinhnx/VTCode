@@ -84,17 +84,20 @@ impl DesktopView {
     /// Shared activity projection, rebuilt only when the transcript or the
     /// restored history changed since the last call.
     pub(super) fn cached_activity_projection(&mut self) -> Rc<inspector::ActivityProjection> {
-        let transcript_revision = self.transcript.revision();
+        // Output-text deltas must not invalidate this projection: the
+        // activity-only revision ignores them while other consumers (the
+        // output tail) still see every change through `revision()`.
+        let activity_revision = self.transcript.activity_revision();
         let restored_revision = self.restored_activity_revision;
         if let Some(hit) = self
             .activity_projection_cache
             .as_ref()
-            .and_then(|cache| cache.get(transcript_revision, restored_revision))
+            .and_then(|cache| cache.get(activity_revision, restored_revision))
         {
             return hit;
         }
         let cache = inspector::ActivityProjectionCache::fresh(
-            transcript_revision,
+            activity_revision,
             restored_revision,
             inspector::activity_rows(&self.transcript, &self.restored_activity),
         );

@@ -105,7 +105,7 @@ fn recovery_context_previews_prefer_substantive_reads_over_recent_low_signal_out
         Message::tool_response(
             "call-2".to_string(),
             json!({
-                "path": "docs/ARCHITECTURE.md",
+                "path": "docs/architecture.md",
                 "content": "VT Code follows a modular architecture designed for maintainability and extensibility."
             })
             .to_string(),
@@ -121,7 +121,7 @@ fn recovery_context_previews_prefer_substantive_reads_over_recent_low_signal_out
         Message::tool_response(
             "call-4".to_string(),
             json!({
-                "error": "Repeated reads of 'docs/ARCHITECTURE.md' with limited progress detected.",
+                "error": "Repeated reads of 'docs/architecture.md' with limited progress detected.",
                 "next_action": "Try an alternative tool or narrower scope."
             })
             .to_string(),
@@ -133,7 +133,7 @@ fn recovery_context_previews_prefer_substantive_reads_over_recent_low_signal_out
     assert_eq!(previews[0], "Latest user request: tell me more");
     assert!(previews[1].contains("VT Code follows a modular architecture"));
     assert!(previews[2].contains("VT Code is an open-source coding agent"));
-    assert!(previews[3].contains("Repeated reads of 'docs/ARCHITECTURE.md'"));
+    assert!(previews[3].contains("Repeated reads of 'docs/architecture.md'"));
     assert!(
         previews.iter().all(|preview| !preview.contains("Listed 20 items")),
         "low-signal listing should be dropped when richer previews exist: {previews:?}"

@@ -454,8 +454,8 @@ for normal next-turn and session restore/resume, so a compacted session needs ze
 Explicit `wait` time is excluded from the per-turn wall-clock budget. Turn-end
 `SnapshotTurnDiagnostics.in_progress_exec_sessions` and `turn.completed.in_progress_exec_sessions` (schema 0.16.0,
 bounded to 4) record all live ids, including retained background sessions; the resume hint uses the foreground subset.
-See invariant #22 in `docs/harness/ARCHITECTURAL_INVARIANTS.md` and the agent-facing settle shape in
-`docs/harness/AGENT_LEGIBILITY_GUIDE.md`.
+See invariant #22 in `docs/harness/architectural_invariants.md` and the agent-facing settle shape in
+`docs/harness/agent_legibility_guide.md`.
 
 Session input is policy-checked: each submitted line is evaluated against the same PTY deny list that guards session
 creation, so a denied interactive program cannot be launched by typing into an already-running session. The

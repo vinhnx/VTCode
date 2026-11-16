@@ -55,7 +55,7 @@ async fn create_accepts_metadata_and_verify_string_forms() {
             "items": [
                 {
                     "description": "Analyze",
-                    "files": ["docs/ARCHITECTURE.md"],
+                    "files": ["docs/architecture.md"],
                     "outcome": "Map the harness",
                     "verify": "cargo check"
                 },
@@ -68,7 +68,7 @@ async fn create_accepts_metadata_and_verify_string_forms() {
         .await
         .expect("create tracker");
 
-    assert_eq!(created["checklist"]["items"][0]["files"], json!(["docs/ARCHITECTURE.md"]));
+    assert_eq!(created["checklist"]["items"][0]["files"], json!(["docs/architecture.md"]));
     assert_eq!(created["checklist"]["items"][0]["outcome"], "Map the harness");
     assert_eq!(created["checklist"]["items"][0]["verify"], json!(["cargo check"]));
     assert_eq!(

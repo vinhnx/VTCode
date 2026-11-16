@@ -320,6 +320,14 @@ impl DesktopView {
                     return;
                 }
                 let key = event.keystroke.key.as_str();
+                // Up/Down move the highlight over the visible choices. They
+                // reuse the pointer-selection state, so the checked row and
+                // the Confirm button always agree; digits still commit at once.
+                if key == "up" || key == "down" {
+                    cx.stop_propagation();
+                    this.move_interaction_choice(key == "down", window, cx);
+                    return;
+                }
                 if key.len() != 1 {
                     return;
                 }

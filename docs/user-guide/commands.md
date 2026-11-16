@@ -569,7 +569,7 @@ vtcode plugins remove my-plugin
 ## pods
 
 Manage remote GPU-backed model pods over SSH. See the full feature guide in
-[GPU Pod Manager](../features/GPU_POD_MANAGER.md).
+[GPU Pod Manager](../features/gpu_pod_manager.md).
 
 ### Usage
 

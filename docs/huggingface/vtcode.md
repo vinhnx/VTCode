@@ -214,7 +214,7 @@ curl -H "Authorization: Bearer $HF_TOKEN" \
 ## Resources
 
 - [VT Code Repository](https://github.com/vinhnx/vtcode)
-- [VT Code Architecture Documentation](https://github.com/vinhnx/vtcode/blob/main/docs/ARCHITECTURE.md)
+- [VT Code Architecture Documentation](https://github.com/vinhnx/vtcode/blob/main/docs/architecture.md)
 - [Hugging Face Inference API Documentation](https://huggingface.co/docs/api-inference/index)
 - [Hugging Face Inference Endpoints](https://huggingface.co/docs/inference-endpoints/index)
 - [Supported Models on Hugging Face](https://huggingface.co/models)

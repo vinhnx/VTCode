@@ -234,7 +234,7 @@ mod tests {
         // decision render_diagnosis makes. Command mirrors the failing
         // `cat ... | head -c ...` launch from the latest session.
         let command_diagnosis = ToolFailureDiagnosis::new(
-            "'exec_command' returned exit code 1. Command: cat docs/harness/INDEX.md | head -c 6000; echo ===; cat docs/harness/CORE_BELIEFS.md | head -c 4000.",
+            "'exec_command' returned exit code 1. Command: cat docs/harness/index.md | head -c 6000; echo ===; cat docs/harness/core_beliefs.md | head -c 4000.",
             "The command reported a non-zero exit status; the bounded output does not establish a more specific cause.",
             "Inspect the reported error and retry with corrected arguments or a narrower scope.",
         )

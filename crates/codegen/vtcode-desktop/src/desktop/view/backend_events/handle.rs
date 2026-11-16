@@ -487,6 +487,31 @@ impl DesktopView {
                             self.truncate_dispatched_to_depth(removed.queue_depth);
                         }
                     }
+                    protocol::method::TURN_STEER => {
+                        let pending_echo = self.steer_pending_echo_id.take();
+                        let steered = serde_json::from_value::<protocol::TurnSteerResult>(result)
+                            .ok()
+                            .filter(|steered| self.selected_session_id.as_deref() == Some(steered.session_id.as_str()));
+                        match steered {
+                            Some(steered) if steered.steered => {
+                                // The service removed the entry atomically with
+                                // the steer; converge our mirror to its depth.
+                                if let Some(echo_id) = pending_echo
+                                    && let Some(index) =
+                                        self.queued_submissions.iter().position(|entry| entry.echo_id == echo_id)
+                                {
+                                    let entry = self.queued_submissions.remove(index);
+                                    self.transcript.remove(&entry.echo_id);
+                                }
+                                self.truncate_dispatched_to_depth(steered.queue_depth);
+                            }
+                            _ => {
+                                // No live turn channel: the row stays queued so
+                                // the prompt is never lost to a failed steer.
+                                self.error = Some("No active turn to steer; the prompt stays queued.".to_string());
+                            }
+                        }
+                    }
                     protocol::method::TURN_CANCEL => {
                         self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
                     }

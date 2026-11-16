@@ -204,6 +204,30 @@ fn a_newer_preflight_release_never_leaks_into_the_current_banner() {
 }
 
 #[test]
+fn backfilled_current_notes_survive_a_newer_check_slot_release() {
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+    // The desktop backfill writes the running version's notes to the install
+    // slot while `update/check` keeps naming a newer release in the check
+    // slot. The current banner must read only its own version's notes.
+    let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+    let newer = Version::parse("99.0.0").expect("newer version");
+    cache::record_successful_check_with_notes(Some(&newer), true, Some("### Highlights\n- Later feature (def5678)\n"))
+        .expect("write newer release to check slot");
+    cache::record_installed_release(&current, "### Highlights\n- Current feature (abc1234)\n")
+        .expect("write current release to install slot");
+
+    let highlights = cached_current_release_highlights().expect("install slot serves the current banner");
+    assert_eq!(highlights.0, current);
+    assert_eq!(highlights.1, vec!["Current feature".to_string()]);
+
+    cache::set_cache_dir_override_for_tests(previous);
+}
+
+#[test]
 fn seeded_release_notes_show_on_first_launch_after_install() {
     use tempfile::TempDir;
 

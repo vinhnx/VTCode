@@ -270,7 +270,7 @@ If VT Code is not behaving as expected with your configuration:
 ## Config reference
 
 For complete field coverage generated from the live `vtcode-config` schema, use
-[`docs/config/CONFIG_FIELD_REFERENCE.md`](./CONFIG_FIELD_REFERENCE.md).
+[`docs/config/config_field_reference.md`](./config_field_reference.md).
 
 For harness behavior, read `agent.harness`, `automation.full_auto`, and `context.dynamic` together: they jointly define
 continuation, turn limits, and context reuse for long-running exec sessions.

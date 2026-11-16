@@ -142,7 +142,7 @@ fn build_exit_postamble(data: &ExitData<'_>, color_enabled: bool) -> String {
 /// value can fall below the configured WCAG minimum (4.5:1 by default) on a
 /// light or dark background. Faint (`SGR 2`) styling is deliberately unused:
 /// terminals render it by dimming the foreground, which pushes normal-size
-/// text under the same minimum. See `docs/guides/COLOR_GUIDELINES.md`.
+/// text under the same minimum. See `docs/guides/color_guidelines.md`.
 struct PostambleStyles {
     /// Bold theme banner color for the `> VT Code (version)` row.
     banner: AnsiStyle,

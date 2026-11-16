@@ -6,7 +6,7 @@ of a _system_ composed of **model · harness · context · tools · evals · san
 behavior over time is that the agent **keeps getting closer to completion**.
 
 This document maps that framing onto concrete VT Code crates and modules, and shows where each subsystem lives and how
-they reinforce the long-horizon progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) (the
+they reinforce the long-horizon progress invariant. It complements [`docs/architecture.md`](../architecture.md) (the
 "Model + Harness" split) and [`docs/context/context_engineering.md`](../context/context_engineering.md).
 
 ## The seven components

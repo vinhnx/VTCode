@@ -118,7 +118,7 @@ fn analyze_file(analysis: &mut ProjectAnalysis, path: &str) {
         | "AGENTS.md"
         | "AGENT.md"
         | "docs/README.md"
-        | "docs/ARCHITECTURE.md"
+        | "docs/architecture.md"
         | "docs/modules/vtcode_docs_map.md" => {
             analysis.documentation_files.push(path.to_owned());
         }
@@ -340,7 +340,7 @@ fn is_text_sample_candidate(path: &str) -> bool {
             | "AGENTS.md"
             | "package.json"
             | "docs/README.md"
-            | "docs/ARCHITECTURE.md"
+            | "docs/architecture.md"
             | "docs/modules/vtcode_docs_map.md"
             | "scripts/README.md"
     ) || path.starts_with(".github/workflows/")
@@ -436,7 +436,7 @@ fn build_orientation_candidates(
 
     for (path, description, score) in [
         ("README.md", "Start here for repository overview and local setup.", 4),
-        ("docs/ARCHITECTURE.md", "Use this for system design and architecture context.", 5),
+        ("docs/architecture.md", "Use this for system design and architecture context.", 5),
         ("docs/modules/vtcode_docs_map.md", "Use this to map VT Code modules and docs quickly.", 5),
         ("docs/README.md", "Use this to browse project documentation.", 3),
         ("CONTRIBUTING.md", "Use this for contribution workflow and repo expectations.", 2),
@@ -449,7 +449,7 @@ fn build_orientation_candidates(
     for content in text_samples.values() {
         for (path, description, score) in [
             ("docs/modules/vtcode_docs_map.md", "Use this to map VT Code modules and docs quickly.", 4),
-            ("docs/ARCHITECTURE.md", "Use this for system design and architecture context.", 2),
+            ("docs/architecture.md", "Use this for system design and architecture context.", 2),
             ("README.md", "Start here for repository overview and local setup.", 1),
         ] {
             if content.contains(path) {

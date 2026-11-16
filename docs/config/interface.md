@@ -118,7 +118,7 @@ You can manage this feature without editing TOML directly:
   separately.
 
 For full editor detection, launcher behavior, and examples, see
-[External Editor Configuration](../tools/EDITOR_CONFIG.md).
+[External Editor Configuration](../tools/editor_config.md).
 
 ## Fullscreen interaction
 

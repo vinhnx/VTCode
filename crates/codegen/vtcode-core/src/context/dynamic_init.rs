@@ -150,10 +150,10 @@ This directory contains dynamic context files for VT Code agent operations.
     tools/            # MCP tool descriptions and schemas
     status.json       # MCP provider status
   skills/
-    INDEX.md          # Available skills index
+    index.md          # Available skills index
     {skill_name}/     # Individual skill directories
   terminals/
-    INDEX.md          # Terminal sessions index
+    index.md          # Terminal sessions index
     {session_id}.txt  # Terminal session output
 ```
 
@@ -187,9 +187,9 @@ sync_skills = true
     .to_string()
 }
 
-/// Create initial skills INDEX.md
+/// Create initial skills index.md
 async fn create_initial_skills_index(skills_dir: &Path) {
-    let index_path = skills_dir.join("INDEX.md");
+    let index_path = skills_dir.join("index.md");
     if fs::try_exists(&index_path).await.unwrap_or(false) {
         return;
     }
@@ -212,9 +212,9 @@ Create skills using the `save_skill` tool.
     }
 }
 
-/// Create initial terminals INDEX.md
+/// Create initial terminals index.md
 async fn create_initial_terminals_index(terminals_dir: &Path) {
-    let index_path = terminals_dir.join("INDEX.md");
+    let index_path = terminals_dir.join("index.md");
     if fs::try_exists(&index_path).await.unwrap_or(false) {
         return;
     }
@@ -235,9 +235,9 @@ Use `exec_command.cmd` with `sed`, `cat`, or `rg` on individual session files fo
     }
 }
 
-/// Create initial MCP tools INDEX.md
+/// Create initial MCP tools index.md
 async fn create_initial_mcp_index(mcp_tools_dir: &Path) {
-    let index_path = mcp_tools_dir.join("INDEX.md");
+    let index_path = mcp_tools_dir.join("index.md");
     if fs::try_exists(&index_path).await.unwrap_or(false) {
         return;
     }
@@ -286,11 +286,11 @@ mod tests {
         assert!(readme.contains("`code_search`"));
 
         // Check startup index files were created
-        assert!(dirs.terminals.join("INDEX.md").exists());
-        let terminals_index = fs::read_to_string(dirs.terminals.join("INDEX.md")).await.unwrap();
+        assert!(dirs.terminals.join("index.md").exists());
+        let terminals_index = fs::read_to_string(dirs.terminals.join("index.md")).await.unwrap();
         assert!(terminals_index.contains("`exec_command.cmd` with `sed`, `cat`, or `rg`"));
-        assert!(!dirs.skills.join("INDEX.md").exists());
-        assert!(!dirs.mcp_tools.join("INDEX.md").exists());
+        assert!(!dirs.skills.join("index.md").exists());
+        assert!(!dirs.mcp_tools.join("index.md").exists());
     }
 
     #[tokio::test]
@@ -313,8 +313,8 @@ mod tests {
 
         let dirs = DynamicContextDirs::from_workspace(temp.path());
         assert!(dirs.mcp_tools.exists());
-        assert!(dirs.mcp_tools.join("INDEX.md").exists());
-        let index = fs::read_to_string(dirs.mcp_tools.join("INDEX.md")).await.unwrap();
+        assert!(dirs.mcp_tools.join("index.md").exists());
+        let index = fs::read_to_string(dirs.mcp_tools.join("index.md")).await.unwrap();
         assert!(index.contains("`exec_command.cmd` with `sed`, `cat`, or `rg`"));
     }
 
@@ -327,8 +327,8 @@ mod tests {
 
         let dirs = DynamicContextDirs::from_workspace(temp.path());
         assert!(dirs.skills.exists());
-        assert!(dirs.skills.join("INDEX.md").exists());
-        let index = fs::read_to_string(dirs.skills.join("INDEX.md")).await.unwrap();
+        assert!(dirs.skills.join("index.md").exists());
+        let index = fs::read_to_string(dirs.skills.join("index.md")).await.unwrap();
         assert!(index.contains("`exec_command.cmd` with `find`, `sed`, or `cat`"));
     }
 }

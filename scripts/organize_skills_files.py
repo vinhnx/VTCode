@@ -55,7 +55,7 @@ def main():
     file_mappings = [
         # Documentation files
         ("vtcode_skills_improvements_proven.md", "docs/skills-enhanced/improvements-proven.md"),
-        ("FINAL_SUMMARY.md", "docs/skills-enhanced/final-summary.md"),
+        ("FINAL_summary.md", "docs/skills-enhanced/final-summary.md"),
         ("vtcode_skills_improvement_guide.md", "docs/skills-enhanced/improvement-guide.md"),
         ("claude_api_skills_tutorial.py", "docs/skills-enhanced/claude-api-tutorial.py"),
         ("claude_api_skills_tutorial_analysis.md", "docs/skills-enhanced/tutorial-analysis.md"),

@@ -372,7 +372,7 @@ fn bundled_config_templates_match_prompt_cache_defaults() {
     }
 
     let prompt_cache_guide =
-        fs::read_to_string(workspace_root.join("docs/tools/PROMPT_CACHING_GUIDE.md")).expect("prompt caching guide");
+        fs::read_to_string(workspace_root.join("docs/tools/prompt_caching_guide.md")).expect("prompt caching guide");
     // The guide is markdownlint-wrapped, so sentences may be reflowed across
     // lines; match against whitespace-normalized text instead of raw lines.
     let normalized_guide = vtcode_commons::formatting::collapse_whitespace(&prompt_cache_guide);
@@ -383,7 +383,7 @@ fn bundled_config_templates_match_prompt_cache_defaults() {
     // opt-in for older supported Responses models; assert that intent survives doc rewrites.
     assert!(normalized_guide.contains("`prompt_cache_retention` is opt-in for older supported Responses models"));
 
-    let field_reference = fs::read_to_string(workspace_root.join("docs/config/CONFIG_FIELD_REFERENCE.md"))
+    let field_reference = fs::read_to_string(workspace_root.join("docs/config/config_field_reference.md"))
         .expect("config field reference");
     assert!(field_reference.contains("`prompt_cache.cache_friendly_prompt_shaping`"));
     assert!(field_reference.contains("`prompt_cache.providers.openai.prompt_cache_retention`"));

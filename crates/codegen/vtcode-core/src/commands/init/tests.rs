@@ -50,8 +50,8 @@ fn emits_verification_question_when_multiple_strong_candidates_exist() {
 #[test]
 fn emits_orientation_question_when_multiple_docs_are_plausible() {
     let workspace = TempDir::new().expect("workspace");
-    write_file(&workspace, "README.md", "See docs/ARCHITECTURE.md for design.\n");
-    write_file(&workspace, "docs/ARCHITECTURE.md", "# Architecture\n");
+    write_file(&workspace, "README.md", "See docs/architecture.md for design.\n");
+    write_file(&workspace, "docs/architecture.md", "# Architecture\n");
     write_file(&workspace, "docs/modules/vtcode_docs_map.md", "# Docs Map\nUse this first.\n");
 
     let plan = prepare_guided_init(workspace.path(), false).expect("plan");

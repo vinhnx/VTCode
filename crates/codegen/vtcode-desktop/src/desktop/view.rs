@@ -875,13 +875,13 @@ struct DesktopView {
     /// Display previews from the latest status snapshot (backstop when local
     /// entries are missing; normally the panel renders `queued_submissions`).
     queue_previews: Vec<String>,
-    /// Seconds since each entry was queued, oldest first, from the latest
-    /// status snapshot (empty when the service omits them).
-    queue_ages_secs: Vec<u64>,
     /// Total oldest queued prompts the service discarded via the soft cap.
     queue_dropped_total: usize,
     /// Whether a take-latest request is in flight.
     take_latest_pending: bool,
+    /// Echo id of the queued row whose steer request is in flight. The row
+    /// stays visible until the service confirms it reached a live turn.
+    steer_pending_echo_id: Option<String>,
     /// Take-latest text awaiting composer restore (applied with a window by
     /// `process_drained_event`).
     pending_composer_restore: Option<String>,

@@ -215,11 +215,11 @@ level = "allow"
 reason = "used in doctest: name.into_inner()"
 
 # Planned CLI permission handler: `PermissionPromptHandler`/`set_permission_handler`
-# already exist in `tool_policy`, and docs/development/TUI_ONLY_REFACTORING.md
+# already exist in `tool_policy`, and docs/development/tui_only_refactoring.md
 # documents this prompt as the CLI implementation of that trait.
 [[override]]
 lint = "hawk::dead_public"
 crate = "vtcode_core"
 item = "ui::user_confirmation::UserConfirmation::confirm_tool_usage"
 level = "allow"
-reason = "CLI PermissionPromptHandler implementation planned in docs/development/TUI_ONLY_REFACTORING.md"
+reason = "CLI PermissionPromptHandler implementation planned in docs/development/tui_only_refactoring.md"

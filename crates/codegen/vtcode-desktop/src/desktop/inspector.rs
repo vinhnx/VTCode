@@ -401,23 +401,23 @@ pub(super) fn filter_output_lines(tail: &str, query: &str) -> (String, usize, us
 /// changed since the last render. `Rc` keeps cache hits allocation-free.
 #[derive(Clone, Debug)]
 pub(super) struct ActivityProjectionCache {
-    transcript_revision: u64,
+    activity_revision: u64,
     restored_revision: u64,
     projection: Rc<ActivityProjection>,
 }
 
 impl ActivityProjectionCache {
-    pub(super) fn fresh(transcript_revision: u64, restored_revision: u64, projection: ActivityProjection) -> Self {
+    pub(super) fn fresh(activity_revision: u64, restored_revision: u64, projection: ActivityProjection) -> Self {
         Self {
-            transcript_revision,
+            activity_revision,
             restored_revision,
             projection: Rc::new(projection),
         }
     }
 
     /// Shared projection when both inputs are unchanged since `fresh`.
-    pub(super) fn get(&self, transcript_revision: u64, restored_revision: u64) -> Option<Rc<ActivityProjection>> {
-        (self.transcript_revision == transcript_revision && self.restored_revision == restored_revision)
+    pub(super) fn get(&self, activity_revision: u64, restored_revision: u64) -> Option<Rc<ActivityProjection>> {
+        (self.activity_revision == activity_revision && self.restored_revision == restored_revision)
             .then(|| self.shared())
     }
 

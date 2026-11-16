@@ -44,10 +44,10 @@ open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and [
 | At a glance   | What you get                                                                                                                                          |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Plan**      | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md). |
-| **Safety**    | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                                                        |
+| **Safety**    | [Auditable command policy](./docs/security/security_model.md) with sandboxing.                                                                        |
 | **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md), [subagents](./docs/user-guide/subagents.md). |
-| **Extend**    | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), editor bridges.          |
-| **Models**    | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.                                                                            |
+| **Extend**    | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/skills_guide.md), [plugins](./docs/guides/agent-plugins.md), editor bridges.          |
+| **Models**    | [Hosted or local providers](./docs/providers/provider_guides.md) per task.                                                                            |
 
 <!-- markdownlint-enable MD060 -->
 
@@ -97,7 +97,7 @@ vtcode secret add openai # replace `openai` with your provider
 
 Keys stay in secure storage (OS keyring or encrypted file); env vars, workspace `.env`, or `vtcode login`
 work where supported. See [getting started](./docs/user-guide/getting-started.md) and
-[provider guides](./docs/providers/PROVIDER_GUIDES.md). ChatGPT: `vtcode login openai` (or `--from-codex`);
+[provider guides](./docs/providers/provider_guides.md). ChatGPT: `vtcode login openai` (or `--from-codex`);
 Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/guides/oauth-authentication.md).
 
 > **Caution:** Keep API keys out of Git and `vtcode.toml`, and never commit a workspace `.env` file.
@@ -167,18 +167,18 @@ from source with `vtcode desktop --install` (see [installation guide](./docs/ins
 
 ## Documentation
 
-Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/vtcode/wiki):
+Start from the [documentation index](./docs/index.md) or [Wiki](https://github.com/vinhnx/vtcode/wiki):
 
 ### Start
 
 - [Installation](./docs/installation/README.md) and [getting started](./docs/user-guide/getting-started.md)
-- [Providers](./docs/providers/PROVIDER_GUIDES.md) and [OAuth login](./docs/guides/oauth-authentication.md)
-- [FAQ](./docs/FAQ.md) and [compatibility](./docs/COMPATIBILITY.md)
+- [Providers](./docs/providers/provider_guides.md) and [OAuth login](./docs/guides/oauth-authentication.md)
+- [FAQ](./docs/faq.md) and [compatibility](./docs/compatibility.md)
 
 ### Use
 
 - [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
-- [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) and [security model](./docs/security/SECURITY_MODEL.md)
+- [Configuration](./docs/config/config_field_reference.md) and [security model](./docs/security/security_model.md)
 
 ### Automate
 
@@ -187,7 +187,7 @@ Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.c
 
 ### Extend
 
-- [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), and
+- [Skills](./docs/skills/skills_guide.md), [plugins](./docs/guides/agent-plugins.md), and
   [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md))
 - [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md)
   ([deployment](./docs/reference/webmcp.md)), [A2A](./docs/a2a/README.md), and
@@ -197,12 +197,12 @@ Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.c
 
 - [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and
   [evals](./docs/guides/eval.md)
-- [Architecture](./docs/ARCHITECTURE.md), [desktop workspace](./docs/development/desktop-workspace.md),
-  [loop engineering](./docs/project/PLAN-loop-engineering.md), and [protocols](./docs/protocols/OPEN_RESPONSES.md)
+- [Architecture](./docs/architecture.md), [desktop workspace](./docs/development/desktop-workspace.md),
+  [loop engineering](./docs/project/plan-loop-engineering.md), and [protocols](./docs/protocols/open_responses.md)
 
 ## Development
 
-25-crate workspace sketch (full list in the [architecture guide](./docs/ARCHITECTURE.md); `default-members` builds
+25-crate workspace sketch (full list in the [architecture guide](./docs/architecture.md); `default-members` builds
 only the root binary, `vtcode-core`, and `vtcode-ui`):
 
 ```mermaid

@@ -637,6 +637,27 @@ fn system_notification_click_reselects_the_notified_thread(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn each_waiting_interaction_posts_its_own_system_banner(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.is_window_active());
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.active_turn_id = Some("turn-3".into());
+            view.running = true;
+            for id in ["interaction-1", "interaction-2"] {
+                view.event_tx.send(question_interaction_event("session", "turn-3", id)).unwrap();
+                let _batch_full = view.drain_events(window, cx);
+            }
+        });
+    })
+    .unwrap();
+    let delivered = cx.delivered_system_notifications();
+    assert_eq!(delivered.len(), 2, "each waiting interaction must post its own banner");
+    assert_ne!(delivered[0].tag, delivered[1].tag, "distinct events need distinct OS tags");
+}
+
+#[gpui_kit::test]
 fn system_notification_click_focuses_the_waiting_interaction(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

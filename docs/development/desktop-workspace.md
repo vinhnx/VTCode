@@ -547,7 +547,7 @@ role, content, and duplicate occurrence so bounded-history shifts do not transfe
 The desktop builds its theme catalog from the full shared VT Code theme registry (`available_themes()` in
 `vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), Noir, the Ciapre variants, Solarized, Gruvbox,
 Catppuccin, Nord, Vitesse, Tomorrow, and the rest of the registry — is selectable on desktop, alongside the kit's
-System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/COLOR_GUIDELINES.md)
+System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/color_guidelines.md)
 for the registry list and the desktop↔CLI sync rules. A theme sets background,
 foreground, accent, danger, and warning; border, muted text, and panel colors are derived from the palette.
 Muted text is binary-searched to the WCAG AA 4.5:1 threshold and filled controls pick white/black text at the
@@ -615,11 +615,12 @@ fail explicitly. The protocol crate caps a line at 1 MiB.
 Restored history keeps archive indices for model-only context but marks those rows hidden; desktop paging advances through
 hidden-only pages without displaying them. The CLI resume view uses the same context filter.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
-GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
-snapshots replace the pending snapshot for the same item, consecutive `plan.delta` events for one item merge, and
-ordered events displace stale snapshots before ever being dropped. A slow GUI therefore degrades the stream instead of
-failing a healthy turn; only a disconnected consumer is fatal, and displaced or dropped events are counted and logged
-by the service pump.
+GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel with one slot per
+item: `item.updated` snapshots replace the pending delta for that item, consecutive `plan.delta` and tool-output
+deltas merge, and a merged active stream moves to the back so ordered events displace quiet stale entries first.
+A slow GUI therefore degrades the stream instead of failing a healthy turn, and saturation cannot strand a
+long-running command's accumulated preview in a separate evicted slot; only a disconnected consumer is fatal, and
+displaced or dropped events are counted and logged by the service pump.
 The transcript appends incremental `plan.delta` chunks to their stable plan row; empty deltas that carry only recovery
 checkpoints remain persistence-only, and the completed plan snapshot replaces the accumulated stream.
 
@@ -640,7 +641,8 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `turn/submit`, `turn/cancel`                                                         | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity. Stops also kill exec sessions where the stop is observed (foreground cooperatively; every session, background included, once forced); a repeat press while a cancel is outstanding escalates immediately, otherwise a turn still active 5s after cancel rebuilds from durable history (see escalation below).                                                                                                                           |
 | `turn/queue/take-latest`                                                             | Pop the newest queued message back for editing; returns its text (empty queue returns null).                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `turn/queue/remove`                                                                  | Remove one queued message by its `entryId` (a `qe-…` token from the latest snapshot). A stale or unknown id answers `removed: false` without an error; a foreign session id fails.                                                                                                                                                                                                                                                                                                                                                               |
-| `turn/queue-status`                                                                  | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, matching `entryIds` and `queuedForSecs`, cumulative `droppedTotal`).                                                                                                                                                                                                                                                                                                                                                                                            |
+| `turn/steer`                                                                         | Inject a prompt into the live turn as a `SteeringMessage::FollowUpInput` instead of queueing it. When a queued row's `entryId` is supplied, the service drops that row only after steering succeeds and publishes the refreshed snapshot; with no live turn the answer is `steered: false` and the client keeps the row for an ordinary submit.                                                                                                                                                                                                   |
+| `turn/queue-status`                                                                  | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, matching `entryIds`, cumulative `droppedTotal`, and legacy `queuedForSecs` which the client no longer renders).                                                                                                                                                                                                                                                                                                                                                   |
 | `interaction/respond`                                                                | Resolve one pending approval or question using its session, turn, and interaction IDs.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `composer/resources`                                                                 | List bounded CLI-safe resource tokens for composer file and mention autocomplete.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `mcp/app/read`                                                                       | Read one bounded MCP app resource body for static previews.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -662,10 +664,20 @@ attachment-carrying submits dispatch alone; cancellation preserves the queue. Th
 oldest first, and reports every gap (`dropped` per acceptance, cumulative `droppedTotal` per snapshot) so a discard is
 never silent. `turn/queue/take-latest` restores the newest queued text into the composer (text-only, like the CLI
 queue edit); `turn/queue/remove` removes one addressed message (stale ids answer `removed: false`). Every prompt
-carries a service-minted `entryId` and enqueue instant; the snapshot publishes ids plus elapsed seconds
-oldest-first so the desktop panel binds rows and offers per-entry wait times and removal. Optimistic entries
+carries a service-minted `entryId`; the snapshot publishes ids oldest-first so the desktop panel binds rows and
+offers per-entry actions. The panel renders each entry as one card in a compact stack with icon-only actions
+and hover labels: pop back for editing, steer into the running turn (`turn/steer`), and remove. Elapsed wait
+times are no longer displayed (the `queuedForSecs` wire field is retained for compatibility). Optimistic entries
 stay unaddressed until the next snapshot; the client reconciles against snapshots, drops queue state with the
 session, and WebMCP keeps its old busy rejection.
+
+The Activity tab derives from a bounded (300-row) newest-first projection whose cache key is an activity-only
+transcript revision: PTY stdout deltas bump the general revision for output consumers but not the activity
+revision, so a streaming command no longer rebuilds every activity row on each chunk. An expanded running
+command shows a three-line live stdout tail; its "Run in bottom terminal" action types the captured command
+into the retained shell pane and focuses it for monitoring. The coalescing live-event channel keeps one slot
+per item (a delta and its terminal snapshot share it) and moves active streams to the back, so saturation
+evicts quiet items instead of dropping a long-running command's accumulated preview.
 
 Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests,
 turn status, and session-scoped primary-agent display changes. A client must reject stale or duplicate interaction

@@ -86,7 +86,7 @@ Child output is untrusted. The panel enforces an output-trust boundary:
 - Closing the panel kills the shell's foreground process group and reaps the shell. Detached background
   groups the shell disowned may survive; this limitation is documented on `close()`.
 - The shell inherits the desktop environment, like any terminal emulator, and runs outside the agent
-  sandbox: the [command security model](COMMAND_SECURITY_MODEL.md) gates agent-issued commands, not your
+  sandbox: the [command security model](command_security_model.md) gates agent-issued commands, not your
   keystrokes.
 
 ## Files

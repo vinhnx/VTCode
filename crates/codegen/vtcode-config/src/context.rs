@@ -34,7 +34,7 @@ pub struct DynamicContextConfig {
     #[serde(default = "default_sync_mcp_tools")]
     pub sync_mcp_tools: bool,
 
-    /// Enable generating skill index in .agents/skills/INDEX.md
+    /// Enable generating skill index in .agents/skills/index.md
     #[serde(default = "default_sync_skills")]
     pub sync_skills: bool,
 

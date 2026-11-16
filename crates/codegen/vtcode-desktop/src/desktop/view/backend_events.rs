@@ -165,13 +165,18 @@ impl DesktopView {
                     return;
                 }
                 let target = deeplinks::NotificationTarget::Thread { session_id: notification.session_id.clone() };
+                let key = format!(
+                    "thread:{}:{}",
+                    notification.session_id,
+                    notification.turn_id.as_deref().unwrap_or_default()
+                );
                 match notification.event.event() {
                     vtcode_exec_events::ThreadEvent::TurnCompleted(_) => {
-                        Some((BackgroundAgentActivity::Completed, target))
+                        Some((BackgroundAgentActivity::Completed, target, key))
                     }
                     vtcode_exec_events::ThreadEvent::TurnFailed(_)
                     | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => {
-                        Some((BackgroundAgentActivity::NeedsAttention, target))
+                        Some((BackgroundAgentActivity::NeedsAttention, target, key))
                     }
                     _ => None,
                 }
@@ -196,6 +201,7 @@ impl DesktopView {
                         session_id: interaction.session_id.clone(),
                         interaction_id: interaction.interaction_id.clone(),
                     },
+                    format!("interaction:{}", interaction.interaction_id),
                 ))
             }
             // The transport reports its terminal state before the channel
@@ -207,14 +213,20 @@ impl DesktopView {
             BackendEvent::Exited { status, .. }
                 if self.backend.is_some() && self.pending_workspace.is_none() && *status != Some(0) =>
             {
-                Some((BackgroundAgentActivity::ServiceDisconnected, deeplinks::NotificationTarget::Workspace))
+                Some((
+                    BackgroundAgentActivity::ServiceDisconnected,
+                    deeplinks::NotificationTarget::Workspace,
+                    "service-disconnect".to_string(),
+                ))
             }
-            BackendEvent::LaunchFailed(_) if self.backend.is_some() && self.pending_workspace.is_none() => {
-                Some((BackgroundAgentActivity::ServiceDisconnected, deeplinks::NotificationTarget::Workspace))
-            }
+            BackendEvent::LaunchFailed(_) if self.backend.is_some() && self.pending_workspace.is_none() => Some((
+                BackgroundAgentActivity::ServiceDisconnected,
+                deeplinks::NotificationTarget::Workspace,
+                "service-disconnect".to_string(),
+            )),
             _ => None,
         };
-        let Some((activity, target)) = activity else {
+        let Some((activity, target, key)) = activity else {
             return;
         };
         if !super::super::notifications::activity_allowed(
@@ -232,6 +244,7 @@ impl DesktopView {
         super::super::notifications::background_agent_activity(
             window,
             activity,
+            key,
             system,
             deeplinks::click_handler(target, weak),
             cx,

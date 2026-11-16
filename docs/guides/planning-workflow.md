@@ -675,4 +675,4 @@ offering `implement`.
 
 - [Command reference](../user-guide/commands.md)
 - [Subagents and primary agents](../user-guide/subagents.md)
-- [Configuration precedence](../config/CONFIGURATION_PRECEDENCE.md)
+- [Configuration precedence](../config/configuration_precedence.md)

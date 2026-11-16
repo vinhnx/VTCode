@@ -165,7 +165,7 @@ the release publisher and legacy updater bridge require complete platform covera
 | `x86_64-pc-windows-msvc`    | `build-linux-windows.yml` | `.zip` (required by default) |
 
 `release.sh` derives a raw `compat-vtcode-<v>-<target>.tar.gz.compat` executable from each normal archive. These are the
-legacy updater compatibility bridge for v0.141.0-v0.141.4 (see [Update System Guide](../guides/UPDATE_SYSTEM.md)). The
+legacy updater compatibility bridge for v0.141.0-v0.141.4 (see [Update System Guide](../guides/update_system.md)). The
 `compat-` prefix is load-bearing: GitHub returns release assets sorted alphabetically by name, and the prefix makes the
 compat asset sort before `vtcode-<v>-<target>.tar.gz` so the broken legacy updater picks the raw binary instead of the
 gzip archive it cannot extract. The release fails if any required target archive (including Windows by default) is

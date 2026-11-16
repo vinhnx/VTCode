@@ -4,7 +4,7 @@ VT Code keeps workspace state and user-global state separate. Workspace files re
 files are resolved through one platform-aware path policy.
 
 For the complete contract and implementation-level details, see the
-[XDG directory specification](../protocols/XDG_DIRECTORY_SPECIFICATION.md).
+[XDG directory specification](../protocols/xdg_directory_specification.md).
 
 ## Find the active paths
 
@@ -148,5 +148,5 @@ If files appear in an unexpected location, run `vtcode --version` and inspect:
 3. the XDG variables and system search lists;
 4. the migration report path and its recorded failures or conflicts.
 
-For configuration-layer details, see [Configuration precedence](../config/CONFIGURATION_PRECEDENCE.md). For security
+For configuration-layer details, see [Configuration precedence](../config/configuration_precedence.md). For security
 boundaries, see the [security guide](security.md).

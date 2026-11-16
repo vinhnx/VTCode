@@ -279,6 +279,20 @@ pub(super) async fn fetch_latest_release_metadata(
     }
 }
 
+/// GitHub API URL for one tagged release. Only a parsed semver version is
+/// interpolated, so the tag cannot inject path segments into the request.
+fn release_tag_url(version: &Version) -> String {
+    format!("https://api.github.com/repos/{REPO_SLUG}/releases/tags/v{version}")
+}
+
+/// Fetch one specific release by version. Used to backfill the running
+/// version's notes on an external install, where no in-app installer seeded
+/// them and the single-slot "latest" cache necessarily names a newer release.
+pub(super) async fn fetch_release_by_tag(version: &Version, timeout_secs: u64) -> Result<GithubRelease> {
+    let url = release_tag_url(version);
+    parse_release(&try_fetch_json_with_auth_fallback(&url, effective_timeout(timeout_secs)).await?)
+}
+
 pub(super) async fn fetch_latest_release(
     updater: &Updater,
     timeout_secs: u64,
@@ -336,6 +350,12 @@ mod tests {
         (0..policy.max_attempts.saturating_sub(1))
             .map(|attempt| policy.delay_for_attempt(attempt))
             .sum()
+    }
+
+    #[test]
+    fn release_tag_url_names_exactly_one_semver_release() {
+        let version = Version::parse("0.182.5").expect("valid test version");
+        assert_eq!(release_tag_url(&version), "https://api.github.com/repos/vinhnx/vtcode/releases/tags/v0.182.5");
     }
 
     /// GitHub's release-asset CDN 504'd continuously for ~2.5 minutes on

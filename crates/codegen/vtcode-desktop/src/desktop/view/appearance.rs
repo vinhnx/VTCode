@@ -464,7 +464,7 @@ impl DesktopView {
     /// Repaint composer tokens with the newly applied palette. The highlighter
     /// reads its colors through the shared cell, so resetting the language is
     /// enough to force a retokenize with the new theme.
-    fn refresh_composer_highlight(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn refresh_composer_highlight(&mut self, cx: &mut Context<Self>) {
         *self.composer_highlight_styles.borrow_mut() =
             composer_highlight::ComposerHighlightStyles::from_colors(&cx.theme().colors);
         self.composer.update(cx, |composer, cx| {

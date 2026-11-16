@@ -83,9 +83,9 @@ Interactive wiring lives in `src/agent/runloop/unified/turn/turn_processing/llm_
 paths reuse the core clearing resolver. Both runloops reuse `auto_compact_messages`; the headless caller checks its shared
 readiness predicate before copy-on-write access so no-op compaction does not clone shared session history.
 
-See the [architecture diagram](../ARCHITECTURE.md#request-projection-and-context-budgets),
+See the [architecture diagram](../architecture.md#request-projection-and-context-budgets),
 [loop contract](../guides/agent-loop-contract.md#unified-auto-compaction), and
-[configuration reference](../config/CONFIG_FIELD_REFERENCE.md) for the surrounding contracts.
+[configuration reference](../config/config_field_reference.md) for the surrounding contracts.
 
 ## Strategy dispatch
 
@@ -119,7 +119,7 @@ and continuation uses the full history with a resume note.
 The shared cache monitor resets only its consecutive low-reuse streak after successful compaction. Manual, recovery,
 and model-switch commits use the same reset; failures and no-ops do not reset it. Session token totals and cumulative
 alerts stay intact. Native OpenAI generation maintains a separate bounded comparison baseline across compaction,
-while replay lineage is cleared normally. See the [prompt caching guide](../tools/PROMPT_CACHING_GUIDE.md#openai-cache-comparison-diagnostics)
+while replay lineage is cleared normally. See the [prompt caching guide](../tools/prompt_caching_guide.md#openai-cache-comparison-diagnostics)
 for wire hints, supported backends, comparison evidence, and billing limits.
 
 ## OpenAI standalone request contract
@@ -208,7 +208,7 @@ empty until a route demonstrates a need.
 Successful compaction starts a new prompt-cache health streak in both runloops. Cumulative usage and hit rates remain
 intact, so expected replay-window changes cannot join an earlier low-reuse streak while persistent degradation remains
 visible. Failed and no-op compaction do not reset the streak. See the
-[cache health guide](../tools/PROMPT_CACHING_GUIDE.md#cache-health-monitoring).
+[cache health guide](../tools/prompt_caching_guide.md#cache-health-monitoring).
 
 ```bash
 cargo nextest run --locked -p vtcode-core -E 'test(compaction::) | test(core::agent::state::) | test(core::agent::runner::tests::clearing::)'

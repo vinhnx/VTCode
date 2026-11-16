@@ -606,7 +606,7 @@ Before the payload:
 {
   "project_summary": "Terminal-first coding agent for repository work.",
   "verification_command": "cargo nextest run",
-  "orientation_doc": "docs/ARCHITECTURE.md",
+  "orientation_doc": "docs/architecture.md",
   "critical_instruction": null
 }
 ```

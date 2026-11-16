@@ -294,12 +294,12 @@ else
 	echo -e "${RED}✗ Some compatibility checks failed!${NC}"
 	echo ""
 	echo "Please review the errors above and fix them."
-	echo "See COMPATIBILITY.md for detailed platform support information."
+	echo "See compatibility.md for detailed platform support information."
 fi
 
 echo ""
 echo -e "${BLUE}For more information:${NC}"
-echo "  - COMPATIBILITY.md - Platform compatibility matrix"
+echo "  - compatibility.md - Platform compatibility matrix"
 echo "  - clippy.toml - Clippy configuration"
 echo "  - rust-toolchain.toml - Rust toolchain settings"
 echo ""

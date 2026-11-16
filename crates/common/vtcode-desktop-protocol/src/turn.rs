@@ -229,3 +229,32 @@ pub struct TurnQueueRemoveResult {
     /// Queue depth after the removal.
     pub queue_depth: usize,
 }
+
+/// Parameters for steering the live turn with a prompt. When the prompt comes
+/// from a queued row, `entry_id` asks the service to remove that entry in the
+/// same request so it is never dispatched a second time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnSteerParams {
+    /// Session that owns the running turn.
+    pub session_id: String,
+    /// The prompt to inject as `SteeringMessage::FollowUpInput`.
+    pub text: String,
+    /// Queue entry to drop before steering, when steering a queued row.
+    #[serde(default)]
+    pub entry_id: Option<String>,
+}
+
+/// Outcome of a steer request. `steered: false` means there was no live turn
+/// channel, so the client must fall back to an ordinary submit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnSteerResult {
+    /// Session that owns the running turn.
+    pub session_id: String,
+    /// Whether the prompt reached the live turn.
+    pub steered: bool,
+    /// Queue depth after dropping `entry_id`, when one was supplied.
+    #[serde(default)]
+    pub queue_depth: usize,
+}

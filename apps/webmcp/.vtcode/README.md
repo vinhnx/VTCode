@@ -13,10 +13,10 @@ This directory contains dynamic context files for VT Code agent operations.
     tools/            # MCP tool descriptions and schemas
     status.json       # MCP provider status
   skills/
-    INDEX.md          # Available skills index
+    index.md          # Available skills index
     {skill_name}/     # Individual skill directories
   terminals/
-    INDEX.md          # Terminal sessions index
+    index.md          # Terminal sessions index
     {session_id}.txt  # Terminal session output
 ```
 

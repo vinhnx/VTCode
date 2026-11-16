@@ -4,11 +4,11 @@ Entry point for VT Code contributor workflows.
 
 ## Getting Started
 
-- [Development Setup](./DEVELOPMENT_SETUP.md) - Canonical local setup and quality loop.
+- [Development Setup](./development_setup.md) - Canonical local setup and quality loop.
 - [Rust Style Guide](./rust-style-guide.md) - Google Rust guidance adoption, enforcement, exceptions, and API migrations.
 - [Rust Toolchain and MSRV](./toolchain-updates.md) - Single compiler pin, bump checklist, new-compiler gate fixes, and
   which compiler references stay historical.
-- [Architecture Guide](../ARCHITECTURE.md#request-projection-and-context-budgets) - Runtime ownership, request projections,
+- [Architecture Guide](../architecture.md#request-projection-and-context-budgets) - Runtime ownership, request projections,
   context budgets, and staged headless compaction.
 - [Testing Guide](./testing.md) - Test commands, structure, and benchmark coverage, including the startup launch
   benchmark.
@@ -17,7 +17,7 @@ Entry point for VT Code contributor workflows.
   `vtcode-ui::design`.
 - [TUI list search](./tui-list-search.md) - Shared live filter for modal and standalone pickers (labels, descriptions,
   keywords).
-- [C++ Core Guidelines Adoption](./CPP_CORE_GUIDELINES_ADOPTION.md) - Policy for any C/C++ code introduced in this
+- [C++ Core Guidelines Adoption](./cpp_core_guidelines_adoption.md) - Policy for any C/C++ code introduced in this
   repository.
 - [Deep Rust Analysis with Charon](./deep-rust-analysis.md) - Semantic Rust inspection (drops, layout, resolution) via
   Charon, and the design lessons it mirrors.
@@ -28,9 +28,9 @@ Entry point for VT Code contributor workflows.
 
 ## Security and Execution
 
-- [Process Hardening](./PROCESS_HARDENING.md) - Runtime hardening controls.
-- [Execution Policy](./EXECUTION_POLICY.md) - Command policy model.
-- [Command Security Model](./COMMAND_SECURITY_MODEL.md) - Command validation and threat model.
+- [Process Hardening](./process_hardening.md) - Runtime hardening controls.
+- [Execution Policy](./execution_policy.md) - Command policy model.
+- [Command Security Model](./command_security_model.md) - Command validation and threat model.
 - [WebMCP bridge](./webmcp.md) - Authenticated browser editing, pairing, runtime adapters, and security boundaries.
 - [VT Code Companion](./vtcode-companion.md) - Local plugin packaging, marketplace generation, install-script and CLI
   behavior, and GitHub sharing boundaries.
@@ -74,8 +74,8 @@ Entry point for VT Code contributor workflows.
 
 - [Responses WebSocket streaming](./responses-websocket-streaming.md) - Connection lifecycle, continuation,
   cancellation, HTTP fallback, and service-tier recovery.
-- [Adding Models](./ADDING_MODELS.md) - Complete workflow for adding new LLM models.
-- [Model Addition Checklist](./MODEL_ADDITION_CHECKLIST.md) - Step-by-step checklist for model additions.
+- [Adding Models](./adding_models.md) - Complete workflow for adding new LLM models.
+- [Model Addition Checklist](./model_addition_checklist.md) - Step-by-step checklist for model additions.
 - [Compaction Engine](./compaction.md) - Request-only clearing, complete tool-batch retention, provider strategies, and
   local summary budgets.
 
@@ -84,9 +84,9 @@ Entry point for VT Code contributor workflows.
 - [Asset Synchronization](./asset-synchronization.md) - Embedded asset maintenance.
 - [AI Tool Surface Eval Report](./ai-tool-surface-eval-report.md) - Executable tool-surface cases, suite validation, and
   the baseline comparison format.
-- [Changelog Generation](./CHANGELOG_GENERATION.md) - `git-cliff`-based changelog updates.
-- [Desire Paths](./DESIRE_PATHS.md) - Known architecture pressure points.
-- [TUI-Only Refactoring Notes](./TUI_ONLY_REFACTORING.md) - Historical refactor details.
+- [Changelog Generation](./changelog_generation.md) - `git-cliff`-based changelog updates.
+- [Desire Paths](./desire_paths.md) - Known architecture pressure points.
+- [TUI-Only Refactoring Notes](./tui_only_refactoring.md) - Historical refactor details.
 - [Tool Summary Display](./tool-summary-display.md) - Compact and expanded tool transition summaries, configuration, and
   testing boundaries.
 - [Preview Budget, Blocked Turns, and Replans](./preview-budget-blocked-replan.md) - Per-turn model-visible budget (64
@@ -97,7 +97,7 @@ Entry point for VT Code contributor workflows.
 ## Navigation
 
 - [Documentation Hub](../README.md)
-- [Docs Index](../INDEX.md)
+- [Docs Index](../index.md)
 - [Contributing](../CONTRIBUTING.md)
 
 - [Checkpoint file storage](filesnap-checkpoints.md): filesnap storage, legacy compatibility, and restore boundaries.

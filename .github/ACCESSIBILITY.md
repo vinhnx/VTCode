@@ -21,7 +21,7 @@ no pointer-only workflows, honored OS accessibility preferences, and plain-text 
 ### Color and contrast
 
 - Default minimum contrast is WCAG AA 4.5:1 (`ui.minimum_contrast = 4.5`). WCAG AAA 7.0 is supported via
-  `minimum_contrast = 7.0`. See [Terminal Color Guidelines](../docs/guides/COLOR_GUIDELINES.md).
+  `minimum_contrast = 7.0`. See [Terminal Color Guidelines](../docs/guides/color_guidelines.md).
 - Theme contrast is validated at startup with warnings, and every built-in theme is gated to meet the AA floor
   (`cargo nextest run -p vtcode-ui -E 'test(theme)'`).
 - `NO_COLOR=1` and `vtcode --no-color` suppress ANSI color; `ui.safe_colors_only` restricts output to the 11 portable

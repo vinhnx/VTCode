@@ -149,6 +149,9 @@ impl DesktopView {
             }
         } else if method == protocol::method::TURN_QUEUE_TAKE_LATEST {
             self.take_latest_pending = false;
+        } else if method == protocol::method::TURN_STEER {
+            // Leave the row queued: a rejected steer must not lose the prompt.
+            self.steer_pending_echo_id = None;
         }
         // A busy thread is actionable, not generic: surface the close-and-reload /
         // fork remedy in the status line too, so it survives banner dismissal.

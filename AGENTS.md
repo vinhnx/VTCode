@@ -37,17 +37,17 @@ Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` 
 
 ## Detailed Guides
 
-- Development, testing, evals: [README](docs/development/README.md), [SETUP](docs/development/DEVELOPMENT_SETUP.md), [testing](docs/development/testing.md), [pty-testing](docs/guides/pty-integration-testing.md), [eval](docs/guides/eval.md), [desktop workspace](docs/development/desktop-workspace.md).
-- CI/release + models: [ci-cd](docs/development/ci-cd.md), [toolchain/MSRV](docs/development/toolchain-updates.md), [CHANGELOG](docs/development/CHANGELOG_GENERATION.md), [ADDING_MODELS](docs/development/ADDING_MODELS.md), [WORKFLOW](docs/development/MODEL_ADDITION_WORKFLOW.md), [CHECKLIST](docs/development/MODEL_ADDITION_CHECKLIST.md).
-- Architecture + tools/security: [code-organization](docs/guides/code-organization-patterns.md), [async](docs/guides/async-architecture.md), [perf](docs/development/rust-performance-principles.md), [grep-guide](docs/development/grep-tool-guide.md), [grep-ref](docs/development/grep-quick-reference.md), [COMMAND_SECURITY](docs/development/COMMAND_SECURITY_MODEL.md), [security](docs/guides/security.md).
-- WebMCP + harness: [webmcp](docs/development/webmcp.md), [agent-loop](docs/guides/agent-loop-contract.md), [harness INDEX](docs/harness/INDEX.md), [CORE_BELIEFS](docs/harness/CORE_BELIEFS.md), [INVARIANTS](docs/harness/ARCHITECTURAL_INVARIANTS.md), [LEGIBILITY](docs/harness/AGENT_LEGIBILITY_GUIDE.md).
-- Prompt/runtime + planning/automation + loop: [runtime-guidance](docs/development/runtime-guidance.md), [planning](docs/guides/planning-workflow.md), [full-auto](docs/guides/full-automation.md), [EXECUTION_POLICY](docs/development/EXECUTION_POLICY.md), [loop-eng](docs/project/PLAN-loop-engineering.md).
+- Development, testing, evals: [README](docs/development/README.md), [SETUP](docs/development/development_setup.md), [testing](docs/development/testing.md), [pty-testing](docs/guides/pty-integration-testing.md), [eval](docs/guides/eval.md), [desktop workspace](docs/development/desktop-workspace.md).
+- CI/release + models: [ci-cd](docs/development/ci-cd.md), [toolchain/MSRV](docs/development/toolchain-updates.md), [CHANGELOG](docs/development/changelog_generation.md), [ADDING_MODELS](docs/development/adding_models.md), [WORKFLOW](docs/development/model_addition_workflow.md), [CHECKLIST](docs/development/model_addition_checklist.md).
+- Architecture + tools/security: [code-organization](docs/guides/code-organization-patterns.md), [async](docs/guides/async-architecture.md), [perf](docs/development/rust-performance-principles.md), [grep-guide](docs/development/grep-tool-guide.md), [grep-ref](docs/development/grep-quick-reference.md), [COMMAND_SECURITY](docs/development/command_security_model.md), [security](docs/guides/security.md).
+- WebMCP + harness: [webmcp](docs/development/webmcp.md), [agent-loop](docs/guides/agent-loop-contract.md), [harness INDEX](docs/harness/index.md), [CORE_BELIEFS](docs/harness/core_beliefs.md), [INVARIANTS](docs/harness/architectural_invariants.md), [LEGIBILITY](docs/harness/agent_legibility_guide.md).
+- Prompt/runtime + planning/automation + loop: [runtime-guidance](docs/development/runtime-guidance.md), [planning](docs/guides/planning-workflow.md), [full-auto](docs/guides/full-automation.md), [EXECUTION_POLICY](docs/development/execution_policy.md), [loop-eng](docs/project/plan-loop-engineering.md).
 
 ## Workspace
 
 Cargo workspace, 25 crates. Rust stable, MSRV 1.100.0, edition 2024. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
 
-Crate roles live in each crate's `Cargo.toml` `description` and [ARCHITECTURE](docs/ARCHITECTURE.md#workspace-crates). Not obvious from the code: `vtcode-desktop` is a non-publishable GPUI app while `vtcode-desktop-protocol` is published (the `vtcode` binary depends on it); `vtcode-llm` and `vtcode-skills` are partial extractions from `vtcode-core`.
+Crate roles live in each crate's `Cargo.toml` `description` and [ARCHITECTURE](docs/architecture.md#workspace-crates). Not obvious from the code: `vtcode-desktop` is a non-publishable GPUI app while `vtcode-desktop-protocol` is published (the `vtcode` binary depends on it); `vtcode-llm` and `vtcode-skills` are partial extractions from `vtcode-core`.
 
 New reusable logic: put it in an existing small crate or a new one. Keep it out of `vtcode-core` by default unless tightly coupled to the core runtime.
 

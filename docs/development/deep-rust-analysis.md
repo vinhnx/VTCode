@@ -4,7 +4,7 @@ VT Code's Rust support is intentionally layered:
 
 - `code_search` reports **recognised declarations** and **exact syntactic usages**. A usage can belong
   to a different symbol with the same spelling, so it is *not* a semantically resolved reference
-  (see [Language Support](../protocols/LANGUAGE_SUPPORT.md)).
+  (see [Language Support](../protocols/language_support.md)).
 - `ast-grep` (an optional developer tool, not a repository dependency) covers structural/AST queries over source shape.
 - The shell covers builds, tests, and toolchain probes.
 

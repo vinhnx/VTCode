@@ -35,7 +35,7 @@ OpenLLM serves the full `/v1/` API surface and also provides an MCP server. See 
 Custom providers are trusted configuration, so VT Code rejects them in a workspace `vtcode.toml`. Add the entry to your
 user configuration (`~/.vtcode/vtcode.toml`, or `$VTCODE_HOME/vtcode.toml` when `VTCODE_HOME` is set — the default
 `~/.vtcode/vtcode.toml` path is not discovered in that case — or the platform config directory) or pass a file with
-`--config path/to/file.toml`. See [Configuration precedence](../config/CONFIGURATION_PRECEDENCE.md).
+`--config path/to/file.toml`. See [Configuration precedence](../config/configuration_precedence.md).
 
 ```toml
 [agent]

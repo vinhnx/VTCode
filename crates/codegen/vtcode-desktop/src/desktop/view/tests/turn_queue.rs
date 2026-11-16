@@ -1,4 +1,4 @@
-use super::super::{QueuePanelState, QueuedSubmission, SubmissionDraft, queue_wait_time_label};
+use super::super::{QueuePanelState, QueuedSubmission, SubmissionDraft};
 use super::*;
 
 fn queued_draft(prompt: &str) -> SubmissionDraft {
@@ -536,6 +536,30 @@ fn remove_button_sends_remove_request_and_drops_the_row(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn steer_keeps_the_row_until_the_service_confirms(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".to_string());
+        view.queued_submissions.push(QueuedSubmission {
+            echo_id: "echo-steer".into(),
+            entry_id: Some("qe-1".into()),
+            prompt: "ship it".into(),
+            acknowledged: true,
+        });
+        view.steer_queued_submission("echo-steer", cx);
+        assert_eq!(view.queued_submissions.len(), 1, "the row waits for confirmation");
+        assert_eq!(view.steer_pending_echo_id.as_deref(), Some("echo-steer"));
+    });
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("steer request") else {
+        panic!("expected steer request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_STEER);
+    assert_eq!(params, serde_json::json!({ "sessionId": "session", "prompt": "ship it", "entryId": "qe-1" }));
+}
+
+#[gpui_kit::test]
 fn remove_without_a_bound_entry_id_is_suppressed(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
@@ -553,17 +577,6 @@ fn remove_without_a_bound_entry_id_is_suppressed(cx: &mut TestAppContext) {
         assert_eq!(view.queued_submissions.len(), 1, "unaddressed entry cannot be optimistically removed");
     });
     assert!(requests.try_recv().is_err(), "no remove request without a service id");
-}
-
-#[test]
-fn queue_wait_label_formats_human_units() {
-    let format = |secs: u64| {
-        // Indirect through the view helpers' formatter for parity.
-        queue_wait_time_label(secs)
-    };
-    assert!(format(5).contains('5'), "{:?}", format(5));
-    assert!(format(90).contains('1'), "{:?}", format(90));
-    assert!(format(3900).contains('1'), "{:?}", format(3900));
 }
 
 #[gpui_kit::test]

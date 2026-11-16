@@ -5623,7 +5623,7 @@ All notable changes to vtcode will be documented in this file.
 
 - Remove sccache + rust-cache from Windows and macOS builds (ecd69fc1) (@vinhnx)
 - Update TODO.md (51f4dad0) (@vinhnx)
-- Delete PLAN-loop-engineering.md (40ae26f0) (@vinhnx)
+- Delete plan-loop-engineering.md (40ae26f0) (@vinhnx)
 - Delete web-fetch-hilt-fix.md (05425cda) (@vinhnx)
 - Update TODO.md (e8266c24) (@vinhnx)
 - Update TODOs (66a93a98)
@@ -5935,7 +5935,7 @@ All notable changes to vtcode will be documented in this file.
 - Add web_search tool reference, document /continue and did-you-mean (90a321b2)
 - Expand TODO with known tech debt items (144491a0)
 - Add defuddle_fetch tool reference and web_search config fields (5040faca)
-- Fix stale src/tui.rs references, update CONTRIBUTING.md and INDEX.md (8b0518e1)
+- Fix stale src/tui.rs references, update CONTRIBUTING.md and index.md (8b0518e1)
 - Audit and trim per-crate AGENTS.md files (018656ea)
 - Align CI/CD docs with actual workflow files (5e39c041)
 
@@ -6424,7 +6424,7 @@ No highlighted changes.
 - Add signal handling architecture documentation (3d30aa17)
 - Update tree detail rendering to use correct prefix styling (5f335b9d)
 - Update tree detail rendering to use correct prefix character (50bb4f4a)
-- Update safety documentation link to SECURITY_MODEL.md (5919991d)
+- Update safety documentation link to security_model.md (5919991d)
 - Update logo and fix documentation links in README (47c2d476)
 
 #### Features
@@ -6740,7 +6740,7 @@ No highlighted changes.
 - Trim whitespace from custom config and data directory environment variables (179f1ef9) (@vinhnx)
 - Use correct repo name and handle tags without v prefix (6dfb0356) (@vinhnx)
 - Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47) (@vinhnx)
-- Update Cargo.toml to exclude all docs except CONFIG_FIELD_REFERENCE.md (6903748b) (@vinhnx)
+- Update Cargo.toml to exclude all docs except config_field_reference.md (6903748b) (@vinhnx)
 - Update terminal notification handling for ghostty to use bell-only (ca512670) (@vinhnx)
 - Preserve v prefix in GitHub release URLs for install script (3f2088be) (@vinhnx)
 - Use exact tag names from GitHub API in install script (b22bd9af) (@vinhnx)
@@ -6918,7 +6918,7 @@ No highlighted changes.
 - Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project
   configurations and dependencies. (67278d19) (@vinhnx)
 - Complete documentation migration - consolidate and organize (4fd42b50) (@vinhnx)
-- Add comprehensive INDEX.md for navigation (aa7d7545) (@vinhnx)
+- Add comprehensive index.md for navigation (aa7d7545) (@vinhnx)
 - Link MCP module docs and add team guide (139a035f) (@vinhnx)
 - Add team announcement document (bebe2099) (@vinhnx)
 - Add executive summary document (245db406) (@vinhnx)
@@ -9763,7 +9763,7 @@ No highlighted changes.
 - Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d) (@vinhnx)
 - Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c) (@vinhnx)
 - Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4) (@vinhnx)
-- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and
+- Update tool_specs.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and
   project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints
   in structural_search.rs. (0cf298f6) (@vinhnx)
 - Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom
@@ -12616,7 +12616,7 @@ No highlighted changes.
 - Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d)
 - Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c)
 - Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4)
-- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and
+- Update tool_specs.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and
   project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints
   in structural_search.rs. (0cf298f6)
 - Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom
@@ -12678,7 +12678,7 @@ No highlighted changes.
 - Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d)
 - Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c)
 - Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4)
-- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and
+- Update tool_specs.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and
   project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints
   in structural_search.rs. (0cf298f6)
 - Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom
@@ -13713,7 +13713,7 @@ No highlighted changes.
 #### Bug Fixes
 
 - Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47)
-- Update Cargo.toml to exclude all docs except CONFIG_FIELD_REFERENCE.md (6903748b)
+- Update Cargo.toml to exclude all docs except config_field_reference.md (6903748b)
 
 ### Other Changes
 
@@ -14035,8 +14035,8 @@ All notable changes to vtcode will be documented in this file.
 
 #### Documentation
 
-- Add Native Plugin Guide (`docs/skills/NATIVE_PLUGIN_GUIDE.md`) - Complete user guide for plugin development
-- Add Native Plugin Implementation Summary (`docs/skills/NATIVE_PLUGIN_IMPLEMENTATION.md`) - Technical implementation
+- Add Native Plugin Guide (`docs/skills/native_plugin_guide.md`) - Complete user guide for plugin development
+- Add Native Plugin Implementation Summary (`docs/skills/native_plugin_implementation.md`) - Technical implementation
   details
 - Add example plugin with tests (`examples/plugins/hello-world/`)
 
@@ -21369,7 +21369,7 @@ No significant changes.
 - docs/mcp: Add executive summary document
 - docs/mcp: Add team announcement document
 - docs: Link MCP module docs and add team guide
-- docs/mcp: Add comprehensive INDEX.md for navigation
+- docs/mcp: Add comprehensive index.md for navigation
 - docs/mcp: Complete documentation migration - consolidate and organize
 - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project
   configurations and dependencies.
@@ -21425,7 +21425,7 @@ No significant changes.
 - docs/mcp: Add executive summary document
 - docs/mcp: Add team announcement document
 - docs: Link MCP module docs and add team guide
-- docs/mcp: Add comprehensive INDEX.md for navigation
+- docs/mcp: Add comprehensive index.md for navigation
 - docs/mcp: Complete documentation migration - consolidate and organize
 - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project
   configurations and dependencies.
@@ -21476,7 +21476,7 @@ No significant changes.
 - docs/mcp: Add executive summary document
 - docs/mcp: Add team announcement document
 - docs: Link MCP module docs and add team guide
-- docs/mcp: Add comprehensive INDEX.md for navigation
+- docs/mcp: Add comprehensive index.md for navigation
 - docs/mcp: Complete documentation migration - consolidate and organize
 - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project
   configurations and dependencies.

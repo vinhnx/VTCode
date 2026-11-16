@@ -183,7 +183,6 @@ impl DesktopView {
             entry.entry_id = Some(id);
         }
         self.queue_previews = status.previews;
-        self.queue_ages_secs = status.queued_for_secs;
         if status.dropped_total > self.queue_dropped_total {
             // Overwrite-safe: the cumulative total stays correct no matter
             // how many drop reports arrive, and the banner clears on the next
@@ -248,6 +247,38 @@ impl DesktopView {
         ) {
             self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
+        cx.notify();
+    }
+
+    /// Steer one queued prompt into the live turn instead of waiting for the
+    /// FIFO dispatch. The row stays put until the service confirms delivery;
+    /// without a live turn the prompt remains queued and an error is shown.
+    pub(super) fn steer_queued_submission(&mut self, echo_id: &str, cx: &mut Context<Self>) {
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return;
+        };
+        if self.steer_pending_echo_id.is_some() {
+            return;
+        }
+        let Some(entry) = self.queued_submissions.iter().find(|entry| entry.echo_id == echo_id) else {
+            return;
+        };
+        let Some(entry_id) = entry.entry_id.clone() else {
+            return;
+        };
+        let prompt = entry.prompt.clone();
+        let params = json!({
+            keys::SESSION_ID: session_id,
+            keys::PROMPT: prompt,
+            keys::ENTRY_ID: entry_id,
+        });
+        if !self.request(protocol::method::TURN_STEER, params) {
+            self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
+            cx.notify();
+            return;
+        }
+        self.clear_error();
+        self.steer_pending_echo_id = Some(echo_id.to_string());
         cx.notify();
     }
 
@@ -327,16 +358,20 @@ impl DesktopView {
                     .child(row_title(title, &colors))
                     .child(
                         desktop_button("edit-newest-queued")
-                            .label(rust_i18n::t!("app.composer.edit_queued").to_string())
+                            .icon(IconName::Pencil)
+                            .accessibility_label("Edit prompt".to_string())
+                            .tooltip("Edit prompt".to_string())
                             .ghost()
-                            .small()
+                            .xsmall()
                             .desktop_disabled(!take_latest_ready || composer_busy)
                             .on_click(cx.listener(|view, _, _, cx| view.take_latest_queued(cx))),
                     ),
             )
             .children(rows.into_iter().map(|(row_index, echo_id, entry_id, prompt)| {
-                let wait = self.queue_wait_label(row_index);
                 let remove_label = rust_i18n::t!("app.composer.remove_queued").to_string();
+                // Each entry reads as one card in a compact stack: its own
+                // surface, a hairline boundary, and stable icon/text/action
+                // lanes. No age column — the count is the state that matters.
                 let row = div()
                     .id(queued_row_element_id(row_index, echo_id.as_deref()))
                     .test_support()
@@ -345,33 +380,27 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .px_1()
-                    .py_0p5()
-                    .rounded_sm()
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(hairline)
+                    .bg(colors.background)
                     .child(
                         // Leading status icon: the clock marks the waiting
                         // state without encoding it by color alone.
                         Icon::new(IconName::Clock).size_3().text_color(muted).into_any_element(),
                     )
                     .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .flex()
-                            .items_baseline()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .truncate()
-                                    .text_sm()
-                                    .text_color(colors.foreground)
-                                    .child(prompt.clone()),
-                            )
-                            .when_some(wait, |meta, wait| {
-                                meta.child(div().flex_shrink_0().text_xs().text_color(muted).child(wait))
-                            }),
+                        div().min_w_0().flex_1().flex().items_baseline().gap_2().child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .truncate()
+                                .text_sm()
+                                .text_color(colors.foreground)
+                                .child(prompt.clone()),
+                        ),
                     );
                 // Trailing action lane: one quiet icon button per row. Every
                 // service-addressed entry removes by id; the newest local
@@ -380,26 +409,50 @@ impl DesktopView {
                 // map to a row, so no pop control is offered).
                 match (&echo_id, &entry_id) {
                     (_, Some(_)) => row.child(
-                        desktop_button(queued_remove_element_id(row_index, echo_id.as_deref()))
-                            .icon(IconName::Trash)
-                            .accessibility_label(remove_label.clone())
-                            .tooltip(remove_label)
-                            .ghost()
-                            .xsmall()
-                            .on_click({
-                                let echo_id = echo_id.clone();
-                                cx.listener(move |view, _, _, cx| {
-                                    let Some(echo_id) = echo_id.as_deref() else {
-                                        return;
-                                    };
-                                    view.remove_queued_submission(echo_id, cx);
-                                })
-                            }),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                desktop_button(queued_steer_element_id(row_index, echo_id.as_deref()))
+                                    .icon(IconName::ArrowRight)
+                                    .accessibility_label("Steer into the running turn".to_string())
+                                    .tooltip("Steer into the running turn".to_string())
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click({
+                                        let echo_id = echo_id.clone();
+                                        cx.listener(move |view, _, _, cx| {
+                                            let Some(echo_id) = echo_id.as_deref() else {
+                                                return;
+                                            };
+                                            view.steer_queued_submission(echo_id, cx);
+                                        })
+                                    }),
+                            )
+                            .child(
+                                desktop_button(queued_remove_element_id(row_index, echo_id.as_deref()))
+                                    .icon(IconName::Trash)
+                                    .accessibility_label(remove_label.clone())
+                                    .tooltip(remove_label)
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click({
+                                        let echo_id = echo_id.clone();
+                                        cx.listener(move |view, _, _, cx| {
+                                            let Some(echo_id) = echo_id.as_deref() else {
+                                                return;
+                                            };
+                                            view.remove_queued_submission(echo_id, cx);
+                                        })
+                                    }),
+                            ),
                     ),
                     (Some(_), None) if row_index + 1 == rows_len && !composer_busy && take_latest_ready => row.child(
                         desktop_button("edit-newest-queued-row")
                             .icon(IconName::ArrowUp)
-                            .accessibility_label(rust_i18n::t!("app.composer.edit_queued").to_string())
+                            .accessibility_label("Edit prompt".to_string())
+                            .tooltip("Edit prompt".to_string())
                             .ghost()
                             .xsmall()
                             .on_click(cx.listener(|view, _, _, cx| view.take_latest_queued(cx))),
@@ -414,19 +467,10 @@ impl DesktopView {
         self.queued_submissions.clear();
         self.queue_depth = 0;
         self.queue_previews.clear();
-        self.queue_ages_secs.clear();
         self.queue_dropped_total = 0;
         self.take_latest_pending = false;
+        self.steer_pending_echo_id = None;
         self.pending_composer_restore = None;
-    }
-
-    /// Human-readable wait time for one preview or entry row. The snapshot
-    /// lists ages oldest-first, matching preview slots one-to-one; local
-    /// entries count their slot from the front the same way. `None` renders
-    /// no time (service omits ages, or the row sits past the snapshot).
-    fn queue_wait_label(&self, row_index: usize) -> Option<String> {
-        let secs = *self.queue_ages_secs.get(row_index)?;
-        Some(queue_wait_label(secs))
     }
 
     /// The newest acknowledged queue entry's wire identity, when the service
@@ -442,25 +486,6 @@ impl DesktopView {
     }
 }
 
-/// Format the per-row wait time. Below a minute shows seconds; beyond it,
-/// short human units keep the column scannable.
-fn queue_wait_label(secs: u64) -> String {
-    queue_wait_time_label(secs)
-}
-
-/// Shared wait-time formatter (published for tests).
-pub(crate) fn queue_wait_time_label(secs: u64) -> String {
-    if secs < 60 {
-        return rust_i18n::t!("app.composer.queue_wait_time", time = format!("{secs}s")).to_string();
-    }
-    let minutes = secs / 60;
-    if minutes < 60 {
-        return rust_i18n::t!("app.composer.queue_wait_time", time = format!("{minutes}m")).to_string();
-    }
-    let hours = minutes / 60;
-    rust_i18n::t!("app.composer.queue_wait_time", time = format!("{hours}h")).to_string()
-}
-
 /// Bounded row element id: local rows echo the client transcript id,
 /// authoritative preview rows fall back to their slot index.
 fn queued_row_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit::ElementId {
@@ -470,6 +495,11 @@ fn queued_row_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit::E
 /// Bounded remove-action element id, paired with its row.
 fn queued_remove_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit::ElementId {
     gpui_kit::ElementId::named_usize("queued-remove", queued_row_discriminator(row_index, echo_id))
+}
+
+/// Bounded steer-action element id, paired with its row.
+fn queued_steer_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit::ElementId {
+    gpui_kit::ElementId::named_usize("queued-steer", queued_row_discriminator(row_index, echo_id))
 }
 
 /// Hash the row's stable identity (echo id when bound, slot index fallback)

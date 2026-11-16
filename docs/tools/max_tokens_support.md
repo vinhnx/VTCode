@@ -36,7 +36,7 @@ Read a bounded file slice:
 
 ```json
 {
-  "cmd": "sed -n '1,160p' docs/tools/TOOL_SPECS.md",
+  "cmd": "sed -n '1,160p' docs/tools/tool_specs.md",
   "max_output_tokens": 4000
 }
 ```

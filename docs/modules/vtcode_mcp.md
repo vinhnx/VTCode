@@ -65,6 +65,6 @@ Environment variables:
 
 ## See Also
 
-- [MCP Integration Guide](../mcp/MCP_INTEGRATION_GUIDE.md) — setup and usage
-- [Tool Specifications](../tools/TOOL_SPECS.md) — tool definitions
-- [Security Model](../security/SECURITY_MODEL.md) — MCP security considerations
+- [MCP Integration Guide](../mcp/mcp_integration_guide.md) — setup and usage
+- [Tool Specifications](../tools/tool_specs.md) — tool definitions
+- [Security Model](../security/security_model.md) — MCP security considerations

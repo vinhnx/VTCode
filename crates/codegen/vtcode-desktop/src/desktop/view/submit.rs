@@ -407,6 +407,42 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Move the highlighted choice one row (wrapping) for Up/Down keys.
+    /// This reuses the exact selection state pointer clicks write, so the
+    /// checked row, the Confirm button and arrow keys can never disagree.
+    /// Digits keep their immediate-commit contract; arrows only select.
+    pub(super) fn move_interaction_choice(&mut self, down: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
+        let Some(interaction) = self.interaction.clone() else {
+            return;
+        };
+        let step_index = self.interaction_step_index;
+        let choices = interaction_render::visible_choices(&interaction, step_index);
+        if choices.len() < 2 {
+            return;
+        }
+        let current_id = if interaction_render::is_wizard_interaction(&interaction) {
+            self.interaction_choice_ids.get(step_index).and_then(|id| id.clone())
+        } else {
+            self.effective_immediate_choice_id()
+        };
+        let current = current_id
+            .as_deref()
+            .and_then(|id| choices.iter().position(|choice| choice.id == id))
+            .unwrap_or(0);
+        let len = choices.len();
+        let next = if down {
+            (current + 1) % len
+        } else {
+            (current + len - 1) % len
+        };
+        if let Some(choice) = choices.get(next) {
+            self.choose_interaction_option(step_index, choice.id.clone(), window, cx);
+        }
+    }
+
     /// Submit the highlighted immediate choice (mouse selection, else the
     /// service default). Digit shortcuts bypass this and commit directly.
     pub(super) fn confirm_immediate_choice(&mut self, window: &mut Window, cx: &mut Context<Self>) {

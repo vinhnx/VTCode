@@ -174,6 +174,30 @@ fn digit_shortcut_commits_the_numbered_choice(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn arrow_keys_move_the_highlight_without_submitting(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _cx| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
+    focus_panel(&view, window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-grant-40").selected(), Some(true));
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-grant-20").selected(), Some(true));
+        assert_eq!(window.find("choice-grant-40").selected(), Some(false));
+        window.press("up", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-grant-40").selected(), Some(true));
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "arrows only move the highlight; Confirm commits");
+}
+
+#[gpui_kit::test]
 fn arriving_approval_focuses_panel_and_accepts_digit(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

@@ -236,6 +236,11 @@ pub(super) struct Transcript {
     /// stale-projection bug, so new `&mut self` methods that touch `items`
     /// must call `bump_revision`.
     revision: u64,
+    /// Coarser sibling of `revision` that only changes when a row's activity
+    /// meaning changes (title, status, category, output presence). Pure output
+    /// text deltas bump `revision` but not this counter, so the Activity
+    /// projection is not rebuilt for every PTY chunk of a streaming command.
+    activity_revision: u64,
 }
 
 impl Transcript {
@@ -257,9 +262,23 @@ impl Transcript {
         self.revision
     }
 
+    /// Generation for projections that depend on row identity/status but not
+    /// on captured output text (notably the Activity tab).
+    pub(super) fn activity_revision(&self) -> u64 {
+        self.activity_revision
+    }
+
     fn bump_revision(&mut self) {
         // Wrapping is deliberate: the counter is a cache key, not a count.
         // A collision needs 2^64 mutations without an intervening cache read.
+        self.revision = self.revision.wrapping_add(1);
+        self.activity_revision = self.activity_revision.wrapping_add(1);
+    }
+
+    /// Bump only the general revision for output-text changes. Activity rows
+    /// read output *presence*, which this mutation does not change; callers
+    /// that cross the none↔some boundary must use `bump_revision` instead.
+    fn bump_output_revision(&mut self) {
         self.revision = self.revision.wrapping_add(1);
     }
 

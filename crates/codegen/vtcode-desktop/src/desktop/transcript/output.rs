@@ -7,7 +7,7 @@ impl Transcript {
             && item.output_item_id.as_deref() != Some(output_id)
         {
             item.output_item_id = Some(output_id.to_owned());
-            self.bump_revision();
+            self.bump_output_revision();
         }
     }
     /// Attach or replace human-projected output and remeasure an expanded transcript row.
@@ -15,9 +15,17 @@ impl Transcript {
         if let Some(index) = self.position_by_id(id) {
             if let Some(item) = self.items.get_mut(index) {
                 if item.output != output {
+                    // Activity rows read `has_output`, so only the none↔some
+                    // boundary matters to them. Streaming text deltas keep
+                    // the Activity projection cache warm.
+                    let activity_affecting = item.output.is_none() != output.is_none();
                     item.output = output;
                     let expanded = item.expanded;
-                    self.bump_revision();
+                    if activity_affecting {
+                        self.bump_revision();
+                    } else {
+                        self.bump_output_revision();
+                    }
                     if expanded {
                         self.layout_changes
                             .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
@@ -34,7 +42,7 @@ impl Transcript {
         {
             item.output_truncated = truncated;
             let expanded = item.expanded;
-            self.bump_revision();
+            self.bump_output_revision();
             if expanded {
                 self.layout_changes
                     .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));

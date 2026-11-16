@@ -28,7 +28,7 @@ In priority order:
    Bugs here = arbitrary command execution, sandbox escape, network exfil.
 2. **Command safety + execution policy** — allowlist, per-command arg validation,
    path normalization, symlink escape, env leakage, fail-closed behavior.
-   See `docs/development/COMMAND_SECURITY_MODEL.md`, `docs/development/EXECUTION_POLICY.md`.
+   See `docs/development/command_security_model.md`, `docs/development/execution_policy.md`.
 3. **Tool dispatch** — `exec_command` / `write_stdin` / `apply_patch` / `code_search`,
    bounded diffs (`vtcode-diff`), patch application, HITL approval persistence
    (Approve Once vs Session vs Always).

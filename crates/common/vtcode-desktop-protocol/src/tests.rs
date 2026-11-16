@@ -3,6 +3,27 @@ use std::error::Error;
 use std::io;
 
 #[test]
+fn steer_params_and_result_round_trip() {
+    let params = TurnSteerParams {
+        session_id: "session".into(),
+        text: "ship it".into(),
+        entry_id: Some("qe-1".into()),
+    };
+    let value = serde_json::to_value(&params).unwrap();
+    assert_eq!(value["entryId"], serde_json::json!("qe-1"));
+    assert_eq!(serde_json::from_value::<TurnSteerParams>(value).unwrap(), params);
+
+    let result = TurnSteerResult {
+        session_id: "session".into(),
+        steered: true,
+        queue_depth: 2,
+    };
+    let value = serde_json::to_value(&result).unwrap();
+    assert_eq!(value["steered"], serde_json::json!(true));
+    assert_eq!(serde_json::from_value::<TurnSteerResult>(value).unwrap(), result);
+}
+
+#[test]
 fn legacy_session_load_defaults_review_history() {
     let loaded: SessionLoadResult = serde_json::from_value(serde_json::json!({
         "session": {"sessionId": "legacy", "title": "Legacy", "workspace": "/workspace", "completed": true, "resumable": true},
@@ -664,7 +685,7 @@ async fn tool_output_snapshots_still_replace_pending_updates() {
 }
 
 #[tokio::test]
-async fn tool_output_delta_and_snapshot_for_one_item_do_not_coalesce() {
+async fn tool_output_delta_and_snapshot_for_one_item_share_a_slot() {
     use vtcode_exec_events::ToolCallStatus;
     let (sender, receiver) = live_event_channel(4);
     sender
@@ -679,9 +700,11 @@ async fn tool_output_delta_and_snapshot_for_one_item_do_not_coalesce() {
     while let Some(event) = receiver.recv().await {
         drained.push(event);
     }
-    assert_eq!(drained.len(), 2, "delta and snapshot slots coexist without merging");
-    assert_eq!(tool_output_details(&drained[0]).output, "chunk-");
-    assert_eq!(tool_output_details(&drained[1]).output, "snapshot");
+    // One slot per item: the terminal snapshot supersedes the accumulated
+    // delta instead of leaving a second slot that saturation could evict.
+    assert_eq!(drained.len(), 1, "delta and snapshot share the item's slot");
+    assert_eq!(tool_output_details(&drained[0]).output, "snapshot");
+    assert_eq!(tool_output_details(&drained[0]).is_delta, Some(false));
 }
 
 #[tokio::test]
@@ -704,8 +727,45 @@ async fn interleaved_tool_output_deltas_merge_per_item_in_queue_order() {
         drained.push(event);
     }
     assert_eq!(drained.len(), 2, "each stream merges independently");
-    assert_eq!(tool_output_details(&drained[0]).output, "a1-a2");
-    assert_eq!(tool_output_details(&drained[1]).output, "b1");
+    // An active stream moves to the back on each merge, so the quieter `b`
+    // slot leads; LRU eviction then protects the still-running `a` stream.
+    assert_eq!(tool_output_details(&drained[0]).output, "b1");
+    assert_eq!(tool_output_details(&drained[1]).output, "a1-a2");
+}
+
+#[tokio::test]
+async fn saturation_keeps_the_active_long_running_stream_intact() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(2);
+    sender
+        .publish(tool_output_update("running", "a-", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("quiet", "b", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    // The running command keeps producing: each chunk moves its slot to the
+    // back, leaving `quiet` as the eviction victim when the third item arrives.
+    sender
+        .publish(tool_output_update("running", "c-", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("running", "d", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("new", "e", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 2, "the bounded channel keeps its capacity");
+    let running = drained
+        .iter()
+        .find(|event| tool_output_details(event).call_id == "running-call")
+        .expect("the long-running stream survived saturation");
+    assert_eq!(tool_output_details(running).output, "a-c-d");
 }
 
 #[test]

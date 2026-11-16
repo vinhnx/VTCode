@@ -283,7 +283,7 @@ fn per_item_brackets_in_verify_list_validate_as_one_plan() {
     assert!(validate_concrete_verification(verify).is_ok());
 
     let plan = format!(
-        "## Summary\nRefine README.\n\n## Implementation Steps\n1. Refine intro -> files: [README.md] -> verify: [git diff -- README.md]\n2. Check links -> files: [README.md, docs/INDEX.md] -> verify: [python3 scripts/check_markdown_location.py]\n3. Review format -> files: [README.md] -> verify: {verify}\n\n## Test Cases and Validation\nRun checks.\n\n## Assumptions and Defaults\nREADME only."
+        "## Summary\nRefine README.\n\n## Implementation Steps\n1. Refine intro -> files: [README.md] -> verify: [git diff -- README.md]\n2. Check links -> files: [README.md, docs/index.md] -> verify: [python3 scripts/check_markdown_location.py]\n3. Review format -> files: [README.md] -> verify: {verify}\n\n## Test Cases and Validation\nRun checks.\n\n## Assumptions and Defaults\nREADME only."
     );
     assert!(validate_plan_content(&plan).is_ready());
 }
@@ -494,16 +494,16 @@ In: README.md hero, Overview, Quick start install/configure, Usage, Desktop app,
 Out: No code, installer scripts, desktop sources, docs content, contributor list, screenshots, badges, or sponsorship changes.
 
 ## Implementation Steps
-1. Consolidate Quick start install variants into one Install flow -> files: [README.md] -> verify: [grep -n '^### 1. Install' README.md, grep -n 'NATIVE_INSTALLERS.md' README.md]
+1. Consolidate Quick start install variants into one Install flow -> files: [README.md] -> verify: [grep -n '^### 1. Install' README.md, grep -n 'native_installers.md' README.md]
 2. Merge Desktop app download, installer offer, update with-desktop, and from-source fallback into one path -> files: [README.md] -> verify: [grep -n '^## Desktop app' README.md, grep -n 'desktop-workspace.md' README.md]
-3. Deduplicate Documentation catalog against Quick start and Usage links -> files: [README.md] -> verify: [grep -n '^## Documentation' README.md, grep -n 'docs/INDEX.md' README.md]
+3. Deduplicate Documentation catalog against Quick start and Usage links -> files: [README.md] -> verify: [grep -n '^## Documentation' README.md, grep -n 'docs/index.md' README.md]
 4. Consolidate Contributing, Community, Thanks contributors, and Support sections without losing conduct, templates, or sponsor note -> files: [README.md] -> verify: [grep -n '^## Contributing' README.md, grep -n 'CODE_OF_CONDUCT.md' README.md]
 5. Tighten Overview and Usage wording and repair heading anchors after renames -> files: [README.md] -> verify: [grep -n '^#{1,4} ' README.md, grep -n 'planning-workflow.md' README.md]
 6. Confirm scope limited to README.md and expect status lists only README.md with no other tracked edits -> files: [README.md] -> verify: [wc -l README.md, git status --short -- README.md]
 
 ## Test Cases and Validation
 - Single Install, Desktop, Documentation, and Contributing headings remain: grep -n '^#{1,4} ' README.md
-- Desktop and installer references resolve: grep -n 'desktop-workspace.md' README.md, grep -n 'NATIVE_INSTALLERS.md' README.md
+- Desktop and installer references resolve: grep -n 'desktop-workspace.md' README.md, grep -n 'native_installers.md' README.md
 - Preserved uncommitted installer wording visible: git diff -- README.md
 - Length stays under 1000-line ceiling: wc -l README.md
 - Markdown lint if available, otherwise report skipped: npx markdownlint-cli2 README.md

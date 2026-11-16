@@ -360,5 +360,5 @@ for (component, tokens) in breakdown {
 ## Related Documentation
 
 - [Configuration Guide](../config/config.md)
-- [Tool Development Guide](../tools/TOOL_SPECS.md)
-- [Architecture Guide](../ARCHITECTURE.md)
+- [Tool Development Guide](../tools/tool_specs.md)
+- [Architecture Guide](../architecture.md)

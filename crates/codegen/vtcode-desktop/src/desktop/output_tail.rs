@@ -4,7 +4,7 @@ use gpui_kit::SharedString;
 
 pub(super) const MAX_OUTPUT_LINES: usize = 1_000;
 pub(super) const MAX_OUTPUT_BYTES: usize = 128 * 1024;
-const COMPACT_OUTPUT_LINES: usize = 8;
+const COMPACT_OUTPUT_LINES: usize = 3;
 const COMPACT_OUTPUT_BYTES: usize = 4 * 1024;
 
 fn bounded_tail(text: &SharedString, max_bytes: usize, max_lines: usize) -> SharedString {
@@ -68,8 +68,8 @@ mod tests {
             .into();
         let tail = compact_output_tail(&lines);
         assert!(tail.contains("line-11"));
-        assert!(!tail.contains("line-3\n"));
-        assert!(tail.contains("line-4"));
+        assert!(!tail.contains("line-8\n"));
+        assert!(tail.contains("line-9"));
         let long: SharedString = format!("prefix{}", "界".repeat(2_000)).into();
         let tail = compact_output_tail(&long);
         assert!(!tail.contains("prefix"));

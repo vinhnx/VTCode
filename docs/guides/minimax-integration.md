@@ -191,7 +191,7 @@ If you see temperature-related errors:
 
 ## Related Documentation
 
-- [Provider Guides](../providers/PROVIDER_GUIDES.md)
+- [Provider Guides](../providers/provider_guides.md)
 - [Configuration Guide](../config/config.md)
 
 ## Additional Resources

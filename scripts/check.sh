@@ -188,7 +188,7 @@ run_structured_logging_lint() {
 		print_success "Structured logging is correct!"
 		return 0
 	else
-		print_error "Structured logging violations found. See ARCHITECTURAL_INVARIANTS.md #4."
+		print_error "Structured logging violations found. See architectural_invariants.md #4."
 		return 1
 	fi
 }
@@ -248,7 +248,7 @@ run_release_contract_tests() {
 	fi
 }
 
-# Run focused harness regression tests called out in docs/harness/QUALITY_SCORE.md.
+# Run focused harness regression tests called out in docs/harness/quality_score.md.
 run_harness_regression_tests() {
 	print_status "Running harness PTY/TUI regression tests..."
 

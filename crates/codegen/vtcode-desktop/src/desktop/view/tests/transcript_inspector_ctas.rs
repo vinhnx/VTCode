@@ -698,8 +698,8 @@ fn running_command_row_shows_live_tail_and_terminal_cta(cx: &mut TestAppContext)
         let excerpt = window.find("tool-output-live");
         let body = excerpt.label().unwrap();
         assert!(body.contains("live-line-11"), "live tail keeps the newest line: {body}");
-        assert!(body.contains("live-line-4"), "live tail keeps 8 lines: {body}");
-        assert!(!body.contains("live-line-3\n"), "live tail drops the oldest lines: {body}");
+        assert!(body.contains("live-line-9"), "live tail keeps 3 lines: {body}");
+        assert!(!body.contains("live-line-8\n"), "live tail drops the oldest lines: {body}");
         let cta = window.find("tool-open-terminal-live");
         assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
         window.click("tool-open-terminal-live", cx);

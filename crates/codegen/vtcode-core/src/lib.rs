@@ -117,7 +117,7 @@
 //! ```
 //!
 //! For a complete tour of modules and extension points, read
-//! `docs/ARCHITECTURE.md` and the guides in `docs/project/`.
+//! `docs/architecture.md` and the guides in `docs/project/`.
 //!
 //! ## Agent Client Protocol (ACP)
 //!

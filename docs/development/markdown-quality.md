@@ -27,7 +27,7 @@ avatars, disclosure sections, and keyboard labels.
 Narrow inline exceptions document intentional historical headings, long
 generated avatar markup, and compact instruction files with fixed line budgets.
 The generated `CHANGELOG.md` carries a file-level `markdownlint-disable` for the
-subject-dependent rules (see [CHANGELOG_GENERATION](CHANGELOG_GENERATION.md)). Fix
+subject-dependent rules (see [CHANGELOG_GENERATION](changelog_generation.md)). Fix
 generated output at its generator so regeneration remains lint-clean.
 
 | Check | Command |
@@ -35,3 +35,18 @@ generated output at its generator so regeneration remains lint-clean.
 | Maintained Markdown | `python3 scripts/check_markdown.py` |
 | Selection regressions | `python3 scripts/tests/test_check_markdown.py` |
 | Links in all maintained Markdown (also in `check-dev.sh`) | `python3 scripts/check_docs_links.py` |
+
+## File naming and location
+
+GitHub recognizes a small set of special filenames case-insensitively in the repository root, `docs/`, or
+`.github/`: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `ACCESSIBILITY.md`,
+`CHANGELOG.md`, `SUPPORT.md`, `CITATION.cff`, `FUNDING.yml`, and `CODEOWNERS`. Keep those names as written.
+
+Every other Markdown file uses lowercase, separator-style filenames (`command_security_model.md`,
+`desktop-workspace.md`). When renaming a doc, rewrite every relative link in the same change, update hardcoded
+paths in `scripts/` (notably `scripts/check_docs_links.py` entrypoints and generator outputs), and keep the
+generated-file owner in sync — a renamed generator target must be regenerated from the updated script.
+
+Place new documents in the domain folder that owns them (`guides/`, `development/`, `user-guide/`, `modules/`,
+`security/`, …) rather than at `docs/` root. `docs/index.md` is the repository-wide index and `docs/README.md`
+the hub; the owner-only `docs/project/TODO.md` is never renamed or edited by agents.

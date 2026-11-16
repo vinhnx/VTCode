@@ -4,7 +4,7 @@ use super::*;
 
 /// Label for the running-command terminal CTA. English literal: the repo
 /// does not add locale keys without full native-quality translations.
-const TERMINAL_CTA_LABEL: &str = "Open the built-in terminal";
+const TERMINAL_CTA_LABEL: &str = "Run in bottom terminal";
 
 impl DesktopView {
     /// A small, theme-colored dotted rule under an actionable filename.
@@ -183,19 +183,25 @@ impl DesktopView {
         }
     }
 
-    /// Button beside the Output CTA on an expanded running command row,
-    /// opening the built-in terminal panel so the user can monitor the
-    /// command from a shell. English literal: the repo does not add locale
-    /// keys without full native-quality translations.
+    /// Button beside the Output CTA on an expanded running command row. It
+    /// opens the bottom terminal pane, types the command into the retained
+    /// shell and runs it there, leaving the pane focused for monitoring.
+    /// Rows without a captured command still just open the pane. English
+    /// literal: the repo does not add locale keys without full translations.
     pub(super) fn tool_terminal_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
+        let command = item.command.clone();
         desktop_button(format!("tool-open-terminal-{}", item.id))
             .icon(IconName::SquareTerminal)
             .ghost()
             .xsmall()
             .accessibility_label(TERMINAL_CTA_LABEL.to_string())
             .tooltip(TERMINAL_CTA_LABEL.to_string())
-            .on_click(cx.listener(|view, _, window, cx| {
-                view.open_terminal_panel(window, cx);
+            .on_click(cx.listener(move |view, _, window, cx| {
+                if let Some(command) = command.as_ref() {
+                    view.run_command_in_terminal(command.as_ref(), window, cx);
+                } else {
+                    view.open_terminal_panel(window, cx);
+                }
             }))
     }
 

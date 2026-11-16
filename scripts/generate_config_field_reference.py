@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate docs/config/CONFIG_FIELD_REFERENCE.md from vtcode-config schema."""
+"""Generate docs/config/config_field_reference.md from vtcode-config schema."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OUTPUT = REPO_ROOT / "docs" / "config" / "CONFIG_FIELD_REFERENCE.md"
+DEFAULT_OUTPUT = REPO_ROOT / "docs" / "config" / "config_field_reference.md"
 CARGO_SCHEMA_CMD = [
     "cargo",
     "run",

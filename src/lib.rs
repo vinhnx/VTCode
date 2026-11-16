@@ -76,7 +76,7 @@
 //! - Safety features include workspace boundary enforcement, rate limiting,
 //!   telemetry controls, and confirm-to-run guardrails.
 //!
-//! Additional implementation details live in `docs/ARCHITECTURE.md` and the
+//! Additional implementation details live in `docs/architecture.md` and the
 //! guides under `docs/project/`.
 //!
 //! ## Distribution Channels

@@ -22,7 +22,7 @@ safe changes without restarting.
   CLI configuration, validation, and the config reference table.
 - [User data directories](../guides/user-data-directories.md)
 - [Permissions guide](../guides/permissions.md)
-- [Generated field reference](./CONFIG_FIELD_REFERENCE.md)
+- [Generated field reference](./config_field_reference.md)
 
 VT Code supports several mechanisms for setting config values:
 

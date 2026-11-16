@@ -239,7 +239,7 @@ impl SkillManager {
         Ok(())
     }
 
-    /// Generate INDEX.md with all skill names and descriptions
+    /// Generate index.md with all skill names and descriptions
     ///
     /// This implements dynamic context discovery: agents can read the index
     /// to discover available skills, then load specific skills as needed.
@@ -297,7 +297,7 @@ impl SkillManager {
         // Ensure directory exists
         ensure_dir_exists(&self.skills_dir).await.context(ERR_CREATE_SKILLS_DIR)?;
 
-        let index_path = self.skills_dir.join("INDEX.md");
+        let index_path = self.skills_dir.join("index.md");
         write_file_with_context(&index_path, &content, "skills index")
             .await
             .with_context(|| format!("Failed to write skills index: {}", index_path.display()))?;
@@ -305,15 +305,15 @@ impl SkillManager {
         info!(
             skills_count = skills.len(),
             path = %index_path.display(),
-            "Generated skills INDEX.md"
+            "Generated skills index.md"
         );
 
         Ok(index_path)
     }
 
-    /// Get the path to the INDEX.md file
+    /// Get the path to the index.md file
     pub fn index_path(&self) -> PathBuf {
-        self.skills_dir.join("INDEX.md")
+        self.skills_dir.join("index.md")
     }
 
     async fn list_skills_with_origin(&self) -> Result<Vec<SkillEntry>> {

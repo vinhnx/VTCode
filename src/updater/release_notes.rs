@@ -12,6 +12,7 @@ use semver::Version;
 use tracing::debug;
 
 use super::cache;
+use super::github;
 use super::preflight;
 use super::types::UpdateInfo;
 
@@ -202,6 +203,27 @@ pub(crate) fn seed_release_notes_for_installed_version(version: &Version, releas
     // and would otherwise hide the notes this version still owes the user.
     let _ = cache::record_installed_release(version, release_notes);
     let _ = cache::clear_dismissed_version();
+}
+
+/// Backfill the running version's notes from GitHub for an externally
+/// installed desktop app.
+///
+/// An in-app install seeds the `installed_release` cache slot, but a manual /
+/// package-manager upgrade does not. The single-slot "latest" cache then holds
+/// a newer release, so `cached_current_release_highlights()` stays empty and
+/// the desktop "what's new" banner never arms. Fetch the running version's own
+/// release and record it in the **install** slot only — never the check slot,
+/// which must keep naming the newer release for the update offer.
+///
+/// Best-effort: a missing tag or network failure leaves the quiet state intact;
+/// the next launch retries while the notes remain unseen.
+pub(crate) async fn backfill_current_release_notes(timeout_secs: u64) -> anyhow::Result<()> {
+    let current = Version::parse(env!("CARGO_PKG_VERSION"))?;
+    if cached_current_release_highlights().is_some() {
+        return Ok(());
+    }
+    let release = github::fetch_release_by_tag(&current, timeout_secs).await?;
+    cache::record_installed_release(&current, &release.release_notes)
 }
 
 /// Record that a version's release notes have been shown.

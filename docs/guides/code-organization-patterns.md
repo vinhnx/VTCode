@@ -79,7 +79,7 @@ comment stating why detachment is safe (bounded work, token/channel termination,
 discard panics and `Err` results silently, so detached tasks that can fail meaningfully must log or send their outcome.
 Never spawn async cleanup inside `Drop`; cleanup that must happen before `std::process::exit` is awaited inline with a
 timeout. Details and examples: "Task Extent, Error Propagation, and Cancel-Safety" in
-`docs/guides/async-architecture.md`; invariant #21 in `docs/harness/ARCHITECTURAL_INVARIANTS.md`.
+`docs/guides/async-architecture.md`; invariant #21 in `docs/harness/architectural_invariants.md`.
 
 ## Channel Boundaries
 

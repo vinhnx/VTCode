@@ -64,6 +64,6 @@ exec_policy::manager
 
 ## See Also
 
-- [Security Model](../security/SECURITY_MODEL.md) — security architecture
-- [Process Hardening](../development/PROCESS_HARDENING.md) — runtime hardening controls
-- [Command Security Model](../development/COMMAND_SECURITY_MODEL.md) — command security details
+- [Security Model](../security/security_model.md) — security architecture
+- [Process Hardening](../development/process_hardening.md) — runtime hardening controls
+- [Command Security Model](../development/command_security_model.md) — command security details

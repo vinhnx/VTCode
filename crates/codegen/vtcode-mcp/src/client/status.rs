@@ -177,7 +177,7 @@ impl McpClient {
 
         // Write index file
         let index_content = self.generate_tools_index(&tools, &by_provider);
-        let index_path = tools_dir.join("INDEX.md");
+        let index_path = tools_dir.join("index.md");
         write_file_with_context(&index_path, &index_content, "MCP tools index")
             .await
             .with_context(|| format!("Failed to write MCP tools index: {}", index_path.display()))?;
@@ -200,7 +200,7 @@ impl McpClient {
         Ok((index_path, tools.len()))
     }
 
-    /// Generate INDEX.md content for MCP tools
+    /// Generate index.md content for MCP tools
     fn generate_tools_index(&self, tools: &[McpToolInfo], by_provider: &BTreeMap<String, Vec<&McpToolInfo>>) -> String {
         let mut content = String::new();
         content.push_str("# MCP Tools Index\n\n");

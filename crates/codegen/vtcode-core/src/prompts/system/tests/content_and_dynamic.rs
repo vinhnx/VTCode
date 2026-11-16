@@ -17,7 +17,7 @@ async fn test_default_live_prompt_budget_with_instruction_inline() {
     std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
     std::fs::write(
         workspace.path().join("AGENTS.md"),
-        "- run ./scripts/check.sh\n- avoid adding to vtcode-core\n- use Conventional Commits\n- start with docs/ARCHITECTURE.md\n",
+        "- run ./scripts/check.sh\n- avoid adding to vtcode-core\n- use Conventional Commits\n- start with docs/architecture.md\n",
     )
     .expect("write agents");
     std::fs::create_dir_all(workspace.path().join(".vtcode/rules")).expect("rules dir");

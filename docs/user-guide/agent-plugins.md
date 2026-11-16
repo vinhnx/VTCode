@@ -108,11 +108,11 @@ auto_reload = true            # hot-reload manifest polling
 This section does **not** gate Agent Plugins. Agent Plugins (`~/.agents/plugins` and `<workspace>/.agents/plugins`) are
 always discovered and loaded regardless of `tools.plugins` settings.
 
-See the [Configuration Field Reference](../config/CONFIG_FIELD_REFERENCE.md) for every `tools.plugins.*` option.
+See the [Configuration Field Reference](../config/config_field_reference.md) for every `tools.plugins.*` option.
 
 ## Further reading
 
 - [Agent Plugins Guide](../guides/agent-plugins.md) — reference: layout, manifest validation, MCP transports,
   environment expansion, path containment
 - [MCP Integration Guide](../guides/mcp-integration.md) — using MCP servers in general
-- [Agent Skills Guide](../skills/SKILLS_GUIDE.md) — creating and loading skills
+- [Agent Skills Guide](../skills/skills_guide.md) — creating and loading skills

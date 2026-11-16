@@ -169,7 +169,7 @@ impl PtyManager {
 
         // Write index file
         let index_content = self.generate_terminals_index(&sessions);
-        let index_path = terminals_dir.join("INDEX.md");
+        let index_path = terminals_dir.join("index.md");
         write_file_with_context(&index_path, &index_content, "terminals index")
             .await
             .with_context(|| format!("Failed to write terminals index: {}", index_path.display()))?;
@@ -179,7 +179,7 @@ impl PtyManager {
         Ok(written_files)
     }
 
-    /// Generate INDEX.md content for terminal sessions
+    /// Generate index.md content for terminal sessions
     fn generate_terminals_index(&self, sessions: &[VTCodePtySession]) -> String {
         let mut content = String::new();
         content.push_str("# Terminal Sessions Index\n\n");

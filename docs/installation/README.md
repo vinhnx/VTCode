@@ -99,10 +99,10 @@ the release zip directly.
 
 Mixing update paths on one machine is the main source of confusion: updating a cask-managed bundle with
 `vtcode update --with-desktop` leaves Homebrew's version record stale. Keep using `brew upgrade --cask` for cask
-installs (see [Update System](../guides/UPDATE_SYSTEM.md#desktop-app-macos)).
+installs (see [Update System](../guides/update_system.md#desktop-app-macos)).
 
 See the [desktop workspace guide](../development/desktop-workspace.md) for requirements and the
-[installer guide](./NATIVE_INSTALLERS.md) for flags (`--with-desktop` / `--without-desktop`, `DESKTOP_INSTALL_DIR`).
+[installer guide](./native_installers.md) for flags (`--with-desktop` / `--without-desktop`, `DESKTOP_INSTALL_DIR`).
 
 ## After Installation
 
@@ -198,7 +198,7 @@ chmod +x /usr/local/bin/vtcode
 
 - Open an issue: <https://github.com/vinhnx/vtcode/issues>
 - Check docs: <https://github.com/vinhnx/vtcode/docs>
-- See [detailed guide](./NATIVE_INSTALLERS.md)
+- See [detailed guide](./native_installers.md)
 
 ## Uninstall
 
@@ -271,7 +271,7 @@ The native installers automatically select the best location and add it to PATH.
 
 ## Additional Resources
 
-- **[Detailed Native Installers Guide](./NATIVE_INSTALLERS.md)** - Technical details and advanced options
-- **[Quick Reference](./QUICK_REFERENCE.md)** - One-liner commands
+- **[Detailed Native Installers Guide](./native_installers.md)** - Technical details and advanced options
+- **[Quick Reference](./quick_reference.md)** - One-liner commands
 - **[GitHub Releases](https://github.com/vinhnx/vtcode/releases)** - Download binaries manually
 - **[Documentation](https://github.com/vinhnx/vtcode/docs)** - Full documentation

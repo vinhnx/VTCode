@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use crate::agent::runloop::unified::config_section_headings::normalize_config_path;
 
-const FIELD_REFERENCE_MARKDOWN: &str = include_str!("../../../../../docs/config/CONFIG_FIELD_REFERENCE.md");
+const FIELD_REFERENCE_MARKDOWN: &str = include_str!("../../../../../docs/config/config_field_reference.md");
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FieldDoc {

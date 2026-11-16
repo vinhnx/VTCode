@@ -1,5 +1,5 @@
 # VT Code Configuration File (Example)
-# Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
+# Getting-started reference; see docs/config/configuration_precedence.md for override order.
 # Copy this file to vtcode.toml and customize as needed.
 
 # Clickable file citation URI scheme ("vscode", "cursor", "windsurf", "vscode-insiders", "none")
@@ -54,7 +54,7 @@ persistence = "file"
 # Show onboarding hints on the welcome screen
 # show_tooltips = true
 
-# Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
+# Core agent behavior; see docs/config/configuration_precedence.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
 provider = "openai"

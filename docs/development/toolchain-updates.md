@@ -11,7 +11,7 @@ moving that pin.
 - The MSRV *is* that value. Crates fail closed on older compilers instead of silently compiling with a toolchain CI
   and Docker never test. Do not introduce a second (lower) MSRV floor without replacing the pin guard.
 - Edition 2024 and the dependency floors (ratatui, darling, sysinfo, zip) are documented in
-  [COMPATIBILITY](../COMPATIBILITY.md).
+  [COMPATIBILITY](../compatibility.md).
 - Local runtime state and vendored forks are never part of the pin: `target/`, `.worktrees/`, `.vtcode/`, `patches/`,
   `fuzz/`, and `extensions/` are excluded by the guards. `.vtcode/perf/` snapshots copy whole workspaces and keep the
   toolchain they were audited with.

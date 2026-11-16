@@ -375,7 +375,7 @@ Stay informed about security updates:
 
 ## Additional Resources
 
-- [Security Model](../security/SECURITY_MODEL.md) - Complete security architecture
+- [Security Model](../security/security_model.md) - Complete security architecture
 - [Sandboxing Basics Reference](../development/sandboxing-basics-reference.md) - Distilled reference notes on
   discretionary privilege dropping with the VT Code applicability mapping
 - [Tool Policies](../modules/vtcode_tools_policy.md) - Command execution policies

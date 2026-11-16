@@ -32,7 +32,7 @@ checkout as shown below so it is not paired with an older installed binary.
 environment and checks a source checkout. It updates Rust and installs
 development tools; plugin users do not need to run it, and it does not install
 Companion. Contributors should follow the canonical
-[Development Setup](../development/DEVELOPMENT_SETUP.md) guide.
+[Development Setup](../development/development_setup.md) guide.
 
 ## Prepare your local plugin
 
@@ -42,7 +42,7 @@ Configure the model/provider in VT Code first. For coding tasks, explicitly
 persist full-auto workspace trust and configure `automation.full_auto.enabled`
 and the intended tool allowlist through VT Code's normal setup. Companion cannot
 grant trust or approve permissions for you. Inspect these settings before use;
-see [execution policy](../development/EXECUTION_POLICY.md). Choose the exact
+see [execution policy](../development/execution_policy.md). Choose the exact
 binary and one workspace for the plugin before installing or connecting it:
 
 ```sh

@@ -575,7 +575,7 @@ mod tests {
         std::fs::create_dir_all(&project_memory_dir).expect("memory dir");
         std::fs::write(
             project_memory_dir.join("memory_summary.md"),
-            "# VT Code Memory Summary\n\n- keep changes surgical\n- run ./scripts/check.sh\n- use cargo nextest for targeted tests\n- prefer docs/ARCHITECTURE.md for orientation\n- extra detail that should stay out of the prompt body\n",
+            "# VT Code Memory Summary\n\n- keep changes surgical\n- run ./scripts/check.sh\n- use cargo nextest for targeted tests\n- prefer docs/architecture.md for orientation\n- extra detail that should stay out of the prompt body\n",
         )
         .expect("write memory summary");
 
@@ -595,7 +595,7 @@ mod tests {
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
         write_doc(
             repo.path(),
-            "- run ./scripts/check.sh\n- avoid adding to vtcode-core\n- use Conventional Commits\n- start with docs/ARCHITECTURE.md\n",
+            "- run ./scripts/check.sh\n- avoid adding to vtcode-core\n- use Conventional Commits\n- start with docs/architecture.md\n",
         )
         .expect("write root doc");
 
@@ -607,7 +607,7 @@ mod tests {
         assert!(!appendix.contains("### Instruction map"));
         assert!(!appendix.contains("### Key points"));
         assert!(appendix.contains("avoid adding to vtcode-core"));
-        assert!(appendix.contains("start with docs/ARCHITECTURE.md"));
+        assert!(appendix.contains("start with docs/architecture.md"));
         assert!(approx_tokens < 250, "got ~{approx_tokens} tokens");
     }
 }

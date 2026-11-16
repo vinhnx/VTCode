@@ -1,0 +1,473 @@
+# Architectural Invariants
+
+Mechanical enforcement rules for VT Code. These are not suggestions — they are invariants that must hold at all times.
+Violations should be caught by CI, not code review.
+
+Each invariant includes a **remediation** instruction so agents can fix violations without asking for help.
+
+For additive principle mapping and staged rollout policy, see [zen_alignment.md](zen_alignment.md).
+
+---
+
+## 1. Layer Dependency Rules
+
+VT Code modules form a strict dependency DAG. No reverse imports.
+
+```text
+types / commons
+    ↓
+  config
+    ↓
+   core
+    ↓
+  tools
+    ↓
+  agent (runloop, modes)
+    ↓
+   TUI (src/)
+```
+
+Side crates with no upstream dependents:
+
+- `vtcode-bash-runner` — used by core/exec
+- `vtcode-indexer` — used for workspace file indexing (includes merged markdown storage and file search)
+- `vtcode-exec-events` — event definitions, used by core
+- `vtcode-acp` — Zed integration, used by agent
+
+**Violation**: a lower-layer crate imports from a higher-layer crate. **Remediation**: move the shared type/function
+down to the lowest common layer (usually `vtcode-commons` or `vtcode-config`). Never add a reverse dependency.
+
+---
+
+## 2. File Size Limits
+
+Each Rust source file should be ≤500 lines. Files exceeding this limit should be split into focused submodules.
+
+**Violation**: `wc -l` > 500 on a `.rs` file. **Remediation**: extract logical sections into submodules within the same
+directory. Use `mod.rs` to re-export public items. Preserve the public API surface.
+
+---
+
+## 3. Naming Conventions
+
+Enforced mechanically:
+
+| Element   | Convention             | Example           |
+| --------- | ---------------------- | ----------------- |
+| Functions | `snake_case`           | `execute_tool`    |
+| Variables | `snake_case`           | `provider_name`   |
+| Types     | `PascalCase`           | `ToolRegistry`    |
+| Structs   | `PascalCase`           | `McpProvider`     |
+| Enums     | `PascalCase`           | `SafetyDecision`  |
+| Constants | `SCREAMING_SNAKE_CASE` | `DEFAULT_TIMEOUT` |
+| Modules   | `snake_case`           | `golden_path`     |
+| Crates    | `kebab-case`           | `vtcode-core`     |
+
+**Violation**: naming does not match the convention for its element type. **Remediation**: rename the item. Use your
+editor's rename refactoring to update all references. If it's a public API, check for downstream usage first.
+
+---
+
+## 4. Structured Logging
+
+All log statements must use the `tracing` crate with structured fields. No `println!` or `eprintln!` in library code
+(TUI binary `src/` may use `eprintln!` for fatal startup errors only).
+
+```rust
+// Correct
+tracing::info!(provider = %name, model = %model_id, "Sending LLM request");
+
+// Incorrect
+println!("Sending request to {} with model {}", name, model_id);
+```
+
+**Violation**: `println!` or `eprintln!` in any crate except `src/` startup code. **Remediation**: replace with
+`tracing::info!`, `tracing::warn!`, `tracing::error!`, or `tracing::debug!` using structured fields.
+
+---
+
+## 5. No `unwrap()`
+
+Never use `.unwrap()` or `.expect()` in production code. Use `anyhow::Result<T>` with `.with_context()`.
+
+```rust
+// Correct
+let config = tokio::fs::read_to_string(path)
+    .await
+    .with_context(|| format!("Failed to read config at {}", path))?;
+
+// Incorrect
+let config = tokio::fs::read_to_string(path).await.unwrap();
+```
+
+Exception: test code (`#[cfg(test)]` modules) may use `.unwrap()` when the test should panic on failure.
+
+**Violation**: `.unwrap()` or `.expect()` outside of `#[cfg(test)]`. **Remediation**: replace with
+`.with_context(|| "descriptive message")?`. The context message should describe what was being attempted, not just what
+failed.
+
+---
+
+## 6. No Hardcoded Model IDs
+
+Model identifiers change frequently. All model references must come from `docs/models.json` or
+`crates/codegen/vtcode-core/src/config/constants.rs`.
+
+```rust
+// Correct
+use vtcode_core::config::constants::DEFAULT_MODEL_ID;
+
+// Incorrect
+let model = "gpt-5-mini";
+```
+
+**Violation**: string literal matching a known model ID pattern (e.g., `"gpt-"`, `"claude-"`, `"gemini-"`) in non-test
+code. **Remediation**: add the model to `docs/models.json` and reference it via constants. If it's a default, add it to
+`crates/codegen/vtcode-core/src/config/constants.rs`.
+
+---
+
+## 7. Documentation Location
+
+All `.md` documentation files go in `docs/`. The only exceptions in repository root are approved governance files
+(`README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `CHANGELOG.md`).
+
+Within `docs/`, top-level `docs/*.md` is reserved for stable entrypoint docs. New one-off implementation notes, phase
+reports, and fix summaries must go to a domain folder (for example `docs/features/`) or archive path (for example
+`docs/archive/`).
+
+**Violation**:
+
+- a `.md` file in repository root outside the approved list.
+- a `docs/*.md` file that is not listed in `scripts/docs_top_level_allowlist.txt`.
+
+**Remediation**:
+
+1. Move the file to the appropriate `docs/<domain>/` path or `docs/archive/`.
+2. Update links that referenced the old path.
+3. Add to `scripts/docs_top_level_allowlist.txt` only when the file is intentionally a long-lived top-level entrypoint.
+
+---
+
+## 8. Workspace Boundary Enforcement
+
+All file operations (read, write, list, search) must validate that paths are within the workspace root. No file tool
+should access paths outside the workspace without explicit user approval.
+
+```rust
+// At the tool boundary, before any file operation:
+let canonical = vtcode_commons::canonicalize(path)
+    .with_context(|| format!("Failed to resolve path: {}", path.display()))?;
+if !canonical.starts_with(&workspace_root) {
+    anyhow::bail!("Path {} is outside workspace boundary", path.display());
+}
+```
+
+**Violation**: file operation without workspace boundary check. **Remediation**: add path validation at the tool's entry
+point (the API boundary), not deep inside helper functions. Use the existing `validate_path` utility if available.
+
+---
+
+## 9. Parse at Boundaries
+
+Validate and parse inputs where they enter the system — at API boundaries, config loading, and tool argument parsing.
+Internal functions should receive validated types, not raw strings.
+
+```rust
+// At the boundary (tool argument parsing):
+let line_number: usize = args["line"]
+    .as_u64()
+    .with_context(|| "line must be a positive integer")?
+    as usize;
+
+// Internal function receives validated type:
+fn process_line(content: &str, line: usize) -> Result<String> { ... }
+```
+
+**Violation**: raw string parsing or validation deep inside business logic. **Remediation**: move validation to the
+boundary function. Define typed structs for parsed inputs. Internal functions should receive these typed structs.
+
+---
+
+## 10. Lint Error Messages
+
+Custom lint rules, Clippy configurations, and CI checks must include remediation instructions in their error messages.
+An agent reading the error should know how to fix it without searching.
+
+```text
+// Good error message:
+error: File exceeds 500-line limit (623 lines).
+  Remediation: split into submodules. Extract logical sections into
+  separate files and re-export from mod.rs.
+
+// Bad error message:
+error: File too long.
+```
+
+**Violation**: CI check or lint rule that produces an error without remediation guidance. **Remediation**: update the
+check's error message to include a "Remediation:" section with specific instructions.
+
+---
+
+## 11. Agent Legibility
+
+Operational data and status reports must be presented in structured formats (tables, YAML, or consistent headers) to
+ensure high parseability by agents and clarity for humans.
+
+**Violation**: multi-file or multi-component status reported in long prose blocks without structure. **Remediation**:
+convert the status report into a markdown table or structured list. Follow the examples in
+`docs/harness/agent_legibility_guide.md`.
+
+---
+
+## 12. Documentation Link Integrity
+
+Core documentation entrypoints must not contain broken local markdown links.
+
+**Violation**: a local markdown link target in `AGENTS.md`, `README.md`, `docs/README.md`, `docs/index.md`, or harness
+docs does not exist. **Remediation**:
+
+1. Fix or remove broken references.
+2. Keep links relative to the source markdown file when possible.
+3. Re-run `python3 scripts/check_docs_links.py`.
+
+## 13. Pre-flight Environment Checks
+
+Before modifying code in any workspace, the agent must identify the project's build system, test runner, and module
+structure. Structural errors (missing `__init__.py`, broken `mod.rs` declarations, wrong test runner) cause more
+failures than incorrect logic.
+
+**Violation**: Agent modifies code without first checking `Cargo.toml`, `package.json`, `pyproject.toml`, or equivalent
+project manifests. **Remediation**: Before any code changes, run at least one of: `ls *.toml *.json Makefile`, read
+`AGENTS.md`, or use `list_files` on the project root. Identify the build/test commands and module convention before
+editing.
+
+---
+
+## 14. Verification-First Autonomy
+
+Agent output must be verifiable before deployment. Every agent action that produces or modifies code must be followed by
+at least one verification step (test, type-check, or lint).
+
+**Blind Editing**: Making consecutive code changes without intermediate testing or verification is strictly forbidden.
+This leads to compounding errors and brittle implementations.
+
+**Violation**: Agent declares a task complete or moves to a next major phase without executing a verification tool
+(e.g., `cargo check`, `cargo test`, `npx tsc`). **Remediation**: Run the appropriate verification command. Analyze the
+output. If it fails, fix and re-verify. Never rely on internal reasoning as proof of correctness ("hallucination of
+verification").
+
+**Prompt surface**: The shipped system prompt carries this invariant (and §16) as the outcome rule in the runtime
+guidance shared by every prompt profile, Minimal included, and re-added when a workspace `system.md` replaces the base
+(`RUNTIME_GUIDANCE_SECTION`: "Report work as done only after verifying it: never claim a check passed unless you ran it,
+and report failures with their output."). The no-blind-editing cadence is enforced by the harness gate
+(`BLIND_EDITING_THRESHOLD` in `src/agent/runloop/unified/turn/tool_outcomes/helpers.rs`), not by a per-edit prompt
+instruction: telling current models to verify every edit makes them over-verify.
+
+---
+
+## 15. Error Mode Diagnosis
+
+Before modifying code in response to a shell/command failure, the agent must verify if the failure is environmental or
+logical.
+
+**Violation**: Agent modifies code to "fix" an error that is actually caused by a missing dependency, port conflict,
+incorrect file path, or permission issue. **Remediation**: Use `ls`, `cat /etc/*release`, `which <cmd>`, or `ps` to
+diagnose the environment state first. Proactively document environment findings in `<analysis>`. If the environment is
+broken, fix the environment (if possible) or report it to the user rather than editing code.
+
+---
+
+## 16. Regression Verification
+
+Every intentional "fix" for an observed error must be followed by running at least one related existing test to prevent
+introducing regressions. Research shows agents break existing code in 12-30% of cases when focusing purely on a new
+feature or fix.
+
+**Hallucination of Verification Warning**: Avoid declaring success purely through internal reasoning. If you claim a
+regression check passed, you MUST show the tool output that proves it.
+
+---
+
+## 17. Loop Safety
+
+When vtcode-core is invoked by an external loop (scheduler, CI, or a future loop crate), each invocation must be
+stateless across runs. No mutable global state, leaked temp files, or stale worktrees may persist between loop
+iterations.
+
+Key guarantees:
+
+- **Loop run state** is persisted explicitly to `.vtcode/state/loop-<id>.json` via `LoopRunState`. In-memory state is
+  discarded at the end of each invocation.
+- **Loop memory** (notes, decisions) is append-only in `.vtcode/state/`. The agent reads previous entries on startup and
+  appends new ones; it never overwrites.
+- **Worktree isolation** prevents parallel loop runs from colliding on the working tree. Each spawned sub-agent with
+  `isolation = "worktree"` gets its own git worktree under `.vtcode/worktrees/`.
+- **Cost guardrails** (`CostBudget` in `loop_state.rs`) prevent unbounded iteration cost. The loop scheduler reads the
+  budget on resume and stops when limits are reached.
+
+**Violation**: global mutable state that leaks between invocations, or worktree paths left behind after the loop run
+completes. **Remediation**: use `LoopRunState` for persistence, clean up worktrees via `WorktreeManager::remove()`, and
+ensure all state flows through the explicit `.vtcode/state/` layout.
+
+---
+
+## 18. Evaluate Outcomes, Not Claims
+
+Agent output claiming success is not evidence of success. Every completion claim must be backed by actual verification
+output: test results, build output, runtime behavior, or environment state.
+
+**Violation**: Agent declares a task complete or a sprint passes without showing actual tool output that proves
+correctness (test pass counts, build exit codes, command output).
+
+**Remediation**: Write an outcome verification artifact (`current_outcome_verification.md`) that records: (1) what
+verification commands were run, (2) what their actual output was, (3) whether tests passed or failed with counts, (4)
+whether the build succeeded. The evaluator must check this artifact, not the agent's claims.
+
+---
+
+## 19. Sprint Contract Negotiation
+
+Before implementation begins, the generator and evaluator must agree on "what counts as done" through a structured
+sprint contract. Vague requirements become testable acceptance criteria.
+
+**Violation**: Agent begins implementation without a sprint contract that specifies scope, acceptance criteria, and
+out-of-scope items.
+
+**Remediation**: Write a sprint contract artifact (`current_sprint_contract.md`) before coding. Include: (1) what this
+sprint will deliver, (2) acceptance criteria that can be verified mechanically, (3) what is explicitly out of scope, (4)
+scoring dimensions with hard thresholds.
+
+---
+
+## 20. Reward Hacking Prevention in Eval Environments
+
+The eval and sandbox environment must not contain shortcuts the agent can exploit instead of solving the real task.
+Hidden tests must not be in the container, future commits must not be in `.git/objects`, and production secrets must not
+be exposed directly.
+
+**Violation**: Eval environment contains hidden tests in the filesystem, future commits in `.git/objects`, or production
+secrets (API keys, OAuth tokens, SSH keys) exposed directly to the agent.
+
+**Remediation**: Store hidden tests outside the container. Use controlled tool capabilities for secrets. The tool
+internally checks permissions, limits parameters, and logs audit trails. Verify environment state (files, tests, git
+clean), rather than agent output text.
+
+---
+
+## 21. Spawned Task Ownership
+
+Every `tokio::spawn`/`spawn_blocking` call site must have an owner: the `JoinHandle` is awaited before the spawning
+scope exits, stored behind a Drop-abort guard or an owned field with a shutdown path, or dropped only with a comment
+documenting the detachment as safe (bounded work, token/channel termination, observable outcome). Rust tasks have
+indefinite extent, unaware cancellation, and never-propagated errors — an unowned task is killed silently at process
+exit and discards panics and `Err` results (see `docs/guides/async-architecture.md`, "Task Extent, Error Propagation,
+and Cancel-Safety").
+
+**Violation**: A `tokio::spawn` whose handle is dropped without await, guard, or documented-detached comment; a detached
+task whose error/panic outcome is silently lost; async work spawned inside `Drop` or between a bounded shutdown await
+and `std::process::exit`.
+
+**Remediation**: Await the handle, store it in a guard, or document the detachment with its termination and
+observability story. Detached tasks that can fail meaningfully must log or send their outcome (observer pattern).
+Cleanup before `process::exit` must be awaited inline with a timeout, not spawned.
+
+---
+
+## 22. Cross-Turn Exec-Session Resume Hint
+
+When a turn ends while a foreground `run-*` exec session is still running, the next turn start must surface a bounded
+resume hint from the live registry so a resumed or compacted session needs zero identity reconstruction. Retained
+background sessions remain asynchronous and are excluded from this hint.
+
+Key guarantees:
+
+- **Source**: live registry via the foreground-only `in_progress_foreground_exec_sessions` view with backend-checked
+  completion; exited and retained background sessions are filtered, newest first, capped at 4.
+- **Injection site**: `append_transient_turn_notes` at every turn start — this single site covers both the normal
+  next-turn case and session restore/resume (both flow through the turn loop).
+- **Bounded**: per-session command display truncated to 160 bytes, at most 4 sessions; a single-session hint stays under
+  1 KiB.
+- **Shape**: session id, command display, elapsed time, plus a pre-filled `write_stdin` wait
+  (`{"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}`).
+- **Never auto-execute**: the hint only suggests the wait call; the runtime never waits on its own.
+- **Budget**: explicit `wait` time is excluded from the per-turn wall-clock budget, so settling never starves new work.
+  A deadline-expired wait returns an in-progress session that can be waited on again.
+- **Diagnostics**: turn-end `SnapshotTurnDiagnostics.in_progress_exec_sessions` (bounded to 4) records all live ids,
+  including retained background sessions, for ATIF correlation.
+
+**Violation**: a turn starts with a live exec session but no resume hint; a single-session hint exceeding 1 KiB; more
+than 4 sessions in one hint; a hint that auto-executes a wait; a resumed session that must guess the `session_id`.
+
+**Remediation**: route the hint through `append_transient_turn_notes` from `in_progress_foreground_exec_sessions`, keep
+the 4-session / 160-byte / single-session 1 KiB bounds, and settle via `write_stdin` wait before starting new work. See
+`docs/harness/agent_legibility_guide.md` for the agent-facing settle shape.
+
+---
+
+## 23. Item Handles Are Process-Unique
+
+`ThreadItem.id` is a handle, not a label: the desktop transcript (`position_by_id`), the canonical memory projection
+(`task\0actor\0id`) and replay all key rows on it. A handle minted twice rebinds a live row to a different item, which
+is the "slot reused by a new item" failure mode of an ungenerationed handle.
+
+Key guarantees:
+
+- **Single authority**: `SharedLifecycleEmitter::next_item_id` draws from one process-wide `AtomicU64`
+  (`NEXT_ITEM_HANDLE`). Per-emitter counters are forbidden — emitters are rebuilt per recorder, per runtime and per
+  streaming step, so each restarted at `item_0`.
+- **Derived handles inherit uniqueness**: composite ids (`{call_id}:changes`, `{call_item_id}:output`,
+  `{call_item_id}:decision`, `{call_item_id}:delegated-agent`, `{call_item_id}:session-message`) are only unique while
+  their base handle is. Never base a derived handle on an id from a different namespace (for example the
+  provider-facing `vtcode-llm` `generate_item_id`, which mints its own `item_N` for Open Responses payloads and never
+  becomes a `ThreadItem.id`).
+- **Miss, never panic**: a handle→value lookup must return `Option`, including for handles the store never issued
+  (`StringInterner::get_bytes` range-checks the offset table; a stale or foreign `StringId` is `None`, not a panic).
+- **Fail closed**: an unknown exec-session or PTY handle returns a typed "not found" error and is never silently
+  re-created. `ExecSessionManager::insert_session` uses `entry()` so identity is never reused.
+
+**Known limit — resume across processes**: the counter is process-local, so a resumed session whose event log already
+contains `item_0..item_N` mints those handles again from zero. Today this does not corrupt restored rows because
+restore projects history items straight into the view (`historical: true`) and the client drops a restored row only
+when a *live* item supersedes it; it is not a real generation mechanism. A future change that replays restore through
+the live update path must first seed the counter from the restored maximum. The tripwire test
+`item_handles_do_not_account_for_restored_history_from_a_previous_process` pins the current behaviour.
+
+**Violation**: two live items sharing an id in one session log; an emitter that restarts its counter; a public
+`Option`-returning lookup that indexes a table directly; a stale handle that panics or silently binds to a new item.
+
+**Remediation**: mint handles through `next_item_id` (or a UUID when the handle is not a `ThreadItem`), keep lookups
+total, and cover the case with a test that constructs two independent producers — a single-emitter test cannot observe a
+collision.
+
+---
+
+## Enforcement
+
+These invariants should be enforced by:
+
+1. **Clippy lints** — configured in workspace `Cargo.toml` under `[workspace.lints]`.
+2. **CI checks** — `cargo clippy`, `cargo fmt --check`, custom scripts.
+3. **Pre-commit hooks** — optional but recommended for file size and naming.
+4. **Code review** — last line of defense, not the primary enforcement mechanism.
+
+When adding a new invariant:
+
+1. Add it to this document with violation description and remediation.
+2. Implement automated enforcement (Clippy lint, CI script, or pre-commit hook).
+3. Fix all existing violations before merging.
+4. Add a tech debt item (`docs/harness/tech_debt_tracker.md`) if existing violations cannot be fixed immediately.
+
+## Known Violations
+
+Not all invariants are fully enforced yet. Known violations are tracked in `docs/harness/tech_debt_tracker.md`:
+
+| Invariant                 | Debt Item | Status                                                                        |
+| ------------------------- | --------- | ----------------------------------------------------------------------------- |
+| #2 File Size Limits       | TD-005    | TUI event handler modules likely exceed 500 lines                             |
+| #4 Structured Logging     | TD-013    | Not yet audited; some legacy `println!` may exist                             |
+| #10 Lint Error Messages   | TD-014    | Custom lints with remediation not yet implemented                             |
+| #7 Documentation Location | TD-001    | Top-level docs sprawl now gated by allowlist; consolidation still in-progress |
+
+Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are
+enforced by code review and agent discipline.

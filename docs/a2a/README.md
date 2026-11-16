@@ -302,5 +302,5 @@ cargo nextest run -p vtcode-core --features a2a-server
 ## References
 
 - [A2A Protocol Specification](https://a2a-protocol.org)
-- [VT Code Architecture](../ARCHITECTURE.md)
+- [VT Code Architecture](../architecture.md)
 - [Contributing Guide](../../docs/CONTRIBUTING.md)

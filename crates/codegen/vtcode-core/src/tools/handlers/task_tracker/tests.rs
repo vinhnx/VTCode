@@ -40,7 +40,7 @@ async fn test_create_accepts_metadata_and_verify_string_forms() {
             "items": [
                 {
                     "description": "Analyze current harness",
-                    "files": ["docs/ARCHITECTURE.md"],
+                    "files": ["docs/architecture.md"],
                     "outcome": "Document the harness map",
                     "verify": "cargo check"
                 },
@@ -53,7 +53,7 @@ async fn test_create_accepts_metadata_and_verify_string_forms() {
         .await
         .unwrap();
 
-    assert_eq!(result["checklist"]["items"][0]["files"], json!(["docs/ARCHITECTURE.md"]));
+    assert_eq!(result["checklist"]["items"][0]["files"], json!(["docs/architecture.md"]));
     assert_eq!(result["checklist"]["items"][0]["outcome"], "Document the harness map");
     assert_eq!(result["checklist"]["items"][0]["verify"], json!(["cargo check"]));
     assert_eq!(
@@ -62,7 +62,7 @@ async fn test_create_accepts_metadata_and_verify_string_forms() {
     );
 
     let persisted = std::fs::read_to_string(temp.path().join(".vtcode/tasks/current_task.md")).unwrap();
-    assert!(persisted.contains("files: docs/ARCHITECTURE.md"));
+    assert!(persisted.contains("files: docs/architecture.md"));
     assert!(persisted.contains("outcome: Document the harness map"));
     assert!(persisted.contains("verify: cargo check"));
 }

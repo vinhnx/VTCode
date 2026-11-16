@@ -108,7 +108,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-For a complete tour of modules and extension points, read `docs/ARCHITECTURE.md` and the guides in `docs/project/`.
+For a complete tour of modules and extension points, read `docs/architecture.md` and the guides in `docs/project/`.
 
 #### Agent Client Protocol (ACP)
 
@@ -189,4 +189,4 @@ See [docs.rs/vtcode-core](https://docs.rs/vtcode-core).
 
 ## Related docs
 
-- [Architecture overview](../../../docs/ARCHITECTURE.md)
+- [Architecture overview](../../../docs/architecture.md)

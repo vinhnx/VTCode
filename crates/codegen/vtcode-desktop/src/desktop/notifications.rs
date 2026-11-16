@@ -102,15 +102,19 @@ pub(super) fn activity_for_interaction_kind(kind: vtcode_desktop_protocol::Inter
 pub(super) fn background_agent_activity(
     window: &mut Window,
     activity: BackgroundAgentActivity,
+    key: String,
     system: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     cx: &mut App,
 ) {
+    // Distinct per-event id: Kit replaces notifications that share an id, and
+    // the OS tag is derived from it. One id for every HITL/failure event made
+    // the first banner the only one that ever presented.
     let notification = Notification::new()
         .message(activity.message())
         .with_type(activity.severity())
         .title(app::NAME)
-        .id::<BackgroundAgentActivityNotification>()
+        .id1::<BackgroundAgentActivityNotification>(key)
         .on_click(on_click);
     // Focused windows toast in-app where the click target lives; backgrounded
     // windows banner through the OS center. System-banner clicks activate the

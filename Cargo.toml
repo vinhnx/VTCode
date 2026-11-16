@@ -15,7 +15,7 @@ exclude = [
     "target/",
     ".github/",
     "docs/**",
-    "!docs/config/CONFIG_FIELD_REFERENCE.md",
+    "!docs/config/config_field_reference.md",
     "scripts/",
     "screenshots/",
     "logs/",

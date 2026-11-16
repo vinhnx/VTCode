@@ -121,7 +121,7 @@ documentation or auxiliary files, including:
 
 - README.md
 - INSTALLATION_GUIDE.md
-- QUICK_REFERENCE.md
+- quick_reference.md
 - CHANGELOG.md
 - etc.
 

@@ -725,9 +725,9 @@ impl DesktopView {
             queued_submissions: Vec::new(),
             queue_depth: 0,
             queue_previews: Vec::new(),
-            queue_ages_secs: Vec::new(),
             queue_dropped_total: 0,
             take_latest_pending: false,
+            steer_pending_echo_id: None,
             pending_composer_restore: None,
             session_request: None,
             pending_new_thread: false,
@@ -774,6 +774,9 @@ impl DesktopView {
         self.preferences.follow_cli_theme = Some(preferences.follow_cli_theme.unwrap_or(preferences.theme.is_none()));
         self.restore_saved_theme(window, cx);
         self.apply_typography(cx);
+        // Startup restore rewrites the palette (theme and saved contrast), so
+        // composer token colors must follow it just like an in-app change.
+        self.refresh_composer_highlight(cx);
         self.refresh_dock_icon();
         self.sidebar_width = preferences.sidebar_width();
         self.terminal_panel_height = preferences.terminal_panel_height();

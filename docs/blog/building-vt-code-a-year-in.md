@@ -60,9 +60,9 @@ me: allocation discipline is a proxy for how much of the code someone has actual
 One caveat: a HumanEval score through VT Code measures the harness plus the model, not the model alone. Tool formatting,
 prompt assembly, and retry behavior all move the number. That's the point of measuring end to end.
 
-_Sources: [benchmark summary](https://github.com/vinhnx/VTCode/blob/main/docs/benchmarks/SUMMARY.md),
+_Sources: [benchmark summary](https://github.com/vinhnx/VTCode/blob/main/docs/benchmarks/summary.md),
 [performance benchmarks](https://github.com/vinhnx/VTCode/blob/main/docs/benchmarks/performance_benchmarks.md),
-[benchmark comparison](https://github.com/vinhnx/VTCode/blob/main/docs/benchmarks/BENCHMARK_COMPARISON.md)._
+[benchmark comparison](https://github.com/vinhnx/VTCode/blob/main/docs/benchmarks/benchmark_comparison.md)._
 
 ## The roadmap shipped
 
@@ -134,7 +134,7 @@ can't burn through an API budget overnight.
 
 _Sources: [vtcode-exec-events](https://github.com/vinhnx/VTCode/tree/main/crates/common/vtcode-exec-events)
 (ThreadEvent + ATIF), [vtcode-eval](https://github.com/vinhnx/VTCode/tree/main/crates/codegen/vtcode-eval) (pass@k,
-probes), [PLAN-loop-engineering.md](https://github.com/vinhnx/VTCode/blob/main/docs/project/PLAN-loop-engineering.md)
+probes), [plan-loop-engineering.md](https://github.com/vinhnx/VTCode/blob/main/docs/project/plan-loop-engineering.md)
 (worktrees, verifier, budgets)._
 
 The verifier sees the diff and the files, not the proposer's reasoning. That's deliberate: reasoning is persuasive, and
@@ -193,7 +193,7 @@ The original design had sandboxed execution and path validation. The current mod
 ```
 
 _Source:
-[COMMAND_SECURITY_MODEL.md](https://github.com/vinhnx/VTCode/blob/main/docs/development/COMMAND_SECURITY_MODEL.md)._
+[command_security_model.md](https://github.com/vinhnx/VTCode/blob/main/docs/development/command_security_model.md)._
 
 Anything unmatched is denied. Fail-closed, not fail-open. Shell commands aren't matched as text; they're parsed with
 tree-sitter-bash so pipes, `&&` chains, and redirections are decomposed and every subcommand is checked individually.
@@ -209,7 +209,7 @@ The full model is five layers deep, each with its own failure mode:
 | Sandbox integration | Filesystem isolation, network allowlists | Out-of-sandbox reads and writes             |
 | Human-in-the-loop   | Approve once / for session / always      | Anything above its trust level              |
 
-_Source: [SECURITY_MODEL.md](https://github.com/vinhnx/VTCode/blob/main/docs/security/SECURITY_MODEL.md)._
+_Source: [security_model.md](https://github.com/vinhnx/VTCode/blob/main/docs/security/security_model.md)._
 
 Approvals are scoped: "allow for session" lives in memory only, and cached approvals are keyed to the specific command
 shape, not the tool. A granted `cargo test` does not become a granted `cargo anything`.

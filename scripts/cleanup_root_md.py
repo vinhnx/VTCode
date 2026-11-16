@@ -23,7 +23,7 @@ def cleanup_root_files():
         "vtcode_claude_skills_implementation.md": "docs/skills-enhanced/implementation.md",
         "vtcode_skills_improvement_guide.md": "docs/skills-enhanced/improvement-guide.md",
         "vtcode_skills_improvements_proven.md": "docs/skills-enhanced/improvements-proven.md",
-        "FINAL_SUMMARY.md": "docs/skills-enhanced/final-summary.md",
+        "FINAL_summary.md": "docs/skills-enhanced/final-summary.md",
     }
     
     print("Cleaning up root directory .md files...")

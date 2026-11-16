@@ -74,4 +74,4 @@ non-recursively, in `args`, `env` values, and `cwd` only. `validate_plugin_relat
 - [Agent Plugins Guide](../guides/agent-plugins.md) — setup and usage
 - [Agent Plugins User Guide](../user-guide/agent-plugins.md) — task-oriented quick start
 - [MCP Integration Guide](../guides/mcp-integration.md) — MCP client and server modes
-- [Agent Skills Guide](../skills/SKILLS_GUIDE.md) — creating and loading skills
+- [Agent Skills Guide](../skills/skills_guide.md) — creating and loading skills

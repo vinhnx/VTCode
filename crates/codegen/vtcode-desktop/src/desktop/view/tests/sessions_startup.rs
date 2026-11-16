@@ -91,9 +91,11 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
     .unwrap();
 
     let notifications = cx.delivered_system_notifications();
-    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications.len(), 3, "each distinct agent event posts its own system banner");
     assert_eq!(notifications[0].title, "VT Code");
-    assert_eq!(notifications[0].body, "An agent run is waiting for your input.");
+    assert_eq!(notifications[0].body, "Your agent run has finished.");
+    assert_eq!(notifications[1].body, "Your agent run needs attention.");
+    assert_eq!(notifications[2].body, "An agent run is waiting for your input.");
     let shown = cx.shown_system_notifications();
     assert_eq!(shown.len(), 3);
     assert_eq!(shown[0].body, "Your agent run has finished.");

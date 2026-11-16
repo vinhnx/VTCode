@@ -268,7 +268,7 @@ fn build_payload_recovers_balanced_prefix_from_malformed_history_tool_arguments(
             vec![ToolCall::function(
                 "tool_call_0".to_string(),
                 "apply_patch".to_string(),
-                "{\"action\":\"read\",\"path\":\"docs/ARCHITECTURE.md\",\"offset\":1,\"limit\":100}{\"action\":\"read\",\"path\":\"README.md\"}"
+                "{\"action\":\"read\",\"path\":\"docs/architecture.md\",\"offset\":1,\"limit\":100}{\"action\":\"read\",\"path\":\"README.md\"}"
                     .to_string(),
             )],
         )].into(),
@@ -285,7 +285,7 @@ fn build_payload_recovers_balanced_prefix_from_malformed_history_tool_arguments(
         tool_calls[0].function.arguments,
         Some(json!({
             "action": "read",
-            "path": "docs/ARCHITECTURE.md",
+            "path": "docs/architecture.md",
             "offset": 1,
             "limit": 100
         }))

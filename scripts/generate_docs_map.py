@@ -23,7 +23,7 @@ CATEGORY_MAPPING = {
 
 # Explicit file to category mapping for files in root docs/ or misfits
 FILE_CATEGORY_OVERRIDE = {
-    "docs/ARCHITECTURE.md": "Getting Started & Overview",
+    "docs/architecture.md": "Getting Started & Overview",
     "docs/models.json": "LLM Providers & Models",
     "docs/user-guide/commands.md": "User Workflows & Commands",
     "docs/user-guide/interactive-mode.md": "User Workflows & Commands",
@@ -33,10 +33,10 @@ FILE_CATEGORY_OVERRIDE = {
 EXCLUDE_FILES = [
     "docs/modules/vtcode_docs_map.md",
     "docs/README.md",
-    "docs/INDEX.md",
+    "docs/index.md",
     "docs/CONTRIBUTING.md",
     "docs/CODE_OF_CONDUCT.md",
-    "docs/FAQ.md",
+    "docs/faq.md",
     "docs/project/TODO.md",
 ]
 
