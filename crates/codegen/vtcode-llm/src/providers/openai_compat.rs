@@ -640,12 +640,14 @@ mod tests {
         let serialized = Arc::new(vec![json!({"type": "function"})]);
         cache.insert(&tools, Arc::clone(&serialized));
 
-        // The stable catalog is the `last` entry, so repeated lookups hit the
-        // single-entry fast path and return the exact same allocation.
+        // With the map emptied, a hit can only come from the single-entry fast
+        // path — this distinguishes it from the HashMap fallback.
+        cache.map.clear();
         for _ in 0..3 {
-            let hit = cache.get(&tools).expect("cached catalog");
+            let hit = cache.get(&tools).expect("fast-path hit with map cleared");
             assert!(Arc::ptr_eq(&hit, &serialized));
         }
+        assert!(cache.last.is_some(), "fast path stays warm across lookups");
     }
 
     #[test]

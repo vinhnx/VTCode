@@ -47,23 +47,19 @@ pub(super) struct ExecCommandDefaults {
 
 /// Map an already-normalized name to its canonical dispatch name.
 ///
-/// Borrows from either the static `exec_command` constant or the caller's
-/// normalized string, so no allocation is needed. Callers must normalize first
-/// via [`canonicalize_normalized_name`] (which also guarantees non-empty input).
-fn canonicalize_from_normalized_name(normalized: &str) -> &str {
-    if exec_command_defaults_from_normalized_name(normalized).is_some() {
-        tools::EXEC_COMMAND
+/// Reuses the normalized allocation in the common (non-exec) case. Callers must
+/// normalize first via `canonicalize_normalized_name`, which also guarantees
+/// non-empty input.
+fn canonicalize_from_normalized_name(normalized: String) -> String {
+    if exec_command_defaults_from_normalized_name(&normalized).is_some() {
+        tools::EXEC_COMMAND.to_owned()
     } else {
         normalized
     }
 }
 
 pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
-    let normalized = canonicalize_normalized_name(raw)?;
-    if normalized.is_empty() {
-        return None;
-    }
-    Some(canonicalize_from_normalized_name(&normalized).to_owned())
+    canonicalize_normalized_name(raw).map(canonicalize_from_normalized_name)
 }
 
 /// Canonicalize a tool call and optionally validate against known tools.
@@ -74,22 +70,17 @@ pub(super) fn canonicalize_tool_result(name: String, mut args: Value, validate: 
     // Normalize once and reuse the result: `canonicalize_tool_name` used to be
     // called here, which re-normalized the very same string a second time.
     let normalized = canonicalize_normalized_name(&name)?;
-    let canonical = canonicalize_from_normalized_name(&normalized);
-    if canonical == tools::EXEC_COMMAND
-        && let Some(defaults) = exec_command_defaults_from_normalized_name(&normalized)
+    let defaults = exec_command_defaults_from_normalized_name(&normalized);
+    let canonical = canonicalize_from_normalized_name(normalized);
+    if let Some(defaults) = defaults
         && let Some(payload) = args.as_object_mut()
     {
         apply_exec_command_defaults(payload, defaults);
     }
-    if validate {
-        if is_known_textual_tool(canonical) {
-            Some((canonical.to_owned(), args))
-        } else {
-            None
-        }
-    } else {
-        Some((canonical.to_owned(), args))
+    if validate && !is_known_textual_tool(&canonical) {
+        return None;
     }
+    Some((canonical, args))
 }
 
 pub(crate) fn is_known_textual_tool(name: &str) -> bool {
