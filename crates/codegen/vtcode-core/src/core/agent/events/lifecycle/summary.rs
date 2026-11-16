@@ -586,30 +586,21 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
     } else if let Some(matches) = output.get("matches").and_then(Value::as_array) {
         (Some(summarize_matches(output, matches)), MATCH_RESULT_SUMMARY_FIELDS)
     } else if let Some(results) = output.get("results").and_then(Value::as_array) {
-        // `code_search`-style outputs: without this branch the archive only
-        // records "Structured result with fields: query, filters, results,
-        // returned", which made the turn_912/913 planning trajectories (54
-        // searches) illegible in session archives and ATIF exports.
+        // `code_search`-style outputs: the count/query/path summary keeps the
+        // turn_912/913 planning trajectories (54 searches) legible in session
+        // archives and ATIF exports.
         (Some(summarize_search_results(output, results)), SEARCH_RESULT_SUMMARY_FIELDS)
     } else {
-        (
-            output
-                .as_object()
-                .map(|obj| {
-                    obj.keys()
-                        .filter(|key| {
-                            key.as_str() != "success"
-                                && key.as_str() != MCP_APP_DISCLOSURE_KEY
-                                && key.as_str() != MCP_APP_SUPPRESSED_KEY
-                        })
-                        .take(4)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                })
-                .filter(|keys| !keys.is_empty())
-                .map(|keys| format!("Structured result with fields: {}", keys.join(", "))),
-            EMPTY_RESULT_SUMMARY_FIELDS,
-        )
+        // No generic fallback: a field-name list ("Structured result with
+        // fields: ...") names fields without values, so it is noise on every
+        // surface. Message parts plus the structured metadata block below
+        // carry the content for the LLM; degenerate payloads with neither
+        // (e.g. a bare status) aggregate to empty, as success-only payloads
+        // always have. Historical payloads keep the line; human layers strip
+        // it (desktop `human_output_text`, CLI previews, archive cleaner),
+        // while evidence surfaces (`share_log`, log viewer, `exec` output)
+        // keep raw text by design.
+        (None, EMPTY_RESULT_SUMMARY_FIELDS)
     };
 
     let mut parts = Vec::new();

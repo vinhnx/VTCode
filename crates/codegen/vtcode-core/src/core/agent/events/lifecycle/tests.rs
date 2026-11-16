@@ -425,6 +425,41 @@ fn tool_output_payload_preserves_structured_only_result_metadata() {
 }
 
 #[test]
+fn tool_output_payload_omits_structured_field_list_fallback() {
+    // Shape produced by `start_planning`: status/message plus structured
+    // fields, no primary streams. The human message and the metadata block
+    // carry the content; the legacy "Structured result with fields:" line
+    // must not appear on any surface.
+    let payload = tool_output_payload_from_value(&json!({
+        "status": "success",
+        "message": "Entered Planning workflow.",
+        "plan_file": ".vtcode/plans/plan.md",
+        "instructions": ["Explore first"]
+    }));
+
+    assert!(payload.aggregated_output.contains("Entered Planning workflow."));
+    assert!(payload.aggregated_output.contains("Structured output:"));
+    assert!(payload.aggregated_output.contains("plan.md"));
+    assert!(
+        !payload.aggregated_output.contains("Structured result with fields:"),
+        "field-list fallback leaked: {}",
+        payload.aggregated_output
+    );
+    // Asymmetric: a message-less structured payload still carries its fields
+    // in metadata without the fallback line.
+    let bare = tool_output_payload_from_value(&json!({
+        "plan_file": ".vtcode/plans/plan.md",
+        "retryable": true,
+    }));
+    assert!(bare.aggregated_output.contains("plan.md"));
+    assert!(
+        !bare.aggregated_output.contains("Structured result with fields:"),
+        "field-list fallback leaked: {}",
+        bare.aggregated_output
+    );
+}
+
+#[test]
 fn tool_output_payload_preserves_structured_error_details() {
     let payload = tool_output_payload_from_value(&json!({
         "error": {

@@ -7,11 +7,14 @@
 //! never be interpreted as Markdown) and only the user-relevant `spool_note`
 //! survives from the metadata block.
 //!
-//! This machine stays desktop-local on purpose: it is the only stripper in
-//! the workspace (nothing is duplicated), and its `SharedString` sections are
-//! a desktop rendering type. CLI export/forensic surfaces (`share_log`, the
-//! log viewer, `exec` event output) intentionally keep the raw block — they
-//! are evidence surfaces, not conversation.
+//! The envelope splitter stays desktop-local on purpose: its `SharedString`
+//! sections are a desktop rendering type, and nothing else splits the block.
+//! The one-line legacy strip below is the deliberate exception — CLI previews
+//! (`summarize_preview_text`) mirror the same leading-only marker, and the
+//! session-archive cleaner drops the line per transcript line. CLI
+//! export/forensic surfaces (`share_log`, the log viewer, `exec` event
+//! output) intentionally keep raw text — they are evidence surfaces, not
+//! conversation.
 
 use gpui_kit::SharedString;
 use serde::de::IgnoredAny;
@@ -23,6 +26,14 @@ use serde_json::Deserializer;
 /// which emits `{marker}\n{pretty_json}` as one part; later parts (error or
 /// hint text) may follow, so only a *leading* JSON value is claimed.
 pub(super) const STRUCTURED_OUTPUT_MARKER: &str = "Structured output:";
+
+/// Legacy first line core used to prepend to structured-only tool results
+/// (the `tool_output_payload_from_value` field-list fallback, since removed).
+/// Historical payloads still carry it, so the human projection drops it for
+/// every tool — not just the tracker that first needed the strip. Mirrored in
+/// CLI `summarize_preview_text`; keep the marker and leading-only semantics
+/// identical.
+const STRUCTURED_RESULT_MARKER: &str = "Structured result with fields:";
 
 /// A tool-output tail split for stripping.
 ///
@@ -56,23 +67,25 @@ const MAX_STRIP_PASSES: usize = 8;
 
 /// Human-readable projection of captured tool output for every display surface.
 ///
-/// Removes every `Structured output:` JSON metadata block, last first. Only
-/// the user-relevant `spool_note` of each block survives, spliced in where
-/// its block stood so document order never changes. Stripping all blocks
-/// (rather than just core's trailing one) is what keeps the projection
-/// idempotent — streaming re-stores, page joins, and copy joins all re-strip,
-/// and any fixed point they converge on must be stable.
+/// Drops the legacy `Structured result with fields:` first line, then removes
+/// every `Structured output:` JSON metadata block, last first. Only the
+/// user-relevant `spool_note` of each block survives, spliced in where its
+/// block stood so document order never changes. Stripping all blocks (rather
+/// than just core's trailing one) is what keeps the projection idempotent —
+/// streaming re-stores, page joins, and copy joins all re-strip, and any fixed
+/// point they converge on must be stable.
 ///
 /// Postconditions: the result holds no valid block the splitter can still
-/// find (up to [`MAX_STRIP_PASSES`]); marker-less input passes through
-/// byte-identical; anything unparseable (truncated JSON, an empty candidate,
-/// a mid-line mention) degrades to the input unchanged. Trade-off: a tool
+/// find (up to [`MAX_STRIP_PASSES`]); input with neither marker passes
+/// through byte-identical; anything unparseable (truncated JSON, an empty
+/// candidate, a mid-line mention) degrades to the input unchanged. Trade-off: a tool
 /// echoing an envelope-shaped block (e.g. catting a spooled capture) loses
 /// that echo too — in practice nested blocks are core metadata echoes, and
 /// uniformity across transcript, Output tab, and copies wins over preserving
 /// them.
 #[must_use]
 pub(super) fn human_output_text(raw: &str) -> String {
+    let raw = strip_structured_result_line(raw);
     if last_marker_offset(raw).is_none() {
         return raw.to_owned();
     }
@@ -120,6 +133,17 @@ fn spool_note(json: &str) -> Option<String> {
         .map(str::trim)
         .filter(|note| !note.is_empty())
         .map(str::to_string)
+}
+
+/// Drop the legacy structured-result first line, when present.
+///
+/// Core always emitted the line first, so only a leading line counts: a
+/// mid-text mention is tool prose and passes through untouched.
+fn strip_structured_result_line(text: &str) -> &str {
+    if !text.starts_with(STRUCTURED_RESULT_MARKER) {
+        return text;
+    }
+    text.split_once('\n').map_or("", |(_, rest)| rest)
 }
 
 /// Split a bounded output tail into literal prose and structured JSON.
@@ -368,5 +392,22 @@ mod tests {
         let once = human_output_text(raw);
         assert_eq!(human_output_text(&once), once);
         assert!(!once.contains("Structured output:"));
+    }
+
+    #[test]
+    fn human_output_drops_legacy_structured_result_first_line() {
+        // Historical payloads (e.g. start_planning) prepended a field list;
+        // the message below it is the human content.
+        let raw = "Structured result with fields: status, message, plan_file\nEntered Planning workflow.";
+        assert_eq!(human_output_text(raw), "Entered Planning workflow.");
+        // A lone legacy line leaves nothing.
+        assert_eq!(human_output_text("Structured result with fields: status"), "");
+        // Combined with a metadata block: the line drops, then the block
+        // strips to its note, in document order.
+        let raw = "Structured result with fields: status\nlog line\nStructured output:\n{\"spool_note\": \"Spooled\"}";
+        assert_eq!(human_output_text(raw), "log line\nSpooled");
+        // Asymmetric: a mid-text mention is tool prose, not core's line.
+        let prose = "log line\nsaw Structured result with fields: x in output";
+        assert_eq!(human_output_text(prose), prose);
     }
 }

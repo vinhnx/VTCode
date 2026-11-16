@@ -1,15 +1,12 @@
-use super::{ToolCategory, activity_capture_output, bounded_output_chunk, describe_activity};
+use super::{bounded_output_chunk, describe_activity};
 use vtcode_exec_events::{
     CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem, WebSearchItem,
 };
 
-#[test]
-fn tracker_capture_hides_structured_field_list_but_keeps_message() {
-    let raw = "Structured result with fields: status, message, checklist\nChecklist updated";
-    assert_eq!(activity_capture_output(raw, Some(ToolCategory::Tracker)).as_deref(), Some("Checklist updated"));
-    assert_eq!(activity_capture_output(raw, Some(ToolCategory::Run)).as_deref(), Some(raw));
-    assert_eq!(activity_capture_output("Structured result with fields: status", Some(ToolCategory::Tracker)), None);
-}
+// The legacy "Structured result with fields:" strip lives in the shared
+// human projection (`output_sections::human_output_text`, pinned by
+// `human_output_drops_legacy_structured_result_first_line`), so every tool
+// row — tracker or otherwise — hides the line without a category gate here.
 
 #[test]
 fn live_output_chunks_keep_order_and_bound_utf8() {

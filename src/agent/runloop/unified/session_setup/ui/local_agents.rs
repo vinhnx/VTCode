@@ -430,13 +430,32 @@ fn command_status_label(status: CommandExecutionStatus) -> &'static str {
 /// above it so a session row never previews a raw JSON tail (`}`).
 const STRUCTURED_OUTPUT_MARKER: &str = "Structured output:";
 
+/// Legacy first line core used to prepend to structured-only tool results
+/// (the `tool_output_payload_from_value` field-list fallback, since removed).
+/// Historical captures still carry it; previews skip it so a session row
+/// never previews a field list. Mirrored in desktop `human_output_text`;
+/// keep the marker and leading-only semantics identical.
+const STRUCTURED_RESULT_MARKER: &str = "Structured result with fields:";
+
 fn summarize_preview_text(text: &str) -> Option<String> {
     // Prefer the last meaningful line above the metadata envelope; fall back
     // to the whole text when the head holds nothing, so degenerate
     // envelope-only captures still preview something.
+    let text = strip_structured_result_line(text);
     let preview = last_meaningful_line(truncate_before_envelope(text)).or_else(|| last_meaningful_line(text))?;
 
     Some(truncate_preview_text(preview, 180))
+}
+
+/// Text without the legacy structured-result first line, when present.
+///
+/// Core always emitted the line first, so only a leading line counts: a
+/// mid-text mention is tool prose and previews untouched.
+fn strip_structured_result_line(text: &str) -> &str {
+    if !text.starts_with(STRUCTURED_RESULT_MARKER) {
+        return text;
+    }
+    text.split_once('\n').map_or("", |(_, rest)| rest)
 }
 
 /// Text above the first `Structured output:` marker line, if any.
@@ -598,5 +617,31 @@ mod tests {
         );
         // Degenerate envelope-only captures still preview something.
         assert_eq!(summarize_preview_text("Structured output:\n}").as_deref(), Some("}"));
+    }
+
+    #[test]
+    fn preview_skips_legacy_structured_result_first_line() {
+        // Historical start_planning capture: the field list never previews.
+        assert_eq!(
+            summarize_preview_text("Structured result with fields: status, message\nEntered Planning workflow.")
+                .as_deref(),
+            Some("Entered Planning workflow.")
+        );
+        // A lone legacy line previews nothing.
+        assert_eq!(summarize_preview_text("Structured result with fields: status"), None);
+        // Combined with a metadata block: the line drops and the preview
+        // still stops above the envelope.
+        assert_eq!(
+            summarize_preview_text(
+                "Structured result with fields: status\noutput line\nStructured output:\n{\"pid\": 1}"
+            )
+            .as_deref(),
+            Some("output line")
+        );
+        // Asymmetric: a mid-text mention is prose, not core's line.
+        assert_eq!(
+            summarize_preview_text("log line\nsaw Structured result with fields: x in output").as_deref(),
+            Some("saw Structured result with fields: x in output")
+        );
     }
 }

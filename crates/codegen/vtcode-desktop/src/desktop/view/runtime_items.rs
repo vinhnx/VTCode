@@ -26,18 +26,6 @@ fn edit_path_for_change(row: &TranscriptItem, diff: &DiffCard) -> Option<String>
     matches.next().is_none().then_some(path)
 }
 
-fn activity_capture_output(raw: &str, category: Option<ToolCategory>) -> Option<String> {
-    let raw = if category == Some(ToolCategory::Tracker) {
-        raw.strip_prefix("Structured result with fields:")
-            .and_then(|rest| rest.split_once('\n').map(|(_, remaining)| remaining))
-            .or_else(|| raw.starts_with("Structured result with fields:").then_some(""))
-            .unwrap_or(raw)
-    } else {
-        raw
-    };
-    human_output_option(raw)
-}
-
 pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
     let chunk_start = chunk.ceil_char_boundary(chunk.len().saturating_sub(LIVE_OUTPUT_LIMIT));
     let chunk = chunk.get(chunk_start..).unwrap_or_default();
@@ -346,7 +334,7 @@ impl DesktopView {
                 // Identity implies output: `output_for` resolves a selection by
                 // identity and falls back to the newest capture when the row is
                 // output-less, so a blank merge must not plant an identity.
-                if let Some(human) = activity_capture_output(&output.output, row.activity_category) {
+                if let Some(human) = human_output_option(&output.output) {
                     row.output = Some(human.into());
                     row.output_item_id = Some(item.id.clone());
                 } else {
@@ -366,14 +354,13 @@ impl DesktopView {
                     .and_then(|index| self.transcript.get(index))
             {
                 let title = row.title.to_string();
-                let category = row.activity_category;
                 let payload = activity_payload(&row.text);
                 let status = describe_activity(&item.details, None).1;
                 let text = activity_text(&status, payload);
                 self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                 // Identity implies output (see the historical merge above): a
                 // blank capture stores no output and plants no identity.
-                if let Some(human) = activity_capture_output(&output.output, category) {
+                if let Some(human) = human_output_option(&output.output) {
                     self.transcript.set_output(&row_id, Some(human.into()));
                     self.transcript.set_output_identity(&row_id, &item.id);
                 } else {

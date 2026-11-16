@@ -414,6 +414,35 @@ mod tests {
     }
 
     #[test]
+    fn output_text_drops_legacy_structured_result_first_line() {
+        // Historical start_planning capture: the field list is noise, the
+        // message is the content — for every tool, not just the tracker.
+        let tool_output = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: "call-1".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: "Structured result with fields: status, message, plan_file\nEntered Planning workflow.".into(),
+            is_delta: None,
+            exit_code: None,
+            status: ToolCallStatus::Completed,
+            app_previews: Vec::new(),
+        }));
+        assert_eq!(activity_output_text(&tool_output).as_deref(), Some("Entered Planning workflow."));
+        // Asymmetric: a lone legacy line collapses like any blank capture.
+        let lone = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: "call-2".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: "Structured result with fields: status".into(),
+            is_delta: None,
+            exit_code: None,
+            status: ToolCallStatus::Completed,
+            app_previews: Vec::new(),
+        }));
+        assert_eq!(activity_output_text(&lone), None);
+    }
+
+    #[test]
     fn output_text_collapses_blank_captures_to_none() {
         for blank in ["", "   ", "\n\n"] {
             assert_eq!(activity_output_text(&command_output(blank)), None, "{blank:?} collapses");
