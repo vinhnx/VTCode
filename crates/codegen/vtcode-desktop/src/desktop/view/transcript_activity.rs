@@ -3,6 +3,31 @@ use vtcode_commons::tool_headlines::strip_mcp_prefix;
 use super::*;
 
 impl DesktopView {
+    /// A small, theme-colored dotted rule under an actionable filename.
+    pub(super) fn filename_dotted_underline(color: gpui_kit::Hsla) -> impl IntoElement {
+        gpui_kit::canvas(
+            |_, _, _| (),
+            move |bounds, (), window, _| {
+                let width: f32 = bounds.size.width.into();
+                for index in 0_u16..1024 {
+                    let offset = f32::from(index) * 3.0;
+                    if offset >= width {
+                        break;
+                    }
+                    let x = bounds.origin.x + px(offset);
+                    window.paint_quad(gpui_kit::fill(
+                        gpui_kit::Bounds::new(point(x, bounds.origin.y), size(px(1.0), px(1.0))),
+                        color,
+                    ));
+                }
+            },
+        )
+        .absolute()
+        .bottom_0()
+        .left_0()
+        .w_full()
+        .h(px(1.0))
+    }
     pub(super) fn render_activity_group(&self, range: std::ops::Range<usize>, cx: &mut Context<Self>) -> AnyElement {
         let Some(head) = self.transcript.get(range.start) else {
             return div().into_any_element();
@@ -236,14 +261,15 @@ impl DesktopView {
                     .find(|candidate| candidate.id == id)
                     .and_then(|candidate| candidate.diff.as_ref())
                     .and_then(|diff| {
+                        let previews = gpui_kit::component::diff::DiffFile::parse(&diff.patch).ok()?;
                         diff.files
                             .iter()
-                            .find(|file| view.changes.has_preview(&file.path))
+                            .find(|file| previews.iter().any(|preview| preview.path().as_ref() == file.path.as_str()))
                             .map(|file| file.path.clone())
                     });
                 match open_path {
-                    Some(path) => view.select_change(path, cx),
-                    None => view.open_inspector_tab(InspectorTab::Changes, cx),
+                    Some(path) if view.select_change_from_item(&id, &path, cx) => {}
+                    _ => view.open_inspector_tab(InspectorTab::Changes, cx),
                 }
             }))
     }

@@ -75,6 +75,7 @@ pub(super) struct ActivityRow {
     pub status: String,
     pub state: ActivityState,
     pub has_output: bool,
+    pub edit_path: Option<SharedString>,
     /// Whether the row resolves in the live transcript. Restored-only rows
     /// predate the loaded window, so they offer output but no transcript jump.
     pub in_transcript: bool,
@@ -296,6 +297,7 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
                 state: ActivityState::from_status(&status),
                 status,
                 has_output: item.has_output(),
+                edit_path: item.edit_path.clone(),
                 in_transcript,
             }
         })
@@ -575,6 +577,7 @@ mod tests {
             status: String::new(),
             state,
             has_output: false,
+            edit_path: None,
             in_transcript: true,
         })
         .collect::<Vec<_>>();

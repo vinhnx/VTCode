@@ -10,6 +10,22 @@ use vtcode_commons::tool_headlines::{command_text, compact_command_headline};
 /// preview with the runtime's final snapshot, which can include a spool path.
 pub(super) const LIVE_OUTPUT_LIMIT: usize = 64 * 1024;
 
+fn edit_path_for_change(row: &TranscriptItem, diff: &DiffCard) -> Option<String> {
+    if row.activity_category != Some(ToolCategory::Edit) || diff.failed || diff.patch.is_empty() {
+        return None;
+    }
+    let mut matches = diff.files.iter().filter(|file| {
+        let name = file.path.rsplit(['/', '\\']).next().unwrap_or(&file.path);
+        let base = format!("Edited {name}");
+        row.title.as_str() == base
+            || row.edit_totals.is_some_and(|totals| {
+                row.title.as_str() == Transcript::title_with_edit_stats(&base, totals.additions, totals.deletions)
+            })
+    });
+    let path = matches.next()?.path.clone();
+    matches.next().is_none().then_some(path)
+}
+
 fn activity_capture_output(raw: &str, category: Option<ToolCategory>) -> Option<String> {
     let raw = if category == Some(ToolCategory::Tracker) {
         raw.strip_prefix("Structured result with fields:")
@@ -33,104 +49,7 @@ pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
 }
 
 #[cfg(test)]
-mod live_output_tests {
-    use super::{ToolCategory, activity_capture_output, bounded_output_chunk, describe_activity};
-    use vtcode_exec_events::{
-        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem, WebSearchItem,
-    };
-
-    #[test]
-    fn tracker_capture_hides_structured_field_list_but_keeps_message() {
-        let raw = "Structured result with fields: status, message, checklist\nChecklist updated";
-        assert_eq!(activity_capture_output(raw, Some(ToolCategory::Tracker)).as_deref(), Some("Checklist updated"));
-        assert_eq!(activity_capture_output(raw, Some(ToolCategory::Run)).as_deref(), Some(raw));
-        assert_eq!(activity_capture_output("Structured result with fields: status", Some(ToolCategory::Tracker)), None);
-    }
-
-    #[test]
-    fn live_output_chunks_keep_order_and_bound_utf8() {
-        let first = bounded_output_chunk("", "first\n");
-        assert_eq!(bounded_output_chunk(&first, "second"), "first\nsecond");
-        assert_eq!(bounded_output_chunk("other", ""), "other");
-        let large = format!("prefix{}end", "界".repeat(30_000));
-        let tail = bounded_output_chunk("old", &large);
-        assert!(tail.len() <= 64 * 1024);
-        assert!(tail.ends_with("界end"));
-        assert!(!tail.contains("prefix"));
-    }
-
-    #[test]
-    fn failed_tool_output_and_command_report_exit_code_consistently() {
-        let output = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
-            call_id: "call".into(),
-            tool_call_id: None,
-            spool_path: None,
-            output: String::new(),
-            is_delta: None,
-            exit_code: Some(17),
-            status: ToolCallStatus::Failed,
-            app_previews: Vec::new(),
-        }));
-        let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-            command: "false".into(),
-            arguments: None,
-            aggregated_output: String::new(),
-            exit_code: Some(17),
-            status: CommandExecutionStatus::Failed,
-        }));
-        assert_eq!(describe_activity(&output, None).1, "failed (exit 17)");
-        assert_eq!(describe_activity(&command, None).1, "failed (exit 17)");
-        let ThreadItemDetails::ToolOutput(mut output) = output else {
-            panic!("expected tool output")
-        };
-        output.status = ToolCallStatus::Completed;
-        output.exit_code = Some(0);
-        assert_eq!(describe_activity(&ThreadItemDetails::ToolOutput(output), None).1, "completed");
-    }
-
-    #[test]
-    fn blank_commands_fall_back_to_cli_placeholder_title() {
-        for blank in ["", "   "] {
-            let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-                command: blank.into(),
-                arguments: None,
-                aggregated_output: String::new(),
-                exit_code: None,
-                status: CommandExecutionStatus::Completed,
-            }));
-            assert_eq!(describe_activity(&command, None).0, "Ran command");
-        }
-    }
-
-    #[test]
-    fn multi_line_queries_collapse_to_single_line_titles() {
-        // Titles render in a single-line slot: a multi-line query collapses
-        // to one line instead of overflowing its row with a bare middle line
-        // and ghosted neighbors (the 2026-11-09 session failure). Commands
-        // preview to one line upstream (`gist_previews_multiline_commands`);
-        // this pins the collapse for sources that carry raw text.
-        let search = ThreadItemDetails::WebSearch(Box::new(WebSearchItem {
-            query: "first line\n\tsecond line".into(),
-            provider: None,
-            results: None,
-        }));
-        assert_eq!(describe_activity(&search, None).0, "first line second line");
-    }
-
-    #[test]
-    fn completed_commands_preview_like_invocation_gists() {
-        // A pending row and its completed row title identically: multi-line
-        // commands preview to the first line on both paths.
-        let execution = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-            command: "sed -n '1p' README.md\necho done".into(),
-            arguments: None,
-            aggregated_output: String::new(),
-            exit_code: Some(0),
-            status: CommandExecutionStatus::Completed,
-        }));
-        assert_eq!(describe_activity(&execution, None).0, "Ran sed README.md");
-    }
-}
+mod live_output_tests;
 
 impl DesktopView {
     /// Resolve a live tool output to its invocation row when identities are unambiguous.
@@ -510,6 +429,7 @@ impl DesktopView {
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &decision.summary, false);
             }
             ThreadItemDetails::FileChange(change) => {
+                let edit_id = id.strip_suffix(":changes").map(str::to_owned);
                 // The emitter ids this `{call_id}:changes`: stamp per-call edit
                 // stats onto the sibling invocation row when counts are present.
                 let stamp = match (change.additions, change.deletions) {
@@ -521,6 +441,9 @@ impl DesktopView {
                 self.upsert_diff_card(id, change);
                 if let Some((stem, additions, deletions)) = stamp {
                     self.transcript.stamp_edit_totals(&stem, additions, deletions);
+                }
+                if let Some(stem) = edit_id {
+                    self.sync_edit_path(&stem);
                 }
             }
             details => {
@@ -559,6 +482,13 @@ impl DesktopView {
                     item.activity_category = ToolCategory::from_details(details);
                     item.tool_name = invocation_tool_name(details).map(Into::into);
                     item.command = command.map(Into::into);
+                    let change_id = format!("{}:changes", item.id);
+                    item.edit_path = self.transcript.position_by_id(&change_id)
+                        .and_then(|ix| self.transcript.get(ix))
+                        .filter(|change| !matches!((item.canonical_turn_id.as_deref(), change.canonical_turn_id.as_deref()), (Some(a), Some(b)) if a != b))
+                        .and_then(|change| change.diff.as_ref())
+                        .and_then(|diff| edit_path_for_change(&item, diff))
+                        .map(Into::into);
                     self.push_restored_activity(item);
                 } else {
                     // Carry stamped edit totals across re-projections: the fresh
@@ -591,6 +521,9 @@ impl DesktopView {
                     if let Some(tool_name) = invocation_tool_name(details) {
                         self.transcript.set_tool_name(&id, tool_name);
                     }
+                    if ToolCategory::from_details(details) == Some(ToolCategory::Edit) {
+                        self.sync_edit_path(&id);
+                    }
                     if let Some(EditTotals { additions, deletions }) = carried {
                         self.transcript.set_edit_totals(&id, additions, deletions);
                     }
@@ -603,6 +536,24 @@ impl DesktopView {
         let previous_patch = self.selected_change_patch();
         self.replace_diff_card_row(id, change);
         self.rebuild_changes(previous_patch);
+    }
+
+    fn sync_edit_path(&mut self, id: &str) {
+        let path = self
+            .transcript
+            .position_by_id(id)
+            .and_then(|ix| self.transcript.get(ix))
+            .and_then(|row| {
+                let change_id = format!("{id}:changes");
+                let diff = self
+                    .transcript
+                    .position_by_id(&change_id)
+                    .and_then(|ix| self.transcript.get(ix))?
+                    .diff
+                    .as_ref()?;
+                edit_path_for_change(row, diff)
+            });
+        self.transcript.set_edit_path(id, path.as_deref());
     }
 
     /// Project restored file-change snapshots after a session load. Rows are
@@ -666,6 +617,14 @@ impl DesktopView {
 
     /// Raw patch text behind the selected change, for viewer refresh detection.
     fn selected_change_patch(&self) -> Option<String> {
+        if let Some(id) = &self.selected_change_source {
+            return self
+                .transcript
+                .position_by_id(id)
+                .and_then(|ix| self.transcript.get(ix))
+                .and_then(|item| item.diff.as_ref())
+                .map(|diff| diff.patch.clone());
+        }
         self.selected_change
             .as_deref()
             .and_then(|path| self.changes.patch_for(&self.transcript, path))
@@ -676,10 +635,7 @@ impl DesktopView {
     /// this once for the whole batch.
     fn rebuild_changes(&mut self, previous_patch: Option<String>) {
         self.changes = ChangesProjection::rebuild(&self.transcript);
-        self.change_viewer_dirty |= self
-            .selected_change
-            .as_deref()
-            .is_some_and(|path| self.changes.patch_for(&self.transcript, path) != previous_patch);
+        self.change_viewer_dirty |= self.selected_change.is_some() && self.selected_change_patch() != previous_patch;
     }
 
     /// Refresh only when the selected file's accepted patch changed, preserving its mode.
@@ -687,11 +643,20 @@ impl DesktopView {
         if !std::mem::take(&mut self.change_viewer_dirty) {
             return;
         }
-        let file = self.selected_change.as_deref().and_then(|path| self.changes.select(path));
+        let file = self.selected_change.as_deref().and_then(|path| {
+            if self.selected_change_source.is_some() {
+                self.selected_change_patch()
+                    .and_then(|patch| gpui_kit::component::diff::DiffFile::parse(&patch).ok())
+                    .and_then(|files| files.into_iter().find(|file| file.path() == path))
+            } else {
+                self.changes.select(path)
+            }
+        });
         if let (Some(viewer), Some(file)) = (self.change_viewer.as_ref(), file) {
             viewer.update(cx, |viewer, cx| viewer.set_files(vec![file], cx));
         } else {
             self.selected_change = None;
+            self.selected_change_source = None;
             self.change_viewer = None;
             if self.workspace_review.is_none() && self.current_route() == Route::Review {
                 self.teardown_current_route();
@@ -705,6 +670,33 @@ impl DesktopView {
         let Some(file) = self.changes.select(&path) else {
             return;
         };
+        self.show_change(path, file, None, cx);
+    }
+
+    /// Open the exact patch captured by a transcript change card.
+    pub(super) fn select_change_from_item(&mut self, item_id: &str, path: &str, cx: &mut Context<Self>) -> bool {
+        let file = self
+            .transcript
+            .items_newest_first()
+            .find(|item| item.id == item_id)
+            .and_then(|item| item.diff.as_ref())
+            .and_then(|diff| gpui_kit::component::diff::DiffFile::parse(&diff.patch).ok())
+            .and_then(|files| files.into_iter().find(|file| file.path() == path));
+        if let Some(file) = file {
+            self.show_change(path.to_string(), file, Some(item_id.to_owned()), cx);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn show_change(
+        &mut self,
+        path: String,
+        file: gpui_kit::component::diff::DiffFile,
+        source: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let filter = self.change_kind_filter;
         let position = self
             .changes
@@ -722,6 +714,7 @@ impl DesktopView {
             .map(|viewer| viewer.read(cx).mode())
             .unwrap_or_else(|| self.preferences.diff_mode());
         self.selected_change = Some(path);
+        self.selected_change_source = source;
         self.change_viewer_dirty = false;
         self.change_viewer =
             Some(cx.new(|cx| diff_preferences::new_diff_state(vec![file], mode, &self.preferences.diff, cx)));

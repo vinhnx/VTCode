@@ -719,6 +719,7 @@ struct DesktopView {
     inspector_tabs_scroll: ScrollHandle,
     changes: ChangesProjection,
     selected_change: Option<String>,
+    selected_change_source: Option<String>,
     /// Kind filter for the Changes list; `None` shows every file.
     change_kind_filter: Option<DiffFileKind>,
     change_viewer: Option<Entity<DiffState>>,

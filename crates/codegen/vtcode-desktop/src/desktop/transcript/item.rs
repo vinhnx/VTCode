@@ -70,6 +70,8 @@ pub(crate) struct TranscriptItem {
     /// until then (or when the emitter had no counts); doubles as the
     /// already-stamped guard so replays never double-suffix the title.
     pub edit_totals: Option<EditTotals>,
+    /// Unambiguous path associated with this edit call's change record.
+    pub edit_path: Option<SharedString>,
     /// Raw tool name for an invocation row (`exec_command`), kept verbatim so
     /// search matches snake_case queries the prettified title cannot. `None`
     /// for rows without an invoking tool (messages, executions, diffs).
@@ -187,6 +189,7 @@ impl TranscriptItem {
             activity_group_summary,
             activity_category: None,
             edit_totals: None,
+            edit_path: None,
             tool_name: None,
             command: None,
             diff: None,

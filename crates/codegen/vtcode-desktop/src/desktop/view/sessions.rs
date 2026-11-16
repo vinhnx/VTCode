@@ -770,6 +770,7 @@ impl DesktopView {
         self.reset_hidden_inspector_tab_if_stranded();
         self.changes = ChangesProjection::default();
         self.selected_change = None;
+        self.selected_change_source = None;
         self.change_kind_filter = None;
         self.change_viewer = None;
         self.change_viewer_dirty = false;
@@ -928,72 +929,7 @@ impl DesktopView {
     }
 }
 
-/// Short single-line sidebar title derived from a session's first prompt,
-/// mirroring the archive's first-prompt preview.
-pub(super) fn session_title_from_prompt(prompt: &str) -> String {
-    const MAX_TITLE_CHARS: usize = 72;
-    let first_line = prompt.lines().find(|line| !line.trim().is_empty()).unwrap_or_default();
-    let trimmed = first_line.trim();
-    let mut title: String = trimmed.chars().take(MAX_TITLE_CHARS).collect();
-    if trimmed.chars().count() > MAX_TITLE_CHARS {
-        title.push('…');
-    }
-    title
-}
-
-pub(super) fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurrence: usize) -> String {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    session_id.hash(&mut hasher);
-    role.hash(&mut hasher);
-    text.hash(&mut hasher);
-    occurrence.hash(&mut hasher);
-    format!("history-{:016x}", hasher.finish())
-}
-
-fn restored_archive_element_id(session_id: &str, archive_index: usize) -> String {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    session_id.hash(&mut hasher);
-    format!("history-{:016x}-{archive_index}", hasher.finish())
-}
-
-/// Prepare stable transcript rows and Markdown accessibility projections for archived messages.
-pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage>) -> Vec<TranscriptItem> {
-    let mut occurrences = HashMap::<u64, usize>::new();
-    let mut phases = Vec::new();
-    let rows: Vec<TranscriptItem> = messages
-        .into_iter()
-        .filter(|message| !message.hidden || message.role != TranscriptRole::System.as_str())
-        .map(|message| {
-            let SessionHistoryMessage {
-                archive_index, role, text, phase, event_item_id, ..
-            } = message;
-            phases.push(phase.clone());
-            let title = match TranscriptRole::from_str(&role) {
-                Some(TranscriptRole::User) => rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string(),
-                Some(TranscriptRole::Assistant) => app::NAME.to_string(),
-                Some(TranscriptRole::Tool) => rust_i18n::t!("app.transcript.tool_result").to_string(),
-                _ => role.clone(),
-            };
-            let id = archive_index.map_or_else(
-                || {
-                    let mut fingerprint = std::collections::hash_map::DefaultHasher::new();
-                    role.hash(&mut fingerprint);
-                    text.hash(&mut fingerprint);
-                    let occurrence = occurrences.entry(fingerprint.finish()).or_default();
-                    let id = restored_history_element_id(session_id, &role, &text, *occurrence);
-                    *occurrence = (*occurrence).saturating_add(1);
-                    id
-                },
-                |index| restored_archive_element_id(session_id, index),
-            );
-            // Preserve collapsed archive tool text without inventing activity status.
-            let mut item = TranscriptItem::new(id, role, title.into(), text);
-            item.archived_phase = phase.map(Into::into);
-            item.canonical_item_id = event_item_id.filter(|id| !id.is_empty() && id.len() <= 512).map(Into::into);
-            item.has_activity_status = false;
-            item.prepare_render_content();
-            item
-        })
-        .collect();
-    Transcript::group_archive_turns(rows, phases)
-}
+mod history;
+#[cfg(test)]
+pub(super) use history::restored_history_element_id;
+pub(super) use history::{prepare_session_history, session_title_from_prompt};

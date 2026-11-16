@@ -246,7 +246,7 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
             let mut pending = TranscriptItem::new("pending".into(), "diff".into(), "Pending".into(), String::new());
             pending.diff = Some(super::super::DiffCard {
                 files: vec![super::super::DiffFile {
-                    path: "missing.rs".into(),
+                    path: "src/app.rs".into(),
                     kind: super::super::DiffFileKind::Update,
                 }],
                 additions: None,
@@ -283,6 +283,52 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
         assert_eq!(view.read(cx).selected_change, None);
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn selecting_change_item_uses_its_patch_for_same_path(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        for (id, added) in [("old", "+one\n"), ("new", "+one\n+two\n")] {
+            let mut row = TranscriptItem::new(id.into(), "diff".into(), "Edits".into(), String::new());
+            row.diff = Some(super::super::DiffCard {
+                files: vec![super::super::DiffFile {
+                    path: "src/app.rs".into(),
+                    kind: super::super::DiffFileKind::Update,
+                }],
+                additions: None,
+                deletions: None,
+                incomplete: false,
+                failed: false,
+                patch: format!(
+                    "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -0,0 +1,{} @@\n{added}",
+                    if id == "old" { 1 } else { 2 }
+                ),
+            });
+            view.transcript.push(row);
+        }
+        view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
+        assert!(view.select_change_from_item("old", "src/app.rs", cx));
+        assert_eq!(view.change_viewer.as_ref().unwrap().read(cx).files()[0].additions(), 1);
+        let newer = vtcode_exec_events::FileChangeItem {
+            changes: vec![vtcode_exec_events::FileUpdateChange {
+                path: "src/app.rs".into(),
+                kind: vtcode_exec_events::PatchChangeKind::Update,
+                terminators_normalized: None,
+            }],
+            status: vtcode_exec_events::PatchApplyStatus::Completed,
+            unified_diff: Some("--- a/src/app.rs\n+++ b/src/app.rs\n@@ -0,0 +1,3 @@\n+one\n+two\n+three\n".into()),
+            additions: Some(3),
+            deletions: Some(0),
+            diff_incomplete: None,
+        };
+        view.upsert_diff_card("new".into(), &newer);
+        view.refresh_selected_change(cx);
+        assert_eq!(view.change_viewer.as_ref().unwrap().read(cx).files()[0].additions(), 1);
+        assert!(view.select_change_from_item("new", "src/app.rs", cx));
+        assert_eq!(view.change_viewer.as_ref().unwrap().read(cx).files()[0].additions(), 3);
+        assert!(!view.select_change_from_item("old", "missing.rs", cx));
+    });
 }
 
 #[gpui_kit::test]

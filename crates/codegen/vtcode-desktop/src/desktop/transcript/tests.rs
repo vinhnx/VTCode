@@ -14,6 +14,8 @@ fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
 
 mod turn_tests;
 
+mod edit_tests;
+
 #[test]
 fn tool_and_diff_rows_skip_unused_markdown_projections() {
     let mut transcript = Transcript::default();

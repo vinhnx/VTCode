@@ -595,6 +595,9 @@ impl Transcript {
             if item.command.is_none() {
                 item.command.clone_from(&existing.command);
             }
+            if item.edit_path.is_none() {
+                item.edit_path.clone_from(&existing.edit_path);
+            }
             let remeasure_row = role_changed
                 || title_changed
                 || has_activity_status_changed
@@ -711,6 +714,18 @@ impl Transcript {
         {
             item.command = Some(command.to_owned().into());
             self.bump_revision();
+        }
+    }
+
+    pub fn set_edit_path(&mut self, id: &str, path: Option<&str>) {
+        if let Some(index) = self.position_by_id(id)
+            && let Some(item) = self.items.get_mut(index)
+            && item.edit_path.as_deref() != path
+        {
+            item.edit_path = path.map(|value| value.to_owned().into());
+            self.bump_revision();
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
         }
     }
 

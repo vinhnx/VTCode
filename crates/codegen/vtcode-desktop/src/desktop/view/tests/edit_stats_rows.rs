@@ -53,6 +53,213 @@ fn notify(event: vtcode_exec_events::ThreadEvent) -> vtcode_desktop_protocol::Th
 }
 
 #[gpui_kit::test]
+fn edited_filename_opens_its_change(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.handle_thread_event(notify(ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: edit_call("edit-1", ToolCallStatus::InProgress),
+        })));
+        let mut change = file_change("edit-1:changes", Some(1), Some(1));
+        if let ThreadItemDetails::FileChange(change) = &mut change.details {
+            change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+        }
+        view.handle_thread_event(notify(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: change })));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("tool-file-edit-1").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("tool-chevron-edit-1").role(), Some(gpui_kit::Role::Button));
+        let disclosure = window.find("tool-edit-1").bounds();
+        let filename = window.find("tool-file-edit-1").bounds();
+        assert!(
+            filename.origin.x >= disclosure.origin.x + disclosure.size.width,
+            "filename must not overlap disclosure"
+        );
+        assert_eq!(filename.origin.y, disclosure.origin.y, "both controls share the same row");
+        window.click("tool-edit-1", cx);
+        assert!(
+            view.read(cx)
+                .transcript
+                .items()
+                .find(|row| row.id == "edit-1")
+                .unwrap()
+                .expanded
+        );
+        window.click("tool-chevron-edit-1", cx);
+        assert!(
+            !view
+                .read(cx)
+                .transcript
+                .items()
+                .find(|row| row.id == "edit-1")
+                .unwrap()
+                .expanded,
+            "chevron toggles like every other row"
+        );
+        window.click("tool-chevron-edit-1", cx);
+        assert!(
+            view.read(cx)
+                .transcript
+                .items()
+                .find(|row| row.id == "edit-1")
+                .unwrap()
+                .expanded
+        );
+        window.render_frame(cx);
+        focus_element_by_tab(window, "tool-file-edit-1", cx);
+        window.press("enter", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/main.rs"));
+        assert_eq!(view.read(cx).inspector_tab, super::super::InspectorTab::Changes);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn edit_link_survives_change_arriving_before_invocation(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let mut change = file_change("edit-1:changes", Some(1), Some(1));
+        if let ThreadItemDetails::FileChange(change) = &mut change.details {
+            change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+        }
+        view.handle_thread_event(notify(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: change })));
+        view.handle_thread_event(notify(ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: edit_call("edit-1", ToolCallStatus::InProgress),
+        })));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("tool-file-edit-1", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/main.rs"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn restored_edit_activity_opens_its_change(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        let mut change = file_change("edit-1:changes", Some(1), Some(1));
+        if let ThreadItemDetails::FileChange(change) = &mut change.details {
+            change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+        }
+        view.project_restored_review(&[change]);
+        view.project_runtime_item(&edit_call("edit-1", ToolCallStatus::Completed), true);
+        view.open_inspector_tab(super::super::InspectorTab::Activity, cx);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("activity-change-edit-1").role(), Some(gpui_kit::Role::Button));
+        window.click("activity-change-edit-1", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/main.rs"));
+        assert_eq!(view.read(cx).inspector_tab, super::super::InspectorTab::Changes);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn restored_edit_rejects_a_change_from_another_turn(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (_window, view) = open_desktop(cx);
+    let context = |turn: &str| {
+        Box::new(ItemContext {
+            task_id: "task".into(),
+            turn_id: turn.into(),
+            actor_id: "actor".into(),
+            parent_actor_id: None,
+            timestamp: "2026-11-05T00:00:00Z".into(),
+            activity: None,
+        })
+    };
+    view.update(cx, |view, _| {
+        let mut change = file_change("edit-1:changes", Some(1), Some(1));
+        change.context = Some(context("other-turn"));
+        if let ThreadItemDetails::FileChange(change) = &mut change.details {
+            change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+        }
+        view.project_restored_review(&[change]);
+        let mut call = edit_call("edit-1", ToolCallStatus::Completed);
+        call.context = Some(context("current-turn"));
+        view.project_runtime_item(&call, true);
+        assert!(
+            view.restored_activity
+                .iter()
+                .find(|row| row.id == "edit-1")
+                .unwrap()
+                .edit_path
+                .is_none()
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn ambiguous_change_does_not_offer_a_misleading_filename_action(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.handle_thread_event(notify(ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: edit_call("edit-1", ToolCallStatus::InProgress),
+        })));
+        let mut item = file_change("edit-1:changes", Some(1), Some(1));
+        if let ThreadItemDetails::FileChange(change) = &mut item.details {
+            change.changes.push(FileUpdateChange {
+                path: "other/main.rs".into(),
+                kind: PatchChangeKind::Update,
+                terminators_normalized: None,
+            });
+            change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+        }
+        view.handle_thread_event(notify(ThreadEvent::ItemCompleted(ItemCompletedEvent { item })));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("tool-file-edit-1").is_none());
+        assert_eq!(window.find("tool-edit-1").role(), Some(gpui_kit::Role::Button));
+        view.update(cx, |view, _| {
+            let mut item = file_change("edit-1:changes", Some(1), Some(1));
+            if let ThreadItemDetails::FileChange(change) = &mut item.details {
+                change.changes.push(FileUpdateChange {
+                    path: "other/secondary.rs".into(),
+                    kind: PatchChangeKind::Update,
+                    terminators_normalized: None,
+                });
+                change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+            }
+            view.handle_thread_event(notify(ThreadEvent::ItemCompleted(ItemCompletedEvent { item })));
+        });
+        window.render_frame(cx);
+        window.click("tool-file-edit-1", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/main.rs"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn failed_change_does_not_offer_filename_action(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.handle_thread_event(notify(ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: edit_call("edit-1", ToolCallStatus::InProgress),
+        })));
+        let mut item = file_change("edit-1:changes", Some(1), Some(1));
+        if let ThreadItemDetails::FileChange(change) = &mut item.details {
+            change.status = PatchApplyStatus::Failed;
+            change.unified_diff = Some("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n".into());
+        }
+        view.handle_thread_event(notify(ThreadEvent::ItemCompleted(ItemCompletedEvent { item })));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("tool-file-edit-1").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn edit_rows_show_per_call_stats_from_changes_sibling(cx: &mut TestAppContext) {
     use vtcode_exec_events::*;
     let (window, view) = open_desktop(cx);

@@ -349,6 +349,32 @@ impl DesktopView {
                                     .map_or_else(
                                         || div().into_any_element(),
                                         |row| {
+                                            let change_action =
+                                                row.edit_path.as_ref().filter(|_| !row.in_transcript).map(|path| {
+                                                    let view = weak_view.clone();
+                                                    let change_id = format!("{}:changes", row.id);
+                                                    let path = path.to_string();
+                                                    desktop_button(format!("activity-change-{}", row.id))
+                                                        .icon(IconName::Pencil)
+                                                        .ghost()
+                                                        .small()
+                                                        .accessibility_label(format!("View changes: {path}"))
+                                                        .on_click(move |_, _, app| {
+                                                            if let Some(view) = view.upgrade() {
+                                                                view.update(app, |view, cx| {
+                                                                    if !view
+                                                                        .select_change_from_item(&change_id, &path, cx)
+                                                                    {
+                                                                        view.open_inspector_tab(
+                                                                            InspectorTab::Changes,
+                                                                            cx,
+                                                                        );
+                                                                    }
+                                                                });
+                                                            }
+                                                        })
+                                                        .into_any_element()
+                                                });
                                             let jump_action = row.in_transcript.then(|| {
                                                 let view = weak_view.clone();
                                                 let jump_id = row.id.clone();
@@ -417,6 +443,7 @@ impl DesktopView {
                                                 activity_count,
                                                 jump_action,
                                                 output_action,
+                                                change_action,
                                                 focused_activity.as_deref() == Some(row.id.as_str()),
                                             )
                                             .into_any_element()
@@ -556,6 +583,7 @@ impl DesktopView {
         set_size: usize,
         jump_action: Option<AnyElement>,
         output_action: Option<AnyElement>,
+        change_action: Option<AnyElement>,
         keyboard_focused: bool,
     ) -> impl IntoElement {
         let status_color = Self::activity_status_color(row.state, colors);
@@ -611,6 +639,9 @@ impl DesktopView {
         }
         if let Some(output_action) = output_action {
             row_element = row_element.child(div().flex_shrink_0().child(output_action));
+        }
+        if let Some(change_action) = change_action {
+            row_element = row_element.child(div().flex_shrink_0().child(change_action));
         }
         row_element
     }

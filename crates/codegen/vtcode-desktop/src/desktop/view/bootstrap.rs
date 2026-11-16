@@ -601,6 +601,7 @@ impl DesktopView {
             inspector_tabs_scroll: ScrollHandle::default(),
             changes: ChangesProjection::default(),
             selected_change: None,
+            selected_change_source: None,
             change_kind_filter: None,
             change_viewer: None,
             change_viewer_dirty: false,

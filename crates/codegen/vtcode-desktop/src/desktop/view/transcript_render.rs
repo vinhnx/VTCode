@@ -739,7 +739,99 @@ impl DesktopView {
         let state = ActivityState::from_status(&status);
         let icon_color = Self::activity_status_color(state, colors);
         let kind_icon = Self::transcript_tool_kind_icon(item.tool_name.as_deref(), item.activity_category);
-        let mut panel = div().w_full().max_w(px(self.content_width())).flex().flex_col().gap_1().child(
+        let change_id = format!("{}:changes", item.id);
+        let edit_path = item.edit_path.as_ref().map(ToString::to_string);
+        let header = if let Some(path) = edit_path {
+            let name = path.rsplit(['/', '\\']).next().unwrap_or(&path).to_string();
+            let title = item.title.to_string();
+            let suffix = title
+                .strip_prefix("Edited ")
+                .and_then(|rest| rest.strip_prefix(&name))
+                .unwrap_or("")
+                .to_string();
+            let toggle_id = item.id.clone();
+            let chevron_id = item.id.clone();
+            let item_id = item.id.clone();
+            let details_label = || {
+                rust_i18n::t!(
+                    "app.transcript.details_label",
+                    toggle = if item.expanded {
+                        rust_i18n::t!("app.transcript.hide_details").to_string()
+                    } else {
+                        rust_i18n::t!("app.transcript.show_details").to_string()
+                    },
+                    title = title.as_str(),
+                    status = status.as_str()
+                )
+                .to_string()
+            };
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .min_w_0()
+                .gap_1()
+                .child(
+                    desktop_button(format!("tool-{}", item.id))
+                        .accessibility_label(details_label())
+                        .ghost()
+                        .small()
+                        .text_color(themes::muted_text(&colors))
+                        .child(transcript_icon_slot(Self::render_transcript_tool_indicator(
+                            "tool-indicator",
+                            &item.id,
+                            state,
+                            icon_color,
+                            kind_icon,
+                        )))
+                        .child("Edited")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.transcript.toggle_tool(&toggle_id);
+                            this.request_mcp_app_previews(&toggle_id, cx);
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    desktop_button(format!("tool-file-{item_id}"))
+                        .accessibility_label(format!("View changes: {path}"))
+                        .ghost()
+                        .small()
+                        .text_color(themes::muted_text(&colors))
+                        .min_w_0()
+                        .child(
+                            div()
+                                .relative()
+                                .min_w_0()
+                                .truncate()
+                                .child(name)
+                                .child(Self::filename_dotted_underline(themes::muted_text(&colors))),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.select_change_from_item(&change_id, &path, cx) {
+                                this.open_inspector_tab(InspectorTab::Changes, cx);
+                            }
+                        })),
+                )
+                .child(div().text_color(themes::muted_text(&colors)).child(suffix))
+                .child(div().flex_1())
+                .when(state != ActivityState::Completed, |row| {
+                    row.child(div().text_sm().text_color(themes::muted_text(&colors)).child(status.clone()))
+                })
+                .child(
+                    desktop_button(format!("tool-chevron-{item_id}"))
+                        .accessibility_label(details_label())
+                        .ghost()
+                        .small()
+                        .text_color(themes::muted_text(&colors))
+                        .child(transcript_chevron_lane(item.expanded))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.transcript.toggle_tool(&chevron_id);
+                            this.request_mcp_app_previews(&chevron_id, cx);
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        } else {
             desktop_button(format!("tool-{}", item.id))
                 .accessibility_label(
                     rust_i18n::t!(
@@ -807,8 +899,16 @@ impl DesktopView {
                     // tier-off and already-loaded paths too.
                     this.request_mcp_app_previews(&id, cx);
                     cx.notify();
-                })),
-        );
+                }))
+                .into_any_element()
+        };
+        let mut panel = div()
+            .w_full()
+            .max_w(px(self.content_width()))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(header);
         // Grouped rows nest under their shared header; single tool rows stay flush.
         panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
         // Standalone tracker rows show the current snapshot inline. Grouped
