@@ -36,14 +36,14 @@
 
 ## Overview
 
-VT Code runs an auditable, resumable agentic coding loop in your repo — terminal TUI and native macOS app.
-Open source under **MIT OR Apache-2.0**; see [Contributing](#contributing) and [License](#license).
+VT Code runs an auditable, resumable agentic coding loop in your repo — terminal TUI and native macOS app,
+open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and [License](#license)).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
 
 | At a glance   | What you get                                                                                                                                          |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Plan**      | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md).                                        |
+| **Plan**      | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md). |
 | **Safety**    | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                                                        |
 | **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md), [subagents](./docs/user-guide/subagents.md). |
 | **Extend**    | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), editor bridges.          |
@@ -95,10 +95,10 @@ vtcode init # scaffolds vtcode.toml, .vtcode/, and AGENTS.md; review before comm
 vtcode secret add openai # replace `openai` with your provider
 ```
 
-Keys stay in secure storage (OS keyring or encrypted file); env vars, workspace `.env`, or `vtcode login` work where
-supported. See [getting started](./docs/user-guide/getting-started.md) and
-[provider guides](./docs/providers/PROVIDER_GUIDES.md). ChatGPT: `vtcode login openai` (or `--from-codex`); Copilot
-uses the official `copilot` CLI — see [OAuth authentication](./docs/guides/oauth-authentication.md).
+Keys stay in secure storage (OS keyring or encrypted file); env vars, workspace `.env`, or `vtcode login`
+work where supported. See [getting started](./docs/user-guide/getting-started.md) and
+[provider guides](./docs/providers/PROVIDER_GUIDES.md). ChatGPT: `vtcode login openai` (or `--from-codex`);
+Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/guides/oauth-authentication.md).
 
 > **Caution:** Keep API keys out of Git and `vtcode.toml`, and never commit a workspace `.env` file.
 
@@ -108,8 +108,8 @@ uses the official `copilot` CLI — see [OAuth authentication](./docs/guides/oau
 vtcode   # open the interactive TUI
 ```
 
-Ask one focused question, review the changes and test results, then commit. See [Usage](#usage) for automation and
-session commands.
+Ask one focused question, review the changes and test results, then commit. See [Usage](#usage) for automation
+and session commands.
 
 ## Usage
 
@@ -253,8 +253,7 @@ reporting](https://github.com/vinhnx/vtcode/security/advisories/new). See the [s
 - [Good first issues](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted)
 - [Fork the repo](https://github.com/vinhnx/vtcode/forks)
 
-The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
-Contact: `vinhnguyen2308 [at] gmail [dot] com`.
+The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive. Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
 ## Thanks to our contributors
 
