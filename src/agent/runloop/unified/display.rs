@@ -104,11 +104,21 @@ fn style_for_token(token: &str, expect_command: &mut bool) -> Option<AnsiStyle> 
 }
 
 fn strip_matching_backticks(input: &str) -> &str {
+    strip_enclosing_backticks(input).map_or(input, |(inner, _, _)| inner)
+}
+
+/// Split `` `command` `` into its inner text plus the trimmed byte offsets.
+///
+/// Returns `None` unless the trimmed input starts and ends with a backtick.
+/// The offsets let callers preserve surrounding whitespace when re-rendering.
+fn strip_enclosing_backticks(input: &str) -> Option<(&str, usize, usize)> {
     let trimmed = input.trim();
     if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
-        &trimmed[1..trimmed.len() - 1]
+        let leading_len = input.len() - input.trim_start().len();
+        let trailing_len = input.len() - input.trim_end().len();
+        Some((&trimmed[1..trimmed.len() - 1], leading_len, trailing_len))
     } else {
-        input
+        None
     }
 }
 
@@ -225,13 +235,9 @@ mod theme_sync_tests {
 }
 
 fn highlight_shell_command_preserve_text(command: &str) -> String {
-    let trimmed = command.trim();
-    if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
-        let leading_len = command.len() - command.trim_start().len();
-        let trailing_len = command.len() - command.trim_end().len();
+    if let Some((inner, leading_len, trailing_len)) = strip_enclosing_backticks(command) {
         let leading = &command[..leading_len];
         let trailing = &command[command.len() - trailing_len..];
-        let inner = &trimmed[1..trimmed.len() - 1];
         return format!("{}`{}`{}", leading, highlight_shell_command(inner), trailing);
     }
     highlight_shell_command(command)

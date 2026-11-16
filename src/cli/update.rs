@@ -340,6 +340,13 @@ async fn print_installed_release_notes(version: &Version, release_notes: &str) {
     // is the durable announcement and must still show these notes.
 }
 
+/// Print the standard next steps after a successful CLI update.
+fn print_restart_next_steps() {
+    println!("\n{} Restart VT Code to use the new version", "→".cyan());
+    println!("{} vtcode init   # scaffold project if needed", "→".cyan());
+    println!("{} vtcode        # launch TUI", "→".cyan());
+}
+
 async fn install_update(
     updater: &Updater,
     update_info: Option<&UpdateInfo>,
@@ -371,9 +378,7 @@ async fn install_update(
                 crate::updater::seed_release_notes_for_installed_version(&info.version, &info.release_notes);
                 print_installed_release_notes(&info.version, &info.release_notes).await;
             }
-            println!("\n{} Restart VT Code to use the new version", "→".cyan());
-            println!("{} vtcode init   # scaffold project if needed", "→".cyan());
-            println!("{} vtcode        # launch TUI", "→".cyan());
+            print_restart_next_steps();
             maybe_offer_desktop_install(updater, update_info.map(|info| info.version.clone()), desktop).await?;
         } else {
             let code = status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".to_string());
@@ -397,9 +402,7 @@ async fn install_update(
             if let Some(info) = update_info {
                 print_installed_release_notes(&info.version, &info.release_notes).await;
             }
-            println!("\n{} Restart VT Code to use the new version", "→".cyan());
-            println!("{} vtcode init   # scaffold project if needed", "→".cyan());
-            println!("{} vtcode        # launch TUI", "→".cyan());
+            print_restart_next_steps();
             target
         }
         InstallOutcome::UpToDate(version) => {
