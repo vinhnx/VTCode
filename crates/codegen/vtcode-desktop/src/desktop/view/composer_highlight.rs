@@ -175,7 +175,7 @@ pub(super) fn tokenize_prompt(text: &str) -> Vec<PromptToken> {
 
 /// Theme-derived styles for each token kind. Kept behind `Rc<RefCell<_>>` so a
 /// theme change can update the colors without rebuilding the highlighter.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct ComposerHighlightStyles {
     slash: HighlightStyle,
     agent: HighlightStyle,

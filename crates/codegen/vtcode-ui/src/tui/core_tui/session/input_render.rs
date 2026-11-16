@@ -1,11 +1,33 @@
 use super::*;
 use anstyle::{Color as AnsiColorEnum, Effects};
-use ratatui::style::{Color, Modifier};
+use ratatui::style::{Color, Modifier, Style};
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::UnicodeWidthStr;
 
 use super::input::{CompactInputPreview, InputRender, InputStatusLine, InputToken, InputTokenKind, tokenize_input};
 use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
+
+/// Resolve a composer token's style from the active theme.
+///
+/// Token colors come from semantic theme slots (with the theme foreground as a
+/// fallback), never fixed ANSI hues, so decorations track light/dark and custom
+/// themes. A modifier keeps each kind distinguishable by shape, not color alone.
+fn prompt_token_style(kind: InputTokenKind, base: Style, theme: &InlineTheme) -> Style {
+    let (color, modifier) = match kind {
+        InputTokenKind::Normal => return base,
+        InputTokenKind::SlashCommand => (theme.primary.or(theme.foreground), Modifier::BOLD),
+        InputTokenKind::AgentReference => {
+            (theme.tool_accent.or(theme.secondary).or(theme.foreground), Modifier::UNDERLINED)
+        }
+        InputTokenKind::FileReference => (theme.secondary.or(theme.foreground), Modifier::UNDERLINED),
+        InputTokenKind::InlineCode => (theme.warning.or(theme.foreground), Modifier::BOLD),
+    };
+    let mut style = base;
+    if let Some(color) = color {
+        style = style.fg(ratatui_color_from_ansi(color));
+    }
+    style.add_modifier(modifier)
+}
 
 impl Session {
     /// Build (or reuse) the input paragraph model for the current input state.
@@ -171,10 +193,6 @@ impl Session {
             };
         }
 
-        let slash_style = accent_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
-        let file_ref_style = accent_style.fg(Color::Cyan).add_modifier(Modifier::UNDERLINED);
-        let code_style = accent_style.fg(Color::Green).add_modifier(Modifier::BOLD);
-
         let (layout, start, end) = self.visible_input_window(width, max_visible_lines as u16);
         let tokens = tokenize_input(self.input_manager.content());
         let cursor_y = layout.cursor_line_idx.saturating_sub(start) as u16;
@@ -202,12 +220,7 @@ impl Session {
                         spans.push(Span::styled(text, accent_style));
                     }
                     let text: String = buf_chars[seg_start..seg_end].iter().collect();
-                    let style = match token.kind {
-                        InputTokenKind::SlashCommand => slash_style,
-                        InputTokenKind::AgentReference | InputTokenKind::FileReference => file_ref_style,
-                        InputTokenKind::InlineCode => code_style,
-                        InputTokenKind::Normal => accent_style,
-                    };
+                    let style = prompt_token_style(token.kind, accent_style, &self.theme);
                     spans.push(Span::styled(text, style));
                     pos = seg_end;
                 }

@@ -298,8 +298,8 @@ draft recovery retain their existing ownership and safeguards.
 The draft text is decorated as you type: leading slash commands, `@agent-…` references, `@file` mentions, and
 backtick-delimited code spans each use a distinct foreground color (plus bold or underline) drawn from the active
 theme's text colors. Decoration is presentation-only — it does not change tokenizing for completion, submission, or
-history — and updates in place when the theme changes. The composer uses Kit's `EditorState` solely to host this
-highlighter; it is styled borderless with the UI font and emulates the one-to-six-line growth of the old textarea.
+history — and updates in place when the theme or its contrast changes. The composer uses Kit's `EditorState` solely
+to host this highlighter; borderless with the UI font, it grows up to six lines like the old textarea.
 
 ### Composer context and runtime controls
 

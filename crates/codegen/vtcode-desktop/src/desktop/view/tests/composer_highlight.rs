@@ -20,6 +20,20 @@ fn composer_installs_the_prompt_token_highlighter(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn composer_token_colors_follow_contrast_changes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let before = *view.read(cx).composer_highlight_styles.borrow();
+        view.update(cx, |view, cx| view.set_contrast(100.0, window, cx));
+        let after = *view.read(cx).composer_highlight_styles.borrow();
+        let expected = super::super::composer_highlight::ComposerHighlightStyles::from_colors(&cx.theme().colors);
+        assert_ne!(before, after, "contrast must re-derive the composer token colors");
+        assert_eq!(after, expected);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn composer_grows_for_soft_wrapped_single_line_drafts(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

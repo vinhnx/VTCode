@@ -75,6 +75,9 @@ impl DesktopView {
         );
         self.sync_terminal_palette(cx);
         self.apply_typography(cx);
+        // Contrast rewrites the palette too, so composer token colors must be
+        // re-derived from the new foreground/fills just like a theme switch.
+        self.refresh_composer_highlight(cx);
         self.transcript.remeasure();
         self.save_preferences();
         cx.notify();
