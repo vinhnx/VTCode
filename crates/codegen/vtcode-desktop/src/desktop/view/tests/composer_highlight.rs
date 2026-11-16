@@ -18,3 +18,26 @@ fn composer_installs_the_prompt_token_highlighter(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn composer_grows_for_soft_wrapped_single_line_drafts(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let mut measure = |text: &str| {
+            view.update(cx, |view, cx| {
+                view.composer.update(cx, |input, cx| input.set_value(text, window, cx));
+            });
+            window.render_frame(cx);
+            window.find("message-composer-frame").bounds().size.height
+        };
+        let short_height = measure("ok");
+        // One logical line that wraps to many visual rows at the 720px cap.
+        let long_height = measure(&"longword ".repeat(200));
+        assert!(
+            long_height > short_height,
+            "soft-wrapped draft must grow the composer ({short_height:?} vs {long_height:?})"
+        );
+        assert!(long_height <= short_height * 6, "growth must stay within the six-row cap ({long_height:?})");
+    })
+    .unwrap();
+}

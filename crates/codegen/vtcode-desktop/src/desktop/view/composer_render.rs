@@ -124,15 +124,18 @@ impl DesktopView {
         // labels inset by button padding (matching transcript tool rows).
         let composer_size = gpui_kit::component::Size::default();
         // `EditorState` (unlike `TextareaState`) can host the token highlighter,
-        // but it has no `auto_grow`: size it from the draft's line count (1-6
-        // rows) the way the composer's old textarea did.
-        let lines = self.composer.read(cx).value().lines().count().clamp(1, 6);
+        // but has no `auto_grow`. Use the display map's wrapped row count — the
+        // same source the old textarea used — so soft-wrapped drafts grow too.
+        // The count is 0 before first layout; clamp keeps the one-row minimum.
+        let lines = self.composer.read(cx).display_map().wrap_row_count().clamp(1, 6);
         let line_height = self
             .composer
             .read(cx)
             .line_height()
             .filter(|height| height.as_f32() > 0.)
-            .unwrap_or(cx.theme().font_size * 1.25);
+            // Before first layout, match the `rems(1.25)` line height set on the
+            // element instead of guessing from the UI font size.
+            .unwrap_or(gpui_kit::rems(1.25).to_pixels(window.rem_size()));
         let composer_height = px(line_height.as_f32() * lines as f32);
         // Strip the editor's code-editor chrome (border, background, mono font,
         // taller leading) so it renders like the Textarea it replaced.

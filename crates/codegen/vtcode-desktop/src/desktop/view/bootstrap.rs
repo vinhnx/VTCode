@@ -331,6 +331,10 @@ impl DesktopView {
                 .line_number(false)
                 .folding(false)
                 .auto_close(false)
+                // Code-editor affordances the old Textarea never had: no
+                // indentation guides and no auto-indent on newlines.
+                .indent_guides(false)
+                .smart_indent(false)
                 .language(composer_highlight::PROMPT_LANGUAGE)
                 // Pinned, not defaulted: off-macOS Kit binds ctrl-f to Search
                 // on the deeper input context, and only a non-searchable input
