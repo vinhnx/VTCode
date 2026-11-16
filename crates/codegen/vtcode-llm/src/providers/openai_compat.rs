@@ -202,9 +202,9 @@ pub(crate) struct OpenAiCompatCore<S: OpenAiCompatSpec> {
     /// The `tools` array in `convert_request` depends only on the tool
     /// definitions and the provider spec `S` (both fixed for the lifetime of
     /// this core). Re-serializing a large catalog every turn is wasted work,
-    /// so we key the cached `Value` array by the `Arc` identity of the catalog
-    /// (plus its length for collision tolerance). The `Arc` itself is retained
-    /// in the entry, guaranteeing the pointer key stays valid while cached.
+    /// so we key the cached `Value` array by the `Arc` identity of the catalog.
+    /// The `Arc` itself is retained in the entry, guaranteeing the pointer key
+    /// stays valid while cached.
     tools_cache: Mutex<ToolsCache>,
 }
 
@@ -329,7 +329,10 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         }
 
         if let Some(tools) = &request.tools {
-            let key = Arc::as_ptr(tools) as usize;
+            // Strict provenance: `.addr()` inspects the address without exposing
+            // provenance. The key is never cast back to a pointer; identity is
+            // re-validated with `Arc::ptr_eq` on lookup.
+            let key = Arc::as_ptr(tools).addr();
             let serialized_tools = {
                 let mut cache = self.tools_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                 match cache.get(&key) {

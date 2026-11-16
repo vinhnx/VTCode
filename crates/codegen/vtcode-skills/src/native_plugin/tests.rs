@@ -23,7 +23,7 @@ unsafe extern "C" fn test_free_string(ptr: *const c_char) {
     TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(true));
     if !ptr.is_null() {
         // Safety: tests pass pointers produced by `CString::into_raw` in this module.
-        let _ = unsafe { CString::from_raw(ptr as *mut c_char) };
+        let _ = unsafe { CString::from_raw(ptr.cast_mut()) };
     }
 }
 

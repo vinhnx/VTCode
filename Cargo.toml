@@ -291,6 +291,11 @@ undocumented_unsafe_blocks = "warn"
 multiple_unsafe_ops_per_block = "warn"
 unnecessary_safety_doc = "warn"
 unnecessary_safety_comment = "warn"
+# Strict provenance: derive pointers with `.cast()`/`.cast_const()`/`.cast_mut()`
+# and `addr_of(_mut)!`, inspect addresses with `.addr()`; never round-trip a
+# pointer through an integer with an `as` cast.
+ptr_as_ptr = "warn"
+ref_as_ptr = "warn"
 
 # Don't Do Potentially Incorrect Things with Numbers
 # Integer overflow in Rust: arithmetic panics in debug, wraps as two's complement in release.

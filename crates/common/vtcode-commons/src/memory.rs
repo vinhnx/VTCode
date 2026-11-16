@@ -32,7 +32,12 @@ pub fn resident_set_size_mb() -> Option<f64> {
     // out-pointers of the expected size, and `task_info` only writes them on
     // success.
     let ret = unsafe {
-        libc::task_info(task, libc::MACH_TASK_BASIC_INFO, &mut info as *mut _ as *mut libc::integer_t, &mut count)
+        libc::task_info(
+            task,
+            libc::MACH_TASK_BASIC_INFO,
+            std::ptr::addr_of_mut!(info).cast::<libc::integer_t>(),
+            &mut count,
+        )
     };
     if ret != libc::KERN_SUCCESS {
         return None;

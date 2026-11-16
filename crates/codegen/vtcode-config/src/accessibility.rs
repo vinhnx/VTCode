@@ -31,7 +31,7 @@ fn detect_reduce_motion_preference() -> Option<bool> {
     let mut animations_enabled = 0i32;
     // SAFETY: SystemParametersInfoW writes one BOOL to the provided, correctly sized pointer.
     let succeeded = unsafe {
-        SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&mut animations_enabled as *mut i32).cast(), 0)
+        SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, std::ptr::addr_of_mut!(animations_enabled).cast(), 0)
     };
 
     (succeeded != 0).then_some(animations_enabled == 0)

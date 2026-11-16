@@ -190,7 +190,7 @@ fn decode_plugin_c_string(
     free_string_fn: Option<PluginFreeStringFn>,
     utf8_error_context: &'static str,
 ) -> Result<String> {
-    let raw_ptr = ptr.as_ptr() as *const c_char;
+    let raw_ptr = ptr.as_ptr().cast_const();
     // SAFETY:
     // 1. `raw_ptr` is guaranteed to be non-null (validated by `ensure_non_null_c_string_ptr`).
     // 2. We assume the plugin-returned pointer is a valid nul-terminated C string per the plugin ABI.
