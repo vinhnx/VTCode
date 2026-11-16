@@ -185,11 +185,19 @@ pub(super) struct ComposerHighlightStyles {
 
 impl ComposerHighlightStyles {
     pub(super) fn from_colors(colors: &ThemeColor) -> Self {
+        // Prompt tokens are plain text on the composer canvas, not labels on a
+        // filled control. The `*_foreground` slots are contrast colors *for*
+        // a fill (often plain black or white) and can be near-invisible here —
+        // e.g. `success_foreground` is black on a bright green fill, which
+        // disappears on a dark canvas. Re-seat each tone against the canvas
+        // so it keeps its hue and holds text AA on every theme.
+        let on_canvas =
+            |tone| crate::desktop::themes::readable_indicator_color(colors.background, colors.foreground, tone);
         Self {
-            slash: token_style(colors.accent_foreground, true, false),
-            agent: token_style(colors.info_foreground, false, false),
-            file: token_style(colors.success_foreground, false, true),
-            code: token_style(colors.warning_foreground, false, false),
+            slash: token_style(on_canvas(colors.accent), true, false),
+            agent: token_style(on_canvas(colors.info), false, false),
+            file: token_style(on_canvas(colors.success), false, true),
+            code: token_style(on_canvas(colors.warning), false, false),
         }
     }
 
@@ -350,8 +358,17 @@ mod tests {
         for pair in runs.windows(2) {
             assert_eq!(pair[0].0.end, pair[1].0.start);
         }
-        // The slash-command run carries a theme color, not the default style.
-        assert_eq!(runs[0].1.color, Some(ThemeColor::default().accent_foreground));
+        // The slash-command run carries a canvas-readable accent, not the
+        // default style or the on-fill `accent_foreground` slot.
+        let default = ThemeColor::default();
+        assert_eq!(
+            runs[0].1.color,
+            Some(crate::desktop::themes::readable_indicator_color(
+                default.background,
+                default.foreground,
+                default.accent,
+            ))
+        );
         assert!(runs.iter().any(|run| run.1 == HighlightStyle::default()));
     }
 
@@ -364,5 +381,34 @@ mod tests {
         *styles.borrow_mut() = ComposerHighlightStyles::from_colors(&ThemeColor::light());
         let after = highlighter.styles(&(0..6), &NoResolver)[0].1;
         assert_ne!(before, after);
+    }
+
+    /// Prompt tokens render as plain text on the composer canvas, so their
+    /// colors must hold text AA there — not merely on a filled control where
+    /// the `*_foreground` slots are tuned. A green `@file` token using
+    /// `success_foreground` (black on a bright green fill) vanished on dark
+    /// themes, so this pins every token kind across the whole theme registry.
+    #[gpui_kit::test]
+    fn prompt_tokens_stay_readable_on_the_canvas_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::component::theme::Theme;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            for palette in crate::desktop::themes::all_themes() {
+                let _mode = crate::desktop::themes::apply_by_id(palette.id, None, cx);
+                let colors = cx.global::<Theme>().colors;
+                let styles = ComposerHighlightStyles::from_colors(&colors);
+                for (name, style) in [
+                    ("slash", styles.slash),
+                    ("agent", styles.agent),
+                    ("file", styles.file),
+                    ("code", styles.code),
+                ] {
+                    let color = style.color.expect("prompt token must carry a color");
+                    let ratio = crate::desktop::themes::contrast_ratio(color, colors.background);
+                    assert!(ratio >= 4.5, "{}: unreadable {name} token on composer canvas ({ratio:.2})", palette.id);
+                }
+            }
+        });
     }
 }
