@@ -489,6 +489,8 @@ fn compact_command_headline_hides_arguments_and_directories() {
     assert_eq!(compact_command_headline("sed -n '1,20p' /work/src/main.rs | head -c 99"), "sed main.rs");
     assert_eq!(compact_command_headline("cargo check --locked"), "cargo");
     assert_eq!(compact_command_headline("echo hello && cat secret.txt"), "echo");
+    assert_eq!(compact_command_headline("echo;cat secret.txt"), "echo");
+    assert_eq!(compact_command_headline("echo hi;cat secret.txt"), "echo");
     assert_eq!(compact_command_headline("python3 -c 'unfinished"), "python3");
     assert_eq!(compact_command_headline("python3 -c 'print(\"secret.txt\")'"), "python3");
     assert_eq!(compact_command_headline(""), "command");

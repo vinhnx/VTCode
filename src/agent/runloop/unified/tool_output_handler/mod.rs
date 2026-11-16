@@ -22,11 +22,9 @@ use crate::agent::runloop::unified::tool_pipeline::{
     ToolDisplayStatus, ToolExecutionStatus, ToolPipelineOutcome, is_exec_session_call, renders_pty_command_header,
     streams_pty_output,
 };
-use crate::agent::runloop::unified::tool_summary_helpers::{
-    COMPACT_PREVIEW_LEN, display_command_text, relativize_command_paths,
-};
+use crate::agent::runloop::unified::tool_summary_helpers::{display_command_text, relativize_command_paths};
 use vtcode_commons::canonicalize;
-use vtcode_commons::tool_headlines::{preview_command, preview_full_command};
+use vtcode_commons::tool_headlines::preview_full_command;
 
 fn render_error_common(renderer: &mut AnsiRenderer, name: &str, error: &str, error_type: &str) -> Result<()> {
     let err_msg = format!("Tool '{name}' {error_type}: {error}");

@@ -277,6 +277,29 @@ fn command_header_for_multiline_python_stays_readable() {
     assert_ne!(header, "• Ran python3 -c \"");
 }
 #[test]
+fn command_output_viewer_header_keeps_full_pipeline() {
+    // Screenshot 2026-09-24: visible headlines are compact, so the output
+    // viewer header must carry every pipe segment instead. `display_command_text`
+    // normalizes quoting (double to single), so assert token completeness
+    // rather than byte equality: `||` in the pattern (3 pattern pipes +
+    // 3 shell pipes = 6) and the backslash-escaped `\.backup` must survive.
+    let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+    let header = command_output_header(tools::EXEC_COMMAND, &serde_json::json!({ "command": command }), None);
+    assert!(!header.contains('…'), "truncation ellipsis leaked: {header:?}");
+    for fragment in [
+        "grep",
+        "-rn",
+        "@vinhnx/vtcode|npm install -g||npx @vinhnx",
+        "docs",
+        "node_modules",
+        "package-lock",
+        "\\.backup",
+    ] {
+        assert!(header.contains(fragment), "missing {fragment:?} in {header:?}");
+    }
+    assert_eq!(header.matches('|').count(), 6, "pattern pipes + shell pipes must survive: {header:?}");
+}
+#[test]
 fn command_header_shows_full_command_without_truncation() {
     // Transcript Review must show the complete command: a long chained
     // `git add && git commit && git log` must survive in full instead of

@@ -17,7 +17,7 @@ tool_display_mode = "compact"
 ```
 
 Compact mode keeps one concise activity row for each contiguous run of successful command/PTY calls. A single command
-can show its command and hidden line count, for example `• Ran cargo check · … +12 lines`; consecutive calls collapse to
+can show its program headline and hidden line count, for example `• Ran cargo · … +12 lines`; consecutive calls collapse to
 `• Ran 2 commands`. The review suffix includes the configured shortcut and a styled `click to expand` affordance. In
 expanded mode, running PTY blocks show a bounded live tail; after completion, successful bodies collapse to the activity
 row. Failures, non-zero exits, cancellations, warnings, stderr diagnostics, meaningful diffs, and useful artifacts
@@ -116,8 +116,9 @@ The redundant stream label is only dropped for the generic capture label (`outpu
 shown below the row. Diagnostic labels (`error`, `stderr`, `stdout`, `stdio`) survive so a failed session read does not
 lose its failure signal on the header.
 
-`• Ran` headers for long commands head-truncate at a word boundary with a single trailing ellipsis, sharing
-`preview_command` between the summary headline and the command line so a path is never cut in half (`…crates/…onfig/…`).
+`• Ran` headers show a compact program headline (the executable plus, when identifiable, a filename without its
+directory) via the shared `compact_command_headline` formatter, so long commands never clutter the transcript with a
+trailing ellipsis. The complete command stays in the tool-output viewer header and Transcript Review.
 
 Command launches (`exec_command`, `unified_exec` action `run`, `run_pty_cmd`) are unaffected: they keep the `• Ran …`
 header and the three-line head plus three-line tail command preview.

@@ -128,7 +128,7 @@ mod tests {
     fn pty_stream_state_renders_command_prompt_without_output() {
         let state = PtyStreamState::new(Some("cargo check".to_string()), test_pty_config(), None);
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["• Ran cargo check".to_string()]);
+        assert_eq!(rendered, vec!["• Ran cargo".to_string()]);
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
         assert_eq!(
             state.render_lines(2),
             vec![
-                "• Ran cargo check".to_string(),
+                "• Ran cargo".to_string(),
                 "    … +1 line".to_string(),
                 "  └ second".to_string(),
                 "    third".to_string(),
@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(
             rendered,
             vec![
-                "• Ran cargo check".to_string(),
+                "• Ran cargo".to_string(),
                 "  └ a".to_string(),
                 "    b".to_string(),
                 "    … +3 lines".to_string(),
@@ -169,51 +169,53 @@ mod tests {
     fn normalizes_command_prompt_whitespace() {
         let state = PtyStreamState::new(Some("  cargo   check \n -p  vtcode  ".to_string()), test_pty_config(), None);
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["• Ran cargo check -p vtcode".to_string()]);
+        assert_eq!(rendered, vec!["• Ran cargo".to_string()]);
     }
 
     #[test]
-    fn wraps_long_command_header() {
+    fn long_command_header_compacts_to_single_line() {
+        // A long multi-token command collapses to its program headline; the
+        // full text stays in the output viewer, not the live header.
         let command = "cargo test -p vtcode run_command_preview_ build_tool_summary_formats_run_command_as_ran";
         let state = PtyStreamState::new(Some(command.to_string()), test_pty_config(), None);
-        let rendered = state.render_lines(5);
-        assert_eq!(rendered.len(), 2);
-        assert!(rendered[0].starts_with("• Ran cargo test -p vtcode run_command_preview_"));
-        assert!(rendered[1].starts_with("  │ build_tool_summary_formats_run_command_as_ran"));
+        assert_eq!(state.render_lines(5), vec!["• Ran cargo".to_string()]);
     }
 
     #[test]
-    fn screenshot_grep_pipeline_header_renders_in_full_without_truncation() {
-        // Screenshot 2026-09-24 16:37: `• Ran grep -rn "@vinhnx/..." docs`
-        // wrapped across `│` lines must keep every pipe segment with no `…`.
-        // Exact screenshot bytes: `||` inside the quoted pattern and the
-        // backslash-escaped `\.backup` arg must both survive (3 pattern pipes
-        // + 3 shell pipes = 6).
+    fn wraps_overlong_command_token_without_loss() {
+        // A single token wider than the 62-char first line still wraps, and
+        // rejoining the rows reproduces the token exactly (no `…`).
+        let token = "p".repeat(70);
+        let state = PtyStreamState::new(Some(token.clone()), test_pty_config(), None);
+        let rendered = state.render_lines(5);
+        assert_eq!(rendered.len(), 2, "got: {rendered:?}");
+        assert!(rendered[0].starts_with("• Ran "), "got: {rendered:?}");
+        assert!(rendered[1].starts_with("  │ "), "got: {rendered:?}");
+        let rejoined = rendered
+            .iter()
+            .enumerate()
+            .map(|(index, line)| {
+                let body = if index == 0 {
+                    line.strip_prefix("• Ran ").expect("header prefix")
+                } else {
+                    line.strip_prefix("  │ ").expect("continuation prefix")
+                };
+                body.strip_suffix(" \\").unwrap_or(body)
+            })
+            .collect::<String>();
+        assert_eq!(rejoined, token);
+        assert!(!rendered.join("\n").contains('…'), "got: {rendered:?}");
+    }
+
+    #[test]
+    fn screenshot_grep_pipeline_header_renders_compact_headline() {
+        // Screenshot 2026-09-24 16:37: the live header shows the program
+        // only; pipe segments live in the output viewer, never the header.
         let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
         assert!(command.chars().count() > 120, "fixture must overflow the old preview cap");
         let state = PtyStreamState::new(Some(command.to_string()), test_pty_config(), None);
         let rendered = state.render_lines(8);
-        let joined = rendered.join("\n");
-        assert!(!joined.contains('…'), "command header must not truncate, got: {joined:?}");
-        assert!(joined.contains("node_modules"), "got: {joined:?}");
-        assert!(joined.contains("package-lock"), "got: {joined:?}");
-        assert!(joined.contains("\"\\.backup\""), "final pipe arg must survive, got: {joined:?}");
-        assert_eq!(joined.matches('|').count(), 6, "pattern pipes + shell pipes must survive: {joined:?}");
-        // Proper shell-aware wrapping: the quoted pattern holds spaces but
-        // must stay on the first line, never split mid-quote, and every
-        // segment must fit its 62/58 budget plus the `• Ran` / `  │ ` prefix.
-        assert!(
-            rendered[0].contains("\"@vinhnx/vtcode|npm install -g||npx @vinhnx\""),
-            "quoted pattern must stay atomic on the first line, got: {rendered:?}"
-        );
-        for (index, line) in rendered.iter().enumerate() {
-            let (body, budget) = if index == 0 {
-                (line.strip_prefix("• Ran ").expect("header prefix"), 62)
-            } else {
-                (line.strip_prefix("  │ ").expect("continuation prefix"), 58)
-            };
-            assert!(body.chars().count() <= budget, "line {index} exceeds its {budget}-char budget: {line:?}");
-        }
+        assert_eq!(rendered, vec!["• Ran grep".to_string()]);
     }
 
     #[test]

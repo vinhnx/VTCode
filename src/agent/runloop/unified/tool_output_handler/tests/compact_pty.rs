@@ -87,7 +87,7 @@ async fn compact_pty_attention_keeps_command_summary_and_stderr_visible() {
     let commands = std::iter::from_fn(|| receiver.try_recv().ok()).collect::<Vec<_>>();
     assert!(commands.iter().any(|command| {
         matches!(command, InlineCommand::AppendToolOutputLine { segments, .. }
-            if segments.iter().map(|segment| segment.text.as_str()).collect::<String>().contains("• Ran printf diagnostic"))
+            if segments.iter().map(|segment| segment.text.as_str()).collect::<String>() == "• Ran printf")
     }));
     assert!(commands.iter().any(|command| {
         matches!(command, InlineCommand::Diagnostic(diagnostic)
@@ -163,7 +163,7 @@ async fn compact_command_output_emits_group_metadata_and_complete_capture() {
     let activity = activity.expect("compact command activity should be emitted");
     assert_eq!(activity.review_anchor, Some(capture_id));
     assert_eq!(activity.hidden_line_count, 2);
-    assert_eq!(activity.display_text(), "• Ran printf first · … +2 lines");
+    assert_eq!(activity.display_text(), "• Ran printf · … +2 lines");
     assert!(
         commands
             .iter()

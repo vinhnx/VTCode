@@ -8,7 +8,7 @@ use vtcode_commons::preview::{
     format_hidden_lines_summary as shared_hidden_lines_summary, split_head_tail_preview_with_limit,
     summary_window as shared_summary_window,
 };
-use vtcode_commons::tool_headlines::preview_full_command;
+use vtcode_commons::tool_headlines::compact_command_headline;
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;
 
@@ -341,16 +341,10 @@ fn normalize_command_prompt(command_prompt: Option<String>) -> Option<String> {
 }
 
 fn format_command_header_lines(command: &str, workspace_root: Option<&Path>) -> Vec<String> {
-    // Fold prefix-only `python3 -c "` / unclosed-quote scripts into readable
-    // content first (same pipeline as `• Ran` summaries) so live PTY headers
-    // do not echo a dangling prefix. The transcript must show the command in
-    // full: unlike compact previews, live headers never head-truncate with
-    // `…` — explicit `\` continuations own the wrapping (same operator-aware
-    // breaks as the summaries), so every pipe segment (e.g. screenshot
-    // 2026-09-24 `| grep -v ".backup"`) survives; TUI reflow owns only
-    // residual viewport overflow.
+    // Use the same compact headline as completed command rows; the output
+    // viewer retains the complete command and captured output.
     let relative = relativize_command_paths(command, workspace_root);
-    let preview = preview_full_command(&relative);
+    let preview = compact_command_headline(&relative);
     let wrapped =
         wrap_shell_command_with_continuations(&preview, RAN_COMMAND_FIRST_WIDTH, RAN_COMMAND_CONTINUATION_WIDTH);
     if wrapped.is_empty() {

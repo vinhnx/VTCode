@@ -1,4 +1,5 @@
 pub(super) use super::*;
+pub(super) use crate::agent::runloop::unified::tool_summary_helpers::COMPACT_PREVIEW_LEN;
 pub(super) use std::io::{IsTerminal, stdin};
 pub(super) use std::sync::Arc;
 pub(super) use tempfile::TempDir;

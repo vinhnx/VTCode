@@ -9,19 +9,16 @@ pub(super) fn extract_command_line(args: &serde_json::Value) -> Option<String> {
     display_command_text(args)
 }
 
-/// Shared display → relativize → single-line preview pipeline for `• Ran …`
-/// headers. Keeps the collapsed row and the viewer header consistent instead
-/// of echoing a multi-line script.
+/// Compact display headline for `• Ran …` rows; the viewer keeps full text.
 pub(super) fn compact_command_preview(args: &serde_json::Value, workspace_root: Option<&Path>) -> Option<String> {
     display_command_text(args)
         .map(|command| relativize_command_paths(&command, workspace_root))
-        .map(|command| preview_command(&command, COMPACT_PREVIEW_LEN))
+        .map(|command| vtcode_commons::tool_headlines::compact_command_headline(&command))
         .filter(|command| !command.is_empty())
 }
 
 pub(super) fn compact_command_text(name: &str, args: &serde_json::Value, workspace_root: Option<&Path>) -> String {
-    // Display join (no shell_words quoting) plus a first-line head-truncated
-    // preview: the collapsed row must stay readable, not executable-looking.
+    // The collapsed row uses the same concise headline as other surfaces.
     compact_command_preview(args, workspace_root).unwrap_or_else(|| name.to_string())
 }
 
@@ -243,7 +240,7 @@ pub(super) fn record_summary_line(
     };
     let headline = if action_label == "Run command" {
         if let Some(cmd) = extract_command_line(args) {
-            format!("Ran {cmd}")
+            format!("Ran {}", vtcode_commons::tool_headlines::compact_command_headline(&cmd))
         } else {
             "Ran command".to_string()
         }

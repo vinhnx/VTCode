@@ -10,9 +10,9 @@ use vtcode_commons::formatting::{
     wrap_shell_command_with_continuations,
 };
 use vtcode_commons::tool_headlines::{
-    collect_param_details, describe_code_search, describe_fetch_action, describe_grep_file, describe_list_files,
-    exec_session_param_detail, mcp_tool_display_name, relativize_to_workspace, unified_exec_action_label,
-    write_stdin_action_label,
+    collect_param_details, compact_command_headline, describe_code_search, describe_fetch_action, describe_grep_file,
+    describe_list_files, exec_session_param_detail, mcp_tool_display_name, relativize_to_workspace,
+    unified_exec_action_label, write_stdin_action_label,
 };
 use vtcode_commons::ui_protocol::{CompactToolSummaryLine, CompactToolSummaryLineKind};
 
@@ -306,10 +306,6 @@ fn prepare_summary_data(
     let summary_highlights = highlight_texts_for_summary(args, &highlights, workspace_root);
     let action_label = tool_action_label(tool_name, args);
     let is_run_command = action_label == "Run command";
-    // Expanded `• Ran` headlines must show the command in full: the truncated
-    // preview stays on compact/collapsed surfaces and `$` detail lines, while
-    // the transcript headline wraps the complete command across `│` lines
-    // (screenshot 2026-09-24: `| grep -v ".backup"` must survive).
     let full_run_command = is_run_command
         .then(|| display_command_text(args).map(|cmd| relativize_command_paths(&cmd, workspace_root)))
         .flatten();
@@ -332,7 +328,7 @@ fn prepare_summary_data(
     if is_run_command {
         summary = full_run_command
             .as_ref()
-            .map(|command| format!("Ran {command}"))
+            .map(|command| format!("Ran {}", compact_command_headline(command)))
             .unwrap_or(summary);
     }
     if is_run_command && run_summary_is_placeholder(&summary) {

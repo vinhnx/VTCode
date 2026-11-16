@@ -714,15 +714,20 @@ pub fn compact_command_headline(command: &str) -> String {
         .map(String::as_str)
         .or_else(|| line.split_whitespace().next())
         .unwrap_or("command");
-    let program = program
+    let first_word = program;
+    let first_program = first_word.split(['|', '&', ';', '<', '>']).next().unwrap_or("command");
+    let program = first_program
         .rsplit(['/', '\\'])
         .next()
         .filter(|part| !part.is_empty())
         .unwrap_or("command");
+    if first_word.len() != first_program.len() {
+        return program.to_string();
+    }
     let target = words
         .iter()
         .skip(1)
-        .take_while(|word| !matches!(word.as_str(), "|" | "||" | "&&" | ";"))
+        .take_while(|word| !word.contains(['|', '&', ';', '<', '>']))
         .filter(|word| !word.starts_with('-'))
         .find_map(|word| {
             let base = word.rsplit(['/', '\\']).next()?;
