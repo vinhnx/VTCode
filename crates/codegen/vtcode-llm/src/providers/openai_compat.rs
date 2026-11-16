@@ -208,10 +208,65 @@ pub(crate) struct OpenAiCompatCore<S: OpenAiCompatSpec> {
     tools_cache: Mutex<ToolsCache>,
 }
 
+/// A serialized tool catalog together with the `Arc` it was serialized from.
+///
+/// Retaining the `Arc` keeps the allocation alive, so the raw-address key
+/// cannot be recycled for an unrelated catalog while the entry is live.
+struct ToolsCacheEntry {
+    key: usize,
+    catalog: Arc<Vec<ToolDefinition>>,
+    serialized: Arc<Vec<Value>>,
+}
+
 /// Maps a stable tool catalog (by `Arc` identity) to its serialized wire
-/// payload. The retained `Arc` keeps the catalog alive so the raw-pointer key
-/// cannot be reused for an unrelated catalog while the entry is live.
-type ToolsCache = HashMap<usize, (Arc<Vec<ToolDefinition>>, Arc<Vec<Value>>)>;
+/// payload.
+///
+/// A tool catalog is fixed for the lifetime of a core, so consecutive requests
+/// almost always ask for the same catalog. A single-entry fast path answers
+/// that common case with a pointer compare instead of hashing and probing the
+/// map (the same trick rustc uses for its repeated parent-span lookups). The
+/// map stays as the fallback for the uncommon case of multiple catalogs on one
+/// core.
+#[derive(Default)]
+struct ToolsCache {
+    last: Option<ToolsCacheEntry>,
+    map: HashMap<usize, (Arc<Vec<ToolDefinition>>, Arc<Vec<Value>>)>,
+}
+
+impl ToolsCache {
+    /// Look up the serialized payload for `tools`, if this catalog was seen.
+    fn get(&self, tools: &Arc<Vec<ToolDefinition>>) -> Option<Arc<Vec<Value>>> {
+        // Strict provenance: `.addr()` inspects the address without exposing
+        // provenance. The key is never cast back to a pointer; identity is
+        // re-validated with `Arc::ptr_eq`.
+        let key = Arc::as_ptr(tools).addr();
+
+        if let Some(entry) = &self.last
+            && entry.key == key
+            && Arc::ptr_eq(&entry.catalog, tools)
+        {
+            return Some(Arc::clone(&entry.serialized));
+        }
+
+        let (catalog, serialized) = self.map.get(&key)?;
+        if Arc::ptr_eq(catalog, tools) {
+            Some(Arc::clone(serialized))
+        } else {
+            None
+        }
+    }
+
+    /// Cache the serialized payload for `tools` as the newest entry.
+    fn insert(&mut self, tools: &Arc<Vec<ToolDefinition>>, serialized: Arc<Vec<Value>>) {
+        let key = Arc::as_ptr(tools).addr();
+        self.last = Some(ToolsCacheEntry {
+            key,
+            catalog: Arc::clone(tools),
+            serialized: Arc::clone(&serialized),
+        });
+        self.map.insert(key, (Arc::clone(tools), serialized));
+    }
+}
 
 impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
     /// Constructor backing the provider's `with_model`/`new` shorthands.
@@ -254,7 +309,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
             prompt_cache_enabled: false,
             model_behavior,
             spec: PhantomData,
-            tools_cache: Mutex::new(HashMap::new()),
+            tools_cache: Mutex::new(ToolsCache::default()),
         }
     }
 
@@ -268,7 +323,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
             prompt_cache_enabled: false,
             model_behavior: None,
             spec: PhantomData,
-            tools_cache: Mutex::new(HashMap::new()),
+            tools_cache: Mutex::new(ToolsCache::default()),
         }
     }
 
@@ -329,19 +384,15 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         }
 
         if let Some(tools) = &request.tools {
-            // Strict provenance: `.addr()` inspects the address without exposing
-            // provenance. The key is never cast back to a pointer; identity is
-            // re-validated with `Arc::ptr_eq` on lookup.
-            let key = Arc::as_ptr(tools).addr();
             let serialized_tools = {
                 let mut cache = self.tools_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                match cache.get(&key) {
-                    Some((arc, serialized)) if Arc::ptr_eq(arc, tools) => Arc::clone(serialized),
-                    _ => {
+                match cache.get(tools) {
+                    Some(serialized) => serialized,
+                    None => {
                         let serialized = serialize_tools_openai_format(tools)
                             .map(Arc::new)
                             .unwrap_or_else(|| Arc::new(Vec::new()));
-                        cache.insert(key, (Arc::clone(tools), Arc::clone(&serialized)));
+                        cache.insert(tools, Arc::clone(&serialized));
                         serialized
                     }
                 }
@@ -568,3 +619,57 @@ macro_rules! impl_openai_compat_provider {
 }
 
 pub(crate) use impl_openai_compat_provider;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn catalog(name: &str) -> Arc<Vec<ToolDefinition>> {
+        Arc::new(vec![ToolDefinition::function(
+            name.to_owned(),
+            "description".to_owned(),
+            json!({"type": "object"}),
+        )])
+    }
+
+    #[test]
+    fn tools_cache_fast_path_reuses_serialized_arc() {
+        let mut cache = ToolsCache::default();
+        let tools = catalog("alpha");
+        let serialized = Arc::new(vec![json!({"type": "function"})]);
+        cache.insert(&tools, Arc::clone(&serialized));
+
+        // The stable catalog is the `last` entry, so repeated lookups hit the
+        // single-entry fast path and return the exact same allocation.
+        for _ in 0..3 {
+            let hit = cache.get(&tools).expect("cached catalog");
+            assert!(Arc::ptr_eq(&hit, &serialized));
+        }
+    }
+
+    #[test]
+    fn tools_cache_falls_back_to_map_for_older_catalog() {
+        let mut cache = ToolsCache::default();
+        let first = catalog("first");
+        let second = catalog("second");
+        let first_serialized = Arc::new(vec![json!("first")]);
+        let second_serialized = Arc::new(vec![json!("second")]);
+        cache.insert(&first, Arc::clone(&first_serialized));
+        cache.insert(&second, Arc::clone(&second_serialized));
+
+        // `second` is the newest fast-path entry.
+        let second_hit = cache.get(&second).expect("newest catalog cached");
+        assert!(Arc::ptr_eq(&second_hit, &second_serialized));
+
+        // `first` is no longer `last` but must still resolve via the map.
+        let first_hit = cache.get(&first).expect("older catalog still cached in map");
+        assert!(Arc::ptr_eq(&first_hit, &first_serialized));
+    }
+
+    #[test]
+    fn tools_cache_misses_unseen_catalog() {
+        let cache = ToolsCache::default();
+        assert!(cache.get(&catalog("unseen")).is_none());
+    }
+}

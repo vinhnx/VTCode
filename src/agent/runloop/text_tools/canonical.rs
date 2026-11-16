@@ -45,15 +45,25 @@ pub(super) struct ExecCommandDefaults {
     pub(super) force_tty: Option<bool>,
 }
 
+/// Map an already-normalized name to its canonical dispatch name.
+///
+/// Borrows from either the static `exec_command` constant or the caller's
+/// normalized string, so no allocation is needed. Callers must normalize first
+/// via [`canonicalize_normalized_name`] (which also guarantees non-empty input).
+fn canonicalize_from_normalized_name(normalized: &str) -> &str {
+    if exec_command_defaults_from_normalized_name(normalized).is_some() {
+        tools::EXEC_COMMAND
+    } else {
+        normalized
+    }
+}
+
 pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
     let normalized = canonicalize_normalized_name(raw)?;
     if normalized.is_empty() {
-        None
-    } else if exec_command_defaults_from_normalized_name(&normalized).is_some() {
-        Some(tools::EXEC_COMMAND.to_string())
-    } else {
-        Some(normalized)
+        return None;
     }
+    Some(canonicalize_from_normalized_name(&normalized).to_owned())
 }
 
 /// Canonicalize a tool call and optionally validate against known tools.
@@ -61,8 +71,10 @@ pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
 /// When `validate` is true, the result is checked against the known-tool allowlist.
 /// When `validate` is false, only canonicalisation and exec_command defaults are applied.
 pub(super) fn canonicalize_tool_result(name: String, mut args: Value, validate: bool) -> Option<(String, Value)> {
+    // Normalize once and reuse the result: `canonicalize_tool_name` used to be
+    // called here, which re-normalized the very same string a second time.
     let normalized = canonicalize_normalized_name(&name)?;
-    let canonical = canonicalize_tool_name(&name)?;
+    let canonical = canonicalize_from_normalized_name(&normalized);
     if canonical == tools::EXEC_COMMAND
         && let Some(defaults) = exec_command_defaults_from_normalized_name(&normalized)
         && let Some(payload) = args.as_object_mut()
@@ -70,13 +82,13 @@ pub(super) fn canonicalize_tool_result(name: String, mut args: Value, validate: 
         apply_exec_command_defaults(payload, defaults);
     }
     if validate {
-        if is_known_textual_tool(&canonical) {
-            Some((canonical, args))
+        if is_known_textual_tool(canonical) {
+            Some((canonical.to_owned(), args))
         } else {
             None
         }
     } else {
-        Some((canonical, args))
+        Some((canonical.to_owned(), args))
     }
 }
 
@@ -154,5 +166,49 @@ fn exec_command_defaults_from_normalized_name(normalized: &str) -> Option<ExecCo
         "list_pty_sessions" => Some(ExecCommandDefaults { action: "list", force_tty: None }),
         "close_pty_session" => Some(ExecCommandDefaults { action: "close", force_tty: None }),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn tool_name_canonicalization_preserves_behavior() {
+        // Shell aliases fold to exec_command; ordinary names keep normalized
+        // form; empty input stays a miss.
+        assert_eq!(canonicalize_tool_name("run").as_deref(), Some(tools::EXEC_COMMAND));
+        assert_eq!(canonicalize_tool_name("  RUN  ").as_deref(), Some(tools::EXEC_COMMAND));
+        assert_eq!(canonicalize_tool_name("Write File").as_deref(), Some("write_file"));
+        assert_eq!(canonicalize_tool_name("default_api.read_file").as_deref(), Some("default_api_read_file"));
+        assert_eq!(canonicalize_tool_name("   "), None);
+    }
+
+    #[test]
+    fn tool_result_normalizes_once_and_applies_exec_defaults() {
+        // A shell alias is normalized to exec_command and gets the default
+        // action, exactly as before the single-normalization refactor.
+        let (name, args) = canonicalize_tool_result("run".to_owned(), json!({}), false).expect("exec result");
+        assert_eq!(name, tools::EXEC_COMMAND);
+        assert_eq!(args["action"], "run");
+
+        // An explicit action is preserved (`entry().or_insert_with`).
+        let (_, args) =
+            canonicalize_tool_result("run".to_owned(), json!({"action": "poll"}), false).expect("exec result");
+        assert_eq!(args["action"], "poll");
+
+        // Non-exec tools are canonicalized but receive no defaults.
+        let (name, args) = canonicalize_tool_result("Write File".to_owned(), json!({}), false).expect("write result");
+        assert_eq!(name, "write_file");
+        assert!(args.get("action").is_none());
+    }
+
+    #[test]
+    fn tool_result_validation_still_gates_unknown_names() {
+        assert!(canonicalize_tool_result("totally_unknown".to_owned(), json!({}), true).is_none());
+        let (name, _) =
+            canonicalize_tool_result("totally_unknown".to_owned(), json!({}), false).expect("unvalidated result");
+        assert_eq!(name, "totally_unknown");
     }
 }
