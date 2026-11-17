@@ -148,3 +148,4 @@ mod execution_replan;
 mod plan_repair;
 mod pseudo_tool_call;
 mod session_cases;
+mod steering_boundary;

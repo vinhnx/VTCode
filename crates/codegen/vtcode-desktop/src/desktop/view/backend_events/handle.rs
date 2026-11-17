@@ -510,30 +510,31 @@ impl DesktopView {
                         }
                     }
                     protocol::method::TURN_STEER => {
-                        let pending_echo = self.steer_pending_echo_id.take();
                         let steered = serde_json::from_value::<protocol::TurnSteerResult>(result)
                             .ok()
                             .filter(|steered| self.selected_session_id.as_deref() == Some(steered.session_id.as_str()));
                         match steered {
                             Some(steered) if steered.steered => {
-                                // The service removed the entry atomically with
-                                // the steer; converge our mirror to its depth.
-                                if let Some(echo_id) = pending_echo
-                                    && let Some(index) =
-                                        self.queued_submissions.iter().position(|entry| entry.echo_id == echo_id)
-                                {
-                                    let entry = self.queued_submissions.remove(index);
-                                    self.transcript.remove(&entry.echo_id);
+                                // The row stays visible until the runtime's
+                                // terminal acknowledgment arrives. Bind the
+                                // receipt id to the oldest in-flight row.
+                                if let Some(echo_id) = self.steer_pending.keys().next().cloned() {
+                                    let _ = self.steer_pending.insert(echo_id, steered.receipt_id);
                                 }
-                                self.truncate_dispatched_to_depth(steered.queue_depth);
                             }
                             _ => {
+                                // Immediate refusal: no receipt is coming, so
+                                // release the oldest in-flight row and keep it queued.
+                                if let Some(echo_id) = self.steer_pending.keys().next().cloned() {
+                                    let _ = self.steer_pending.remove(&echo_id);
+                                }
                                 self.error = Some(
                                     "Could not steer the prompt. It may have changed, have attachments, or have no active turn."
                                         .to_string(),
                                 );
                             }
                         }
+                        cx.notify();
                     }
                     protocol::method::TURN_CANCEL => {
                         self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
@@ -683,6 +684,37 @@ impl DesktopView {
                     return;
                 };
                 self.apply_queue_status(snapshot);
+            }
+            BackendEvent::TurnSteerResult(result) => {
+                let Ok(outcome) = serde_json::from_value::<protocol::TurnSteerResultNotification>(result) else {
+                    return;
+                };
+                if self.selected_session_id.as_deref() != Some(outcome.session_id.as_str()) {
+                    return;
+                }
+                let echo_id = self
+                    .steer_pending
+                    .iter()
+                    .find(|(_, receipt_id)| **receipt_id == outcome.receipt_id)
+                    .map(|(echo_id, _)| echo_id.clone());
+                if let Some(echo_id) = echo_id {
+                    let _ = self.steer_pending.remove(&echo_id);
+                    if outcome.accepted {
+                        // The service removed the addressed row atomically with
+                        // admission; converge our mirror to its depth.
+                        if let Some(index) = self.queued_submissions.iter().position(|row| row.echo_id == echo_id) {
+                            let row = self.queued_submissions.remove(index);
+                            self.transcript.remove(&row.echo_id);
+                        }
+                        self.truncate_dispatched_to_depth(outcome.queue_depth);
+                    } else {
+                        self.error = Some(format!(
+                            "The prompt stayed queued: steering was rejected ({:?}).",
+                            outcome.reason.unwrap_or(protocol::TurnSteerRejection::Superseded)
+                        ));
+                    }
+                    cx.notify();
+                }
             }
             BackendEvent::TurnStatus(status) => self.handle_turn_status(status),
             BackendEvent::Exited { status, authentication_required } => {

@@ -157,10 +157,26 @@ impl<'a> InlineEventContext<'a> {
                     )?;
                     self.modal.restore_input_draft(input);
                     InlineLoopAction::Continue
-                } else if self.ctrl_c_state.take_steer_delivered() {
-                    // Callback already handed this steer to the live steering
-                    // channel (mid-turn injection). Stay passive so the message
-                    // is not queued twice.
+                } else if let Some(pending) = self.ctrl_c_state.take_steer_receipt(&input.text) {
+                    // A live handoff is outstanding. Park the input until the
+                    // runtime reports its terminal outcome. Only a rejection
+                    // falls through to the ordinary queue, exactly once; an
+                    // accepted steer was already applied to model-facing
+                    // history and must not be queued a second time.
+                    let handle = self.handle.clone();
+                    let original = pending.input;
+                    tokio::spawn(async move {
+                        match pending.receipt.await {
+                            Ok(vtcode_core::core::agent::steering::SteerOutcome::Accepted { .. }) => {}
+                            _ => {
+                                // Rejected, turn closed first, or the receipt
+                                // was abandoned on session/turn replacement.
+                                if let Err(error) = handle.defer_event(InlineEvent::QueueSubmit(original)) {
+                                    tracing::warn!(%error, "could not defer rejected steer to the inline queue");
+                                }
+                            }
+                        }
+                    });
                     self.input_processor().passive()
                 } else {
                     // Steering was unavailable (no sender, closed channel, or

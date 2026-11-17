@@ -787,6 +787,42 @@ impl<'a> TurnProcessingContext<'a> {
             return Ok(TurnHandlerOutcome::SwitchPrimaryAgentWithPolicy { target });
         }
 
+        // Final-response boundary: a steer that arrived while this model
+        // response was in flight must be admitted to model-facing history so
+        // another request sees it before the turn completes. Closing admission
+        // atomically with this drain makes a later arrival rejected rather
+        // than stranded in the channel.
+        if self.finalize_steering_before_completion()? {
+            return Ok(TurnHandlerOutcome::Continue);
+        }
+
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false }))
+    }
+}
+
+impl TurnProcessingContext<'_> {
+    /// Drain and admit steering received during the in-flight final response,
+    /// apply admitted intents to `working_history`, then close admission.
+    /// Returns `true` when a steer was admitted (the turn must continue).
+    pub(crate) fn finalize_steering_before_completion(&mut self) -> anyhow::Result<bool> {
+        let Some(mut receiver) = self.runtime_steering.take_receiver() else {
+            self.runtime_steering.close_admission();
+            return Ok(false);
+        };
+        while let Ok(message) = receiver.try_recv() {
+            if let vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(steer) = message {
+                // The receipt is resolved at admission, so a steer received
+                // after this point is explicitly rejected with `TurnClosing`.
+                let _ = self.runtime_steering.admit_follow_up_steer(steer);
+            }
+        }
+        self.runtime_steering.set_receiver(Some(receiver));
+        let admitted = crate::agent::runloop::unified::turn::turn_loop_helpers::apply_pending_follow_ups_mid_turn(
+            self.renderer,
+            self.runtime_steering,
+            self.working_history,
+        )?;
+        self.runtime_steering.close_admission();
+        Ok(admitted)
     }
 }

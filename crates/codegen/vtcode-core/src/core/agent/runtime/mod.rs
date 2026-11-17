@@ -1,8 +1,9 @@
 use crate::core::agent::events::{EventSink, SharedLifecycleEmitter};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::{
-    FollowUpProvenance, FollowUpQueueFull, MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_OVERFLOW_FOLLOW_UP_INTENTS,
-    MAX_PENDING_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent, SteeringMessage,
+    FollowUpProvenance, FollowUpQueueFull, FollowUpSteer, MAX_APPLIED_FOLLOW_UP_INTENT_IDS,
+    MAX_OVERFLOW_FOLLOW_UP_INTENTS, MAX_PENDING_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent,
+    SteeringMessage,
 };
 use crate::exec::events::{ThreadEvent, ToolCallStatus, ToolOutcome};
 use crate::llm::provider::{
@@ -550,6 +551,38 @@ impl AgentRuntime {
     /// Queue a harness-generated continuation or recovery instruction.
     pub fn try_queue_synthetic_follow_up_input(&mut self, input: String) -> Result<(), FollowUpQueueFull> {
         self.steering.try_queue_synthetic_follow_up_input(input)
+    }
+
+    /// Authoritatively admit a live steer, resolving its receipt with exactly
+    /// one terminal outcome. See [`RuntimeSteering::admit_follow_up_steer`].
+    pub fn admit_follow_up_steer(&mut self, steer: FollowUpSteer) -> Option<QueuedFollowUpIntent> {
+        self.steering.admit_follow_up_steer(steer)
+    }
+
+    /// Reject steers left in the channel after admission closed. Called before
+    /// [`Self::open_admission`] so a late arrival cannot leak into the next turn.
+    pub fn drain_rejected_steers(&mut self) {
+        self.steering.drain_rejected_steers();
+    }
+
+    /// Reopen live-steer admission for a new turn.
+    pub fn open_admission(&mut self) {
+        self.steering.open_admission();
+    }
+
+    /// Close live-steer admission atomically with the final steering drain.
+    pub fn close_admission(&mut self) {
+        self.steering.close_admission();
+    }
+
+    #[must_use]
+    pub const fn admission_closed(&self) -> bool {
+        self.steering.admission_closed()
+    }
+
+    /// Declare that cancellation outranks pending steers for this turn.
+    pub fn set_cancellation_precedence(&mut self, value: bool) {
+        self.steering.set_cancellation_precedence(value);
     }
 
     /// Restore the durable steering snapshot after loading session history.

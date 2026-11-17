@@ -5,8 +5,19 @@
 //! debounce/window timing, and steer-delivery accounting are verbatim, and the
 //! `pub(crate)` surface re-exported from `state.rs` is unchanged.
 
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+use vtcode_core::core::agent::steering::SteerReceipt;
+use vtcode_ui::tui::app::SubmittedInput;
+
+/// A steer handed to the live channel whose outcome has not been observed yet.
+pub(crate) struct PendingSteerReceipt {
+    pub(crate) text: String,
+    pub(crate) receipt: SteerReceipt,
+    pub(crate) input: SubmittedInput,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CtrlCSignal {
@@ -87,16 +98,11 @@ pub(crate) struct CtrlCState {
     exit_started: std::sync::OnceLock<Instant>,
     signal_clock_origin: Instant,
     last_signal_time: AtomicU64,
-    /// Shared event-delivery counter: incremented by the UI event callback
-    /// each time a Steer input is accepted by the live steering channel,
-    /// decremented by the runloop Steer handler. Callback and handler run
-    /// sequentially per event (callback first, then the channel), so an
-    /// undelivered steer falls through to the durable queue instead of
-    /// vanishing when the agent is temporarily unavailable (no steering
-    /// sender, closed channel). A counter — not a flag — so a burst of
-    /// steers delivered before the runloop drains does not double-queue the
-    /// second and later messages.
-    steer_delivered: AtomicUsize,
+    /// Per-message steer receipts registered by the UI callback in send
+    /// order. The runloop pops the matching receipt when it handles each
+    /// Steer event. A missing receipt means no live channel accepted the
+    /// message, so it must fall through to the durable queue.
+    pending_steer_receipts: std::sync::Mutex<VecDeque<PendingSteerReceipt>>,
     /// Stop-signal escalation: set only by a host's forced stop (desktop
     /// force stop, forced watchdog). The runloop's cancel paths widen the
     /// exec-session teardown from foreground-only to every session —
@@ -114,7 +120,7 @@ impl Default for CtrlCState {
             exit_started: std::sync::OnceLock::new(),
             signal_clock_origin: Instant::now(),
             last_signal_time: AtomicU64::default(),
-            steer_delivered: AtomicUsize::default(),
+            pending_steer_receipts: std::sync::Mutex::new(VecDeque::new()),
             force_kill: AtomicBool::default(),
         }
     }
@@ -256,21 +262,36 @@ impl CtrlCState {
         cleared
     }
 
-    /// Record that the UI event callback accepted a Steer input on the live
-    /// steering channel. Called from the callback before the event reaches
-    /// the runloop. Safe to call once per delivered steer in a burst.
-    pub(crate) fn mark_steer_delivered(&self) {
-        self.steer_delivered.fetch_add(1, Ordering::SeqCst);
+    /// Register the receipt for a steer the UI callback handed to the live
+    /// channel, before the event reaches the runloop.
+    pub(crate) fn register_steer_receipt(&self, text: String, receipt: SteerReceipt, input: SubmittedInput) {
+        let mut pending = self
+            .pending_steer_receipts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        pending.push_back(PendingSteerReceipt { text, receipt, input });
     }
 
-    /// Consume one steer-delivery credit. `true` means the matching Steer
-    /// event was already handed to the steering channel and must not be
-    /// queued again; `false` means it fell through and should be queued so
-    /// the message is processed once the agent is ready.
-    pub(crate) fn take_steer_delivered(&self) -> bool {
-        self.steer_delivered
-            .try_update(Ordering::SeqCst, Ordering::SeqCst, |pending| Some(pending.saturating_sub(1)))
-            .is_ok_and(|prev| prev > 0)
+    /// Take the receipt registered for this Steer event. `None` means the
+    /// callback never found a live channel, so the caller must queue the input.
+    pub(crate) fn take_steer_receipt(&self, text: &str) -> Option<PendingSteerReceipt> {
+        let mut pending = self
+            .pending_steer_receipts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let position = pending.iter().position(|entry| entry.text == text)?;
+        pending.remove(position)
+    }
+
+    /// Abandon every outstanding steer receipt (turn/session replacement or
+    /// teardown). Dropping the sender half makes each waiter see a rejection
+    /// and route its input through the ordinary queue exactly once.
+    pub(crate) fn reject_pending_steers(&self) {
+        let mut pending = self
+            .pending_steer_receipts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        pending.clear();
     }
 
     pub(crate) fn mark_cancel_handled(&self) {

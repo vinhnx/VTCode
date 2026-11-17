@@ -1,0 +1,92 @@
+use super::super::QueuedSubmission;
+use super::*;
+
+#[gpui_kit::test]
+fn a_second_steer_is_suppressed_while_a_receipt_is_pending(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".to_string());
+        for (echo, entry, prompt) in [("echo-a", "qe-1", "first"), ("echo-b", "qe-2", "second")] {
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: echo.into(),
+                entry_id: Some(entry.into()),
+                prompt: prompt.into(),
+                acknowledged: true,
+            });
+        }
+        view.steer_queued_submission("echo-a", cx);
+        view.steer_queued_submission("echo-b", cx);
+        assert_eq!(view.steer_pending.len(), 1, "only one steer may be in flight");
+    });
+    assert!(requests.try_recv().is_ok(), "the first steer request is sent");
+    assert!(requests.try_recv().is_err(), "the second steer must be suppressed while pending");
+}
+
+#[gpui_kit::test]
+fn steer_result_acceptance_removes_only_the_addressed_row(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".to_string());
+        view.queued_submissions.push(QueuedSubmission {
+            echo_id: "echo-steer".into(),
+            entry_id: Some("qe-1".into()),
+            prompt: "ship it".into(),
+            acknowledged: true,
+        });
+        view.queued_submissions.push(QueuedSubmission {
+            echo_id: "echo-other".into(),
+            entry_id: Some("qe-2".into()),
+            prompt: "stay queued".into(),
+            acknowledged: true,
+        });
+        let _ = view.steer_pending.insert("echo-steer".into(), "receipt-1".into());
+        view.handle_backend_event(
+            BackendEvent::TurnSteerResult(serde_json::json!({
+                "sessionId": "session",
+                "turnId": "turn-1",
+                "receiptId": "receipt-1",
+                "entryId": "qe-1",
+                "accepted": true,
+                "intentId": "intent-1",
+                "queueDepth": 1,
+            })),
+            cx,
+        );
+        assert_eq!(view.queued_submissions.len(), 1, "only the accepted row is removed");
+        assert_eq!(view.queued_submissions[0].echo_id, "echo-other");
+        assert!(view.steer_pending.is_empty());
+        assert_eq!(view.queue_depth, 1);
+    });
+}
+
+#[gpui_kit::test]
+fn steer_result_rejection_keeps_the_row_and_reports_reason(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".to_string());
+        view.queued_submissions.push(QueuedSubmission {
+            echo_id: "echo-steer".into(),
+            entry_id: Some("qe-1".into()),
+            prompt: "ship it".into(),
+            acknowledged: true,
+        });
+        let _ = view.steer_pending.insert("echo-steer".into(), "receipt-2".into());
+        view.handle_backend_event(
+            BackendEvent::TurnSteerResult(serde_json::json!({
+                "sessionId": "session",
+                "turnId": "turn-1",
+                "receiptId": "receipt-2",
+                "entryId": "qe-1",
+                "accepted": false,
+                "reason": "queueFull",
+                "queueDepth": 1,
+            })),
+            cx,
+        );
+        assert_eq!(view.queued_submissions.len(), 1, "a rejected steer leaves the row available");
+        assert!(view.steer_pending.is_empty());
+        assert!(view.error.as_deref().is_some_and(|error| error.contains("QueueFull")));
+    });
+}

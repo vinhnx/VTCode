@@ -1,4 +1,14 @@
 use super::*;
+use vtcode_core::core::agent::steering::{FollowUpSteer, SteerOutcome, SteerRejection};
+
+use crate::agent::runloop::unified::state::CtrlCState;
+
+/// Register an already-accepted live steer the way the UI callback would.
+fn accept_steer(state: &Arc<CtrlCState>, text: &str) {
+    let (steer, receipt) = FollowUpSteer::channel(text.to_string());
+    state.register_steer_receipt(text.to_string(), receipt, text.to_string().into());
+    steer.resolve(SteerOutcome::Accepted { intent_id: format!("intent-{text}") });
+}
 
 #[tokio::test]
 async fn steering_events_are_passive_in_idle_loop() {
@@ -103,8 +113,9 @@ async fn steered_input_already_delivered_is_not_queued_twice() {
 
     {
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
-        // Simulate the UI callback accepting this steer on the live channel.
-        ctrl_c_state.mark_steer_delivered();
+        // Simulate the UI callback handing this steer to the live channel and
+        // the runtime admitting it.
+        accept_steer(&ctrl_c_state, "already steered");
         let action = context
             .process_event(InlineEvent::Steer("already steered".into()), &mut queue)
             .await
@@ -168,8 +179,8 @@ async fn rapid_delivered_steers_are_not_double_queued() {
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
         // Both steers are delivered to the live channel before the runloop
         // drains either event — the common rapid-influx ordering.
-        ctrl_c_state.mark_steer_delivered();
-        ctrl_c_state.mark_steer_delivered();
+        accept_steer(&ctrl_c_state, "steer one");
+        accept_steer(&ctrl_c_state, "steer two");
         for text in ["steer one", "steer two"] {
             let action = context
                 .process_event(InlineEvent::Steer(text.into()), &mut queue)
@@ -183,6 +194,66 @@ async fn rapid_delivered_steers_are_not_double_queued() {
         "burst of delivered steers must not fall through to the queue, got {queued_inputs:?}"
     );
 }
+#[tokio::test]
+async fn rejected_steer_falls_back_to_the_inline_queue_exactly_once() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+
+    {
+        let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+        let (steer, receipt) = FollowUpSteer::channel("needs fallback".to_string());
+        ctrl_c_state.register_steer_receipt("needs fallback".to_string(), receipt, "needs fallback".to_string().into());
+        // The runtime rejected the live handoff.
+        steer.reject(SteerRejection::QueueFull);
+        let action = context
+            .process_event(InlineEvent::Steer("needs fallback".into()), &mut queue)
+            .await
+            .expect("process rejected steer");
+        assert!(matches!(action, InlineLoopAction::Continue));
+        // Not queued inline; the receipt resolution defers a QueueSubmit.
+        assert!(queued_inputs.is_empty());
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert!(handle.has_deferred_event(), "a rejected live steer must fall through to the queue once");
+}
+
 #[tokio::test]
 async fn steer_with_attachments_restores_full_draft_and_continues() {
     let (handle, mut commands, mut renderer) = renderer_with_handle_and_commands();

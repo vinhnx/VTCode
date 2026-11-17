@@ -240,6 +240,7 @@ mod session_load_probe;
 mod shutdown_turns;
 mod spooled_scope;
 mod startup_interaction;
+mod steer_ack;
 mod stop_signal;
 mod storage;
 mod terminal_pump;

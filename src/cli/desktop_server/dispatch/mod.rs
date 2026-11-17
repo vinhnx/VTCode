@@ -1,12 +1,13 @@
 use super::*;
 use crate::agent::runloop::unified::stop_requests;
-use vtcode_core::core::agent::steering::SteeringMessage;
 
 mod lifecycle;
+mod steer;
 pub(super) use lifecycle::shutdown_current_session;
 #[cfg(test)]
 pub(super) use lifecycle::signal_runloop_stop_with_timeout;
 use lifecycle::*;
+use steer::handle_turn_steer;
 
 pub(super) async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
     let transition = matches!(
@@ -727,60 +728,8 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
         }
         method::TURN_STEER => {
             let params: protocol::TurnSteerParams = parse_params(&request.params)?;
-            if params.text.is_empty() {
-                bail!("steered prompt is empty");
-            }
-            let (steered, queue_status, queue_depth) = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                // Reuse the goal-loop steering channel: a live turn receives a
-                // FollowUpInput immediately instead of waking for a queued turn.
-                // With no live turn the client falls back to an ordinary submit.
-                let queue_position = params
-                    .entry_id
-                    .as_deref()
-                    .and_then(|entry_id| state.queue.iter().position(|queued| queued.entry_id() == entry_id));
-                let queued_input_matches = match params.entry_id.as_deref() {
-                    Some(_) => queue_position.is_some_and(|position| {
-                        state
-                            .queue
-                            .get(position)
-                            .is_some_and(|queued| queued.input.text == params.text && !queued.input.has_attachments())
-                    }),
-                    None => true,
-                };
-                let steered = {
-                    let steering = state
-                        .runtime
-                        .as_ref()
-                        .and_then(|runtime| stop_requests::host_steering_sender(&runtime.stop));
-                    queued_input_matches
-                        && state.active_turn_id.is_some()
-                        && steering.is_some_and(|sender| {
-                            sender.send(SteeringMessage::FollowUpInput(params.text.clone())).is_ok()
-                        })
-                };
-                // Only drop the queued row once steering succeeded, so a closed
-                // channel never loses the prompt. The client reconciles the
-                // published snapshot either way.
-                if steered && let Some(position) = queue_position {
-                    state.queue.remove(position);
-                }
-                let queue_status =
-                    (steered && params.entry_id.is_some()).then(|| state.queue_status(&params.session_id));
-                (steered, queue_status, state.queue.len())
-            };
-            if let Some(status) = queue_status {
-                publish_queue_status_sync(&context.notifications, &status);
-            }
-            let result = protocol::TurnSteerResult {
-                session_id: params.session_id,
-                steered,
-                queue_depth,
-            };
-            Ok((serde_json::to_value(result)?, false))
+            let result = handle_turn_steer(context, params).await?;
+            Ok((result, false))
         }
         method::GOAL_EXECUTE => goal::handle_goal_execute(context, request).await,
         method::TURN_UNDO => turn_undo::handle_undo_turn(context, request).await,

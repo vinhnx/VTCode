@@ -272,16 +272,67 @@ pub struct TurnSteerParams {
     pub entry_id: Option<String>,
 }
 
-/// Outcome of a steer request. `steered: false` means there was no live turn
-/// channel, so the client must fall back to an ordinary submit.
+/// Outcome of a steer handoff. `steered: true` means the prompt was accepted
+/// by the live steering channel; the runtime's terminal decision arrives later
+/// in a `turn/steer/result` notification while `pending` is set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnSteerResult {
     /// Session that owns the running turn.
     pub session_id: String,
-    /// Whether the prompt reached the live turn.
+    /// Whether the prompt reached the live steering channel.
     pub steered: bool,
     /// Queue depth after dropping `entry_id`, when one was supplied.
+    #[serde(default)]
+    pub queue_depth: usize,
+    /// Whether the runtime acknowledgment is still outstanding. The client
+    /// keeps the addressed row until the result notification arrives.
+    #[serde(default)]
+    pub pending: bool,
+    /// Correlation token for the pending acknowledgment.
+    #[serde(default)]
+    pub receipt_id: String,
+}
+
+/// Why the runtime rejected a live steer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TurnSteerRejection {
+    /// The turn's admission window closed before the steer was admitted.
+    TurnClosing,
+    /// Cancellation took precedence.
+    CancellationPrecedence,
+    /// The runtime follow-up queue was full.
+    QueueFull,
+    /// There was no live turn.
+    NoLiveTurn,
+    /// The session, turn, or queue entry was superseded.
+    Superseded,
+}
+
+/// Terminal runtime acknowledgment for a `turn/steer` handoff. The addressed
+/// queue row stays owned by the client until this notification arrives.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnSteerResultNotification {
+    /// Session that owns the turn.
+    pub session_id: String,
+    /// Turn that was steered.
+    pub turn_id: String,
+    /// Receipt token echoed from `TurnSteerResult`.
+    pub receipt_id: String,
+    /// Queue entry the steer addressed, when any.
+    #[serde(default)]
+    pub entry_id: String,
+    /// Whether the runtime admitted the steer. `false` leaves the row queued.
+    pub accepted: bool,
+    /// Rejection reason when `accepted` is false.
+    #[serde(default)]
+    pub reason: Option<TurnSteerRejection>,
+    /// Stable identity of the admitted follow-up intent.
+    #[serde(default)]
+    pub intent_id: String,
+    /// Queue depth after the row was removed (accept) or left in place.
     #[serde(default)]
     pub queue_depth: usize,
 }

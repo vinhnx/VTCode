@@ -689,7 +689,7 @@ impl DesktopView {
             queue_previews: Vec::new(),
             queue_dropped_total: 0,
             take_latest_pending: false,
-            steer_pending_echo_id: None,
+            steer_pending: std::collections::BTreeMap::new(),
             editing_queue_echo_id: None,
             queue_edit_pending: None,
             queue_edit_input,

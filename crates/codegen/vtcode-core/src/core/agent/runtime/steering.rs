@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::agent::steering::{SteerOutcome, SteerRejection};
 
 /// Manages steering messages (stop, pause, resume, follow-up inputs) for a running agent turn.
 pub struct RuntimeSteering {
@@ -11,6 +12,12 @@ pub struct RuntimeSteering {
     recovered_follow_up: Option<QueuedFollowUpIntent>,
     pub(super) in_flight_follow_up_intents: VecDeque<QueuedFollowUpIntent>,
     applied_follow_up_intent_ids: VecDeque<String>,
+    /// Once closed, no further live steer may be admitted. Closed atomically
+    /// with the final steering drain so a late arrival is rejected instead of
+    /// being stranded in the channel after the turn ends.
+    admission_closed: bool,
+    /// Set by the runloop when cancellation outranks a pending steer.
+    cancellation_precedence: bool,
 }
 
 impl Default for RuntimeSteering {
@@ -28,6 +35,8 @@ impl RuntimeSteering {
             recovered_follow_up: None,
             in_flight_follow_up_intents: VecDeque::new(),
             applied_follow_up_intent_ids: VecDeque::new(),
+            admission_closed: false,
+            cancellation_precedence: false,
         }
     }
 
@@ -39,6 +48,76 @@ impl RuntimeSteering {
     /// Take ownership of the steering receiver, leaving `None` in its place.
     pub fn take_receiver(&mut self) -> Option<UnboundedReceiver<SteeringMessage>> {
         self.steering_receiver.take()
+    }
+
+    /// Reopen admission for a new turn. Called once at turn setup.
+    pub fn open_admission(&mut self) {
+        self.admission_closed = false;
+        self.cancellation_precedence = false;
+    }
+
+    /// Close admission atomically with the final steering drain. Later arrivals
+    /// are rejected rather than left stranded in the channel.
+    pub fn close_admission(&mut self) {
+        self.admission_closed = true;
+    }
+
+    #[must_use]
+    pub const fn admission_closed(&self) -> bool {
+        self.admission_closed
+    }
+
+    /// Declare that cancellation outranks any pending steer until the next
+    /// [`Self::open_admission`].
+    pub fn set_cancellation_precedence(&mut self, value: bool) {
+        self.cancellation_precedence = value;
+    }
+
+    /// Reject steers that arrived after admission closed but before the next
+    /// turn reopens it. Without this drain a late arrival would be admitted
+    /// into the following turn instead of being rejected as intended.
+    pub fn drain_rejected_steers(&mut self) {
+        let Some(mut receiver) = self.steering_receiver.take() else {
+            return;
+        };
+        while let Ok(message) = receiver.try_recv() {
+            if let SteeringMessage::FollowUpInput(steer) = message {
+                steer.reject(SteerRejection::TurnClosing);
+            }
+        }
+        self.steering_receiver = Some(receiver);
+    }
+
+    /// The single authoritative admission point for a live steer.
+    ///
+    /// Checks the admission gate and capacity, queues the intent with a fresh
+    /// identity, and resolves the receipt with exactly one terminal outcome.
+    /// Returns the admitted intent so callers can apply it to model-facing
+    /// history; `None` means the steer was rejected and the sender must fall
+    /// back to its own queue.
+    pub fn admit_follow_up_steer(&mut self, steer: FollowUpSteer) -> Option<QueuedFollowUpIntent> {
+        let FollowUpSteer { text, mut receipt } = steer;
+        let reject = |reason: SteerRejection, receipt: &mut Option<tokio::sync::oneshot::Sender<SteerOutcome>>| {
+            if let Some(receipt) = receipt.take() {
+                let _ = receipt.send(SteerOutcome::Rejected { reason });
+            }
+            None
+        };
+        if self.admission_closed {
+            return reject(SteerRejection::TurnClosing, &mut receipt);
+        }
+        if self.cancellation_precedence {
+            return reject(SteerRejection::CancellationPrecedence, &mut receipt);
+        }
+        let intent = QueuedFollowUpIntent::new(text);
+        if let Err(error) = self.try_queue_follow_up_intent(intent.clone()) {
+            tracing::warn!(%error, "Rejected live steer: follow-up queue full");
+            return reject(SteerRejection::QueueFull, &mut receipt);
+        }
+        if let Some(receipt) = receipt {
+            let _ = receipt.send(SteerOutcome::Accepted { intent_id: intent.id().to_string() });
+        }
+        Some(intent)
     }
 
     #[must_use]
@@ -260,10 +339,8 @@ impl RuntimeSteering {
                 Ok(SteeringMessage::Resume) => {
                     paused = true;
                 }
-                Ok(SteeringMessage::FollowUpInput(input)) => {
-                    if let Err(error) = self.try_queue_follow_up_input(input) {
-                        tracing::warn!(%error, "Rejected follow-up steering intent");
-                    }
+                Ok(SteeringMessage::FollowUpInput(steer)) => {
+                    let _ = self.admit_follow_up_steer(steer);
                 }
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
                     return if paused {
@@ -285,10 +362,8 @@ impl RuntimeSteering {
             match receiver.recv().await {
                 Some(SteeringMessage::Resume) => return RuntimeControl::Continue,
                 Some(SteeringMessage::SteerStop) => return RuntimeControl::StopRequested,
-                Some(SteeringMessage::FollowUpInput(input)) => {
-                    if let Err(error) = self.try_queue_follow_up_input(input) {
-                        tracing::warn!(%error, "Rejected follow-up steering intent");
-                    }
+                Some(SteeringMessage::FollowUpInput(steer)) => {
+                    let _ = self.admit_follow_up_steer(steer);
                 }
                 Some(SteeringMessage::Pause) => {}
                 None => return RuntimeControl::Continue,

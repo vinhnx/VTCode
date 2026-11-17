@@ -1,4 +1,5 @@
 use super::*;
+use vtcode_core::core::agent::steering::SteerOutcome;
 
 type RuntimeStateFixture = (
     Mutex<ServerState>,
@@ -663,21 +664,32 @@ async fn steer_request_injects_into_the_live_turn_and_drops_only_the_addressed_r
     assert!(!stop);
     let steered: protocol::TurnSteerResult = serde_json::from_value(result).expect("steer result");
     assert!(steered.steered);
-    assert_eq!(steered.queue_depth, 1);
+    assert!(steered.pending, "the handoff waits for the runtime acknowledgment");
+    assert!(!steered.receipt_id.is_empty());
+    // The addressed row is still owned by the client while delivery is pending.
+    assert_eq!(steered.queue_depth, 2);
     let message = steer_rx.try_recv().expect("steering message");
-    assert!(
-        matches!(message, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text == "older"),
-        "the queued prompt must reach the live turn verbatim"
-    );
-    let status = notifications.recv().await.expect("queue status on steer");
-    assert_eq!(status.method, protocol::method::TURN_QUEUE_STATUS);
-    assert_eq!(status.params["queueDepth"], 1);
+    let vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(steer) = message else {
+        panic!("expected a follow-up steer");
+    };
+    assert_eq!(steer.text, "older", "the queued prompt must reach the live turn verbatim");
+    // The runtime admits the steer. Only now may the addressed row be removed.
+    steer.resolve(SteerOutcome::Accepted { intent_id: "intent-older".into() });
+
+    let first = notifications.recv().await.expect("queue status on steer");
+    assert_eq!(first.method, protocol::method::TURN_QUEUE_STATUS);
+    assert_eq!(first.params["queueDepth"], 1);
+    let second = notifications.recv().await.expect("steer result on ack");
+    assert_eq!(second.method, protocol::method::TURN_STEER_RESULT);
+    assert_eq!(second.params["receiptId"], steered.receipt_id);
+    assert_eq!(second.params["accepted"], true);
+    assert_eq!(second.params["intentId"], "intent-older");
     let remaining: Vec<String> = {
         let state = context.state.lock().await;
         state.queue.iter().map(|entry| entry.entry_id()).collect()
     };
     assert_eq!(remaining, vec![entry_ids[1].clone()], "only the addressed row is removed");
-    assert!(notifications.try_recv().is_err(), "one status per successful steer");
+    assert!(notifications.try_recv().is_err(), "one status plus one result per successful steer");
 
     for (entry_id, text) in [(&entry_ids[0], "older"), (&entry_ids[1], "stale text")] {
         let request = Request {

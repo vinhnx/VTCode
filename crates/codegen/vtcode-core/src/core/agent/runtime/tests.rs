@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::agent::steering::{SteerOutcome, SteerRejection};
 use async_trait::async_trait;
 use futures::stream;
 
@@ -109,10 +110,10 @@ async fn queued_follow_up_inputs_are_applied_one_at_a_time() {
     let mut runtime = AgentRuntime::new(state, None, Some(receiver));
 
     sender
-        .send(SteeringMessage::FollowUpInput("first".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("first".to_string())))
         .expect("first follow-up should queue");
     sender
-        .send(SteeringMessage::FollowUpInput("second".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("second".to_string())))
         .expect("second follow-up should queue");
 
     assert_eq!(runtime.poll_turn_control().await, RuntimeControl::Continue);
@@ -427,7 +428,7 @@ async fn paused_runtime_resumes_and_preserves_follow_up_inputs() {
 
     sender.send(SteeringMessage::Pause).expect("pause should send");
     sender
-        .send(SteeringMessage::FollowUpInput("queued while paused".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("queued while paused".to_string())))
         .expect("follow-up should send");
     sender.send(SteeringMessage::Resume).expect("resume should send");
 
@@ -649,6 +650,112 @@ fn update_throttle_advance_to_does_not_count_event() {
     assert!(!throttle.should_emit(200, false, 256, 2));
     // 256 new bytes past 100 meets the threshold.
     assert!(throttle.should_emit(356, false, 256, 2));
+}
+
+#[tokio::test]
+async fn admitted_steer_receives_one_accepted_outcome_with_a_stable_intent_id() {
+    let mut steering = RuntimeSteering::default();
+    let (steer, receipt) = FollowUpSteer::channel("ship it".to_string());
+
+    let intent = steering.admit_follow_up_steer(steer).expect("steer should be admitted");
+    let outcome = receipt.await.expect("receipt must be resolved");
+
+    assert_eq!(outcome, SteerOutcome::Accepted { intent_id: intent.id().to_string() });
+    assert_eq!(intent.text(), "ship it");
+    assert!(steering.has_pending_follow_up_inputs());
+    // The receipt resolves once: dropping the outcome cannot produce a second.
+    assert_eq!(steering.pending_follow_up_intents().len(), 1);
+}
+
+#[tokio::test]
+async fn closing_admission_rejects_late_steers_without_queueing_them() {
+    let mut steering = RuntimeSteering::default();
+    steering.close_admission();
+
+    let (steer, receipt) = FollowUpSteer::channel("too late".to_string());
+    assert!(steering.admit_follow_up_steer(steer).is_none());
+
+    assert_eq!(receipt.await.unwrap(), SteerOutcome::Rejected { reason: SteerRejection::TurnClosing });
+    assert!(!steering.has_pending_follow_up_inputs());
+
+    // A new turn reopens admission.
+    steering.open_admission();
+    assert!(
+        steering
+            .admit_follow_up_steer(FollowUpSteer::new("next turn".to_string()))
+            .is_some()
+    );
+}
+
+#[tokio::test]
+async fn late_steers_are_rejected_when_the_next_turn_drains_the_channel() {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut steering = RuntimeSteering::new(Some(receiver));
+    steering.close_admission();
+
+    let (steer, receipt) = FollowUpSteer::channel("after close".to_string());
+    sender
+        .send(SteeringMessage::FollowUpInput(steer))
+        .expect("late steer queued in channel");
+
+    // Reopening without draining would silently admit it into the next turn.
+    steering.drain_rejected_steers();
+    steering.open_admission();
+
+    assert_eq!(
+        receipt.await.expect("late receipt resolved"),
+        SteerOutcome::Rejected { reason: SteerRejection::TurnClosing }
+    );
+    assert!(!steering.has_pending_follow_up_inputs());
+}
+
+#[tokio::test]
+async fn cancellation_takes_precedence_over_a_pending_steer() {
+    let mut steering = RuntimeSteering::default();
+    steering.set_cancellation_precedence(true);
+
+    let (steer, receipt) = FollowUpSteer::channel("outranked".to_string());
+    assert!(steering.admit_follow_up_steer(steer).is_none());
+    assert_eq!(receipt.await.unwrap(), SteerOutcome::Rejected { reason: SteerRejection::CancellationPrecedence });
+}
+
+#[tokio::test]
+async fn a_full_follow_up_queue_rejects_the_steer() {
+    let mut steering = RuntimeSteering::default();
+    for _ in 0..(MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS) {
+        steering.try_queue_follow_up_input("filler".to_string()).expect("fill queue");
+    }
+
+    let (steer, receipt) = FollowUpSteer::channel("overflow".to_string());
+    assert!(steering.admit_follow_up_steer(steer).is_none());
+    assert_eq!(receipt.await.unwrap(), SteerOutcome::Rejected { reason: SteerRejection::QueueFull });
+}
+
+#[tokio::test]
+async fn distinct_steers_are_admitted_in_fifo_order_with_distinct_ids() {
+    let mut steering = RuntimeSteering::default();
+    let mut receipts = Vec::new();
+    for text in ["first", "second", "third"] {
+        let (steer, receipt) = FollowUpSteer::channel(text.to_string());
+        assert!(steering.admit_follow_up_steer(steer).is_some());
+        receipts.push(receipt);
+    }
+    let ids: Vec<String> =
+        futures::future::join_all(receipts.into_iter().map(async |receipt| match receipt.await.unwrap() {
+            SteerOutcome::Accepted { intent_id } => intent_id,
+            other => panic!("unexpected outcome: {other:?}"),
+        }))
+        .await;
+    assert_eq!(ids.len(), 3);
+    let mut unique = ids.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(unique.len(), 3, "each steer must own a distinct intent id");
+
+    let admitted: Vec<String> = (0..3)
+        .map(|_| steering.pop_follow_up_intent().expect("intents stay FIFO").into_parts().1)
+        .collect();
+    assert_eq!(admitted, vec!["first", "second", "third"]);
 }
 
 #[test]

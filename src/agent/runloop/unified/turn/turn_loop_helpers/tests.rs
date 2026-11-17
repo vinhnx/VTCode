@@ -8,7 +8,7 @@ use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use std::time::Duration;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::core::agent::steering::{FollowUpSteer, SteerOutcome, SteerRejection, SteeringMessage};
 use vtcode_core::llm::provider::MessageRole;
 
 #[test]
@@ -328,11 +328,11 @@ async fn steering_follow_up_inputs_apply_mid_turn_in_order() {
     let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender
-        .send(SteeringMessage::FollowUpInput("first".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("first".to_string())))
         .expect("first follow-up");
     sender.send(SteeringMessage::Resume).expect("stray resume");
     sender
-        .send(SteeringMessage::FollowUpInput("second".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("second".to_string())))
         .expect("second follow-up");
     backing.set_steering_receiver(receiver);
 
@@ -443,7 +443,7 @@ async fn paused_steering_accepts_follow_up_before_resume() {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender.send(SteeringMessage::Pause).expect("pause");
     sender
-        .send(SteeringMessage::FollowUpInput("refine search".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("refine search".to_string())))
         .expect("follow-up");
     let resume_sender = sender.clone();
     let resume_task = tokio::spawn(async move {
@@ -473,13 +473,77 @@ async fn paused_steering_accepts_follow_up_before_resume() {
 }
 
 #[tokio::test]
+async fn mid_turn_steer_receipt_is_accepted_and_reaches_model_history() {
+    let mut backing = TestTurnProcessingBacking::new().await;
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (steer, receipt) = FollowUpSteer::channel("change of plan".to_string());
+    sender.send(SteeringMessage::FollowUpInput(steer)).expect("steer");
+    backing.set_steering_receiver(receiver);
+
+    let mut working_history = Vec::new();
+    let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
+    let handled = {
+        let mut ctx = backing.turn_loop_context();
+        handle_steering_messages(&mut ctx, &mut working_history, &mut result)
+            .await
+            .expect("handle steering")
+    };
+
+    assert!(!handled);
+    let outcome = receipt.await.expect("receipt resolved at admission");
+    let SteerOutcome::Accepted { intent_id } = outcome else {
+        panic!("a mid-turn steer with room in the queue must be accepted");
+    };
+    assert!(!intent_id.is_empty());
+    let steered: Vec<String> = working_history
+        .iter()
+        .filter(|message| message.role == MessageRole::User)
+        .map(|message| message.content.as_text().to_string())
+        .collect();
+    assert_eq!(steered, vec!["change of plan".to_string()]);
+    assert!(
+        working_history
+            .iter()
+            .any(|message| message.metadata.as_ref().and_then(|m| m.intent_id()) == Some(intent_id.as_str())),
+        "the tagged intent identity must survive into model-facing history"
+    );
+}
+
+#[tokio::test]
+async fn steering_stop_rejects_queued_receipts_with_cancellation_precedence() {
+    let mut backing = TestTurnProcessingBacking::new().await;
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (steer, receipt) = FollowUpSteer::channel("outranked".to_string());
+    sender.send(SteeringMessage::FollowUpInput(steer)).expect("steer");
+    sender.send(SteeringMessage::SteerStop).expect("stop");
+    backing.set_steering_receiver(receiver);
+
+    let mut working_history = Vec::new();
+    let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
+    let handled = {
+        let mut ctx = backing.turn_loop_context();
+        handle_steering_messages(&mut ctx, &mut working_history, &mut result)
+            .await
+            .expect("handle steering")
+    };
+
+    assert!(handled, "a stop signal interrupts the turn");
+    assert!(matches!(result, TurnLoopResult::Cancelled));
+    assert_eq!(
+        receipt.await.expect("receipt resolved on cancellation"),
+        SteerOutcome::Rejected { reason: SteerRejection::CancellationPrecedence }
+    );
+    assert!(working_history.is_empty(), "a rejected steer must not reach model history");
+}
+
+#[tokio::test]
 async fn paused_steering_keeps_follow_up_after_resume_in_same_batch() {
     let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender.send(SteeringMessage::Pause).expect("pause");
     sender.send(SteeringMessage::Resume).expect("resume");
     sender
-        .send(SteeringMessage::FollowUpInput("use the queued note".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("use the queued note".to_string())))
         .expect("follow-up");
     backing.set_steering_receiver(receiver);
 
@@ -507,7 +571,7 @@ async fn steering_stop_beats_queued_follow_up() {
     let mut backing = TestTurnProcessingBacking::new().await;
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     sender
-        .send(SteeringMessage::FollowUpInput("ignore me".to_string()))
+        .send(SteeringMessage::FollowUpInput(FollowUpSteer::new("ignore me".to_string())))
         .expect("follow-up");
     sender.send(SteeringMessage::SteerStop).expect("stop");
     backing.set_steering_receiver(receiver);

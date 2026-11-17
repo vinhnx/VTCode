@@ -40,6 +40,8 @@ pub const TURN_QUEUE_REMOVE: &str = "turn/queue/remove";
 pub const TURN_QUEUE_EDIT: &str = "turn/queue/edit";
 /// Inject a prompt into the live turn as steering input instead of queueing it.
 pub const TURN_STEER: &str = "turn/steer";
+/// Terminal runtime acknowledgment for a `turn/steer` handoff.
+pub const TURN_STEER_RESULT: &str = "turn/steer/result";
 /// Execute a `/goal` command against the selected session's goal loop.
 pub const GOAL_EXECUTE: &str = "goal/execute";
 

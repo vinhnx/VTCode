@@ -111,6 +111,12 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         completed_turn_prompt_message_index,
         preparation_started_at,
     } = gate;
+    // A new turn owns a fresh admission window. Abandon receipts left over
+    // from the previous turn so their inputs fall through to the ordinary
+    // queue exactly once instead of being stranded on a dead channel.
+    runtime.drain_rejected_steers();
+    runtime.open_admission();
+    ctrl_c_state.reject_pending_steers();
     if next_turn_input.trim().is_empty() {
         return Ok(TurnPrepFlow::ContinueLoop);
     }

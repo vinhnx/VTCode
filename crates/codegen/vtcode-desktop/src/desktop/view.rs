@@ -884,9 +884,10 @@ struct DesktopView {
     queue_dropped_total: usize,
     /// Whether a take-latest request is in flight.
     take_latest_pending: bool,
-    /// Echo id of the queued row whose steer request is in flight. The row
-    /// stays visible until the service confirms it reached a live turn.
-    steer_pending_echo_id: Option<String>,
+    /// Queued-row echo id to receipt id for steers whose runtime outcome is
+    /// still pending. An empty receipt id means the request is in flight.
+    /// Rows stay visible until their receipt resolves.
+    steer_pending: std::collections::BTreeMap<String, String>,
     /// Echo id of the queued row currently being edited inline, if any. Only
     /// one row carries the shared edit input at a time.
     editing_queue_echo_id: Option<String>,

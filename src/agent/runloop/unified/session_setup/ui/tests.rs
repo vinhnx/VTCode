@@ -525,13 +525,13 @@ fn ordinary_steer_still_routes_to_steering_channel() {
     assert!(matches!(steering_rx.try_recv(), Ok(SteeringMessage::FollowUpInput(_))));
     assert!(settings_rx.try_recv().is_err());
     assert!(
-        state.take_steer_delivered(),
-        "successful steering delivery must latch so the runloop does not queue twice"
+        state.take_steer_receipt("keep going").is_some(),
+        "a successful handoff must register a per-message receipt so the runloop does not queue twice"
     );
 }
 
 #[test]
-fn steer_without_steering_sender_leaves_delivery_latch_clear() {
+fn steer_without_steering_sender_registers_no_receipt() {
     let state = Arc::new(state::CtrlCState::new());
     let notify = Arc::new(Notify::new());
     let (settings_events, _settings_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -547,8 +547,8 @@ fn steer_without_steering_sender_leaves_delivery_latch_clear() {
 
     callback(&InlineEvent::Steer("queue me".into()));
     assert!(
-        !state.take_steer_delivered(),
-        "undelivered steer must leave the latch clear so the runloop queues it"
+        state.take_steer_receipt("queue me").is_none(),
+        "an undelivered steer must have no receipt so the runloop queues it"
     );
 }
 

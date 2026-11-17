@@ -254,12 +254,15 @@ impl DesktopView {
     /// FIFO dispatch. The row stays put until the service confirms delivery;
     /// without a live turn the prompt remains queued and an error is shown.
     pub(super) fn steer_queued_submission(&mut self, echo_id: &str, cx: &mut Context<Self>) {
+        // Single-flight: the response/notification router binds receipts by
+        // the one pending row. Allowing a second steer would mis-correlate
+        // acks because responses carry no per-request identity.
+        if !self.steer_pending.is_empty() {
+            return;
+        }
         let Some(session_id) = self.selected_session_id.clone() else {
             return;
         };
-        if self.steer_pending_echo_id.is_some() {
-            return;
-        }
         let Some(entry) = self.queued_submissions.iter().find(|entry| entry.echo_id == echo_id) else {
             return;
         };
@@ -278,7 +281,7 @@ impl DesktopView {
             return;
         }
         self.clear_error();
-        self.steer_pending_echo_id = Some(echo_id.to_string());
+        let _ = self.steer_pending.insert(echo_id.to_string(), String::new());
         cx.notify();
     }
 
@@ -578,7 +581,7 @@ impl DesktopView {
         self.queue_previews.clear();
         self.queue_dropped_total = 0;
         self.take_latest_pending = false;
-        self.steer_pending_echo_id = None;
+        self.steer_pending.clear();
         self.editing_queue_echo_id = None;
         self.queue_edit_pending = None;
         self.pending_composer_restore = None;

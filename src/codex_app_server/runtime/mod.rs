@@ -677,8 +677,8 @@ async fn handle_steering_message(
 
     match steering {
         SteeringMessage::SteerStop => client.turn_interrupt(thread_id, turn_id).await,
-        SteeringMessage::FollowUpInput(input) => {
-            let input = input.trim();
+        SteeringMessage::FollowUpInput(steer) => {
+            let input = steer.text.trim();
             if input.is_empty() {
                 return Ok(());
             }

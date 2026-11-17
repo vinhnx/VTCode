@@ -550,7 +550,7 @@ fn steer_keeps_the_row_until_the_service_confirms(cx: &mut TestAppContext) {
         });
         view.steer_queued_submission("echo-steer", cx);
         assert_eq!(view.queued_submissions.len(), 1, "the row waits for confirmation");
-        assert_eq!(view.steer_pending_echo_id.as_deref(), Some("echo-steer"));
+        assert!(view.steer_pending.contains_key("echo-steer"));
     });
     let BackendCommand::Request { method, params } = requests.try_recv().expect("steer request") else {
         panic!("expected steer request");

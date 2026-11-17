@@ -9,7 +9,7 @@ use vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::features::FeatureSet;
-use vtcode_core::core::agent::steering::{FollowUpProvenance, SteeringMessage};
+use vtcode_core::core::agent::steering::{FollowUpProvenance, FollowUpSteer, SteerRejection, SteeringMessage};
 use vtcode_core::llm::provider as uni;
 
 #[derive(Debug, Clone)]
@@ -101,6 +101,14 @@ pub(super) async fn handle_steering_messages(
         }
 
         if pending.iter().any(|message| matches!(message, SteeringMessage::SteerStop)) {
+            // Cancellation outranks steering: reject every steer in this batch
+            // with an explicit reason so senders fall back exactly once.
+            ctx.runtime_steering.set_cancellation_precedence(true);
+            for message in pending {
+                if let SteeringMessage::FollowUpInput(steer) = message {
+                    steer.reject(SteerRejection::CancellationPrecedence);
+                }
+            }
             cancel_for_steering_stop(tool_registry, result).await;
             display_status(renderer, "Stop requested by steering signal.")?;
             break Ok(true);
@@ -108,8 +116,8 @@ pub(super) async fn handle_steering_messages(
 
         if let Some(pause_index) = pending.iter().position(|message| matches!(message, SteeringMessage::Pause)) {
             for message in pending.drain(..pause_index) {
-                if let SteeringMessage::FollowUpInput(input) = message {
-                    queue_follow_up_input(renderer, ctx.runtime_steering, input, &mut accepted_this_call)?;
+                if let SteeringMessage::FollowUpInput(steer) = message {
+                    queue_follow_up_input(renderer, ctx.runtime_steering, steer, &mut accepted_this_call)?;
                 }
             }
             pending.remove(0);
@@ -132,8 +140,8 @@ pub(super) async fn handle_steering_messages(
         }
 
         for message in pending {
-            if let SteeringMessage::FollowUpInput(input) = message {
-                queue_follow_up_input(renderer, ctx.runtime_steering, input, &mut accepted_this_call)?;
+            if let SteeringMessage::FollowUpInput(steer) = message {
+                queue_follow_up_input(renderer, ctx.runtime_steering, steer, &mut accepted_this_call)?;
             }
         }
     };
@@ -179,17 +187,14 @@ pub(super) async fn handle_steering_messages(
 }
 
 fn queue_follow_up_input(
-    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
+    _renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
-    input: String,
+    steer: FollowUpSteer,
     accepted: &mut Vec<String>,
 ) -> Result<()> {
-    match runtime_steering.try_queue_follow_up_input(input.clone()) {
-        Ok(()) => accepted.push(input),
-        Err(error) => {
-            tracing::warn!(%error, "Rejected follow-up steering input");
-            display_status(renderer, &format!("Follow-up Input Rejected: {error}"))?;
-        }
+    let text = steer.text.clone();
+    if runtime_steering.admit_follow_up_steer(steer).is_some() {
+        accepted.push(text);
     }
     Ok(())
 }
@@ -204,7 +209,7 @@ fn queue_follow_up_input(
 /// completion, verification recovery) stay quiet: the full internal prompt is
 /// model-facing, so echoing it to the transcript is TUI noise. Only genuine
 /// user steering gets a `Steered into active turn` status line.
-fn apply_pending_follow_ups_mid_turn(
+pub(crate) fn apply_pending_follow_ups_mid_turn(
     renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     working_history: &mut Vec<uni::Message>,
@@ -334,7 +339,7 @@ pub(super) fn restore_fresh_turn_tool_guidance(history: &mut Vec<uni::Message>, 
 /// Append a steered user message tagged with its intent id and provenance so
 /// restart recovery can dedupe it (mirrors the corresponding
 /// `AgentSessionState` insertion method).
-fn push_steered_user_message(
+pub(crate) fn push_steered_user_message(
     working_history: &mut Vec<uni::Message>,
     intent_id: &str,
     input: &str,
@@ -381,8 +386,8 @@ async fn handle_pause_signal(
                 cancel_for_steering_stop(tool_registry, result).await;
                 return Ok(true);
             }
-            SteeringMessage::FollowUpInput(input) => {
-                queue_follow_up_input(renderer, runtime_steering, input, accepted)?;
+            SteeringMessage::FollowUpInput(steer) => {
+                queue_follow_up_input(renderer, runtime_steering, steer, accepted)?;
             }
             SteeringMessage::Pause => {}
         }
@@ -405,8 +410,8 @@ async fn handle_pause_signal(
                         cancel_for_steering_stop(tool_registry, result).await;
                         return Ok(true);
                     }
-                    Some(SteeringMessage::FollowUpInput(input)) => {
-                        queue_follow_up_input(renderer, runtime_steering, input, accepted)?;
+                    Some(SteeringMessage::FollowUpInput(steer)) => {
+                        queue_follow_up_input(renderer, runtime_steering, steer, accepted)?;
                     }
                     Some(SteeringMessage::Pause) => {}
                     None => return Ok(false),

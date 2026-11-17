@@ -71,6 +71,7 @@ pub(crate) enum BackendEvent {
     Interaction(InteractionRequest),
     TurnStatus(Value),
     TurnQueueStatus(Value),
+    TurnSteerResult(Value),
     UiProgress(Value),
     UpdateInstallProgress(protocol::UpdateInstallState),
     Exited {
@@ -524,6 +525,7 @@ fn decode_frame(
                 .map_err(|_error| ProtocolDecodeError),
             protocol::method::TURN_STATUS => Ok(Some(BackendEvent::TurnStatus(params))),
             protocol::method::TURN_QUEUE_STATUS => Ok(Some(BackendEvent::TurnQueueStatus(params))),
+            protocol::method::TURN_STEER_RESULT => Ok(Some(BackendEvent::TurnSteerResult(params))),
             protocol::method::UI_PROGRESS => Ok(Some(BackendEvent::UiProgress(params))),
             protocol::method::UPDATE_INSTALL_PROGRESS => serde_json::from_value::<protocol::UpdateInstallState>(params)
                 .map(BackendEvent::UpdateInstallProgress)

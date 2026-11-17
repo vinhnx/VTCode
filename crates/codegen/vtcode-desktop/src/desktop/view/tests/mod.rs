@@ -789,6 +789,7 @@ mod settings_spacing;
 mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
+mod steer_result;
 mod storage_settings;
 mod swipe_navigation_debounce;
 mod tab_queue;

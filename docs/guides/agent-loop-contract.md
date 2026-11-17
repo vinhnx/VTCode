@@ -514,7 +514,11 @@ Steering follow-ups are persisted as UUID-tagged intents with provenance: genuin
 harness continuations and recovery prompts are `synthetic`. Provenance survives mid-turn and turn-boundary application,
 resume recovery, and envelope recovery; intents written before provenance existed default to `user_input`. The schema-v3
 session envelope keeps at most 16 pending intents and a 64-ID applied window. Recovery replays only pending IDs absent
-from both the applied window and tagged history; the public `FollowUpInput(String)` message shape remains unchanged.
+from both the applied window and tagged history. `FollowUpInput` now carries a `FollowUpSteer` with an optional one-shot
+receipt; the runtime resolves it with exactly one terminal outcome (`Accepted` with the intent id, or `Rejected` with a
+reason) at the single authoritative admission point. A steer is admitted only when the turn is open, cancellation does
+not take precedence, and the follow-up queue has room; closing admission is atomic with the final steering drain, and
+late arrivals are rejected rather than stranded.
 Mid-turn intents are appended as steering arrives; other pending intents enter live history at the next turn-loop
 iteration boundary (after the current tool-call batch). Both are acknowledged only after the post-turn history
 checkpoint succeeds.

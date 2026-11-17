@@ -40,10 +40,28 @@ fn steer_params_and_result_round_trip() {
         session_id: "session".into(),
         steered: true,
         queue_depth: 2,
+        pending: true,
+        receipt_id: "receipt-1".into(),
     };
     let value = serde_json::to_value(&result).unwrap();
     assert_eq!(value["steered"], serde_json::json!(true));
+    assert_eq!(value["pending"], serde_json::json!(true));
+    assert_eq!(value["receiptId"], serde_json::json!("receipt-1"));
     assert_eq!(serde_json::from_value::<TurnSteerResult>(value).unwrap(), result);
+
+    let notification = TurnSteerResultNotification {
+        session_id: "session".into(),
+        turn_id: "turn-1".into(),
+        receipt_id: "receipt-1".into(),
+        entry_id: "qe-1".into(),
+        accepted: true,
+        reason: None,
+        intent_id: "intent-1".into(),
+        queue_depth: 1,
+    };
+    let value = serde_json::to_value(&notification).unwrap();
+    assert_eq!(value["receiptId"], serde_json::json!("receipt-1"));
+    assert_eq!(serde_json::from_value::<TurnSteerResultNotification>(value).unwrap(), notification);
 }
 
 #[test]

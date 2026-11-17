@@ -7,7 +7,7 @@
 //! a `submit` prompt starts a real turn when set.
 
 use super::*;
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::core::agent::steering::{FollowUpSteer, SteeringMessage};
 use vtcode_desktop_protocol::slash_command::{GoalSlashCommandParseError, parse_goal_slash_command};
 
 use crate::agent::runloop::unified::stop_requests;
@@ -77,7 +77,7 @@ pub(super) async fn handle_goal_execute(context: &ServiceContext, request: &Requ
     // queued turn appears. Without a steering channel, fall back to submit.
     let submit = match effect.submit {
         Some(prompt) if turn_active => match steering {
-            Some(sender) => match sender.send(SteeringMessage::FollowUpInput(prompt.clone())) {
+            Some(sender) => match sender.send(SteeringMessage::FollowUpInput(FollowUpSteer::new(prompt.clone()))) {
                 Ok(()) => None,
                 Err(_) => Some(prompt),
             },

@@ -20,7 +20,7 @@ use vtcode_core::config::constants::app as app_constants;
 use vtcode_core::config::constants::ui as ui_constants;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::core::agent::steering::{FollowUpSteer, SteeringMessage};
 use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::tools::exec_session::ExecSessionManager;
 use vtcode_core::utils::dot_config::take_startup_user_config;
@@ -306,16 +306,19 @@ pub(crate) fn build_session_event_callback(
                 let _ = settings_events.send(event.clone());
                 return;
             }
-            // Hand text-only steers to the live steering channel for mid-turn
-            // injection. When the channel is unavailable (no sender yet, or
-            // closed) leave the delivery latch clear so the runloop Steer
-            // handler queues the message for the next ready boundary instead
-            // of dropping it.
+            // Hand text-only steers to the live steering channel with a
+            // per-message receipt. The runloop parks the input until the
+            // runtime reports acceptance; a rejection (or a dropped receipt on
+            // turn replacement) routes it through the ordinary queue once.
+            // Without a live channel no receipt is registered, so the runloop
+            // queues the message directly instead of dropping it.
             if !input.has_attachments()
                 && let Some(sender) = steering_sender.as_ref()
-                && sender.send(SteeringMessage::FollowUpInput(input.text.clone())).is_ok()
             {
-                state.mark_steer_delivered();
+                let (steer, receipt) = FollowUpSteer::channel(input.text.clone());
+                if sender.send(SteeringMessage::FollowUpInput(steer)).is_ok() {
+                    state.register_steer_receipt(input.text.clone(), receipt, input.clone());
+                }
             }
         }
         InlineEvent::Transient(

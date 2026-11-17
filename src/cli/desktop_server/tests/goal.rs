@@ -143,7 +143,7 @@ async fn goal_execute_steers_live_turn_instead_of_queueing() {
     assert!(result.submit.is_none(), "steered submit must not queue a turn");
     let steered = steer_rx.try_recv().expect("steering message");
     assert!(
-        matches!(steered, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text.starts_with("Ship it") && text.contains("GOAL ACHIEVED:")),
+        matches!(steered, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(steer) if steer.text.starts_with("Ship it") && steer.text.contains("GOAL ACHIEVED:")),
         "objective plus completion contract must steer the live turn"
     );
 }

@@ -109,8 +109,112 @@ impl fmt::Display for FollowUpQueueFull {
 
 impl std::error::Error for FollowUpQueueFull {}
 
+/// Why a runtime refused a live steer. The sender uses this to decide how to
+/// fall back without ever losing the message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SteerRejection {
+    /// The turn's admission window is already closed.
+    TurnClosing,
+    /// Cancellation was requested and takes precedence over the steer.
+    CancellationPrecedence,
+    /// Both the primary follow-up queue and its overflow park are full.
+    QueueFull,
+    /// There is no live turn to steer (no receiver or no active turn).
+    NoLiveTurn,
+    /// The addressed session, turn, or queue entry was superseded.
+    Superseded,
+}
+
+impl fmt::Display for SteerRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::TurnClosing => "turn is closing",
+            Self::CancellationPrecedence => "cancellation takes precedence",
+            Self::QueueFull => "follow-up queue is full",
+            Self::NoLiveTurn => "no live turn",
+            Self::Superseded => "session or turn was superseded",
+        };
+        f.write_str(label)
+    }
+}
+
+/// The single terminal outcome of a live steering handoff. Exactly one of
+/// these is sent on the receipt carried by [`FollowUpSteer`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SteerOutcome {
+    /// The runtime admitted the intent into the follow-up queue. `intent_id`
+    /// is the stable identity preserved through history and checkpointing.
+    Accepted { intent_id: String },
+    /// The runtime refused the steer; the sender must fall back to its own
+    /// queue so the message is delivered exactly once.
+    Rejected { reason: SteerRejection },
+}
+
+impl SteerOutcome {
+    /// Whether the steer was admitted.
+    #[must_use]
+    pub const fn accepted(&self) -> bool {
+        matches!(self, Self::Accepted { .. })
+    }
+}
+
+/// One-shot channel used to report a steer's terminal outcome back to its sender.
+pub type SteerReceiptSender = tokio::sync::oneshot::Sender<SteerOutcome>;
+/// Receiver half of [`SteerReceiptSender`].
+pub type SteerReceipt = tokio::sync::oneshot::Receiver<SteerOutcome>;
+
+/// A follow-up steering input together with its optional delivery receipt.
+///
+/// The runtime resolves the receipt at the exact moment it admits or refuses
+/// the intent, so the sender never has to guess from a channel send whether
+/// the message reached model-facing history.
+#[derive(Debug)]
+pub struct FollowUpSteer {
+    pub text: String,
+    pub receipt: Option<SteerReceiptSender>,
+}
+
+impl FollowUpSteer {
+    /// A steer without a receipt (control-path and embedded callers).
+    #[must_use]
+    pub fn new(text: String) -> Self {
+        Self { text, receipt: None }
+    }
+
+    /// A steer whose sender expects a terminal outcome.
+    #[must_use]
+    pub fn with_receipt(text: String, receipt: SteerReceiptSender) -> Self {
+        Self { text, receipt: Some(receipt) }
+    }
+
+    /// Create a steer and the receiver for its terminal outcome.
+    #[must_use]
+    pub fn channel(text: String) -> (Self, SteerReceipt) {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        (Self::with_receipt(text, sender), receiver)
+    }
+
+    /// Resolve the receipt with exactly one terminal outcome. Consuming `self`
+    /// makes a second outcome impossible.
+    pub fn resolve(self, outcome: SteerOutcome) {
+        if let Some(receipt) = self.receipt {
+            // A dropped receiver means the sender no longer cares; there is
+            // nobody to deliver a second outcome to.
+            let _ = receipt.send(outcome);
+        }
+    }
+
+    /// Reject this steer with a reason.
+    pub fn reject(self, reason: SteerRejection) {
+        self.resolve(SteerOutcome::Rejected { reason });
+    }
+}
+
 /// Messages used to steer the agent's execution loop from an external source.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// This is a control-plane value only: it is never serialized or compared for
+/// equality, so it can carry a one-shot receipt directly.
+#[derive(Debug)]
 pub enum SteeringMessage {
     /// Stop the agent's execution loop immediately (Steering).
     SteerStop,
@@ -118,8 +222,7 @@ pub enum SteeringMessage {
     Pause,
     /// Resume the agent's execution loop.
     Resume,
-    /// Inject input as a follow-up user message. The turn loop applies it to
-    /// live history at the next iteration boundary (mid-turn steering) or, if
-    /// the turn ends first, delivers it at the next turn boundary.
-    FollowUpInput(String),
+    /// Inject input as a follow-up user message and resolve its delivery
+    /// receipt when the runtime admits or refuses it.
+    FollowUpInput(FollowUpSteer),
 }

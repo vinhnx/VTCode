@@ -151,7 +151,9 @@ impl DesktopView {
             self.take_latest_pending = false;
         } else if method == protocol::method::TURN_STEER {
             // Leave the row queued: a rejected steer must not lose the prompt.
-            self.steer_pending_echo_id = None;
+            if let Some(echo_id) = self.steer_pending.keys().next().cloned() {
+                let _ = self.steer_pending.remove(&echo_id);
+            }
         } else if method == protocol::method::TURN_QUEUE_EDIT {
             // Restore the pre-edit prompt the service still holds.
             if let Some((echo_id, original)) = self.queue_edit_pending.take()
