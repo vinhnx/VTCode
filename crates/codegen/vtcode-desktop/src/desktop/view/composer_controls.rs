@@ -515,7 +515,7 @@ fn effort_options(
                     .font_semibold()
                     .text_color(colors.foreground)
             })
-            .when(!enabled, |row| row.text_color(colors.muted_foreground))
+            .when(!effort_row_highlighted(selected, enabled), |row| row.text_color(colors.muted_foreground))
             .when(enabled && !selected, |row| row.hover(|hover| hover.bg(colors.accent).text_color(colors.foreground)))
             .when(enabled, |row| row.cursor_pointer())
             .aria_position_in_set(level_count - index)
@@ -575,9 +575,10 @@ fn effort_options(
         .into_any_element()
 }
 
-/// Whether a selected effort row keeps its accent tint. A disabled control has
-/// no active affordance, so its selected row must look as dark as the disabled
-/// model button rather than a lit, clickable choice.
+/// Whether an effort row uses its active (accent-tinted, bright) style. This
+/// drives both the highlight and its muted complement so the two can never
+/// diverge: a disabled row has no active affordance and must look as dark as
+/// the disabled model button, while unselected rows stay quiet when enabled.
 fn effort_row_highlighted(selected: bool, enabled: bool) -> bool {
     selected && enabled
 }
