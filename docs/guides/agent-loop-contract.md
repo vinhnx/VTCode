@@ -84,6 +84,11 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   Approved-plan execution also reaches this recovery after 15 consecutive inspections without implementation progress,
   including distinct source ranges and saved tool-output reads. Ordinary research still requires repetition or low-signal
   evidence. A recurrent inspection-only stall in approved execution ends in a blocked handoff.
+- Declared-edit enforcement: an explicit edit declaration during approved-plan execution ("now applying …") admits at
+  most 3 further inspections; beyond that reads are refused until a mutation lands, while tracker calls, live waits,
+  and verifiers stay available and one reserved patch-recovery read still passes. A mutation closes the pending
+  declaration; a text-only answer without a declaration clears it outside recovery. Refusals charge the
+  blocked-call guard, so persistent defiance escalates to the existing blocked handoff instead of looping.
 - Cleared historical arguments are placeholders, not callable input. Reusing `{"cleared":"tool_input"}` consumes the
   validation failure allowance; policy errors retain precedence and every rejected/skipped call gets one response.
   Tracker notes append, so repeating an update does not replace earlier notes.

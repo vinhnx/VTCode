@@ -21,6 +21,7 @@ use crate::agent::runloop::unified::turn::tool_outcomes::{ToolOutcomeContext, ha
 use crate::agent::runloop::unified::turn::turn_loop::{
     PENDING_VERIFICATION_BLOCK_REASON, RECOVERY_CONTRACT_VIOLATION_REASON, budget_recovery_final_response,
 };
+use crate::agent::runloop::unified::turn::turn_loop_helpers::declares_imminent_edit;
 
 /// Result of processing a single turn.
 pub(crate) struct HandleTurnProcessingResultParams<'a> {
@@ -477,6 +478,31 @@ async fn block_verification_execution_limit(
 pub(crate) async fn handle_turn_processing_result<'a>(
     params: HandleTurnProcessingResultParams<'a>,
 ) -> Result<TurnHandlerOutcome> {
+    // Declared-edit enforcement (approved execution only): an explicit
+    // "now applying" claim arms a bounded inspection grace, enforced in
+    // validation; a mutation clears it, and a text-only answer without a
+    // declaration clears it outside recovery (false-positive valve).
+    match &params.processing_result {
+        TurnProcessingResult::ToolCalls { assistant_text, .. } => {
+            if params.ctx.is_approved_plan_execution()
+                && let Some(declaration) = declares_imminent_edit(assistant_text)
+            {
+                params.ctx.harness_state.arm_declared_edit(declaration);
+            }
+        }
+        TurnProcessingResult::TextResponse { text, .. } if params.ctx.is_approved_plan_execution() => {
+            match declares_imminent_edit(text) {
+                Some(declaration) => params.ctx.harness_state.arm_declared_edit(declaration),
+                // The valve is normal flow only: a recovery synthesis pass
+                // must not launder a pending declaration, or refuse → fuse
+                // → recover → disarm cycles would repeat the stall slowly
+                // instead of forcing the edit.
+                None if !params.ctx.is_recovery_active() => params.ctx.harness_state.clear_declared_edit(),
+                None => {}
+            }
+        }
+        _ => {}
+    }
     match params.processing_result {
         TurnProcessingResult::ToolCalls {
             tool_calls,

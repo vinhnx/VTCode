@@ -234,6 +234,16 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(outcome);
     }
 
+    if let Some(outcome) = enforce_declared_edit_guard(
+        ctx,
+        tool_call_id,
+        &canonical_tool_name,
+        effective_args,
+        prepared.readonly_classification,
+    ) {
+        return Ok(outcome);
+    }
+
     if let Some(outcome) = enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, effective_args) {
         return Ok(outcome);
     }

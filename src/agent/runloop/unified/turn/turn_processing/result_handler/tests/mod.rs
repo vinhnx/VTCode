@@ -281,6 +281,7 @@ fn capture_planning_recovery_diagnostics(
 
 mod assertions_piped;
 mod completion_navigation;
+mod declared_edit;
 mod harness_verification;
 mod incident_records;
 mod planning_recovery;

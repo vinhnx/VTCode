@@ -76,6 +76,7 @@ impl HarnessTurnState {
             recovery_rejected_synthesis: None,
             approved_plan_execution: false,
             approved_plan_recovery_retries: 0,
+            declared_edit: None,
             interview_denial_recovery_pending: false,
             preflight_circuit_recovery_pending: false,
             blocked_tool_recovery_pending: false,
@@ -382,6 +383,33 @@ impl HarnessTurnState {
     /// their dedicated safeguards remain responsible for those failure loops.
     pub(crate) fn reset_assistant_text_response_streak(&mut self) {
         self.consecutive_assistant_text_responses = 0;
+    }
+
+    /// Arm declared-edit enforcement for an explicit edit declaration. A
+    /// re-declaration never resets the grace: the pending declaration keeps
+    /// its count so declare/read cycles cannot mint fresh inspection budget
+    /// (the navigation-loop guard backstops the remainder).
+    pub(crate) fn arm_declared_edit(&mut self, declaration: String) {
+        if self.declared_edit.is_none() {
+            self.declared_edit = Some(DeclaredEditPending { grace_used: 0, declaration: declaration.into() });
+        }
+    }
+
+    /// Clear a pending declaration after a mutation landed or a text-only
+    /// answer superseded it.
+    pub(crate) fn clear_declared_edit(&mut self) {
+        self.declared_edit = None;
+    }
+
+    pub(crate) fn declared_edit_pending(&self) -> Option<&DeclaredEditPending> {
+        self.declared_edit.as_ref()
+    }
+
+    /// Count one admitted inspection against the pending declaration.
+    pub(crate) fn record_declared_edit_inspection(&mut self) {
+        if let Some(pending) = self.declared_edit.as_mut() {
+            pending.grace_used = pending.grace_used.saturating_add(1);
+        }
     }
 
     /// Record productive tool execution that is not represented by a normal

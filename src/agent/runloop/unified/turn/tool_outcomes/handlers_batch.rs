@@ -20,7 +20,8 @@ use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::{
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     PIPED_VERIFICATION_DIRECTIVE, PIPED_VERIFICATION_WARNING, VERIFICATION_RESULT_LOST_DIRECTIVE,
-    VERIFICATION_RESULT_LOST_WARNING, resolve_max_tool_retries, update_repetition_tracker_for_registry,
+    VERIFICATION_RESULT_LOST_WARNING, mutation_was_applied, resolve_max_tool_retries,
+    update_repetition_tracker_for_registry,
 };
 
 const DEFAULT_MAX_PARALLEL_TOOL_CALLS: usize = 4;
@@ -397,6 +398,14 @@ async fn execute_parallel_group_inner<'a, 'b>(
             // re-applies instead of blocking the turn on the failure summary.
             t_ctx.ctx.harness_state.reset_assistant_text_response_streak();
         }
+        // `mutation_was_applied` assumes mutating intent (every successful
+        // exec reports `command_success`), so gate on the args-aware intent:
+        // only a real mutation closes the announce-apply gap.
+        if vtcode_core::tools::tool_intent::classify_tool_intent(&name, &args).mutating
+            && mutation_was_applied(&outcome)
+        {
+            t_ctx.ctx.harness_state.clear_declared_edit();
+        }
         t_ctx
             .ctx
             .session_stats
@@ -728,6 +737,14 @@ async fn execute_and_handle_tool_call_inner<'a>(
         // A failed verifier grants fix-up edits; reset the text streak so the
         // model can diagnose the failure before the text cap re-applies.
         ctx.harness_state.reset_assistant_text_response_streak();
+    }
+    // `mutation_was_applied` assumes mutating intent (every successful
+    // exec reports `command_success`), so gate on the args-aware intent:
+    // only a real mutation closes the announce-apply gap.
+    if vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, &args_val).mutating
+        && mutation_was_applied(&pipeline_outcome)
+    {
+        ctx.harness_state.clear_declared_edit();
     }
     ctx.session_stats
         .set_verification_snapshot(repeated_tool_attempts.verification_snapshot());

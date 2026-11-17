@@ -348,6 +348,24 @@ pub(crate) fn enforce_read_after_write_guard(
     Some(ValidationResult::Blocked)
 }
 
+/// Read-only calls that observe live state rather than gathering reusable
+/// evidence, shared by the read caps and declared-edit enforcement so the
+/// exclusion cannot drift between guards. Tracker calls change state
+/// independently of file-read signatures and history caches, so both list
+/// and updates must execute against the current checklist. Session waits
+/// likewise observe live process state; a yielded result is not reusable
+/// evidence, even when its captured output is unchanged.
+fn is_live_state_observer_call(
+    tool_registry: &vtcode_core::tools::registry::ToolRegistry,
+    canonical_tool_name: &str,
+    effective_args: &Value,
+) -> bool {
+    canonical_tool_name == tool_names::TASK_TRACKER
+        || (vtcode_core::tools::tool_intent::is_command_session_tool(canonical_tool_name)
+            && vtcode_core::tools::tool_intent::command_session_action_is(effective_args, "wait"))
+        || tool_registry.is_completion_verifier_call(canonical_tool_name, effective_args)
+}
+
 /// Enforce the repeated read-only call guard.
 ///
 /// Uses a two-tier approach:
@@ -363,19 +381,7 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     effective_args: &Value,
     readonly_classification: bool,
 ) -> Option<ValidationResult> {
-    // Tracker calls are read-only with respect to workspace files, but their
-    // state changes independently of file-read signatures and history caches.
-    // Both list and updates must execute against the current checklist.
-    // Session waits likewise observe live process state; a yielded result is
-    // not reusable evidence, even when its captured output is unchanged.
-    if !readonly_classification
-        || canonical_tool_name == tool_names::TASK_TRACKER
-        || (vtcode_core::tools::tool_intent::is_command_session_tool(canonical_tool_name)
-            && vtcode_core::tools::tool_intent::command_session_action_is(effective_args, "wait"))
-        || ctx
-            .tool_registry
-            .is_completion_verifier_call(canonical_tool_name, effective_args)
-    {
+    if !readonly_classification || is_live_state_observer_call(ctx.tool_registry, canonical_tool_name, effective_args) {
         return None;
     }
 
@@ -542,6 +548,59 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
         return Some(ValidationResult::Handled);
     }
 
+    None
+}
+
+/// Inspections admitted after an explicit edit declaration during
+/// approved-plan execution. Covers same-batch [read, edit] shapes and one
+/// "grab the exact lines" follow-up; the incident turn ran 30+ reads past
+/// its first declaration, so 3 closes the announce-apply gap without
+/// stranding legitimate flows.
+pub(crate) const DECLARED_EDIT_GRACE_INSPECTIONS: u8 = 3;
+
+/// Enforce a declared edit during approved-plan execution: once the model
+/// says the edit is being applied, further inspection is refused past a
+/// small grace until a mutation lands. A text-only answer clears the
+/// pending declaration (pressure valve for false positives); a mutation
+/// clears it (gap closed). Rejections charge the blocked-call guard so
+/// persistent defiance escalates to the existing blocked handoff instead
+/// of looping.
+pub(crate) fn enforce_declared_edit_guard(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    effective_args: &Value,
+    readonly_classification: bool,
+) -> Option<ValidationResult> {
+    if !ctx.is_approved_plan_execution() || !readonly_classification {
+        return None;
+    }
+    if is_live_state_observer_call(ctx.tool_registry, canonical_tool_name, effective_args) {
+        return None;
+    }
+    // A reserved patch-recovery read is the fix-up path for a failed edit,
+    // not evidence gathering: never refuse it (mirrors the read-only
+    // guard bypass, and stays ahead of the grace counter).
+    if ctx.tool_registry.has_patch_recovery_read(canonical_tool_name, effective_args) {
+        return None;
+    }
+    let pending = ctx.harness_state.declared_edit_pending()?;
+    if pending.grace_used >= DECLARED_EDIT_GRACE_INSPECTIONS {
+        let block_reason = format!(
+            "You declared this edit ('{}'), but {DECLARED_EDIT_GRACE_INSPECTIONS} further inspections already ran with no mutation. Inspection is blocked until the edit lands: make it with edit_file/apply_patch from gathered evidence, or answer in text with the concrete missing fact.",
+            pending.declaration
+        );
+        let error_content = super::super::super::execution_result::build_error_content(
+            block_reason.clone(),
+            None,
+            None,
+            "declared_edit_pending",
+        )
+        .to_string();
+        push_guard_failure_messages(ctx, tool_call_id, canonical_tool_name, error_content, &block_reason);
+        return Some(ValidationResult::Blocked);
+    }
+    ctx.harness_state.record_declared_edit_inspection();
     None
 }
 

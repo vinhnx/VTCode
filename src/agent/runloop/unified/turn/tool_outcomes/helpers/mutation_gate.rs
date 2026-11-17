@@ -423,7 +423,7 @@ fn update_repetition_tracker_inner(
     false
 }
 
-fn mutation_was_applied(outcome: &ToolPipelineOutcome) -> bool {
+pub(crate) fn mutation_was_applied(outcome: &ToolPipelineOutcome) -> bool {
     match &outcome.status {
         ToolExecutionStatus::Success { output, command_success, modified_files, .. } => {
             if let Some(effective_change) = vtcode_core::tools::file_ops::diff_output_has_effective_change(output) {

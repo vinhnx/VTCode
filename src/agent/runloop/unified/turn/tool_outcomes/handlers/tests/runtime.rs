@@ -13,6 +13,7 @@ use vtcode_core::tools::registry::ToolExecutionError;
 mod admission;
 mod budgets;
 mod corrections;
+mod declared_edit;
 mod history;
 mod lifecycle;
 mod pairing;

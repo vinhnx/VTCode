@@ -53,8 +53,9 @@ pub(crate) use guards::{
     blocked_tool_call_messages_detailed, max_consecutive_blocked_tool_calls_per_turn,
 };
 use guards::{
-    enforce_blocked_tool_call_guard, enforce_duplicate_task_tracker_create_guard, enforce_read_after_write_guard,
-    enforce_repeated_read_only_call_guard, enforce_repeated_shell_run_guard, enforce_spool_chunk_read_guard,
+    enforce_blocked_tool_call_guard, enforce_declared_edit_guard, enforce_duplicate_task_tracker_create_guard,
+    enforce_read_after_write_guard, enforce_repeated_read_only_call_guard, enforce_repeated_shell_run_guard,
+    enforce_spool_chunk_read_guard,
 };
 pub(crate) use handlers_batch::{execute_and_handle_tool_call, handle_tool_call_batch_prepared};
 use rate_limit::acquire_adaptive_rate_limit_slot;

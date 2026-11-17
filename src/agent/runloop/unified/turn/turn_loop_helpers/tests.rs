@@ -1,5 +1,6 @@
 use super::{
-    extract_turn_config, handle_steering_messages, is_internal_harness_follow_up, is_stale_approved_plan_pause_response,
+    declares_imminent_edit, extract_turn_config, handle_steering_messages, is_internal_harness_follow_up,
+    is_stale_approved_plan_pause_response,
 };
 use crate::agent::runloop::unified::planning_workflow::{
     PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
@@ -589,4 +590,57 @@ async fn steering_stop_beats_queued_follow_up() {
     assert!(matches!(result, TurnLoopResult::Cancelled));
     assert!(working_history.is_empty());
     assert!(backing.deferred_follow_up_inputs().is_empty());
+}
+
+#[test]
+fn declares_imminent_edit_matches_incident_declarations() {
+    // Verbatim shapes from session-vtcode-20261117T162700Z turn 7c0e1b36,
+    // each followed only by more reads.
+    for text in [
+        "I’ve mapped the card layout and alignment gaps — now applying the breathing room, edge alignment, and modernized restyle.",
+        "I’ve mapped the card layout and its alignment issues — now I’ll apply the spacing, alignment, and modernized styling fixes.",
+        "I have enough context to start the card fixes — applying breathing room, alignment, and the modernized design now.",
+        "Making the edits now.",
+        "I will now apply the patch.",
+    ] {
+        assert_eq!(declares_imminent_edit(text).as_deref(), Some(text), "{text}");
+    }
+}
+
+#[test]
+fn declares_imminent_edit_rejects_reading_past_and_conditional_text() {
+    for text in [
+        "now reading the remaining details to make the edits precise.",
+        "now reading the exact card code to apply it cleanly.",
+        "I've applied the fix to card.rs.",
+        "I will apply the patch after review.",
+        "Applying careful review before the next step.",
+        "should I apply the patch?",
+        "the plan is now awaiting approval.",
+        "",
+        "   ",
+    ] {
+        assert_eq!(declares_imminent_edit(text), None, "{text}");
+    }
+}
+
+#[test]
+fn declares_imminent_edit_bounds_the_reversed_span() {
+    // "now" ending 63 chars after "applying" arms; ending at 65 it does not.
+    assert!(declares_imminent_edit(&format!("applying{} now", " x".repeat(30))).is_some());
+    assert_eq!(declares_imminent_edit(&format!("applying{} now", " x".repeat(31))), None);
+    // Whole-word "now": knowledge and snow must not arm.
+    assert_eq!(declares_imminent_edit("applying knowledge of the layout"), None);
+    assert_eq!(
+        declares_imminent_edit("applying snow effect to the header now"),
+        Some("applying snow effect to the header now".to_string())
+    );
+}
+
+#[test]
+fn declares_imminent_edit_returns_first_matching_trimmed_line() {
+    let text = "  mapping the card layout  \n\n  now applying the spacing fixes  \nmore detail here";
+    assert_eq!(declares_imminent_edit(text).as_deref(), Some("now applying the spacing fixes"));
+    let long = format!("now applying {}", "x".repeat(200));
+    assert_eq!(declares_imminent_edit(&long).as_deref().map(str::len), Some(160));
 }

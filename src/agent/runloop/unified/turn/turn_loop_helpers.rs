@@ -67,6 +67,43 @@ pub(super) fn is_stale_approved_plan_pause_response(text: &str) -> bool {
     pause_marker && unavailable_marker
 }
 
+/// Detects an explicit declaration that the edit is being applied now
+/// ("now applying …", "now I'll apply …"). Intentionally narrow:
+/// reading-framed ("now reading … to make the edits precise"), past-tense
+/// ("applied the fix"), and conditional ("will apply after review") text
+/// must not arm declared-edit enforcement. Returns the first matching
+/// line, trimmed and truncated, for the enforcement message.
+pub(super) fn declares_imminent_edit(text: &str) -> Option<String> {
+    /// Snippet budget for the enforcement message.
+    const MAX_DECLARATION_CHARS: usize = 160;
+    /// "now" must follow "applying" within this many characters; keeps the
+    /// reversed order ("applying … now") tight enough to exclude research
+    /// framing ("applying careful review before the next step").
+    const APPLY_NOW_SPAN_CHARS: usize = 64;
+    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let normalized: String = line
+            .to_ascii_lowercase()
+            .chars()
+            .filter(|c| *c != '\'' && *c != '’' && *c != '‘')
+            .collect();
+        let direct = ["now applying", "now ill apply", "will now apply", "making the edit"]
+            .iter()
+            .any(|marker| normalized.contains(marker));
+        let spanned = normalized.match_indices("applying").any(|(start, _)| {
+            normalized[start + "applying".len()..]
+                .chars()
+                .take(APPLY_NOW_SPAN_CHARS)
+                .collect::<String>()
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|word| word == "now")
+        });
+        if direct || spanned {
+            return Some(line.chars().take(MAX_DECLARATION_CHARS).collect());
+        }
+    }
+    None
+}
+
 const PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS: &str =
     "Planning workflow: explicit planning request detected. Entering read-only planning before continuing this turn.";
 

@@ -133,6 +133,18 @@ pub(crate) struct DiagnosisMemoEntry {
     pub next_action: CompactStr,
 }
 
+/// Pending declared-edit enforcement for approved-plan execution. Armed when
+/// the model explicitly declares the edit ("now applying …"); a bounded
+/// inspection grace follows, then reads are refused until a mutation lands,
+/// closing the announce-apply gap where "now applying" precedes only reads.
+/// Reset every turn with the rest of the harness state.
+pub(crate) struct DeclaredEditPending {
+    /// Inspections admitted since arming; past the grace, reads are refused.
+    pub grace_used: u8,
+    /// First matching declaration line, for the enforcement message.
+    pub declaration: CompactStr,
+}
+
 pub(crate) struct HarnessTurnState {
     pub run_id: TurnRunId,
     pub turn_id: TurnId,
@@ -278,6 +290,9 @@ pub(crate) struct HarnessTurnState {
     /// "tools are disabled" status responses from the planning turn.
     approved_plan_execution: bool,
     approved_plan_recovery_retries: u8,
+    /// Declared-edit enforcement pending this turn (`None` when no edit was
+    /// declared, or after a mutation or a text-only answer cleared it).
+    declared_edit: Option<DeclaredEditPending>,
     /// Set when the planning interview tool is permanently unavailable. The
     /// tool batch consumes this flag after all tool responses have been
     /// appended so the recovery directive is not interleaved with a batch.

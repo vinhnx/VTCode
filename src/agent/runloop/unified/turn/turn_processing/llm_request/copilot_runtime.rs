@@ -56,7 +56,7 @@ use crate::agent::runloop::unified::tool_routing::{
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::error_handling::tool_denial_diagnostic;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-    LoopTracker, update_repetition_tracker_for_registry,
+    LoopTracker, mutation_was_applied, update_repetition_tracker_for_registry,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::{
     ToolFailureDiagnosis, bounded_diagnostic_field, bounded_error_evidence, bounded_output_evidence,
@@ -380,6 +380,13 @@ impl<'a> CopilotRuntimeHost<'a> {
                     // the run-loop context, which owns the `&mut`
                     // `harness_state` borrow for this block.
                     run_loop_ctx.harness_state.reset_assistant_text_response_streak();
+                }
+                // Gate on mutating intent: `mutation_was_applied` assumes it.
+                if vtcode_core::tools::tool_intent::classify_tool_intent(&canonical_tool_name, &effective_arguments)
+                    .mutating
+                    && mutation_was_applied(&pipeline_outcome)
+                {
+                    run_loop_ctx.harness_state.clear_declared_edit();
                 }
                 run_loop_ctx
                     .session_stats
