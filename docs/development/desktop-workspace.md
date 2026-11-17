@@ -790,7 +790,7 @@ regular `text_sm`; call the helper for the role instead of repeating a size and
 weight chain. Secondary copy uses `muted_text` (7:1 target), true captions use
 `aa_muted` (5:1 floor), and both clear the WCAG AA 4.5:1 floor. Settings rows
 stack title and description with `gap_1` air (no dividers) and separate rows by
-the Kit `gap_4` rhythm. Transcript Markdown keeps 1.5x body leading with a 1rem paragraph gap; inline
+the Kit `gap_4` rhythm. Transcript Markdown keeps 1.6x body leading with a 1rem paragraph gap; inline
 code renders as a mono pill with explicit text and fill colors that hold AA on
 both assistant canvas and user-bubble fills.
 The Settings dialog keeps its title and category tabs visible while the active page scrolls vertically;
