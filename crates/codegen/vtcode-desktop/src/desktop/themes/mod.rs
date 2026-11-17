@@ -59,6 +59,12 @@ pub(super) mod ThemeId {
 
     pub(crate) mod catppuccin {
         pub(crate) const LATTE: &'static str = "catppuccin-latte";
+        pub(crate) const MOCHA: &'static str = "catppuccin-mocha";
+    }
+
+    #[cfg(test)]
+    pub(crate) mod gruvbox {
+        pub(crate) const DARK: &'static str = "gruvbox-dark";
     }
 
     #[cfg(test)]

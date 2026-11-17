@@ -376,6 +376,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
 
 #[gpui_kit::test]
 fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx: &mut TestAppContext) {
+    use super::super::themes;
     let directory = tempfile::tempdir().expect("workspace");
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
@@ -384,7 +385,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             view.workspace = Some(directory.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
             view.selected_session_id = Some("session-live".to_string());
-            view.theme_id = "ciapre-blue".into();
+            view.theme_id = themes::ThemeId::ciapre::BLUE.into();
             view.configuration = serde_json::from_value(json!({
                 "provider": "ollama",
                 "model": "gpt-oss:20b",
@@ -437,7 +438,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
                 },
                 cx,
             );
-            assert_eq!(view.theme_id, "ciapre-blue");
+            assert_eq!(view.theme_id, themes::ThemeId::ciapre::BLUE);
             assert_eq!(view.preferences.follow_cli_theme, Some(true));
             assert_eq!(view.composer.read(cx).value().as_str(), "Keep this draft");
             assert_eq!(view.selected_session_id.as_deref(), Some("session-live"), "theme sync preserves the thread");

@@ -373,7 +373,7 @@ fn system_theme_sentinels_apply_without_submitting_prompt(cx: &mut TestAppContex
     for (input, expected_id, expected_mode) in [
         ("/theme system-light", themes::SYSTEM_LIGHT_ID, ThemeMode::Light),
         ("/theme system-dark", themes::SYSTEM_DARK_ID, ThemeMode::Dark),
-        ("/theme ciapre", "ciapre", ThemeMode::Dark),
+        ("/theme ciapre", themes::ThemeId::ciapre::BASE, ThemeMode::Dark),
     ] {
         cx.update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| {

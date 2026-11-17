@@ -592,8 +592,8 @@ fn theme_modes_have_valid_defaults_and_system_ids() {
         assert_eq!(mode_for_id(default_id(mode)), Some(mode));
         assert_eq!(mode_for_id(system_id(mode)), Some(mode));
     }
-    assert_eq!(mode_for_id("solarized-light"), Some(ThemeMode::Light));
-    assert_eq!(mode_for_id("ciapre"), Some(ThemeMode::Dark));
+    assert_eq!(mode_for_id(ThemeId::solarized::LIGHT), Some(ThemeMode::Light));
+    assert_eq!(mode_for_id(ThemeId::ciapre::BASE), Some(ThemeMode::Dark));
     assert_eq!(mode_for_id("invalid-theme"), None);
 }
 
@@ -602,7 +602,7 @@ fn cli_sync_ids_cover_sentinels_and_reject_unknown_ids() {
     assert_eq!(cli_id_for(SYSTEM_LIGHT_ID), Some(default_id(ThemeMode::Light)));
     assert_eq!(cli_id_for(SYSTEM_DARK_ID), Some(default_id(ThemeMode::Dark)));
     assert_ne!(cli_id_for(SYSTEM_LIGHT_ID), cli_id_for(SYSTEM_DARK_ID));
-    assert_eq!(cli_id_for("ciapre-blue"), Some("ciapre-blue"));
+    assert_eq!(cli_id_for(ThemeId::ciapre::BLUE), Some(ThemeId::ciapre::BLUE));
     assert_eq!(cli_id_for("invalid-theme"), None);
 }
 
@@ -815,7 +815,15 @@ fn picker_swatches_group_every_entry_by_mode() {
     let dark_ids: Vec<_> = picker_swatches_for(ThemeMode::Dark).map(|entry| entry.id()).collect();
     assert_eq!(light_ids.first().map(String::as_str), Some(SYSTEM_LIGHT_ID));
     let dark_head: Vec<&str> = dark_ids.iter().take(4).map(String::as_str).collect();
-    assert_eq!(dark_head, [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue", SYSTEM_DARK_ID]);
+    assert_eq!(
+        dark_head,
+        [
+            DEFAULT_THEME_ID,
+            ThemeId::ciapre::DARK,
+            ThemeId::ciapre::BLUE,
+            SYSTEM_DARK_ID
+        ]
+    );
 
     // Combined groups cover every selectable entry exactly once: no drops,
     // no duplicates across the mode boundary.

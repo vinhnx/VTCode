@@ -161,7 +161,10 @@ fn desktop_slash_actions_route_native_equivalents_and_config_deep_links() {
     assert_eq!(desktop_slash_action("/files src/ui"), Some(DesktopSlashAction::Files("src/ui".into())));
     assert_eq!(desktop_slash_action("/fast"), Some(DesktopSlashAction::FastMode(None)));
     assert_eq!(desktop_slash_action("/fast off"), Some(DesktopSlashAction::FastMode(Some(false))));
-    assert_eq!(desktop_slash_action("/theme ciapre"), Some(DesktopSlashAction::Theme(Some("ciapre".into()))));
+    assert_eq!(
+        desktop_slash_action("/theme ciapre"),
+        Some(DesktopSlashAction::Theme(Some(super::super::themes::ThemeId::ciapre::BASE.into())))
+    );
     assert_eq!(desktop_slash_action("/goal"), Some(DesktopSlashAction::Goal(String::new())));
     assert_eq!(desktop_slash_action("/goal pause"), Some(DesktopSlashAction::Goal("pause".into())));
     assert_eq!(desktop_slash_action("/goal ship it"), Some(DesktopSlashAction::Goal("ship it".into())));
@@ -169,7 +172,10 @@ fn desktop_slash_actions_route_native_equivalents_and_config_deep_links() {
     // Whitespace-only arguments are "no theme", and exactly one token survives
     // the extra separator runs.
     assert_eq!(desktop_slash_action("/theme   "), Some(DesktopSlashAction::Theme(None)));
-    assert_eq!(desktop_slash_action("/theme   ciapre   "), Some(DesktopSlashAction::Theme(Some("ciapre".into()))));
+    assert_eq!(
+        desktop_slash_action("/theme   ciapre   "),
+        Some(DesktopSlashAction::Theme(Some(super::super::themes::ThemeId::ciapre::BASE.into())))
+    );
     // Two or more tokens fall through to the service instead of routing.
     assert_eq!(desktop_slash_action("/theme one two"), None);
     assert_eq!(desktop_slash_action("/cli"), Some(DesktopSlashAction::Cli));

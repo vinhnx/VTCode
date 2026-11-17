@@ -1,3 +1,4 @@
+use super::super::themes;
 use super::*;
 
 #[gpui_kit::test]
@@ -571,7 +572,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         assert_eq!((saved.typography_for(ThemeMode::Light).ui_font_size, saved.code_font_size()), (17, 13),);
         view.update(cx, |view, cx| {
             view.preferences.touch_workspace("/preserve-workspace");
-            view.apply_theme("ciapre".into(), window, cx);
+            view.apply_theme(themes::ThemeId::ciapre::BASE.into(), window, cx);
         });
         assert_eq!(cx.theme().font_size, px(17.));
         scroll_settings_into_view(window, "reset-appearance", cx);

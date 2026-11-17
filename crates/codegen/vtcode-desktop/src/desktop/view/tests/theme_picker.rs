@@ -1,9 +1,10 @@
+use super::super::themes::ThemeId;
 use super::*;
 
 /// Swatch element ids for the OS-derived defaults (headless tests are Light).
 const DEFAULT_DARK_SWATCH: &str = "theme-noir";
 const DEFAULT_LIGHT_SWATCH: &str = "theme-vitesse-light";
-const DEFAULT_LIGHT_ID: &str = "vitesse-light";
+const DEFAULT_LIGHT_ID: &str = ThemeId::vitesse::LIGHT;
 
 #[gpui_kit::test]
 fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: &mut TestAppContext) {
@@ -14,7 +15,7 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
         view.update(cx, |view, cx| {
             view.preferences.ui_font_size = Some(19);
             view.preferences.code_font_size = Some(14);
-            view.apply_theme(super::super::themes::ThemeId::solarized::LIGHT.into(), window, cx);
+            view.apply_theme(ThemeId::solarized::LIGHT.into(), window, cx);
             view.composer
                 .update(cx, |input, cx| input.set_value("keep this draft", window, cx));
             view.transcript.push(TranscriptItem::new(
@@ -24,7 +25,10 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
                 "Text and `code` stay visible.".into(),
             ));
         });
-        for (mode, id) in [(ThemeMode::Dark, "system-dark"), (ThemeMode::Light, "system-light")] {
+        for (mode, id) in [
+            (ThemeMode::Dark, ThemeId::system::DARK),
+            (ThemeMode::Light, ThemeId::system::LIGHT),
+        ] {
             view.update(cx, |view, cx| view.run_palette_action(super::super::PaletteAction::ToggleTheme, window, cx));
             window.render_frame(cx);
             assert_eq!(view.read(cx).theme_mode, mode);
@@ -45,7 +49,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
+        view.update(cx, |view, cx| view.apply_theme(ThemeId::ciapre::BASE.into(), window, cx));
         window.click("open-settings", cx);
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
@@ -54,7 +58,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         {
             let preferences = &view.read(cx).preferences;
             assert!(preferences.separate_theme_profiles);
-            assert_eq!(preferences.dark_theme.as_deref(), Some("ciapre"));
+            assert_eq!(preferences.dark_theme.as_deref(), Some(ThemeId::ciapre::BASE));
             assert_eq!(preferences.light_theme.as_deref(), Some(DEFAULT_LIGHT_ID));
         }
         assert!(window.try_find("theme-list-light").is_none(), "light grid hides while editing dark");
@@ -109,8 +113,8 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
         window.click("theme-solarized-light", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "solarized-light");
-        assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some("solarized-light"));
+        assert_eq!(view.read(cx).theme_id, ThemeId::solarized::LIGHT);
+        assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some(ThemeId::solarized::LIGHT));
 
         window.within("settings-panel").click("settings-dismiss", cx);
         window.render_frame(cx);
@@ -118,17 +122,17 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
         assert_eq!(cx.theme().font_size, px(16.));
-        assert_eq!(view.read(cx).theme_id, "ciapre");
+        assert_eq!(view.read(cx).theme_id, ThemeId::ciapre::BASE);
         view.update(cx, |view, cx| view.run_palette_action(super::super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(cx.theme().font_size, px(17.));
-        assert_eq!(view.read(cx).theme_id, "solarized-light");
+        assert_eq!(view.read(cx).theme_id, ThemeId::solarized::LIGHT);
 
         let saved = crate::desktop::preferences::Preferences::load();
         assert!(saved.separate_theme_profiles);
-        assert_eq!(saved.light_theme.as_deref(), Some("solarized-light"));
-        assert_eq!(saved.dark_theme.as_deref(), Some("ciapre"));
+        assert_eq!(saved.light_theme.as_deref(), Some(ThemeId::solarized::LIGHT));
+        assert_eq!(saved.dark_theme.as_deref(), Some(ThemeId::ciapre::BASE));
         assert_eq!(saved.typography_for(ThemeMode::Light).ui_font_size, 17);
         assert_eq!(saved.typography_for(ThemeMode::Dark).ui_font_size, 16);
     })
@@ -158,7 +162,7 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
+        view.update(cx, |view, cx| view.apply_theme(ThemeId::ciapre::BASE.into(), window, cx));
         window.click("open-settings", cx);
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
@@ -263,7 +267,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
         window.click("theme-catppuccin-mocha", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "catppuccin-mocha");
+        assert_eq!(view.read(cx).theme_id, ThemeId::catppuccin::MOCHA);
         assert_eq!(window.find("theme-catppuccin-mocha").checked(), Some(true));
         assert_eq!(window.find("theme-catppuccin-mocha").label(), Some("Catppuccin Mocha (active)"));
 
@@ -274,7 +278,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.render_frame(cx);
         window.click("theme-system-light", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "system-light");
+        assert_eq!(view.read(cx).theme_id, ThemeId::system::LIGHT);
     })
     .unwrap();
 }
@@ -329,7 +333,7 @@ fn theme_chevrons_scroll_only_the_visible_profile_grid(cx: &mut TestAppContext) 
     let (window, view) = open_desktop_sized(cx, 760., 900.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
+        view.update(cx, |view, cx| view.apply_theme(ThemeId::ciapre::BASE.into(), window, cx));
         window.click("open-settings", cx);
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
@@ -399,7 +403,7 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         assert_eq!(window.find("theme-github-dark").checked(), Some(true));
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, super::super::themes::ThemeId::github::DARK);
+            assert_eq!(view.theme_id, ThemeId::github::DARK);
             assert_eq!(view.theme_mode, ThemeMode::Dark);
         }
         scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
@@ -411,7 +415,7 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         assert_eq!(window.find("theme-solarized-light").checked(), Some(true));
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, "solarized-light");
+            assert_eq!(view.theme_id, ThemeId::solarized::LIGHT);
             assert_eq!(view.theme_mode, ThemeMode::Light);
         }
     })

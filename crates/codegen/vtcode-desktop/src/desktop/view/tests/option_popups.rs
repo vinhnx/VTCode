@@ -1,3 +1,4 @@
+use super::super::themes;
 use super::*;
 
 #[gpui_kit::test]
@@ -14,20 +15,24 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
             view.preferences.ui_font_size = Some(19);
             view.composer
                 .update(cx, |input, cx| input.set_value("Preserve this draft", window, cx));
-            view.handle_backend_event(snapshot("ciapre-blue"), cx);
-            assert_eq!(view.theme_id, "ciapre-blue");
+            view.handle_backend_event(snapshot(themes::ThemeId::ciapre::BLUE), cx);
+            assert_eq!(view.theme_id, themes::ThemeId::ciapre::BLUE);
             assert_eq!(view.preferences.follow_cli_theme, Some(true));
             assert_eq!(cx.theme().font_size, px(19.));
-            view.apply_theme("github-dark".into(), window, cx);
-            view.handle_backend_event(snapshot("solarized-light"), cx);
-            assert_eq!(view.theme_id, "github-dark", "CLI discovery cannot overwrite an explicit desktop choice");
+            view.apply_theme(themes::ThemeId::github::DARK.into(), window, cx);
+            view.handle_backend_event(snapshot(themes::ThemeId::solarized::LIGHT), cx);
+            assert_eq!(
+                view.theme_id,
+                themes::ThemeId::github::DARK,
+                "CLI discovery cannot overwrite an explicit desktop choice"
+            );
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
         select_settings_category(window, 0, cx);
         focus_element_by_tab(window, "use-cli-theme", cx);
         window.press("enter", cx);
-        assert_eq!(view.read(cx).theme_id, "solarized-light");
+        assert_eq!(view.read(cx).theme_id, themes::ThemeId::solarized::LIGHT);
         assert_eq!(view.read(cx).preferences.follow_cli_theme, Some(true));
         assert_eq!(view.read(cx).composer.read(cx).value(), "Preserve this draft");
         assert_eq!(cx.theme().font_size, px(19.));

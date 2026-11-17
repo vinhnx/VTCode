@@ -6,7 +6,13 @@ fn desktop_view_uses_the_supplied_startup_preferences(cx: &mut TestAppContext) {
     let mut preferences = crate::desktop::preferences::Preferences::default();
     preferences.set_ui_language(crate::desktop::localization::UiLanguage::Vietnamese);
     let (view, cx) = cx.add_window_view(move |window, cx| {
-        DesktopView::new_with_preferences(window, cx, ThemeMode::Light, "vitesse-light".to_string(), preferences)
+        DesktopView::new_with_preferences(
+            window,
+            cx,
+            ThemeMode::Light,
+            super::super::themes::ThemeId::vitesse::LIGHT.to_string(),
+            preferences,
+        )
     });
 
     cx.update_entity(&view, |view: &mut DesktopView, _| {

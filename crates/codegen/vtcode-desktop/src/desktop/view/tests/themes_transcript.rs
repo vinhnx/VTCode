@@ -152,7 +152,7 @@ fn saved_preferences_restore_theme_widths_and_inspector_state(cx: &mut TestAppCo
     });
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
-            assert_eq!(view.theme_id, "gruvbox-dark");
+            assert_eq!(view.theme_id, super::super::themes::ThemeId::gruvbox::DARK);
             assert_eq!(view.theme_mode, ThemeMode::Dark);
             assert!(!view.inspector_open);
             assert!((view.sidebar_width - 230.0).abs() < f32::EPSILON);
@@ -687,7 +687,7 @@ fn slash_theme_accepts_capitalized_ids_like_the_cli(cx: &mut TestAppContext) {
             view.submit_prompt(window, cx);
         });
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "ciapre-dark");
+        assert_eq!(view.read(cx).theme_id, super::super::themes::ThemeId::ciapre::DARK);
         assert!(view.read(cx).error.is_none());
 
         view.update(cx, |view, cx| {
@@ -696,7 +696,11 @@ fn slash_theme_accepts_capitalized_ids_like_the_cli(cx: &mut TestAppContext) {
             view.submit_prompt(window, cx);
         });
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "ciapre-dark", "unknown ids keep the active theme");
+        assert_eq!(
+            view.read(cx).theme_id,
+            super::super::themes::ThemeId::ciapre::DARK,
+            "unknown ids keep the active theme"
+        );
         assert_eq!(
             view.read(cx).error.as_deref(),
             Some("Theme 'NoSuchTheme' is not available. Choose a theme from Appearance settings.")

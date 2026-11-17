@@ -1,3 +1,4 @@
+use super::super::themes;
 use super::*;
 
 #[gpui_kit::test]
@@ -93,10 +94,10 @@ fn contrast_survives_theme_change_and_restores_from_preferences(cx: &mut TestApp
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.apply_theme("solarized-light".into(), window, cx));
+        view.update(cx, |view, cx| view.apply_theme(themes::ThemeId::solarized::LIGHT.into(), window, cx));
         assert_eq!(view.read(cx).preferences.contrast(), 67);
         let changed_foreground = cx.theme().colors.foreground;
-        let _mode = super::super::themes::apply_with_contrast("solarized-light", 0, Some(window), cx);
+        let _mode = themes::apply_with_contrast(themes::ThemeId::solarized::LIGHT, 0, Some(window), cx);
         assert_ne!(changed_foreground, cx.theme().colors.foreground);
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         assert_eq!(cx.theme().colors.foreground, changed_foreground);

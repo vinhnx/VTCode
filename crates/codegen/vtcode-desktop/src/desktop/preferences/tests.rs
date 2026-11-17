@@ -1,4 +1,5 @@
 use super::*;
+use crate::desktop::themes::ThemeId;
 
 #[test]
 fn contrast_defaults_to_zero_and_clamps_saved_values() {
@@ -6,7 +7,7 @@ fn contrast_defaults_to_zero_and_clamps_saved_values() {
     assert_eq!(legacy.contrast(), 0);
     let high: Preferences = serde_json::from_str(r#"{"contrast":240,"theme":"ciapre"}"#).unwrap();
     assert_eq!(high.contrast(), 100);
-    assert_eq!(high.theme.as_deref(), Some("ciapre"));
+    assert_eq!(high.theme.as_deref(), Some(ThemeId::ciapre::BASE));
 }
 
 #[test]
@@ -49,7 +50,7 @@ fn ui_language_round_trips_and_invalid_saved_values_preserve_other_preferences()
     let serialized = serde_json::to_string(&preferences).unwrap();
     let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
     assert_eq!(loaded.ui_language(), UiLanguage::Vietnamese);
-    assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
 
     for language in UiLanguage::ALL {
         preferences.set_ui_language(language);
@@ -60,7 +61,7 @@ fn ui_language_round_trips_and_invalid_saved_values_preserve_other_preferences()
 
     let invalid: Preferences = serde_json::from_str(r#"{"theme":"ciapre","uiLanguage":"unsupported"}"#).unwrap();
     assert_eq!(invalid.ui_language(), UiLanguage::English);
-    assert_eq!(invalid.theme.as_deref(), Some("ciapre"));
+    assert_eq!(invalid.theme.as_deref(), Some(ThemeId::ciapre::BASE));
 }
 
 #[test]
@@ -128,7 +129,7 @@ fn file_open_destination_round_trips_and_invalid_values_fall_back_to_system() {
         let content = format!(r#"{{"theme":"ciapre","fileOpenDestination":{saved:?}}}"#);
         let loaded: Preferences = serde_json::from_str(&content).unwrap();
         assert_eq!(loaded.file_open_destination(), FileOpenDestination::System, "saved {saved:?}");
-        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+        assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     }
 }
 
@@ -238,7 +239,7 @@ fn cli_terminal_round_trips_and_invalid_values_fall_back_to_terminal() {
         let content = format!(r#"{{"theme":"ciapre","cliTerminal":{saved:?}}}"#);
         let loaded: Preferences = serde_json::from_str(&content).unwrap();
         assert_eq!(loaded.cli_terminal(), CliTerminal::Terminal, "saved {saved:?}");
-        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+        assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     }
 }
 
@@ -265,7 +266,7 @@ fn terminal_ansi_theme_round_trips_and_invalid_values_fall_back_to_ciapre() {
         let content = format!(r#"{{"theme":"ciapre","terminalAnsiTheme":{saved:?}}}"#);
         let loaded: Preferences = serde_json::from_str(&content).unwrap();
         assert_eq!(loaded.terminal_ansi_theme(), TerminalAnsiTheme::Ciapre, "saved {saved:?}");
-        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+        assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     }
 }
 
@@ -292,7 +293,7 @@ fn terminal_position_round_trips_and_invalid_values_fall_back_to_bottom() {
         let content = format!(r#"{{"theme":"ciapre","terminalPosition":{saved:?}}}"#);
         let loaded: Preferences = serde_json::from_str(&content).unwrap();
         assert_eq!(loaded.terminal_position(), TerminalPosition::Bottom, "saved {saved:?}");
-        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+        assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     }
 
     let mut preferences = Preferences::default();
@@ -474,8 +475,8 @@ fn separate_theme_profiles_default_off_and_round_trip_independently() {
 
     let selected = Preferences {
         separate_theme_profiles: true,
-        light_theme: Some("solarized-light".into()),
-        dark_theme: Some("ciapre".into()),
+        light_theme: Some(ThemeId::solarized::LIGHT.into()),
+        dark_theme: Some(ThemeId::ciapre::BASE.into()),
         light_typography: Some(TypographyProfile {
             ui_font_size: Some(19),
             ..TypographyProfile::default()
@@ -488,8 +489,8 @@ fn separate_theme_profiles_default_off_and_round_trip_independently() {
     };
     let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
     assert!(loaded.separate_theme_profiles);
-    assert_eq!(loaded.light_theme.as_deref(), Some("solarized-light"));
-    assert_eq!(loaded.dark_theme.as_deref(), Some("ciapre"));
+    assert_eq!(loaded.light_theme.as_deref(), Some(ThemeId::solarized::LIGHT));
+    assert_eq!(loaded.dark_theme.as_deref(), Some(ThemeId::ciapre::BASE));
     assert_eq!(loaded.typography_for(ThemeMode::Light).ui_font_size, 19);
     assert_eq!(loaded.typography_for(ThemeMode::Dark).ui_font_size, 16);
 }
@@ -588,7 +589,7 @@ fn window_maximized_defaults_to_true_and_round_trips() {
 #[test]
 fn round_trips_through_json() {
     let mut preferences = Preferences {
-        theme: Some("ciapre".to_string()),
+        theme: Some(ThemeId::ciapre::BASE.to_string()),
         inspector_open: Some(false),
         navigation_on_right: Some(false),
         navigation_visible: Some(false),
@@ -599,7 +600,7 @@ fn round_trips_through_json() {
 
     let content = serde_json::to_string(&preferences).expect("serialize");
     let parsed: Preferences = serde_json::from_str(&content).expect("deserialize");
-    assert_eq!(parsed.theme.as_deref(), Some("ciapre"));
+    assert_eq!(parsed.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     assert_eq!(parsed.recent_workspaces, vec!["/tmp/ws"]);
     assert_eq!(parsed.inspector_open, Some(false));
     assert!(!parsed.navigation_on_right());
@@ -706,7 +707,7 @@ fn diff_mode_round_trips_and_invalid_values_fall_back_to_unified() {
         let serialized = serde_json::to_string(&preferences).unwrap();
         let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
         assert_eq!(loaded.diff_mode(), mode);
-        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+        assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     }
 
     for saved in ["", "  ", "sideways"] {
@@ -783,7 +784,7 @@ fn valid_preferences_file_loads_values_without_quarantine() {
 
     let loaded = Preferences::load();
 
-    assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
     assert_eq!(loaded.contrast(), 42);
     assert!(!path.with_extension("json.corrupt").exists(), "a valid file must not quarantine");
 }
