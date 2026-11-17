@@ -221,8 +221,10 @@ fn secondary_copy_degrades_gracefully_without_headroom() {
 fn flagship_surfaces_and_muted_text_read_crisp_not_grey(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        assert_eq!(DEFAULT_THEME_ID, "ciapre", "Ciapre is the flagship default");
-        let _mode = apply_by_id(DEFAULT_THEME_ID, None, cx);
+        // Ciapre is the lowest-headroom flagship palette, so it stays the
+        // stress case for surface stacking and muted-text crispness. The
+        // high-headroom neutral default is covered by the every-theme tests.
+        let _mode = apply_by_id("ciapre", None, cx);
         let colors = cx.theme().colors;
         // Layers stack in a strict order above the canvas (direction-free:
         // contrast ratios, not signed lightness lifts, so the pin survives
@@ -241,6 +243,20 @@ fn flagship_surfaces_and_muted_text_read_crisp_not_grey(cx: &mut gpui_kit::TestA
             let ratio = contrast_ratio(colors.muted_foreground, surface);
             assert!(ratio >= 5.0, "default muted text on {name} is washed ({ratio:.2})");
         }
+    });
+}
+
+#[gpui_kit::test]
+fn default_theme_has_headroom_for_a_readable_text_ramp(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let _mode = apply_by_id(DEFAULT_THEME_ID, None, cx);
+        let colors = cx.theme().colors;
+        let headroom = contrast_ratio(colors.foreground, colors.background);
+        // `muted_text` targets 7:1 and `aa_muted` holds 5:1. With a low-
+        // headroom foreground (Ciapre is ~7:1) both collapse onto the same
+        // tone, so the default must leave clear room above the muted tier.
+        assert!(headroom >= 12.0, "{DEFAULT_THEME_ID} has only {headroom:.2}:1 headroom for the text ramp");
     });
 }
 

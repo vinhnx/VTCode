@@ -32,8 +32,10 @@ pub(super) use terminal::{ciapre_ansi_slots, latte_ansi_slots, light_ansi_slots}
 mod toolbar;
 pub(super) use toolbar::toolbar_band_surface;
 
-/// The theme applied on first launch.
-pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
+/// The theme applied on first launch. A neutral, high-headroom palette keeps
+/// UI text crisp and lets the muted-text ramp read as a distinct tier; the
+/// terminal-first palettes (Ciapre and variants) stay selectable in the picker.
+pub(super) const DEFAULT_THEME_ID: &str = "apple-system-colors";
 
 /// Sentinel ids that keep the kit's own light/dark base without overrides.
 pub(super) const SYSTEM_LIGHT_ID: &str = "system-light";

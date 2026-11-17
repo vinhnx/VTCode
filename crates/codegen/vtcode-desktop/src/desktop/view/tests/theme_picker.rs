@@ -1,5 +1,8 @@
 use super::*;
 
+/// Swatch element id for the default dark theme (`themes::DEFAULT_THEME_ID`).
+const DEFAULT_DARK_SWATCH: &str = "theme-apple-system-colors";
+
 #[gpui_kit::test]
 fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -55,6 +58,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert!(window.try_find("theme-list-light").is_none(), "light grid hides while editing dark");
         assert_eq!(window.find("theme-list-dark").label(), Some("Dark"));
         assert!(window.try_find("theme-catppuccin-latte").is_none(), "light swatch hides while editing dark");
+        scroll_theme_into_view(window, &view, "theme-ciapre", cx);
         assert_eq!(window.find("theme-ciapre").checked(), Some(true));
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit the Dark appearance profile (selected)"));
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile"));
@@ -136,12 +140,12 @@ fn inactive_system_swatch_carries_no_selection_state(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "ciapre");
+        assert_eq!(view.read(cx).theme_id, super::super::themes::DEFAULT_THEME_ID);
         assert_eq!(window.find("theme-system-light").label(), Some("System Light"));
         assert_eq!(window.find("theme-system-light").checked(), Some(false));
-        let active_label = window.find("theme-ciapre").label().unwrap_or_default().to_string();
+        let active_label = window.find(DEFAULT_DARK_SWATCH).label().unwrap_or_default().to_string();
         assert!(active_label.ends_with(" (active)"), "unexpected active label: {active_label}");
-        assert_eq!(window.find("theme-ciapre").checked(), Some(true));
+        assert_eq!(window.find(DEFAULT_DARK_SWATCH).checked(), Some(true));
     })
     .unwrap();
 }
@@ -160,6 +164,7 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
             window.try_find("theme-catppuccin-latte-profile").is_none(),
             "light caption hides while editing dark"
         );
+        scroll_theme_into_view(window, &view, "theme-ciapre", cx);
         assert_eq!(window.find("theme-ciapre-profile").label(), Some("Dark"));
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         assert_eq!(window.find("theme-github-dark-profile").label(), None);
@@ -212,7 +217,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         let light_strip = window.find("theme-list-light").bounds();
         let dark_strip = window.find("theme-list-dark").bounds();
         let first_light = window.find("theme-system-light").bounds();
-        let first_dark = window.find("theme-ciapre").bounds();
+        let first_dark = window.find(DEFAULT_DARK_SWATCH).bounds();
         let typography_top = window.find("choose-ui-font").bounds().top();
         // Overflow precondition in row-stride pixels: both rows hold more
         // swatches than the narrow viewport fits, so paging has somewhere
@@ -240,7 +245,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.click("previous-themes", cx);
         window.render_frame(cx);
         assert_eq!(window.find("theme-system-light").bounds().left(), first_light.left());
-        assert_eq!(window.find("theme-ciapre").bounds().left(), first_dark.left());
+        assert_eq!(window.find(DEFAULT_DARK_SWATCH).bounds().left(), first_dark.left());
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
 
         // The stacked groups overflow the narrow panel: reveal the dark row,
@@ -329,7 +334,7 @@ fn theme_chevrons_scroll_only_the_visible_profile_grid(cx: &mut TestAppContext) 
         // Editing the dark profile: only the dark grid renders.
         assert!(window.try_find("theme-list-light").is_none());
         assert_eq!(window.find("theme-list-dark").label(), Some("Dark"));
-        let first_dark = window.find("theme-ciapre").bounds();
+        let first_dark = window.find(DEFAULT_DARK_SWATCH).bounds();
         let dark_offset = view.read(cx).theme_scroll_dark.offset();
         let light_offset = view.read(cx).theme_scroll_light.offset();
         window.click("next-themes", cx);
@@ -357,7 +362,7 @@ fn theme_rows_mount_only_the_visible_window(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
-        assert!(window.try_find("theme-ciapre").is_some(), "the first dark swatch mounts");
+        assert!(window.try_find(DEFAULT_DARK_SWATCH).is_some(), "the first dark swatch mounts");
         assert!(
             window.try_find("theme-catppuccin-mocha").is_none(),
             "deep swatches stay unmounted until scrolled into view"
@@ -375,8 +380,12 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         window.click("open-settings", cx);
         window.render_frame(cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
-        assert_eq!(window.find("theme-ciapre").checked(), Some(true));
+        assert_eq!(
+            view.read(cx).theme_id,
+            super::super::themes::DEFAULT_THEME_ID,
+            "the neutral palette is the default theme"
+        );
+        assert_eq!(window.find(DEFAULT_DARK_SWATCH).checked(), Some(true));
         scroll_theme_into_view(window, &view, "theme-ayu", cx);
         assert_eq!(window.find("theme-ayu").label(), Some("ayu · Ayu Dark"));
         scroll_theme_into_view(window, &view, "theme-ayu-dark", cx);
@@ -384,8 +393,8 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         window.click("theme-github-dark", cx);
         window.render_frame(cx);
-        scroll_theme_into_view(window, &view, "theme-ciapre", cx);
-        assert_eq!(window.find("theme-ciapre").checked(), Some(false));
+        scroll_theme_into_view(window, &view, DEFAULT_DARK_SWATCH, cx);
+        assert_eq!(window.find(DEFAULT_DARK_SWATCH).checked(), Some(false));
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         assert_eq!(window.find("theme-github-dark").checked(), Some(true));
         {

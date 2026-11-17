@@ -513,7 +513,7 @@ mod tests {
         // dark ground), so the scheme promises AA on Ciapre, where darker
         // grounds only read better by monotonicity.
         use super::super::themes::{contrast_ratio, find};
-        let ciapre = find("ciapre").expect("ciapre is the default theme");
+        let ciapre = find("ciapre").expect("ciapre is a built-in theme");
         let colors = ThemeColor::default();
         let palette = ciapre_palette(&colors);
         let rio = List::from(&Colors::default());

@@ -398,8 +398,10 @@ panel header carries an explicit Close control that dismisses without a Forward 
 
 ### Startup and desktop shortcuts
 
-Ciapre remains the CLI and desktop default. New desktop profiles follow the CLI-resolved theme delivered
-by `config/discover`. Existing explicit desktop theme choices are preserved during preference migration.
+Ciapre remains the CLI default; the desktop defaults to **Apple System Colors**, a neutral high-headroom
+palette whose near-white foreground gives the muted-text ramp room to read as a distinct tier. The CLI-resolved
+theme from `config/discover` still wins for new desktop profiles when present, so a user who already picked a
+CLI theme keeps it. Existing explicit desktop theme choices are preserved during preference migration.
 Choosing a swatch creates a desktop override; **CLI preferences → Use CLI theme** restores inheritance.
 **Sync current theme to CLI** persists a built-in swatch to the active CLI config layer via the shared `ConfigManager`
 writer, then starts the next session with that theme. System appearance swatches and custom themes cannot be written
@@ -545,7 +547,7 @@ role, content, and duplicate occurrence so bounded-history shifts do not transfe
 ## Themes
 
 The desktop builds its theme catalog from the full shared VT Code theme registry (`available_themes()` in
-`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), Noir, the Ciapre variants, Solarized, Gruvbox,
+`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the CLI default and flagship), Noir, the Ciapre variants, Solarized, Gruvbox,
 Catppuccin, Nord, Vitesse, Tomorrow, and the rest of the registry — is selectable on desktop, alongside the kit's
 System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/color_guidelines.md)
 for the registry list and the desktop↔CLI sync rules. A theme sets background,
