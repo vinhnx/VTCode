@@ -84,7 +84,7 @@
 //! VT Code is distributed via multiple ecosystems:
 //!
 //! - **crates.io**: `cargo install vtcode`
-//! - **Homebrew**: `brew install vtcode`
+//! - **Homebrew**: `brew install vinhnx/tap/vtcode`
 //! - **GitHub Releases**: pre-built binaries for macOS, Linux, and Windows
 //!
 //! ## crates.io Categories

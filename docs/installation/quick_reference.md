@@ -47,7 +47,7 @@ vtcode
 rm /usr/local/bin/vtcode
 
 # Homebrew
-brew uninstall vtcode
+brew uninstall vinhnx/tap/vtcode
 
 # Homebrew cask (desktop app)
 brew uninstall --cask vinhnx/tap/vtcode-desktop
