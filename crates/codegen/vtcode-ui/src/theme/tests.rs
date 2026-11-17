@@ -3,6 +3,7 @@ use anstyle::{Color, RgbColor, Style};
 use crate::theme::color_math::contrast_ratio;
 use crate::theme::gpui_kit::terminal_accent;
 use crate::theme::registry::all_theme_definitions;
+use crate::theme::ui_palette::TEXT_HEADROOM_RATIO;
 use crate::*;
 
 #[test]
@@ -35,6 +36,22 @@ fn builtin_ui_palettes_cover_the_full_cli_registry() {
         assert!(contrast_ratio(colors.foreground, colors.background) >= 4.5, "{id} foreground");
     }
     assert!(builtin_theme_colors("no-such-theme").is_none());
+}
+
+#[test]
+fn builtin_ui_palettes_reach_the_text_headroom_floor() {
+    // Noir-like crisp text on every theme: the shared derivation must lift the
+    // original palette foreground to the headroom floor (or to the pure neutral
+    // where the background caps it), never leave a muddy low-headroom hue.
+    for id in available_themes() {
+        let colors = builtin_theme_colors(id).unwrap_or_else(|| panic!("missing palette for {id}"));
+        let ratio = contrast_ratio(colors.foreground, colors.background);
+        let definition = all_theme_definitions().get(id).unwrap();
+        let max = contrast_ratio(RgbColor(0, 0, 0), definition.palette.background)
+            .max(contrast_ratio(RgbColor(255, 255, 255), definition.palette.background));
+        let floor = TEXT_HEADROOM_RATIO.min(max);
+        assert!(ratio >= floor - 0.01, "{id}: foreground {ratio:.2} below floor {floor:.2}");
+    }
 }
 
 #[test]

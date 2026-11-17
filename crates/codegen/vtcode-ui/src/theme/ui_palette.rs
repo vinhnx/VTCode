@@ -11,6 +11,12 @@
 use anstyle::{Color, RgbColor};
 use vtcode_config::constants::ui;
 
+/// Minimum canvas contrast for desktop-ready foreground text. Well above the
+/// 7:1 `muted_text` target so a secondary tier stays distinct on raised fills;
+/// reachable by every built-in palette, with a pure-neutral fallback where a
+/// mid-gray background cannot get there.
+pub(super) const TEXT_HEADROOM_RATIO: f32 = 12.0;
+
 use crate::theme::color_math::{aa_muted_text, contrast_ratio, filled_text, mix, relative_luminance};
 use crate::theme::gpui_kit::{UiThemePalette, UiThemeSpec, theme_specs};
 use crate::theme::registry::theme_definition;
@@ -84,9 +90,15 @@ pub fn builtin_theme_colors(theme_id: &str) -> Option<UiThemeColors> {
         _ => fallback,
     };
     let original_foreground = rgb(Some(styles.foreground), palette.foreground);
-    // Desktop needs enough contrast headroom for raised surfaces as well as
-    // the canvas. Move toward the best neutral only when the CLI text color
-    // cannot support those surfaces, preserving its hue as far as possible.
+    // Desktop text needs the same crisp, high-headroom reading as the Noir
+    // palette on every theme. `muted_text` targets 7:1 on the raised popover
+    // fill, so an original foreground sitting at ~7:1 on the canvas leaves no
+    // room for a distinct muted tier and the whole page reads as one muddy
+    // tone. Move toward the contrast-strongest neutral (black on light
+    // backgrounds, white on dark) until the text clears TEXT_HEADROOM_RATIO
+    // on its own background, keeping as much of the palette hue as that floor
+    // allows. Themes whose background cannot reach the floor (e.g. mid-grays)
+    // fall back to the pure neutral, the best contrast their ground permits.
     let black = RgbColor(0, 0, 0);
     let white = RgbColor(255, 255, 255);
     let target = if contrast_ratio(black, palette.background) > contrast_ratio(white, palette.background) {
@@ -96,7 +108,7 @@ pub fn builtin_theme_colors(theme_id: &str) -> Option<UiThemeColors> {
     };
     let foreground = (0..=100)
         .map(|step| mix(original_foreground, target, step as f32 / 100.0))
-        .find(|color| contrast_ratio(*color, palette.background) >= 7.0)
+        .find(|color| contrast_ratio(*color, palette.background) >= TEXT_HEADROOM_RATIO)
         .unwrap_or(target);
     let accent = rgb(styles.mcp.get_fg_color(), foreground);
     Some(UiThemeColors {
