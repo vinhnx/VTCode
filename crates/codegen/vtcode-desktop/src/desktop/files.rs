@@ -186,6 +186,7 @@ pub(super) enum ExternalEditor {
     Terminal,
     ITerm2,
     Ghostty,
+    Rex,
 }
 
 /// How `/usr/bin/open` receives the resolved path.
@@ -201,7 +202,7 @@ enum OpenAction {
 
 impl ExternalEditor {
     #[cfg(test)]
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 10] = [
         Self::System,
         Self::VsCode,
         Self::Sublime,
@@ -211,17 +212,19 @@ impl ExternalEditor {
         Self::Terminal,
         Self::ITerm2,
         Self::Ghostty,
+        Self::Rex,
     ];
 
     /// Editors located by scanning the application directories for their
     /// bundle identifiers.
-    pub(super) const DETECTABLE: [Self; 6] = [
+    pub(super) const DETECTABLE: [Self; 7] = [
         Self::VsCode,
         Self::Sublime,
         Self::Xcode,
         Self::AndroidStudio,
         Self::ITerm2,
         Self::Ghostty,
+        Self::Rex,
     ];
 
     /// Destinations needing no detection: the system default plus macOS apps
@@ -241,13 +244,14 @@ impl ExternalEditor {
             Self::AndroidStudio => Some("com.google.android.studio"),
             Self::ITerm2 => Some("com.googlecode.iterm2"),
             Self::Ghostty => Some("com.mitchellh.ghostty"),
+            Self::Rex => Some("com.superlogical.rex"),
         }
     }
 
     const fn open_action(self) -> OpenAction {
         match self {
             Self::Finder => OpenAction::Reveal,
-            Self::Terminal | Self::ITerm2 | Self::Ghostty => OpenAction::OpenDirectory,
+            Self::Terminal | Self::ITerm2 | Self::Ghostty | Self::Rex => OpenAction::OpenDirectory,
             Self::System | Self::VsCode | Self::Sublime | Self::Xcode | Self::AndroidStudio => OpenAction::Open,
         }
     }
@@ -528,7 +532,7 @@ mod tests {
 
     #[test]
     fn editor_catalog_partitions_always_available_and_detectable_targets() {
-        assert_eq!(ExternalEditor::ALL.len(), 9, "extend this test when adding an editor");
+        assert_eq!(ExternalEditor::ALL.len(), 10, "extend this test when adding an editor");
         for editor in ExternalEditor::ALL {
             let always = ExternalEditor::ALWAYS_AVAILABLE.contains(&editor);
             let detectable = ExternalEditor::DETECTABLE.contains(&editor);
@@ -537,7 +541,7 @@ mod tests {
                 assert!(editor.bundle_id().is_some(), "{editor:?} needs an identifier to detect");
             }
         }
-        assert_eq!(ExternalEditor::DETECTABLE.len(), 6);
+        assert_eq!(ExternalEditor::DETECTABLE.len(), 7);
         assert_eq!(ExternalEditor::ALWAYS_AVAILABLE.len(), 3);
         assert_eq!(ExternalEditor::System.bundle_id(), None);
         assert_eq!(ExternalEditor::Finder.bundle_id(), None);
@@ -545,6 +549,7 @@ mod tests {
             ExternalEditor::Terminal,
             ExternalEditor::ITerm2,
             ExternalEditor::Ghostty,
+            ExternalEditor::Rex,
         ] {
             assert_eq!(editor.open_action(), OpenAction::OpenDirectory, "{editor:?} opens a directory");
         }
@@ -565,6 +570,7 @@ mod tests {
         let first = temp_workspace();
         let second = temp_workspace();
         write_test_bundle(first.path(), "Ghostty.app", "com.mitchellh.ghostty");
+        write_test_bundle(second.path(), "Rex Beta.app", "com.superlogical.rex");
         // Detection keys on the registered identifier, not the directory name.
         write_test_bundle(first.path(), "Renamed Code.app", "com.microsoft.VSCode");
         write_test_bundle(second.path(), "iTerm.app", "com.googlecode.iterm2");
@@ -594,6 +600,7 @@ mod tests {
                 ExternalEditor::AndroidStudio,
                 ExternalEditor::ITerm2,
                 ExternalEditor::Ghostty,
+                ExternalEditor::Rex,
             ]
         );
 

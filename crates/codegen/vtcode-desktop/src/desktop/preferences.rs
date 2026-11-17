@@ -357,16 +357,18 @@ pub(super) enum CliTerminal {
     Terminal,
     ITerm2,
     Ghostty,
+    Rex,
 }
 
 impl CliTerminal {
-    pub(super) const ALL: [Self; 3] = [Self::Terminal, Self::ITerm2, Self::Ghostty];
+    pub(super) const ALL: [Self; 4] = [Self::Terminal, Self::ITerm2, Self::Ghostty, Self::Rex];
 
     pub(super) const fn id(self) -> &'static str {
         match self {
             Self::Terminal => "terminal",
             Self::ITerm2 => "iterm2",
             Self::Ghostty => "ghostty",
+            Self::Rex => "rex",
         }
     }
 
@@ -375,6 +377,7 @@ impl CliTerminal {
             Self::Terminal => ExternalEditor::Terminal,
             Self::ITerm2 => ExternalEditor::ITerm2,
             Self::Ghostty => ExternalEditor::Ghostty,
+            Self::Rex => ExternalEditor::Rex,
         }
     }
 
@@ -399,6 +402,7 @@ impl CliTerminal {
             Self::Terminal => "Terminal".to_string(),
             Self::ITerm2 => "iTerm2".to_string(),
             Self::Ghostty => "Ghostty".to_string(),
+            Self::Rex => "Rex".to_string(),
         }
     }
 

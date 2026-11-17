@@ -217,11 +217,12 @@ fn cli_terminal_round_trips_and_invalid_values_fall_back_to_terminal() {
         assert_eq!(loaded.cli_terminal(), terminal);
         assert_eq!(loaded.cli_terminal, Some(terminal.id().to_owned()));
     }
-    assert_eq!(CliTerminal::ALL.len(), 3, "extend this table when adding a terminal");
+    assert_eq!(CliTerminal::ALL.len(), 4, "extend this table when adding a terminal");
     for (terminal, label, editor) in [
         (CliTerminal::Terminal, "Terminal", ExternalEditor::Terminal),
         (CliTerminal::ITerm2, "iTerm2", ExternalEditor::ITerm2),
         (CliTerminal::Ghostty, "Ghostty", ExternalEditor::Ghostty),
+        (CliTerminal::Rex, "Rex", ExternalEditor::Rex),
     ] {
         assert_eq!(terminal.label(), label);
         assert_eq!(terminal.external_editor(), editor);
@@ -230,6 +231,7 @@ fn cli_terminal_round_trips_and_invalid_values_fall_back_to_terminal() {
     // Parsing is case-insensitive and trims whitespace, like destination ids.
     assert_eq!(CliTerminal::from_saved(Some("  ITERM2 ")), CliTerminal::ITerm2);
     assert_eq!(CliTerminal::from_saved(Some("Ghostty")), CliTerminal::Ghostty);
+    assert_eq!(CliTerminal::from_saved(Some(" REX ")), CliTerminal::Rex);
 
     // Unknown or empty ids fall back without touching other preferences.
     for saved in ["konsole", "", "   "] {
@@ -311,6 +313,12 @@ fn offered_terminals_combine_always_available_detected_and_saved() {
         CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::Ghostty, ExternalEditor::ITerm2]),
         vec![CliTerminal::Terminal, CliTerminal::ITerm2, CliTerminal::Ghostty]
     );
+
+    assert_eq!(
+        CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::Rex]),
+        vec![CliTerminal::Terminal, CliTerminal::Rex]
+    );
+    assert_eq!(CliTerminal::offered(CliTerminal::Rex, &[]), vec![CliTerminal::Terminal, CliTerminal::Rex]);
 
     // Non-terminal detections never leak into the terminal picker.
     assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::VsCode]), vec![CliTerminal::Terminal]);

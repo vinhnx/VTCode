@@ -287,7 +287,7 @@ Desktop loads the same thread (exit the CLI session first).
   the same handoff card showing `vtcode --fork-session <id>` for the selected thread (the same command as Settings →
   Connections → Terminal). Fork, not resume: the desktop keeps the thread open, so the CLI continues an independent
   copy while the desktop thread stays live. **Copy** copies it; **Continue in terminal** copies it and runs it in
-  the chosen terminal (Terminal.app runs it automatically via a generated script; iTerm2/Ghostty open at the
+  the chosen terminal (Terminal.app runs it automatically via a generated script; iTerm2/Ghostty/Rex open at the
   workspace for pasting until their script handling is verified); **Dismiss** closes the card. The terminal is
   chosen in Settings → Connections. With no thread selected the button is disabled and the other entries explain
   why. While a turn runs, the card notes the copy includes only completed turns.

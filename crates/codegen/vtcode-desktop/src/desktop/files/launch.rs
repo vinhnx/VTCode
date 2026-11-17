@@ -76,11 +76,11 @@ pub(crate) fn reveal_in_finder(root: &Path, rel_path: &str) -> Result<(), String
 /// Open Terminal at a workspace root (no file anchor needed, e.g. for the
 /// CLI handoff card). Same argv-boundary discipline as [`open_in_editor`]:
 /// a fixed argv, never a shell command.
-pub(crate) fn open_terminal_at(root: &Path) -> Result<(), String> {
+pub(crate) fn open_terminal_at(root: &Path, terminal: ExternalEditor) -> Result<(), String> {
     if !root.is_dir() {
         return Err(rust_i18n::t!("app.files.missing").to_string());
     }
-    run_open_command(editor_command(ExternalEditor::Terminal, root))
+    run_open_command(editor_command(terminal, root))
 }
 
 /// CLI flag the desktop handoff uses to continue a thread: a fork (not
@@ -229,6 +229,7 @@ mod tests {
                 ExternalEditor::Terminal => &["-b", "com.apple.Terminal"],
                 ExternalEditor::ITerm2 => &["-b", "com.googlecode.iterm2"],
                 ExternalEditor::Ghostty => &["-b", "com.mitchellh.ghostty"],
+                ExternalEditor::Rex => &["-b", "com.superlogical.rex"],
             };
             let command = editor_command(editor, &path);
             let args = command.get_args().collect::<Vec<_>>();
@@ -249,7 +250,7 @@ mod tests {
         // Success launches a real Terminal, so only the fail-closed guard is
         // pinned here; the launch itself is covered by view interception tests.
         let workspace = temp_workspace();
-        assert!(open_terminal_at(&workspace.path().join("missing")).is_err());
+        assert!(open_terminal_at(&workspace.path().join("missing"), ExternalEditor::Terminal).is_err());
     }
 
     #[test]
@@ -272,6 +273,7 @@ mod tests {
             ExternalEditor::Terminal,
             ExternalEditor::ITerm2,
             ExternalEditor::Ghostty,
+            ExternalEditor::Rex,
         ] {
             assert_eq!(
                 launch_path(&root, "nested/deep.rs", editor).unwrap(),
@@ -306,7 +308,7 @@ mod tests {
     #[test]
     fn only_terminal_app_runs_handoff_scripts() {
         assert!(terminal_runs_handoff_script(ExternalEditor::Terminal));
-        for editor in [ExternalEditor::ITerm2, ExternalEditor::Ghostty] {
+        for editor in [ExternalEditor::ITerm2, ExternalEditor::Ghostty, ExternalEditor::Rex] {
             assert!(!terminal_runs_handoff_script(editor), "{editor:?} stays on copy+open until verified");
         }
     }

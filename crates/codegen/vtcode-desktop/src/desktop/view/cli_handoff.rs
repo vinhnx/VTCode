@@ -118,7 +118,7 @@ impl DesktopView {
                     match script {
                         Some(content) => files::write_handoff_script(&content)
                             .and_then(|path| files::open_script_in_terminal(&path, terminal)),
-                        None => files::open_terminal_at(&root),
+                        None => files::open_terminal_at(&root, terminal),
                     }
                 })
                 .await;
