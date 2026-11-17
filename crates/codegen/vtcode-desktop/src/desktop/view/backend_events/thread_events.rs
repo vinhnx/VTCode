@@ -181,7 +181,8 @@ impl DesktopView {
                     // Mirror this exact chunk into the read-only bottom-pane
                     // monitor. The command runs once in the agent's PTY; the
                     // monitor never starts a second shell process.
-                    if monitor_row.as_deref() == Some(row_id.as_str())
+                    if accepted
+                        && monitor_row.as_deref() == Some(row_id.as_str())
                         && let Some(tab) = self.terminal_monitor.as_mut()
                     {
                         let _drain = tab.feed_output(&output.output);

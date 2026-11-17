@@ -146,7 +146,10 @@ impl TerminalTab {
     /// Feed one output chunk from the monitored command into the grid.
     pub(super) fn feed_output(&mut self, text: &str) -> TerminalDrain {
         let mut events = Vec::new();
-        for event in self.screen.process(text.as_bytes()) {
+        // Progress callbacks carry text with bare LF. Rio treats LF as a
+        // vertical move, so supply CR as well for this text-only monitor.
+        let normalized = text.replace('\n', "\r\n");
+        for event in self.screen.process(normalized.as_bytes()) {
             if may_forward_to_view(&event) && events.len() < MAX_VIEW_EVENTS_PER_DRAIN {
                 events.push(event);
             }
@@ -336,6 +339,23 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(rendered.contains("live output from the agent PTY"), "{rendered}");
+    }
+
+    #[test]
+    fn monitor_aligns_line_feeds_and_preserves_carriage_return_updates() {
+        let size = PtySize { rows: 5, cols: 40, pixel_width: 0, pixel_height: 0 };
+        let mut tab = TerminalTab::monitor(size, List::from(&Colors::default()));
+        let _ = tab.feed_output("first line\nsecond");
+        let _ = tab.feed_output(" line\r\nprogress 10%\rprogress 90%\nlast");
+        let rows: Vec<String> = tab
+            .display_rows()
+            .iter()
+            .map(|row| row.iter().map(|run| run.text.as_str()).collect())
+            .collect();
+        assert_eq!(rows[0].trim_end(), "first line");
+        assert_eq!(rows[1].trim_end(), "second line");
+        assert_eq!(rows[2].trim_end(), "progress 90%");
+        assert_eq!(rows[3].trim_end(), "last");
     }
 
     #[test]
