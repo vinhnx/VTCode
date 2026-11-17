@@ -472,8 +472,14 @@ validate_release_assets() {
 #
 # Cross-built musl/aarch64-linux-gnu artifacts cannot embed cargo-auditable
 # data (cargo runs inside the cross container), so MISSING is expected for
-# them. MISSING anywhere else prints a WARNING: either the auditable build
-# step regressed or the release machine lacks cargo-auditable.
+# them. The Windows MSVC artifact is built natively with `cargo auditable build`,
+# but Rust 1.100's Cargo build-dir layout change drops the injected `.dep-v0`
+# object on MSVC targets, and no cargo-auditable release fixes it yet. MISSING
+# there is a known, tracked limitation rather than a build-step regression
+# (see docs/SECURITY.md); the Windows build stays auditable-enabled so the data
+# reappears automatically once upstream is fixed. MISSING anywhere else prints
+# a WARNING: either the auditable build step regressed or the release machine
+# lacks cargo-auditable.
 #
 # Always returns 0: this is a report, not a gate. release.sh treats
 # cargo-auditable as optional today; only flip this to fatal together with
@@ -513,6 +519,9 @@ report_audit_data_coverage() {
             case "$name" in
                 *musl*|*aarch64-unknown-linux-gnu*)
                     echo "audit-data: $name: MISSING (expected: cross-built artifacts cannot embed cargo-auditable data)"
+                    ;;
+                *x86_64-pc-windows-msvc*)
+                    echo "audit-data: $name: MISSING (known limitation: Rust 1.100 breaks cargo-auditable injection on MSVC; see SECURITY.md)"
                     ;;
                 *)
                     echo "audit-data: $name: MISSING (WARNING: expected embedded audit data; check the cargo-auditable build step)"

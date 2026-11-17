@@ -660,10 +660,20 @@ cargo audit bin target/release/vtcode   # RustSec scan of a shipped binary
 
 The `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc` jobs in `build-linux-windows.yml` and the
 macOS builds in `scripts/release.sh` use `cargo auditable build`; `scripts/release.sh` falls back to
-a plain build with a warning when the tool is absent. The `cross`-built musl/aarch64 artifacts do not
-carry audit data — cross runs cargo inside its container, so injecting would require custom cross
-images (see the comment on the cross build step). Verify any artifact with `cargo audit bin` after
-building if the data matters for that channel.
+a plain build with a warning when the tool is absent. Two channels do not currently carry audit data:
+
+- `cross`-built musl/aarch64 artifacts: cross runs cargo inside its container, so injecting would
+  require custom cross images (see the comment on the cross build step).
+- Windows MSVC (`x86_64-pc-windows-msvc`): the Windows job is built natively with
+  `cargo auditable build`, but Rust 1.100's Cargo build-dir layout change drops the injected
+  `.dep-v0` object during the MSVC link. This started at v0.182.3 (the 1.99.1 → 1.100.0 toolchain
+  bump); v0.182.1 and earlier embedded the section. No cargo-auditable release fixes it yet. The
+  build stays auditable-enabled so the data returns automatically once upstream is fixed — do not
+  replace the Windows build with a plain `cargo build`.
+
+`report_audit_data_coverage` reports these three known gaps as `MISSING (expected/known limitation)`
+rather than a regression `WARNING`. Verify any artifact with `cargo audit bin` after building if the
+data matters for that channel.
 
 ### License Compliance
 

@@ -195,10 +195,18 @@ cargo audit bin path/to/vtcode        # RustSec scan of the binary itself
 ```
 
 trivy (v0.31+), grype (v0.83+), and osv-scanner (v2.0.1+) read the same section, so container/distro scanners pick it
-up automatically. The GNU Linux, Windows, and macOS release builds embed the data; the `cross`-built musl/aarch64
-artifacts do not (cargo runs inside the cross container, so a custom image would be required). Every release prints a
-per-artifact coverage report during staging (`report_audit_data_coverage` in `scripts/release-assets.sh`), so a silent
-regression in the auditable build step shows up in the release log instead of shipping unnoticed.
+up automatically. The GNU Linux and macOS release builds embed the data. Two shipped channels currently do not:
+
+- The `cross`-built musl/aarch64 artifacts — cargo runs inside the cross container, so a custom image would be required.
+- Windows MSVC (`x86_64-pc-windows-msvc`) — the Windows job is built natively with `cargo auditable build`, but
+  Rust 1.100's Cargo build-dir layout change drops the injected `.dep-v0` object during the MSVC link (regression
+  from v0.182.3; no cargo-auditable release fixes it yet). The build stays auditable-enabled so the data returns
+  once upstream is fixed. For these binaries `cargo audit bin` falls back to recovering partial dependency data
+  from panic strings, which is less complete than the embedded graph.
+
+Every release prints a per-artifact coverage report during staging (`report_audit_data_coverage` in
+`scripts/release-assets.sh`), so a silent regression in the auditable build step shows up in the release log instead
+of shipping unnoticed. Known toolchain/cross limitations are labeled as such; any other `MISSING` is a `WARNING`.
 
 Embedded metadata records crate names and versions only (URLs/paths are redacted); it is an SBOM, not a
 supply-chain defense.

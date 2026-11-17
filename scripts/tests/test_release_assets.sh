@@ -703,7 +703,10 @@ make_cov_archive "x86_64-unknown-linux-musl" "tar.gz" "vtcode" "NODATA"
 make_cov_archive "aarch64-unknown-linux-gnu" "tar.gz" "vtcode" "HASDATA"
 make_cov_archive "fake-huge-target" "tar.gz" "vtcode" "BIGDATA"
 if command -v zip >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
-    make_cov_archive "x86_64-pc-windows-msvc" "zip" "vtcode.exe" "HASDATA"
+    # x86_64 MSVC is the Rust 1.100 known-limitation case (no data survives the
+    # link); aarch64 MSVC still reports EMBEDDED, proving .zip extraction works.
+    make_cov_archive "x86_64-pc-windows-msvc" "zip" "vtcode.exe" "NODATA"
+    make_cov_archive "aarch64-pc-windows-msvc" "zip" "vtcode.exe" "HASDATA"
     cov_has_zip=true
 else
     echo "  - zip/unzip not installed; skipping windows zip coverage fixture"
@@ -763,8 +766,10 @@ check_cov "vtcode-9.9.9-x86_64-unknown-linux-musl.tar.gz: MISSING (expected:" \
 check_cov "vtcode-9.9.9-aarch64-unknown-linux-gnu.tar.gz: EMBEDDED (42 dependencies)" \
     "EMBEDDED wins over the cross rule when data is present"
 if [[ "$cov_has_zip" == true ]]; then
-    check_cov "vtcode-9.9.9-x86_64-pc-windows-msvc.zip: EMBEDDED (42 dependencies)" \
-        "windows zip binary is scanned"
+    check_cov "vtcode-9.9.9-x86_64-pc-windows-msvc.zip: MISSING (known limitation:" \
+        "windows MSVC MISSING is a documented toolchain limitation, not a warning"
+    check_cov "vtcode-9.9.9-aarch64-pc-windows-msvc.zip: EMBEDDED (42 dependencies)" \
+        "windows zip binary with data is scanned and reported EMBEDDED"
 fi
 check_cov "vtcode-9.9.9-fake-huge-target.tar.gz: TOO-LARGE" \
     "oversized binary reports TOO-LARGE instead of a misleading verdict"
