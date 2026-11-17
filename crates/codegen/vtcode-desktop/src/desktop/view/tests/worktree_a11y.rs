@@ -85,6 +85,24 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn contrast_assistive_increment_persists_without_a_drag(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        // This is the exact path the Kit slider's `AccessibleAction::Increment`
+        // takes: `step_thumb` emits `Change` but never `Release`. It must still
+        // persist — unlike a pointer drag, which saves once on `Release`.
+        let slider = view.read(cx).contrast_slider.clone();
+        slider.update(cx, |slider, cx| {
+            slider.step_thumb(false, slider.accessibility_step(), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_entity(&view, |view, _| assert_eq!(view.preferences.contrast(), 1));
+    assert_eq!(crate::desktop::preferences::Preferences::load().contrast(), 1);
+}
+
+#[gpui_kit::test]
 fn contrast_survives_theme_change_and_restores_from_preferences(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

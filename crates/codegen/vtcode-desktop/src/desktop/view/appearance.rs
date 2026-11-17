@@ -11,6 +11,9 @@ pub(super) struct AppearanceSettingsProps {
     pub(super) theme_mode: ThemeMode,
     pub(super) theme_scroll_light: VirtualListScrollHandle,
     pub(super) theme_scroll_dark: VirtualListScrollHandle,
+    /// Child views hosting each virtualized swatch row (see `ThemeGrid`).
+    pub(super) theme_grid_light: Entity<appearance_theme_picker::ThemeGrid>,
+    pub(super) theme_grid_dark: Entity<appearance_theme_picker::ThemeGrid>,
     pub(super) ui_font_size: u8,
     pub(super) code_font_size: u8,
     pub(super) ui_language_select: Entity<UiLanguageSelectState>,
@@ -35,6 +38,8 @@ impl AppearanceSettingsProps {
             theme_mode: view.theme_mode,
             theme_scroll_light: view.theme_scroll_light.clone(),
             theme_scroll_dark: view.theme_scroll_dark.clone(),
+            theme_grid_light: view.theme_grid_light.clone(),
+            theme_grid_dark: view.theme_grid_dark.clone(),
             ui_font_size: typography.ui_font_size,
             code_font_size: typography.code_font_size,
             ui_language_select: view.ui_language_select.clone(),
@@ -74,18 +79,22 @@ impl DesktopView {
             cx,
         );
         self.sync_terminal_palette(cx);
-        self.apply_typography(cx);
-        // Contrast rewrites the palette too, so composer token colors must be
-        // re-derived from the new foreground/fills just like a theme switch.
+        // No `apply_typography`: fonts are contrast-independent and the palette
+        // above already refreshed windows. Contrast rewrites colors, so the
+        // composer tokens must be re-derived just like on a theme switch.
         self.refresh_composer_highlight(cx);
         self.transcript.remeasure();
-        self.save_preferences();
         cx.notify();
+        // No save here: this runs on every drag Change tick, and saving ends in
+        // an fsync. Callers persist once on Release (bootstrap) or on discrete
+        // keyboard/reset changes.
     }
 
     pub(super) fn reset_contrast(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.set_contrast(0.0, window, cx);
         self.contrast_slider.update(cx, |slider, cx| slider.set_value(0.0, window, cx));
+        // Discrete action: persist once (the drag path above never saves).
+        self.save_preferences();
     }
 
     pub(super) fn set_terminal_position(&mut self, position: preferences::TerminalPosition, cx: &mut Context<Self>) {
@@ -656,10 +665,8 @@ impl DesktopView {
         let editing = props.theme_mode;
         let show_light = !separate || editing == ThemeMode::Light;
         let show_dark = !separate || editing == ThemeMode::Dark;
-        let light_group = show_light
-            .then(|| Self::render_theme_group_content(ThemeMode::Light, &props.theme_scroll_light, view.clone(), cx));
-        let dark_group = show_dark
-            .then(|| Self::render_theme_group_content(ThemeMode::Dark, &props.theme_scroll_dark, view.clone(), cx));
+        let light_group = show_light.then(|| Self::render_theme_group_content(&props.theme_grid_light));
+        let dark_group = show_dark.then(|| Self::render_theme_group_content(&props.theme_grid_dark));
         // Own the theme: `cx.theme()` borrows `cx`, but the content
         // builders below take `cx` mutably in later chain links.
         let theme = cx.theme().clone();

@@ -175,6 +175,7 @@ fn settings_navigation_groups_desktop_tabs_and_cli_config(cx: &mut TestAppContex
         let divider = window.find("settings-nav-group-divider").bounds();
         let header_cli = window.find("settings-nav-group-cli-config").bounds();
         let configuration = window.find("settings-nav-configuration").bounds();
+        let about = window.find("settings-nav-about").bounds();
         assert!(
             header_settings.origin.y < appearance.origin.y && appearance.origin.y < storage.origin.y,
             "desktop tabs follow their group header: header={header_settings:?} appearance={appearance:?} storage={storage:?}"
@@ -184,6 +185,10 @@ fn settings_navigation_groups_desktop_tabs_and_cli_config(cx: &mut TestAppContex
                 && divider.origin.y + divider.size.height <= header_cli.origin.y + px(1.)
                 && header_cli.origin.y + header_cli.size.height <= configuration.origin.y + px(1.),
             "a divider and header separate the CLI config entry: storage={storage:?} divider={divider:?} header={header_cli:?} configuration={configuration:?}"
+        );
+        assert!(
+            configuration.origin.y + configuration.size.height <= about.origin.y + px(1.),
+            "About closes the settings list after CLI configuration: configuration={configuration:?} about={about:?}"
         );
     })
     .unwrap();
@@ -310,7 +315,7 @@ fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
         let title = window.find("settings-page-title");
         assert_eq!(title.role(), Some(gpui_kit::Role::Heading));
         assert_eq!(title.label(), Some("Appearance"));
-        select_settings_category(window, 7, cx);
+        select_settings_category(window, super::super::settings::SettingsTab::ABOUT_INDEX, cx);
         window.render_frame(cx);
         assert_eq!(window.find("settings-page-title").label(), Some("About"));
     })

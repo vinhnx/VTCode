@@ -13,9 +13,35 @@ pub(super) enum SettingsTab {
     About,
 }
 
+/// One entry in the unified settings navigation: the eight tabs plus the CLI
+/// configuration page. This is the single ordering source for the Kit sidebar,
+/// the legacy nav, keyboard cycling, and index→page dispatch, so a reorder
+/// cannot desync one surface from another. About is deliberately last.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SettingsPage {
+    Tab(SettingsTab),
+    Configuration,
+}
+
+impl SettingsPage {
+    pub(super) const ALL: [Self; 9] = [
+        Self::Tab(SettingsTab::VtCode),
+        Self::Tab(SettingsTab::Appearance),
+        Self::Tab(SettingsTab::Accessibility),
+        Self::Tab(SettingsTab::Shortcuts),
+        Self::Tab(SettingsTab::Connections),
+        Self::Tab(SettingsTab::Notifications),
+        Self::Tab(SettingsTab::Storage),
+        Self::Configuration,
+        Self::Tab(SettingsTab::About),
+    ];
+
+    pub(super) const CONFIG_INDEX: usize = 7;
+}
+
 impl SettingsTab {
-    /// VT Code leads the rail (app identity first), then the desktop tabs,
-    /// with About closing the group after Storage.
+    /// Tab-only order for the search palette, canonical deeplink names, and
+    /// the icon-coverage test. Navigation ordering lives in [`SettingsPage`].
     pub(super) const ALL: [Self; 8] = [
         Self::VtCode,
         Self::Appearance,
@@ -28,12 +54,14 @@ impl SettingsTab {
     ];
 
     /// Index of the CLI configuration entry in the unified settings
-    /// navigation: it follows every `SettingsTab` instead of swapping the
-    /// whole surface through `config_page_open` alone.
-    pub(super) const CONFIG_INDEX: usize = Self::ALL.len();
+    /// navigation: it sits just before About, which closes the list.
+    pub(super) const CONFIG_INDEX: usize = SettingsPage::CONFIG_INDEX;
+
+    /// Index of the About page: the last entry in the unified navigation.
+    pub(super) const ABOUT_INDEX: usize = Self::ALL.len();
 
     /// Tabs plus the configuration entry.
-    pub(super) const PAGE_COUNT: usize = Self::ALL.len() + 1;
+    pub(super) const PAGE_COUNT: usize = SettingsPage::ALL.len();
 
     /// i18n key for the tab label, resolved once in [`SettingsTab::label`].
     const fn label_key(self) -> &'static str {
@@ -357,14 +385,60 @@ impl DesktopView {
     fn render_settings_navigation(&self, window: &Window, cx: &mut Context<Self>, narrow: bool) -> AnyElement {
         let colors = cx.theme().colors;
         let selected = self.settings_page_index();
-        let mut desktop_entries = Vec::with_capacity(SettingsTab::ALL.len());
-        for (index, tab) in SettingsTab::ALL.iter().enumerate() {
+        // Single ordered pass over `SettingsPage::ALL`: tabs, the CLI config
+        // entry behind its divider/header, then About as the closing entry.
+        // Building in page order keeps keyboard cycling, the Kit sidebar, and
+        // this legacy rail on exactly the same index model.
+        let mut items = Vec::with_capacity(SettingsPage::ALL.len() + 3);
+        items.push(nav_group_header(
+            "settings-nav-group-settings",
+            rust_i18n::t!("app.settings.search.group_settings"),
+            &colors,
+        ));
+        for (index, page) in SettingsPage::ALL.iter().enumerate() {
+            if *page == SettingsPage::Configuration {
+                items.push(
+                    div()
+                        .id("settings-nav-group-divider")
+                        .test_support()
+                        .w_full()
+                        .child(row_divider(&colors))
+                        .into_any_element(),
+                );
+                items.push(nav_group_header(
+                    "settings-nav-group-cli-config",
+                    rust_i18n::t!("app.settings.search.group_cli_config"),
+                    &colors,
+                ));
+                let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
+                items.push(
+                    desktop_button("settings-nav-configuration")
+                        .accessibility_label(config_label.clone())
+                        .child(nav_entry_content(
+                            "settings-nav-label-configuration",
+                            IconName::Settings2,
+                            "settings-nav-icon-configuration",
+                            config_label,
+                        ))
+                        .desktop_selected(selected == index, &colors)
+                        .w_full()
+                        .justify_start()
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.select_settings_page(SettingsTab::CONFIG_INDEX, window, cx);
+                        }))
+                        .into_any_element(),
+                );
+                continue;
+            }
+            let SettingsPage::Tab(tab) = page else {
+                continue;
+            };
             let active = index == selected;
             let icon = match tab.icon() {
                 Some(name) => Icon::new(name),
                 None => vtcode_nav_mark(),
             };
-            desktop_entries.push(
+            items.push(
                 desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
                     .accessibility_label(tab.label())
                     .child(nav_entry_content(
@@ -380,49 +454,7 @@ impl DesktopView {
                     .into_any_element(),
             );
         }
-        let config_active = selected == SettingsTab::CONFIG_INDEX;
-        let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
-        let config_entry = desktop_button("settings-nav-configuration")
-            .accessibility_label(config_label.clone())
-            .child(nav_entry_content(
-                "settings-nav-label-configuration",
-                IconName::Settings2,
-                "settings-nav-icon-configuration",
-                config_label,
-            ))
-            .desktop_selected(config_active, &colors)
-            .w_full()
-            .justify_start()
-            .on_click(cx.listener(|view, _, window, cx| {
-                view.select_settings_page(SettingsTab::CONFIG_INDEX, window, cx);
-            }))
-            .into_any_element();
-        // Two groups mirror the settings search palette: the desktop tabs,
-        // then the CLI configuration entry behind a divider and header.
-        let entries = div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(nav_group_header(
-                "settings-nav-group-settings",
-                rust_i18n::t!("app.settings.search.group_settings"),
-                &colors,
-            ))
-            .children(desktop_entries)
-            .child(
-                div()
-                    .id("settings-nav-group-divider")
-                    .test_support()
-                    .w_full()
-                    .child(row_divider(&colors)),
-            )
-            .child(nav_group_header(
-                "settings-nav-group-cli-config",
-                rust_i18n::t!("app.settings.search.group_cli_config"),
-                &colors,
-            ))
-            .child(config_entry);
+        let entries = div().w_full().flex().flex_col().gap_1().children(items);
         div()
             .id("settings-navigation")
             .test_support()
@@ -620,16 +652,16 @@ impl DesktopView {
         }
     }
 
-    /// Navigation index of the visible page: the tab position, or the
-    /// trailing configuration entry while the config page is open.
+    /// Navigation index of the visible page in [`SettingsPage::ALL`]. The
+    /// config page wins while open (the view keeps a tab selected behind it),
+    /// and About resolves to the trailing slot past the config entry.
     pub(super) fn settings_page_index(&self) -> usize {
-        if self.config_page_open {
-            return SettingsTab::CONFIG_INDEX;
-        }
-        SettingsTab::ALL
-            .iter()
-            .position(|tab| *tab == self.settings_tab)
-            .unwrap_or_default()
+        let current = if self.config_page_open {
+            SettingsPage::Configuration
+        } else {
+            SettingsPage::Tab(self.settings_tab)
+        };
+        SettingsPage::ALL.iter().position(|page| *page == current).unwrap_or_default()
     }
 
     fn select_settings_page(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -641,7 +673,10 @@ impl DesktopView {
     }
 
     fn update_settings_page(&mut self, index: usize, reveal: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if index == SettingsTab::CONFIG_INDEX {
+        let Some(page) = SettingsPage::ALL.get(index).copied() else {
+            return;
+        };
+        if page == SettingsPage::Configuration {
             self.config_page_open = true;
             if reveal {
                 self.settings_nav_scroll.scroll_to_item(index);
@@ -650,34 +685,35 @@ impl DesktopView {
             cx.notify();
             return;
         }
-        if let Some(tab) = SettingsTab::ALL.get(index) {
-            self.select_settings_tab(*tab);
-            if *tab == SettingsTab::VtCode {
-                self.refresh_login_item_status(cx);
-            }
-            if *tab == SettingsTab::Storage {
-                self.maybe_request_storage_summary(cx);
-            }
-            // The About page reads the cached release notes; ask for a status
-            // only when launch never delivered one. Pending-gated and
-            // snapshot-gated, so a repeat selection costs nothing.
-            if *tab == SettingsTab::About {
-                self.maybe_request_update_status();
-            }
-            // Live connection state, like the storage summary: passive
-            // selection refreshes only when a service exists to answer, so a
-            // backend-less page never marks status dirty or posts a queue
-            // notice. The request itself is pending-gated, so re-selecting
-            // refreshes only after the previous round-trip settles.
-            if *tab == SettingsTab::Connections && self.backend.is_some() {
-                self.request_webmcp_status();
-            }
-            if reveal {
-                self.settings_nav_scroll.scroll_to_item(index);
-            }
-            self.focus_settings_selection(window, cx);
-            cx.notify();
+        let SettingsPage::Tab(tab) = page else {
+            return;
+        };
+        self.select_settings_tab(tab);
+        if tab == SettingsTab::VtCode {
+            self.refresh_login_item_status(cx);
         }
+        if tab == SettingsTab::Storage {
+            self.maybe_request_storage_summary(cx);
+        }
+        // The About page reads the cached release notes; ask for a status
+        // only when launch never delivered one. Pending-gated and
+        // snapshot-gated, so a repeat selection costs nothing.
+        if tab == SettingsTab::About {
+            self.maybe_request_update_status();
+        }
+        // Live connection state, like the storage summary: passive
+        // selection refreshes only when a service exists to answer, so a
+        // backend-less page never marks status dirty or posts a queue
+        // notice. The request itself is pending-gated, so re-selecting
+        // refreshes only after the previous round-trip settles.
+        if tab == SettingsTab::Connections && self.backend.is_some() {
+            self.request_webmcp_status();
+        }
+        if reveal {
+            self.settings_nav_scroll.scroll_to_item(index);
+        }
+        self.focus_settings_selection(window, cx);
+        cx.notify();
     }
 
     fn cycle_settings_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -729,8 +765,12 @@ mod tests {
 
     #[test]
     fn vtcode_leads_the_settings_rail_and_about_closes_it() {
-        assert_eq!(SettingsTab::ALL.first(), Some(&SettingsTab::VtCode));
-        assert_eq!(SettingsTab::ALL.last(), Some(&SettingsTab::About));
-        assert_eq!(SettingsTab::CONFIG_INDEX, SettingsTab::ALL.len());
+        assert_eq!(SettingsPage::ALL.first(), Some(&SettingsPage::Tab(SettingsTab::VtCode)));
+        assert_eq!(SettingsPage::ALL.last(), Some(&SettingsPage::Tab(SettingsTab::About)));
+        // CLI configuration sits just before About, which is the final entry
+        // in every settings navigation surface.
+        assert_eq!(SettingsPage::ALL.get(SettingsTab::CONFIG_INDEX), Some(&SettingsPage::Configuration));
+        assert_eq!(SettingsTab::CONFIG_INDEX + 1, SettingsTab::ABOUT_INDEX);
+        assert_eq!(SettingsTab::PAGE_COUNT, SettingsPage::ALL.len());
     }
 }

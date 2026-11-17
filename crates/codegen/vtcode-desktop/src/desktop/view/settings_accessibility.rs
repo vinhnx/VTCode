@@ -31,10 +31,16 @@ impl DesktopView {
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
-        let _ = &view;
         let label = rust_i18n::t!("app.settings.accessibility.contrast").to_string();
         let slider = props.contrast_slider.clone();
         let focus = props.contrast_focus.clone();
+        // Arrow keys call `SliderState::set_value`, which notifies but emits no
+        // `SliderEvent::Release`. Persist here so a discrete keyboard change is
+        // never lost (the drag path saves once on Release instead).
+        let save_view = view.clone();
+        let drag_view = view.clone();
+        let drag_view_up = view.clone();
+        let drag_view_out = view.clone();
         let ring = cx.theme().colors.ring;
         accessible_group_box(
             "accessibility-contrast-group",
@@ -55,7 +61,17 @@ impl DesktopView {
                             .capture_any_mouse_down(move |event, window, cx| {
                                 if event.button == MouseButton::Left {
                                     focus.focus(window, cx);
+                                    drag_view.update(cx, |view, _| view.contrast_drag_active = true);
                                 }
+                            })
+                            // Safety net: a press that starts on the wrapper but
+                            // not the slider track emits no `Release`, so clear
+                            // the drag flag on any pointer-up too.
+                            .on_mouse_up(MouseButton::Left, move |_, _, cx| {
+                                drag_view_up.update(cx, |view, _| view.contrast_drag_active = false);
+                            })
+                            .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
+                                drag_view_out.update(cx, |view, _| view.contrast_drag_active = false);
                             })
                             .on_key_down(move |event, window, cx| {
                                 if event.keystroke.modifiers.control
@@ -71,9 +87,16 @@ impl DesktopView {
                                     _ => return,
                                 };
                                 cx.stop_propagation();
-                                slider.update(cx, |state, cx| {
-                                    let value = (state.value().start() + delta).clamp(0.0, 100.0);
-                                    state.set_value(value, window, cx);
+                                let next = (slider.read(cx).value().start() + delta).clamp(0.0, 100.0);
+                                slider.update(cx, |state, cx| state.set_value(next, window, cx));
+                                // `set_value` notifies the SliderState asynchronously,
+                                // so its `observe_in` callback (which applies the
+                                // palette) would run after this handler. Apply and
+                                // persist synchronously here; the observer later
+                                // sees the same value and short-circuits.
+                                save_view.update(cx, |view, cx| {
+                                    view.set_contrast(next, window, cx);
+                                    view.save_preferences();
                                 });
                             })
                             .child(

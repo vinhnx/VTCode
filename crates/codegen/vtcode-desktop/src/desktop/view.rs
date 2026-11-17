@@ -62,8 +62,8 @@ use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
     FocusHandle, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, NavigationDirection, NoAction, OsAction, PathPromptOptions, Pixels, Render,
-    ScrollEvent, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, actions, anchored,
-    deferred, div, img, point, px, size,
+    ScrollEvent, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, WeakEntity, Window, actions,
+    anchored, deferred, div, img, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -746,6 +746,12 @@ struct DesktopView {
     contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
     contrast_focus: FocusHandle,
     _contrast_slider_subscription: Subscription,
+    /// Persists contrast on `Release` and on discrete (non-drag) `Change`s such
+    /// as assistive-technology increments; never per pointer-drag tick.
+    _contrast_event_subscription: Subscription,
+    /// True while the pointer is held on the contrast slider, so a drag writes
+    /// once on `Release` instead of an fsync per `Change` tick.
+    contrast_drag_active: bool,
     effort_focus: FocusHandle,
     _effort_slider_subscriptions: Vec<Subscription>,
     composer_resources: Vec<protocol::ComposerResource>,
@@ -769,6 +775,12 @@ struct DesktopView {
     config_page_group: Option<String>,
     theme_scroll_light: VirtualListScrollHandle,
     theme_scroll_dark: VirtualListScrollHandle,
+    /// Virtualized theme rows live in child views (`ThemeGrid`), each with a
+    /// weak back-reference to avoid an entity cycle. GPUI dirties ancestors on
+    /// a child notify, so this is a structural boundary rather than a true
+    /// repaint scope. The handles above stay here for chevrons and tests.
+    theme_grid_light: Entity<appearance_theme_picker::ThemeGrid>,
+    theme_grid_dark: Entity<appearance_theme_picker::ThemeGrid>,
     theme_editor: appearance_themes::CustomThemeState,
     settings_scroll: ScrollHandle,
     settings_nav_scroll: ScrollHandle,

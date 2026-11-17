@@ -192,6 +192,19 @@ impl DesktopView {
     ) -> Self {
         let (event_tx, event_rx) = BackendEventSender::channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
+        // One retained scroll position per theme mode, shared with the child
+        // grid views that own the virtual list (see `ThemeGrid`). The handles
+        // stay here so chevrons and tests control both grids uniformly.
+        let theme_scroll_light = VirtualListScrollHandle::new();
+        let theme_scroll_dark = VirtualListScrollHandle::new();
+        let view_handle = cx.entity();
+        let light_view = view_handle.clone();
+        let dark_view = view_handle.clone();
+        let theme_grid_light = cx.new(|_| {
+            appearance_theme_picker::ThemeGrid::new(ThemeMode::Light, theme_scroll_light.clone(), &light_view)
+        });
+        let theme_grid_dark =
+            cx.new(|_| appearance_theme_picker::ThemeGrid::new(ThemeMode::Dark, theme_scroll_dark.clone(), &dark_view));
         let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
             let target = window
                 .focus_lost_restore_target(cx)
@@ -220,6 +233,28 @@ impl DesktopView {
         let contrast_slider_subscription = cx.observe_in(&contrast_slider, window, |view, slider, window, cx| {
             view.set_contrast(slider.read(cx).value().start(), window, cx);
         });
+        // `observe_in` fires on every `SliderState::notify` (drag ticks) and
+        // applies the palette there without persisting. Persistence is handled
+        // here instead: once on pointer `Release`, and on discrete `Change`s
+        // that have no drag behind them (assistive-technology Increment/
+        // Decrement call `step_thumb`, which emits `Change` but never
+        // `Release`). Arrow keys call `set_value`, which emits no event and
+        // persists at its own call site in `settings_accessibility`.
+        let contrast_event_subscription = cx.subscribe_in(
+            &contrast_slider,
+            window,
+            |view, _, event: &gpui_kit::component::slider::SliderEvent, _, _| {
+                use gpui_kit::component::slider::SliderEvent;
+                match event {
+                    SliderEvent::Change(_) if !view.contrast_drag_active => view.save_preferences(),
+                    SliderEvent::Release(_) => {
+                        view.contrast_drag_active = false;
+                        view.save_preferences();
+                    }
+                    _ => {}
+                }
+            },
+        );
         let shortcut_capture_focus = cx.focus_handle().tab_stop(true);
         let shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
         let shortcut_search_input = cx
@@ -597,6 +632,8 @@ impl DesktopView {
             contrast_slider,
             contrast_focus: cx.focus_handle().tab_stop(true),
             _contrast_slider_subscription: contrast_slider_subscription,
+            _contrast_event_subscription: contrast_event_subscription,
+            contrast_drag_active: false,
             effort_focus: cx.focus_handle().tab_stop(true),
             _effort_slider_subscriptions: Vec::new(),
             composer_resources: Vec::new(),
@@ -610,8 +647,10 @@ impl DesktopView {
             palette_groups: Vec::new(),
             config_page_open: false,
             config_page_group: None,
-            theme_scroll_light: VirtualListScrollHandle::new(),
-            theme_scroll_dark: VirtualListScrollHandle::new(),
+            theme_scroll_light,
+            theme_scroll_dark,
+            theme_grid_light,
+            theme_grid_dark,
             theme_editor: appearance_themes::CustomThemeState::new(window, cx),
             settings_scroll: ScrollHandle::default(),
             settings_nav_scroll: ScrollHandle::default(),

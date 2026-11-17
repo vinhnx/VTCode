@@ -531,15 +531,16 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         window.press("end", cx);
         window.render_frame(cx);
         window.render_frame(cx);
-        assert!(window.try_find("cli-config-page").is_some());
-        assert_eq!(window.find("settings-nav-configuration").checked(), Some(true));
+        // End resolves the last unified entry: About closes the list.
+        assert!(window.try_find("about-settings").is_some());
+        assert_eq!(window.find("settings-nav-about").checked(), Some(true));
         assert_eq!(window.find("settings-nav-appearance").checked(), Some(false));
         assert_eq!(view.read(cx).settings_page_index(), 8);
         window.press("left", cx);
         window.render_frame(cx);
-        assert!(window.try_find("about-settings").is_some());
-        assert_eq!(window.find("settings-nav-about").checked(), Some(true));
-        assert!(window.try_find("cli-config-page").is_none());
+        assert!(window.try_find("cli-config-page").is_some());
+        assert_eq!(window.find("settings-nav-configuration").checked(), Some(true));
+        assert!(window.try_find("about-settings").is_none());
 
         select_settings_category(window, 3, cx);
         assert!(window.try_find("keyboard-settings").is_some());
@@ -919,7 +920,7 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
         }
         // Kit sidebar rows carry no accessible label in 0.9.0 (upstream
         // sidebar-a11y ask, re-verified 2026-11-09), so the config row pins by position for now.
-        assert!(window.try_find("0-8").is_some());
+        assert!(window.try_find("0-7").is_some());
 
         // Pin the cycle start: Home selects the first tab (VT Code).
         window.press("home", cx);
@@ -928,14 +929,14 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
         assert!(!view.read(cx).config_page_open);
         assert!(window.try_find("vtcode-settings").is_some());
 
-        // Backward wrap: VT Code (first) -> configuration (last).
+        // Backward wrap: VT Code (first) -> About (last).
         window.press("left", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).config_page_open);
-        assert!(window.try_find("cli-config-page").is_some());
+        assert!(!view.read(cx).config_page_open);
+        assert!(window.try_find("about-settings").is_some());
         assert!(window.try_find("vtcode-settings").is_none());
 
-        // Forward wrap: configuration (last) -> VT Code (first).
+        // Forward wrap: About (last) -> VT Code (first).
         window.press("right", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).config_page_open);
@@ -944,7 +945,7 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
         // Up and Down alias the movement and wrap at both ends.
         window.press("up", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).config_page_open);
+        assert!(window.try_find("about-settings").is_some());
         window.press("down", cx);
         window.render_frame(cx);
         assert!(window.try_find("vtcode-settings").is_some());
@@ -957,22 +958,21 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
         assert!(!view.read(cx).config_page_open);
         assert!(window.try_find("storage-settings").is_some());
 
-        // Kit-internal clicks navigate the hosted container without view
-        // sync (pinned gap until upstream on-select lands): the config
-        // page renders while the view still selects storage, and the next
-        // view-driven push remounts Kit and wins.
-        window.click("0-8", cx);
+        // Kit-internal clicks navigate Kit only (pinned gap until upstream
+        // on-select lands): config renders while the view still selects storage.
+        window.click("0-7", cx);
         window.render_frame(cx);
         assert!(window.try_find("cli-config-page").is_some());
         assert!(!view.read(cx).config_page_open);
-        // The next view-driven push remounts Kit and wins: storage → About → config.
-        window.press("right", cx);
-        window.render_frame(cx);
-        assert!(window.try_find("about-settings").is_some());
+        // The next view-driven push remounts Kit and wins: storage → config → About.
         window.press("right", cx);
         window.render_frame(cx);
         assert!(view.read(cx).config_page_open);
         assert!(window.try_find("cli-config-page").is_some());
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).config_page_open);
+        assert!(window.try_find("about-settings").is_some());
     })
     .unwrap();
 }

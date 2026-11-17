@@ -19,6 +19,7 @@ use vtcode_ui::theme::{self, UiThemeColors};
 
 mod custom;
 mod fills;
+mod hairline;
 pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
     validate as validate_custom_theme,
@@ -473,7 +474,10 @@ pub(super) fn apply_selection_with_contrast(
         colors.ring = accessible_focus_color(colors.primary, colors);
         colors.caret = accessible_focus_color(colors.primary, colors);
     });
-    cx.refresh_windows();
+    // No explicit `cx.refresh_windows()`: both `apply_selection` (via
+    // `Theme::change`) and `Theme::update` above already schedule one per
+    // update cycle, and GPUI coalesces repeats. Contrast drags call this on
+    // every `Change`, so keep the hot path free of redundant work.
     mode
 }
 
@@ -817,28 +821,7 @@ pub(super) fn muted_text(colors: &ThemeColor) -> Hsla {
     text_at_contrast(colors.popover, colors.foreground, TARGET_RATIO.min(headroom))
 }
 
-/// A 1px separator tone for `fill`: the smallest blend toward the
-/// foreground that stays visible. Contrast grows monotonically along the
-/// lightness-only blend, so binary search lands just inside the threshold;
-/// when even the full blend falls short (extreme hues), the foreground
-/// itself keeps the divider visible.
-pub(super) fn hairline(fill: Hsla, foreground: Hsla) -> Hsla {
-    const MINIMUM: f32 = 1.6;
-    if contrast_ratio(mix(fill, foreground, 1.0), fill) < MINIMUM {
-        return foreground;
-    }
-    let mut low = 0.0_f32;
-    let mut high = 1.0_f32;
-    for _ in 0..24 {
-        let middle = (low + high) / 2.0;
-        if contrast_ratio(mix(fill, foreground, middle), fill) >= MINIMUM {
-            high = middle;
-        } else {
-            low = middle;
-        }
-    }
-    mix(fill, foreground, high)
-}
+pub(super) use hairline::hairline;
 
 fn text_at_contrast(background: Hsla, foreground: Hsla, minimum: f32) -> Hsla {
     let mut low = 0.0_f32;
@@ -959,8 +942,13 @@ pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
 
 /// WCAG contrast ratio between two colors.
 pub(super) fn contrast_ratio(a: Hsla, b: Hsla) -> f32 {
-    let la = relative_luminance(a);
-    let lb = relative_luminance(b);
+    contrast_ratio_luminance(relative_luminance(a), relative_luminance(b))
+}
+
+/// Ratio from two already-measured luminances. Lets callers that compare one
+/// color against a fixed reference (e.g. `hairline`'s binary search) measure
+/// that reference once instead of once per iteration, bit-identically.
+fn contrast_ratio_luminance(la: f32, lb: f32) -> f32 {
     let (lighter, darker) = if la >= lb { (la, lb) } else { (lb, la) };
     (lighter + 0.05) / (darker + 0.05)
 }

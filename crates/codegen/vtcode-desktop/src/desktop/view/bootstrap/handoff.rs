@@ -5,7 +5,7 @@ use super::*;
 /// Main window for `vtcode://` delivery. Weak: a closed window must drop
 /// its view instead of leaking it through the global.
 pub(super) struct MainWindow {
-    pub(super) view: gpui_kit::WeakEntity<DesktopView>,
+    pub(super) view: WeakEntity<DesktopView>,
     pub(super) window: gpui_kit::AnyWindowHandle,
 }
 

@@ -1,5 +1,12 @@
 //! Theme picker sections for the appearance settings: swatch buttons and
 //! per-mode groups with their own virtualized scrollers.
+//!
+//! Each mode row hosts its virtual list in a small child view ([`ThemeGrid`])
+//! rather than in `DesktopView`, with a weak back-reference to avoid an entity
+//! cycle. The virtual list mounts only the visible swatch window per frame;
+//! GPUI's scroller notifies `window.current_view()` on wheel ticks, which is
+//! now the grid, though `mark_view_dirty` still dirties ancestor views. The
+//! per-swatch `hairline` cost is separately cached in `themes/hairline.rs`.
 
 use super::*;
 
@@ -35,6 +42,111 @@ fn swatch_sizes(mode: ThemeMode) -> Rc<Vec<Size<Pixels>>> {
     )
 }
 
+/// The slice of live view state a swatch needs to decide its active/profile
+/// badges. Copied out of `DesktopView` before each item is built so the
+/// virtual list's item closure never holds a read guard across a mutable
+/// `App` borrow.
+#[derive(Clone)]
+pub(super) struct ThemeSelection {
+    theme_id: String,
+    separate_profiles: bool,
+    light_theme: Option<String>,
+    dark_theme: Option<String>,
+}
+
+impl ThemeSelection {
+    fn capture(view: &DesktopView) -> Self {
+        Self {
+            theme_id: view.theme_id.clone(),
+            separate_profiles: view.preferences.separate_theme_profiles,
+            light_theme: view.preferences.light_theme.clone(),
+            dark_theme: view.preferences.dark_theme.clone(),
+        }
+    }
+}
+
+/// One virtualized theme row, hosted in its own view so wheel-driven repaints
+/// stay off the rest of the desktop. The retained scroll handle is shared
+/// with `DesktopView` (chevrons, tests, and the other profile's row use it).
+/// The `WeakEntity` back-reference avoids an entity cycle: the view owns this
+/// grid, so the grid must not own the view back.
+pub(super) struct ThemeGrid {
+    mode: ThemeMode,
+    scroll: VirtualListScrollHandle,
+    view: WeakEntity<DesktopView>,
+}
+
+impl ThemeGrid {
+    pub(super) fn new(mode: ThemeMode, scroll: VirtualListScrollHandle, view: &Entity<DesktopView>) -> Self {
+        Self { mode, scroll, view: view.downgrade() }
+    }
+}
+
+impl Render for ThemeGrid {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let mode = self.mode;
+        let light = mode == ThemeMode::Light;
+        let label = if light {
+            rust_i18n::t!("app.settings.appearance.light").to_string()
+        } else {
+            rust_i18n::t!("app.settings.appearance.dark").to_string()
+        };
+        let entries = themes::picker_entries_for(mode);
+        let counts = themes::picker_label_counts();
+        let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
+        let scroller_id = if light {
+            "theme-scroller-light"
+        } else {
+            "theme-scroller-dark"
+        };
+        let scroll = self.scroll.clone();
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_sm()
+                    .font_semibold()
+                    .text_color(themes::label_foreground(&cx.theme().colors))
+                    .child(label.clone()),
+            )
+            .child(
+                div()
+                    .id(list_id)
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label(label)
+                    .w_full()
+                    .min_w_0()
+                    .flex_shrink_0()
+                    .h(px(128.))
+                    .relative()
+                    .child(
+                        h_virtual_list(cx.entity(), scroller_id, swatch_sizes(mode), move |grid, range, _, cx| {
+                            let Some(desktop) = grid.view.upgrade() else {
+                                return Vec::new();
+                            };
+                            let selection = ThemeSelection::capture(&desktop.read(cx));
+                            range
+                                .filter_map(|ix| {
+                                    let entry = entries.get(ix).copied()?;
+                                    let duplicate = counts.get(entry.label()).copied().unwrap_or_default() > 1;
+                                    Some(DesktopView::render_theme_swatch_content(
+                                        entry, duplicate, &selection, &desktop, cx,
+                                    ))
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .track_scroll(&scroll),
+                    )
+                    .child(ScrollableMask::vertical_wheel(&scroll))
+                    .child(Scrollbar::horizontal(&scroll)),
+            )
+    }
+}
+
 impl DesktopView {
     /// One theme entry in the settings picker: a color preview chip that
     /// applies live on click. Reads the live view (not captured props) so
@@ -43,8 +155,8 @@ impl DesktopView {
     pub(super) fn render_theme_swatch_content(
         entry: themes::SwatchEntry,
         duplicate: bool,
-        view_state: &DesktopView,
-        view: Entity<Self>,
+        selection: &ThemeSelection,
+        view: &Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
         let (background, foreground) = entry.preview();
@@ -54,10 +166,10 @@ impl DesktopView {
         } else {
             entry.label().to_owned()
         };
-        let active = view_state.theme_id == entry_id;
-        let separate = view_state.preferences.separate_theme_profiles;
-        let light_profile = separate && view_state.preferences.light_theme.as_deref() == Some(entry_id.as_str());
-        let dark_profile = separate && view_state.preferences.dark_theme.as_deref() == Some(entry_id.as_str());
+        let active = selection.theme_id == entry_id;
+        let separate = selection.separate_profiles;
+        let light_profile = separate && selection.light_theme.as_deref() == Some(entry_id.as_str());
+        let dark_profile = separate && selection.dark_theme.as_deref() == Some(entry_id.as_str());
         let badge = if active {
             "active"
         } else if light_profile && dark_profile {
@@ -144,70 +256,10 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// One mode group inside the theme picker: a subordinate header plus its
-    /// own virtualized swatch row. Headers sit one type step below the
-    /// section title so Light/Dark read as groups under Themes. Only the
-    /// visible window builds per frame; the retained handle keeps chevron
-    /// paging, the scrollbar, and the wheel mask on one scroll position.
-    /// The handle arrives as a parameter: this runs during the view's own
-    /// render, when reading the entity back would panic.
-    pub(super) fn render_theme_group_content(
-        mode: ThemeMode,
-        scroll: &VirtualListScrollHandle,
-        view: Entity<Self>,
-        cx: &mut App,
-    ) -> AnyElement {
-        let light = mode == ThemeMode::Light;
-        let label = if light {
-            rust_i18n::t!("app.settings.appearance.light").to_string()
-        } else {
-            rust_i18n::t!("app.settings.appearance.dark").to_string()
-        };
-        let entries = themes::picker_entries_for(mode);
-        let counts = themes::picker_label_counts();
-        let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
-        let scroller_id = if light {
-            "theme-scroller-light"
-        } else {
-            "theme-scroller-dark"
-        };
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_semibold()
-                    .text_color(themes::label_foreground(&cx.theme().colors))
-                    .child(label.clone()),
-            )
-            .child(
-                div()
-                    .id(list_id)
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(label)
-                    .w_full()
-                    .min_w_0()
-                    .flex_shrink_0()
-                    .h(px(128.))
-                    .relative()
-                    .child(
-                        h_virtual_list(view, scroller_id, swatch_sizes(mode), move |view, range, _, cx| {
-                            range
-                                .filter_map(|ix| {
-                                    let entry = entries.get(ix).copied()?;
-                                    let duplicate = counts.get(entry.label()).copied().unwrap_or_default() > 1;
-                                    Some(Self::render_theme_swatch_content(entry, duplicate, view, cx.entity(), cx))
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .track_scroll(scroll),
-                    )
-                    .child(ScrollableMask::vertical_wheel(scroll))
-                    .child(Scrollbar::horizontal(scroll)),
-            )
-            .into_any_element()
+    /// Host one mode's grid child view. The header and virtual scroller live
+    /// in [`ThemeGrid`]; the handle stays on `DesktopView` so chevron paging
+    /// and tests keep one scroll position per mode.
+    pub(super) fn render_theme_group_content(grid: &Entity<ThemeGrid>) -> AnyElement {
+        grid.clone().into_any_element()
     }
 }
