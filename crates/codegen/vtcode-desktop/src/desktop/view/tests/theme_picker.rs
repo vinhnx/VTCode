@@ -14,7 +14,7 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
         view.update(cx, |view, cx| {
             view.preferences.ui_font_size = Some(19);
             view.preferences.code_font_size = Some(14);
-            view.apply_theme("solarized-light".into(), window, cx);
+            view.apply_theme(super::super::themes::ThemeId::solarized::LIGHT.into(), window, cx);
             view.composer
                 .update(cx, |input, cx| input.set_value("keep this draft", window, cx));
             view.transcript.push(TranscriptItem::new(
@@ -399,7 +399,7 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         assert_eq!(window.find("theme-github-dark").checked(), Some(true));
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, "github-dark");
+            assert_eq!(view.theme_id, super::super::themes::ThemeId::github::DARK);
             assert_eq!(view.theme_mode, ThemeMode::Dark);
         }
         scroll_theme_into_view(window, &view, "theme-solarized-light", cx);

@@ -573,8 +573,8 @@ pub(super) fn terminal_scheme_preview(
     fn flagship(id: &str, live: gpui_kit::Hsla) -> gpui_kit::Hsla {
         themes::find(id).map(|theme| theme.background).unwrap_or(live)
     }
-    let dark_ground = flagship("ciapre", colors.background);
-    let light_ground = flagship("catppuccin-latte", colors.background);
+    let dark_ground = flagship(themes::ThemeId::ciapre::BASE, colors.background);
+    let light_ground = flagship(themes::ThemeId::catppuccin::LATTE, colors.background);
     let (ground, ground_alt) = match setting {
         preferences::TerminalAnsiTheme::Auto => (dark_ground, Some(light_ground)),
         preferences::TerminalAnsiTheme::Ciapre | preferences::TerminalAnsiTheme::Dark => (dark_ground, None),

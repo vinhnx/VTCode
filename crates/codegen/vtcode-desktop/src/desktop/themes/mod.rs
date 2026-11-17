@@ -32,19 +32,59 @@ pub(super) use terminal::{ciapre_ansi_slots, latte_ansi_slots, light_ansi_slots}
 mod toolbar;
 pub(super) use toolbar::toolbar_band_surface;
 
+/// The built-in theme identifiers referenced in source, grouped by the prefix
+/// of their registry id. The CLI registry owns the full catalog at runtime;
+/// this namespace gives the ids code names by one typed home instead of
+/// scattered string literals.
+#[allow(non_snake_case)]
+pub(super) mod ThemeId {
+    /// Unprefixed id.
+    pub(super) const NOIR: &'static str = "noir";
+
+    /// Kit light/dark base sentinels — no palette override.
+    pub(crate) mod system {
+        pub(crate) const LIGHT: &'static str = "system-light";
+        pub(crate) const DARK: &'static str = "system-dark";
+    }
+
+    pub(crate) mod ciapre {
+        pub(crate) const BASE: &'static str = "ciapre";
+        pub(crate) const DARK: &'static str = "ciapre-dark";
+        pub(crate) const BLUE: &'static str = "ciapre-blue";
+    }
+
+    pub(crate) mod vitesse {
+        pub(crate) const LIGHT: &'static str = "vitesse-light";
+    }
+
+    pub(crate) mod catppuccin {
+        pub(crate) const LATTE: &'static str = "catppuccin-latte";
+    }
+
+    #[cfg(test)]
+    pub(crate) mod github {
+        pub(crate) const DARK: &'static str = "github-dark";
+    }
+
+    #[cfg(test)]
+    pub(crate) mod solarized {
+        pub(crate) const LIGHT: &'static str = "solarized-light";
+    }
+}
+
 /// The theme applied on first launch. A neutral, high-headroom palette keeps
 /// UI text crisp and lets the muted-text ramp read as a distinct tier; the
 /// terminal-first palettes (Ciapre and variants) stay selectable in the picker.
-pub(super) const DEFAULT_THEME_ID: &str = "noir";
+pub(super) const DEFAULT_THEME_ID: &str = ThemeId::NOIR;
 
 /// Sentinel ids that keep the kit's own light/dark base without overrides.
-pub(super) const SYSTEM_LIGHT_ID: &str = "system-light";
-pub(super) const SYSTEM_DARK_ID: &str = "system-dark";
+pub(super) const SYSTEM_LIGHT_ID: &str = ThemeId::system::LIGHT;
+pub(super) const SYSTEM_DARK_ID: &str = ThemeId::system::DARK;
 
 pub(super) fn mode_for_id(id: &str) -> Option<ThemeMode> {
     match id {
-        SYSTEM_LIGHT_ID => Some(ThemeMode::Light),
-        SYSTEM_DARK_ID => Some(ThemeMode::Dark),
+        ThemeId::system::LIGHT => Some(ThemeMode::Light),
+        ThemeId::system::DARK => Some(ThemeMode::Dark),
         _ => find(id).map(|theme| theme.mode),
     }
 }
@@ -53,7 +93,7 @@ pub(super) fn mode_for_id(id: &str) -> Option<ThemeMode> {
 /// neutral, high-headroom palettes so text reads crisply in either OS appearance.
 pub(super) fn default_id(mode: ThemeMode) -> &'static str {
     match mode {
-        ThemeMode::Light => "vitesse-light",
+        ThemeMode::Light => ThemeId::vitesse::LIGHT,
         ThemeMode::Dark => DEFAULT_THEME_ID,
     }
 }
@@ -300,7 +340,7 @@ pub(super) const SYSTEM_SWATCHES: [SwatchEntry; 2] = [
     SwatchEntry::System(ThemeMode::Dark),
 ];
 
-const FEATURED_THEME_IDS: [&str; 3] = [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue"];
+const FEATURED_THEME_IDS: [&str; 3] = [DEFAULT_THEME_ID, ThemeId::ciapre::DARK, ThemeId::ciapre::BLUE];
 
 /// Picker order within one mode group leads with the VT Code themes of
 /// that mode, then the matching system base and the remaining shared

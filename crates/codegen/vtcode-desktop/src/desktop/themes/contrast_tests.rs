@@ -199,7 +199,7 @@ fn secondary_copy_degrades_gracefully_without_headroom() {
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
         .expect("theme registry is non-empty");
-    for id in ["ciapre", "catppuccin-latte", lowest.id] {
+    for id in [ThemeId::ciapre::BASE, ThemeId::catppuccin::LATTE, lowest.id] {
         let theme = find(id).unwrap_or_else(|| panic!("{id} missing"));
         let headroom = contrast_ratio(theme.foreground, theme.background);
         let muted = text_at_contrast(theme.background, theme.foreground, 6.0_f32.min(headroom));
@@ -224,7 +224,7 @@ fn flagship_surfaces_and_muted_text_read_crisp_not_grey(cx: &mut gpui_kit::TestA
         // Ciapre is the lowest-headroom flagship palette, so it stays the
         // stress case for surface stacking and muted-text crispness. The
         // high-headroom neutral default is covered by the every-theme tests.
-        let _mode = apply_by_id("ciapre", None, cx);
+        let _mode = apply_by_id(ThemeId::ciapre::BASE, None, cx);
         let colors = cx.theme().colors;
         // Layers stack in a strict order above the canvas (direction-free:
         // contrast ratios, not signed lightness lifts, so the pin survives

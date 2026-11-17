@@ -512,8 +512,8 @@ mod tests {
         // Rio's own dark table promises less (its black fails AA on every
         // dark ground), so the scheme promises AA on Ciapre, where darker
         // grounds only read better by monotonicity.
-        use super::super::themes::{contrast_ratio, find};
-        let ciapre = find("ciapre").expect("ciapre is a built-in theme");
+        use super::super::themes::{ThemeId, contrast_ratio, find};
+        let ciapre = find(ThemeId::ciapre::BASE).expect("ciapre is a built-in theme");
         let colors = ThemeColor::default();
         let palette = ciapre_palette(&colors);
         let rio = List::from(&Colors::default());
@@ -569,8 +569,8 @@ mod tests {
         // promises AA on its own latte ground, where darker grounds only
         // read better by monotonicity. The shared light table stays the
         // universal every-light option.
-        use super::super::themes::{contrast_ratio, find};
-        let latte = find("catppuccin-latte").expect("latte is the default light theme");
+        use super::super::themes::{ThemeId, contrast_ratio, find};
+        let latte = find(ThemeId::catppuccin::LATTE).expect("latte is the default light theme");
         let colors = ThemeColor::default();
         let palette = latte_palette(&colors);
         let rio = List::from(&Colors::default());
