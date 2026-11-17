@@ -13,6 +13,12 @@ use gpui_kit::Hsla;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+/// The faintest contrast a 1px divider may carry before it reads as a rule
+/// rather than a hairline. This is the visibility floor the theme tests use
+/// (`ratio >= 1.5`); searching for less would make separators disappear on
+/// some fills. Shared with the test oracle so the two cannot drift.
+const HAIRLINE_MIN_CONTRAST: f32 = 1.5;
+
 /// A 1px separator tone for `fill`: the smallest blend toward the
 /// foreground that stays visible. Contrast grows monotonically along the
 /// lightness-only blend, so binary search lands just inside the threshold;
@@ -44,13 +50,12 @@ pub(crate) fn hairline(fill: Hsla, foreground: Hsla) -> Hsla {
 }
 
 fn hairline_uncached(fill: Hsla, foreground: Hsla) -> Hsla {
-    const MINIMUM: f32 = 1.6;
     // `fill` is the fixed side of every comparison in the search below; measure
     // its luminance once instead of 25 times. The ratio math is identical to
     // `contrast_ratio(mix(..), fill)` because the helper takes the same two
     // luminances in the same order.
     let fill_lum = relative_luminance(fill);
-    if contrast_ratio_luminance(relative_luminance(mix(fill, foreground, 1.0)), fill_lum) < MINIMUM {
+    if contrast_ratio_luminance(relative_luminance(mix(fill, foreground, 1.0)), fill_lum) < HAIRLINE_MIN_CONTRAST {
         return foreground;
     }
     let mut low = 0.0_f32;
@@ -58,7 +63,7 @@ fn hairline_uncached(fill: Hsla, foreground: Hsla) -> Hsla {
     for _ in 0..24 {
         let middle = (low + high) / 2.0;
         let blend_lum = relative_luminance(mix(fill, foreground, middle));
-        if contrast_ratio_luminance(blend_lum, fill_lum) >= MINIMUM {
+        if contrast_ratio_luminance(blend_lum, fill_lum) >= HAIRLINE_MIN_CONTRAST {
             high = middle;
         } else {
             low = middle;
@@ -75,15 +80,14 @@ mod tests {
     /// The pre-optimization algorithm, kept as an oracle so the hoisted
     /// luminance is proven bit-identical rather than merely close.
     fn reference(fill: Hsla, foreground: Hsla) -> Hsla {
-        const MINIMUM: f32 = 1.6;
-        if contrast_ratio(mix(fill, foreground, 1.0), fill) < MINIMUM {
+        if contrast_ratio(mix(fill, foreground, 1.0), fill) < HAIRLINE_MIN_CONTRAST {
             return foreground;
         }
         let mut low = 0.0_f32;
         let mut high = 1.0_f32;
         for _ in 0..24 {
             let middle = (low + high) / 2.0;
-            if contrast_ratio(mix(fill, foreground, middle), fill) >= MINIMUM {
+            if contrast_ratio(mix(fill, foreground, middle), fill) >= HAIRLINE_MIN_CONTRAST {
                 high = middle;
             } else {
                 low = middle;
