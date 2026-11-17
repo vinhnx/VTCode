@@ -35,8 +35,8 @@ vtcode dependencies install search-tools
 ```
 
 Installing with the fully-qualified `vinhnx/tap/...` name automatically trusts just that formula or cask, so no
-separate `brew trust` step is needed. The cask is separate from the formula — installing it gives you the GUI, while `brew install vinhnx/tap/vtcode`
-gives you the `vtcode` CLI, and either works alone.
+separate `brew trust` step is needed. The cask is separate from the formula — installing it gives you the GUI,
+while `brew install vinhnx/tap/vtcode` gives you the `vtcode` CLI, and either works alone.
 
 ### Cargo (Rust)
 
