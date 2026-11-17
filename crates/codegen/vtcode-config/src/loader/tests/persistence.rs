@@ -691,3 +691,39 @@ fn loader_loads_prompt_cache_ttl_and_rejects_invalid_values() {
     fs::write(&path, "[prompt_cache.providers.openai]\nprompt_cache_ttl = \"24h\"\n").unwrap();
     assert!(ConfigManager::load_from_file(&path).is_err());
 }
+
+/// Every path the loader warns about as removed must also be pruned on save:
+/// the warning explicitly promises the next save will drop the key. Pin the
+/// two lists together so adding a warning cannot silently leave a stale key
+/// in the user's config (which would repeat the warning on every load).
+#[test]
+fn removed_config_keys_are_pruned_on_save() {
+    let dir = assert_fs::TempDir::new().expect("workspace");
+    let path = dir.path().join("vtcode.toml");
+    let content = concat!(
+        "[agent.harness]\nmax_tool_calls_per_turn = 32\n",
+        "[tools]\nmax_tool_loops = 20\n",
+        "[automation.full_auto]\nauto_grant_tool_limits = false\n",
+        "[telemetry]\nsample_interval_ms = 1000\nretention_days = 14\nbottleneck_tracing = false\n",
+        "[ui]\nshow_timeline_pane = false\n",
+        "[context]\ntrim_to_percent = 60\n",
+        "[prompt_cache.providers.anthropic]\ndefault_ttl_seconds = 300\n",
+    );
+    fs::write(&path, content).expect("existing config");
+    let _manager = ConfigManager::load_from_file(&path).expect("load");
+    ConfigManager::save_config_to_path(&path, &VTCodeConfig::default()).expect("save");
+    let saved = fs::read_to_string(&path).expect("read");
+    for key in [
+        "max_tool_calls_per_turn",
+        "max_tool_loops",
+        "auto_grant_tool_limits",
+        "sample_interval_ms",
+        "retention_days",
+        "bottleneck_tracing",
+        "show_timeline_pane",
+        "trim_to_percent",
+        "default_ttl_seconds",
+    ] {
+        assert!(!saved.contains(key), "stale key {key} should be pruned, got:\n{saved}");
+    }
+}
