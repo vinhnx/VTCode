@@ -84,12 +84,14 @@ pub(super) fn open_or_activate_main_window(
         cx.activate(true);
         return Ok(window);
     }
-    // Saved preferences decide the starting theme; Ciapre is the default.
+    // A saved preference wins; otherwise follow the OS appearance so a fresh
+    // launch opens Noir in dark mode and Vitesse Light in light mode.
     let preferences = preferences.unwrap_or_else(preferences::Preferences::load);
+    let start_mode = ThemeMode::from(cx.window_appearance());
     let start_theme = preferences
         .theme
         .clone()
-        .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
+        .unwrap_or_else(|| themes::default_id(start_mode).to_string());
     let start_customs = preferences.custom_themes.clone();
     let start_maximized = preferences.window_maximized();
     let translucent = preferences.translucent_sidebar && !reduced_transparency_requested();
@@ -111,7 +113,7 @@ pub(super) fn open_or_activate_main_window(
     let (window, view) = gpui_kit::open_window(options, cx, move |window, cx| {
         window.set_window_title(app::NAME);
         let theme_mode = themes::apply_selection(&start_theme, &start_customs, Some(window), cx);
-        let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
+        let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, start_theme, preferences));
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         view
     })?;
@@ -172,13 +174,20 @@ pub(super) fn open_or_activate_main_window(
 impl DesktopView {
     #[cfg(test)]
     pub(super) fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
-        Self::new_with_preferences(window, cx, theme_mode, preferences::Preferences::load())
+        Self::new_with_preferences(
+            window,
+            cx,
+            theme_mode,
+            themes::default_id(theme_mode).to_string(),
+            preferences::Preferences::load(),
+        )
     }
 
     pub(super) fn new_with_preferences(
         window: &mut Window,
         cx: &mut Context<Self>,
         theme_mode: ThemeMode,
+        start_theme: String,
         preferences: preferences::Preferences,
     ) -> Self {
         let (event_tx, event_rx) = BackendEventSender::channel(UI_EVENT_CAPACITY);
@@ -719,7 +728,7 @@ impl DesktopView {
             retained_submission: None,
             cli_handoff: None,
             last_usage: None,
-            theme_id: themes::DEFAULT_THEME_ID.to_string(),
+            theme_id: themes::canonical_selection(&start_theme, theme_mode, &preferences.custom_themes),
             preferences,
             login_item_status,
             system_motion_baseline,

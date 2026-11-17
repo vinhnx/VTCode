@@ -49,9 +49,11 @@ pub(super) fn mode_for_id(id: &str) -> Option<ThemeMode> {
     }
 }
 
+/// Default palette for a mode: Noir in dark, Vitesse Light in light. Both are
+/// neutral, high-headroom palettes so text reads crisply in either OS appearance.
 pub(super) fn default_id(mode: ThemeMode) -> &'static str {
     match mode {
-        ThemeMode::Light => "catppuccin-latte",
+        ThemeMode::Light => "vitesse-light",
         ThemeMode::Dark => DEFAULT_THEME_ID,
     }
 }

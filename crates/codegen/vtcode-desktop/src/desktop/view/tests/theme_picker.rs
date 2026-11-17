@@ -1,7 +1,9 @@
 use super::*;
 
-/// Swatch element id for the default dark theme (`themes::DEFAULT_THEME_ID`).
+/// Swatch element ids for the OS-derived defaults (headless tests are Light).
 const DEFAULT_DARK_SWATCH: &str = "theme-noir";
+const DEFAULT_LIGHT_SWATCH: &str = "theme-vitesse-light";
+const DEFAULT_LIGHT_ID: &str = "vitesse-light";
 
 #[gpui_kit::test]
 fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: &mut TestAppContext) {
@@ -53,7 +55,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
             let preferences = &view.read(cx).preferences;
             assert!(preferences.separate_theme_profiles);
             assert_eq!(preferences.dark_theme.as_deref(), Some("ciapre"));
-            assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
+            assert_eq!(preferences.light_theme.as_deref(), Some(DEFAULT_LIGHT_ID));
         }
         assert!(window.try_find("theme-list-light").is_none(), "light grid hides while editing dark");
         assert_eq!(window.find("theme-list-dark").label(), Some("Dark"));
@@ -77,11 +79,11 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(window.find("edit-light-profile").checked(), Some(true));
         assert_eq!(window.find("edit-dark-profile").checked(), Some(false));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
-        assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
+        assert_eq!(view.read(cx).theme_id, DEFAULT_LIGHT_ID);
         assert!(window.try_find("theme-list-dark").is_none(), "dark grid hides while editing light");
         assert_eq!(window.find("theme-list-light").label(), Some("Light"));
-        scroll_theme_into_view(window, &view, "theme-catppuccin-latte", cx);
-        assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (active)"));
+        scroll_theme_into_view(window, &view, DEFAULT_LIGHT_SWATCH, cx);
+        assert_eq!(window.find(DEFAULT_LIGHT_SWATCH).label(), Some("Vitesse Light (active)"));
         // The grouped picker pushes typography below the fold; scroll down
         // for the font row, then back up for the profile buttons above.
         scroll_settings_by(window, px(-240.), cx);
@@ -140,12 +142,13 @@ fn inactive_system_swatch_carries_no_selection_state(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).theme_id, super::super::themes::DEFAULT_THEME_ID);
+        assert_eq!(view.read(cx).theme_id, DEFAULT_LIGHT_ID);
         assert_eq!(window.find("theme-system-light").label(), Some("System Light"));
         assert_eq!(window.find("theme-system-light").checked(), Some(false));
-        let active_label = window.find(DEFAULT_DARK_SWATCH).label().unwrap_or_default().to_string();
+        scroll_theme_into_view(window, &view, DEFAULT_LIGHT_SWATCH, cx);
+        let active_label = window.find(DEFAULT_LIGHT_SWATCH).label().unwrap_or_default().to_string();
         assert!(active_label.ends_with(" (active)"), "unexpected active label: {active_label}");
-        assert_eq!(window.find(DEFAULT_DARK_SWATCH).checked(), Some(true));
+        assert_eq!(window.find(DEFAULT_LIGHT_SWATCH).checked(), Some(true));
     })
     .unwrap();
 }
@@ -161,7 +164,7 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
         window.click("separate-theme-profiles", cx);
         window.render_frame(cx);
         assert!(
-            window.try_find("theme-catppuccin-latte-profile").is_none(),
+            window.try_find(format!("{DEFAULT_LIGHT_SWATCH}-profile")).is_none(),
             "light caption hides while editing dark"
         );
         scroll_theme_into_view(window, &view, "theme-ciapre", cx);
@@ -177,11 +180,11 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
         );
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
-        scroll_theme_into_view(window, &view, "theme-catppuccin-latte", cx);
-        assert_eq!(window.find("theme-catppuccin-latte-profile").label(), Some("Light"));
+        scroll_theme_into_view(window, &view, DEFAULT_LIGHT_SWATCH, cx);
+        assert_eq!(window.find(format!("{DEFAULT_LIGHT_SWATCH}-profile")).label(), Some("Light"));
         assert!(window.try_find("theme-ciapre-profile").is_none(), "dark caption hides while editing light");
         let strip = window.find("theme-list-light").bounds();
-        let swatch = window.find("theme-catppuccin-latte").bounds();
+        let swatch = window.find(DEFAULT_LIGHT_SWATCH).bounds();
         assert!(
             swatch.bottom() <= strip.bottom(),
             "caption lane must fit inside the strip: swatch={swatch:?} strip={strip:?}"
@@ -380,12 +383,9 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         window.click("open-settings", cx);
         window.render_frame(cx);
         window.render_frame(cx);
-        assert_eq!(
-            view.read(cx).theme_id,
-            super::super::themes::DEFAULT_THEME_ID,
-            "the neutral palette is the default theme"
-        );
-        assert_eq!(window.find(DEFAULT_DARK_SWATCH).checked(), Some(true));
+        assert_eq!(view.read(cx).theme_id, DEFAULT_LIGHT_ID, "the OS appearance picks the neutral default theme");
+        scroll_theme_into_view(window, &view, DEFAULT_LIGHT_SWATCH, cx);
+        assert_eq!(window.find(DEFAULT_LIGHT_SWATCH).checked(), Some(true));
         scroll_theme_into_view(window, &view, "theme-ayu", cx);
         assert_eq!(window.find("theme-ayu").label(), Some("ayu · Ayu Dark"));
         scroll_theme_into_view(window, &view, "theme-ayu-dark", cx);
@@ -393,8 +393,8 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         window.click("theme-github-dark", cx);
         window.render_frame(cx);
-        scroll_theme_into_view(window, &view, DEFAULT_DARK_SWATCH, cx);
-        assert_eq!(window.find(DEFAULT_DARK_SWATCH).checked(), Some(false));
+        scroll_theme_into_view(window, &view, DEFAULT_LIGHT_SWATCH, cx);
+        assert_eq!(window.find(DEFAULT_LIGHT_SWATCH).checked(), Some(false));
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         assert_eq!(window.find("theme-github-dark").checked(), Some(true));
         {
