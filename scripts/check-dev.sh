@@ -182,14 +182,17 @@ run_tests() {
 	fi
 	nextest_args+=("--profile" "$test_profile")
 
-	# Machine-tuned concurrency. This suite is latency-bound (child processes,
-	# sleeps, socket mocks), so 2x cores outperforms num-cpus on this Apple M5
-	# (10 cores): vtcode-core 41s -> 32s, full workspace 157s -> 131s. Cap at 20
-	# to bound memory pressure; hosts with < 4 cores keep nextest's default.
+	# Machine-tuned concurrency for the load-insensitive `default` profile.
+	# This suite is latency-bound (child processes, sleeps, socket mocks), so
+	# 2x cores outperforms num-cpus on this Apple M5 (10 cores): vtcode-core
+	# 41s -> 32s, full workspace 157s -> 131s. Cap at 20 to bound memory; hosts
+	# with < 4 cores keep nextest's default. Never boost `quick`: its 10s
+	# slow-timeout flakes at high concurrency (e.g.
+	# ten_thousand_events_share_cached_projections_for_bounded_pages).
 	# NEXTEST_TEST_THREADS overrides the computed value when set explicitly.
 	if [ -n "${NEXTEST_TEST_THREADS:-}" ]; then
 		nextest_args+=("--test-threads" "$NEXTEST_TEST_THREADS")
-	else
+	elif [ "$test_profile" != "quick" ]; then
 		local cpu_count=""
 		if command -v sysctl >/dev/null 2>&1; then
 			cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"

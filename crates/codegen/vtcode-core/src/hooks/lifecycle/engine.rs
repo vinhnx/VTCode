@@ -56,7 +56,13 @@ impl HookProcessGroupGuard {
         Self { pid, armed: true }
     }
 
-    fn kill(&self) {
+    /// Kill at most once: once the child has been reaped its PID can be
+    /// recycled, so a second best-effort kill could hit an unrelated group.
+    fn kill(&mut self) {
+        if !self.armed {
+            return;
+        }
+        self.armed = false;
         if let Some(pid) = self.pid {
             let _ = vtcode_bash_runner::process_group::kill_process_group_by_pid(pid);
         }
@@ -70,9 +76,7 @@ impl HookProcessGroupGuard {
 #[cfg(unix)]
 impl Drop for HookProcessGroupGuard {
     fn drop(&mut self) {
-        if self.armed {
-            self.kill();
-        }
+        self.kill();
     }
 }
 
