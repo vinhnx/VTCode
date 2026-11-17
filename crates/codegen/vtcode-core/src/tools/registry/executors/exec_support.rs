@@ -56,6 +56,43 @@ const PTY_DENY_PREFIXES: &[&str] = &[
 
 const PTY_DENY_STANDALONE: &[&str] = &["python", "python3", "bash", "sh", "zsh", "fish"];
 
+/// Interactive editors/pagers are denied regardless of their arguments.
+/// Matching the program token (rather than a raw line prefix) keeps the policy
+/// honest when shell punctuation, extra spaces, or command chains are used.
+const PTY_DENY_INTERACTIVE_PROGRAMS: &[&str] = &[
+    "ipython", "nano", "vim", "vi", "emacs", "top", "htop", "less", "more", "screen", "tmux",
+];
+/// Shells and REPLs are denied when launched bare or with an explicit `-i`.
+const PTY_DENY_SHELLS: &[&str] = &["python", "python3", "bash", "sh", "zsh", "fish"];
+
+fn pty_policy_denies(command_text: &str) -> bool {
+    match crate::command_safety::shell_parser::parse_shell_commands(command_text) {
+        Ok(commands) => commands.iter().any(|tokens| {
+            let Some(program) = tokens.first() else {
+                return false;
+            };
+            let program = program.rsplit('/').next().unwrap_or(program).to_ascii_lowercase();
+            if PTY_DENY_INTERACTIVE_PROGRAMS.contains(&program.as_str()) {
+                return true;
+            }
+            if PTY_DENY_SHELLS.contains(&program.as_str()) {
+                let args = &tokens[1..];
+                return args.is_empty() || args.iter().any(|arg| arg == "-i");
+            }
+            false
+        }),
+        // Keep the conservative raw-text check for shell text that cannot be
+        // tokenized (e.g. unbalanced quotes), matching the previous behavior.
+        Err(_) => {
+            let trimmed = command_text.to_ascii_lowercase();
+            let trimmed = trimmed.trim();
+            let is_standalone = trimmed.split_whitespace().count() == 1;
+            PTY_DENY_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix))
+                || (is_standalone && PTY_DENY_STANDALONE.contains(&trimmed))
+        }
+    }
+}
+
 pub(super) struct ExecOutputPreview {
     pub(super) raw_output: String,
     pub(super) output: String,
@@ -381,14 +418,10 @@ pub(super) fn sanitize_subagent_tool_output_paths(workspace_root: &Path, value: 
 /// already-running session (e.g. starting `echo`, then sending `bash\n`).
 pub(super) fn enforce_exec_input_line_policy(input: &str) -> Result<()> {
     for line in input.lines() {
-        let trimmed = line.trim().to_ascii_lowercase();
-        if trimmed.is_empty() {
+        if line.trim().is_empty() {
             continue;
         }
-        let is_standalone = trimmed.split_whitespace().count() == 1;
-        let deny_match = PTY_DENY_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix));
-        let standalone_denied = is_standalone && PTY_DENY_STANDALONE.contains(&trimmed.as_str());
-        if deny_match || standalone_denied {
+        if pty_policy_denies(line) {
             return Err(anyhow!(
                 "Session input '{line}' would launch a program blocked by the PTY safety policy. Start a fresh session through exec_command with operator approval instead."
             ));
@@ -398,14 +431,7 @@ pub(super) fn enforce_exec_input_line_policy(input: &str) -> Result<()> {
 }
 
 pub(super) fn enforce_pty_command_policy(display_command: &str, confirm: bool) -> Result<()> {
-    let lower = display_command.to_ascii_lowercase();
-    let trimmed = lower.trim();
-    let is_standalone = trimmed.split_whitespace().count() == 1;
-
-    let deny_match = PTY_DENY_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix));
-    let standalone_denied = is_standalone && PTY_DENY_STANDALONE.contains(&trimmed);
-
-    if deny_match || standalone_denied {
+    if pty_policy_denies(display_command) {
         if confirm {
             return Ok(());
         }
@@ -419,7 +445,7 @@ pub(super) fn enforce_pty_command_policy(display_command: &str, confirm: bool) -
 
 #[cfg(test)]
 mod input_policy_tests {
-    use super::enforce_exec_input_line_policy;
+    use super::{enforce_exec_input_line_policy, enforce_pty_command_policy};
 
     #[test]
     fn blocks_interactive_launchers_submitted_into_sessions() {
@@ -427,6 +453,35 @@ mod input_policy_tests {
         assert!(enforce_exec_input_line_policy("  zsh  \n").is_err());
         assert!(enforce_exec_input_line_policy("echo ok\nbash\n").is_err());
         assert!(enforce_exec_input_line_policy("vim\n").is_err());
+    }
+
+    #[test]
+    fn shell_punctuation_and_chains_do_not_bypass_the_denylist() {
+        for input in [
+            "python;\n",
+            "bash;\n",
+            "python  -i\n",
+            "vi &\n",
+            "bash && echo hi\n",
+            "python; echo ok\n",
+        ] {
+            assert!(enforce_exec_input_line_policy(input).is_err(), "input {input:?} must be denied");
+        }
+    }
+
+    #[test]
+    fn argument_bearing_commands_stay_allowed() {
+        for input in ["python script.py\n", "bash -c 'echo hi'\n", "echo done;\n", "vimium\n"] {
+            assert!(enforce_exec_input_line_policy(input).is_ok(), "input {input:?} should stay allowed");
+        }
+    }
+
+    #[test]
+    fn confirm_gate_is_not_bypassed_by_shell_punctuation() {
+        for command in ["bash;", "python  -i", "vi &"] {
+            assert!(enforce_pty_command_policy(command, false).is_err(), "{command:?} needs operator approval");
+            assert!(enforce_pty_command_policy(command, true).is_ok(), "{command:?} is allowed once approved");
+        }
     }
 
     #[test]
