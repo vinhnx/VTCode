@@ -601,9 +601,10 @@ Approval options:
   confirmation policy.
 - **Yes, clear context and implement** — execute in a fresh `build` thread while preserving the approved plan and task
   tracker. The subtitle reports the pre-reset context usage (for example, `Fresh thread. Context: 7% used.`). This is
-  recommended after long research sessions.
+  recommended after long research sessions, and the option is omitted when context usage is 0%.
 - **Yes, switch to Auto and implement** — execute in the current context as `auto` with unattended confirmations. The
-  same command, path, verification, blocked-call, budget, and recovery gates remain active.
+  same command, path, verification, blocked-call, budget, and recovery gates remain active. The option is omitted when
+  `auto` is already the active primary agent.
 - **No, stay in Plan mode** — return to planning and revise the plan.
 
 `Ctrl+G` in the approval popup opens the persisted plan file in your configured external editor (`tools.editor`). After

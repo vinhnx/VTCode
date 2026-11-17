@@ -213,7 +213,7 @@ fn plan_confirmation_submission_maps_switch_outcomes() {
 
 #[test]
 fn plan_confirmation_request_has_build_auto_and_revision_choices() {
-    let req = build_plan_confirmation_request_with_context(&sample_plan(), false, 7);
+    let req = build_plan_confirmation_request_with_context(&sample_plan(), false, 7, false);
     let ListOverlayRequest { items, .. } = match req {
         TransientRequest::List(list) => list,
         _ => panic!("expected a list overlay request"),
@@ -236,15 +236,52 @@ fn plan_confirmation_request_has_build_auto_and_revision_choices() {
             .any(|s| matches!(s, InlineListSelection::PlanApprovalSwitchAuto))
     );
     assert_eq!(selections.len(), 4);
-    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&sample_plan(), false, 7) else {
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&sample_plan(), false, 7, false)
+    else {
         panic!("expected list request");
     };
     assert_eq!(request.items[1].subtitle.as_deref(), Some("Fresh thread. Context: 7% used."));
 }
 
 #[test]
+fn plan_confirmation_choices_follow_usage_and_active_agent() {
+    use InlineListSelection::{
+        PlanApprovalEditPlan, PlanApprovalExecute, PlanApprovalFreshContext, PlanApprovalSwitchAuto,
+    };
+
+    // Asymmetric inputs: zero vs nonzero usage and active vs inactive Auto
+    // independently remove one choice, so the exact ordered list proves both
+    // gates and that hotkey order stays stable.
+    let cases = [
+        (
+            7,
+            false,
+            vec![
+                PlanApprovalExecute,
+                PlanApprovalFreshContext,
+                PlanApprovalSwitchAuto,
+                PlanApprovalEditPlan,
+            ],
+        ),
+        (7, true, vec![PlanApprovalExecute, PlanApprovalFreshContext, PlanApprovalEditPlan]),
+        (0, false, vec![PlanApprovalExecute, PlanApprovalSwitchAuto, PlanApprovalEditPlan]),
+        (0, true, vec![PlanApprovalExecute, PlanApprovalEditPlan]),
+    ];
+    for (usage, auto_active, expected) in cases {
+        let TransientRequest::List(request) =
+            build_plan_confirmation_request_with_context(&sample_plan(), false, usage, auto_active)
+        else {
+            panic!("expected list request");
+        };
+        let selections: Vec<_> = request.items.iter().filter_map(|item| item.selection.clone()).collect();
+        assert_eq!(selections, expected, "usage={usage} auto_active={auto_active}");
+    }
+}
+
+#[test]
 fn plan_confirmation_autonomous_choice_uses_shared_name_and_preserves_action() {
-    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&sample_plan(), false, 7) else {
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&sample_plan(), false, 7, false)
+    else {
         panic!("expected list request");
     };
     let autonomous = request
@@ -265,7 +302,7 @@ fn plan_confirmation_autonomous_choice_uses_shared_name_and_preserves_action() {
 fn plan_confirmation_request_carries_normalized_plan_markdown_for_hosts() {
     let mut plan = sample_plan();
     plan.raw_content = "<proposed_plan>\n# Retry plan\n\nWrap generate in retry.\n</proposed_plan>".to_string();
-    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&plan, false, 7) else {
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&plan, false, 7, false) else {
         panic!("expected list request");
     };
     let markdown = request.plan_markdown.expect("hosts receive the full plan");
@@ -277,7 +314,7 @@ fn plan_confirmation_request_carries_normalized_plan_markdown_for_hosts() {
 
     // Empty-after-cleanup yields None so clients hide expansion UI.
     plan.raw_content = "   ".to_string();
-    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&plan, false, 7) else {
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&plan, false, 7, false) else {
         panic!("expected list request");
     };
     assert_eq!(request.plan_markdown, None);
@@ -463,9 +500,12 @@ async fn execute_plan_confirmation_editor_hotkey_reshows_overlay_without_edit_co
         &mut session,
         sample_plan(),
         false,
-        0,
-        &editor,
-        std::path::Path::new("."),
+        super::PlanConfirmationOptions {
+            context_usage_percent: 7,
+            auto_agent_active: false,
+            editor: &editor,
+            workspace_root: std::path::Path::new("."),
+        },
         &ctrl_c_state,
         &ctrl_c_notify,
     )

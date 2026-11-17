@@ -646,6 +646,11 @@ impl<'a> TurnProcessingContext<'a> {
                                 ),
                             ),
                         ),
+                        auto_agent_active: self
+                            .active_primary_agent
+                            .active()
+                            .name()
+                            .eq_ignore_ascii_case(vtcode_config::builtin_primary_auto_agent().name.as_str()),
                         editor: approval_editor,
                         workspace_root: approval_workspace_root,
                     },

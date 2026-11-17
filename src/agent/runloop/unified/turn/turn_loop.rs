@@ -318,6 +318,11 @@ pub(crate) async fn run_turn_loop(
                 skip_confirmations: ctx.skip_confirmations,
                 full_auto: ctx.full_auto,
                 context_usage_percent: ctx.context_manager.context_usage_percent(context_budget),
+                auto_agent_active: ctx
+                    .active_primary_agent
+                    .active()
+                    .name()
+                    .eq_ignore_ascii_case(vtcode_config::builtin_primary_auto_agent().name.as_str()),
                 telemetry: crate::agent::runloop::unified::planning_workflow::PlanApprovalTelemetryContext {
                     emitter: ctx.harness_emitter,
                     thread_id: &ctx.harness_state.run_id.0,

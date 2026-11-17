@@ -49,6 +49,7 @@ pub(crate) struct PlanningExitContext<'a> {
     pub(crate) skip_confirmations: bool,
     pub(crate) full_auto: bool,
     pub(crate) context_usage_percent: u8,
+    pub(crate) auto_agent_active: bool,
     pub(crate) telemetry: PlanApprovalTelemetryContext<'a>,
 }
 
@@ -197,6 +198,7 @@ pub(crate) async fn maybe_handle_planning_exit_trigger(
                         skip_confirmations: exit_context.skip_confirmations,
                         full_auto: exit_context.full_auto,
                         context_usage_percent: exit_context.context_usage_percent,
+                        auto_agent_active: exit_context.auto_agent_active,
                         editor: approval_editor,
                         workspace_root: approval_workspace_root,
                     },
