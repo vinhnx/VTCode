@@ -1,7 +1,11 @@
 # cargo-nextest configuration for vtcode
 # Reference: https://nexte.st/docs/configuration/reference/
-# Local machine: Apple M5 (10 cores, 24GB, SSD) — macOS aarch64.
-# test-threads = "num-cpus" auto-senses 10 cores.
+# Local machine: Apple M5 (10 cores, 24GB, NVMe) — macOS aarch64.
+# test-threads = "num-cpus" is the portable repo default (CI uses it as-is).
+# check-dev.sh overrides it locally with 2x cores (capped at 20, min 4 cores):
+# this suite is latency-bound, so measured wall time on this host improved from
+# 41s -> 32s (vtcode-core) and 157s -> 131s (full workspace) at 20 threads.
+# Set NEXTEST_TEST_THREADS to override the computed value.
 # sccache wraps rustc (~53% hit rate locally); CARGO_INCREMENTAL=1 overrides
 # profile.dev.incremental=false for local test builds (see check-dev.sh).
 

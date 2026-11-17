@@ -182,6 +182,30 @@ run_tests() {
 	fi
 	nextest_args+=("--profile" "$test_profile")
 
+	# Machine-tuned concurrency. This suite is latency-bound (child processes,
+	# sleeps, socket mocks), so 2x cores outperforms num-cpus on this Apple M5
+	# (10 cores): vtcode-core 41s -> 32s, full workspace 157s -> 131s. Cap at 20
+	# to bound memory pressure; hosts with < 4 cores keep nextest's default.
+	# NEXTEST_TEST_THREADS overrides the computed value when set explicitly.
+	if [ -n "${NEXTEST_TEST_THREADS:-}" ]; then
+		nextest_args+=("--test-threads" "$NEXTEST_TEST_THREADS")
+	else
+		local cpu_count=""
+		if command -v sysctl >/dev/null 2>&1; then
+			cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+		fi
+		if [[ ! "$cpu_count" =~ ^[0-9]+$ ]] && command -v nproc >/dev/null 2>&1; then
+			cpu_count="$(nproc 2>/dev/null || true)"
+		fi
+		if [[ "$cpu_count" =~ ^[0-9]+$ ]] && [ "$cpu_count" -ge 4 ]; then
+			local tuned_threads=$((cpu_count * 2))
+			if [ "$tuned_threads" -gt 20 ]; then
+				tuned_threads=20
+			fi
+			nextest_args+=("--test-threads" "$tuned_threads")
+		fi
+	fi
+
 	# Changed-crate mode: only test crates with changes since HEAD~1. nextest
 	# does not provide cargo's `--changed --since` flags, so resolve changed
 	# packages from Cargo metadata and pass explicit package filters instead.
