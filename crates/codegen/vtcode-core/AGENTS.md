@@ -7,7 +7,7 @@
 
 Paths are under `src/`. `core/agent/` runtime, event recording, runner, request envelopes, completion assessment | `tools/` handlers, registry, policy, execution
 `tools/registry/` admission, dispatch, results, history, completion verification | `tools/exec_session/` unified PTY/pipe registry, background slots, pipe line-monitor subscriptions | `tools/output_spooler/` bounded previews and spool references | `tools/source_inspection/` session-local source ledger
-`llm/` re-export facade over `vtcode-llm` | `exec/events.rs` re-exports canonical `ThreadEvent` | `prompts/` static profiles and compiled runtime guidance | `compaction/` history compaction and memory envelopes | `subagents/matrix/` scheduler-owned workers | `mcp/`, `skills/` plugin MCP servers and skill policy/loading | `exec_policy/`, `command_safety/` separate policy layers | `notifications/` per-domain OS alerts | `utils/ansi/` renderer
+`llm/` re-export facade over `vtcode-llm` | `exec/events.rs` re-exports canonical `ThreadEvent` | `prompts/` static profiles and compiled runtime guidance | `compaction/` history compaction and memory envelopes | `subagents/matrix/` scheduler-owned workers | `mcp/`, `skills/` plugin MCP servers and skill policy/loading | `exec_policy/`, `command_safety/` separate policy layers | `notifications/` per-domain OS alerts
 
 ## Rules
 
@@ -25,7 +25,7 @@ Paths are under `src/`. `core/agent/` runtime, event recording, runner, request 
 
 ## Gotchas
 
-- The `tui` feature (default-on) owns `vtcode-ui`/`ratatui`/`crossterm`/`ansi-to-tui`; headless builds (`--no-default-features`, used by `vtcode-acp`) must keep compiling, so new UI uses need `#[cfg(feature = "tui")]` plus a stub, and shared types move to `vtcode-commons::ui_protocol` instead.
+- Rendering and the inline-session runtime live in `vtcode-tui-runtime`; `vtcode-core` is UI-free and has no `tui` feature. Headless consumers (e.g. `vtcode-acp`) depend on core directly; keep new UI code out of core and put shared protocol types in `vtcode-commons::ui_protocol`.
 - Headless fallible work must run inside an awaited async block; an ordinary block does not contain `?` propagation, so errors would skip terminal recording and persistence close.
 - There is no per-turn tool-call count budget; explicit `wait` time is excluded from wall-clock accounting instead. Do not reintroduce a call-count ceiling.
 - `AgentSessionState.messages` is `Arc<Vec<Message>>`; mutate via `messages_mut()`/`Arc::make_mut` so request and continuation histories stay shared.
@@ -33,4 +33,4 @@ Paths are under `src/`. `core/agent/` runtime, event recording, runner, request 
 - Force-cancel retains a session when direct-child termination is unconfirmed, because direct-child exit does not prove descendant cleanup.
 - Read-only intent skips the approval gate, so an allow-listed program name must never be able to write or execute.
 
-Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-core.md) — read the section for the subsystem you change before editing it.
+Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-core.md) — read before editing.

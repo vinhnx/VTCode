@@ -12,7 +12,7 @@ use vtcode_config::core::ProviderOverrideConfig;
 use vtcode_config::core::{CustomProviderApiFormat, CustomProviderConfig, CustomProviderProfileConfig};
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::models::ModelId;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use self::options::{MODEL_OPTIONS, build_filtered_options, find_option_index, option_indexes_for_provider};

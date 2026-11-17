@@ -14,8 +14,8 @@ use vtcode_core::copilot::{
 };
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::ansi_codes::notify_attention;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};

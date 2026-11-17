@@ -19,7 +19,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::instructions::{InstructionSourceKind, format_instruction_path, instruction_scope_label};
 use vtcode_core::project_doc::load_instruction_appendix;
 use vtcode_core::skills::types::Skill;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 /// Flag skill descriptions that bloat the always-loaded skill listing. The
 /// stored maximum is 1024 bytes, so 512 is a "long but still valid" threshold.

@@ -9,7 +9,7 @@ use tracing::warn;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
     InlineHandle, InlineHeaderContext, InlineListSelection, SubmittedInput, TransientRequest, WizardModalMode,
     WizardOverlayRequest, WizardStep,

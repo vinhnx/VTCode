@@ -11,7 +11,7 @@
 
 ## Rules
 
-- Keep the binary thin; runtime logic, spool preview generation, and shell activity classification belong in `vtcode-core`, and the binary only serializes typed references.
+- Keep the binary thin; runtime logic, spool preview generation, and shell activity classification belong in `vtcode-core`, and the binary only serializes typed references. Rendering: `vtcode-tui-runtime`.
 - Use the shared `ThreadEvent` contract for telemetry; unexpected exits must emit terminal lifecycle events before draining, and `take_active_turn` is the single take point for terminal emission.
 - Build `LifecycleHookEngine` with `new_with_session_gated` so workspace-controlled hooks stay gated behind the approval overlay.
 - Verification gates completion only, never editing; verifier responses require a terminal exit code before clearing the gate, and verification credit is never derived from request-only projections.

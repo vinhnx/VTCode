@@ -23,13 +23,13 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::tools::exec_session::ExecSessionManager;
-use vtcode_core::ui::slash::visible_commands;
-use vtcode_core::ui::theme;
-use vtcode_core::ui::{
+use vtcode_core::utils::dot_config::take_startup_user_config;
+use vtcode_skills::command_slash::visible_commands;
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::ui::{
     inline_theme_from_core_styles, is_tui_mode, set_tui_mode, to_tui_appearance, to_tui_fullscreen,
     to_tui_keyboard_protocol, to_tui_slash_commands, to_tui_surface,
 };
-use vtcode_core::utils::dot_config::take_startup_user_config;
 use vtcode_ui::tui::app::{
     FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle, InlineListSelection, InlineSession,
     PreviewCallback, SessionOptions, spawn_session_with_options,

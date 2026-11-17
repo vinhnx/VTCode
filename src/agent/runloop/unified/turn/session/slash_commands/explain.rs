@@ -1,8 +1,8 @@
 //! Deterministic explanation command and private offline exports.
 use super::{SlashCommandContext, SlashCommandControl};
 use anyhow::{Context, Result, bail};
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_memory::explanation::{ExplanationScope, render_diagram, render_html_with_workspace, render_summary};
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 #[derive(Default)]
 struct Options {

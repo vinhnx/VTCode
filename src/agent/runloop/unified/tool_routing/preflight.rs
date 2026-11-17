@@ -1,9 +1,9 @@
 use anyhow::Result;
-use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec::events::PermissionDecision;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::ToolRegistry;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::interfaces::ui::UiSession;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;
 
 use super::{

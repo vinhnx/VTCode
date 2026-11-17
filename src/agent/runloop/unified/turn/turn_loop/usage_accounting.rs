@@ -3,7 +3,7 @@
 use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::usage_cost;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::post_tool_recovery::{PlanRecoveryEventContext, complete_turn_after_failed_tool_free_recovery_with_events};
 use crate::agent::runloop::unified::turn::context::{TurnLoopResult, TurnProcessingContext};

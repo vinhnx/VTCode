@@ -3,8 +3,8 @@ use vtcode_core::core::agent::snapshots::SnapshotTurnContext;
 use vtcode_core::exec::events::HarnessEventKind;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::types::CompactStr;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::SessionMessage;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::display::reset_inline_input;
 use crate::agent::runloop::unified::turn::context::{TurnLoopResult, TurnOutcomeContext};
@@ -124,7 +124,7 @@ mod tests {
     use std::time::Duration;
 
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
     use super::*;

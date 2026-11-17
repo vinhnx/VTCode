@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::state::missing_executable_hint;

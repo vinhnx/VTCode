@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::Notify;
-use vtcode_core::config::EditorToolConfig;
-use vtcode_core::exec::events::PlanApprovalDecision;
-use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
+use tui_rt::terminal_setup::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
+use vtcode_core::{config::EditorToolConfig, exec::events::PlanApprovalDecision};
+use vtcode_tui_runtime as tui_rt;
 use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession, ListOverlayRequest,
     PlanContent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest, TransientSubmission,
@@ -117,10 +117,10 @@ fn append_message(handle: &InlineHandle, kind: InlineMessageKind, text: impl Int
 /// feedback instead of a silent blank block.
 fn append_markdown_message(handle: &InlineHandle, kind: InlineMessageKind, markdown: &str) -> bool {
     use std::sync::Arc;
-    use vtcode_core::ui::markdown::{CodeBlockWeight, RenderMarkdownOptions, render_markdown_to_lines_with_options};
-    use vtcode_core::ui::theme;
-    use vtcode_core::ui::tui::{InlineSegment, convert_style};
-    use vtcode_core::utils::ansi::MessageStyle;
+    use tui_rt::ui::markdown::{CodeBlockWeight, RenderMarkdownOptions, render_markdown_to_lines_with_options};
+    use tui_rt::ui::theme;
+    use tui_rt::ui::tui::{InlineSegment, convert_style};
+    use tui_rt::utils::ansi::MessageStyle;
 
     if markdown.trim().is_empty() {
         return false;

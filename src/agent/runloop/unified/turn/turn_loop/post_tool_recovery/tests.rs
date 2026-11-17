@@ -495,7 +495,7 @@ async fn tool_free_recovery_keeps_planning_alive_on_non_transient_error() {
 #[tokio::test]
 async fn dispatch_marks_recovery_exhausted_when_wall_clock_exhausted_in_plan_mode() {
     use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 
     let mut renderer = AnsiRenderer::stdout();
     let mut working_history: Vec<uni::Message> = Vec::new();

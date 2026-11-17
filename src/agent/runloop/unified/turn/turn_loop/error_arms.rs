@@ -5,7 +5,7 @@ use std::ops::ControlFlow;
 use anyhow::Result;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::context::TurnLoopContext;
 use super::post_tool_recovery::{PostToolFailureAction, PostToolRecoveryContext, dispatch_post_tool_failure};

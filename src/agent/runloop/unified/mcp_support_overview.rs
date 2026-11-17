@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::tools::registry::ToolRegistry;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};

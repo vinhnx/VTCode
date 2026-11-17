@@ -14,7 +14,7 @@ use vtcode_commons::fs::{is_windows_absolute_path, trim_trailing_image_path, une
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::scheduler::{ScheduleSpec, SessionLanguageCommand, scheduled_tasks_enabled};
 use vtcode_core::tools::file_ops::is_image_path;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 pub(crate) enum CommandProcessingResult {
     Outcome(InteractionOutcome),

@@ -17,11 +17,11 @@ use vtcode_core::llm::ModelResolver;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
-use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::tools::tool_intent::{VERIFIER_SHELL_FORM_NOTE, verifier_reference};
-use vtcode_core::ui::theme;
-use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance, to_tui_fullscreen};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::terminal_setup::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::ui::{inline_theme_from_core_styles, to_tui_appearance, to_tui_fullscreen};
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{ContentPart as UiContentPart, SubmittedInput};
 
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
@@ -517,7 +517,7 @@ pub(super) fn build_durable_scheduler_daemon() -> Result<SchedulerDaemon> {
 }
 
 async fn try_resume_archived_session(
-    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     session_id: &str,
     intent: ArchivedSessionIntent,
     loading_message: &str,

@@ -75,7 +75,6 @@
 //! }
 //! ```
 
-pub mod ansi;
 pub mod ansi_capabilities;
 pub mod ansi_codes;
 pub mod ansi_parser;
@@ -85,8 +84,6 @@ pub mod at_pattern;
 pub mod cached_style_parser;
 pub mod colors;
 pub mod common;
-#[cfg(feature = "tui")]
-pub mod diff;
 pub mod diff_styles;
 pub mod dot_config;
 pub mod error_log_collector;
@@ -98,7 +95,6 @@ pub mod formatting;
 pub mod gatekeeper;
 pub mod http_client;
 pub mod image_processing;
-pub mod message_style;
 pub mod migration;
 pub mod path;
 pub mod serde_helpers;
@@ -110,7 +106,6 @@ pub mod terminal_color_probe;
 pub mod tokens;
 pub mod tool_name_parsing;
 pub mod trace_writer;
-pub mod transcript;
 pub mod tty;
 pub mod unicode_monitor;
 pub mod validation;

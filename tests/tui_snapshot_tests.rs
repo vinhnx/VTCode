@@ -11,7 +11,7 @@
 //! To update snapshots, run: `cargo insta review`
 
 use insta::assert_snapshot;
-use vtcode_core::ui::{InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle};
+use vtcode_tui_runtime::ui::{InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle};
 
 /// Test message kind string representation
 #[test]

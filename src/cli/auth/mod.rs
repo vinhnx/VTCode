@@ -752,8 +752,8 @@ fn prompt_openai_manual_input_cli_once() -> Result<Option<String>> {
     tokio::task::block_in_place(|| -> Result<Option<String>> {
         println!("Paste the redirected URL/query and press Enter when ready.");
         print!("Redirect URL or query: ");
-        vtcode_core::ui::terminal::flush_stdout();
-        let input = vtcode_core::ui::terminal::read_line().map_err(|err| anyhow!("stdin read failed: {err}"))?;
+        vtcode_tui_runtime::ui::terminal::flush_stdout();
+        let input = vtcode_tui_runtime::ui::terminal::read_line().map_err(|err| anyhow!("stdin read failed: {err}"))?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
             Ok(None)
@@ -869,7 +869,7 @@ fn confirm_cli_browser_open(url: &str) -> Result<bool> {
         return Ok(false);
     };
 
-    if vtcode_core::ui::terminal::is_piped_input() || vtcode_core::ui::terminal::is_piped_output() {
+    if vtcode_tui_runtime::ui::terminal::is_piped_input() || vtcode_tui_runtime::ui::terminal::is_piped_output() {
         println!("Automatic browser launch skipped because approval requires an interactive terminal.");
         return Ok(false);
     }
@@ -879,8 +879,8 @@ fn confirm_cli_browser_open(url: &str) -> Result<bool> {
     }
 
     print!("Open in browser now? [y/N]: ");
-    vtcode_core::ui::terminal::flush_stdout();
-    let input = vtcode_core::ui::terminal::read_line().map_err(|err| anyhow!("stdin read failed: {err}"))?;
+    vtcode_tui_runtime::ui::terminal::flush_stdout();
+    let input = vtcode_tui_runtime::ui::terminal::read_line().map_err(|err| anyhow!("stdin read failed: {err}"))?;
     Ok(cli_browser_open_approved(&input))
 }
 

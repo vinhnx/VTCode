@@ -50,8 +50,8 @@ mod tests {
     use crate::agent::runloop::unified::inline_events::interrupts::InlineInterruptCoordinator;
     use crate::agent::runloop::unified::inline_events::state::InlineEventState;
     use crate::agent::runloop::unified::state::CtrlCState;
-    use vtcode_core::core::interfaces::ui::UiSession;
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::interfaces::ui::UiSession;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::{InlineEvent, InlineHandle, InlineSession};
 
     #[test]

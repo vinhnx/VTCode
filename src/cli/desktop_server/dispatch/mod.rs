@@ -140,7 +140,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             protocol: selected,
             workspace: context.workspace.to_string_lossy().into_owned(),
             server_version: env!("CARGO_PKG_VERSION").to_string(),
-            slash_commands: vtcode_core::ui::slash::visible_commands_for_desktop()
+            slash_commands: vtcode_skills::command_slash::visible_commands_for_desktop()
                 .into_iter()
                 .map(|command| protocol::SlashCommandInfo {
                     name: command.name.to_string(),

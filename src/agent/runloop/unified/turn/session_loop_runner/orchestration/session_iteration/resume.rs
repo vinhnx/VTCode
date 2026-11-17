@@ -5,7 +5,7 @@ use std::path::Path;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::runtime::AgentRuntime;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::super::support::take_pending_resumed_user_prompt;
 use crate::agent::runloop::unified::state::CtrlCState;

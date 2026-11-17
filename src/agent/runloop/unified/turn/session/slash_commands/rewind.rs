@@ -7,7 +7,7 @@ use vtcode_core::core::agent::snapshots::{
     CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata, SnapshotSkippedPaths,
 };
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineListSearchConfig, InlineListSelection, RewindAction};
 
 use super::ui;

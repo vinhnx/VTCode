@@ -79,11 +79,11 @@ pub(crate) async fn handle_direct_tool_execution(
                 diagnosis.clone()
             };
             ctx.interaction_ctx.renderer.line(
-                vtcode_core::utils::ansi::MessageStyle::Info,
+                vtcode_tui_runtime::utils::ansi::MessageStyle::Info,
                 "Shell mode (!): command rejected (invalid shell syntax).",
             )?;
             ctx.interaction_ctx.renderer.line(
-                vtcode_core::utils::ansi::MessageStyle::Info,
+                vtcode_tui_runtime::utils::ansi::MessageStyle::Info,
                 &format!("Fix syntax and retry as `!{command}`, or ask without `!`. ({detail})"),
             )?;
             return Ok(Some(InteractionOutcome::DirectToolHandled));
@@ -139,10 +139,10 @@ pub(crate) async fn execute_direct_tool_call(
 
         // 1. Display user message and push to history
         if is_bang_prefix {
-            t_ctx
-                .ctx
-                .renderer
-                .line(vtcode_core::utils::ansi::MessageStyle::Info, "Shell mode (!): executing command directly.")?;
+            t_ctx.ctx.renderer.line(
+                vtcode_tui_runtime::utils::ansi::MessageStyle::Info,
+                "Shell mode (!): executing command directly.",
+            )?;
         }
         if matches!(tool_name, tools::SPAWN_AGENT | tools::SPAWN_BACKGROUND_SUBPROCESS)
             && let Some(controller) = t_ctx.ctx.tool_registry.subagent_controller()
@@ -193,7 +193,7 @@ pub(crate) async fn execute_direct_tool_call(
             {
                 consumed_fallback = true;
                 t_ctx.ctx.renderer.line(
-                    vtcode_core::utils::ansi::MessageStyle::Info,
+                    vtcode_tui_runtime::utils::ansi::MessageStyle::Info,
                     &format!("Retrying with tool-provided fallback `{fallback_tool}`."),
                 )?;
                 pending_tool = Some((fallback_tool, fallback_args));
@@ -217,7 +217,7 @@ pub(crate) async fn execute_direct_tool_call(
             t_ctx
                 .ctx
                 .renderer
-                .line(vtcode_core::utils::ansi::MessageStyle::Response, &reply)?;
+                .line(vtcode_tui_runtime::utils::ansi::MessageStyle::Response, &reply)?;
             t_ctx
                 .ctx
                 .working_history

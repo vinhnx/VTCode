@@ -200,7 +200,7 @@ fn config_poll_without_changes_leaves_session_config_and_ui_untouched() {
     watcher.set_check_interval(0);
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let handle = vtcode_ui::tui::app::InlineHandle::new_for_tests(sender);
-    let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle, Default::default());
+    let mut renderer = vtcode_tui_runtime::utils::ansi::AnsiRenderer::with_inline_ui(handle, Default::default());
     let mut vt_cfg = None;
     super::poll_config_reload(&mut watcher, &mut vt_cfg, &config, &mut renderer, "test reload").unwrap();
     assert!(vt_cfg.is_none());
@@ -223,7 +223,7 @@ fn config_poll_retains_rejected_config_and_recovers_with_cli_overrides() {
     watcher.set_last_known_config(previous);
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let handle = vtcode_ui::tui::app::InlineHandle::new_for_tests(sender);
-    let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle, Default::default());
+    let mut renderer = vtcode_tui_runtime::utils::ansi::AnsiRenderer::with_inline_ui(handle, Default::default());
     super::poll_config_reload(&mut watcher, &mut vt_cfg, &config, &mut renderer, "test reload").unwrap();
 
     let path = temp.path().join("vtcode.toml");

@@ -10,7 +10,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::exec::events::{InterjectedEvent, InterjectionSource, RedirectKind, ThreadEvent};
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineEvent, InlineHandle, InlineHeaderContext, InlineSession, SubmittedInput};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -552,7 +552,7 @@ mod tests {
             workspace: std::env::current_dir().expect("current_dir"),
             verbose: false,
             quiet: false,
-            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),

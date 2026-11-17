@@ -3,7 +3,7 @@ use anyhow::Result;
 use chrono::Local;
 use hashbrown::HashMap;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(super) fn render_resume_state_if_present(
     renderer: &mut AnsiRenderer,

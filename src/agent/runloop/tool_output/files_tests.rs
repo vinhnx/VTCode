@@ -8,8 +8,8 @@ async fn apply_patch_preview_keeps_full_hunk_range_counts() {
     // start-only `@@ -65 +65 @@`, which reads as a one-line change.
     use crate::agent::runloop::tool_output::collect_inline_output;
     use serde_json::json;
-    use vtcode_core::ui::InlineHandle;
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::ui::InlineHandle;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 
     let payload = json!({
         "diff": [{
@@ -321,8 +321,8 @@ fn list_dir_render_survives_an_extreme_page_value() {
     // release keeps `overflow-checks = true`, so this used to abort the CLI.
     use crate::agent::runloop::tool_output::collect_inline_output;
     use serde_json::json;
-    use vtcode_core::ui::InlineHandle;
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::ui::InlineHandle;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());

@@ -7,8 +7,6 @@
 
 pub mod acp;
 pub mod session;
-pub mod ui;
 
 pub use acp::{AcpClientAdapter, AcpLaunchParams};
 pub use session::{SessionRuntime, SessionRuntimeParams};
-pub use ui::UiSession;

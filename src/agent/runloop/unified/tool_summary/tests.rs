@@ -1,7 +1,7 @@
 use serde_json::json;
 use vtcode_commons::formatting::wrap_text_words;
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
 use super::{

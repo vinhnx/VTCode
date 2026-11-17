@@ -14,7 +14,7 @@ use render::summarize_value;
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::{ConfigResetRequest, ConfigService, ConfigWriteTarget};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 use docs::FIELD_DOCS;

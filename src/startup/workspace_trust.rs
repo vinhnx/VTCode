@@ -63,7 +63,7 @@ pub(crate) async fn is_workspace_trusted(workspace: &Path) -> bool {
 /// terminal. Persist the same trust bit the prompt would set so the switch can
 /// complete instead of stopping the session at an unrecoverable warning.
 pub(crate) async fn auto_grant_tui_full_auto_workspace_trust(workspace: &Path) -> Result<()> {
-    if !vtcode_core::ui::is_tui_mode() || is_workspace_trusted(workspace).await {
+    if !vtcode_tui_runtime::ui::is_tui_mode() || is_workspace_trusted(workspace).await {
         return Ok(());
     }
 
@@ -183,7 +183,7 @@ fn prompt_capable() -> bool {
     // println! / stdin.read_line() would corrupt the display and block the
     // event loop, so treat the session as non-interactive here.  The caller
     // will surface the trust requirement through its own renderer.
-    if vtcode_core::ui::is_tui_mode() {
+    if vtcode_tui_runtime::ui::is_tui_mode() {
         return false;
     }
     io::stdin().is_tty_ext() && io::stdout().is_tty_ext()
@@ -193,7 +193,7 @@ fn prompt_capable() -> bool {
 /// terminal and raw println! would corrupt the display; the message is
 /// logged via tracing instead.
 fn tui_safe_println(msg: &str) {
-    if vtcode_core::ui::is_tui_mode() {
+    if vtcode_tui_runtime::ui::is_tui_mode() {
         tracing::info!(target: "workspace_trust", "{msg}");
     } else {
         println!("{msg}");
@@ -447,14 +447,14 @@ mod tests {
         let env_guard = vtcode_commons::env_lock::lock();
         let previous_env = env::var_os(TRUST_OVERRIDE_ENV);
         env_guard.remove_var(TRUST_OVERRIDE_ENV);
-        let was_tui = vtcode_core::ui::is_tui_mode();
-        vtcode_core::ui::set_tui_mode(true);
+        let was_tui = vtcode_tui_runtime::ui::is_tui_mode();
+        vtcode_tui_runtime::ui::set_tui_mode(true);
 
         auto_grant_tui_full_auto_workspace_trust(temp.path())
             .await
             .expect("TUI auto grant should persist trust");
 
-        vtcode_core::ui::set_tui_mode(was_tui);
+        vtcode_tui_runtime::ui::set_tui_mode(was_tui);
         env_guard.restore_var(TRUST_OVERRIDE_ENV, previous_env);
 
         assert_eq!(load_workspace_trust_level(temp.path()).await.unwrap(), Some(WorkspaceTrustLevel::FullAuto));
@@ -466,14 +466,14 @@ mod tests {
         let env_guard = vtcode_commons::env_lock::lock();
         let previous_env = env::var_os(TRUST_OVERRIDE_ENV);
         env_guard.set_var(TRUST_OVERRIDE_ENV, "deny");
-        let was_tui = vtcode_core::ui::is_tui_mode();
-        vtcode_core::ui::set_tui_mode(true);
+        let was_tui = vtcode_tui_runtime::ui::is_tui_mode();
+        vtcode_tui_runtime::ui::set_tui_mode(true);
 
         let err = auto_grant_tui_full_auto_workspace_trust(temp.path())
             .await
             .expect_err("explicit deny should block auto grant");
 
-        vtcode_core::ui::set_tui_mode(was_tui);
+        vtcode_tui_runtime::ui::set_tui_mode(was_tui);
         env_guard.restore_var(TRUST_OVERRIDE_ENV, previous_env);
 
         assert!(err.to_string().contains("denied"));

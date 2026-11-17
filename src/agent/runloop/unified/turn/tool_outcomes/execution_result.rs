@@ -23,7 +23,7 @@ use vtcode_core::persistent_memory::GroundedFactRecord;
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use self::auto_permission_probe::push_tool_response_with_auto_permission_probe;
 pub(crate) use self::failure_diagnosis::{

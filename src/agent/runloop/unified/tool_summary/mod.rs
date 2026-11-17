@@ -19,9 +19,9 @@ use vtcode_commons::ui_protocol::{CompactToolSummaryLine, CompactToolSummaryLine
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::tools::tool_intent;
-use vtcode_core::ui::theme;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::syntax_highlight;
 
 use crate::agent::runloop::tool_output::render_tree_detail;

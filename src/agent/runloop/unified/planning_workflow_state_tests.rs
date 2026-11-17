@@ -402,7 +402,7 @@ fn promote_planning_stage_emits_no_researching_row() {
     // Mid-turn `start_planning` entry must not render the researching row:
     // the turn-loop detector owns it (rendered after the `• Start planning`
     // summary). Emitting here duplicates it (❋, •, ❋).
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::InlineHandle;
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -418,7 +418,7 @@ fn promote_planning_stage_emits_no_researching_row() {
 #[test]
 fn mark_planning_turn_started_emits_single_researching_row() {
     // Turn start / detector path owns the single researching row.
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::InlineHandle;
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();

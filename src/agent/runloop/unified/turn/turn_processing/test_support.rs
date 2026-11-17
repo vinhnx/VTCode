@@ -82,7 +82,8 @@ impl uni::LLMProvider for NoopProvider {
     }
 }
 
-fn create_headless_session() -> (InlineSession, tokio::sync::mpsc::UnboundedReceiver<vtcode_core::ui::InlineCommand>) {
+fn create_headless_session()
+-> (InlineSession, tokio::sync::mpsc::UnboundedReceiver<vtcode_tui_runtime::ui::InlineCommand>) {
     let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
     (
@@ -111,9 +112,9 @@ pub(crate) struct TestTurnProcessingBacking {
     last_forced_redraw: Instant,
     input_status_state: InputStatusState,
     session: InlineSession,
-    command_receiver: tokio::sync::mpsc::UnboundedReceiver<vtcode_core::ui::InlineCommand>,
+    command_receiver: tokio::sync::mpsc::UnboundedReceiver<vtcode_tui_runtime::ui::InlineCommand>,
     handle: InlineHandle,
-    renderer: vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     ctrl_c_state: Arc<CtrlCState>,
     ctrl_c_notify: Arc<Notify>,
     safety_validator: Arc<ToolCallSafetyValidator>,
@@ -162,7 +163,8 @@ impl TestTurnProcessingBacking {
         let (mut session, command_receiver) = create_headless_session();
         session.set_skip_confirmations(true);
         let handle = session.clone_inline_handle();
-        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let renderer =
+            vtcode_tui_runtime::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());

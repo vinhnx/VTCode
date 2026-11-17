@@ -21,6 +21,7 @@
 pub mod authoring;
 pub mod bundle;
 pub mod command_skills;
+pub mod command_slash;
 pub mod container;
 pub mod container_validation;
 pub mod context_manager;

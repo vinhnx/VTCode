@@ -214,14 +214,15 @@ The command-line interface is built on specific principles for robustness and in
 
 ### Workspace crates
 
-The workspace has 25 crates: the root `vtcode` binary plus 24 library crates under `crates/codegen/` (runtime) and
-`crates/common/` (shared contracts and utilities). `default-members` build only the root, `vtcode-core`, and `vtcode-ui`.
+The workspace has 26 crates: the root `vtcode` binary plus 25 library crates under `crates/codegen/` (runtime) and
+`crates/common/` (shared contracts and utilities). `default-members` build the root, `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and `vtcode-ui`.
 New reusable logic belongs in an existing small crate (or a new one) rather than in `vtcode-core` by default.
 
 | Crate                       | Role                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
 | `vtcode` (root `src/`)      | Binary, CLI, session bootstrap.                                                             |
-| `vtcode-core`               | Agent loop, tools, prompts, LLM orchestration, UI.                                          |
+| `vtcode-core`               | Agent loop, tools, prompts, LLM orchestration (no TUI stack).                                |
+| `vtcode-tui-runtime`        | TUI/ANSI rendering stack: theming, markdown, transcript, inline session, terminal setup.    |
 | `vtcode-ui`                 | Unified UI: design system, theme registry, TUI framework.                                   |
 | `vtcode-config`             | Config loading and schema.                                                                  |
 | `vtcode-bash-runner`        | Shell execution sandbox.                                                                    |
@@ -252,10 +253,10 @@ New reusable logic belongs in an existing small crate (or a new one) rather than
 The terminal UI now has a dedicated crate boundary:
 
 - `vtcode-ui`: public UI-facing API surface for downstream consumers (TUI, design, theme)
-- `vtcode-core::ui::tui`: canonical runtime type surface for VT Code internals
+- `vtcode-tui-runtime::ui::tui`: canonical runtime type surface for VT Code internals
 
-This separation allows external code to import TUI types and session APIs from `vtcode-ui` while keeping host-specific
-integrations inside `vtcode-core`.
+This separation lets external code import TUI types and session APIs from `vtcode-ui`, keeps host-specific
+integrations in `vtcode-tui-runtime`, and leaves `vtcode-core` free of the TUI stack for headless consumers.
 
 `vtcode-ui` now exposes standalone launch primitives (`SessionOptions`, `SessionSurface`, `KeyboardProtocolSettings`)
 plus host adapters (`host::HostAdapter`) so downstream projects can start sessions without importing
@@ -265,8 +266,8 @@ The full TUI source tree is now located in:
 
 - `crates/codegen/vtcode-ui/src/tui/core_tui/`
 
-`crates/codegen/vtcode-core/src/ui/tui.rs` is a compatibility shim that compiles this migrated source tree to preserve
-existing `vtcode_core::ui::tui` paths.
+`crates/codegen/vtcode-tui-runtime/src/ui/tui.rs` re-exports this migrated source tree to preserve the
+`vtcode_tui_runtime::ui::tui` path. `vtcode-core` has no `ui` or `terminal_setup` module; the slash catalog lives in `vtcode-skills` and terminal detection in `vtcode-commons`.
 
 The TUI runner is organized into focused modules:
 

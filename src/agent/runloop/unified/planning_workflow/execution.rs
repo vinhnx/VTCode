@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::tools::registry::ExecSettlementMode;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::planning_workflow_state::{
     apply_plan_agent_header, promote_planning_stage, render_planning_workflow_next_step_hint,

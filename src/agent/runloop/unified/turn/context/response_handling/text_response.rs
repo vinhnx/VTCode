@@ -469,7 +469,7 @@ impl<'a> TurnProcessingContext<'a> {
         // promoted untagged candidate skips the hint: it reaches the
         // persist/approval handoff below.
         if defer_no_ready_plan_hint && proposed_plan.is_none() {
-            use vtcode_core::utils::ansi::MessageStyle;
+            use vtcode_tui_runtime::utils::ansi::MessageStyle;
             let hint =
                 crate::agent::runloop::unified::planning_workflow_state::PLANNING_WORKFLOW_NO_APPROVAL_READY_PLAN_HINT;
             self.renderer.line(MessageStyle::Info, hint)?;
@@ -477,7 +477,7 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         if let Some(plan_text) = proposed_plan {
-            use vtcode_core::utils::ansi::MessageStyle;
+            use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
             let planning_active = self.is_planning_active();
             // A revision emitted while an approved-plan execution turn is in

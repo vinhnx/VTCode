@@ -1,7 +1,7 @@
 use anyhow::Result;
 use shell_words::split as shell_split;
 use vtcode_core::llm::providers::local_server::LocalProvider;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::rendering::{render_local_usage, render_mcp_usage, render_secret_usage};
 use super::{LocalServerAction, McpCommandAction, SecretCommandAction, SlashCommandOutcome};

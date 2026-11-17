@@ -1,6 +1,6 @@
 use anyhow::Result;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::TurnLoopContext;
 use super::context::effective_vt_cfg;

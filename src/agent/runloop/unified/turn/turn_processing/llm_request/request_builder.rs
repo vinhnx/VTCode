@@ -26,7 +26,7 @@ use vtcode_core::core::agent::harness_kernel::{
     HarnessRequestPlanInput, build_harness_request_plan, stable_system_prefix_hash,
 };
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::context_management::resolve_context_management;
 use super::metrics::{

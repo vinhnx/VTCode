@@ -161,7 +161,7 @@ impl<'a> TurnProcessingContext<'a> {
         plan_text: &str,
         allow_repair: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {
-        use vtcode_core::utils::ansi::MessageStyle;
+        use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
         // An unapproved execution turn can still propose a plan for review.
         // Give an invalid first draft one tool-free repair pass so it can
@@ -389,7 +389,7 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         if !response_streamed {
-            use vtcode_core::utils::ansi::MessageStyle;
+            use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
             if !text.trim().is_empty() {
                 self.renderer.line(MessageStyle::Response, &text)?;

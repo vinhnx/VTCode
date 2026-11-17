@@ -77,10 +77,10 @@ pub(super) fn task_tracker_block_lines(output: &serde_json::Value, expanded: boo
 /// the default style. All colors come from theme tokens through the shared
 /// style bridge, so WCAG contrast holds by construction.
 pub(super) fn task_tracker_block_segments(lines: &[TrackerLine]) -> Vec<Vec<InlineSegment>> {
-    use vtcode_core::ui::markdown::CodeBlockWeight;
-    use vtcode_core::ui::markdown::RenderMarkdownOptions;
-    use vtcode_core::ui::theme;
-    use vtcode_core::ui::tui::convert_style;
+    use vtcode_tui_runtime::ui::markdown::CodeBlockWeight;
+    use vtcode_tui_runtime::ui::markdown::RenderMarkdownOptions;
+    use vtcode_tui_runtime::ui::theme;
+    use vtcode_tui_runtime::ui::tui::convert_style;
 
     let default_style = std::sync::Arc::new(InlineTextStyle::default());
     let base_style = MessageStyle::Info.style();
@@ -126,12 +126,12 @@ pub(super) fn task_tracker_block_segments(lines: &[TrackerLine]) -> Vec<Vec<Inli
 /// rendering; other statuses tint through [`render_tracker_status_row`].
 pub(super) fn render_tracker_line(
     line: &TrackerLine,
-    theme_styles: &vtcode_core::ui::theme::ThemeStyles,
+    theme_styles: &vtcode_tui_runtime::ui::theme::ThemeStyles,
     info_fallback: &InlineTextStyle,
     primary: &InlineTextStyle,
     warning: &InlineTextStyle,
     default_style: &std::sync::Arc<InlineTextStyle>,
-    render_options: &vtcode_core::ui::markdown::RenderMarkdownOptions,
+    render_options: &vtcode_tui_runtime::ui::markdown::RenderMarkdownOptions,
 ) -> Option<Vec<InlineSegment>> {
     let row_style = match line.status {
         None | Some(TaskItemStatus::Pending) => {
@@ -202,13 +202,13 @@ pub(super) fn split_tracker_row_prefix(line: &str) -> Option<(&str, &str)> {
 /// prefix or markdown yields no visible output (caller falls back to plain).
 pub(super) fn render_tracker_inline_row(
     line: &str,
-    theme_styles: &vtcode_core::ui::theme::ThemeStyles,
+    theme_styles: &vtcode_tui_runtime::ui::theme::ThemeStyles,
     fallback: &InlineTextStyle,
     default_style: &std::sync::Arc<InlineTextStyle>,
-    render_options: &vtcode_core::ui::markdown::RenderMarkdownOptions,
+    render_options: &vtcode_tui_runtime::ui::markdown::RenderMarkdownOptions,
 ) -> Option<Vec<InlineSegment>> {
-    use vtcode_core::ui::markdown::render_markdown_to_lines_with_options;
-    use vtcode_core::ui::tui::convert_style;
+    use vtcode_tui_runtime::ui::markdown::render_markdown_to_lines_with_options;
+    use vtcode_tui_runtime::ui::tui::convert_style;
 
     let (prefix, body) = split_tracker_row_prefix(line)?;
     if body.trim().is_empty() {
@@ -270,12 +270,12 @@ pub(super) fn render_tracker_inline_row(
 pub(super) fn render_tracker_status_row(
     line: &str,
     row_style: &InlineTextStyle,
-    theme_styles: &vtcode_core::ui::theme::ThemeStyles,
+    theme_styles: &vtcode_tui_runtime::ui::theme::ThemeStyles,
     info_fallback: &InlineTextStyle,
-    render_options: &vtcode_core::ui::markdown::RenderMarkdownOptions,
+    render_options: &vtcode_tui_runtime::ui::markdown::RenderMarkdownOptions,
 ) -> Option<Vec<InlineSegment>> {
-    use vtcode_core::ui::markdown::render_markdown_to_lines_with_options;
-    use vtcode_core::ui::tui::convert_style;
+    use vtcode_tui_runtime::ui::markdown::render_markdown_to_lines_with_options;
+    use vtcode_tui_runtime::ui::tui::convert_style;
 
     let (prefix, body) = split_tracker_row_prefix(line)?;
     if body.trim().is_empty() {

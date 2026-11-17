@@ -83,7 +83,7 @@ mod tests {
             workspace: directory.path().to_path_buf(),
             verbose: false,
             quiet: false,
-            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.into(),
+            theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.into(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: vtcode_core::config::types::UiSurfacePreference::default(),
             prompt_cache: vtcode_core::config::core::PromptCachingConfig::default(),

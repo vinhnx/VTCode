@@ -5,7 +5,7 @@ use vtcode_config::VTCodeConfig;
 use vtcode_core::exec::events::PlanApprovalDecision;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::ToolRegistry;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::unified::planning_workflow::{
@@ -304,7 +304,7 @@ pub(crate) async fn maybe_handle_planning_exit_trigger(
 }
 
 fn display_status(renderer: &mut AnsiRenderer, message: &str) -> anyhow::Result<()> {
-    renderer.line(vtcode_core::utils::ansi::MessageStyle::Status, message)
+    renderer.line(vtcode_tui_runtime::utils::ansi::MessageStyle::Status, message)
 }
 
 #[cfg(test)]

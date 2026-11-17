@@ -1,0 +1,67 @@
+[package]
+name = "vtcode-tui-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Vinh Nguyen"]
+description = "Terminal-rendering and inline-UI runtime extracted from vtcode-core"
+license.workspace = true
+readme = "README.md"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-tui-runtime"
+keywords = ["terminal", "tui", "ansi", "rendering", "agent"]
+categories = ["command-line-interface", "development-tools"]
+include = [
+    "src/",
+    "tests/",
+    "examples/",
+    "assets/",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "LICENSE-MIT",
+]
+
+[dependencies]
+anyhow = { workspace = true }
+anstyle = { workspace = true }
+anstream = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+dialoguer = { workspace = true }
+dirs = { workspace = true }
+hashbrown = { workspace = true }
+parking_lot = { workspace = true }
+ratatui = { workspace = true, features = [
+    "crossterm",
+    "unstable-rendered-line-info",
+    "unstable-widget-ref",
+] }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shell-words = { workspace = true }
+tempfile = { workspace = true }
+terminal_size = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "sync", "time"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+unicode-width = { workspace = true }
+url = { workspace = true }
+which = { workspace = true }
+crossterm = { workspace = true, features = ["event-stream"] }
+ansi-to-tui = "8.0.1"
+
+vtcode-commons = { workspace = true }
+vtcode-config = { workspace = true }
+vtcode-core = { workspace = true }
+vtcode-diff = { workspace = true, features = ["serde"] }
+vtcode-skills = { workspace = true }
+vtcode-ui = { workspace = true }
+
+[dev-dependencies]
+assert_fs = { workspace = true }
+serial_test = { workspace = true }
+
+[lints]
+workspace = true

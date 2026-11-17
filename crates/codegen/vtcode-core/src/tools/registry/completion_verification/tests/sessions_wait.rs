@@ -52,7 +52,7 @@ async fn completion_verification_waits_for_mutating_sessions_before_accepting_ch
     registry.observe_completion_verifier(id, &args, &Ok(json!({"exit_code":0})));
     assert!(!registry.completion_verification_pending());
 }
-#[cfg(all(unix, feature = "tui"))]
+#[cfg(unix)]
 #[tokio::test]
 async fn completion_verification_bulk_termination_reconciles_only_gone_sessions() {
     use crate::tools::pty::PtySize;

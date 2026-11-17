@@ -9,10 +9,10 @@ use vtcode_core::core::agent::snapshots::SnapshotTurnDiagnostics;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{set_global_notification_hook_engine, set_global_terminal_focused};
-use vtcode_core::ui::set_tui_mode;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
-use vtcode_core::utils::transcript;
+use vtcode_tui_runtime::ui::set_tui_mode;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::transcript;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;

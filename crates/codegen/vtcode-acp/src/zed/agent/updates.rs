@@ -6,7 +6,7 @@ use crate::acp::Error as SdkError;
 use crate::zed::connection::ConnectionHandle;
 use anyhow::Result;
 use vtcode_core::prompts::discover_prompt_templates;
-use vtcode_core::ui::slash::visible_commands;
+use vtcode_skills::command_slash::visible_commands;
 
 impl ZedAgent {
     pub(super) async fn send_update(

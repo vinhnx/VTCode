@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::fs::write_private_file_atomic;
 use vtcode_core::constants::tools;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{AgentPaletteItem, InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};

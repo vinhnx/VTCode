@@ -5,7 +5,7 @@ use vtcode_config::{AnthropicSpeed, ConfigManager, OpenAIServiceTier};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::llm::provider::{ContextWindowProvider, LLMProvider};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::fast_mode::{

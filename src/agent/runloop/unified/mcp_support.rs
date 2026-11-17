@@ -8,7 +8,7 @@ use tokio::{
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::mcp::validate_mcp_config;
 use vtcode_core::tools::registry::ToolRegistry;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use crate::agent::runloop::mcp_events;

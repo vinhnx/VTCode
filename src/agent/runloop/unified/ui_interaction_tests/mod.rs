@@ -8,7 +8,7 @@ pub(super) use std::sync::Arc;
 pub(super) use std::time::Duration;
 pub(super) use tokio::sync::{Notify, mpsc};
 pub(super) use vtcode_core::llm::provider as uni;
-pub(super) use vtcode_core::utils::ansi::AnsiRenderer;
+pub(super) use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 pub(super) use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
 #[derive(Clone)]

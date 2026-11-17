@@ -18,8 +18,8 @@ TERMINAL = re.compile(r"\b(?:eprintln!|println!|styled_eprintln!|styled_println!
 
 # Reviewed failure-like Info contexts. New candidates require an explicit rationale.
 INFO_CONTEXT_REVIEWS = {
-    "crates/codegen/vtcode-core/src/terminal_setup/wizard.rs": "Positive operation progress or instructions; adjacent failure branches use Error/Warning canonical adapters.",
-    "crates/codegen/vtcode-core/src/utils/ansi/output.rs": "Info reference is presentation/style selection; actual failure messages use canonical Error/Warning or explicit Diagnostic payloads.",
+    "crates/codegen/vtcode-tui-runtime/src/terminal_setup/wizard.rs": "Positive operation progress or instructions; adjacent failure branches use Error/Warning canonical adapters.",
+    "crates/codegen/vtcode-tui-runtime/src/utils/ansi/output.rs": "Info reference is presentation/style selection; actual failure messages use canonical Error/Warning or explicit Diagnostic payloads.",
     "src/agent/runloop/model_picker/state_machine.rs": "Positive operation progress or instructions; adjacent failure branches use Error/Warning canonical adapters.",
     "src/agent/runloop/slash_commands/builtins.rs": "Positive operation progress or instructions; adjacent failure branches use Error/Warning canonical adapters.",
     "src/agent/runloop/slash_commands/rendering.rs": "Positive operation progress or instructions; adjacent failure branches use Error/Warning canonical adapters.",

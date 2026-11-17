@@ -12,7 +12,7 @@ use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use anyhow::Result;
 use vtcode_core::core::agent::refusal;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 /// defined in crates/codegen/vtcode-core/src/tools/registry?" task produced 4 identical
 /// 6500-token outline responses and burned ~90 seconds.  Capping at 2

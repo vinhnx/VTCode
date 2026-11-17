@@ -36,12 +36,12 @@ use vtcode_core::primary_agent::build_primary_agent_hook_config;
 use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::subagents::SubagentController;
 use vtcode_core::tools::exec_session::ExecSessionManager;
-use vtcode_core::tools::terminal_app::TerminalAppLauncher;
-use vtcode_core::ui::slash::visible_commands;
-use vtcode_core::ui::{is_tui_mode, set_tui_mode, to_tui_slash_commands};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
-use vtcode_core::utils::transcript;
+use vtcode_skills::command_slash::visible_commands;
+use vtcode_tui_runtime::terminal_setup::terminal_app::TerminalAppLauncher;
+use vtcode_tui_runtime::ui::{is_tui_mode, set_tui_mode, to_tui_slash_commands};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::transcript;
 use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, InlineSession, SlashCommandItem};
 
 use self::header_context::{HeaderContextInit, initialize_header_context, maybe_render_system_prompt_budget_warning};

@@ -47,8 +47,8 @@ use vtcode_core::tools::exec_session::ExecSessionManager;
 use vtcode_core::tools::health::ToolHealthTracker;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
-use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use super::*;

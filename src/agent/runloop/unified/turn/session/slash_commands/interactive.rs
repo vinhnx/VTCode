@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vtcode_core::subagents::{BackgroundSubprocessStatus, SubagentStatus};
 use vtcode_core::tools::types::{VTCodeExecSession, VTCodeSessionLifecycleState};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::ui::ensure_selection_ui_available;
 use super::{SlashCommandContext, SlashCommandControl};

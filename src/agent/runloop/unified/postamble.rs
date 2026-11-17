@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use std::io::{self, Write};
 use std::time::Duration;
 use vtcode_commons::color_policy::color_output_enabled;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::theme;
 
 use crate::agent::runloop::unified::state::FirstCallComposition;

@@ -70,7 +70,7 @@ fn task_tracker_row_segments_keep_diagnostics_plain() {
 }
 #[test]
 fn task_tracker_done_rows_render_struck_through_dimmed_italic() {
-    use vtcode_core::ui::tui::convert_style;
+    use vtcode_tui_runtime::ui::tui::convert_style;
 
     let rows = task_tracker_block_segments(&[
         TrackerLine::plain("• Release 1/3".to_string()),
@@ -99,7 +99,7 @@ fn task_tracker_done_rows_render_struck_through_dimmed_italic() {
 }
 #[test]
 fn task_tracker_current_row_segments_carry_primary_accent() {
-    use vtcode_core::ui::tui::convert_style;
+    use vtcode_tui_runtime::ui::tui::convert_style;
 
     let rows = task_tracker_block_segments(&[
         TrackerLine::plain("• Release 1/3".to_string()),

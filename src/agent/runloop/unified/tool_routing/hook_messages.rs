@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use vtcode_core::hooks::{HookMessage, HookMessageLevel};
 

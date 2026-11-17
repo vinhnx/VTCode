@@ -11,10 +11,10 @@ use vtcode_commons::ui_protocol::TaskItemStatus;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::tool_intent;
-use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::style_helpers::ColorPalette;
-use vtcode_core::utils::transcript;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::transcript;
 use vtcode_ui::tui::app::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, ToolOutputId};
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;

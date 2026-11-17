@@ -19,11 +19,11 @@ use vtcode_core::core::interfaces::session::{PlanningEntrySource, SessionRuntime
 use vtcode_core::core::threads::build_thread_archive_metadata;
 use vtcode_core::llm::provider::{FinishReason, LLMResponse, MessageRole};
 use vtcode_core::planning;
-use vtcode_core::ui::terminal;
 use vtcode_core::utils::session_archive::{
     SessionArchive, SessionArchiveMetadata, SessionMessage, SessionProgressArgs, generate_session_archive_identifier,
     history_persistence_enabled, reserve_session_archive_identifier,
 };
+use vtcode_tui_runtime::ui::terminal;
 
 const APPROVAL_POLICY_INTERACTIVE: &str = "on-request";
 const APPROVAL_POLICY_AUTOMATIC: &str = "never";
@@ -747,7 +747,7 @@ fn handle_mcp_startup_notification(event: &ServerEvent, tracker: &mut CodexMcpSt
 
 fn emit_mcp_startup_messages(messages: Vec<String>) {
     for message in messages {
-        vtcode_core::ui::styled::warning(&message);
+        vtcode_tui_runtime::ui::styled::warning(&message);
     }
 }
 

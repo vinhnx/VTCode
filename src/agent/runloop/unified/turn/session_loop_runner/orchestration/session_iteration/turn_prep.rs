@@ -21,8 +21,8 @@ use vtcode_core::core::agent::snapshots::{
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider::Message;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionMessage;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, ProgressGuard};
 
 use super::super::super::support::{

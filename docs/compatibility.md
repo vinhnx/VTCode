@@ -51,6 +51,7 @@ it.
 | vtcode-macros             | 0.133.21 | 1.100.0 | 2024    | Yes       | Proc macros                                                |
 | vtcode-threads            | 0.181.9  | 1.100.0 | 2024    | Yes       | Thread identifiers and lifecycle types                     |
 | vtcode-ui                 | 0.133.21 | 1.100.0 | 2024    | Yes       | TUI framework                                              |
+| vtcode-tui-runtime        | 0.182.5  | 1.100.0 | 2024    | Yes       | TUI/ANSI rendering stack extracted from vtcode-core        |
 | vtcode-desktop            | 0.180.5  | 1.100.0 | 2024    | No        | macOS GPUI app (publish=false)                             |
 | vtcode-desktop-protocol   | 0.181.0  | 1.100.0 | 2024    | Yes       | Desktop JSON-RPC contract (required by the vtcode binary)  |
 | vtcode-utility-tool-specs | 0.133.21 | 1.100.0 | 2024    | Yes       | Tool schemas                                               |

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use vtcode_config::api_keys::{CredentialSource, store_credential_with_mode};
 use vtcode_config::auth::AuthCredentialsStoreMode;
 use vtcode_core::config::models::Provider;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::common::prompt_with_placeholder;
 use super::secret_input::{mask_key, read_secret_line};

@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use vtcode_commons::modal_hints::truncate_modal_text;
 use vtcode_core::config::StatusLineMode;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::slash_commands::StatuslineTargetMode;

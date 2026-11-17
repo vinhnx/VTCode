@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::planning_workflow::PlanningFinishReason;
 use crate::agent::runloop::unified::planning_workflow_state::{

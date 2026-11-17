@@ -41,8 +41,8 @@ use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::continuation::{
     NEXT_CONTINUE_PROMPT, NEXT_READ_PROMPT, PtyContinuationArgs, ReadChunkContinuationArgs,
 };
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 #[must_use]
 pub(crate) fn spooled_output_hint(path: &str) -> String {
@@ -322,7 +322,7 @@ pub(crate) async fn render_tool_output(
         // and canonical event retain it. Successful results keep stderr —
         // progress and warning streams are ordinary output.
         if result_failed(val) && !renderer.failure_evidence_visible() {
-            vtcode_core::utils::transcript::append(&vtcode_core::utils::ansi_parser::strip_ansi(stderr));
+            vtcode_tui_runtime::utils::transcript::append(&vtcode_core::utils::ansi_parser::strip_ansi(stderr));
         } else {
             render_stream_section(
                 renderer,
@@ -365,7 +365,7 @@ fn render_simple_tool_status(renderer: &mut AnsiRenderer, _tool_name: Option<&st
         if renderer.failure_evidence_visible() {
             render_error_details(renderer, val)?;
         } else {
-            vtcode_core::utils::transcript::append(&error_evidence_text(val));
+            vtcode_tui_runtime::utils::transcript::append(&error_evidence_text(val));
             renderer.line(MessageStyle::ToolError, &compact_failed_label(val))?;
         }
     }
@@ -512,26 +512,26 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 
 #[cfg(test)]
 pub(crate) fn collect_inline_output(
-    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_core::ui::InlineCommand>,
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_tui_runtime::ui::InlineCommand>,
 ) -> String {
     let mut lines: Vec<String> = Vec::new();
     while let Ok(command) = receiver.try_recv() {
         match command {
-            vtcode_core::ui::InlineCommand::AppendLine { segments, .. } => {
+            vtcode_tui_runtime::ui::InlineCommand::AppendLine { segments, .. } => {
                 lines.push(segments.into_iter().map(|segment| segment.text).collect::<String>());
             }
-            vtcode_core::ui::InlineCommand::ReplaceLast { lines: replacement_lines, .. } => {
+            vtcode_tui_runtime::ui::InlineCommand::ReplaceLast { lines: replacement_lines, .. } => {
                 lines.extend(
                     replacement_lines
                         .into_iter()
                         .map(|line| line.into_iter().map(|segment| segment.text).collect::<String>()),
                 );
             }
-            vtcode_core::ui::InlineCommand::Diagnostic(diagnostic) => {
+            vtcode_tui_runtime::ui::InlineCommand::Diagnostic(diagnostic) => {
                 // This helper models the collapsed human transcript, not retained details.
                 lines.push(diagnostic.summary);
             }
-            vtcode_core::ui::InlineCommand::RecordDiffReview(anchor) => {
+            vtcode_tui_runtime::ui::InlineCommand::RecordDiffReview(anchor) => {
                 lines.push(format!("RecordDiffReview {}", anchor.file_path));
                 lines.push(anchor.notice);
             }
@@ -544,11 +544,11 @@ pub(crate) fn collect_inline_output(
 /// Drain test-sink commands and return recorded diff-review anchors.
 #[cfg(test)]
 pub(crate) fn collect_inline_diff_review_anchors(
-    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_core::ui::InlineCommand>,
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_tui_runtime::ui::InlineCommand>,
 ) -> Vec<vtcode_commons::ui_protocol::DiffReviewAnchor> {
     let mut anchors = Vec::new();
     while let Ok(command) = receiver.try_recv() {
-        if let vtcode_core::ui::InlineCommand::RecordDiffReview(anchor) = command {
+        if let vtcode_tui_runtime::ui::InlineCommand::RecordDiffReview(anchor) = command {
             anchors.push(anchor);
         }
     }

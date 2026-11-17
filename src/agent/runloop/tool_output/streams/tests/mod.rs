@@ -1,5 +1,5 @@
-pub(super) use vtcode_core::ui::InlineHandle;
-pub(super) use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+pub(super) use vtcode_tui_runtime::ui::InlineHandle;
+pub(super) use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(super) use anstyle::AnsiColor;
 pub(super) use vtcode_commons::diff_theme::{DiffColorLevel, DiffTheme};
@@ -24,11 +24,11 @@ pub(super) use vtcode_core::config::constants::tools as tool_names;
 /// (indent prefix plus text). Text alone cannot prove styling, and per-line
 /// coloring shows up on the indent prefix even when the text stays uncolored.
 async fn collect_inline_line_styles(
-    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_core::ui::InlineCommand>,
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_tui_runtime::ui::InlineCommand>,
 ) -> Vec<String> {
     let mut lines = Vec::new();
     while let Ok(command) = receiver.try_recv() {
-        if let vtcode_core::ui::InlineCommand::AppendLine { segments, .. } = command {
+        if let vtcode_tui_runtime::ui::InlineCommand::AppendLine { segments, .. } = command {
             let key = segments
                 .iter()
                 .filter(|segment| !segment.text.is_empty())

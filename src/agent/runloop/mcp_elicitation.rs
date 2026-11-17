@@ -5,9 +5,8 @@ use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::Mutex;
 
 use vtcode_core::mcp::{ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse};
-use vtcode_core::{
-    NotificationEvent, exec_policy::AskForApproval, send_global_notification, utils::ansi_codes::notify_attention,
-};
+use vtcode_core::utils::ansi_codes::notify_attention;
+use vtcode_core::{NotificationEvent, exec_policy::AskForApproval, send_global_notification};
 
 /// Interactive handler that prompts the user on the terminal when an MCP provider
 /// requests additional input via the elicitation flow.
@@ -83,7 +82,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         // In TUI mode crossterm owns the terminal; raw print!/stdin would
         // corrupt the display and block the event loop.  Auto-decline so
         // the MCP server gets a clear response instead of hanging.
-        if vtcode_core::ui::is_tui_mode() {
+        if vtcode_tui_runtime::ui::is_tui_mode() {
             tracing::info!("MCP elicitation auto-declined in TUI mode");
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Decline,

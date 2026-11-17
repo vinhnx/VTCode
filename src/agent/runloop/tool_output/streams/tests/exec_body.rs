@@ -70,7 +70,7 @@ async fn exec_session_body_keeps_short_output_whole() {
 #[tokio::test]
 async fn exec_session_body_and_notice_are_dimmed() {
     use anstyle::Effects;
-    use vtcode_core::ui::InlineCommand;
+    use vtcode_tui_runtime::ui::InlineCommand;
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -123,7 +123,7 @@ async fn exec_session_body_and_notice_are_dimmed() {
 }
 #[tokio::test]
 async fn exec_session_expand_notice_binds_tool_output_id() {
-    use vtcode_core::ui::InlineCommand;
+    use vtcode_tui_runtime::ui::InlineCommand;
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());

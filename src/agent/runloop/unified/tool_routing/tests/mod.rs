@@ -25,13 +25,13 @@ pub(super) use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffor
 pub(super) use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
-pub(super) use vtcode_core::core::interfaces::ui::UiSession;
 pub(super) use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
 pub(super) use vtcode_core::hooks::LifecycleHookEngine;
 pub(super) use vtcode_core::llm::provider as uni;
 pub(super) use vtcode_core::tool_policy::ToolPolicy;
 pub(super) use vtcode_core::tools::registry::ToolRegistry;
-pub(super) use vtcode_core::utils::ansi::AnsiRenderer;
+pub(super) use vtcode_tui_runtime::interfaces::ui::UiSession;
+pub(super) use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 pub(super) use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 pub(super) use crate::agent::runloop::unified::state::CtrlCState;
@@ -227,7 +227,7 @@ fn runtime_config() -> CoreAgentConfig {
         workspace: std::env::current_dir().expect("current_dir"),
         verbose: false,
         quiet: false,
-        theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: UiSurfacePreference::default(),
         prompt_cache: PromptCachingConfig::default(),

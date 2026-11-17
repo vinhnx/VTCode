@@ -8,7 +8,7 @@ use crate::agent::runloop::ui_list;
 use crate::agent::runloop::ui_list::Tone;
 use anyhow::{Context, Result};
 use std::sync::Arc;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode};
 
 use crate::agent::runloop::unified::session_setup::session_mcp_config;

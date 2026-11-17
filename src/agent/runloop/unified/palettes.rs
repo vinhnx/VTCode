@@ -5,10 +5,10 @@ use anyhow::Result;
 use chrono::Local;
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
-use vtcode_core::ui::theme;
-use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance, to_tui_fullscreen};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::ui::{inline_theme_from_core_styles, to_tui_appearance, to_tui_fullscreen};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
 use vtcode_ui::tui::core::convert_style;
 

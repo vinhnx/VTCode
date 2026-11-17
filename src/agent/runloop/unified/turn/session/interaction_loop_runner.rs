@@ -11,7 +11,7 @@ use vtcode_core::exec::events::planning::PlanningOutcome;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 use crate::agent::runloop::model_picker::ModelPickerProgress;

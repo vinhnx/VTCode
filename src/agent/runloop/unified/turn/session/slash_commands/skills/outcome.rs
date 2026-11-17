@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::handlers::ToolModelCapabilities;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::SkillCommandOutcome;
 use crate::agent::runloop::unified::tool_catalog::tool_catalog_change_notifier;

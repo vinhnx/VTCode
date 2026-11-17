@@ -11,8 +11,8 @@ pub(super) use vtcode_core::core::trajectory::TrajectoryLogger;
 pub(super) use vtcode_core::tools::ApprovalRecorder;
 pub(super) use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry};
 pub(super) use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
-pub(super) use vtcode_core::ui::inline_theme_from_core_styles;
-pub(super) use vtcode_core::ui::theme;
+pub(super) use vtcode_tui_runtime::ui::inline_theme_from_core_styles;
+pub(super) use vtcode_tui_runtime::ui::theme;
 pub(super) use vtcode_ui::tui::app::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
 
 fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {

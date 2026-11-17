@@ -96,7 +96,7 @@ run_rustfmt() {
 	fi
 }
 
-DEFAULT_PACKAGE_NAMES=("vtcode" "vtcode-core" "vtcode-ui")
+DEFAULT_PACKAGE_NAMES=("vtcode" "vtcode-core" "vtcode-skills" "vtcode-tui-runtime" "vtcode-ui")
 DEFAULT_MEMBERS=()
 for package_name in "${DEFAULT_PACKAGE_NAMES[@]}"; do
 	DEFAULT_MEMBERS+=("-p" "$package_name")

@@ -6,7 +6,7 @@ use super::responses::{
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 /// Enforce the consecutive-assistant-text cap.
 ///

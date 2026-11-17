@@ -3,7 +3,7 @@ use anyhow::Result;
 use serde_json::Value;
 use vtcode_commons::ui_protocol::TaskItemStatus;
 use vtcode_core::tools::handlers::task_tracking::{compact_task_tree_view_from_items, short_task_description};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::TaskPanelMetadata;
 
 /// User-facing transcript surface for a tracker payload.

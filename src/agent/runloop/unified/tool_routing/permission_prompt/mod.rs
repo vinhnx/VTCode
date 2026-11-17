@@ -7,10 +7,10 @@ use anyhow::Result;
 use serde_json::Value;
 use tokio::sync::Notify;
 use vtcode_commons::modal_hints::{APPROVAL_NAVIGATE_CANCEL, APPROVAL_NAVIGATE_DENY, choose_handling_line};
-use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::sandboxing::{AdditionalPermissions, SandboxPermissions as CoreSandboxPermissions};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::interfaces::ui::UiSession;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{
     InlineHandle, ListOverlayRequest, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest,
     TransientSubmission,
@@ -849,7 +849,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             TransientSubmission::Hotkey(TransientHotkeyAction::OpenSourceThread) => {
                 handle.set_input("/agent".to_string());
                 let _ = renderer.line(
-                    vtcode_core::utils::ansi::MessageStyle::Info,
+                    vtcode_tui_runtime::utils::ansi::MessageStyle::Info,
                     "Switched focus to thread selector command. Run /agent to inspect the source thread, then retry the tool action.",
                 );
                 Some(HitlDecision::DeniedOnce)

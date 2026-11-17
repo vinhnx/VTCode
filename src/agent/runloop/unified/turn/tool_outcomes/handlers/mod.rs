@@ -7,7 +7,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::primary_agent_allows_tool;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::error_handling::tool_denial_diagnostic;
 use super::helpers::{check_is_argument_error, find_tool_response_after_last_assistant, is_tool_call_recorded};

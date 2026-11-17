@@ -138,7 +138,7 @@ pub(super) struct TestContextBacking {
     input_status_state: InputStatusState,
     session: InlineSession,
     handle: InlineHandle,
-    renderer: vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     ctrl_c_state: Arc<CtrlCState>,
     ctrl_c_notify: Arc<Notify>,
     safety_validator: Arc<ToolCallSafetyValidator>,
@@ -186,7 +186,8 @@ impl TestContextBacking {
         let mut session = create_headless_session();
         session.set_skip_confirmations(true);
         let handle = session.clone_inline_handle();
-        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let renderer =
+            vtcode_tui_runtime::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());

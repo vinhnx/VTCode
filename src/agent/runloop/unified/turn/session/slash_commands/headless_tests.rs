@@ -31,7 +31,7 @@ use tokio::time::timeout;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::skills::types::Skill;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHeaderContext;
 
 const HEADLESS_TEST_TIMEOUT: Duration = Duration::from_secs(10);

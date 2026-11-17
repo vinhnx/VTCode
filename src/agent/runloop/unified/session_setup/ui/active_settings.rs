@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::config::types::AgentConfig;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientSubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerStart, ModelPickerState};

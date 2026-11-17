@@ -4,8 +4,10 @@ use anyhow::Result;
 use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListItem, InlineListSelection, OpenAIServiceTierChoice, reasoning_to_selection_string};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::ui::{
+    InlineListItem, InlineListSelection, OpenAIServiceTierChoice, reasoning_to_selection_string,
+};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
     SelectionDetail, available_service_tiers, reasoning_level_description, reasoning_level_label,

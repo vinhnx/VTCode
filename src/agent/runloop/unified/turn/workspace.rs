@@ -106,7 +106,7 @@ mod tests {
             workspace: std::env::temp_dir(),
             verbose: false,
             quiet: false,
-            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: vtcode_config::types::ReasoningEffortLevel::default(),
             ui_surface: vtcode_core::config::types::UiSurfacePreference::default(),
             prompt_cache: vtcode_core::config::core::PromptCachingConfig::default(),

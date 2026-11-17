@@ -75,7 +75,7 @@ fn diagnostic_correlation_id(
 }
 
 pub(crate) fn render_diagnosis(
-    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     _harness_emitter: Option<&crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     turn_id: &str,
     tool_call_id: Option<&str>,
@@ -91,10 +91,10 @@ pub(crate) fn render_diagnosis(
     if diagnosis.no_matches {
         let line = concise_diagnosis_line(tool_name, diagnosis);
         if renderer.writes_to_inline_sink() && !matches!(renderer.communication_style(), CommunicationStyle::Verbose) {
-            vtcode_core::utils::transcript::append(&line);
+            vtcode_tui_runtime::utils::transcript::append(&line);
             return;
         }
-        if let Err(error) = renderer.line(vtcode_core::utils::ansi::MessageStyle::Info, &line) {
+        if let Err(error) = renderer.line(vtcode_tui_runtime::utils::ansi::MessageStyle::Info, &line) {
             tracing::warn!(error = %error, "failed to render empty search result");
         }
         return;
@@ -122,7 +122,7 @@ pub(crate) fn render_diagnosis(
     // communication style admits reach the transcript paint path. Hidden
     // rows still join the plain-text trail so exports keep them.
     if !vtcode_commons::diagnostics::diagnostic_is_user_visible(renderer.communication_style(), &diagnostic.code) {
-        vtcode_core::utils::transcript::append(&diagnostic.text());
+        vtcode_tui_runtime::utils::transcript::append(&diagnostic.text());
         if let Err(error) = renderer.persist_diagnostic(&diagnostic) {
             tracing::warn!(tool = %tool_name, error = %error, "failed to persist tool failure diagnosis");
         }
@@ -195,7 +195,7 @@ mod tests {
         use serde_json::json;
         use tokio::sync::mpsc::unbounded_channel;
         use vtcode_commons::ui_protocol::CommunicationStyle;
-        use vtcode_core::utils::ansi::AnsiRenderer;
+        use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
         use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
         for (style, paints) in [
             (CommunicationStyle::Balanced, false),
@@ -226,7 +226,7 @@ mod tests {
         use tokio::sync::mpsc::unbounded_channel;
         use vtcode_commons::diagnostics::Diagnostic;
         use vtcode_commons::ui_protocol::CommunicationStyle;
-        use vtcode_core::utils::ansi::AnsiRenderer;
+        use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
         use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
         // The classifier itself is covered by the failure_diagnosis routing

@@ -200,7 +200,7 @@ async fn initialize_exposes_the_desktop_slash_command_catalog() {
     let (result, should_stop) = handle_request(&context, &request).await.expect("initialize service");
     assert!(!should_stop);
     let initialized: protocol::InitializeResult = serde_json::from_value(result).expect("initialize result");
-    let expected = vtcode_core::ui::slash::visible_commands_for_desktop()
+    let expected = vtcode_skills::command_slash::visible_commands_for_desktop()
         .into_iter()
         .map(|command| protocol::SlashCommandInfo {
             name: command.name.to_string(),

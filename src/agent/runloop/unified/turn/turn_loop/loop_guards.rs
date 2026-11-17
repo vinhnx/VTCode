@@ -19,7 +19,7 @@ use crate::agent::runloop::unified::turn::turn_loop_helpers::is_stale_approved_p
 use crate::agent::runloop::unified::turn::turn_processing::{
     PendingVerificationTextOutcome, execute_harness_auto_verification,
 };
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 /// Handle a stale approved-plan pause echo: discard it and either retry
 /// with a bounded recovery directive or end Blocked. Returns `None` when

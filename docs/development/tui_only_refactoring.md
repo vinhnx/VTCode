@@ -96,7 +96,7 @@ For CLI applications using the library:
 
 ```rust
 use vtcode_core::tool_policy::{ToolPolicyManager, PermissionPromptHandler};
-use vtcode_core::ui::user_confirmation::UserConfirmation;
+use vtcode_tui_runtime::ui::user_confirmation::UserConfirmation;
 
 struct CliPermissionHandler;
 

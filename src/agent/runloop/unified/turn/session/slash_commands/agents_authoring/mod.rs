@@ -13,7 +13,7 @@ use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault
 use vtcode_config::load_subagent_from_file;
 use vtcode_config::{SubagentMemoryScope, SubagentSource, SubagentSpec};
 use vtcode_core::constants::tools;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};

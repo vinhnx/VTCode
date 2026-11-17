@@ -26,7 +26,7 @@ use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHeaderContext;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 

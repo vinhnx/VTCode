@@ -4,10 +4,10 @@ use vtcode_core::core::agent::blocked_handoff::{BlockedHandoffResume, write_bloc
 use vtcode_core::core::agent::harness_artifacts::existing_harness_artifact_paths;
 use vtcode_core::core::agent::snapshots::SnapshotTurnDiagnostics;
 use vtcode_core::exec::events::HarnessEventKind;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{
     SessionArchive, SessionProgressArgs, SessionProgressPersistenceStatus, VerifiedSessionArchiveIdentifier,
 };
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use vtcode_core::tools::tool_intent::{VERIFIER_SHELL_FORM_NOTE, verifier_reference};
 

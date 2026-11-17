@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::unified::webmcp::ActiveWebmcpBridge;

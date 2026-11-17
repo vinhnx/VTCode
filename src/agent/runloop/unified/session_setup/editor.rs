@@ -9,7 +9,7 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use vtcode_commons::{EditorTarget, resolve_editor_target};
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::tools::terminal_app::TerminalAppLauncher;
+use vtcode_tui_runtime::terminal_setup::terminal_app::TerminalAppLauncher;
 use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::external_editor::run_with_event_loop_suspended_async;

@@ -9,7 +9,7 @@
 //! blank after each draw.
 
 use ratatui::{Terminal, backend::TestBackend};
-use vtcode_core::ui::{
+use vtcode_tui_runtime::ui::{
     InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
 };
 

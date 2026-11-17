@@ -6,8 +6,8 @@ use regex::Regex;
 use serde_json::{Value, json};
 use vtcode_commons::sanitizer::redact_secrets;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::file_utils::write_file_with_context_sync;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::slash_commands::SessionLogExportFormat;
 

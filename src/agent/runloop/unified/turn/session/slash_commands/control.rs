@@ -5,8 +5,8 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification_force};
-use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_core::utils::transcript;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::transcript;
 
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{

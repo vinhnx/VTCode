@@ -58,13 +58,13 @@ shell-words = { workspace = true }
 indexmap = { workspace = true }
 tempfile = { workspace = true }
 dunce = "1.0"
-parking_lot = "0.13"
+parking_lot = { workspace = true }
 sha2 = { workspace = true }
 lru = "0.19"
 num_cpus = { workspace = true }
 chrono = { workspace = true } # For timestamp handling in CLI
 humantime = "2.1"
-terminal_size = "0.4.4"
+terminal_size = { workspace = true }
 async-trait = { workspace = true }
 # Home directory detection
 dirs = { workspace = true }
@@ -74,29 +74,21 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 # ANSI styling
 anstyle = { workspace = true }
-anstream = "1.0"
+anstream = { workspace = true }
 anstyle-git = { workspace = true }
 anstyle-ls = "1.0"
 colorchoice-clap = "1.0"
 quick_cache = "0.7"
 roff = "1.1"
 unicode-width = { workspace = true }
-crossterm = { workspace = true, features = ["event-stream"], optional = true }
 # Keep the optional SQLite feature on the stable toolchain: rusqlite 0.40
 # requires libsqlite3-sys 0.38, which uses unstable cfg_select.
 rusqlite = { version = "0.41", features = ["bundled"], optional = true }
-ratatui = { workspace = true, features = [
-    "crossterm",
-    "unstable-rendered-line-info",
-    "unstable-widget-ref",
-], optional = true }
 
 rig = { workspace = true }
 portable-pty = { workspace = true }
-ansi-to-tui = { version = "8.0.1", optional = true }
 vtcode-commons = { workspace = true }
 vtcode-diff = { workspace = true, features = ["serde"] }
-vtcode-ui = { workspace = true, optional = true }
 vtcode-threads = { workspace = true }
 vtcode-macros = { workspace = true }
 vtcode-exec-events = { workspace = true }
@@ -121,7 +113,7 @@ schemars = { workspace = true, optional = true }
 url = { workspace = true }
 jsonschema = "0.60"
 uuid = { workspace = true, features = ["v4", "serde"] }
-which = "8.0.2"
+which = { workspace = true }
 textwrap = "0.16"
 # Phase 1 pilot: DDG HTML parsing in web_search only (pinned; revisit on 0.1+)
 astral-html = "=0.0.4"
@@ -159,20 +151,10 @@ xattr = "1.6"
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [[example]]
-name = "anstyle_test"
-path = "examples/anstyle_test.rs"
-
-[[example]]
 name = "dialoguer_example"
 path = "examples/dialoguer_example.rs"
 
-[[example]]
-name = "migration_test"
-path = "examples/migration_test.rs"
-
 [features]
-default = ["tui"]
-tui = ["dep:ansi-to-tui", "dep:crossterm", "dep:ratatui", "dep:vtcode-ui"]
 mock = []
 policies = []
 schema = ["dep:schemars", "vtcode-config/schema", "vtcode-commons/schema"]

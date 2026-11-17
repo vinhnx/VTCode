@@ -14,8 +14,8 @@ use vtcode_core::{
     config::types::{AgentConfig, ModelSelectionSource, UiSurfacePreference},
     core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS},
     handle_stats_command,
-    ui::theme::DEFAULT_THEME_ID,
 };
+use vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID;
 
 #[tokio::test]
 #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]

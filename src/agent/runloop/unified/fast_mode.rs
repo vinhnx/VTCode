@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use vtcode_config::models::{Provider, ProviderModelSupport};
 use vtcode_config::{AnthropicSpeed, OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::SessionStats;
 use crate::agent::runloop::model_picker::configured_openai_base_url;

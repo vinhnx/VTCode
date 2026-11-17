@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use vtcode_config::loader::ConfigManager;
 use vtcode_core::config::ToolPolicy;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::InlineListSelection;
 
 use crate::agent::runloop::unified::diagnostics::{CheckupOptions, count_configured_hooks, run_checkup_diagnostics};
@@ -293,7 +293,7 @@ async fn run_checkup(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<(
 
 pub(crate) async fn handle_start_terminal_setup(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let vt_cfg = ctx.vt_cfg.as_ref().context("VT Code configuration not available")?;
-    vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg).await?;
+    vtcode_tui_runtime::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg).await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }

@@ -4,7 +4,7 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::tool_intent;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::commands_processing::{parse_command_tokens, preprocess_terminal_stdout};
 use super::render_tool_follow_up_hints;
@@ -172,7 +172,7 @@ pub(crate) async fn render_terminal_command_panel(
             )
             .await?;
         } else {
-            vtcode_core::utils::transcript::append(&vtcode_core::utils::ansi_parser::strip_ansi(&stderr));
+            vtcode_tui_runtime::utils::transcript::append(&vtcode_core::utils::ansi_parser::strip_ansi(&stderr));
         }
     }
 
@@ -183,7 +183,7 @@ pub(crate) async fn render_terminal_command_panel(
             }
             renderer.line(MessageStyle::ToolError, note)?;
         } else {
-            vtcode_core::utils::transcript::append(note);
+            vtcode_tui_runtime::utils::transcript::append(note);
         }
     }
 

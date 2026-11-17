@@ -262,7 +262,7 @@ fn retryable_llm_error_excludes_usage_limit_messages() {
 }
 #[tokio::test]
 async fn streaming_timeout_falls_back_to_non_streaming_for_supported_models() {
-    use vtcode_core::utils::transcript;
+    use vtcode_tui_runtime::utils::transcript;
 
     transcript::clear();
 

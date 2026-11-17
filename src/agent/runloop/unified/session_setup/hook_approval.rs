@@ -16,8 +16,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use vtcode_commons::modal_hints::{APPROVAL_NAVIGATE_DENY, choose_handling_line};
-use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::hooks::LifecycleHookCommandPreview;
+use vtcode_tui_runtime::interfaces::ui::UiSession;
 use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
 };

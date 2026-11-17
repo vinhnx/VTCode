@@ -21,7 +21,7 @@ use vtcode_core::persistent_memory::{
     scaffold_persistent_memory,
 };
 use vtcode_core::project_doc::load_instruction_appendix;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::InlineListSelection;
 
 use crate::agent::runloop::unified::ui_interaction::{instruction_memory_map, start_loading_status};

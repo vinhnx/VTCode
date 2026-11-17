@@ -41,7 +41,6 @@ get_github_username() {
 
 # ── Changelog ────────────────────────────────────────────────────────
 
-
 add_username_tags() {
 	local changelog=$1
 	local commits_range=$2
@@ -397,7 +396,7 @@ trigger_docs_rs_rebuild() {
 		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-desktop-protocol vtcode-webmcp vtcode-memory vtcode-macros vtcode-threads
 		vtcode-config vtcode-indexer vtcode-bash-runner vtcode-utility-tool-specs vtcode-eval
 		vtcode-safety vtcode-a2a vtcode-llm vtcode-skills vtcode-agent-plugins vtcode-ui vtcode-mcp
-		vtcode-core vtcode-acp vtcode
+		vtcode-core vtcode-tui-runtime vtcode-acp vtcode
 	)
 	for crate in "${crates[@]}"; do
 		curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true

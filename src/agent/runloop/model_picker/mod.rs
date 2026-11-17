@@ -45,8 +45,8 @@ use tokio::sync::Notify;
 use vtcode_config::{MiMoAuthMethod, OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListSelection, OpenAIServiceTierChoice, reasoning_from_selection_string};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::ui::{InlineListSelection, OpenAIServiceTierChoice, reasoning_from_selection_string};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::ui::interactive_list::SelectionInterrupted;
 
 use crate::agent::runloop::unified::state::CtrlCState;

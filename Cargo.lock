@@ -4058,7 +4058,7 @@ dependencies = [
  "log",
  "presser",
  "thiserror 2.0.21",
- "windows 0.57.0",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -5446,7 +5446,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.58.0",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -10167,7 +10167,7 @@ version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
- "dirs 5.0.1",
+ "dirs 6.0.0",
 ]
 
 [[package]]
@@ -12055,6 +12055,8 @@ dependencies = [
  "vtcode-eval",
  "vtcode-memory",
  "vtcode-safety",
+ "vtcode-skills",
+ "vtcode-tui-runtime",
  "vtcode-ui",
  "vtcode-utility-tool-specs",
  "vtcode-webmcp",
@@ -12110,6 +12112,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-skills",
 ]
 
 [[package]]
@@ -12257,7 +12260,6 @@ dependencies = [
 name = "vtcode-core"
 version = "0.182.5"
 dependencies = [
- "ansi-to-tui",
  "anstream",
  "anstyle",
  "anstyle-git",
@@ -12276,7 +12278,6 @@ dependencies = [
  "colorchoice-clap",
  "compact_str 0.10.0",
  "criterion",
- "crossterm",
  "dialoguer",
  "dirs 7.0.0",
  "dunce",
@@ -12302,7 +12303,6 @@ dependencies = [
  "portable-pty",
  "proptest",
  "quick_cache",
- "ratatui",
  "regex",
  "reqwest 0.12.28",
  "rig-core",
@@ -12349,7 +12349,6 @@ dependencies = [
  "vtcode-safety",
  "vtcode-skills",
  "vtcode-threads",
- "vtcode-ui",
  "vtcode-utility-tool-specs",
  "webbrowser",
  "which",
@@ -12641,6 +12640,44 @@ dependencies = [
  "serde_json",
  "uuid",
  "vtcode-macros",
+]
+
+[[package]]
+name = "vtcode-tui-runtime"
+version = "0.182.5"
+dependencies = [
+ "ansi-to-tui",
+ "anstream",
+ "anstyle",
+ "anyhow",
+ "assert_fs",
+ "async-trait",
+ "chrono",
+ "crossterm",
+ "dialoguer",
+ "dirs 7.0.0",
+ "hashbrown 0.17.1",
+ "parking_lot 0.13.0",
+ "ratatui",
+ "regex",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "shell-words",
+ "tempfile",
+ "terminal_size",
+ "tokio",
+ "toml 1.1.6+spec-1.1.0",
+ "tracing",
+ "unicode-width",
+ "url",
+ "vtcode-commons",
+ "vtcode-config",
+ "vtcode-core",
+ "vtcode-diff",
+ "vtcode-skills",
+ "vtcode-ui",
+ "which",
 ]
 
 [[package]]

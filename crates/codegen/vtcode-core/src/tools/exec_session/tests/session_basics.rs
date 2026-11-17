@@ -19,7 +19,7 @@ fn completion_command_preserves_short_safe_labels() {
     assert_eq!(bounded_completion_command("cargo check --locked"), "cargo check --locked");
 }
 #[tokio::test]
-#[cfg(all(unix, feature = "tui"))]
+#[cfg(unix)]
 async fn pty_session_limit_holds_until_exec_session_close() -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
     let workspace_root = canonicalize_workspace(temp_dir.path());

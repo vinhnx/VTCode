@@ -10,7 +10,7 @@ fn runtime_config() -> AgentConfig {
         workspace: std::env::temp_dir(),
         verbose: false,
         quiet: false,
-        theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: vtcode_core::config::types::UiSurfacePreference::default(),
         prompt_cache: vtcode_core::config::core::PromptCachingConfig::default(),
@@ -251,8 +251,8 @@ mod suggestions {
     use super::*;
     use crate::agent::runloop::unified::fast_mode::maybe_render_fast_mode_suggestion;
     use crate::agent::runloop::unified::state::SessionStats;
-    use vtcode_core::ui::InlineCommand;
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::ui::InlineCommand;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::InlineHandle;
 
     struct SuggestionUi {

@@ -3,11 +3,11 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
 use vtcode_core::core::threads::fork_thread_for_handoff;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::{
     SessionArchiveMetadata, SessionListing, find_session_by_identifier, history_persistence_enabled,
 };
 use vtcode_desktop_protocol::handoff_url::{HandoffLink, handoff_url};
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::cli::desktop::resolve_desktop_app;

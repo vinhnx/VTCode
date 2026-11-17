@@ -7,7 +7,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key_with_mode};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext};
 
 use super::persistent_memory::{apply_persistent_memory_header_guide, load_persistent_memory_status};
@@ -54,7 +54,9 @@ pub(super) async fn initialize_header_context(
     // System-prompt budget warning is rendered after session hydration via
     // `apply_post_hydration_ui`, when the composed report is available.
 
-    handle.set_theme(vtcode_core::ui::inline_theme_from_core_styles(&vtcode_core::ui::theme::active_styles()));
+    handle.set_theme(vtcode_tui_runtime::ui::inline_theme_from_core_styles(
+        &vtcode_tui_runtime::ui::theme::active_styles(),
+    ));
     palettes::apply_prompt_style(handle);
 
     let reasoning_label = vt_cfg

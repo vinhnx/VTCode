@@ -219,13 +219,11 @@ pub mod shutdown;
 pub mod skills;
 pub mod subagents;
 pub mod telemetry;
-pub mod terminal_setup;
 pub mod tool_policy;
 pub mod tools;
 pub mod trace; // Agent Trace specification for AI code attribution
 pub mod turn_metadata; // Turn metadata for LLM requests (git context)
 pub mod types;
-pub mod ui;
 pub mod utils;
 mod zsh_exec_bridge;
 
@@ -347,7 +345,6 @@ pub use tools::registry::{
     ToolSecurity, tool_groups,
 };
 pub use tools::{ToolRegistration, ToolRegistry};
-pub use ui::diff_renderer::{DiffRenderer, DiffRendererOptions};
 pub use utils::dot_config::{
     CacheConfig, DotConfig, DotManager, LifecycleHookApprovalRecord, ProviderConfigs, UiConfig, UserPreferences,
     WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder, load_lifecycle_hook_approval, load_user_config,

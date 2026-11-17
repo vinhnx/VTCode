@@ -1,6 +1,6 @@
 use anstyle::Style as AnsiStyle;
 use anyhow::Result;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 #[derive(Clone)]
 pub(crate) struct PanelContentLine {

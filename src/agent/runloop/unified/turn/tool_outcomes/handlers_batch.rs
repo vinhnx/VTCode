@@ -29,11 +29,15 @@ const DEFAULT_MAX_PARALLEL_TOOL_CALLS: usize = 4;
 /// when the active communication style keeps routine agent-internal chatter
 /// out of the interactive transcript. The paired system message always
 /// reaches the model, and headless output always paints.
-fn render_loop_notice(ctx: &mut TurnProcessingContext<'_>, style: vtcode_core::utils::ansi::MessageStyle, text: &str) {
+fn render_loop_notice(
+    ctx: &mut TurnProcessingContext<'_>,
+    style: vtcode_tui_runtime::utils::ansi::MessageStyle,
+    text: &str,
+) {
     if ctx.renderer.loop_notices_visible() {
         ctx.renderer.line(style, text).unwrap_or(());
     } else {
-        vtcode_core::utils::transcript::append(text);
+        vtcode_tui_runtime::utils::transcript::append(text);
     }
 }
 
@@ -49,7 +53,7 @@ fn flush_loop_notices(ctx: &mut TurnProcessingContext<'_>, loop_tracker: &mut su
     if let Some(guidance) = loop_tracker.take_redundant_navigation_guidance() {
         render_loop_notice(
             ctx,
-            vtcode_core::utils::ansi::MessageStyle::Info,
+            vtcode_tui_runtime::utils::ansi::MessageStyle::Info,
             "Inspection repeated retained evidence; continue from the existing context.",
         );
         ctx.push_system_message(guidance);
@@ -61,11 +65,15 @@ fn flush_loop_notices(ctx: &mut TurnProcessingContext<'_>, loop_tracker: &mut su
         ctx.push_system_message(guidance);
     }
     if loop_tracker.take_verification_result_lost_notice() {
-        render_loop_notice(ctx, vtcode_core::utils::ansi::MessageStyle::Warning, VERIFICATION_RESULT_LOST_WARNING);
+        render_loop_notice(
+            ctx,
+            vtcode_tui_runtime::utils::ansi::MessageStyle::Warning,
+            VERIFICATION_RESULT_LOST_WARNING,
+        );
         ctx.push_system_message(VERIFICATION_RESULT_LOST_DIRECTIVE);
     }
     if loop_tracker.take_piped_verification_notice() {
-        render_loop_notice(ctx, vtcode_core::utils::ansi::MessageStyle::Warning, PIPED_VERIFICATION_WARNING);
+        render_loop_notice(ctx, vtcode_tui_runtime::utils::ansi::MessageStyle::Warning, PIPED_VERIFICATION_WARNING);
         ctx.push_system_message(PIPED_VERIFICATION_DIRECTIVE);
     }
 }

@@ -11,7 +11,7 @@ use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::ResumeSession;

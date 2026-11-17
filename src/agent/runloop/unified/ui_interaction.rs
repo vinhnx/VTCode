@@ -27,7 +27,7 @@ use vtcode_core::instructions::{InstructionSourceKind, format_instruction_path};
 #[cfg(test)]
 use vtcode_core::llm::provider as uni;
 use vtcode_core::project_doc::load_instruction_appendix;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};

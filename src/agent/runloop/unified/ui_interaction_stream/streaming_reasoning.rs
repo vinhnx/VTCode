@@ -12,7 +12,7 @@ use crate::agent::runloop::unified::ui_interaction::StreamProgressEvent;
 use crate::agent::runloop::unified::ui_interaction_stream_helpers::{map_render_error, render_compact_reasoning_block};
 use vtcode_commons::formatting::compact_reasoning_text;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 #[derive(Default)]
 pub(super) struct StreamingReasoningState {

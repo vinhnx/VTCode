@@ -19,8 +19,8 @@ use vtcode_core::llm::provider::{LLMProvider, ToolDefinition};
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::skills::types::Skill;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use super::super::super::handoff::{

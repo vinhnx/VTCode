@@ -25,7 +25,7 @@ use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::tools::registry::ToolExecutionError;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;
 
 pub(crate) use self::continuation::tracker_continuation_adoption_allowed;

@@ -10,7 +10,7 @@ use vtcode_config::api_keys::CredentialSource;
 use vtcode_config::workspace_env::workspace_env_path;
 use vtcode_core::config::models::Provider;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineEvent, InlineListItem, InlineListSelection, TransientEvent};
 
 use super::{SlashCommandContext, SlashCommandControl};

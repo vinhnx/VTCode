@@ -5,10 +5,8 @@
 use anyhow::Result;
 use assert_fs::TempDir;
 use serde_json::json;
-use vtcode_core::{
-    tools::ToolRegistry,
-    utils::ansi::{AnsiRenderer, MessageStyle},
-};
+use vtcode_core::tools::ToolRegistry;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 #[tokio::test]
 #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]

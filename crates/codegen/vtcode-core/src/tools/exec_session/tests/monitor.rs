@@ -225,7 +225,7 @@ async fn monitor_filter_on_missing_session_fails_closed() -> anyhow::Result<()> 
 }
 
 #[tokio::test]
-#[cfg(all(unix, feature = "tui"))]
+#[cfg(unix)]
 async fn monitor_filter_on_pty_session_is_rejected() -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
     let workspace_root = canonicalize_workspace(temp_dir.path());

@@ -421,7 +421,7 @@ impl StartupContext {
                 return;
             }
             vtcode_core::utils::session_archive::apply_session_history_config_from_vtcode(&config);
-            vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
+            vtcode_tui_runtime::utils::ansi::apply_file_opener_config(config.file_opener);
             vtcode_core::telemetry::perf::initialize_perf_telemetry(&config.telemetry);
             vtcode_core::tools::cache::configure_file_cache(&config.optimization.file_read_cache);
             vtcode_core::tools::read_limits::configure_read_limits(&config.optimization.file_read_cache);

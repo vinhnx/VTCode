@@ -16,7 +16,7 @@ use crate::agent::runloop::unified::stream_sanitization::StreamSanitizer;
 use vtcode_core::copilot::CopilotRuntimeRequest;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, NormalizedStreamEvent};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::CtrlCState;
 use super::stop_requests::wait_for_stop;

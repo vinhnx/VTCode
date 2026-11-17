@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn openai_stale_previous_response_retry_is_disabled() {
-    use vtcode_core::utils::transcript;
+    use vtcode_tui_runtime::utils::transcript;
 
     transcript::clear();
 

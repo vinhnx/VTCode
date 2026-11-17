@@ -461,7 +461,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     if startup_policy.run_interactive_maintenance() {
         let quiet = args.quiet;
         let app_icon = startup.config.ui.app_icon;
-        tokio::task::spawn_blocking(move || match vtcode_core::terminal_setup::ensure_profile_icon(app_icon) {
+        tokio::task::spawn_blocking(move || match vtcode_tui_runtime::terminal_setup::ensure_profile_icon(app_icon) {
             Ok(Some(report)) => {
                 if !quiet {
                     tracing::info!(

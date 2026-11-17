@@ -60,7 +60,7 @@ async fn terminate_active_for_exit_kills_foreground_and_preserves_background() -
     Ok(())
 }
 #[tokio::test]
-#[cfg(all(unix, feature = "tui"))]
+#[cfg(unix)]
 async fn foreground_watcher_promotes_requested_pty_without_wait_polling() -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
     let workspace_root = canonicalize_workspace(temp_dir.path());
@@ -111,7 +111,7 @@ async fn foreground_watcher_promotes_requested_pty_without_wait_polling() -> any
     Ok(())
 }
 #[tokio::test]
-#[cfg(all(unix, feature = "tui"))]
+#[cfg(unix)]
 async fn closing_exited_pty_kills_descendants_that_keep_the_pty_open() -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
     let workspace_root = canonicalize_workspace(temp_dir.path());

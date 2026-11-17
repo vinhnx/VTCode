@@ -1,6 +1,6 @@
 use anyhow::Result;
 use tracing::Instrument;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::auto_permission::{
     ProbeRuntime, ProbeWarning, probe_tool_output, recent_user_context,

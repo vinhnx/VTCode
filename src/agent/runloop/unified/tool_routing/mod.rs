@@ -27,7 +27,6 @@ use vtcode_core::command_safety::parse_bash_lc_commands;
 use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec::events::PermissionDecision;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::hooks::{
@@ -40,7 +39,8 @@ use vtcode_core::permissions::{
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::interfaces::ui::UiSession;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::auto_permission::{AutoPermissionReviewDecision, review_tool_call};

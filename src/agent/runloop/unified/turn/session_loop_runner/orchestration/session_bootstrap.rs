@@ -95,7 +95,7 @@ pub(super) fn poll_config_reload(
     config_watcher: &mut SimpleConfigWatcher,
     vt_cfg: &mut Option<VTCodeConfig>,
     config: &CoreAgentConfig,
-    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     success_message: &'static str,
 ) -> Result<()> {
     if config_watcher.should_reload() {

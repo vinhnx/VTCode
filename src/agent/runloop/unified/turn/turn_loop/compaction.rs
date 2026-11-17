@@ -6,7 +6,7 @@
 use std::time::Instant;
 
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::post_tool_recovery::{POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON, ensure_post_tool_resume_directive};
 use super::recovery_compaction::{RecoveryCompactionRequest, compact_before_tool_enabled_retry};

@@ -12,7 +12,7 @@
 use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
-use vtcode_core::ui::{
+use vtcode_tui_runtime::ui::{
     InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
 };
 

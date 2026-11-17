@@ -4,7 +4,7 @@ use vtcode_commons::diff_paths::language_hint_from_path;
 use vtcode_commons::preview;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::render_tree_detail;
 use super::streams::{diff_language_hint_from_content, render_diff_content_block_with_language, strip_ansi_codes};

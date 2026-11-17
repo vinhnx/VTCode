@@ -1,8 +1,8 @@
 pub(super) use serde_json::json;
 pub(super) use vtcode_commons::ui_protocol::TaskItemStatus;
 pub(super) use vtcode_core::config::ToolDisplayMode;
-pub(super) use vtcode_core::ui::InlineHandle;
-pub(super) use vtcode_core::utils::ansi::AnsiRenderer;
+pub(super) use vtcode_tui_runtime::ui::InlineHandle;
+pub(super) use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 
 pub(super) use super::{
     TRACKER_ROW_DESCRIPTION_MAX_BYTES, TRACKER_TRANSCRIPT_MAX_ROWS, TrackerLine, collect_inline_output,
@@ -13,7 +13,7 @@ pub(super) use super::{
 };
 pub(super) use crate::agent::runloop::tool_output::styles::{GitStyles, LsStyles};
 pub(super) use vtcode_commons::ui_protocol::CommunicationStyle;
-pub(super) use vtcode_core::utils::transcript;
+pub(super) use vtcode_tui_runtime::utils::transcript;
 
 fn transcript_texts(lines: &[TrackerLine]) -> Vec<&str> {
     lines.iter().map(|line| line.text.as_str()).collect()

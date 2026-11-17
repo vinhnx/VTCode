@@ -395,8 +395,8 @@ pub(crate) async fn finish_initialization_exit(
         .await;
     let _ = vtcode_ui::tui::panic_hook::restore_tui_keep_raw_mode();
     vtcode_ui::tui::panic_hook::finish_deferred_raw_mode_restore();
-    vtcode_core::utils::transcript::clear_inline_handle();
-    vtcode_core::ui::set_tui_mode(false);
+    vtcode_tui_runtime::utils::transcript::clear_inline_handle();
+    vtcode_tui_runtime::ui::set_tui_mode(false);
     tracing::debug!(target: "vtcode.shutdown", boundary = "terminal_restored", accepted_exit_elapsed_ms = ?state.exit_elapsed_ms());
     crate::agent::runloop::unified::postamble::print_exit_summary(
         crate::agent::runloop::unified::postamble::ExitData {

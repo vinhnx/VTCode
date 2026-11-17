@@ -45,17 +45,17 @@ Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` 
 
 ## Workspace
 
-Cargo workspace, 25 crates. Rust stable, MSRV 1.100.0, edition 2024. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
+Cargo workspace, 26 crates. Rust 1.100.0 MSRV, edition 2024. `default-members`: root + `vtcode-core`/`vtcode-skills`/`vtcode-tui-runtime`/`vtcode-ui`.
 
-Crate roles live in each crate's `Cargo.toml` `description` and [ARCHITECTURE](docs/architecture.md#workspace-crates). Not obvious from the code: `vtcode-desktop` is a non-publishable GPUI app while `vtcode-desktop-protocol` is published (the `vtcode` binary depends on it); `vtcode-llm` and `vtcode-skills` are partial extractions from `vtcode-core`.
+Crate roles live in each crate's `Cargo.toml` `description` and [ARCHITECTURE](docs/architecture.md#workspace-crates). Not obvious from the code: `vtcode-desktop` is a non-publishable GPUI app while `vtcode-desktop-protocol` is published (the `vtcode` binary depends on it); `vtcode-llm`, `vtcode-skills`, and `vtcode-tui-runtime` are partial extractions from `vtcode-core`.
 
-New reusable logic: put it in an existing small crate or a new one. Keep it out of `vtcode-core` by default unless tightly coupled to the core runtime.
+New reusable logic: prefer a small crate; keep it out of `vtcode-core` unless tightly coupled to the runtime.
 
 ## Per-Module Guidance
 
 Every crate has its own AGENTS.md with crate-specific conventions, next to its `Cargo.toml` (the root binary's is [src/AGENTS.md](src/AGENTS.md)); list them with `git ls-files '*AGENTS.md'`.
 
-After significant changes, use the `audit-module-agents` skill. Keep each module `AGENTS.md` near 30 short lines (none over 600 characters; enforced); put longer detail in `docs/development/maintainer-notes/<crate>.md`.
+After significant changes, use the `audit-module-agents` skill. Keep each module `AGENTS.md` near 30 short lines (600-char cap enforced); put longer detail in `docs/development/maintainer-notes/<crate>.md`.
 
 ## Project Memory
 

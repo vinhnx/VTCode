@@ -10,7 +10,7 @@ use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::reasoning_effort::ReasoningEffortMapper;
 use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext};
 
 use crate::agent::runloop::unified::model_switch_compaction::{
@@ -653,7 +653,7 @@ mod tests {
             workspace: std::env::temp_dir(),
             verbose: false,
             quiet: false,
-            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: vtcode_core::config::types::UiSurfacePreference::default(),
             prompt_cache: vtcode_core::config::core::PromptCachingConfig::default(),

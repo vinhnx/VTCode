@@ -179,7 +179,7 @@ pub(super) async fn handle_steering_messages(
 }
 
 fn queue_follow_up_input(
-    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     input: String,
     accepted: &mut Vec<String>,
@@ -205,7 +205,7 @@ fn queue_follow_up_input(
 /// model-facing, so echoing it to the transcript is TUI noise. Only genuine
 /// user steering gets a `Steered into active turn` status line.
 fn apply_pending_follow_ups_mid_turn(
-    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     working_history: &mut Vec<uni::Message>,
 ) -> Result<bool> {
@@ -359,7 +359,7 @@ async fn cancel_for_steering_stop(tool_registry: &mut vtcode_core::tools::ToolRe
 }
 
 async fn handle_pause_signal(
-    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    renderer: &mut vtcode_tui_runtime::utils::ansi::AnsiRenderer,
     tool_registry: &mut vtcode_core::tools::ToolRegistry,
     ctrl_c_state: &crate::agent::runloop::unified::state::CtrlCState,
     ctrl_c_notify: &tokio::sync::Notify,

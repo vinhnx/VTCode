@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::copilot::{CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotRuntimeRequest};
 use vtcode_core::llm::provider::{self as uni, FinishReason, LLMResponse, LLMStreamEvent, ReasoningSource};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
 struct SleepingRuntimeHandler {

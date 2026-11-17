@@ -25,7 +25,7 @@ fn test_startup_context(workspace: &Path) -> StartupContext {
             workspace: workspace.to_path_buf(),
             verbose: false,
             quiet: false,
-            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            theme: vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),

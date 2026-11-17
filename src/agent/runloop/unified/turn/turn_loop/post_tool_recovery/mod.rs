@@ -3,7 +3,7 @@
 use anyhow::Result;
 use vtcode_commons::ErrorCategory;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::responses::{
     MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_BUDGET_EXHAUSTED_NO_DRAFT_NOTICE, PLANNING_BUDGET_EXHAUSTED_USER_NOTICE,

@@ -22,8 +22,8 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::skills::types::Skill;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::{self, SessionArchive};
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use super::*;
@@ -508,8 +508,8 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
         let _ = vtcode_ui::tui::panic_hook::restore_tui_keep_raw_mode();
         vtcode_ui::tui::panic_hook::finish_deferred_raw_mode_restore();
     }
-    vtcode_core::utils::transcript::clear_inline_handle();
-    vtcode_core::ui::set_tui_mode(false);
+    vtcode_tui_runtime::utils::transcript::clear_inline_handle();
+    vtcode_tui_runtime::ui::set_tui_mode(false);
     tracing::debug!(target: "vtcode.shutdown", boundary = "terminal_restored", elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
     let SessionTeardownOutput { harness_finish_error, end_code_changes } = teardown_output;
     let teardown_error = terminal_event_error.or(harness_finish_error);

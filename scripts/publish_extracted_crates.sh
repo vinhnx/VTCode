@@ -34,7 +34,7 @@ Options:
                      vtcode-indexer, vtcode-bash-runner, vtcode-utility-tool-specs,
                      vtcode-eval, vtcode-safety, vtcode-webmcp, vtcode-a2a, vtcode-llm,
                      vtcode-skills, vtcode-agent-plugins, vtcode-ui, vtcode-mcp, vtcode-core,
-                     vtcode-acp, vtcode.
+                     vtcode-tui-runtime, vtcode-acp, vtcode.
   --skip-tests       Skip running the workspace fmt/clippy/test checks. Use with
                      caution; the release plan expects the validation suite to
                      pass before publishing.
@@ -131,6 +131,7 @@ PUBLISH_CRATES=(
 	vtcode-ui
 	vtcode-mcp
 	vtcode-core
+	vtcode-tui-runtime
 	vtcode-acp
 	vtcode
 )

@@ -15,8 +15,8 @@ use vtcode_config::VTCodeConfig;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::ModelResolver;
-use vtcode_core::ui::{InlineListSearchConfig, InlineListSelection};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::ui::{InlineListSearchConfig, InlineListSelection};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineSession, TransientSubmission, WizardModalMode, WizardStep};
 
 use super::DynamicModelRegistry;

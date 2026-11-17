@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use vtcode_commons::canonicalize;
-use vtcode_core::ui::is_tui_mode;
+use vtcode_tui_runtime::ui::is_tui_mode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GitStatusSummary {

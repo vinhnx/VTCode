@@ -12,7 +12,7 @@
 //! oversized plan cannot loop).
 
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::plan_blocks::has_unclosed_plan_block;
 

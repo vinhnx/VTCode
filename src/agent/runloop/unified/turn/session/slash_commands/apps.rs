@@ -6,8 +6,8 @@ use anyhow::Result;
 use vtcode_commons::resolve_editor_target;
 use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::terminal_setup::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
     InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission, WizardModalMode,
     WizardStep,

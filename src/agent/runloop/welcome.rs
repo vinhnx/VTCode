@@ -9,8 +9,8 @@ use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc::{self, ProjectDocOptions};
-use vtcode_core::ui::slash::find_visible_command;
 use vtcode_core::utils::common::summarize_workspace_languages;
+use vtcode_skills::command_slash::find_visible_command;
 use vtcode_ui::tui::app::InlineHeaderHighlight;
 
 #[derive(Default, Clone)]

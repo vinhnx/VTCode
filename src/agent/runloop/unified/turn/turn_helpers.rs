@@ -4,7 +4,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use anyhow::Result;
 use std::time::Duration;
 use vtcode_core::llm::provider::LLMError;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 /// Centralized error display with consistent formatting.
 ///

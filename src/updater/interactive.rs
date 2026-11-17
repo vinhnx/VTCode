@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::Notify;
-use vtcode_core::tools::terminal_app::{TerminalAppLauncher, TerminalCommandStrategy};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::terminal_setup::terminal_app::{TerminalAppLauncher, TerminalCommandStrategy};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
     InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSelection, InlineMessageKind,
     InlineSegment, InlineSession, InlineTextStyle, ListOverlayRequest, TransientRequest, TransientSubmission,

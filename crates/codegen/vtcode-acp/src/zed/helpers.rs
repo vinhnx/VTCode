@@ -12,7 +12,7 @@ use vtcode_core::permissions::{
 use vtcode_core::prompts::PromptTemplate;
 use vtcode_core::skills::find_command_skill_by_slash_name;
 use vtcode_core::tools::names::canonical_tool_name;
-use vtcode_core::ui::slash::SlashCommandInfo;
+use vtcode_skills::command_slash::SlashCommandInfo;
 
 pub(crate) const SESSION_CONFIG_PRIMARY_AGENT_ID: &str = "primary_agent";
 pub(crate) const SESSION_CONFIG_THOUGHT_LEVEL_ID: &str = "thought_level";

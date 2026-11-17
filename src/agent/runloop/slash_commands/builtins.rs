@@ -2,12 +2,12 @@ use std::path::Path;
 
 use anyhow::Result;
 use vtcode_core::skills::CommandSkillSpec;
-use vtcode_core::ui::theme;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_desktop_protocol::slash_command::{
     WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_goal_slash_command,
     parse_webmcp_slash_command,
 };
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command, handle_plan_command,
@@ -426,7 +426,7 @@ fn handle_jobs_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 }
 
 fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
-    use vtcode_core::terminal_setup::{
+    use vtcode_tui_runtime::terminal_setup::{
         TerminalIconCommand, parse_terminal_icon_command, run_profile_icon_install, run_profile_icon_reset,
         run_terminal_icon_show, run_terminal_icon_switch,
     };

@@ -8,7 +8,7 @@ use vtcode_commons::VtCodePaths;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig, explicit_config_path};
 use vtcode_core::config::{constants::defaults, constants::model_helpers};
 use vtcode_core::llm::{auto_lightweight_model, lightweight_model_choices};
-use vtcode_core::ui::theme;
+use vtcode_tui_runtime::ui::theme;
 
 use crate::agent::runloop::unified::config_section_headings::{heading_for_path, normalize_config_path};
 

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::style::Stylize;
 use std::env;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::updater::{InlineUpdateOutcome, Updater, execute_inline_update, run_inline_update_prompt};

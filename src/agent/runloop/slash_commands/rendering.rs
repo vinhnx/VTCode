@@ -5,9 +5,9 @@ use anyhow::Result;
 use vtcode_commons::terminal_detection::TerminalType;
 use vtcode_core::prompts::find_prompt_template;
 use vtcode_core::skills::find_command_skill_by_slash_name;
-use vtcode_core::ui::slash::{SlashCommandInfo, find_command, visible_commands};
-use vtcode_core::ui::theme;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_skills::command_slash::{SlashCommandInfo, find_command, visible_commands};
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(

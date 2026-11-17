@@ -189,7 +189,7 @@ fn append_summary_lines(
         handle.append_line(InlineMessageKind::Info, vec![summary_segment("• Selection captured".to_string())]);
         // Mirror UI-only append into the shared transcript log so tracker
         // replace decisions do not treat a stale TRANSCRIPT tail as current.
-        vtcode_core::utils::transcript::append("• Selection captured");
+        vtcode_tui_runtime::utils::transcript::append("• Selection captured");
         return;
     }
 
@@ -197,12 +197,12 @@ fn append_summary_lines(
     let total_count = questions.len();
     let questions_summary = format!("• Questions {answered_count}/{total_count} answered");
     handle.append_line(InlineMessageKind::Info, vec![summary_segment(questions_summary.clone())]);
-    vtcode_core::utils::transcript::append(&questions_summary);
+    vtcode_tui_runtime::utils::transcript::append(&questions_summary);
 
     for question in questions {
         let question_line = format!("  • {}", question.question);
         handle.append_line(InlineMessageKind::Info, vec![summary_segment(question_line.clone())]);
-        vtcode_core::utils::transcript::append(&question_line);
+        vtcode_tui_runtime::utils::transcript::append(&question_line);
         let answer_text = answers
             .get(&question.id)
             .map(|answer| {
@@ -226,7 +226,7 @@ fn append_summary_lines(
             .unwrap_or_else(|| "(unanswered)".to_string());
         let answer_line = format!("    answer: {answer_text}");
         handle.append_line(InlineMessageKind::Info, vec![summary_segment(answer_line.clone())]);
-        vtcode_core::utils::transcript::append(&answer_line);
+        vtcode_tui_runtime::utils::transcript::append(&answer_line);
     }
 }
 

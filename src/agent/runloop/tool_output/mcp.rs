@@ -5,7 +5,7 @@ use vtcode_commons::sanitizer::{join_sanitized_truncated, sanitize_terminal_text
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::mcp::{MCP_APP_DISCLOSURE_KEY, MCP_UI_RESOURCE_SCHEME};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::panels::{PanelContentLine, render_left_border_panel};
 

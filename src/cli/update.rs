@@ -10,7 +10,7 @@ use std::env;
 use std::io::IsTerminal;
 use std::process::Command;
 use vtcode_config::update::{ReleaseChannel, UpdateConfig};
-use vtcode_core::ui::user_confirmation::UserConfirmation;
+use vtcode_tui_runtime::ui::user_confirmation::UserConfirmation;
 
 /// How the update command handles the macOS desktop app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

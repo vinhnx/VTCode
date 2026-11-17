@@ -123,7 +123,7 @@ async fn mcp_refresh_route_retains_configured_tool_profile() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     refresh_tool_snapshot(
@@ -173,7 +173,7 @@ async fn critical_path_defers_mcp_init_until_hydrate() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     let mut critical =
@@ -229,7 +229,7 @@ async fn initialize_session_restarts_mcp_background_task_after_merge() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     let state = initialize_session(&runtime_config, Some(&cfg), false, false, None, "test-session", None)
@@ -259,7 +259,7 @@ async fn hydrate_replaces_critical_seed_prompt_and_fills_tools() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     let mut critical =
@@ -322,7 +322,7 @@ async fn hydrate_reuses_critical_discovery_for_controller() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     let mut critical = initialize_session_critical(&runtime_config, Some(&cfg), false, false, None, "test-reuse", None)
@@ -397,7 +397,7 @@ async fn critical_path_defers_policy_manager_to_hydrate() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     let mut critical =
@@ -456,7 +456,7 @@ async fn critical_path_defers_update_and_release_notes_to_hydrate() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
 
     let mut critical =

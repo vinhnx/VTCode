@@ -1,8 +1,8 @@
 use anyhow::Result;
 use vtcode_core::core::agent::refusal;
 use vtcode_core::llm::providers::split_reasoning_from_text;
-use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::plan_blocks::{
     extract_any_plan, has_exactly_one_proposed_plan_block, looks_like_attempted_plan, looks_like_clarifying_question,

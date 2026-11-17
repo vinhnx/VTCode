@@ -216,7 +216,7 @@ async fn foreground_watcher_clears_completed_session_without_wait_polling() -> a
     Ok(())
 }
 #[tokio::test]
-#[cfg(all(unix, feature = "tui"))]
+#[cfg(unix)]
 async fn foreground_pipe_session_counts_for_background_hint() -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
     let workspace_root = canonicalize_workspace(temp_dir.path());

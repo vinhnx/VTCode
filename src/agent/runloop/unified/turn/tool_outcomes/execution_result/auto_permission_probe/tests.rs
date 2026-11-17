@@ -240,7 +240,7 @@ async fn decisions_tui_probe_headless_planning_and_stopped_paths_do_not_consume_
         }
         let mut ctx = backing.turn_processing_context();
         match boundary {
-            "headless" => *ctx.renderer = vtcode_core::utils::ansi::AnsiRenderer::stdout(),
+            "headless" => *ctx.renderer = vtcode_tui_runtime::utils::ansi::AnsiRenderer::stdout(),
             "cancelled" => ctx.ctrl_c_state.request_local_cancel(),
             "handled" => {
                 ctx.ctrl_c_state.request_local_cancel();

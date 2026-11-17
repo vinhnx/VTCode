@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 const DESKTOP_INSTALL_COMMAND: &str = "vtcode desktop --install";
 const DESKTOP_SUGGEST_OPT_OUT: &str = "[desktop] suggest-install = false";

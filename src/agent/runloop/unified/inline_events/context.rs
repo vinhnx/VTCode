@@ -8,7 +8,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::exec_session::ExecSessionManager;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::ExecSessionAction;
 use vtcode_ui::tui::app::{
     InlineEvent, InlineHandle, InlineHeaderContext, SubmittedInput, TransientEvent, TransientHotkeyAction,

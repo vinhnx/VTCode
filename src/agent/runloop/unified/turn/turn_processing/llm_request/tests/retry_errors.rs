@@ -11,7 +11,7 @@ fn retryable_llm_error_excludes_non_transient_messages() {
 #[tokio::test]
 async fn retry_progress_preserves_operation_and_clears_after_completion() {
     use vtcode_commons::ui_protocol::{ProgressPhase, ProgressUpdate};
-    use vtcode_core::ui::{InlineCommand, InlineHandle};
+    use vtcode_tui_runtime::ui::{InlineCommand, InlineHandle};
 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let handle = InlineHandle::new_for_tests(sender);
@@ -64,7 +64,7 @@ async fn retry_progress_preserves_operation_and_clears_after_completion() {
 }
 #[tokio::test]
 async fn compatible_previous_response_not_found_without_sent_chain_is_not_recovered() {
-    use vtcode_core::utils::transcript;
+    use vtcode_tui_runtime::utils::transcript;
 
     transcript::clear();
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
-use vtcode_core::core::interfaces::ui::UiSession;
+use vtcode_tui_runtime::interfaces::ui::UiSession;
 use vtcode_ui::tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientRequest, TransientSubmission};
 
 use super::state::CtrlCState;
@@ -211,7 +211,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use tokio::sync::{Notify, mpsc};
-    use vtcode_core::core::interfaces::ui::UiSession;
+    use vtcode_tui_runtime::interfaces::ui::UiSession;
     use vtcode_ui::tui::app::{
         ContentPart, InlineCommand, InlineListItem, ListOverlayRequest, SubmittedInput, new_host_session,
     };

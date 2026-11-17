@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::load_user_config;
-use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
 use vtcode_core::utils::dot_config::DotConfig;
+use vtcode_tui_runtime::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
 
 /// Resolved theme selection together with the user dot-config that was loaded
 /// during resolution (if available). Returning the loaded config avoids a

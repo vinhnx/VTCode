@@ -9,7 +9,7 @@ use tokio::sync::{Notify, mpsc, oneshot};
 use vtcode_commons::ui_protocol::ProgressUpdate;
 use vtcode_core::copilot::{CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotRuntimeRequest};
 use vtcode_core::llm::provider::{self as uni, FinishReason, LLMResponse, LLMStreamEvent};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
 fn completed_response(content: &str) -> LLMStreamEvent {

@@ -10,9 +10,9 @@ use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
-use vtcode_core::ui::inline_theme_from_core_styles;
-use vtcode_core::ui::theme;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::ui::inline_theme_from_core_styles;
+use vtcode_tui_runtime::ui::theme;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession, SessionOptions, spawn_session_with_options};
 
 /// Helper function to create test registry with common setup

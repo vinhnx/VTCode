@@ -17,8 +17,8 @@ use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
-use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_core::utils::transcript;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::transcript;
 use vtcode_ui::tui::app::{InlineCommand, InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;

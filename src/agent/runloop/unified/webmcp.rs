@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use vtcode_config::{WebmcpConfig, loader::VTCodeConfig};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_webmcp::runtime::{
     AppliedChange, CheckResult, FileSnapshot, PatchProposal, RuntimeAdapter, RuntimeStatus, TurnResult, WorkspaceFile,
 };
@@ -820,7 +820,7 @@ mod tests {
 
     #[tokio::test]
     async fn display_turn_handoff_renders_one_user_entry_without_markers() {
-        use vtcode_core::ui::{InlineCommand, InlineHandle};
+        use vtcode_tui_runtime::ui::{InlineCommand, InlineHandle};
 
         let (sender, mut receiver) = mpsc::unbounded_channel();
         let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -846,7 +846,7 @@ mod tests {
 
     #[tokio::test]
     async fn styled_handoff_survives_the_inline_sink_as_styled_segments() {
-        use vtcode_core::ui::{InlineCommand, InlineHandle};
+        use vtcode_tui_runtime::ui::{InlineCommand, InlineHandle};
 
         let (sender, mut receiver) = mpsc::unbounded_channel();
         let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());

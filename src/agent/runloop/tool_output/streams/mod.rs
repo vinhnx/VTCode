@@ -83,11 +83,11 @@ use vtcode_commons::preview::{
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::tool_intent;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_diff::{
     DiffDisplayKind, DiffDisplayLine, SideBySideRow, bounded_display_lines, diff_display_line_number_width,
     diff_gutter_fits, diff_gutter_width, diff_side_by_side_fits, display_lines_from_unified_diff, side_by_side_rows,
 };
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::files::colorize_diff_summary_line;
 use super::styles::{GitStyles, LsStyles, select_line_style};

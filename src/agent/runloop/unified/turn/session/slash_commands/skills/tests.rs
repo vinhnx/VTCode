@@ -43,7 +43,7 @@ async fn slash_skill_activation_retains_advanced_catalogue() {
             model_source: ModelSelectionSource::WorkspaceConfig,
         },
         "test-key".to_string(),
-        vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        vtcode_tui_runtime::ui::theme::DEFAULT_THEME_ID.to_string(),
     );
     let runtime = skill_runtime_for_session(&registry, &active_tools, &tool_catalog, &config, Some(&vt_cfg));
     let skill = Skill::new(

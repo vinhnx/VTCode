@@ -9,7 +9,7 @@ use vtcode_core::persistent_memory::{
     plan_remember_persistent_memory, truncate_for_fact,
 };
 use vtcode_core::session::SessionId;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode, WizardStep};
 
 use crate::agent::runloop::slash_commands::SlashCommandOutcome;

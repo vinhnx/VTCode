@@ -9,8 +9,8 @@ use vtcode_commons::preview::{display_width, truncate_with_ellipsis};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::large_output::{LargeOutputConfig, spool_large_output};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
@@ -205,7 +205,7 @@ pub(super) fn select_stream_lines_streaming(
 
 #[cfg(test)]
 mod markdown_block_tests {
-    use vtcode_core::ui::InlineHandle;
+    use vtcode_tui_runtime::ui::InlineHandle;
 
     use crate::agent::runloop::tool_output::collect_inline_output;
 

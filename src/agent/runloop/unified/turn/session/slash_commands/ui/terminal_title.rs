@@ -4,7 +4,7 @@ use anyhow::Result;
 use anyhow::{Context, anyhow};
 use vtcode_core::config::DEFAULT_TERMINAL_TITLE_ITEMS;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 use vtcode_ui::tui::core_tui::session::{
     TERMINAL_TITLE_ATTENTION_NEEDLES, TERMINAL_TITLE_UNDOING_NEEDLES, TERMINAL_TITLE_WAITING_NEEDLES,

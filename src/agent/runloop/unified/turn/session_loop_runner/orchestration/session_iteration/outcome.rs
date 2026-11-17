@@ -23,8 +23,8 @@ use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::skills::types::Skill;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::ToolResultCache;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use super::super::super::blocked_handoff::write_blocked_handoff_after_checkpoint;

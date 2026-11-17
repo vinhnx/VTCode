@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 use vtcode_commons::modal_hints::truncate_modal_text;
 use vtcode_core::subagents::{BackgroundSubprocessEntry, SubagentStatusEntry};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, TransientEvent, TransientHotkey,
     TransientHotkeyAction, TransientHotkeyKey, TransientRequest, TransientSelectionChange, TransientSubmission,

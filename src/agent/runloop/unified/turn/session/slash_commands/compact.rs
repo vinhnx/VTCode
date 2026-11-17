@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use tempfile::Builder as TempFileBuilder;
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::terminal_setup::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::slash_commands::CompactConversationCommand;
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;

@@ -5,7 +5,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::time::Duration;
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
 use crate::cli::auth::{COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, supports_auth_provider};
@@ -292,7 +292,7 @@ pub(super) fn handle_auth_command(args: &str) -> SlashCommandOutcome {
 mod tests {
     use super::*;
     use tokio::sync::mpsc::unbounded_channel;
-    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::InlineHandle;
 
     #[test]

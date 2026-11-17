@@ -16,8 +16,8 @@ use vtcode_core::exec::events::ThreadCompletionSubtype;
 use vtcode_core::hooks::{SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::session::SessionId;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::ArchivedPromptEntry;
 use vtcode_ui::tui::app::InlineSession;
 

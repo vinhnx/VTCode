@@ -1,7 +1,7 @@
 use crate::agent::runloop::ui_list;
 use crate::agent::runloop::ui_list::Tone;
 use anyhow::Result;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::InlineListSelection;
 
 use crate::agent::runloop::slash_commands::McpCommandAction;

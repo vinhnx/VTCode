@@ -42,7 +42,7 @@ Match the failure against the reported one (same crate, same error class/count) 
 - Keep changes surgical: only touch files the change owns.
 - When a crate needs an optional feature of a dependency, declare it explicitly
   on that dependency edge. Precedent (`fuzz/Cargo.toml`, root `Cargo.toml`):
-  `vtcode-core = { path = "...", version = "...", default-features = false, features = ["tui"] }`
+  `vtcode-core = { path = "...", version = "...", default-features = false, features = ["schema"] }`
 - Keep path+version on all workspace path dependencies; never rely on unification from other members.
 - Follow repo rules: `anyhow::Result` with context, no `unwrap`/`expect`/`panic` in
   production code, workspace lints apply. Do not commit unless asked.

@@ -35,7 +35,7 @@ use vtcode_config::{builtin_primary_auto_agent, builtin_primary_build_agent};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails, ToolCallStatus, VersionedThreadEvent};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{
     InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientSubmission,
 };

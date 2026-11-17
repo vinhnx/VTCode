@@ -10,9 +10,9 @@ use anyhow::Result;
 use tokio::sync::Mutex;
 
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_desktop_protocol::slash_command::{GOAL_SLASH_HELP, GoalSlashCommand};
 use vtcode_memory::{GoalPauseReason, GoalTracker};
+use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
 

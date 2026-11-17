@@ -30,8 +30,8 @@ pub(super) use vtcode_core::core::agent::snapshots::{
 };
 pub(super) use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 pub(super) use vtcode_core::tools::registry::ToolRegistry;
-pub(super) use vtcode_core::ui::theme;
-pub(super) use vtcode_core::utils::ansi::AnsiRenderer;
+pub(super) use vtcode_tui_runtime::ui::theme;
+pub(super) use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
 pub(super) use vtcode_ui::tui::app::{
     ContentPart, InlineCommand, InlineEvent, InlineHandle, InlineListSelection, SubmittedInput, TransientEvent,
     TransientRequest, TransientSubmission,
