@@ -251,7 +251,6 @@ detailed_tracking = false  # Enable for debugging
 ```toml
 [context]
 max_context_tokens = 160000
-trim_to_percent = 80
 preserve_recent_turns = 5
 
 [context.ledger]

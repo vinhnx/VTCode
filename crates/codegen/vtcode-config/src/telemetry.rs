@@ -11,23 +11,11 @@ pub struct TelemetryConfig {
     #[serde(default = "default_true")]
     pub dashboards_enabled: bool,
 
-    /// KPI sampling interval in milliseconds
-    #[serde(default = "default_interval")]
-    sample_interval_ms: u64,
-
-    /// Retention window for historical benchmarking (days)
-    #[serde(default = "default_retention_days")]
-    retention_days: u32,
-
     /// Enable ATIF (Agent Trajectory Interchange Format) trajectory export.
     /// When enabled, sessions write an `atif-trajectory.json` alongside the
     /// existing `.jsonl` trajectory log.
     #[serde(default)]
     pub atif_enabled: bool,
-
-    /// Emit bottleneck traces for slow paths
-    #[serde(default = "default_true")]
-    bottleneck_tracing: bool,
 
     /// Emit performance events for file I/O, spawns, and UI latency
     #[serde(default = "default_true")]
@@ -52,23 +40,12 @@ impl Default for TelemetryConfig {
             trajectory_enabled: true,
             atif_enabled: false,
             dashboards_enabled: true,
-            sample_interval_ms: default_interval(),
-            retention_days: default_retention_days(),
-            bottleneck_tracing: default_true(),
             perf_events: true,
             trajectory_max_files: default_trajectory_max_files(),
             trajectory_max_age_days: default_trajectory_max_age_days(),
             trajectory_max_size_mb: default_trajectory_max_size_mb(),
         }
     }
-}
-
-fn default_interval() -> u64 {
-    1000
-}
-
-fn default_retention_days() -> u32 {
-    14
 }
 
 fn default_trajectory_max_files() -> usize {

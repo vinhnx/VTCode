@@ -676,14 +676,17 @@ async fn steer_request_injects_into_the_live_turn_and_drops_only_the_addressed_r
     // The runtime admits the steer. Only now may the addressed row be removed.
     steer.resolve(SteerOutcome::Accepted { intent_id: "intent-older".into() });
 
-    let first = notifications.recv().await.expect("queue status on steer");
-    assert_eq!(first.method, protocol::method::TURN_QUEUE_STATUS);
-    assert_eq!(first.params["queueDepth"], 1);
-    let second = notifications.recv().await.expect("steer result on ack");
-    assert_eq!(second.method, protocol::method::TURN_STEER_RESULT);
-    assert_eq!(second.params["receiptId"], steered.receipt_id);
-    assert_eq!(second.params["accepted"], true);
-    assert_eq!(second.params["intentId"], "intent-older");
+    // The terminal result must precede the snapshot: the client drops the
+    // addressed row on the result before the snapshot's depth reconciliation,
+    // otherwise a non-oldest steered row makes it truncate a different row.
+    let first = notifications.recv().await.expect("steer result on ack");
+    assert_eq!(first.method, protocol::method::TURN_STEER_RESULT);
+    assert_eq!(first.params["receiptId"], steered.receipt_id);
+    assert_eq!(first.params["accepted"], true);
+    assert_eq!(first.params["intentId"], "intent-older");
+    let second = notifications.recv().await.expect("queue status on steer");
+    assert_eq!(second.method, protocol::method::TURN_QUEUE_STATUS);
+    assert_eq!(second.params["queueDepth"], 1);
     let remaining: Vec<String> = {
         let state = context.state.lock().await;
         state.queue.iter().map(|entry| entry.entry_id()).collect()

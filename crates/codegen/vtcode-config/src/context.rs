@@ -149,13 +149,7 @@ pub struct ContextFeaturesConfig {
     #[serde(default = "default_max_context_tokens")]
     pub max_context_tokens: usize,
 
-    /// Percentage to trim context to when it gets too large
-    /// This field is maintained for compatibility but no longer used for trimming
-    #[serde(default = "default_trim_to_percent")]
-    trim_to_percent: u8,
-
     /// Preserve recent turns during context management
-    /// This field is maintained for compatibility but no longer used for trimming
     #[serde(default = "default_preserve_recent_turns")]
     pub preserve_recent_turns: usize,
 
@@ -171,7 +165,6 @@ impl Default for ContextFeaturesConfig {
     fn default() -> Self {
         Self {
             max_context_tokens: default_max_context_tokens(),
-            trim_to_percent: default_trim_to_percent(),
             preserve_recent_turns: default_preserve_recent_turns(),
             ledger: LedgerConfig::default(),
             dynamic: DynamicContextConfig::default(),
@@ -195,10 +188,6 @@ fn default_include_in_prompt() -> bool {
 }
 pub fn default_max_context_tokens() -> usize {
     0
-}
-
-fn default_trim_to_percent() -> u8 {
-    60
 }
 
 fn default_preserve_recent_turns() -> usize {

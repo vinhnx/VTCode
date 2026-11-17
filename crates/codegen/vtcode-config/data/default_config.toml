@@ -315,9 +315,6 @@ show_message_timestamps = true
 # Effective in debug/development builds only
 show_diagnostics_in_transcript = false
 
-# Show timeline navigation panel
-show_timeline_pane = false
-
 # Terminal activity reporting (OSC 7501) is on by default; uncomment to opt out.
 # [ui.program_status]
 # enabled = false
@@ -422,9 +419,6 @@ shell_zsh_fork = false
 # Set to 0 to derive the effective budget from the resolved model/provider
 # capacity; positive values remain an explicit session safety ceiling.
 max_context_tokens = 0
-
-# Percentage to trim context to when it gets too large
-trim_to_percent = 60
 
 # Number of recent conversation turns to always preserve
 preserve_recent_turns = 6
@@ -548,7 +542,6 @@ cache_friendly_prompt_shaping = true
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]
 enabled = true
-default_ttl_seconds = 300
 extended_ttl_seconds = 3600
 max_breakpoints = 4
 cache_system_messages = true

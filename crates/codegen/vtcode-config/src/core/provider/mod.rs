@@ -838,7 +838,7 @@ fn default_interleaved_thinking_beta() -> String {
 
 #[inline]
 fn default_interleaved_thinking_budget_tokens() -> u32 {
-    31999
+    crate::constants::context::DEFAULT_THINKING_BUDGET
 }
 
 #[inline]

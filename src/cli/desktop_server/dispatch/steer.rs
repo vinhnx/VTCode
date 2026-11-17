@@ -51,9 +51,6 @@ async fn resolve_steer_receipt(
         let queue_status = accepted_now.then(|| state.queue_status(session_id));
         (current, queue_status, state.queue.len())
     };
-    if let Some(status) = queue_status {
-        publish_queue_status_sync(&notifications, &status);
-    }
     let accepted = current && accepted;
     let reason = if current {
         reason
@@ -78,6 +75,15 @@ async fn resolve_steer_receipt(
     .await
     {
         tracing::warn!(target: "vtcode.desktop", %error, "could not publish steer result");
+    }
+    // Publish the snapshot last. The client removes the addressed row when it
+    // receives the steer result; if the snapshot arrived first, its depth-based
+    // front-truncation would drop the wrong row when the steered entry is not
+    // the oldest (the service removes an arbitrary row, not just the front).
+    // Result-first restores the client's "confirmed entries form a prefix"
+    // invariant before the snapshot reconciles it.
+    if let Some(status) = queue_status {
+        publish_queue_status_sync(&notifications, &status);
     }
 }
 

@@ -61,6 +61,67 @@ fn steer_result_acceptance_removes_only_the_addressed_row(cx: &mut TestAppContex
     });
 }
 
+/// The service publishes the terminal result before the queue snapshot (see
+/// `resolve_steer_receipt`). Steering a non-oldest row must therefore leave the
+/// client mirror holding the two survivors with their authoritative ids: the
+/// addressed row is removed by echo id first, so the snapshot's depth-based
+/// front-truncation has nothing left to drop.
+#[gpui_kit::test]
+fn steering_a_middle_row_then_the_snapshot_keeps_the_other_rows(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".to_string());
+        for (echo, entry, prompt) in [
+            ("echo-older", "qe-1", "older"),
+            ("echo-middle", "qe-2", "middle"),
+            ("echo-newer", "qe-3", "newer"),
+        ] {
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: echo.into(),
+                entry_id: Some(entry.into()),
+                prompt: prompt.into(),
+                acknowledged: true,
+            });
+        }
+        let _ = view.steer_pending.insert("echo-middle".into(), "receipt-middle".into());
+
+        // Result first: the addressed middle row is removed by echo id.
+        view.handle_backend_event(
+            BackendEvent::TurnSteerResult(serde_json::json!({
+                "sessionId": "session",
+                "turnId": "turn-1",
+                "receiptId": "receipt-middle",
+                "entryId": "qe-2",
+                "accepted": true,
+                "intentId": "intent-middle",
+                "queueDepth": 2,
+            })),
+            cx,
+        );
+        // Snapshot second: depth 2 already matches the two remaining rows.
+        view.handle_backend_event(
+            BackendEvent::TurnQueueStatus(serde_json::json!({
+                "sessionId": "session",
+                "queueDepth": 2,
+                "previews": ["older", "newer"],
+                "entryIds": ["qe-1", "qe-3"],
+            })),
+            cx,
+        );
+
+        let prompts: Vec<&str> = view.queued_submissions.iter().map(|entry| entry.prompt.as_str()).collect();
+        assert_eq!(prompts, vec!["older", "newer"], "the steered middle row leaves, both others stay");
+        let ids: Vec<&str> = view
+            .queued_submissions
+            .iter()
+            .map(|entry| entry.entry_id.as_deref().unwrap_or(""))
+            .collect();
+        assert_eq!(ids, vec!["qe-1", "qe-3"], "ids are rebound to the authoritative snapshot");
+        assert_eq!(view.queue_depth, 2);
+        assert!(view.steer_pending.is_empty());
+    });
+}
+
 #[gpui_kit::test]
 fn steer_result_rejection_keeps_the_row_and_reports_reason(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);

@@ -60,7 +60,6 @@ use_memories = true
 
 [telemetry]
 atif_enabled = true
-bottleneck_tracing = false
 
 [ui]
 # Application icon artwork: "dynamic" follows the active light/dark mode,

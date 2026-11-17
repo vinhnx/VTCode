@@ -247,8 +247,7 @@ python3 scripts/generate_config_field_reference.py
 | `context.ledger.max_entries` | `integer` | no | `12` | - |
 | `context.ledger.preserve_in_compression` | `boolean` | no | `true` | Preserve ledger entries during context compression |
 | `context.max_context_tokens` | `integer` | no | `0` | Session context safety ceiling. Zero automatically uses the resolved model capacity. Compaction reserves the next response within this limit. |
-| `context.preserve_recent_turns` | `integer` | no | `10` | Preserve recent turns during context management This field is maintained for compatibility but no longer used for trimming |
-| `context.trim_to_percent` | `integer` | no | `60` | Percentage to trim context to when it gets too large This field is maintained for compatibility but no longer used for trimming |
+| `context.preserve_recent_turns` | `integer` | no | `10` | Preserve recent turns during context management |
 | `custom_providers` | `array` | no | `[]` | Extra OpenAI-compatible endpoints for the model picker. Define in user or system config only. |
 | `custom_providers[].api_format` | `string` | no | `-` | Typed API format for the provider's default profile. |
 | `custom_providers[].api_key_env` | `string` | no | `""` | Environment variable name that holds the API key for this endpoint (e.g., "MYCORP_API_KEY"). |
@@ -499,7 +498,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.182.4"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.182.7"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -784,11 +783,8 @@ python3 scripts/generate_config_field_reference.py
 | `syntax_highlighting.max_file_size_mb` | `integer` | no | `10` | Maximum file size for syntax highlighting (in MB) |
 | `syntax_highlighting.theme` | `string` | no | `"base16-ocean.dark"` | Theme to use for syntax highlighting |
 | `telemetry.atif_enabled` | `boolean` | no | `false` | Enable ATIF (Agent Trajectory Interchange Format) trajectory export. When enabled, sessions write an `atif-trajectory.json` alongside the existing `.jsonl` trajectory log. |
-| `telemetry.bottleneck_tracing` | `boolean` | no | `true` | Emit bottleneck traces for slow paths |
 | `telemetry.dashboards_enabled` | `boolean` | no | `true` | Enable real-time dashboards |
 | `telemetry.perf_events` | `boolean` | no | `true` | Emit performance events for file I/O, spawns, and UI latency |
-| `telemetry.retention_days` | `integer` | no | `14` | Retention window for historical benchmarking (days) |
-| `telemetry.sample_interval_ms` | `integer` | no | `1000` | KPI sampling interval in milliseconds |
 | `telemetry.trajectory_enabled` | `boolean` | no | `true` | - |
 | `telemetry.trajectory_max_age_days` | `integer` | no | `14` | Maximum age in days for rotated trajectory log files |
 | `telemetry.trajectory_max_files` | `integer` | no | `50` | Maximum number of rotated trajectory log files to keep per workspace |

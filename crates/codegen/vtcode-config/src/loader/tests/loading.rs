@@ -369,15 +369,21 @@ fn test_config_builder_overrides() {
 }
 
 #[test]
-fn removed_config_key_paths_detect_stale_budget_keys() {
+fn removed_config_key_paths_detect_stale_keys() {
     use crate::loader::manager::removed_config_key_paths_present;
 
     let stale: toml::Value = toml::from_str(
-        "[agent.harness]\nmax_tool_calls_per_turn = 32\n\n[tools]\nmax_tool_loops = 20\n\n[automation.full_auto]\nauto_grant_tool_limits = false\n",
+        "[agent.harness]\nmax_tool_calls_per_turn = 32\n\n\
+         [tools]\nmax_tool_loops = 20\n\n\
+         [automation.full_auto]\nauto_grant_tool_limits = false\n\n\
+         [telemetry]\nsample_interval_ms = 1000\nretention_days = 14\nbottleneck_tracing = false\n\n\
+         [ui]\nshow_timeline_pane = false\n\n\
+         [context]\ntrim_to_percent = 60\n\n\
+         [prompt_cache.providers.anthropic]\ndefault_ttl_seconds = 300\n",
     )
     .unwrap();
     let found = removed_config_key_paths_present(&stale);
-    assert_eq!(found.len(), 3, "every removed budget key path must be detected");
+    assert_eq!(found.len(), 9, "every removed config key path must be detected");
 
     let clean: toml::Value = toml::from_str("[tools]\nmax_repeated_tool_calls = 2\n").unwrap();
     assert!(removed_config_key_paths_present(&clean).is_empty());
