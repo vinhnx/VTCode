@@ -5,6 +5,71 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.183.0 - 2026-11-17
+
+### Highlights
+
+#### Bug Fixes
+
+- Classify Windows audit-data gap as known toolchain limitation (4ef6fa92)
+- Correct desktop steer queue mirror and remove inert config keys (f9f12090)
+- Prune every warned removed key on save (c02bf048)
+- Never emit Anthropic thinking budget >= max_tokens (a3973ad9)
+- Close PTY denylist bypass via shell punctuation (7a7cda3f)
+- Kill hook process groups on timeout and abort (eee422b3)
+- Prevent full-workspace SIGKILL/OOM cascade (089f1622)
+- Harden process-group cleanup and scope thread tuning (9d1e63e7)
+- Keep blocking approval prompts visible behind stale overlays (78549e0f)
+- Keep help modals queued behind blocking prompts (9a78b577)
+- Clarify shared agent modes and permissions (7d62f234)
+- Keep unselected effort rows muted in model picker (b6ec20e0)
+- Show pointer cursor on selectable rows (93b00b27)
+- Bound approved-plan inspection stalls (d8a60223)
+- Enforce declared edits during approved-plan execution (526e870c)
+- Hide redundant approval choices based on context (a3cc9317)
+- Full-width settings and stable zen floating chrome (858fa1e6)
+
+#### Documentation
+
+- Scope soft-edge claim and correct leading figure (0e4ef808)
+- Use fully-qualified brew tap pattern (90a9ca4f)
+- Refine first-run funnel and refresh workspace facts (dea0f175)
+
+#### Features
+
+- Follow OS appearance for the default theme (c720e95e)
+- Support checkbox multi-select elicitation (f3533cd4)
+- Add chat width presets for the conversation column (eed253ed)
+- Add GPT-6.2 Astra and Sol to OpenAI and Merge Gateway (f31b892b)
+
+### Other Changes
+
+#### Other
+
+- Unify the label type ladder and soft-edge tone (1d152feb)
+- Default to a neutral high-headroom theme for readable text (36213471)
+- Default to Noir for clear neutral text (83fefc4c)
+- Raise shared text headroom floor to 12:1 for crisp default text (70eb06c8)
+- Soften hairline dividers to faintest visible floor (3631dbb3)
+
+#### Performance
+
+- Fix settings scroll jank and move About to the end (f25ab8e6)
+- Tune nextest concurrency to host core count (ed80d91c)
+- Let the quick profile use the core-tuned concurrency (0bee6168)
+
+#### Refactors
+
+- Remove unreachable reverse-search feature (3e9deef1)
+- Drop unreferenced TUI shadow config schema (2126fbb8)
+- Group theme id constants by id prefix (71d995d0)
+- Use ThemeId constants at remaining theme selector sites (34b4f2f2)
+- Cap nav icon tracks with shared overflow menus (6d1d1fff)
+
+#### Tests
+
+- Pin soft-edge tone adaptation across light and dark themes (6c6b575b)
+
 ## 0.182.7 - 2026-11-17
 
 ### Highlights
