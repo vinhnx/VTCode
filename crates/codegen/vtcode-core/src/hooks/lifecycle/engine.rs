@@ -31,6 +31,51 @@ use crate::hooks::lifecycle::utils::path_to_string;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
 
+/// Upper bound on the post-kill stdout/stderr drain for a timed-out hook.
+/// Mirrors `crate::exec::async_command`: a descendant that escaped the process
+/// group via `setsid()` can keep a pipe write end open forever, so the drain
+/// must be bounded or `run_session_end` can hang (and leak the hook task).
+const HOOK_POST_KILL_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Best-effort cleanup for a hook's process group on abort.
+///
+/// `kill_on_drop(true)` only kills the direct `sh` child, which leaves shell
+/// grandchildren alive and holding the captured pipes open. When the owning
+/// future is cancelled, this guard kills the whole group; it is disarmed once
+/// the hook finishes normally so a deliberately detached descendant is not
+/// retroactively killed. Mirrors `crate::exec::async_command`.
+#[cfg(unix)]
+struct HookProcessGroupGuard {
+    pid: Option<u32>,
+    armed: bool,
+}
+
+#[cfg(unix)]
+impl HookProcessGroupGuard {
+    fn new(pid: Option<u32>) -> Self {
+        Self { pid, armed: true }
+    }
+
+    fn kill(&self) {
+        if let Some(pid) = self.pid {
+            let _ = vtcode_bash_runner::process_group::kill_process_group_by_pid(pid);
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+#[cfg(unix)]
+impl Drop for HookProcessGroupGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.kill();
+        }
+    }
+}
+
 mod payloads;
 
 #[derive(Clone)]
@@ -640,6 +685,10 @@ impl LifecycleHookEngine {
         process.stdout(Stdio::piped());
         process.stderr(Stdio::piped());
         process.kill_on_drop(true);
+        // Own process group (PGID == PID) on Unix so timeout/abort kills reach
+        // shell grandchildren via killpg, not just the direct `sh` child.
+        #[cfg(unix)]
+        process.process_group(0);
 
         let workspace_str = self.inner.workspace.to_string_lossy().into_owned();
         process.env("VT_PROJECT_DIR", &workspace_str);
@@ -656,6 +705,8 @@ impl LifecycleHookEngine {
         let mut child = process
             .spawn()
             .with_context(|| format!("failed to spawn lifecycle hook `{}`", command.command))?;
+        #[cfg(unix)]
+        let mut group_guard = HookProcessGroupGuard::new(child.id());
 
         if let Some(mut stdin) = child.stdin.take() {
             let mut payload_bytes =
@@ -686,17 +737,39 @@ impl LifecycleHookEngine {
         let (exit_code, timed_out) = match wait_result {
             Ok(status_res) => {
                 let status = status_res.context("failed to wait for lifecycle hook")?;
+                #[cfg(unix)]
+                group_guard.disarm();
                 (status.code(), false)
             }
             Err(_) => {
+                #[cfg(unix)]
+                group_guard.kill();
+                #[cfg(not(unix))]
                 let _ = child.start_kill();
                 let _ = child.wait().await;
                 (None, true)
             }
         };
 
-        let stdout_bytes = stdout_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
-        let stderr_bytes = stderr_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
+        // After a timeout the group kill should close every writer, but a
+        // setsid-escaped descendant can still hold a pipe open — bound the
+        // drain so a hook can never stall the lifecycle engine.
+        let stdout_bytes = if timed_out {
+            match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stdout_task).await {
+                Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
+                Err(_) => Vec::new(),
+            }
+        } else {
+            stdout_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default()
+        };
+        let stderr_bytes = if timed_out {
+            match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stderr_task).await {
+                Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
+                Err(_) => Vec::new(),
+            }
+        } else {
+            stderr_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default()
+        };
 
         Ok(HookCommandResult {
             exit_code,
