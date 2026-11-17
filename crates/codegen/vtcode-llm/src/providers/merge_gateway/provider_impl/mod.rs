@@ -713,6 +713,8 @@ impl LLMProvider for MergeGatewayProvider {
                 | models::merge_gateway::OPENAI_GPT_5_6_LUNA
                 | models::merge_gateway::OPENAI_GPT_5_6_SOL
                 | models::merge_gateway::OPENAI_GPT_5_6_TERRA
+                | models::merge_gateway::OPENAI_GPT_6_2_ASTRA
+                | models::merge_gateway::OPENAI_GPT_6_2_SOL
                 | models::merge_gateway::OPENAI_GPT_6_ASTRA
                 | models::merge_gateway::OPENAI_GPT_6_SOL
                 | models::merge_gateway::OPENAI_GPT_6_1_SOL

@@ -352,6 +352,29 @@ mod tests {
     }
 
     #[test]
+    fn openai_gpt_62_presets_expose_reasoning_without_none() {
+        for (model, expected) in [
+            ("gpt-6.2-astra", ReasoningEffortLevel::High),
+            ("gpt-6.2-sol", ReasoningEffortLevel::Medium),
+        ] {
+            let preset = presets::openai_presets()
+                .into_iter()
+                .find(|preset| preset.model == model)
+                .expect("GPT-6.2 preset");
+            assert_eq!(preset.default_reasoning_effort, expected, "{model}");
+            assert_eq!(preset.context_window, Some(1_050_000), "{model}");
+            assert!(
+                !preset
+                    .supported_reasoning_efforts
+                    .iter()
+                    .any(|effort| effort.effort == ReasoningEffortLevel::None),
+                "{model}"
+            );
+            assert!(preset.show_in_picker && !preset.is_default, "{model}");
+        }
+    }
+
+    #[test]
     fn mistral_presets_include_large_4_without_changing_default() {
         let presets = presets::mistral_presets();
         let large_4 = presets
@@ -459,12 +482,20 @@ mod tests {
     #[test]
     fn merge_gateway_presets_expose_curated_routes_and_default() {
         let presets = presets::merge_gateway_presets();
-        assert_eq!(presets.len(), 34);
+        assert_eq!(presets.len(), 36);
         assert!(
             presets
                 .iter()
                 .any(|preset| preset.model == "google/gemini-4-carbon" && preset.context_window == Some(1_048_576))
         );
+        for route in ["openai/gpt-6.2-astra", "openai/gpt-6.2-sol"] {
+            let preset = presets
+                .iter()
+                .find(|preset| preset.model == route)
+                .expect("GPT-6.2 Merge preset");
+            assert_eq!(preset.context_window, Some(1_050_000), "{route}");
+            assert!(!preset.supported_reasoning_efforts.is_empty(), "{route}");
+        }
         let default = presets
             .iter()
             .find(|preset| preset.is_default)

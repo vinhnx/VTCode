@@ -19,6 +19,8 @@ pub fn supports_openai_explicit_prompt_cache(model: &str) -> bool {
             ModelId::GPT56Sol
                 | ModelId::GPT56Terra
                 | ModelId::GPT56Luna
+                | ModelId::GPT62Astra
+                | ModelId::GPT62Sol
                 | ModelId::GPT6Astra
                 | ModelId::GPT6Sol
                 | ModelId::GPT61Sol

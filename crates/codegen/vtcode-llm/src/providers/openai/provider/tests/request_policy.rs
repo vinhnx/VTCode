@@ -558,6 +558,30 @@ fn responses_payload_defaults_gpt_5_6_terra_reasoning_to_high() {
 }
 
 #[test]
+fn responses_payload_defaults_gpt_62_reasoning_without_none() {
+    for (model, expected) in [
+        (models::openai::GPT_6_2_ASTRA, "high"),
+        (models::openai::GPT_6_2_SOL, "medium"),
+    ] {
+        let provider = native_openai_provider(model);
+        let payload = responses_payload_for(model, &provider);
+        assert_eq!(
+            payload.get("reasoning").and_then(|r| r.get("effort")).and_then(Value::as_str),
+            Some(expected),
+            "{model} should default to {expected} reasoning"
+        );
+
+        // Official docs reject `none` for GPT-6.2, so the catalog must not
+        // advertise it (the picker/validation layer gates on this list).
+        let efforts = vtcode_config::models::model_catalog_entry("openai", model)
+            .expect("GPT-6.2 catalog entry")
+            .reasoning_efforts;
+        assert!(!efforts.is_empty(), "{model} should advertise reasoning efforts");
+        assert!(!efforts.contains(&"none"), "{model} must not advertise `none`");
+    }
+}
+
+#[test]
 fn responses_payload_omits_sampling_parameters_for_gpt_5_6_sol_high_reasoning() {
     let provider = native_openai_provider(models::openai::GPT_5_6_SOL);
     let mut request = sample_request(models::openai::GPT_5_6_SOL);

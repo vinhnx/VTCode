@@ -22,6 +22,8 @@ impl ModelId {
             ModelId::Gemini4Carbon,
             ModelId::Gemini4Hydrogen,
             // OpenAI models
+            ModelId::GPT62Astra,
+            ModelId::GPT62Sol,
             ModelId::GPT6Astra,
             ModelId::GPT6Sol,
             ModelId::GPT61Sol,
@@ -60,6 +62,8 @@ impl ModelId {
             ModelId::NvidiaNemotron3Nano30bA3b,
             // Merge Gateway routes
             ModelId::MergeGatewayDefaultRouting,
+            ModelId::MergeGatewayOpenAIGpt62Astra,
+            ModelId::MergeGatewayOpenAIGpt62Sol,
             ModelId::MergeGatewayAnthropicClaudeOpus5,
             ModelId::MergeGatewayAnthropicClaudeOpus55,
             ModelId::MergeGatewayAnthropicClaudeSonnet5,

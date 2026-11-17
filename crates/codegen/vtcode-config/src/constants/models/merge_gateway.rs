@@ -20,6 +20,8 @@ pub const ZAI_GLM_5_3_FLASHX: &str = "zai/glm-5.3-flashx";
 pub const OPENAI_GPT_5_6_LUNA: &str = "openai/gpt-5.6-luna";
 pub const OPENAI_GPT_5_6_SOL: &str = "openai/gpt-5.6-sol";
 pub const OPENAI_GPT_5_6_TERRA: &str = "openai/gpt-5.6-terra";
+pub const OPENAI_GPT_6_2_ASTRA: &str = "openai/gpt-6.2-astra";
+pub const OPENAI_GPT_6_2_SOL: &str = "openai/gpt-6.2-sol";
 pub const OPENAI_GPT_6_ASTRA: &str = "openai/gpt-6-astra";
 pub const OPENAI_GPT_6_SOL: &str = "openai/gpt-6-sol";
 pub const OPENAI_GPT_6_1_SOL: &str = "openai/gpt-6.1-sol";
@@ -73,6 +75,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     OPENAI_GPT_5_6_LUNA,
     OPENAI_GPT_5_6_SOL,
     OPENAI_GPT_5_6_TERRA,
+    OPENAI_GPT_6_2_ASTRA,
+    OPENAI_GPT_6_2_SOL,
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_6_SOL,
     OPENAI_GPT_6_1_SOL,
@@ -97,6 +101,8 @@ pub const REASONING_EFFORT_ROUTES: &[&str] = &[
     OPENAI_GPT_5_6_LUNA,
     OPENAI_GPT_5_6_SOL,
     OPENAI_GPT_5_6_TERRA,
+    OPENAI_GPT_6_2_ASTRA,
+    OPENAI_GPT_6_2_SOL,
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_6_SOL,
     OPENAI_GPT_6_1_SOL,
@@ -159,6 +165,8 @@ pub const REASONING_MODELS: &[&str] = &[
     OPENAI_GPT_5_6_LUNA,
     OPENAI_GPT_5_6_SOL,
     OPENAI_GPT_5_6_TERRA,
+    OPENAI_GPT_6_2_ASTRA,
+    OPENAI_GPT_6_2_SOL,
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_6_SOL,
     OPENAI_GPT_6_1_SOL,

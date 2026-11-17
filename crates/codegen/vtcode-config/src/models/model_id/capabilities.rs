@@ -335,6 +335,8 @@ impl ModelId {
                 | ModelId::MergeGatewayGoogleGemini4Argon
                 | ModelId::MergeGatewayGoogleGemini4Carbon
                 | ModelId::MergeGatewayGoogleGemini4Hydrogen
+                | ModelId::GPT62Astra
+                | ModelId::GPT62Sol
                 | ModelId::GPT6Astra
                 | ModelId::GPT6Sol
                 | ModelId::GPT61Sol
@@ -342,6 +344,8 @@ impl ModelId {
                 | ModelId::MergeGatewayOpenAIGpt56Sol
                 | ModelId::MergeGatewayOpenAIGpt56Terra
                 | ModelId::MergeGatewayOpenAIGpt56Luna
+                | ModelId::MergeGatewayOpenAIGpt62Astra
+                | ModelId::MergeGatewayOpenAIGpt62Sol
                 | ModelId::MergeGatewayOpenAIGpt6Astra
                 | ModelId::MergeGatewayOpenAIGpt6Sol
                 | ModelId::MergeGatewayOpenAIGpt61Sol
@@ -429,6 +433,7 @@ impl ModelId {
         match self {
             // Gemini generations
             // OpenAI generations
+            ModelId::GPT62Astra | ModelId::GPT62Sol => "6.2",
             ModelId::GPT6Astra | ModelId::GPT6Sol | ModelId::GPT6Luna => "6",
             ModelId::GPT61Sol | ModelId::GPT61Terra => "6.1",
             ModelId::GPT56Sol | ModelId::GPT56Terra | ModelId::GPT56Luna => "5.6",
@@ -525,6 +530,7 @@ impl ModelId {
             ModelId::MergeGatewayOpenAIGpt56Luna
             | ModelId::MergeGatewayOpenAIGpt56Sol
             | ModelId::MergeGatewayOpenAIGpt56Terra => "5.6",
+            ModelId::MergeGatewayOpenAIGpt62Astra | ModelId::MergeGatewayOpenAIGpt62Sol => "6.2",
             ModelId::MergeGatewayOpenAIGpt6Astra
             | ModelId::MergeGatewayOpenAIGpt6Sol
             | ModelId::MergeGatewayOpenAIGpt6Luna => "6",
@@ -550,7 +556,9 @@ impl ModelId {
     pub(crate) fn supports_shell_tool(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT6Astra
+            ModelId::GPT62Astra
+                | ModelId::GPT62Sol
+                | ModelId::GPT6Astra
                 | ModelId::GPT6Sol
                 | ModelId::GPT61Sol
                 | ModelId::GPT6Luna

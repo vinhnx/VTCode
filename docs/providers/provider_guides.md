@@ -268,6 +268,14 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - Deprecated models (gpt-5, gpt-5-mini, gpt-5-nano, o3, o4-mini, gpt-5-codex, gpt-5.1-codex, gpt-5.1, gpt-5.3-codex,
   gpt-5.4-nano, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, etc.) are removed from the
   model picker but retained in routing constants for backward compatibility with existing configs.
+- **GPT-6.2 Astra (`gpt-6.2-astra`):** most capable OpenAI model for hardest end-to-end work (1,050,000 context, 128k max
+  output, reasoning `low`/`medium` (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported; $8 input / $40 output per
+  1M). Same Responses API route, GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as Astra/6.1 Sol;
+  sampling and logprobs unsupported. Supports the Multi-agent beta (`responses_multi_agent=v1`) for subagent delegation.
+- **GPT-6.2 Sol (`gpt-6.2-sol`):** go-to model for everyday coding and agents at scale (1,050,000 context, 128k max output,
+  reasoning `low`/`medium` (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported; $2 input / $10 output per 1M).
+  Same Responses API route, GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as 6.2 Astra; sampling
+  and logprobs unsupported. Also supports the Multi-agent beta.
 - **GPT-6 Astra (`gpt-6-astra`):** most capable OpenAI model for end-to-end agentic work (1,050,000 context, 128k max
   output, reasoning `low`/`medium`/`high`/`xhigh`/`max`). The catalog drives its Responses API route, sampling and
   logprob capabilities, cache TTL, prompt contract, and supported reasoning levels. Unsupported reasoning requests are
@@ -420,7 +428,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   `deepseek/deepseek-v4-flash-0731`, `xai/grok-4.6`, `qwen/qwen3.8-max`,
   `minimax/minimax-h3`, `minimax/minimax-m3.1-flash`, `moonshot/kimi-k3`, `moonshot/kimi-k3.1-pro`,
   `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
-  `zai/glm-5.3-flashx`, `openai/gpt-5.6-luna`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-6-astra`,
+  `zai/glm-5.3-flashx`, `openai/gpt-5.6-luna`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-6.2-astra`,
+  `openai/gpt-6.2-sol`, `openai/gpt-6-astra`,
   `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6.1-terra`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
   `anthropic/claude-fable-5-1`, `anthropic/claude-fable-5-2`, and `meta/muse-spark-open`
 - **Features:** Native Responses, streaming, tool calling, structured outputs, authenticated paginated model catalog,

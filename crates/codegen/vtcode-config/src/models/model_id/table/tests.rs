@@ -19,6 +19,8 @@ fn round_trip_exempt(model: &ModelId) -> bool {
                 | ModelId::MergeGatewayAnthropicClaudeSonnet5
                 | ModelId::MergeGatewayAnthropicClaudeSonnet55
                 | ModelId::MergeGatewayGoogleGemini38Flash
+                | ModelId::MergeGatewayOpenAIGpt62Astra
+                | ModelId::MergeGatewayOpenAIGpt62Sol
                 | ModelId::MergeGatewayOpenAIGpt6Astra
                 | ModelId::MergeGatewayOpenAIGpt6Sol
                 | ModelId::MergeGatewayOpenAIGpt61Sol

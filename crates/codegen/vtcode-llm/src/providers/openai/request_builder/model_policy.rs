@@ -8,11 +8,13 @@ const NONE_REASONING_EFFORT_MODELS: &[&str] = &[openai_models::GPT, openai_model
 const MEDIUM_REASONING_EFFORT_MODELS: &[&str] = &[
     openai_models::GPT_5,
     openai_models::GPT_5_6_SOL,
+    openai_models::GPT_6_2_SOL,
     openai_models::GPT_6_SOL,
     openai_models::GPT_6_LUNA,
 ];
 
 const HIGH_REASONING_EFFORT_MODELS: &[&str] = &[
+    openai_models::GPT_6_2_ASTRA,
     openai_models::GPT_6_ASTRA,
     openai_models::GPT_5_6_SOL,
     openai_models::GPT_5_6_TERRA,
@@ -22,6 +24,8 @@ const HIGH_REASONING_EFFORT_MODELS: &[&str] = &[
 
 const TEXT_VERBOSITY_MODELS: &[&str] = &[
     openai_models::GPT,
+    openai_models::GPT_6_2_ASTRA,
+    openai_models::GPT_6_2_SOL,
     openai_models::GPT_6_ASTRA,
     openai_models::GPT_6_SOL,
     openai_models::GPT_6_LUNA,
@@ -69,7 +73,9 @@ pub(super) fn is_gpt56_model(model: &str) -> bool {
 pub(super) fn is_gpt6_model(model: &str) -> bool {
     matches!(
         model,
-        openai_models::GPT_6_ASTRA
+        openai_models::GPT_6_2_ASTRA
+            | openai_models::GPT_6_2_SOL
+            | openai_models::GPT_6_ASTRA
             | openai_models::GPT_6_SOL
             | openai_models::GPT_6_1_SOL
             | openai_models::GPT_6_1_TERRA

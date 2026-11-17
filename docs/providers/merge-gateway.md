@@ -78,6 +78,8 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `openai/gpt-5.6-luna` | 1.1M | Yes | OpenAI route |
 | `openai/gpt-5.6-sol` | 1.1M | Yes | OpenAI route |
 | `openai/gpt-5.6-terra` | 1.1M | Yes | OpenAI route |
+| `openai/gpt-6.2-astra` | 1.05M | Yes | OpenAI route; Multi-agent beta supported |
+| `openai/gpt-6.2-sol` | 1.05M | Yes | OpenAI route; Multi-agent beta supported |
 | `openai/gpt-6-astra` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-sol` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6.1-sol` | 1.05M | Yes | OpenAI route |

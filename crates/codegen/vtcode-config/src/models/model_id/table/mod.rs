@@ -128,6 +128,18 @@ model_id_table! {
         description: "Strongest reasoning model for sustained agentic coding, multimodal knowledge work, scientific reasoning, and cybersecurity defense with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high)",
     },
     // OpenAI models
+    GPT62Astra {
+        provider: OpenAI,
+        id: models::openai::GPT_6_2_ASTRA,
+        display: "GPT-6.2 Astra",
+        description: "Most capable model for hardest end-to-end work with complex reasoning, coding, computer use, document creation, and Multi-agent delegation",
+    },
+    GPT62Sol {
+        provider: OpenAI,
+        id: models::openai::GPT_6_2_SOL,
+        display: "GPT-6.2 Sol",
+        description: "Go-to model for everyday work from coding to agents at scale, with Multi-agent delegation",
+    },
     GPT6Astra {
         provider: OpenAI,
         id: models::openai::GPT_6_ASTRA,
@@ -327,6 +339,18 @@ model_id_table! {
         id: models::merge_gateway::DEFAULT_ROUTING,
         display: "Default Routing (Merge Gateway)",
         description: "Merge Gateway's automatic route selection across configured model vendors",
+    },
+    MergeGatewayOpenAIGpt62Astra {
+        provider: MergeGateway,
+        id: models::merge_gateway::OPENAI_GPT_6_2_ASTRA,
+        display: "GPT-6.2 Astra (Merge Gateway)",
+        description: "OpenAI GPT-6.2 Astra accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
+    MergeGatewayOpenAIGpt62Sol {
+        provider: MergeGateway,
+        id: models::merge_gateway::OPENAI_GPT_6_2_SOL,
+        display: "GPT-6.2 Sol (Merge Gateway)",
+        description: "OpenAI GPT-6.2 Sol accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
     MergeGatewayAnthropicClaudeOpus5 {
         provider: MergeGateway,

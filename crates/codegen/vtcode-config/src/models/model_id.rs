@@ -33,6 +33,10 @@ pub enum ModelId {
     Gemini4Carbon,
 
     // OpenAI models
+    /// GPT-6.2 Astra - Most capable model for hardest end-to-end work with complex reasoning, coding, computer use, and research, with Multi-agent delegation
+    GPT62Astra,
+    /// GPT-6.2 Sol - Go-to model for everyday coding and agents at scale, with Multi-agent delegation
+    GPT62Sol,
     /// GPT-6 Astra - Most capable model for hardest end-to-end work with complex reasoning, coding, computer use, and research
     GPT6Astra,
     /// GPT-6 Sol - Cost-efficient high-end model in the GPT-6 series for demanding professional work
@@ -110,6 +114,10 @@ pub enum ModelId {
     // Merge Gateway routes
     /// Merge Gateway's default route selected by Merge
     MergeGatewayDefaultRouting,
+    /// OpenAI GPT-6.2 Astra through Merge Gateway
+    MergeGatewayOpenAIGpt62Astra,
+    /// OpenAI GPT-6.2 Sol through Merge Gateway
+    MergeGatewayOpenAIGpt62Sol,
     /// Anthropic Claude Opus 5 through Merge Gateway
     MergeGatewayAnthropicClaudeOpus5,
     /// Anthropic Claude Opus 5.5 through Merge Gateway

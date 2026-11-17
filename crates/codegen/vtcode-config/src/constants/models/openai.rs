@@ -1,6 +1,8 @@
 pub const DEFAULT_MODEL: &str = "gpt-5.6-sol";
 pub const SUPPORTED_MODELS: &[&str] = &[
     GPT,
+    GPT_6_2_ASTRA,
+    GPT_6_2_SOL,
     GPT_6_ASTRA,
     GPT_6_SOL,
     GPT_6_1_SOL,
@@ -18,6 +20,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 /// Models that require the OpenAI Responses API
 pub const RESPONSES_API_MODELS: &[&str] = &[
     GPT,
+    GPT_6_2_ASTRA,
+    GPT_6_2_SOL,
     GPT_6_ASTRA,
     GPT_6_SOL,
     GPT_6_1_SOL,
@@ -33,6 +37,8 @@ pub const RESPONSES_API_MODELS: &[&str] = &[
 /// Models that support the OpenAI reasoning parameter payload
 pub const REASONING_MODELS: &[&str] = &[
     GPT,
+    GPT_6_2_ASTRA,
+    GPT_6_2_SOL,
     GPT_6_ASTRA,
     GPT_6_SOL,
     GPT_6_1_SOL,
@@ -60,6 +66,8 @@ pub const STREAMING_REQUIRED_MODELS: &[&str] = &[GPT, GPT_5_6_SOL, GPT_5_6_LUNA]
 
 // Convenience constants for commonly used models
 pub const GPT: &str = "gpt";
+pub const GPT_6_2_ASTRA: &str = "gpt-6.2-astra";
+pub const GPT_6_2_SOL: &str = "gpt-6.2-sol";
 pub const GPT_6_ASTRA: &str = "gpt-6-astra";
 pub const GPT_6_SOL: &str = "gpt-6-sol";
 pub const GPT_6_1_SOL: &str = "gpt-6.1-sol";
