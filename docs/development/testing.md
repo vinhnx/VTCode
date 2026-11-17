@@ -251,10 +251,11 @@ overrides are profile-scoped, the guard is repeated per profile in
 `.config/nextest.toml` — keep all five profiles in sync when changing it.
 
 `./scripts/check-dev.sh --test --workspace` deliberately uses the `default`
-profile rather than `quick`. Quick's 10s slow-timeout trips on heavy tests under
-full-workspace parallel load, and its fail-fast then SIGTERMs/SIGKILLs a moving
-set of siblings. Plain `check-dev.sh --test` (default members only) keeps
-`quick` for fast local iteration.
+profile rather than `quick`: it runs the whole workspace with a 30s ceiling and
+retries, while `quick` is tuned for fast local iteration. `quick` uses a 20s
+slow ceiling so it tolerates the script's 2x-cores concurrency boost; its
+fail-fast still terminates on real failures immediately. Plain
+`check-dev.sh --test` (default members only) keeps `quick`.
 
 ## **Test Categories**
 

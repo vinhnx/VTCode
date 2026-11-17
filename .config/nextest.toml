@@ -85,7 +85,11 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 
 # ── Quick profile (TDD) ──────────────────────────────────────────
 # Fastest iteration: skips integration/e2e/slow tests entirely,
-# terminates running tests immediately on first failure.
+# terminates running tests immediately on first failure. The 20s slow ceiling
+# is load-aware: check-dev.sh runs this profile at 2x cores, where a CPU-bound
+# test gets roughly half a core and can cross 10s. Verified 3/3 clean runs of
+# 10,924 tests at 20 threads with no slow markers; fail-fast still fires on
+# real assertion failures immediately.
 [profile.quick]
 default-filter = 'not (binary(/integration|e2e|harness|pods_/)) and not test(/slow_|bench_|heavy/)'
 test-threads = "num-cpus"
@@ -95,9 +99,9 @@ status-level = "fail"
 final-status-level = "fail"
 failure-output = "immediate"
 success-output = "never"
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "20s", terminate-after = 1 }
 
-# Slow runner sweep (~7.5s standalone) vs the 10s quick ceiling: under full-gate
+# Slow runner sweep (~7.5s standalone) vs the quick ceiling: under full-gate
 # parallel load it times out and fail-fast SIGTERMs siblings, poisoning the run
 # with moving failures. Isolate it to the slow group and give it headroom.
 [[profile.quick.overrides]]
@@ -105,14 +109,14 @@ filter = "test(headless_clearing_stages_before_compaction_capacity_sweep)"
 test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
-# Slow headless planning probe (~12s standalone) vs the 10s quick ceiling:
+# Slow headless planning probe (~12s standalone) vs the quick ceiling:
 # same isolation and headroom as the runner sweep above.
 [[profile.quick.overrides]]
 filter = "test(headless_planning_returns_the_actual_plan_after_distinct_shell_inspections)"
 test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
-# Prepared-call budget sweep (~15s standalone) vs the 10s quick ceiling:
+# Prepared-call budget sweep (~15s standalone) vs the quick ceiling:
 # same isolation and headroom as the runner sweep above.
 [[profile.quick.overrides]]
 filter = "test(many_prepared_tool_calls_execute_without_call_count_cap)"
@@ -131,7 +135,7 @@ test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
 # merge_gateway tool_choice_none payload tests take ~6s standalone and crossed
-# the quick 10s ceiling under full-workspace load, tripping fail-fast's SIGTERM
+# the original 10s quick ceiling under load, tripping fail-fast's SIGTERM
 # cascade on 9 siblings. Isolate both variants into the slow group with headroom.
 [[profile.quick.overrides]]
 filter = "test(/payload_omits_callable_tools_for_tool_choice_none/)"
