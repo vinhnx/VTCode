@@ -7,11 +7,8 @@ disclosure and will work to address it promptly.
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report security vulnerabilities via one of the following channels:
-
-- Email: **<vinhnguyen2308@gmail.com>**
-- [GitHub Private Vulnerability Reporting](https://github.com/vinhnx/vtcode/security/advisories/new) - This is the
-  preferred method for reporting vulnerabilities, as it allows for secure, private communication.
+Instead, please use [GitHub Private Vulnerability Reporting](https://github.com/vinhnx/vtcode/security/advisories/new)
+to report vulnerabilities securely and privately.
 
 ### What to Include in Your Report
 
