@@ -5,6 +5,45 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.182.6 - 2026-11-17
+
+### Highlights
+
+#### Bug Fixes
+
+- Avoid broken Windows-only rustdoc link (9769fe94)
+- Preserve composer growth and textarea editing semantics (696b7087)
+- Derive composer token colors from the active theme (7c7366cb)
+- Bound notes backfill outside the update-check deadline (4ce1120c)
+- Restore green fast gate and split oversized test suites (ea4394ae)
+- Keep composer @file tokens readable on every theme (67b45f45)
+- Repair steer params and release turns after direct tool calls (f60b6dde)
+- Mirror PTY output without a second process; warm notes; handle null-id errors (d6345983)
+- Remove email from public metadata (99ddd77d)
+- Align monitored terminal output (456123ed)
+- Harden interrupt timing and queued steering (c606389b)
+- Acknowledge live steer handoff with terminal delivery receipts (7a2c47f6)
+
+#### Documentation
+
+- Remove 49 unreferenced docs and refresh the generated map (0b40d5f9)
+
+#### Features
+
+- Revamp queue/PTY UI, add steer RPC, and normalize docs (91b12535)
+- Edit queued prompts inline per item (11c3bb03)
+- Support Rex terminal handoff (f48efe29)
+
+### Other Changes
+
+#### Refactors
+
+- Extract TUI runtime and slash catalog from core (f91826b9)
+
+#### Tests
+
+- Cover turn/steer service dispatch end to end (1fc3eb47)
+
 ## 0.182.5 - 2026-11-16
 
 ### Highlights
