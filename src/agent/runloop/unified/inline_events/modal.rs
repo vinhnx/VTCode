@@ -421,6 +421,7 @@ impl<'a> InlineModalProcessor<'a> {
             .show_transient(TransientRequest::Wizard(WizardOverlayRequest {
                 title: "Edit setting".to_string(),
                 steps: vec![WizardStep {
+                    multi_select: false,
                     title: "Value".to_string(),
                     question: format!("Enter a new value for `{path}`."),
                     items: vec![

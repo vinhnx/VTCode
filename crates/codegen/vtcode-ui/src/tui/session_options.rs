@@ -18,6 +18,9 @@ use crate::tui::core_tui::session::action::BindingStore;
 use crate::tui::core_tui::session::config::AppearanceConfig;
 use crate::tui::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
+mod host_selection;
+pub use host_selection::host_interaction_response_grouped;
+
 const HOST_COMMAND_QUEUE_CAPACITY: usize = 128;
 
 /// Standalone session launch options for reusable integrations.
@@ -103,6 +106,8 @@ pub struct HostInteractionChoice {
 /// One step in an existing runtime wizard.
 #[derive(Clone, Debug)]
 pub struct HostInteractionStep {
+    pub multi_select: bool,
+    pub selected_choice_ids: Vec<String>,
     pub title: String,
     pub question: String,
     pub choices: Vec<HostInteractionChoice>,
@@ -146,6 +151,8 @@ pub fn host_interaction_from_command(command: &InlineCommand) -> Option<HostInte
                 title: request.title.clone(),
                 details: request.lines.clone(),
                 steps: vec![HostInteractionStep {
+                    multi_select: false,
+                    selected_choice_ids: Vec::new(),
                     title: request.title.clone(),
                     question: request.lines.first().cloned().unwrap_or_default(),
                     choices,
@@ -162,14 +169,25 @@ pub fn host_interaction_from_command(command: &InlineCommand) -> Option<HostInte
                 .iter()
                 .enumerate()
                 .map(|(index, step)| {
-                    let choices = host_choices(&step.items, index);
+                    let mut choices = host_choices(&step.items, index);
+                    if step.multi_select {
+                        choices.retain(|choice| !matches!(&choice.selection, InlineListSelection::RequestUserInputAnswer { selected, .. } if selected.is_empty()));
+                    }
                     let selected_choice_id = step.answer.as_ref().and_then(|selected| {
                         choices
                             .iter()
                             .find(|choice| &choice.selection == selected)
                             .map(|choice| choice.id.clone())
                     });
+                    let selected_choice_ids = choices.iter().filter(|choice| {
+                        match (&step.answer, &choice.selection) {
+                            (Some(InlineListSelection::RequestUserInputAnswer { selected, .. }), InlineListSelection::RequestUserInputAnswer { selected: values, .. }) => !values.is_empty() && values.iter().all(|value| selected.contains(value)),
+                            _ => false,
+                        }
+                    }).map(|choice| choice.id.clone()).collect();
                     HostInteractionStep {
+                        selected_choice_ids,
+                        multi_select: step.multi_select,
                         title: step.title.clone(),
                         question: step.question.clone(),
                         choices,
@@ -214,7 +232,7 @@ pub fn host_interaction_response(
         return Some(InlineEvent::Transient(TransientEvent::Cancelled));
     }
 
-    if interaction.steps.is_empty() {
+    if interaction.steps.is_empty() || interaction.steps.iter().any(|step| step.multi_select) {
         return None;
     }
 
@@ -602,6 +620,7 @@ mod tests {
             request: Box::new(TransientRequest::Wizard(crate::tui::core_tui::app::types::WizardOverlayRequest {
                 title: "Project goal".to_string(),
                 steps: vec![crate::tui::core_tui::app::types::WizardStep {
+                    multi_select: false,
                     title: "Goal".to_string(),
                     question: "What should this change deliver?".to_string(),
                     items: vec![crate::tui::core_tui::app::types::InlineListItem::new(
@@ -635,6 +654,59 @@ mod tests {
                     other: Some(answer),
                 }] if question_id == "goal" && selected.is_empty() && answer == "Keep the change scoped")
         ));
+    }
+
+    #[test]
+    fn grouped_answers_validate_step_ids_and_preserve_order_and_notes() {
+        let choices = ["Beta", "Alpha", "Gamma"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, label)| HostInteractionChoice {
+                id: format!("option-{index}"),
+                label: label.into(),
+                description: None,
+                selection: InlineListSelection::RequestUserInputAnswer {
+                    question_id: "features".into(),
+                    selected: vec![label.into()],
+                    other: None,
+                },
+            })
+            .collect();
+        let mut interaction = HostInteraction {
+            kind: HostInteractionKind::Question,
+            wizard: true,
+            title: "Features".into(),
+            details: vec![],
+            steps: vec![HostInteractionStep {
+                multi_select: true,
+                selected_choice_ids: Vec::new(),
+                title: "Features".into(),
+                question: "Choose?".into(),
+                choices,
+                selected_choice_id: None,
+                allow_freeform: true,
+            }],
+            selected_choice_ids: vec![],
+            plan_markdown: None,
+        };
+        let groups = vec![vec!["option-2".into(), "option-0".into(), "option-2".into()]];
+        assert!(host_interaction_response(&interaction, &["option-2".into(), "option-0".into()], &[], false).is_none());
+        assert!(matches!(
+            host_interaction_response(&interaction, &[], &[], true),
+            Some(InlineEvent::Transient(TransientEvent::Cancelled))
+        ));
+        let event = host_interaction_response_grouped(&interaction, &groups, &[Some("Delta".into())], false).unwrap();
+        assert!(
+            matches!(event, InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Wizard(answers)))
+            if matches!(answers.first(), Some(InlineListSelection::RequestUserInputAnswer { selected, other, .. }) if selected == &["Beta", "Gamma"] && other.as_deref() == Some("Delta")))
+        );
+        assert!(host_interaction_response_grouped(&interaction, &[vec!["foreign".into()]], &[], false).is_none());
+        assert!(host_interaction_response_grouped(&interaction, &[vec![]], &[], false).is_none());
+        assert!(
+            host_interaction_response_grouped(&interaction, &[vec![]], &[Some("Text only".into())], false).is_some()
+        );
+        interaction.steps[0].multi_select = false;
+        assert!(host_interaction_response_grouped(&interaction, &groups, &[], false).is_none());
     }
 
     struct DemoHost;

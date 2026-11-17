@@ -307,6 +307,8 @@ async fn publish_interaction_for_runtime(
         .steps
         .iter()
         .map(|step| InteractionStep {
+            multi_select: step.multi_select,
+            selected_choice_ids: step.selected_choice_ids.clone(),
             title: step.title.clone(),
             question: step.question.clone(),
             choices: step

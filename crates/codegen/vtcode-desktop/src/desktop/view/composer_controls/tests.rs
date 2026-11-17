@@ -4,8 +4,18 @@ use gpui_kit::assets::IconName;
 use super::settings::SettingsTab;
 use super::{
     ComposerTriggerKind, DesktopSlashAction, capitalize_agent_label, composer_trigger, desktop_slash_action, effort_at,
-    file_mention_token, permission_indicator, settings_tab_for_name,
+    effort_row_highlighted, file_mention_token, permission_indicator, settings_tab_for_name,
 };
+
+#[test]
+fn disabled_effort_rows_drop_the_selected_highlight() {
+    // A disabled control must not paint a selected row as a lit, clickable
+    // choice: the accent tint is an active affordance only.
+    assert!(effort_row_highlighted(true, true));
+    assert!(!effort_row_highlighted(true, false));
+    assert!(!effort_row_highlighted(false, true));
+    assert!(!effort_row_highlighted(false, false));
+}
 
 #[test]
 fn composer_triggers_match_cli_file_and_slash_boundaries() {

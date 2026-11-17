@@ -490,6 +490,7 @@ async fn prompt_openai_manual_callback_input(
     auth_url: &str,
 ) -> Result<Option<String>> {
     let step = WizardStep {
+        multi_select: false,
         title: "Callback".to_string(),
         question: format!(
             "Waiting for browser callback. If it doesn't open automatically, copy this URL:\n\n{auth_url}\n\nOr paste the redirected URL / query string below."

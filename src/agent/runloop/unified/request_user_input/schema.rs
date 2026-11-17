@@ -12,6 +12,8 @@ pub(super) struct RequestUserInputArgs {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RequestUserInputQuestion {
+    #[serde(default)]
+    pub(super) multi_select: bool,
     pub(super) id: String,
     pub(super) header: String,
     pub(super) question: String,
@@ -140,6 +142,11 @@ pub(crate) fn normalize_request_user_input_fallback_args(args_val: &Value) -> Op
             question.insert("options".to_string(), Value::Array(options));
         }
 
+        if let Some(value) = find_case_insensitive_field(tab_obj, "multi_select")
+            .or_else(|| find_case_insensitive_field(args_obj, "multi_select"))
+        {
+            question.insert("multi_select".to_string(), value.clone());
+        }
         return Some(json!({ "questions": [Value::Object(question)] }));
     }
 
@@ -160,6 +167,9 @@ pub(crate) fn normalize_request_user_input_fallback_args(args_val: &Value) -> Op
             question.insert("options".to_string(), Value::Array(options));
         }
 
+        if let Some(value) = find_case_insensitive_field(args_obj, "multi_select") {
+            question.insert("multi_select".to_string(), value.clone());
+        }
         return Some(json!({ "questions": [Value::Object(question)] }));
     }
 
@@ -324,6 +334,9 @@ fn normalize_fallback_question(
         question.insert("options".to_string(), Value::Array(options));
     }
 
+    if let Some(value) = find_case_insensitive_field(obj, "multi_select") {
+        question.insert("multi_select".to_string(), value.clone());
+    }
     Some(question)
 }
 

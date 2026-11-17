@@ -206,6 +206,9 @@ pub fn modal_list_item_lines(
     if is_header_row {
         primary_spans.push(Span::styled(GROUP_HEADER_ANCHOR, title_style));
     }
+    if let Some(marker) = item.selection_marker {
+        primary_spans.push(Span::styled(marker, title_style));
+    }
     let title_spans = highlight_segments(item.title.as_str(), title_style, styles.search_match, list.highlight_terms());
     primary_spans.extend(title_spans);
 

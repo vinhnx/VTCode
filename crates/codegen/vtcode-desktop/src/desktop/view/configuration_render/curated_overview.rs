@@ -135,7 +135,13 @@ impl DesktopView {
                 let path = row.path.unwrap_or_default();
                 let setting = curated::find_setting(snapshot, path);
                 let value = setting.map_or_else(
-                    || rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string(),
+                    || {
+                        if snapshot.is_none() {
+                            rust_i18n::t!(i18n::CONFIGURATION_LOADING_VALUE).to_string()
+                        } else {
+                            rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string()
+                        }
+                    },
                     curated::setting_display_value,
                 );
                 let editable = setting.is_some_and(|setting| setting.editable) && curated.can_edit;

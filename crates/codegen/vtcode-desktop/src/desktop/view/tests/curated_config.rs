@@ -509,3 +509,29 @@ fn open_file_is_disabled_while_a_write_is_pending(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn curated_missing_setting_is_unavailable_after_snapshot_arrives(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("curated-communication").label(), Some("Communication style: Balanced"));
+        view.update(cx, |view, cx| {
+            let mut snapshot = curated_snapshot();
+            snapshot.settings.retain(|setting| setting.path != "ui.communication_style");
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("curated-communication").label(), Some("Communication style: Unavailable"));
+    })
+    .unwrap();
+}

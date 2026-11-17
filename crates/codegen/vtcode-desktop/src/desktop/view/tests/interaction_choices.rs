@@ -42,6 +42,8 @@ fn tool_loop_interaction(selected: Option<&str>) -> InteractionRequest {
         ],
         choices: choices.clone(),
         steps: vec![InteractionStep {
+            multi_select: false,
+            selected_choice_ids: Vec::new(),
             title: "Tool Loop Limit Reached".into(),
             question: "Maximum tool loops reached: 20 (cap 60, 40 remaining)".into(),
             choices,
@@ -79,6 +81,8 @@ fn question_interaction(freeform: bool) -> InteractionRequest {
         details: vec!["Choose the scope".into()],
         choices: choices.clone(),
         steps: vec![InteractionStep {
+            multi_select: false,
+            selected_choice_ids: Vec::new(),
             title: "Scope".into(),
             question: "Which scope?".into(),
             choices,
@@ -96,6 +100,8 @@ fn two_step_question() -> InteractionRequest {
     let mut interaction = question_interaction(false);
     interaction.interaction_id = "two-step".into();
     interaction.steps.push(InteractionStep {
+        multi_select: false,
+        selected_choice_ids: Vec::new(),
         title: "Detail".into(),
         question: "How much detail?".into(),
         choices: vec![InteractionChoice {
@@ -869,4 +875,67 @@ fn unbreakable_text_stays_inside_the_panel_and_cards(cx: &mut TestAppContext) {
         assert!(chip_overhang <= px(1.), "digit chip must not clip past the card edge: chip={chip:?} card={card:?}");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn multi_select_checkboxes_toggle_and_submit_grouped_choices(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| view.backend = Some(BackendHandle { commands }));
+    let mut interaction = question_interaction(false);
+    interaction.wizard = true;
+    interaction.steps[0].multi_select = true;
+    deliver(&view, interaction, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("continue-question", cx);
+        assert!(view.read(cx).error.is_some(), "empty selection requires an answer");
+        window.render_frame(cx);
+        window.click("interaction-checkbox-first", cx);
+        assert!(view.read(cx).error.is_none(), "checking an option clears the validation error");
+        window.render_frame(cx);
+        window.click("interaction-checkbox-second", cx);
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert_eq!(view.interaction_choice_groups, vec![vec!["first".to_string(), "second".to_string()]])
+    });
+    assert!(requests.try_recv().is_err());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("continue-question", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { params, .. } = requests.try_recv().expect("submit") else {
+        panic!("request");
+    };
+    assert_eq!(params["choiceIdGroups"], json!([["first", "second"]]));
+}
+
+#[gpui_kit::test]
+fn multi_select_space_activates_only_the_focused_checkbox(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let mut interaction = question_interaction(false);
+    interaction.wizard = true;
+    interaction.steps[0].multi_select = true;
+    deliver(&view, interaction, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("interaction-checkbox-second", cx);
+        view.update(cx, |view, cx| view.interaction_focus.focus(window, cx));
+        window.render_frame(cx);
+        for _ in 0..20 {
+            if window.find("interaction-checkbox-second").focused() == Some(true) {
+                break;
+            }
+            window.focus_next(cx);
+            window.render_frame(cx);
+        }
+        assert_eq!(window.find("interaction-checkbox-second").focused(), Some(true));
+        window.press("space", cx);
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert_eq!(view.interaction_choice_groups, vec![Vec::<String>::new()]);
+    });
 }

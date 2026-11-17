@@ -199,6 +199,8 @@ impl InlineListItem {
 /// A single step in a wizard modal flow.
 #[derive(Clone, Debug)]
 pub struct WizardStep {
+    /// Whether options can be checked independently.
+    pub multi_select: bool,
     /// Title displayed in the tab header.
     pub title: String,
     /// Question or instruction shown above the list.

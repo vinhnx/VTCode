@@ -624,6 +624,7 @@ async fn confirm_memory_plan(
     }
 
     let confirm_step = WizardStep {
+        multi_select: false,
         title: "Confirm".to_string(),
         question: format!("Review the normalized memory action below, then confirm.\n\n{body}"),
         items: vec![
@@ -698,6 +699,7 @@ async fn confirm_memory_cleanup(
     }
 
     let step = WizardStep {
+        multi_select: false,
         title: "Cleanup".to_string(),
         question: format!(
             "Persistent memory contains legacy raw prompts or serialized payloads.\n\n- Suspicious facts: {}\n- Suspicious summary lines: {}\n\nRun the one-time cleanup now?",
@@ -776,6 +778,7 @@ async fn prompt_missing_memory_value(
     ctx.renderer
         .line(MessageStyle::Info, "VT Code needs one more detail before it can save this memory.")?;
     let step = WizardStep {
+        multi_select: false,
         title: "Missing Detail".to_string(),
         question: prompt.to_string(),
         items: vec![

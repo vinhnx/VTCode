@@ -8,6 +8,7 @@ impl ModalListState {
                 let is_divider = is_divider_title(&item);
                 let search_value = item.search_value.as_ref().map(|value| value.to_ascii_lowercase());
                 ModalListItem {
+                    selection_marker: None,
                     title: item.title,
                     subtitle: item.subtitle,
                     badge: item.badge,

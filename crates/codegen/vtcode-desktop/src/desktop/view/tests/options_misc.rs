@@ -39,6 +39,18 @@ fn permission_palette_rows_resolve_shield_modes_only_for_permission_picks() {
 }
 
 #[gpui_kit::test]
+fn composer_mode_shows_a_loading_placeholder_before_session_options_arrive(cx: &mut TestAppContext) {
+    let (window, _view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        // No configuration yet: the mode button must not claim "Unavailable"
+        // forever, it is waiting for the CLI session options.
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Loading…"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn composer_tracks_the_active_agent_without_changing_next_session_mode(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

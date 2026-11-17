@@ -280,7 +280,9 @@ impl DesktopView {
             });
             let effort_focus = self.effort_focus.clone();
             let effort_levels = self.visible_effort_levels();
-            let options_enabled = self.can_select_session_options();
+            // Same gate as the composer model button: the effort rows and the
+            // speed toggle must darken exactly when the model button darkens.
+            let options_enabled = self.model_selection_allowed();
             command = command.searchable(false).header(move |_, _, cx| {
                 let speed_control = speed_toggle.as_ref().map(|(label, enabled, provider, model, palette_id)| {
                     let weak = speed_toggle_view.clone();

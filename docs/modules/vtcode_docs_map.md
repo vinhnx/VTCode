@@ -257,6 +257,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Durable local matrix orchestration?", "How does Define and control a
     matrix work?", "How does Resource reservations and workspace access work?"
 
+- **File**: `docs/development/elicitation-selection.md`
+  - **Content**: Elicitation selection controls
+  - **Topics**: Quick reference
+  - **User Questions**: "What can you tell me about Elicitation selection controls?", "How does Quick reference work?"
+
 - **File**: `docs/development/execution-explanations.md`
   - **Content**: Execution explanations
   - **Topics**: Canonical contract, Queries and reports, Validation
@@ -1499,7 +1504,7 @@ below based on the topic area.
 
 - **File**: `docs/development/maintainer-notes/vtcode-ui.md`
   - **Content**: vtcode-ui maintainer notes
-  - **Topics**: Modules, Rules, Gotchas
+  - **Topics**: Modules, Rules, Gotchas, Elicitation selection
   - **User Questions**: "What can you tell me about vtcode-ui maintainer notes?", "How does Modules work?", "How does
     Rules work?"
 

@@ -34,13 +34,42 @@ impl WizardModalState {
                         _ => false,
                     },
                 );
+                let checked_indices = if step.multi_select {
+                    step.items
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, item)| match (step.answer.as_ref(), item.selection.as_ref()) {
+                            (
+                                Some(InlineListSelection::RequestUserInputAnswer { selected, .. }),
+                                Some(InlineListSelection::RequestUserInputAnswer { selected: values, .. }),
+                            ) if !values.is_empty() && values.iter().all(|value| selected.contains(value)) => {
+                                Some(index)
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let notes = if step.multi_select {
+                    match step.answer.as_ref() {
+                        Some(InlineListSelection::RequestUserInputAnswer { other, .. }) => {
+                            other.clone().unwrap_or_default()
+                        }
+                        _ => String::new(),
+                    }
+                } else {
+                    String::new()
+                };
                 WizardStepState {
+                    multi_select: step.multi_select,
+                    checked_indices,
                     title: step.title,
                     question: step.question,
                     list: ModalListState::new(step.items, step.answer.clone()),
                     completed: step.completed,
                     answer: step.answer,
-                    notes: String::new(),
+                    notes,
                     notes_active,
                     allow_freeform: step.allow_freeform,
                     freeform_label: step.freeform_label,
@@ -91,7 +120,7 @@ impl WizardModalState {
                     return ModalListKeyResult::HandledNoRedraw;
                 }
                 KeyCode::Tab | KeyCode::Esc => {
-                    if !step.notes.is_empty() {
+                    if !step.multi_select && !step.notes.is_empty() {
                         step.notes.clear();
                     }
                     step.notes_active = false;
@@ -184,6 +213,9 @@ impl WizardModalState {
                 && let Some(step) = self.steps.get_mut(self.current_step)
                 && step.list.select_nth_selectable(target_index)
             {
+                if step.multi_select {
+                    return self.toggle_current_option();
+                }
                 return self.submit_current_selection();
             }
             return ModalListKeyResult::HandledNoRedraw;
@@ -223,6 +255,7 @@ impl WizardModalState {
             }
             // Enter: select current item and mark step complete
             KeyCode::Enter => self.submit_current_selection(),
+            KeyCode::Char(' ') if self.search.is_none() => self.toggle_current_option(),
             // Escape or Ctrl+C: cancel wizard
             KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled)),
             KeyCode::Char('c') | KeyCode::Char('C') if modifiers.control => {
@@ -289,6 +322,10 @@ impl WizardModalState {
                 return ModalListKeyResult::HandledNoRedraw;
             };
 
+            if step.multi_select {
+                step.list.list_state.select(Some(visible_index));
+                return self.toggle_current_option();
+            }
             let clicked_custom_note = is_custom_note_selection(selection);
             let already_selected = step.list.list_state.selected() == Some(visible_index);
 
@@ -341,8 +378,66 @@ impl WizardModalState {
         }
     }
 
+    fn toggle_current_option(&mut self) -> ModalListKeyResult {
+        let Some(step) = self.steps.get_mut(self.current_step) else {
+            return ModalListKeyResult::HandledNoRedraw;
+        };
+        let Some(index) = step
+            .list
+            .list_state
+            .selected()
+            .and_then(|i| step.list.visible_indices.get(i))
+            .copied()
+        else {
+            return ModalListKeyResult::HandledNoRedraw;
+        };
+        if !step.multi_select {
+            return ModalListKeyResult::Redraw;
+        }
+        if step
+            .list
+            .items
+            .get(index)
+            .and_then(|item| item.selection.as_ref())
+            .is_some_and(is_custom_note_selection)
+        {
+            step.notes_active = true;
+            return ModalListKeyResult::Redraw;
+        }
+        if let Some(position) = step.checked_indices.iter().position(|i| *i == index) {
+            step.checked_indices.remove(position);
+        } else if step.list.items.get(index).and_then(|item| item.selection.as_ref()).is_some_and(|selection| matches!(selection, InlineListSelection::RequestUserInputAnswer { selected, .. } if !selected.is_empty())) {
+            step.checked_indices.push(index);
+        }
+        step.checked_indices.sort_unstable();
+        ModalListKeyResult::Redraw
+    }
+
     /// Get current selection from the active step
     pub(super) fn current_selection(&self) -> Option<InlineListSelection> {
+        if let Some(step) = self.steps.get(self.current_step)
+            && step.multi_select
+        {
+            let question_id = step.list.items.iter().find_map(|item| match item.selection.as_ref()? {
+                InlineListSelection::RequestUserInputAnswer { question_id, .. } => Some(question_id.clone()),
+                _ => None,
+            })?;
+            let selected = step
+                .checked_indices
+                .iter()
+                .filter_map(|i| step.list.items.get(*i))
+                .filter_map(|item| match item.selection.as_ref()? {
+                    InlineListSelection::RequestUserInputAnswer { selected, .. } => Some(selected.clone()),
+                    _ => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            let other = step.submitted_freeform_value();
+            if selected.is_empty() && other.is_none() {
+                return None;
+            }
+            return Some(InlineListSelection::RequestUserInputAnswer { question_id, selected, other });
+        }
         self.steps
             .get(self.current_step)
             .and_then(|step| step.list.current_selection().map(|selection| (selection, step)))
@@ -450,6 +545,9 @@ impl WizardModalState {
             Some(s) => s,
             None => return Vec::new(),
         };
+        if step.multi_select && !step.notes_active {
+            return vec!["space to toggle | enter to continue | tab to add notes | esc to cancel".to_string()];
+        }
         let custom_note_selected = self.current_step_requires_custom_note_input();
 
         if self.notes_active() {
@@ -494,7 +592,8 @@ impl WizardModalState {
     }
 
     fn submit_current_selection(&mut self) -> ModalListKeyResult {
-        if self.current_step_requires_custom_note_input()
+        if !self.steps.get(self.current_step).is_some_and(|step| step.multi_select)
+            && self.current_step_requires_custom_note_input()
             && let Some(step) = self.steps.get_mut(self.current_step)
             && step.notes.trim().is_empty()
             && !step.has_freeform_default()

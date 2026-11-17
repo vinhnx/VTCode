@@ -152,6 +152,7 @@ async fn run_interactive_plugins_manager(ctx: &mut SlashCommandContext<'_>) -> R
 
 async fn prompt_source(ctx: &mut SlashCommandContext<'_>) -> Result<Option<String>> {
     let step = vtcode_ui::tui::app::WizardStep {
+        multi_select: false,
         title: "Source".to_string(),
         question: "Provide a git URL or local directory to install the plugin from.".to_string(),
         items: vec![

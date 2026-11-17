@@ -521,6 +521,7 @@ pub(crate) fn meta_modifier_press_event() -> KeyEvent {
 
 pub(crate) fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
     WizardStep {
+        multi_select: false,
         title: format!("Question {question_id}"),
         question: format!("Select {question_id}"),
         items: vec![InlineListItem {
@@ -547,6 +548,7 @@ pub(crate) fn request_user_input_step(question_id: &str, label: &str) -> WizardS
 
 pub(crate) fn request_user_input_custom_step(question_id: &str, label: &str, default: &str) -> WizardStep {
     WizardStep {
+        multi_select: false,
         title: format!("Question {question_id}"),
         question: format!("Enter {question_id}"),
         items: vec![InlineListItem {
@@ -679,6 +681,7 @@ pub(crate) fn wizard_auth_transient(url: &str) -> app_types::TransientRequest {
     app_types::TransientRequest::Wizard(app_types::WizardOverlayRequest {
         title: "OpenAI manual callback".to_string(),
         steps: vec![WizardStep {
+            multi_select: false,
             title: "Callback".to_string(),
             question: format!("Open this URL in your browser:\n\n{url}"),
             items: vec![InlineListItem {

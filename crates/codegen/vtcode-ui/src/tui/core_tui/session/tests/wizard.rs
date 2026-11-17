@@ -88,6 +88,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
         request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
             title: "Question".to_string(),
             steps: vec![WizardStep {
+                multi_select: false,
                 title: "Choose".to_string(),
                 question: "Pick one".to_string(),
                 items: vec![
@@ -169,6 +170,7 @@ fn wizard_notes_paste_appends_to_custom_note_editor() {
         request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
             title: "Question".to_string(),
             steps: vec![WizardStep {
+                multi_select: false,
                 title: "Choose".to_string(),
                 question: "Pick one".to_string(),
                 items: vec![InlineListItem {

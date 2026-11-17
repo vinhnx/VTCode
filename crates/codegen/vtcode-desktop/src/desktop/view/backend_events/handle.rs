@@ -663,6 +663,8 @@ impl DesktopView {
                 if self.interaction_choice_ids.is_empty() {
                     self.interaction_choice_ids = interaction.selected_choice_ids.iter().cloned().map(Some).collect();
                 }
+                self.interaction_choice_groups =
+                    interaction.steps.iter().map(|step| step.selected_choice_ids.clone()).collect();
                 self.interaction_answer_texts = vec![None; interaction.steps.len()];
                 self.interaction_step_index = 0;
                 self.interaction_immediate_choice_id = None;

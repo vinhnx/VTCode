@@ -507,12 +507,15 @@ fn effort_options(
             .py_1()
             .px_2()
             .rounded_md()
-            .when(selected, |row| {
+            // The selected tint is an active affordance. Keep it only while the
+            // control is actionable; otherwise a disabled row still reads as a
+            // lit, clickable choice even though clicks are dropped.
+            .when(effort_row_highlighted(selected, enabled), |row| {
                 row.bg(colors.primary.opacity(0.08))
                     .font_semibold()
                     .text_color(colors.foreground)
             })
-            .when(!selected, |row| row.text_color(colors.muted_foreground))
+            .when(!enabled, |row| row.text_color(colors.muted_foreground))
             .when(enabled && !selected, |row| row.hover(|hover| hover.bg(colors.accent).text_color(colors.foreground)))
             .when(enabled, |row| row.cursor_pointer())
             .aria_position_in_set(level_count - index)
@@ -570,6 +573,13 @@ fn effort_options(
         .gap_1()
         .children(rows)
         .into_any_element()
+}
+
+/// Whether a selected effort row keeps its accent tint. A disabled control has
+/// no active affordance, so its selected row must look as dark as the disabled
+/// model button rather than a lit, clickable choice.
+fn effort_row_highlighted(selected: bool, enabled: bool) -> bool {
+    selected && enabled
 }
 
 fn settle_effort(

@@ -65,6 +65,7 @@ fn configuration_copy_is_localized_for_every_language() {
             "app.configuration.empty_search_hint",
             "app.configuration.overview_group",
             "app.configuration.unavailable",
+            "app.configuration.loading_value",
             "app.configuration.turn_off",
             "app.configuration.turn_on",
             "app.configuration.hide_from_models",

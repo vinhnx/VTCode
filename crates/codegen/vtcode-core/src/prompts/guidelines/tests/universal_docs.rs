@@ -1,5 +1,11 @@
 use super::*;
 
+#[test]
+fn selection_guidance_explains_checkbox_opt_in() {
+    assert!(REQUEST_USER_INPUT_LINE.contains("multi_select: true"));
+    assert!(REQUEST_USER_INPUT_LINE.contains("radio-button"));
+}
+
 /// Universal rules have one home in Runtime Guidance (or the shared
 /// contract). Compose every static profile with each tool-guidance variant
 /// and the Harness Limits section, and check each rule marker lands once.

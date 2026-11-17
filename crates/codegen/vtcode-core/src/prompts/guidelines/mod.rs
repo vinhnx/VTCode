@@ -63,8 +63,7 @@ const PARALLEL_TOOLS_LINE: &str = "- Run independent tools in parallel when inpu
 /// work"), which the planning notice always renders. This line therefore
 /// carries only the part the notice does not: that the blocker must survive
 /// repository exploration.
-const REQUEST_USER_INPUT_LINE: &str =
-    "- Use `request_user_input` only for a blocker that repository exploration did not resolve.";
+const REQUEST_USER_INPUT_LINE: &str = "- Use `request_user_input` only for a blocker that repository exploration did not resolve. Set `multi_select: true` for independent checkbox answers; omit it for one radio-button answer.";
 
 /// Read-only capability line shared by the capability-level and
 /// tool-fallback arms of `capability_mode_line`.

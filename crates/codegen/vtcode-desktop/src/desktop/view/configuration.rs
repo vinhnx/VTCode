@@ -563,7 +563,7 @@ impl DesktopView {
 
     pub(super) fn approval_policy_label(&self) -> String {
         self.session_options().map_or_else(
-            || rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string(),
+            || rust_i18n::t!(i18n::CONFIGURATION_LOADING_VALUE).to_string(),
             |options| session_options::permission_mode_label(options.permission_mode),
         )
     }

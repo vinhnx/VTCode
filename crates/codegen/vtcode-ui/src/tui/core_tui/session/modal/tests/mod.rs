@@ -76,6 +76,7 @@ fn make_key_with_modifiers(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
 
 fn single_custom_note_step(default: Option<&str>) -> WizardStep {
     WizardStep {
+        multi_select: false,
         title: "Q1".to_owned(),
         question: "Pick".to_owned(),
         items: vec![InlineListItem {
@@ -168,6 +169,7 @@ fn searchless_approval_modal() -> ModalState {
 
 fn wizard_step_with_options(count: usize) -> WizardStep {
     WizardStep {
+        multi_select: false,
         title: "Q1".to_owned(),
         question: "Pick".to_owned(),
         items: (0..count)

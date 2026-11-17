@@ -255,6 +255,30 @@ pub(crate) fn render_wizard_modal_body(
     if let Some(step) = wizard.steps.get_mut(wizard.current_step)
         && idx < chunks.len()
     {
+        let focused = step
+            .list
+            .list_state
+            .selected()
+            .and_then(|i| step.list.visible_indices.get(i))
+            .copied();
+        for (index, item) in step.list.items.iter_mut().enumerate() {
+            item.selection_marker = match item.selection.as_ref() {
+                Some(InlineListSelection::RequestUserInputAnswer { selected, .. }) if !selected.is_empty() => {
+                    Some(if step.multi_select {
+                        if step.checked_indices.contains(&index) {
+                            "[x] "
+                        } else {
+                            "[ ] "
+                        }
+                    } else if focused == Some(index) {
+                        "(*) "
+                    } else {
+                        "( ) "
+                    })
+                }
+                _ => None,
+            };
+        }
         outcome.list_area = Some(render_modal_list(
             frame,
             chunks[idx],

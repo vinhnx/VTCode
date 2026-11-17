@@ -549,6 +549,7 @@ impl DesktopView {
             pending_interaction_response: None,
             interaction_edit_pending: false,
             interaction_choice_ids: Vec::new(),
+            interaction_choice_groups: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
             interaction_immediate_choice_id: None,

@@ -7,6 +7,7 @@
 - `PermissionMode` owns shared permission labels, descriptions, and translation keys; Desktop tests enforce English parity.
 
 - Keep messages typed and framing bounded; Git review echoes request/workspace identities to reject stale snapshots.
+- Grouped wizard answers carry choice IDs per step; validate each ID against its owning step and enforce selection cardinality.
 - Preserve opaque interaction option identities across the wire. `sharedUi` carries only non-secret CLI preferences.
 - For `interaction/respond`, validate without consuming, enqueue to the active runtime, then resolve; failed delivery
   must leave it retryable.

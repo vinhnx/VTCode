@@ -4,6 +4,7 @@ use super::*;
 fn wizard_tabbed_list_allows_tab_switching_without_completion() {
     let steps = vec![
         WizardStep {
+            multi_select: false,
             title: "Tab A".to_owned(),
             question: "Pick A".to_owned(),
             items: vec![InlineListItem {
@@ -23,6 +24,7 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
             freeform_default: None,
         },
         WizardStep {
+            multi_select: false,
             title: "Tab B".to_owned(),
             question: "Pick B".to_owned(),
             items: vec![InlineListItem {
@@ -58,6 +60,7 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
 #[test]
 fn wizard_tabbed_list_enter_submits_single_selection() {
     let steps = vec![WizardStep {
+        multi_select: false,
         title: "Tab".to_owned(),
         question: "Pick".to_owned(),
         items: vec![InlineListItem {
@@ -94,6 +97,7 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
 #[test]
 fn wizard_tabbed_list_mouse_click_submits_on_first_click() {
     let steps = vec![WizardStep {
+        multi_select: false,
         title: "Tab".to_owned(),
         question: "Pick".to_owned(),
         items: vec![
@@ -145,6 +149,7 @@ fn wizard_tabbed_list_mouse_click_submits_on_first_click() {
 #[test]
 fn wizard_tabbed_list_mouse_click_activates_custom_note_editor() {
     let steps = vec![WizardStep {
+        multi_select: false,
         title: "Tab".to_owned(),
         question: "Pick".to_owned(),
         items: vec![
@@ -186,6 +191,7 @@ fn wizard_tabbed_list_mouse_click_activates_custom_note_editor() {
 fn wizard_multistep_ctrl_n_advances_without_completion() {
     let steps = vec![
         WizardStep {
+            multi_select: false,
             title: "Q1".to_owned(),
             question: "Pick".to_owned(),
             items: vec![InlineListItem {
@@ -205,6 +211,7 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             freeform_default: None,
         },
         WizardStep {
+            multi_select: false,
             title: "Q2".to_owned(),
             question: "Pick".to_owned(),
             items: vec![InlineListItem {
@@ -238,6 +245,7 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
 #[test]
 fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
     let steps = vec![WizardStep {
+        multi_select: false,
         title: "Q1".to_owned(),
         question: "Pick".to_owned(),
         items: vec![
@@ -415,6 +423,7 @@ fn wizard_multistep_mouse_click_uses_default_submission_path() {
 #[test]
 fn wizard_multistep_numeric_select_submits() {
     let steps = vec![WizardStep {
+        multi_select: false,
         title: "Q1".to_owned(),
         question: "Pick".to_owned(),
         items: vec![
@@ -462,4 +471,78 @@ fn wizard_multistep_numeric_select_submits() {
         }
         other => panic!("Expected submit, got: {other:?}"),
     }
+}
+
+#[test]
+fn wizard_multi_select_keeps_focus_independent_and_returns_checked_options_with_note() {
+    let items = ["Alpha", "Beta", "Gamma"]
+        .into_iter()
+        .map(|label| {
+            InlineListItem::new(
+                label,
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "features".into(),
+                    selected: vec![label.into()],
+                    other: None,
+                }),
+            )
+        })
+        .collect();
+    let mut wizard = WizardModalState::new(
+        "Choose".into(),
+        vec![WizardStep {
+            multi_select: true,
+            title: "Features".into(),
+            question: "Choose features?".into(),
+            items,
+            completed: false,
+            answer: None,
+            allow_freeform: true,
+            freeform_label: None,
+            freeform_placeholder: None,
+            freeform_default: None,
+        }],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+    assert!(matches!(
+        wizard.handle_key_event(&KeyEvent::from(KeyCode::Enter), ModalKeyModifiers::default()),
+        ModalListKeyResult::HandledNoRedraw
+    ));
+    let modifiers = ModalKeyModifiers::default();
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Char(' ')), modifiers);
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Down), modifiers);
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Down), modifiers);
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Char(' ')), modifiers);
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Up), modifiers);
+    wizard.steps[0].notes = "Also Delta".into();
+    let mut submitted = wizard.clone();
+    assert!(matches!(submitted.handle_key_event(&KeyEvent::from(KeyCode::Enter), modifiers),
+    ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Wizard(answers))))
+    if answers == vec![InlineListSelection::RequestUserInputAnswer {
+        question_id: "features".into(), selected: vec!["Alpha".into(), "Gamma".into()], other: Some("Also Delta".into()),
+    }]));
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Down), modifiers);
+    wizard.handle_key_event(&KeyEvent::from(KeyCode::Char(' ')), modifiers);
+    assert!(matches!(wizard.handle_key_event(&KeyEvent::from(KeyCode::Enter), modifiers),
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Wizard(answers))))
+        if matches!(answers.first(), Some(InlineListSelection::RequestUserInputAnswer { selected, .. }) if selected == &["Alpha"])));
+}
+
+#[test]
+fn wizard_multi_select_custom_note_click_opens_editor_without_toggling_choices() {
+    let mut step = single_custom_note_step(None);
+    step.multi_select = true;
+    let custom_index = step.items.iter().position(|item| {
+        matches!(item.selection.as_ref(), Some(InlineListSelection::RequestUserInputAnswer { selected, other: Some(_), .. }) if selected.is_empty())
+    }).unwrap();
+    let mut wizard = WizardModalState::new("Choose".into(), vec![step], 0, None, WizardModalMode::MultiStep);
+    assert!(matches!(wizard.handle_mouse_click(custom_index), ModalListKeyResult::Redraw));
+    assert!(wizard.steps[0].notes_active);
+    assert!(wizard.steps[0].checked_indices.is_empty());
+    wizard.handle_key_event(&make_key(KeyCode::Char('Z')), ModalKeyModifiers::default());
+    assert!(matches!(wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default()),
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Wizard(answers))))
+        if matches!(answers.first(), Some(InlineListSelection::RequestUserInputAnswer { selected, other, .. }) if selected.is_empty() && other.as_deref() == Some("Z"))));
 }

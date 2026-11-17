@@ -248,9 +248,10 @@ pub fn request_user_input_parameters() -> Value {
                             },
                             "maxItems": 8
                         },
+                        "multi_select": {"type": "boolean", "default": false, "description": "Allow multiple answers using checkboxes. Omit or set false for one answer using radio buttons."},
                         "options": {
                             "type": "array",
-                            "description": "Optional 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option; the UI provides that automatically. If omitted, the UI auto-suggests options using question text and hints.",
+                            "description": "Optional 2-3 choices; mutually exclusive unless multi_select is true. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option; the UI provides that automatically. If omitted, the UI auto-suggests options using question text and hints.",
                             "minItems": 2,
                             "maxItems": 3,
                             "items": {

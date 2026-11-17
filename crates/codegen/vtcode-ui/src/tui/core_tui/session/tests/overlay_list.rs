@@ -766,6 +766,7 @@ fn wizard_click_below_inline_editor_selects_correct_item() {
         request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
             title: "Question".to_string(),
             steps: vec![WizardStep {
+                multi_select: false,
                 title: "Choose".to_string(),
                 question: "Pick one".to_string(),
                 items: vec![

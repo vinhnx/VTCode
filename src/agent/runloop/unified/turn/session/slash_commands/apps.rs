@@ -534,6 +534,7 @@ struct EditorWorkflowChoices {
 fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: EditorPreset) -> Vec<WizardStep> {
     vec![
         WizardStep {
+            multi_select: false,
             title: "Enable".to_string(),
             question: format!(
                 "External editor launch is currently {}.",
@@ -569,6 +570,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             freeform_default: None,
         },
         WizardStep {
+            multi_select: false,
             title: "Preset".to_string(),
             question: format!("Current editor preset: {}.", current_preset.label()),
             items: EDITOR_PRESET_CHOICES.into_iter().map(preset_choice_item).collect(),
@@ -584,6 +586,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             freeform_default: None,
         },
         WizardStep {
+            multi_select: false,
             title: "Suspend TUI".to_string(),
             question: format!(
                 "Suspending the event loop is currently {}.",
@@ -619,6 +622,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             freeform_default: None,
         },
         WizardStep {
+            multi_select: false,
             title: "Next".to_string(),
             question: "Do you also want to jump to terminal hyperlink settings after saving?".to_string(),
             items: vec![
@@ -701,6 +705,7 @@ async fn prompt_for_custom_editor_command(
 
 fn build_custom_editor_command_step(placeholder: String) -> WizardStep {
     WizardStep {
+        multi_select: false,
         title: "Custom command".to_string(),
         question: "Enter the raw editor command. Include any flags you want VT Code to keep using.".to_string(),
         items: vec![

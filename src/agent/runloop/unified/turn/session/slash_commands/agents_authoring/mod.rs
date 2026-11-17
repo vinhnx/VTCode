@@ -758,6 +758,7 @@ async fn prompt_text_value(
             ctx.session,
             title.to_string(),
             vec![WizardStep {
+                multi_select: false,
                 title: title.to_string(),
                 question: question.to_string(),
                 items,

@@ -274,6 +274,7 @@ impl DesktopView {
         self.pending_interaction_response = None;
         self.interaction_edit_pending = false;
         self.interaction_choice_ids.clear();
+        self.interaction_choice_groups.clear();
         self.interaction_answer_texts.clear();
         self.interaction_step_index = 0;
         self.interaction_immediate_choice_id = None;
@@ -306,6 +307,26 @@ impl DesktopView {
             turn_id: interaction.turn_id,
             interaction_id: interaction.interaction_id,
             choice_id: choice_ids.first().cloned(),
+            choice_id_groups: if !cancelled && interaction.steps.iter().any(|step| step.multi_select) {
+                interaction
+                    .steps
+                    .iter()
+                    .enumerate()
+                    .map(|(index, step)| {
+                        if step.multi_select {
+                            self.interaction_choice_groups.get(index).cloned().unwrap_or_default()
+                        } else {
+                            self.interaction_choice_ids
+                                .get(index)
+                                .and_then(Clone::clone)
+                                .into_iter()
+                                .collect()
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
             choice_ids,
             text: answer_texts.iter().flatten().next().cloned(),
             answer_texts,
@@ -334,6 +355,7 @@ impl DesktopView {
             interaction_id: interaction.interaction_id,
             choice_id: None,
             choice_ids: Vec::new(),
+            choice_id_groups: Vec::new(),
             text: None,
             answer_texts: Vec::new(),
             cancelled: false,
@@ -386,6 +408,18 @@ impl DesktopView {
             {
                 return;
             }
+            if interaction.steps.get(step_index).is_some_and(|step| step.multi_select) {
+                if let Some(group) = self.interaction_choice_groups.get_mut(step_index) {
+                    if let Some(index) = group.iter().position(|id| id == &choice_id) {
+                        let _removed = group.remove(index);
+                    } else {
+                        group.push(choice_id);
+                    }
+                }
+                self.clear_error();
+                cx.notify();
+                return;
+            }
             if let Some(selected) = self.interaction_choice_ids.get_mut(step_index) {
                 *selected = Some(choice_id);
             }
@@ -421,6 +455,9 @@ impl DesktopView {
         let step_index = self.interaction_step_index;
         let choices = interaction_render::visible_choices(&interaction, step_index);
         if choices.len() < 2 {
+            return;
+        }
+        if interaction.steps.get(step_index).is_some_and(|step| step.multi_select) {
             return;
         }
         let current_id = if interaction_render::is_wizard_interaction(&interaction) {
@@ -524,6 +561,46 @@ impl DesktopView {
             .interaction_choice_ids
             .get(self.interaction_step_index)
             .and_then(Option::as_deref);
+        if interaction.steps.iter().any(|step| step.multi_select) {
+            self.store_current_interaction_answer(cx);
+            let Some(interaction) = self.interaction.as_ref() else {
+                return;
+            };
+            let answered = |index: usize, step: &InteractionStep| {
+                let has_choice = if step.multi_select {
+                    self.interaction_choice_groups.get(index).is_some_and(|ids| !ids.is_empty())
+                } else {
+                    self.interaction_choice_ids.get(index).is_some_and(Option::is_some)
+                };
+                has_choice
+                    || (step.allow_freeform
+                        && self
+                            .interaction_answer_texts
+                            .get(index)
+                            .and_then(Option::as_ref)
+                            .is_some_and(|text| !text.trim().is_empty()))
+            };
+            if !interaction
+                .steps
+                .get(self.interaction_step_index)
+                .is_some_and(|step| answered(self.interaction_step_index, step))
+            {
+                self.error = Some(rust_i18n::t!("app.composer.choose_option").to_string());
+                cx.notify();
+                return;
+            }
+            if self.interaction_step_index + 1 < interaction.steps.len() {
+                self.show_interaction_step(self.interaction_step_index + 1, window, cx);
+                return;
+            }
+            if !interaction.steps.iter().enumerate().all(|(index, step)| answered(index, step)) {
+                self.error = Some(rust_i18n::t!("app.composer.choose_all_options").to_string());
+                cx.notify();
+                return;
+            }
+            self.submit_interaction(Vec::new(), false, window, cx);
+            return;
+        }
         if !interaction
             .steps
             .get(self.interaction_step_index)

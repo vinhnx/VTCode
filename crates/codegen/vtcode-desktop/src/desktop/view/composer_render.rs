@@ -646,7 +646,7 @@ impl DesktopView {
                 Some(key_context::DESKTOP),
             )
             .ghost()
-            .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
+            .desktop_disabled(!self.model_selection_allowed())
             .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone())
     }
 

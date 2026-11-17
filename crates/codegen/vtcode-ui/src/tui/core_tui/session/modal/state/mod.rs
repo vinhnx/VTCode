@@ -38,6 +38,8 @@ pub struct WizardModalState {
 /// State for a single wizard step
 #[derive(Clone)]
 pub struct WizardStepState {
+    pub(crate) multi_select: bool,
+    pub(crate) checked_indices: Vec<usize>,
     /// Title displayed in the tab header
     pub(crate) title: String,
     /// Question or instruction shown above the list
@@ -100,6 +102,7 @@ fn config_list_navigation_hint() -> String {
 
 #[derive(Clone)]
 pub struct ModalListItem {
+    pub(crate) selection_marker: Option<&'static str>,
     pub(crate) title: String,
     pub(crate) subtitle: Option<String>,
     pub(crate) badge: Option<String>,

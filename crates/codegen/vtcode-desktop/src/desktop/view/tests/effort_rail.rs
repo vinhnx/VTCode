@@ -146,6 +146,48 @@ fn reasoning_effort_option_does_not_submit_at_its_boundary(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn compact_model_panel_disables_effort_rows_with_the_model_button(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    settle_fade_animations(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+
+        assert_ne!(window.find("pick-model").disabled(), Some(true));
+        for index in 0..3usize {
+            assert_ne!(
+                window.find(("effort-label", index)).disabled(),
+                Some(true),
+                "effort row {index} starts enabled"
+            );
+        }
+
+        // A pending session request darkens the model button. The compact
+        // panel must darken with it instead of leaving lit, clickable-looking
+        // effort rows behind a disabled model button.
+        view.update(cx, |view, _| {
+            view.session_request = Some(vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("pick-model").disabled(), Some(true));
+        for index in 0..3usize {
+            assert_eq!(
+                window.find(("effort-label", index)).disabled(),
+                Some(true),
+                "effort row {index} must darken with the model button"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn reasoning_effort_slider_subscriptions_follow_palette_lifecycle(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(1);

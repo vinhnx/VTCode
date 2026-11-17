@@ -652,6 +652,7 @@ struct DesktopView {
     /// until the follow-up request arrives.
     interaction_edit_pending: bool,
     interaction_choice_ids: Vec<Option<String>>,
+    interaction_choice_groups: Vec<Vec<String>>,
     interaction_answer_texts: Vec<Option<String>>,
     interaction_step_index: usize,
     /// Mouse selection for immediate (non-wizard) choice panels. `None` means

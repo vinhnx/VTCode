@@ -22,6 +22,8 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
             selected_choice_ids: Vec::new(),
             plan_markdown: None,
             steps: vec![InteractionStep {
+                multi_select: false,
+                selected_choice_ids: Vec::new(),
                 title: "Approach".into(),
                 question: "How should we proceed?".into(),
                 allow_freeform: true,

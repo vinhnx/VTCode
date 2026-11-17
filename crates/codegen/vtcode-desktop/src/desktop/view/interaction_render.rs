@@ -1,5 +1,6 @@
 //! Runtime interaction prompts: question stepper, freeform answers, and choice rows.
 use super::*;
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::kbd::Kbd;
 
 /// Highest 1-based digit shortcut. Panels carry at most a handful of rows
@@ -315,7 +316,12 @@ impl DesktopView {
                 // Up/Down move the highlight over the visible choices. They
                 // reuse the pointer-selection state, so the checked row and
                 // the Confirm button always agree; digits still commit at once.
-                if key == "up" || key == "down" {
+                if (key == "up" || key == "down")
+                    && !interaction
+                        .steps
+                        .get(this.interaction_step_index)
+                        .is_some_and(|step| step.multi_select)
+                {
                     cx.stop_propagation();
                     this.move_interaction_choice(key == "down", window, cx);
                     return;
@@ -497,6 +503,28 @@ impl DesktopView {
         let selected_choice_index =
             selected_choice_id.and_then(|selected| step.choices.iter().position(|choice| choice.id == selected));
         let choice_radios = step.choices.iter().enumerate().map(|(choice_index, choice)| {
+            if step.multi_select {
+                let id = choice.id.clone();
+                let checked = self.interaction_choice_groups.get(index).is_some_and(|ids| ids.contains(&id));
+                return div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        Checkbox::new(format!("interaction-checkbox-{id}"))
+                            .label(choice.label.clone())
+                            .checked(checked)
+                            .disabled(self.pending_interaction_response.is_some())
+                            .on_change(cx.listener(move |this, _: &bool, window, cx| {
+                                this.choose_interaction_option(index, id.clone(), window, cx)
+                            })),
+                    )
+                    .when_some(choice.description.clone(), |row, description| {
+                        row.child(div().text_sm().child(description))
+                    })
+                    .into_any_element();
+            }
             self.render_choice_card(
                 ChoiceCard {
                     element_id: format!("interaction-question-choice-{choice_index}"),
@@ -517,7 +545,11 @@ impl DesktopView {
         let options = div()
             .id("interaction-question-options")
             .test_support()
-            .role(gpui_kit::Role::RadioGroup)
+            .role(if step.multi_select {
+                gpui_kit::Role::Group
+            } else {
+                gpui_kit::Role::RadioGroup
+            })
             .aria_label(step.question.clone())
             .w_full()
             .flex()

@@ -305,6 +305,7 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
         interaction_id: "interaction-x".to_string(),
         choice_id: Some("runtime-choice-allow".to_string()),
         choice_ids: Vec::new(),
+        choice_id_groups: Vec::new(),
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
@@ -379,6 +380,7 @@ fn protocol_methods_and_wire_structs_use_camel_case() -> Result<(), Box<dyn Erro
         interaction_id: "i".to_string(),
         choice_id: Some("choice-opaque".to_string()),
         choice_ids: Vec::new(),
+        choice_id_groups: Vec::new(),
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
@@ -832,6 +834,7 @@ fn interaction_hotkey_signal_round_trips_and_defaults_to_none() -> Result<(), Bo
         interaction_id: "i".to_string(),
         choice_id: None,
         choice_ids: Vec::new(),
+        choice_id_groups: Vec::new(),
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
@@ -873,4 +876,25 @@ fn permission_wording_preserves_wire_values() {
             .contains("Sandbox and tool authorization still apply")
     );
     assert!(PermissionMode::FullAccess.description().contains("Explicit denies still apply"));
+}
+
+#[test]
+fn interaction_selection_fields_default_and_round_trip() {
+    let old = serde_json::json!({"title":"Scope", "question":"Choose scope?", "choices":[], "selectedChoiceId":null, "allowFreeform":true});
+    let mut step: InteractionStep = serde_json::from_value(old).unwrap();
+    assert!(!step.multi_select);
+    assert!(step.selected_choice_ids.is_empty());
+    step.multi_select = true;
+    step.selected_choice_ids = vec!["third".into(), "first".into()];
+    let value = serde_json::to_value(&step).unwrap();
+    assert_eq!(value["multiSelect"], true);
+    assert_eq!(serde_json::from_value::<InteractionStep>(value).unwrap(), step);
+    let old = serde_json::json!({"sessionId":"s", "turnId":"t", "interactionId":"i", "choiceId":null, "text":null});
+    let mut response: InteractionResponse = serde_json::from_value(old).unwrap();
+    assert!(response.choice_id_groups.is_empty());
+    response.choice_id_groups = vec![vec!["a".into(), "c".into()], vec!["b".into()]];
+    assert_eq!(
+        serde_json::from_value::<InteractionResponse>(serde_json::to_value(&response).unwrap()).unwrap(),
+        response
+    );
 }

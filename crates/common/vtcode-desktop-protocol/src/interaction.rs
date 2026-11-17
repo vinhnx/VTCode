@@ -14,6 +14,9 @@ pub enum InteractionHotkey {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InteractionResponse {
+    /// Selected choice identities grouped by ordered wizard step.
+    #[serde(default)]
+    pub choice_id_groups: Vec<Vec<String>>,
     /// Session owning the interaction.
     pub session_id: String,
     /// Turn that raised the interaction.
@@ -81,6 +84,12 @@ pub struct InteractionRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InteractionStep {
+    /// Allow independent checkbox selections.
+    #[serde(default)]
+    pub multi_select: bool,
+    /// Initially checked identities for this step.
+    #[serde(default)]
+    pub selected_choice_ids: Vec<String>,
     /// Step label.
     pub title: String,
     /// Question or instruction for this step.

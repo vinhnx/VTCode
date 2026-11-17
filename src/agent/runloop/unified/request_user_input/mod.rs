@@ -19,9 +19,21 @@ mod tests {
     use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode};
 
     #[test]
+    fn multi_select_defaults_false_and_survives_fallback_normalization() {
+        let args = serde_json::json!({"questions": [{"id":"features", "header":"Features", "question":"Choose features?", "multi_select":true}]});
+        let parsed = normalize_request_user_input_args(&args).unwrap();
+        assert!(parsed.args.questions[0].multi_select);
+        let normalized = normalize_request_user_input_fallback_args(&args).unwrap();
+        assert_eq!(normalized["questions"][0]["multi_select"], true);
+        let single = serde_json::json!({"questions": [{"id":"one", "header":"One", "question":"Choose one?"}]});
+        assert!(!normalize_request_user_input_args(&single).unwrap().args.questions[0].multi_select);
+    }
+
+    #[test]
     fn recommendation_decoration_preserves_original_answer_labels() {
         for labels in [["Retry", "Clarify"], ["First (Recommended)", "Second (recommended)"]] {
             let question = RequestUserInputQuestion {
+                multi_select: false,
                 id: "recovery".into(),
                 header: "Recovery".into(),
                 question: "How should planning continue?".into(),
@@ -53,6 +65,7 @@ mod tests {
 
     fn prompt_question_with_hints() -> RequestUserInputQuestion {
         RequestUserInputQuestion {
+            multi_select: false,
             id: "system_prompt_plan".to_string(),
             header: "Direction".to_string(),
             question: "Which area should we prioritize to improve planning workflow behavior?".to_string(),
@@ -79,6 +92,7 @@ mod tests {
     #[test]
     fn generates_weakness_aware_prompt_options() {
         let question = RequestUserInputQuestion {
+            multi_select: false,
             id: "prompt_improvement".to_string(),
             header: "Direction".to_string(),
             question: "Which system prompt improvement should we prioritize?".to_string(),
@@ -100,6 +114,7 @@ mod tests {
     #[test]
     fn generates_planning_options_for_goal_constraints_questions() {
         let question = RequestUserInputQuestion {
+            multi_select: false,
             id: "constraints".to_string(),
             header: "Plan".to_string(),
             question: "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.".to_string(),
@@ -116,6 +131,7 @@ mod tests {
     #[test]
     fn generates_distinct_options_for_outcome_steps_and_verification_questions() {
         let outcome_question = RequestUserInputQuestion {
+            multi_select: false,
             id: "q1".to_string(),
             header: "Q1".to_string(),
             question: "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?".to_string(),
@@ -127,6 +143,7 @@ mod tests {
             ],
         };
         let steps_question = RequestUserInputQuestion {
+            multi_select: false,
             id: "q2".to_string(),
             header: "Q2".to_string(),
             question: "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.".to_string(),
@@ -138,6 +155,7 @@ mod tests {
             ],
         };
         let verification_question = RequestUserInputQuestion {
+            multi_select: false,
             id: "q3".to_string(),
             header: "Q3".to_string(),
             question: "For each step, what exact command or manual check proves it is complete?".to_string(),
@@ -185,6 +203,7 @@ mod tests {
 
         let questions = vec![
             RequestUserInputQuestion {
+                multi_select: false,
                 id: "goal".to_string(),
                 header: "Goal".to_string(),
                 question: "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?".to_string(),
@@ -193,6 +212,7 @@ mod tests {
                 analysis_hints: Vec::new(),
             },
             RequestUserInputQuestion {
+                multi_select: false,
                 id: "constraints".to_string(),
                 header: "Plan".to_string(),
                 question: "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.".to_string(),
@@ -201,6 +221,7 @@ mod tests {
                 analysis_hints: Vec::new(),
             },
             RequestUserInputQuestion {
+                multi_select: false,
                 id: "verification".to_string(),
                 header: "Verification".to_string(),
                 question: "For each step, what exact command or manual check proves it is complete?"
@@ -256,6 +277,7 @@ mod tests {
         ];
 
         let questions = vec![RequestUserInputQuestion {
+            multi_select: false,
             id: "goal".to_string(),
             header: "Goal".to_string(),
             question: "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?".to_string(),
@@ -277,6 +299,7 @@ mod tests {
     #[test]
     fn id_keyword_does_not_override_question_text_intent() {
         let question = RequestUserInputQuestion {
+            multi_select: false,
             id: "constraints".to_string(),
             header: "Plan".to_string(),
             question: "For each step, what exact command or manual check proves it is complete?".to_string(),
@@ -295,6 +318,7 @@ mod tests {
     #[test]
     fn option_questions_add_explicit_custom_note_choice() {
         let question = RequestUserInputQuestion {
+            multi_select: false,
             id: "scope".to_string(),
             header: "Scope".to_string(),
             question: "Pick direction".to_string(),
@@ -329,6 +353,7 @@ mod tests {
     #[test]
     fn falls_back_to_generic_options_when_no_suggestions_apply() {
         let question = RequestUserInputQuestion {
+            multi_select: false,
             id: "env".to_string(),
             header: "Env".to_string(),
             question: "What environment are you using?".to_string(),

@@ -98,6 +98,7 @@ pub(super) mod i18n {
     pub const CONFIGURATION_DEFAULT_HINT: &str = "app.configuration.default_hint";
     pub const CONFIGURATION_ORIGIN_HINT: &str = "app.configuration.origin_hint";
     pub const CONFIGURATION_UNAVAILABLE: &str = "app.configuration.unavailable";
+    pub const CONFIGURATION_LOADING_VALUE: &str = "app.configuration.loading_value";
     pub const CONFIGURATION_UNSET: &str = "app.configuration.unset";
     pub const ERRORS_UNKNOWN_DESTINATION: &str = "app.errors.unknown_destination";
     pub const FILE_PREVIEW_COPY: &str = "app.file_preview.copy";
@@ -184,7 +185,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 60] = [
+        const KEYS: [&str; 61] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -197,6 +198,7 @@ mod tests {
             i18n::CONFIGURATION_DEFAULT_HINT,
             i18n::CONFIGURATION_ORIGIN_HINT,
             i18n::CONFIGURATION_UNAVAILABLE,
+            i18n::CONFIGURATION_LOADING_VALUE,
             i18n::CONFIGURATION_UNSET,
             i18n::ERRORS_UNKNOWN_DESTINATION,
             i18n::FILE_PREVIEW_COPY,

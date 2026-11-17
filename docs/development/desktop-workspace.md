@@ -1004,3 +1004,6 @@ runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`,
 CLI runtime. On wide viewports the groups rail sits beside the rows; on narrow viewports it stacks above them.
 
 Shared naming and compatibility rules: [agent modes and permissions](agent-mode-wording.md).
+
+Question prompts use standard radio buttons for one answer and checkboxes for `multi_select: true`;
+see [elicitation selection controls](elicitation-selection.md) for the shared Desktop/TUI contract.

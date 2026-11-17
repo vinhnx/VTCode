@@ -23,6 +23,13 @@ pub(super) fn dispatch_interaction_response(
             host_interaction_hotkey_response(&pending.view, TransientHotkeyAction::LaunchEditor)
                 .ok_or_else(|| anyhow!("interaction hotkey is invalid"))?
         }
+        None if !response.choice_id_groups.is_empty() => vtcode_ui::tui::app::host_interaction_response_grouped(
+            &pending.view,
+            &response.choice_id_groups,
+            answer_texts,
+            response.cancelled,
+        )
+        .ok_or_else(|| anyhow!("interaction response is incomplete or invalid"))?,
         None => {
             if choice_ids.iter().any(|choice_id| {
                 !pending

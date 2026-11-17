@@ -392,6 +392,7 @@ async fn prompt_overwrite_confirmation(
     path: &std::path::Path,
 ) -> Result<Option<bool>> {
     let step = WizardStep {
+        multi_select: false,
         title: "Overwrite".to_string(),
         question: format!("AGENTS.md already exists at {}. Overwrite it?", path.display()),
         items: vec![
@@ -520,6 +521,7 @@ fn build_question_step(question: &GuidedInitQuestion) -> WizardStep {
     }
 
     WizardStep {
+        multi_select: false,
         title: question.header.clone(),
         question: question.prompt.clone(),
         items,

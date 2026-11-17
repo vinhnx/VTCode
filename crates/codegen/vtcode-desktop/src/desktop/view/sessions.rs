@@ -127,6 +127,13 @@ impl DesktopView {
                 || reload_session_id.is_some_and(|id| self.selected_session_id.as_deref() == Some(id)))
     }
 
+    /// Whether the model button and its compact-panel effort/speed controls may
+    /// be changed right now. Both surfaces share this gate so the effort rows
+    /// can never stay bright while the model button is disabled (and vice versa).
+    pub(super) fn model_selection_allowed(&self) -> bool {
+        self.session_change_allowed(None) && !self.attachments_picker_open
+    }
+
     /// Whether a stop-then-proceed flow owns the session-change funnel: an
     /// unanswered modal or an armed wait. While set, every New/Switch/Close
     /// entry stays dark so intents can neither swap nor double.

@@ -650,6 +650,8 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
             choices.push(make_choice("another-workspace"));
         }
         InteractionStep {
+            multi_select: false,
+            selected_choice_ids: Vec::new(),
             title: title.into(),
             question: question.into(),
             choices,

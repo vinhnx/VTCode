@@ -64,6 +64,7 @@ fn build_statusline_prompt_step(
     default_value: Option<String>,
 ) -> WizardStep {
     WizardStep {
+        multi_select: false,
         title: "Input".to_string(),
         question: question.to_string(),
         items: vec![InlineListItem {

@@ -54,6 +54,7 @@ pub(crate) async fn execute_request_user_input_tool(
             let items = build_question_items_with_options(q, options);
 
             WizardStep {
+                multi_select: q.multi_select,
                 title: q.header.clone(),
                 question: q.question.clone(),
                 items,

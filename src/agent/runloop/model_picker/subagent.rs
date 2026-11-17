@@ -391,6 +391,7 @@ async fn prompt_subagent_model_id(
             session,
             "Subagent model id".to_string(),
             vec![WizardStep {
+                multi_select: false,
                 title: "Model id".to_string(),
                 question: "Enter a concrete VT Code model id. Shortcut aliases such as `inherit` and `small` are available in the list view.".to_string(),
                 items: vec![ui_list::action("Enter a model id", 
