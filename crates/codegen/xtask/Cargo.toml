@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-version = "0.182.7"
+version = "0.183.0"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
