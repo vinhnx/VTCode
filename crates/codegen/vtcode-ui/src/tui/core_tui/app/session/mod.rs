@@ -332,17 +332,17 @@ impl AppSession {
         match request {
             TransientRequest::Modal(request) => {
                 self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(request.into()));
+                    .show_blocking_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(request.into()));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::List(request) => {
                 self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::List(request.into()));
+                    .show_blocking_overlay(crate::tui::core_tui::types::OverlayRequest::List(request.into()));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Wizard(request) => {
                 self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::Wizard(request.into()));
+                    .show_blocking_overlay(crate::tui::core_tui::types::OverlayRequest::Wizard(request.into()));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Diff(request) => {

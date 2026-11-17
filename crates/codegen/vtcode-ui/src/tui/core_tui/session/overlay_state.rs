@@ -42,6 +42,24 @@ impl Session {
         self.activate_overlay(request);
     }
 
+    /// Show an overlay that owns the input surface and whose caller blocks
+    /// waiting for a typed response (permissions, HITL questions, plan
+    /// approval). Such a prompt must be the *visible* overlay: queueing it
+    /// behind an already-active modal leaves the runtime waiting for input no
+    /// visible UI can produce, so the session hangs behind a stale modal.
+    ///
+    /// Only the stale *active* overlay is replaced. Queued overlays keep their
+    /// own blocked callers and are preserved: dropping them would strand those
+    /// callers in the same way.
+    pub(crate) fn show_blocking_overlay(&mut self, request: OverlayRequest) {
+        let _ = self.detach_active_overlay();
+        // The replaced overlay's selection must not anchor this prompt to the
+        // bottom: a blocking prompt selects its own explicit default (e.g.
+        // "Approve Once"), never the previous modal's last row.
+        self.clear_last_overlay_list_cache();
+        self.activate_overlay(request);
+    }
+
     pub(crate) fn has_active_overlay(&self) -> bool {
         self.active_overlay.is_some()
     }
@@ -91,16 +109,24 @@ impl Session {
         }
     }
 
+    /// Detach the active overlay and restore input state without activating a
+    /// queued successor. Shared by `close_overlay` and `show_blocking_overlay`,
+    /// which must replace the visible overlay without consuming the queue.
+    fn detach_active_overlay(&mut self) -> Option<ActiveOverlay> {
+        let state = self.active_overlay.take()?;
+        self.areas.clear_modal_areas();
+        self.modal_link_targets.clear();
+        self.input_enabled = state.restore_input() && !self.activity_state.is_busy();
+        self.cursor_visible = state.restore_cursor() && !self.activity_state.is_busy();
+        Some(state)
+    }
+
     pub(crate) fn close_overlay(&mut self) {
-        let Some(state) = self.active_overlay.take() else {
+        let Some(state) = self.detach_active_overlay() else {
             return;
         };
 
-        self.areas.clear_modal_areas();
-        self.modal_link_targets.clear();
         self.cache_last_overlay_list_state(&state);
-        self.input_enabled = state.restore_input() && !self.activity_state.is_busy();
-        self.cursor_visible = state.restore_cursor() && !self.activity_state.is_busy();
 
         if let Some(next_request) = self.overlay_queue.pop_front() {
             self.activate_overlay(next_request);
