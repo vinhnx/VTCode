@@ -283,6 +283,7 @@ impl DesktopView {
                         .min_w_0()
                         .flex_1()
                         .flex()
+                        .flex_wrap()
                         .items_center()
                         .gap_1()
                         .overflow_hidden()
@@ -655,14 +656,9 @@ impl DesktopView {
         let permission_mode = self.session_options().map(|options| options.permission_mode);
         let sandbox = self.configuration.as_ref().and_then(|config| config.sandbox.as_deref());
         let (policy, policy_label) = match (permission_mode, sandbox) {
-            (Some(protocol::PermissionMode::Ask), _) => {
-                (rust_i18n::t!(i18n::COMPOSER_PERMISSION_ASK).to_string(), "Ask".to_owned())
-            }
-            (Some(protocol::PermissionMode::AutoApproveCommands), _) => {
-                (rust_i18n::t!(i18n::COMPOSER_PERMISSION_AUTO).to_string(), "Auto".to_owned())
-            }
-            (Some(protocol::PermissionMode::FullAccess), _) => {
-                (rust_i18n::t!(i18n::COMPOSER_PERMISSION_FULL).to_string(), "Full access".to_owned())
+            (Some(mode), _) => {
+                let label = session_options::permission_mode_label(mode);
+                (label.clone(), label)
             }
             (None, Some(policy)) => (policy.to_owned(), policy.to_owned()),
             (None, None) => (
@@ -676,7 +672,7 @@ impl DesktopView {
             .open(self.palette_open_for(&[PaletteKind::Permissions]))
             .accessibility_label(rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string())
             .tooltip_with_action(
-                rust_i18n::t!("app.composer.command_permissions").to_string(),
+                rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string(),
                 &OpenPermissions,
                 Some(key_context::DESKTOP),
             )
@@ -693,7 +689,7 @@ impl DesktopView {
             .ghost()
             .small()
             .min_w_0()
-            .max_w(px(112.))
+            .max_w(px(224.))
             .desktop_disabled(!self.can_select_session_options())
             .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone())
     }

@@ -15,6 +15,48 @@ pub enum PermissionMode {
     FullAccess,
 }
 
+impl PermissionMode {
+    /// Canonical English label shared by the CLI service and native clients.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Ask => "Ask before protected actions",
+            Self::AutoApproveCommands => "Auto-approve commands",
+            Self::FullAccess => "Full access",
+        }
+    }
+
+    /// Desktop translation key for the canonical permission label.
+    #[must_use]
+    pub const fn label_key(self) -> &'static str {
+        match self {
+            Self::Ask => "app.composer.permission_ask",
+            Self::AutoApproveCommands => "app.composer.permission_auto",
+            Self::FullAccess => "app.composer.permission_full",
+        }
+    }
+
+    /// Explain the execution boundary without implying that explicit denies disappear.
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Ask => "Ask for approval before running protected commands.",
+            Self::AutoApproveCommands => "Skip command confirmations. Sandbox and tool authorization still apply.",
+            Self::FullAccess => "Run without the process sandbox or approval prompts. Explicit denies still apply.",
+        }
+    }
+
+    /// Desktop translation key for the permission explanation.
+    #[must_use]
+    pub const fn description_key(self) -> &'static str {
+        match self {
+            Self::Ask => "app.permissions.desc_ask",
+            Self::AutoApproveCommands => "app.permissions.desc_auto",
+            Self::FullAccess => "app.permissions.desc_full",
+        }
+    }
+}
+
 /// Runtime options exposed without credentials or complete configuration documents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

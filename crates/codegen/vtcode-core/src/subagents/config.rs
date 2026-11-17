@@ -50,7 +50,7 @@ impl ResolvedAgentRuntimeView {
     pub fn from_spec(spec: &SubagentSpec) -> Self {
         Self {
             canonical_name: spec.name.clone(),
-            display_name: spec.name.clone(),
+            display_name: spec.display_name().to_owned(),
             description: spec.description.clone(),
             color: spec.color.clone(),
             aliases: spec.aliases.clone(),

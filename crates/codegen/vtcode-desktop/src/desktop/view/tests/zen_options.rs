@@ -133,7 +133,16 @@ fn zen_composer_popups_stay_above_input_in_narrow_window(cx: &mut TestAppContext
         view.update(cx, |view, _| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.configuration = Some(runtime_options_config());
+            let mut configuration = runtime_options_config();
+            let options = configuration.session_options.as_mut().unwrap();
+            options.mode = "auto".into();
+            options
+                .available_modes
+                .iter_mut()
+                .find(|mode| mode.name == "auto")
+                .unwrap()
+                .display_name = "Autonomous".into();
+            view.configuration = Some(configuration);
             view.zen_mode = true;
         });
         window.render_frame(cx);
@@ -145,6 +154,14 @@ fn zen_composer_popups_stay_above_input_in_narrow_window(cx: &mut TestAppContext
             "the narrow option cluster must end before the send action: {cluster:?} vs {send:?}"
         );
         for button in ["pick-model", "composer-mode", "composer-policy"] {
+            let bounds = window.find(button).bounds();
+            assert!(
+                bounds.left() >= cluster.left()
+                    && bounds.right() <= cluster.right()
+                    && bounds.top() >= cluster.top()
+                    && bounds.bottom() <= cluster.bottom(),
+                "{button} must remain inside the visible option cluster: {bounds:?} vs {cluster:?}"
+            );
             window.click(button, cx);
             window.render_frame(cx);
             let popup = window.find("command-palette").bounds();

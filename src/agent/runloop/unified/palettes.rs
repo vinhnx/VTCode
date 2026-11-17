@@ -130,31 +130,29 @@ pub(crate) fn show_mode_palette(
 
     let mut items = Vec::new();
     let mut canonical_current = current_name;
+    let mut current_label = current_name;
     for spec in &primary_specs {
         let is_current = spec.name.eq_ignore_ascii_case(current_name);
         if is_current {
             canonical_current = spec.name.as_str();
+            current_label = spec.display_name();
         }
         let badge = if is_current { Some("Active".to_string()) } else { None };
-        let subtitle = if spec.permissions.default == vtcode_config::core::permissions::PermissionDefault::Auto {
-            Some(format!("{} (autonomous)", spec.description))
-        } else {
-            Some(spec.description.clone())
-        };
+        let subtitle = Some(spec.description.clone());
         items.push(InlineListItem {
-            title: spec.name.clone(),
+            title: spec.display_name().to_owned(),
             subtitle,
             badge,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!("{}{}", MODE_ACTION_PREFIX, spec.name))),
-            search_value: Some(format!("{} {} agent mode", spec.name, spec.description)),
+            search_value: Some(format!("{} {} {} agent mode", spec.name, spec.display_name(), spec.description)),
             ..Default::default()
         });
     }
 
     renderer.show_list_modal(
         MODE_PALETTE_TITLE,
-        vec![format!("The current agent is {canonical_current}.")],
+        vec![format!("The current agent is {current_label}.")],
         items,
         Some(InlineListSelection::ConfigAction(format!("{MODE_ACTION_PREFIX}{canonical_current}"))),
         Some(InlineListSearchConfig {

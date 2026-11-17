@@ -1002,3 +1002,5 @@ the list. `/config <group or path>` deep-links into the page; the
 runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`,
 `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the
 CLI runtime. On wide viewports the groups rail sits beside the rows; on narrow viewports it stacks above them.
+
+Shared naming and compatibility rules: [agent modes and permissions](agent-mode-wording.md).

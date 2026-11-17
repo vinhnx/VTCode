@@ -92,9 +92,6 @@ pub(super) mod i18n {
     pub const COMPOSER_CHOOSE_MODEL: &str = "app.composer.choose_model";
     pub const COMPOSER_INPUT_PLACEHOLDER: &str = "app.composer.input_placeholder";
     pub const COMPOSER_MESSAGE_NOT_SUBMITTED: &str = "app.composer.message_not_submitted";
-    pub const COMPOSER_PERMISSION_ASK: &str = "app.composer.permission_ask";
-    pub const COMPOSER_PERMISSION_AUTO: &str = "app.composer.permission_auto";
-    pub const COMPOSER_PERMISSION_FULL: &str = "app.composer.permission_full";
     pub const COMPOSER_REASONING_EFFORT: &str = "app.composer.reasoning_effort";
     pub const COMPOSER_SENDING_DECISION: &str = "app.composer.sending_decision";
     pub const CONFIGURATION_CANCEL: &str = "app.configuration.cancel";
@@ -167,6 +164,19 @@ pub(super) mod display {
 mod tests {
     use super::i18n;
 
+    #[test]
+    fn permission_wording_matches_shared_cli_contract() {
+        use vtcode_desktop_protocol::PermissionMode;
+        for mode in [
+            PermissionMode::Ask,
+            PermissionMode::AutoApproveCommands,
+            PermissionMode::FullAccess,
+        ] {
+            assert_eq!(rust_i18n::t!(mode.label_key(), locale = "en").as_ref(), mode.label());
+            assert_eq!(rust_i18n::t!(mode.description_key(), locale = "en").as_ref(), mode.description());
+        }
+    }
+
     /// Every shared key must resolve in the shipped English locale, covering
     /// both plain keys and `%{...}` templates (which resolve to their raw
     /// template without args). `rust_i18n::t!` returns the key itself on a
@@ -174,16 +184,13 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 63] = [
+        const KEYS: [&str; 60] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
             i18n::COMPOSER_CHOOSE_MODEL,
             i18n::COMPOSER_INPUT_PLACEHOLDER,
             i18n::COMPOSER_MESSAGE_NOT_SUBMITTED,
-            i18n::COMPOSER_PERMISSION_ASK,
-            i18n::COMPOSER_PERMISSION_AUTO,
-            i18n::COMPOSER_PERMISSION_FULL,
             i18n::COMPOSER_REASONING_EFFORT,
             i18n::COMPOSER_SENDING_DECISION,
             i18n::CONFIGURATION_CANCEL,

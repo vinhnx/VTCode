@@ -841,3 +841,26 @@ fn assert_hook_commands(groups: &[HookGroupConfig], expected: &[&str]) {
         .collect::<Vec<_>>();
     assert_eq!(commands, expected);
 }
+
+#[test]
+fn primary_runtime_uses_shared_display_names_without_renaming_identity() {
+    let builtins = builtin_subagents();
+    for (id, label) in [("auto", "Autonomous"), ("duck", "Ask"), ("build", "Build")] {
+        let active = resolve_primary_agent(&builtins, id).expect("builtin primary");
+        assert_eq!(active.name(), id);
+        assert_eq!(active.display_name, label);
+    }
+}
+
+#[test]
+fn human_facing_primary_names_resolve_to_compatible_ids() {
+    let builtins = builtin_subagents();
+    assert_eq!(resolve_primary_agent(&builtins, "Ask").unwrap().name(), "duck");
+    assert_eq!(resolve_primary_agent(&builtins, "Autonomous").unwrap().name(), "auto");
+    let mut custom = builtin_primary_duck_agent();
+    custom.name = "ask".into();
+    custom.source = SubagentSource::ProjectVtcode;
+    let mut specs = builtins;
+    specs.push(custom);
+    assert_eq!(resolve_primary_agent(&specs, "ask").unwrap().name(), "ask");
+}

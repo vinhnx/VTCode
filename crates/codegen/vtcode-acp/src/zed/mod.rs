@@ -443,6 +443,8 @@ Research primary prompt."#,
         );
         assert!(primary_agent_select_labels(&config_options).contains(&"Research primary".into()));
         assert!(primary_agent_select_labels(&config_options).contains(&"Coordinator".into()));
+        assert!(primary_agent_select_labels(&config_options).contains(&"Autonomous".into()));
+        assert!(primary_agent_select_labels(&config_options).contains(&"Ask".into()));
         assert_eq!(primary_agent_current_value(&config_options), Some("research".to_string()));
     }
 

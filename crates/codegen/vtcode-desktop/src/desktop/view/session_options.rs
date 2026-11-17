@@ -101,17 +101,17 @@ impl DesktopView {
             (
                 protocol::PermissionMode::Ask,
                 permission_mode_label(protocol::PermissionMode::Ask),
-                rust_i18n::t!("app.permissions.desc_ask").to_string(),
+                rust_i18n::t!(protocol::PermissionMode::Ask.description_key()).to_string(),
             ),
             (
                 protocol::PermissionMode::AutoApproveCommands,
                 permission_mode_label(protocol::PermissionMode::AutoApproveCommands),
-                rust_i18n::t!("app.permissions.desc_auto").to_string(),
+                rust_i18n::t!(protocol::PermissionMode::AutoApproveCommands.description_key()).to_string(),
             ),
             (
                 protocol::PermissionMode::FullAccess,
                 permission_mode_label(protocol::PermissionMode::FullAccess),
-                rust_i18n::t!("app.permissions.desc_full").to_string(),
+                rust_i18n::t!(protocol::PermissionMode::FullAccess.description_key()).to_string(),
             ),
         ]
         .into_iter()
@@ -243,9 +243,5 @@ impl DesktopView {
 /// Short label for a session permission mode, shared by the composer
 /// permission picker and the curated configuration row.
 pub(super) fn permission_mode_label(mode: protocol::PermissionMode) -> String {
-    match mode {
-        protocol::PermissionMode::Ask => rust_i18n::t!(i18n::COMPOSER_PERMISSION_ASK).to_string(),
-        protocol::PermissionMode::AutoApproveCommands => rust_i18n::t!(i18n::COMPOSER_PERMISSION_AUTO).to_string(),
-        protocol::PermissionMode::FullAccess => rust_i18n::t!(i18n::COMPOSER_PERMISSION_FULL).to_string(),
-    }
+    rust_i18n::t!(mode.label_key()).to_string()
 }

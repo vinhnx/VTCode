@@ -191,7 +191,7 @@ fn builtin_subagents_inner() -> Vec<SubagentSpec> {
 pub fn builtin_primary_build_agent() -> SubagentSpec {
     SubagentSpec {
         name: "build".to_string(),
-        description: "Built-in implementation agent for the main session.".to_string(),
+        description: "Implement changes using configured permissions.".to_string(),
         prompt: BUILTIN_BUILD_PRIMARY_AGENT.to_string(),
         tools: None,
         disallowed_tools: Vec::new(),
@@ -224,7 +224,7 @@ pub fn builtin_primary_build_agent() -> SubagentSpec {
 pub fn builtin_primary_auto_agent() -> SubagentSpec {
     SubagentSpec {
         name: "auto".to_string(),
-        description: "Built-in autonomous implementation agent for the main session.".to_string(),
+        description: "Implement and verify autonomously. Uses automatic agent permissions; sandbox and explicit denies still apply.".to_string(),
         prompt: BUILTIN_AUTO_PRIMARY_AGENT.to_string(),
         tools: None,
         disallowed_tools: Vec::new(),
@@ -281,7 +281,7 @@ pub fn builtin_primary_coordinator_agent() -> SubagentSpec {
 pub fn builtin_plan_agent() -> SubagentSpec {
     SubagentSpec {
         name: "plan".to_string(),
-        description: "Built-in read-only planning agent definition.".to_string(),
+        description: "Explore code and propose a plan before implementation.".to_string(),
         prompt: format!("{DISCUSSION_FIRST_GUIDANCE}\n\n{BUILTIN_PLAN_AGENT_ROLE}"),
         tools: Some(builtin_primary_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
@@ -310,7 +310,7 @@ pub fn builtin_plan_agent() -> SubagentSpec {
 pub fn builtin_primary_duck_agent() -> SubagentSpec {
     SubagentSpec {
         name: "duck".to_string(),
-        description: "Built-in discussion-first agent for the main session.".to_string(),
+        description: "Discuss questions and explore code without changing files.".to_string(),
         prompt: format!("{DISCUSSION_FIRST_GUIDANCE}\n\n{BUILTIN_DUCK_PRIMARY_AGENT_ROLE}"),
         tools: Some(builtin_primary_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
@@ -328,7 +328,7 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
         initial_prompt: None,
         memory: None,
         isolation: None,
-        aliases: Vec::new(),
+        aliases: vec!["ask".to_string()],
         source: SubagentSource::Builtin,
         file_path: None,
         warnings: Vec::new(),

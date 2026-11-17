@@ -185,8 +185,8 @@ fn permission_choices(active: bool, confirm: bool) -> TransientRequest {
                 Some(InlineListSelection::ConfigAction("configured".into())),
             ),
             ui_list::action(
-                "Full access",
-                "Unrestricted access to the internet and any file on your computer",
+                vtcode_desktop_protocol::PermissionMode::FullAccess.label(),
+                vtcode_desktop_protocol::PermissionMode::FullAccess.description(),
                 full_access_badge,
                 Tone::Warning,
                 Some(InlineListSelection::ConfigAction("full".into())),
@@ -446,7 +446,7 @@ mod tests {
             assert_eq!(full.badge_tone, Tone::Warning);
             assert_eq!(
                 full.subtitle.as_deref(),
-                Some("Unrestricted access to the internet and any file on your computer")
+                Some("Run without the process sandbox or approval prompts. Explicit denies still apply.")
             );
             assert_eq!(full.badge.as_deref(), Some(if active { "Current" } else { "Caution" }));
 

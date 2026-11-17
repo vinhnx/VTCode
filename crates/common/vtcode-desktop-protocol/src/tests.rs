@@ -855,3 +855,22 @@ fn interaction_hotkey_signal_round_trips_and_defaults_to_none() -> Result<(), Bo
     assert_eq!(legacy.hotkey, None);
     Ok(())
 }
+
+#[test]
+fn permission_wording_preserves_wire_values() {
+    for (mode, wire, label) in [
+        (PermissionMode::Ask, "ask", "Ask before protected actions"),
+        (PermissionMode::AutoApproveCommands, "autoApproveCommands", "Auto-approve commands"),
+        (PermissionMode::FullAccess, "fullAccess", "Full access"),
+    ] {
+        assert_eq!(serde_json::to_value(mode).unwrap(), wire);
+        assert_eq!(mode.label(), label);
+        assert_eq!(serde_json::from_value::<PermissionMode>(serde_json::json!(wire)).unwrap(), mode);
+    }
+    assert!(
+        PermissionMode::AutoApproveCommands
+            .description()
+            .contains("Sandbox and tool authorization still apply")
+    );
+    assert!(PermissionMode::FullAccess.description().contains("Explicit denies still apply"));
+}

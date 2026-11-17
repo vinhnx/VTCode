@@ -358,3 +358,23 @@ fn builtin_duck_agent_exposes_request_user_input() {
         "duck agent should expose request_user_input for clarifying questions"
     );
 }
+
+#[test]
+fn primary_display_names_preserve_ids_and_custom_overrides() {
+    for (id, label, permission) in [
+        ("auto", "Autonomous", PermissionDefault::Auto),
+        ("build", "Build", PermissionDefault::Ask),
+        ("duck", "Ask", PermissionDefault::Deny),
+        ("plan", "Plan", PermissionDefault::Deny),
+    ] {
+        let builtins = builtin_subagents();
+        let spec = builtins.iter().find(|spec| spec.name == id).expect("builtin");
+        assert_eq!(spec.display_name(), label);
+        assert_eq!(spec.name, id);
+        assert_eq!(spec.permissions.default, permission);
+        assert!(spec.matches_name(id));
+        let mut custom = spec.clone();
+        custom.source = SubagentSource::ProjectVtcode;
+        assert_eq!(custom.display_name(), id, "custom agents must retain their names");
+    }
+}

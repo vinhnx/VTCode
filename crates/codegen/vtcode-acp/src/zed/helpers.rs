@@ -272,7 +272,9 @@ fn local_tool_semantic_name(tool_name: &str) -> Option<&'static str> {
 }
 
 fn primary_agent_label(spec: &SubagentSpec) -> String {
-    if spec.source == SubagentSource::Builtin || spec.description.trim().is_empty() {
+    if spec.source == SubagentSource::Builtin {
+        title_case_identifier(spec.display_name())
+    } else if spec.description.trim().is_empty() {
         title_case_identifier(&spec.name)
     } else {
         spec.description.clone()

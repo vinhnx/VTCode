@@ -222,11 +222,11 @@ pub(super) async fn configuration_snapshot(
         secret_store,
         sandbox: Some(
             if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
-                "Full access"
+                protocol::PermissionMode::FullAccess.label()
             } else if skip_confirmations {
-                "Auto-approved commands"
+                protocol::PermissionMode::AutoApproveCommands.label()
             } else {
-                "Ask before protected actions"
+                protocol::PermissionMode::Ask.label()
             }
             .to_string(),
         ),

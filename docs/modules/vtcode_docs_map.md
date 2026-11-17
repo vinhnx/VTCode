@@ -102,6 +102,10 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Adding New Models to VT Code?", "How does Overview work?", "How does
     Quick Checklist work?"
 
+- **File**: `docs/development/agent-mode-wording.md`
+  - **Content**: Agent modes and permissions
+  - **User Questions**: "What can you tell me about Agent modes and permissions?"
+
 - **File**: `docs/development/allocator_memory.md`
   - **Content**: Allocator & Memory Behavior
   - **Topics**: The problem, Allocator selection, Allocation throughput trade-off (measured), Measuring it,

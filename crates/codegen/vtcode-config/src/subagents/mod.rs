@@ -218,6 +218,22 @@ impl Default for SubagentSpec {
 }
 
 impl SubagentSpec {
+    /// Human-facing built-in name. Canonical IDs and custom agent names stay unchanged.
+    #[must_use]
+    pub fn display_name(&self) -> &str {
+        if self.source != SubagentSource::Builtin {
+            return &self.name;
+        }
+        match self.name.as_str() {
+            "auto" => "Autonomous",
+            "build" => "Build",
+            "duck" => "Ask",
+            "plan" => "Plan",
+            "coordinator" => "Coordinator",
+            _ => &self.name,
+        }
+    }
+
     #[must_use]
     pub const fn is_primary(&self) -> bool {
         matches!(self.mode, AgentMode::Primary | AgentMode::All)

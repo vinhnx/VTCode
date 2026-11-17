@@ -364,7 +364,10 @@ fn render_mode_list_headless(
         } else {
             ""
         };
-        renderer.line(MessageStyle::Output, &format!("  {}{marker} — {}", spec.name, spec.description))?;
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  {} [{}]{marker} — {}", spec.display_name(), spec.name, spec.description),
+        )?;
     }
     renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(())

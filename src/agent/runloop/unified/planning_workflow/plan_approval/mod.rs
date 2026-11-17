@@ -453,6 +453,7 @@ pub(crate) fn build_plan_confirmation_request_with_context(
         .as_ref()
         .map(|path| format!("ctrl-g to edit in VS Code · {path}"));
     let fresh_recommended = context_usage_percent >= 50;
+    let autonomous_agent = vtcode_config::builtin_primary_auto_agent();
     let items = vec![
         InlineListItem {
             title: "Yes, implement this plan".to_string(),
@@ -473,10 +474,8 @@ pub(crate) fn build_plan_confirmation_request_with_context(
             ..Default::default()
         },
         InlineListItem {
-            title: "Yes, switch to Auto and implement".to_string(),
-            subtitle: Some(
-                "Use the Auto agent's unattended confirmation policy; safety gates remain active.".to_string(),
-            ),
+            title: format!("Yes, switch to {} and implement", autonomous_agent.display_name()),
+            subtitle: Some(autonomous_agent.description),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalSwitchAuto),

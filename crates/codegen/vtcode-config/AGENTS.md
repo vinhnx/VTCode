@@ -11,6 +11,8 @@
 
 ## Rules
 
+- `SubagentSpec::display_name()` owns built-in agent labels; preserve canonical IDs and custom names.
+
 - Repository-controlled Workspace/Project layers cannot define non-empty `custom_providers`, override `provider_overrides.*.base_url`/`api_key_env`, or set `auth.copilot.command`; origin checks run before provider registration, malformed or symlinked files fail closed, and explicit config files are never repaired.
 - Workspace lifecycle hooks are built only by `ConfigManager::collect_workspace_lifecycle_hooks` at load and gate behind per-workspace approval, so never construct them outside load.
 - `ConfigLayerStack` handles layering (defaults, file, env, CLI) and must not be bypassed.

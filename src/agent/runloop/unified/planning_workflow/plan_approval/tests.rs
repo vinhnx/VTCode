@@ -243,6 +243,25 @@ fn plan_confirmation_request_has_build_auto_and_revision_choices() {
 }
 
 #[test]
+fn plan_confirmation_autonomous_choice_uses_shared_name_and_preserves_action() {
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&sample_plan(), false, 7) else {
+        panic!("expected list request");
+    };
+    let autonomous = request
+        .items
+        .iter()
+        .find(|item| item.selection == Some(InlineListSelection::PlanApprovalSwitchAuto))
+        .expect("autonomous implementation choice");
+    assert_eq!(autonomous.title, "Yes, switch to Autonomous and implement");
+    assert_eq!(
+        autonomous.subtitle.as_deref(),
+        Some(
+            "Implement and verify autonomously. Uses automatic agent permissions; sandbox and explicit denies still apply."
+        )
+    );
+}
+
+#[test]
 fn plan_confirmation_request_carries_normalized_plan_markdown_for_hosts() {
     let mut plan = sample_plan();
     plan.raw_content = "<proposed_plan>\n# Retry plan\n\nWrap generate in retry.\n</proposed_plan>".to_string();
