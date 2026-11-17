@@ -80,6 +80,21 @@ fn blocking_overlay_preserves_queued_overlays() {
     assert_eq!(title(&session), "Queued", "the queued overlay must resurface");
 }
 
+/// Help has no caller waiting on a typed response, so it must stay queued
+/// behind an active blocking prompt rather than replacing and stranding it.
+#[test]
+fn help_modal_queues_behind_an_active_prompt() {
+    let mut session = build_session();
+    show_approval_modal(&mut session);
+    session.show_help_modal();
+
+    let title = |session: &Session| session.modal_state().map(|modal| modal.title.clone()).unwrap_or_default();
+    assert_eq!(title(&session), "Command approval", "help must not replace the approval prompt");
+
+    session.handle_command(InlineCommand::CloseTransient);
+    assert_eq!(title(&session), "Keyboard Shortcuts", "queued help must resurface");
+}
+
 /// A blocking HITL prompt must become the *visible* overlay. Queueing it
 /// behind an already-active modal leaves the runtime waiting for input no
 /// visible UI can produce, so the session hangs on "Waiting for approval"

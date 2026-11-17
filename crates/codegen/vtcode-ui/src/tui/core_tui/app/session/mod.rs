@@ -331,8 +331,16 @@ impl AppSession {
         self.core.clear_inline_prompt_suggestion();
         match request {
             TransientRequest::Modal(request) => {
-                self.core
-                    .show_blocking_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(request.into()));
+                let is_help = request.is_help_modal;
+                let overlay = crate::tui::core_tui::types::OverlayRequest::Modal(request.into());
+                // Help is informational with no caller waiting on a typed
+                // response. Keep it queued behind the active overlay so it
+                // cannot replace a blocking prompt and strand that caller.
+                if is_help {
+                    self.core.show_overlay(overlay);
+                } else {
+                    self.core.show_blocking_overlay(overlay);
+                }
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::List(request) => {
