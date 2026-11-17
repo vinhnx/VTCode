@@ -1,56 +1,11 @@
 //! Transcript state and conversation rendering: rows, items, tool and diff cards.
 
 use super::*;
+use welcome::{WelcomeHeader, greeting_empty_state, welcome_header};
 
-/// Owned welcome-screen text shared by the default and Zen empty states.
-struct WelcomeHeader {
-    copy: WelcomeCopy,
-    greeting: String,
-    workspace_name: Option<String>,
-    prompt: String,
-}
+mod welcome;
 
 impl DesktopView {
-    /// Welcome prelude both empty states render from; single owner so their copy cannot drift.
-    fn welcome_header(&self) -> WelcomeHeader {
-        let copy = welcome_copy(self.welcome_copy_index);
-        let greeting = welcome_greeting(self.welcome_period);
-        let workspace_name = self.workspace_file_name();
-        let prompt = welcome_prompt(&greeting, &copy.action, &copy.workspace_action, workspace_name.as_deref());
-        WelcomeHeader { copy, greeting, workspace_name, prompt }
-    }
-
-    /// Shared greeting scaffold for the welcome and Zen empty states: one
-    /// owner for the brand mark, title type, and gap, so the two greetings
-    /// cannot drift apart in size. Callers pass their own title content
-    /// (workspace link vs plain text) and wrap the scaffold in their own
-    /// labelled group.
-    fn greeting_empty_state(
-        &self,
-        title: impl IntoElement,
-        colors: gpui_kit::component::theme::ThemeColor,
-    ) -> impl IntoElement {
-        EmptyState::new()
-            .header(
-                EmptyHeader::new()
-                    .max_w(px(self.content_width()))
-                    .gap_6()
-                    .media(
-                        EmptyMedia::new()
-                            .mb_0()
-                            .child(brand_mark("welcome-brand-mark", 36., colors.primary)),
-                    )
-                    .title(
-                        EmptyTitle::new()
-                            .text_size(gpui_kit::rems(1.75))
-                            .font_weight(gpui_kit::FontWeight::NORMAL)
-                            .text_color(colors.foreground)
-                            .child(title),
-                    ),
-            )
-            .size_full()
-    }
-
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
             id,
@@ -141,7 +96,7 @@ impl DesktopView {
                 greeting,
                 workspace_name,
                 prompt,
-            } = self.welcome_header();
+            } = welcome_header(self);
             let title = div()
                 .id("welcome-prompt")
                 .test_support()
@@ -199,7 +154,7 @@ impl DesktopView {
                 .role(gpui_kit::Role::Group)
                 .aria_label(rust_i18n::t!("app.transcript.welcome_label").to_string())
                 .size_full()
-                .child(self.greeting_empty_state(title, colors))
+                .child(greeting_empty_state(self, title, colors))
                 .into_any_element()
         } else if empty_conversation {
             self.render_zen_empty_state(cx)
@@ -330,24 +285,23 @@ impl DesktopView {
     /// toggling modes never resizes the greeting.
     fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let WelcomeHeader { prompt, .. } = self.welcome_header();
+        let WelcomeHeader { prompt, .. } = welcome_header(self);
         div()
             .id("zen-welcome")
             .test_support()
             .role(gpui_kit::Role::Group)
             .aria_label(rust_i18n::t!("app.transcript.zen_start_label").to_string())
             .size_full()
-            .child(
-                self.greeting_empty_state(
-                    div()
-                        .id("zen-welcome-prompt")
-                        .test_support()
-                        .role(gpui_kit::Role::Heading)
-                        .aria_label(prompt.clone())
-                        .child(prompt),
-                    colors,
-                ),
-            )
+            .child(greeting_empty_state(
+                self,
+                div()
+                    .id("zen-welcome-prompt")
+                    .test_support()
+                    .role(gpui_kit::Role::Heading)
+                    .aria_label(prompt.clone())
+                    .child(prompt),
+                colors,
+            ))
             .into_any_element()
     }
 

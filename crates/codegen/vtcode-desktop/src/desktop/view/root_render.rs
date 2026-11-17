@@ -201,6 +201,7 @@ impl Render for DesktopView {
                 row.child(self.render_terminal_dock(preferences::TerminalPosition::Right, navigation_visible, cx))
             });
         let main = div()
+            .relative()
             .flex_1()
             .min_w_0()
             .min_h_0()
@@ -213,7 +214,7 @@ impl Render for DesktopView {
                 main.child(self.render_terminal_dock(preferences::TerminalPosition::Bottom, navigation_visible, cx))
             })
             .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)))
-            .when(self.zen_mode, |main| main.child(self.render_zen_toggle_floating(cx)));
+            .when(self.zen_mode, |main| main.child(self.render_zen_floating_chrome(cx)));
         let mut body = div()
             .size_full()
             .flex()

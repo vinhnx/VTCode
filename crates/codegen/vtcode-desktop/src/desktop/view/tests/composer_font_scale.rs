@@ -291,7 +291,7 @@ fn composer_follows_settings_stepper_clicks(cx: &mut TestAppContext) {
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(17.));
-        window.within("settings-panel").click("settings-dismiss", cx);
+        window.press("escape", cx);
         window.render_frame(cx);
     })
     .unwrap();

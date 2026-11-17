@@ -92,6 +92,12 @@ fn hover_surfaces_are_unified_and_contrast_safe_in_every_theme(cx: &mut gpui_kit
                 (colors.foreground.l - colors.background.l).signum(),
                 "{id}: hover should move gently toward the foreground"
             );
+            // Zen's floating chrome is a popover surface whose armed-swipe cue
+            // uses the hover fill; it must not collapse onto the pill itself.
+            assert!(
+                contrast_ratio(colors.accent, colors.popover) >= 1.01,
+                "{id}: hover fill must stay visible on a popover surface"
+            );
         }
     });
 }

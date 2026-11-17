@@ -743,6 +743,17 @@ fn discard_prompt_text(intent: &DiscardIntent) -> (String, String) {
 /// Each page stops its own presses, so only true background presses arrive
 /// here — toolbar and sidebar chrome never does.
 pub(super) fn dismissable_route_page(panel: impl IntoElement, cx: &mut Context<DesktopView>) -> impl IntoElement {
+    dismissable_route_page_with_layout(panel, cx, RoutePageLayout::Centered)
+}
+
+/// Same gutter dismissal as [`dismissable_route_page`] with an explicit page
+/// width. Full-width routes keep the bottom gutter as their pointer-dismiss
+/// area because their horizontal gutters are gone.
+pub(super) fn dismissable_route_page_with_layout(
+    panel: impl IntoElement,
+    cx: &mut Context<DesktopView>,
+    layout: RoutePageLayout,
+) -> impl IntoElement {
     div()
         .id("route-page-gutter")
         .test_support()
@@ -755,7 +766,7 @@ pub(super) fn dismissable_route_page(panel: impl IntoElement, cx: &mut Context<D
         // review never replays the fade; only the workspace ↔ panel transition
         // remounts it.
         .fade_in("route-page-fade", cx.theme())
-        .child(route_page(panel))
+        .child(route_page_with_layout(panel, layout))
 }
 
 #[cfg(test)]

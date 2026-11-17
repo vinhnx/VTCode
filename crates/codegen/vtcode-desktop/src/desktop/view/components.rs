@@ -524,23 +524,9 @@ pub(super) fn settings_switch(
         .on_click(on_click)
 }
 
-/// Route container shared by the settings, browser, and review pages:
-/// centers the max-width panel in the content slot. The toolbar (normal
-/// mode) or the zen drag strip (windowed zen) owns the traffic-light
-/// clearance above the slot, so the page adds none itself. Titles align
-/// to the content spine in every mode; no horizontal dodge is needed once
-/// the lights clear the panel vertically.
-pub(super) fn route_page(panel: impl IntoElement) -> impl IntoElement {
-    div()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .px_6()
-        .pb_6()
-        .flex()
-        .justify_center()
-        .child(div().w_full().h_full().max_w(px(1500.)).child(panel))
-}
+mod route_page;
+
+pub(super) use route_page::*;
 
 /// Shared scrim behind every inline modal (palette, review, browser, file
 /// preview, config editor, settings): the canvas at 85% so the background

@@ -116,7 +116,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).theme_id, ThemeId::solarized::LIGHT);
         assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some(ThemeId::solarized::LIGHT));
 
-        window.within("settings-panel").click("settings-dismiss", cx);
+        window.press("escape", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.run_palette_action(super::super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);

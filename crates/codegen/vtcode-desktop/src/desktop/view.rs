@@ -106,7 +106,7 @@ use navigation_history::{
     ArmOutcome, NavigationHistory, NavigationLocation, PendingNavigation, SWIPE_COMMIT_DELAY, SwipeArming,
     SwipeScrollAccumulator, is_vertical_dominant_scroll, natural_scroll_enabled, swipe_direction_for_dx,
 };
-use overlays::{DiscardIntent, Route, RouteHistory, dismissable_route_page};
+use overlays::{DiscardIntent, Route, RouteHistory, dismissable_route_page, dismissable_route_page_with_layout};
 
 mod about;
 mod app_icon_settings;

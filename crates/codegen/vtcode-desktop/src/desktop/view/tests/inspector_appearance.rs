@@ -653,7 +653,7 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn settings_dismiss_button_restores_the_previous_focus(cx: &mut TestAppContext) {
+fn settings_escape_restores_the_previous_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
@@ -665,8 +665,8 @@ fn settings_dismiss_button_restores_the_previous_focus(cx: &mut TestAppContext) 
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        assert!(window.within("settings-panel").find("settings-dismiss").visible());
-        window.within("settings-panel").click("settings-dismiss", cx);
+        assert!(window.try_find("settings-dismiss").is_none(), "the settings header has no duplicate close control");
+        window.press("escape", cx);
         window.render_frame(cx);
     })
     .unwrap();

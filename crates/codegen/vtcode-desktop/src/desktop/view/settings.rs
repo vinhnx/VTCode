@@ -58,6 +58,7 @@ impl SettingsTab {
     pub(super) const CONFIG_INDEX: usize = SettingsPage::CONFIG_INDEX;
 
     /// Index of the About page: the last entry in the unified navigation.
+    #[cfg(test)]
     pub(super) const ABOUT_INDEX: usize = Self::ALL.len();
 
     /// Tabs plus the configuration entry.
@@ -261,7 +262,7 @@ impl DesktopView {
         // NARROW_PANEL_BREAKPOINT): the nav stacks above the content and
         // shares the height, mirroring the config rail breakpoint.
         let narrow = Self::settings_use_legacy_layout(window);
-        dismissable_route_page(
+        dismissable_route_page_with_layout(
             div()
                 .id("settings-panel")
                 .test_support()
@@ -334,12 +335,9 @@ impl DesktopView {
                         // step lands the title on the `px_4` body spine.
                         .pl_1()
                         .child(div().id("settings-title").test_support().child(panel_title(title, &colors))),
-                    // Generic "Close" word shared across panels (owned by the browser surface).
-                    desktop_dismiss_button("settings-dismiss", rust_i18n::t!("app.browser.close").to_string())
-                        .small()
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.request_panel_dismiss(window, cx);
-                        })),
+                    // Dismissal stays on Escape, the bottom gutter, and toolbar
+                    // Back; the header no longer duplicates a close control.
+                    div(),
                 ))
                 .child(if narrow {
                     div()
@@ -377,6 +375,7 @@ impl DesktopView {
                 })
                 .when(self.config_editor.is_some(), |panel| panel.child(self.render_cli_config_editor(cx))),
             cx,
+            RoutePageLayout::FullWidth,
         )
         .into_any_element()
     }

@@ -60,6 +60,7 @@ pub(super) mod ThemeId {
 
     pub(crate) mod catppuccin {
         pub(crate) const LATTE: &'static str = "catppuccin-latte";
+        #[cfg(test)]
         pub(crate) const MOCHA: &'static str = "catppuccin-mocha";
     }
 

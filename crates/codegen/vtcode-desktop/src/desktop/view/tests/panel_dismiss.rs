@@ -11,10 +11,14 @@ fn gutter_press_dismisses_a_clean_settings_page(cx: &mut TestAppContext) {
         window.click("settings-title", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings, "inner press keeps the page");
-        // Gutter press: 4px into the route container's left padding.
+        // Full-width settings has no horizontal gutter; the bottom gutter is
+        // the pointer-dismiss area. Press 4px below the panel.
         let panel = window.find("settings-panel").bounds();
         let root = window.find("pane-root").bounds();
-        let gutter = point(panel.origin.x - root.origin.x - px(4.), panel.origin.y - root.origin.y + px(40.));
+        let gutter = point(
+            panel.origin.x - root.origin.x + panel.size.width / 2.,
+            panel.origin.y - root.origin.y + panel.size.height + px(4.),
+        );
         window.click_at("pane-root", gutter, cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Workspace, "gutter press dismisses a clean page");
@@ -23,7 +27,7 @@ fn gutter_press_dismisses_a_clean_settings_page(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn dismiss_buttons_and_gutter_hold_dirty_settings_for_the_prompt(cx: &mut TestAppContext) {
+fn dismiss_requests_hold_dirty_settings_for_the_prompt(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     // Stage a shortcut edit directly, the same shape a capture commit writes.
     view.update(cx, |view, _| {
@@ -33,14 +37,19 @@ fn dismiss_buttons_and_gutter_hold_dirty_settings_for_the_prompt(cx: &mut TestAp
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        // The close button holds for the prompt: headless it never answers.
-        window.click("settings-dismiss", cx);
+        // A dismiss request holds for the prompt: headless it never answers.
+        // With the header close control gone, this is the shared entry point
+        // used by the bottom gutter and the remaining dismiss affordances.
+        view.update(cx, |view, cx| view.request_panel_dismiss(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings, "dirty dismiss waits for the prompt");
         // The gutter holds the same way.
         let panel = window.find("settings-panel").bounds();
         let root = window.find("pane-root").bounds();
-        let gutter = point(panel.origin.x - root.origin.x - px(4.), panel.origin.y - root.origin.y + px(40.));
+        let gutter = point(
+            panel.origin.x - root.origin.x + panel.size.width / 2.,
+            panel.origin.y - root.origin.y + panel.size.height + px(4.),
+        );
         window.click_at("pane-root", gutter, cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings, "dirty gutter press waits for the prompt");
@@ -110,7 +119,10 @@ fn gutter_press_unwinds_one_layer_and_theme_draft_holds_for_the_prompt(cx: &mut 
         });
         let panel = window.find("settings-panel").bounds();
         let root = window.find("pane-root").bounds();
-        let gutter = point(panel.origin.x - root.origin.x - px(4.), panel.origin.y - root.origin.y + px(40.));
+        let gutter = point(
+            panel.origin.x - root.origin.x + panel.size.width / 2.,
+            panel.origin.y - root.origin.y + panel.size.height + px(4.),
+        );
         window.click_at("pane-root", gutter, cx);
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_capture.is_none(), "gutter cancels the capture");

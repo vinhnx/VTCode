@@ -224,7 +224,18 @@ fn close_truncates_the_panel_while_back_preserves_forward(cx: &mut TestAppContex
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.click("settings-dismiss", cx);
+        // The full-width settings panel has no close button; its bottom
+        // gutter is the pointer-dismiss control and truncates forward entries.
+        let panel = window.find("settings-panel").bounds();
+        let root = window.find("pane-root").bounds();
+        window.click_at(
+            "pane-root",
+            point(
+                panel.origin.x - root.origin.x + panel.size.width / 2.,
+                panel.origin.y - root.origin.y + panel.size.height + px(4.),
+            ),
+            cx,
+        );
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Workspace);
         assert!(!view.read(cx).route_history.can_forward(), "close truncates forward entries");

@@ -285,6 +285,28 @@ fn appearance_sections_keep_order_air_and_narrow_containment(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn settings_panel_spans_the_center_container_while_other_routes_stay_inset(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        let panel = window.find("settings-panel").bounds();
+        let gutter = window.find("route-page-gutter").bounds();
+        assert_eq!(panel.origin.x, gutter.origin.x, "settings reaches the leading center edge: {panel:?} {gutter:?}");
+        assert_eq!(panel.right(), gutter.right(), "settings reaches the trailing center edge: {panel:?} {gutter:?}");
+
+        // Asymmetric comparison: the shared centered container must still
+        // inset the other routes, so the full-width change is settings-only.
+        view.update(cx, |view, cx| view.open_thread_browser(window, cx));
+        window.render_frame(cx);
+        let browser = window.find("thread-browser").bounds();
+        assert!(browser.origin.x > gutter.origin.x, "browser keeps its leading inset: {browser:?} {gutter:?}");
+        assert!(browser.right() < gutter.right(), "browser keeps its trailing inset: {browser:?} {gutter:?}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_container_and_sections_keep_horizontal_air(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

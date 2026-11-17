@@ -411,8 +411,88 @@ impl DesktopView {
         )
     }
 
+    /// Back/Forward pair shared by the normal toolbar and the zen floating
+    /// chrome. IDs, labels, pending/swipe cues, disabled state, and actions
+    /// stay identical so switching modes never changes their behavior.
+    ///
+    /// The armed-swipe highlight is surface-aware: the toolbar supplies a
+    /// raised fill for its rail surface, while the zen pill supplies its hover
+    /// fill because a popover-on-popover highlight would be invisible.
+    fn render_navigation_buttons(
+        &self,
+        cue_background: gpui_kit::Hsla,
+        cue_foreground: gpui_kit::Hsla,
+    ) -> impl IntoElement {
+        let pending_direction = self.pending_navigation_direction();
+        let pending_back = pending_direction == Some(NavigationDirection::Back);
+        let pending_forward = pending_direction == Some(NavigationDirection::Forward);
+        // Scroll-gesture cue: lights the arrow a sustained horizontal scroll
+        // is about to fire. Gated render-side so a stale gesture can never
+        // advertise a blocked navigation (overlay opened mid-swipe, pending
+        // transition). The caller owns the color choice for its surface.
+        let swipe_cue = self
+            .swipe_scroll
+            .armed()
+            .filter(|direction| self.swipe_navigation_allowed() && self.swipe_direction_available(*direction));
+        div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .child(
+                desktop_button("navigate-back")
+                    .accessibility_label(if pending_back {
+                        rust_i18n::t!("app.navigation.back_navigating").to_string()
+                    } else {
+                        rust_i18n::t!("app.navigation.back").to_string()
+                    })
+                    .icon(IconName::ArrowLeft)
+                    .ghost()
+                    .small()
+                    .loading(pending_back)
+                    .when(swipe_cue == Some(NavigationDirection::Back), |button| {
+                        button.bg(cue_background).text_color(cue_foreground)
+                    })
+                    .tooltip_with_action(
+                        format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.back")),
+                        &NavigateBack,
+                        Some(key_context::DESKTOP),
+                    )
+                    .desktop_disabled(!self.route_back_available() && !self.can_navigate_back() && !pending_back)
+                    .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
+            )
+            .child(
+                desktop_button("navigate-forward")
+                    .accessibility_label(if pending_forward {
+                        rust_i18n::t!("app.navigation.forward_navigating").to_string()
+                    } else {
+                        rust_i18n::t!("app.navigation.forward").to_string()
+                    })
+                    .icon(IconName::ArrowRight)
+                    .ghost()
+                    .small()
+                    .loading(pending_forward)
+                    .when(swipe_cue == Some(NavigationDirection::Forward), |button| {
+                        button.bg(cue_background).text_color(cue_foreground)
+                    })
+                    .tooltip_with_action(
+                        format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.forward")),
+                        &NavigateForward,
+                        Some(key_context::DESKTOP),
+                    )
+                    .desktop_disabled(
+                        !self.route_history.can_forward() && !self.can_navigate_forward() && !pending_forward,
+                    )
+                    .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
+            )
+    }
+
     pub(super) fn render_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
+        let workspace_foreground = theme.colors.foreground;
+        // The rail surface is a resting panel fill, so the armed-swipe cue uses
+        // the raised popover fill to stand out.
+        let swipe_cue_background = theme.colors.popover;
+        let swipe_cue_foreground = theme.colors.foreground;
         // The toolbar is chrome, not content: in translucent mode it floats
         // fully transparent on the window vibrancy instead of painting a
         // band over it (see `toolbar_band_surface`).
@@ -426,21 +506,10 @@ impl DesktopView {
         let leading_inset = |bar: TitleBar| {
             if window.is_fullscreen() { bar.pl_3() } else { bar }
         };
-        // Zen drops the toolbar entirely (see `render_zen_toggle_floating`),
-        // so this bar only renders in normal mode.
+        // Zen drops the toolbar entirely (see `render_zen_floating_chrome`),
+        // so this bar only renders in normal mode. The navigation pair is
+        // shared with the zen floating chrome via `render_navigation_buttons`.
         let navigation_visible = self.preferences.navigation_visible();
-        let pending_direction = self.pending_navigation_direction();
-        let pending_back = pending_direction == Some(NavigationDirection::Back);
-        let pending_forward = pending_direction == Some(NavigationDirection::Forward);
-        // Scroll-gesture cue: lights the arrow a sustained horizontal scroll
-        // is about to fire. Gated render-side so a stale gesture can never
-        // advertise a blocked navigation (overlay opened mid-swipe, pending
-        // transition). Popover, not secondary: the toolbar sits on the rail
-        // surface, where secondary would be pixel-identical to the background.
-        let swipe_cue = self
-            .swipe_scroll
-            .armed()
-            .filter(|direction| self.swipe_navigation_allowed() && self.swipe_direction_available(*direction));
         let workspace = self
             .workspace
             .as_ref()
@@ -476,56 +545,7 @@ impl DesktopView {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .child(
-                            desktop_button("navigate-back")
-                                .accessibility_label(if pending_back {
-                                    rust_i18n::t!("app.navigation.back_navigating").to_string()
-                                } else {
-                                    rust_i18n::t!("app.navigation.back").to_string()
-                                })
-                                .icon(IconName::ArrowLeft)
-                                .ghost()
-                                .small()
-                                .loading(pending_back)
-                                .when(swipe_cue == Some(NavigationDirection::Back), |button| {
-                                    button.bg(theme.colors.popover).text_color(theme.colors.foreground)
-                                })
-                                .tooltip_with_action(
-                                    format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.back")),
-                                    &NavigateBack,
-                                    Some(key_context::DESKTOP),
-                                )
-                                .desktop_disabled(
-                                    !self.route_back_available() && !self.can_navigate_back() && !pending_back,
-                                )
-                                .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
-                        )
-                        .child(
-                            desktop_button("navigate-forward")
-                                .accessibility_label(if pending_forward {
-                                    rust_i18n::t!("app.navigation.forward_navigating").to_string()
-                                } else {
-                                    rust_i18n::t!("app.navigation.forward").to_string()
-                                })
-                                .icon(IconName::ArrowRight)
-                                .ghost()
-                                .small()
-                                .loading(pending_forward)
-                                .when(swipe_cue == Some(NavigationDirection::Forward), |button| {
-                                    button.bg(theme.colors.popover).text_color(theme.colors.foreground)
-                                })
-                                .tooltip_with_action(
-                                    format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.forward")),
-                                    &NavigateForward,
-                                    Some(key_context::DESKTOP),
-                                )
-                                .desktop_disabled(
-                                    !self.route_history.can_forward()
-                                        && !self.can_navigate_forward()
-                                        && !pending_forward,
-                                )
-                                .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
-                        )
+                        .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
                         .child(div().text_sm().font_semibold().child(app::NAME))
                         .when(show_details, |row| {
                             row.child(
@@ -536,7 +556,7 @@ impl DesktopView {
                                     .max_w(px(WORKSPACE_LABEL_MAX_WIDTH))
                                     .truncate()
                                     .text_sm()
-                                    .text_color(theme.colors.foreground)
+                                    .text_color(workspace_foreground)
                                     .child(format!("/ {workspace}")),
                             )
                         }),
@@ -602,22 +622,41 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// Floating zen exit: pinned to the main column's top-right corner and
-    /// painted after the content, so it floats above the edge-to-edge zen
-    /// surface. Toggling restores the toolbar and the toggle's docked slot.
-    pub(super) fn render_zen_toggle_floating(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Floating zen chrome: Back/Forward plus the zen exit, pinned to the
+    /// main column's top-right corner and painted after the content so it
+    /// floats above the edge-to-edge zen surface. The group is right-anchored
+    /// and the toggle is its trailing child, so arrows appearing/disappearing
+    /// never move the toggle.
+    ///
+    /// The insets reproduce the docked slot exactly: the title bar's `pr_3`
+    /// (12px) plus the small toolbar's `p_1` (4px), minus the pill's 1px
+    /// border; vertically the 48px toolbar centers its 32px band, leaving
+    /// 12px above the 24px button. The zen chrome UI integration test in
+    /// `view/tests/zen_chrome.rs` guards this alignment if either changes.
+    pub(super) fn render_zen_floating_chrome(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        const FLOATING_TOP_INSET: f32 = 11.;
+        const FLOATING_TRAILING_INSET: f32 = 15.;
+
         let colors = cx.theme().colors;
         let faded = themes::faded_chrome(colors.background, colors.foreground);
+        // The pill itself is a raised popover surface: use the hover fill for
+        // the armed cue so the highlight is visible against it.
+        let swipe_cue_background = colors.accent;
+        let swipe_cue_foreground = colors.accent_foreground;
         div()
             .absolute()
-            .top_2()
-            .right_2()
+            .top(px(FLOATING_TOP_INSET))
+            .right(px(FLOATING_TRAILING_INSET))
+            .flex()
+            .items_center()
+            .gap_1()
             .rounded_full()
             .bg(colors.popover)
             .border_1()
             .border_color(themes::soft_edge_color(&colors))
             .shadow_md()
             .fade_in("zen-toggle-float", cx.theme())
+            .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
             .child(zen_mode_toggle(true, faded, &self.focus_handle))
     }
 
