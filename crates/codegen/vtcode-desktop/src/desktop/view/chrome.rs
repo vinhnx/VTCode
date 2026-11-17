@@ -429,16 +429,6 @@ impl DesktopView {
         // Zen drops the toolbar entirely (see `render_zen_toggle_floating`),
         // so this bar only renders in normal mode.
         let navigation_visible = self.preferences.navigation_visible();
-        let navigation_label = if navigation_visible {
-            rust_i18n::t!(i18n::NAVIGATION_TOGGLE_NAVIGATION).to_string()
-        } else {
-            rust_i18n::t!("app.navigation.show_navigation").to_string()
-        };
-        let navigation_icon = if navigation_visible && self.preferences.navigation_on_right() {
-            IconName::PanelRight
-        } else {
-            IconName::PanelLeft
-        };
         let pending_direction = self.pending_navigation_direction();
         let pending_back = pending_direction == Some(NavigationDirection::Back);
         let pending_forward = pending_direction == Some(NavigationDirection::Forward);
@@ -535,16 +525,6 @@ impl DesktopView {
                                         && !pending_forward,
                                 )
                                 .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
-                        )
-                        .child(
-                            desktop_button("toggle-sidebar")
-                                .accessibility_label(navigation_label.as_str())
-                                .toggled(navigation_visible && self.sidebar_open)
-                                .icon(navigation_icon)
-                                .ghost()
-                                .small()
-                                .tooltip_with_action(navigation_label, &ToggleSidebar, Some(key_context::DESKTOP))
-                                .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                         )
                         .child(div().text_sm().font_semibold().child(app::NAME))
                         .when(show_details, |row| {
@@ -650,77 +630,18 @@ impl DesktopView {
         let mut group = ToolbarGroup::new("header-actions-group")
             .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
             .gap_1();
-        if !self.preferences.navigation_visible() {
-            group = group
-                .child(
-                    desktop_button("top-new-thread")
-                        .icon(IconName::Plus)
-                        .ghost()
-                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
-                        .tooltip_with_action(
-                            rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
-                            &NewSession,
-                            Some(key_context::DESKTOP),
-                        )
-                        .desktop_disabled(!self.new_thread_available())
-                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
+        group = group.child(
+            desktop_button("search-commands")
+                .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string())
+                .icon(IconName::Search)
+                .ghost()
+                .tooltip_with_action(
+                    rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
+                    &OpenCommandPalette,
+                    Some(key_context::DESKTOP),
                 )
-                .child(
-                    desktop_button("top-utilities")
-                        .icon(IconName::GitBranch)
-                        .ghost()
-                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string())
-                        .tooltip_with_action(
-                            rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
-                            &OpenUtilities,
-                            Some(key_context::DESKTOP),
-                        )
-                        .desktop_disabled(self.workspace.is_none())
-                        .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
-                );
-        }
-        group = group
-            .child(
-                desktop_button("search-commands")
-                    .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string())
-                    .icon(IconName::Search)
-                    .ghost()
-                    .tooltip_with_action(
-                        rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
-                        &OpenCommandPalette,
-                        Some(key_context::DESKTOP),
-                    )
-                    .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
-            )
-            .child(
-                desktop_button("toggle-inspector")
-                    .icon(IconName::PanelRight)
-                    .accessibility_label(if self.inspector_open {
-                        rust_i18n::t!("app.navigation.hide_panel").to_string()
-                    } else {
-                        rust_i18n::t!("app.navigation.show_panel").to_string()
-                    })
-                    .tooltip_with_action(
-                        rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
-                        &ToggleInspector,
-                        Some(key_context::DESKTOP),
-                    )
-                    .ghost()
-                    .desktop_disabled(self.workspace.is_none() || self.current_route() != Route::Workspace)
-                    .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
-            )
-            .child(
-                desktop_button("open-settings")
-                    .accessibility_label(rust_i18n::t!("app.navigation.settings_button").to_string())
-                    .icon(IconName::Settings2)
-                    .tooltip_with_action(
-                        rust_i18n::t!("app.navigation.settings_button").to_string(),
-                        &OpenSettings,
-                        Some(key_context::DESKTOP),
-                    )
-                    .ghost()
-                    .on_click(cx.listener(|view, _, window, cx| view.toggle_settings(window, cx))),
-            );
+                .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
+        );
         // Redundant with the composer model pill: first to go when the main
         // column narrows, together with the workspace suffix.
         if show_details {

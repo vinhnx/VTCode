@@ -5,7 +5,7 @@ fn second_trigger_closes_settings_browser_and_same_kind_palettes(cx: &mut TestAp
     let (window, view) = open_desktop(cx);
     // Action dispatch is deferred; park the loop before asserting each effect.
     cx.update_window(window, |_, window, cx| {
-        focus_element_by_tab(window, "open-settings", cx);
+        focus_element_by_tab(window, "header-overflow", cx);
         window.dispatch_action(Box::new(super::super::OpenSettings), cx);
     })
     .unwrap();
@@ -595,10 +595,7 @@ fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
     let chrome_ids = [
         "navigate-back",
         "navigate-forward",
-        "toggle-sidebar",
         "search-commands",
-        "toggle-inspector",
-        "open-settings",
         "header-overflow",
         "zen-mode-toggle",
     ];
@@ -617,7 +614,7 @@ fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
         // rechecked because the bar re-lays-out around the wider column.
         view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
         window.render_frame(cx);
-        for id in chrome_ids.into_iter().chain(["top-new-thread", "top-utilities"]) {
+        for id in chrome_ids {
             assert_inside_main(window, id);
         }
     })
@@ -646,14 +643,7 @@ fn title_bar_workspace_label_returns_above_the_breakpoint_capped(cx: &mut TestAp
         view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
         window.render_frame(cx);
         let pane = window.find("pane-root").bounds();
-        for id in [
-            "navigate-back",
-            "toggle-sidebar",
-            "top-new-thread",
-            "search-commands",
-            "header-overflow",
-            "zen-mode-toggle",
-        ] {
+        for id in ["navigate-back", "search-commands", "header-overflow", "zen-mode-toggle"] {
             let bounds = window.find(id).bounds();
             assert!(
                 bounds.origin.x >= pane.origin.x

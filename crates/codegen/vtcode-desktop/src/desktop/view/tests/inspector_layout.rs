@@ -109,8 +109,8 @@ fn inspector_close_button_collapses_the_card_and_round_trips_through_the_toolbar
             "closing a focused inspector must restore the desktop focus path"
         );
 
-        // Close is a collapse, not a teardown: the toolbar toggle brings the card back.
-        window.click("toggle-inspector", cx);
+        // Close is a collapse, not a teardown: the overflow toggle brings the card back.
+        view.update(cx, |view, cx| view.toggle_inspector(cx));
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
         assert_eq!(view.read(cx).preferences.inspector_open, Some(true));

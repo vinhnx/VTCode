@@ -407,27 +407,28 @@ fn slash_new_and_exit_route_through_running_confirm_mid_turn(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn toolbar_new_thread_stays_enabled_mid_turn_when_rail_hidden(cx: &mut TestAppContext) {
+fn overflow_new_thread_stays_enabled_mid_turn_when_rail_hidden(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_running_desktop(cx);
     view.update(cx, |view, _| view.preferences.navigation_visible = Some(false));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("top-new-thread").is_some(), "hidden rail moves New thread to the toolbar");
-        assert_ne!(window.find("top-new-thread").disabled(), Some(true), "toolbar New stays enabled mid-turn");
-        window.click("top-new-thread", cx);
+        assert!(window.try_find("header-overflow").is_some(), "hidden rail keeps New thread in the overflow");
+        assert!(view.read(cx).new_thread_available(), "New thread stays enabled mid-turn");
+        let focus = view.read(cx).focus_handle.clone();
+        focus.dispatch_action(&super::super::NewSession, window, cx);
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_some());
         assert!(requests.try_recv().is_err());
     })
     .unwrap();
 
-    // Without a backend the same button stays disabled: only a running turn
-    // reroutes, nothing else relaxes the gate.
+    // Without a backend the same action still runs through the funnel; the
+    // overflow trigger stays available because it owns the hidden-rail actions.
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| view.preferences.navigation_visible = Some(false));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("top-new-thread").disabled(), Some(true));
+        assert!(!view.read(cx).new_thread_available(), "no backend keeps New thread disabled");
     })
     .unwrap();
 }

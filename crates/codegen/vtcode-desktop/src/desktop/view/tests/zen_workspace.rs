@@ -98,7 +98,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("project-thread-sidebar").is_some());
-        assert!(window.try_find("toggle-inspector").is_some());
+        assert!(window.try_find("header-overflow").is_some());
         assert!(window.try_find("status-bar").is_some());
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
         assert!(window.try_find("thread-header").is_some());
@@ -110,8 +110,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         view.update(cx, |view, _| view.preferences.navigation_visible = Some(false));
         window.render_frame(cx);
         assert!(window.try_find("navigation-rail").is_none());
-        assert!(window.try_find("top-new-thread").is_some());
-        assert!(window.try_find("top-utilities").is_some());
+        assert!(window.try_find("header-overflow").is_some(), "hidden rail keeps its actions in the overflow");
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
         let collapsed_nav_slot = window.find("zen-mode-toggle").bounds();
         let collapsed_nav_bar = window.find("title-bar").bounds();
@@ -145,10 +144,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         );
         assert!(window.try_find("nav-home").is_none());
         assert!(window.try_find("nav-new-thread").is_none());
-        assert!(window.try_find("nav-utilities").is_none());
-        assert!(window.try_find("top-new-thread").is_none());
-        assert!(window.try_find("top-utilities").is_none());
-        assert!(window.try_find("toggle-sidebar").is_none());
+        assert!(window.try_find("nav-overflow").is_none());
         assert!(window.try_find("search-commands").is_none());
         assert!(window.try_find("toggle-inspector").is_none());
         assert!(window.try_find("open-settings").is_none());
@@ -198,9 +194,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         assert!(window.try_find("composer-context").is_none(), "exiting zen restores the single-row composer");
         assert!(window.try_find("navigation-rail").is_none());
         assert!(window.try_find("project-thread-sidebar").is_none());
-        assert!(window.try_find("top-new-thread").is_some());
-        assert!(window.try_find("top-utilities").is_some());
-        assert!(window.try_find("toggle-inspector").is_some());
+        assert!(window.try_find("header-overflow").is_some(), "hidden rail keeps its actions in the overflow");
         assert!(window.try_find("status-bar").is_some());
     })
     .unwrap();
@@ -221,12 +215,7 @@ fn header_icon_band_shares_one_frame_and_center_line(cx: &mut TestAppContext) {
         let slots = [
             "navigate-back",
             "navigate-forward",
-            "toggle-sidebar",
-            "top-new-thread",
-            "top-utilities",
             "search-commands",
-            "toggle-inspector",
-            "open-settings",
             "header-overflow",
             "zen-mode-toggle",
         ];

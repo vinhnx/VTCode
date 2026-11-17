@@ -429,7 +429,7 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
         assert!(!view.read(cx).navigation_peek);
         assert_eq!(window.find("nav-home").label(), Some("Projects and threads"));
         assert_eq!(window.find("nav-home").checked(), Some(false));
-        window.click("toggle-sidebar", cx);
+        window.click("nav-home", cx);
         assert!(view.read(cx).sidebar_open);
         window.press("cmd-b", cx);
         assert!(!view.read(cx).sidebar_open);
@@ -748,21 +748,19 @@ fn header_overflow_menu_is_accessible_and_preserves_the_draft(cx: &mut TestAppCo
         window.input("Keep this draft", cx);
         window.render_frame(cx);
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
-        assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
-        assert_eq!(window.find("toggle-inspector").label(), Some("Hide panel"));
+        assert!(window.find("navigate-back").bounds().origin.x >= px(80.), "reserve native traffic-light space");
+        assert!(window.try_find("toggle-inspector").is_none(), "inspector toggle moved to the overflow");
         assert_eq!(window.find("search-commands").role(), Some(gpui_kit::Role::Button));
-        assert_eq!(window.find_all("open-settings").len(), 1);
-        assert!(window.find_all("nav-settings").is_empty(), "Settings has one header entry");
-        assert!(window.find_all("navigation-overflow").is_empty(), "the duplicate rail menu is omitted");
+        assert_eq!(window.find_all("header-overflow").len(), 1, "one global overflow trigger remains");
+        assert_eq!(window.find_all("nav-overflow").len(), 1, "the rail caps its icons with one overflow");
         assert!(window.find_all("toggle-theme").is_empty());
         focus_element_by_tab(window, "search-commands", cx);
         window.press("right", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("toggle-inspector").focused(), Some(true));
+        assert_eq!(window.find("header-overflow").focused(), Some(true));
         window.press("right", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("open-settings").focused(), Some(true));
-        assert_eq!(window.find_all("header-overflow").len(), 1, "one global overflow trigger remains");
+        assert_eq!(window.find("zen-mode-toggle").focused(), Some(true));
         assert_eq!(window.find("header-overflow").label(), Some("Window actions"));
         window.click("header-overflow", cx);
         window.render_frame(cx);
@@ -794,7 +792,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         assert!(compact.size.height <= px(120.), "empty composer height: {:?}", compact.size.height);
         assert_eq!(window.find("send-prompt").disabled(), Some(true));
         assert!(window.find_all("composer-settings").is_empty(), "global settings has one header entry");
-        assert_eq!(window.find_all("open-settings").len(), 1);
+        assert_eq!(window.find_all("header-overflow").len(), 1);
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Permissions unavailable"));
         view.update(cx, |view, cx| {
             view.composer
@@ -819,7 +817,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
         });
         window.render_frame(cx);
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })
@@ -982,7 +980,7 @@ fn settings_toggle_reaches_the_open_page_from_the_keyboard(cx: &mut TestAppConte
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings);
         // The fullscreen page covers the toolbar, so the toggle path while

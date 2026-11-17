@@ -8,7 +8,7 @@ runloop, the harness event stream, or `ThreadEvent`.
 
 ## Open, close, resize
 
-- Toggle: `Cmd-J` (fixed binding), the View menu, or the Terminal button in the navigation rail.
+- Toggle: `Cmd-J` (fixed binding), the View menu, or Terminal in the navigation rail overflow menu.
   Settings → Connections offers a Run button that opens the panel and runs the session fork
   command for the selected thread.
 - Dock position: Settings → Appearance → Terminal position docks the panel at the bottom

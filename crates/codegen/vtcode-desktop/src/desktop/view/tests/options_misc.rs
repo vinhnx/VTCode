@@ -657,7 +657,7 @@ fn workspace_utilities_can_return_to_changes_without_creating_a_session(cx: &mut
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.workspace = Some(std::env::temp_dir()));
         window.render_frame(cx);
-        window.click("nav-utilities", cx);
+        view.update(cx, |view, cx| view.open_utilities(cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
         window.press("home", cx);

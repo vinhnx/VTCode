@@ -719,7 +719,7 @@ fn connections_settings_tab_opens_and_refreshes_webmcp_status(cx: &mut TestAppCo
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.backend = Some(BackendHandle { commands }));
         window.render_frame(cx);
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         select_settings_category(window, 4, cx);
         window.render_frame(cx);

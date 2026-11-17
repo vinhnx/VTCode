@@ -10,11 +10,10 @@ fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_sess
         for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
             assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
         }
-        window.click("nav-utilities", cx);
+        view.update(cx, |view, cx| view.open_utilities(cx));
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
-        assert_eq!(window.find("nav-utilities").label(), Some("Workspace utilities (selected)"));
         assert!(view.read(cx).selected_session_id.is_none());
         assert_eq!(window.find("send-prompt").label(), Some("Send message"));
         view.update(cx, |view, _| {

@@ -134,27 +134,27 @@ fn terminal_toggle_without_workspace_spawns_at_home(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn terminal_rail_button_toggles_panel(cx: &mut TestAppContext) {
+fn terminal_overflow_action_toggles_panel(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let dir = tempfile::tempdir().unwrap();
     prepare_workspace(&view, dir.path(), cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("nav-terminal", cx);
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
         let state = view.read(cx);
-        assert!(state.terminal_visible, "rail click must show the panel");
-        assert!(state.terminal.is_some(), "rail click must spawn the shell");
+        assert!(state.terminal_visible, "overflow toggle must show the panel");
+        assert!(state.terminal.is_some(), "overflow toggle must spawn the shell");
     });
     cx.update_window(window, |_, window, cx| {
-        window.click("nav-terminal", cx);
+        window.dispatch_action(Box::new(super::super::ToggleTerminal), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
-        assert!(!view.read(cx).terminal_visible, "second rail click must hide the panel");
+        assert!(!view.read(cx).terminal_visible, "second overflow toggle must hide the panel");
     });
 }
 

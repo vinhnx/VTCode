@@ -9,7 +9,7 @@ actions share one composer surface. Existing VT Code theme tokens drive all colo
 
 | Action                         | Control                              |
 | ------------------------------ | ------------------------------------ |
-| Collapse or restore navigation | Toolbar navigation button or `Cmd+B` |
+| Collapse or restore navigation | Navigation rail Home button or `Cmd+B` |
 | Search commands                | Toolbar search button or `Cmd+K`     |
 
 Collapsing navigation retains the active session, draft, and pane width for the

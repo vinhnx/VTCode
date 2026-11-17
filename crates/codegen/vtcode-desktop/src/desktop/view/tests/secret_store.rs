@@ -30,8 +30,8 @@ fn feed_discover(view: &Entity<DesktopView>, snapshot: serde_json::Value, cx: &m
     });
 }
 
-fn open_provider_settings(window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
-    window.click("open-settings", cx);
+fn open_provider_settings(view: &Entity<DesktopView>, window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
+    view.update(cx, |view, cx| view.toggle_settings(window, cx));
     window.render_frame(cx);
     select_settings_category(window, 0, cx);
     window.render_frame(cx);
@@ -63,7 +63,7 @@ fn secret_form_saves_through_the_protocol_and_repairs_the_banner(cx: &mut TestAp
             view.secret_input
                 .update(cx, |input, cx| input.set_value("  pasted-key-123  ", window, cx));
         });
-        open_provider_settings(window, cx);
+        open_provider_settings(&view, window, cx);
         assert_eq!(window.find("secret-input").label(), Some("Provider API key"));
         // The initialize feed emits the discovery burst; drain it so the
         // save below observes an empty queue like a live service would.
@@ -172,7 +172,7 @@ fn empty_secret_input_sends_nothing(cx: &mut TestAppContext) {
             }),
             cx,
         );
-        open_provider_settings(window, cx);
+        open_provider_settings(&view, window, cx);
         while requests.try_recv().is_ok() {}
         window.click("save-secret", cx);
         view.update(cx, |view, cx| {
@@ -230,7 +230,7 @@ fn secret_save_error_stays_inline_without_touching_the_banner(cx: &mut TestAppCo
         view.update(cx, |view, cx| {
             view.secret_input.update(cx, |input, cx| input.set_value("bogus", window, cx));
         });
-        open_provider_settings(window, cx);
+        open_provider_settings(&view, window, cx);
         while requests.try_recv().is_ok() {}
         window.click("save-secret", cx);
     })
@@ -350,7 +350,7 @@ fn login_route_providers_keep_the_terminal_copy_row(cx: &mut TestAppContext) {
             }),
             cx,
         );
-        open_provider_settings(window, cx);
+        open_provider_settings(&view, window, cx);
         window.click("copy-credential-command", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login openai"));
     })

@@ -1,6 +1,93 @@
 use super::*;
 
+/// Actions that can move out of an icon track into a single `...` overflow.
+/// One mapping drives every overflow trigger, so labels, state labels, and
+/// enable state share a single source across the rail and the toolbar.
+#[derive(Clone, Copy)]
+enum NavMenuAction {
+    NewThread,
+    CloseThread,
+    ToggleNavigation,
+    ToggleInspector,
+    ToggleZen,
+    SearchCommands,
+    ToggleStatusBar,
+    Settings,
+    Utilities,
+    Terminal,
+}
+
+impl NavMenuAction {
+    /// State-bearing labels keep the old rail/tooltips' accessible state in
+    /// menu form, where there is no pressed/highlighted treatment to read it.
+    fn label(self, view: &DesktopView) -> String {
+        match self {
+            Self::NewThread => rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
+            Self::CloseThread => rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string(),
+            Self::ToggleNavigation if !view.preferences.navigation_visible() => {
+                rust_i18n::t!("app.navigation.show_navigation").to_string()
+            }
+            Self::ToggleNavigation => rust_i18n::t!(i18n::NAVIGATION_TOGGLE_NAVIGATION).to_string(),
+            Self::ToggleInspector => rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
+            Self::ToggleZen => rust_i18n::t!("app.navigation.toggle_zen_mode").to_string(),
+            Self::SearchCommands => rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
+            Self::ToggleStatusBar => rust_i18n::t!("app.navigation.toggle_status_bar").to_string(),
+            Self::Settings => rust_i18n::t!("app.navigation.settings_menu").to_string(),
+            Self::Utilities if view.inspector_open && view.inspector_tab == InspectorTab::Utilities => {
+                rust_i18n::t!("app.navigation.workspace_utilities_selected").to_string()
+            }
+            Self::Utilities => rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
+            Self::Terminal if view.terminal_visible => rust_i18n::t!("app.navigation.terminal_hide").to_string(),
+            Self::Terminal => rust_i18n::t!("app.navigation.terminal").to_string(),
+        }
+    }
+
+    fn action(self) -> Box<dyn gpui_kit::Action> {
+        match self {
+            Self::NewThread => Box::new(NewSession),
+            Self::CloseThread => Box::new(CloseSession),
+            Self::ToggleNavigation => Box::new(ToggleSidebar),
+            Self::ToggleInspector => Box::new(ToggleInspector),
+            Self::ToggleZen => Box::new(ToggleZenMode),
+            Self::SearchCommands => Box::new(OpenCommandPalette),
+            Self::ToggleStatusBar => Box::new(ToggleStatusBar),
+            Self::Settings => Box::new(OpenSettings),
+            Self::Utilities => Box::new(OpenUtilities),
+            Self::Terminal => Box::new(ToggleTerminal),
+        }
+    }
+
+    fn disabled(self, view: &DesktopView) -> bool {
+        match self {
+            Self::NewThread => !view.new_thread_available(),
+            Self::CloseThread => view.selected_session_id.is_none() || !view.new_thread_available(),
+            Self::ToggleInspector => view.workspace.is_none() || view.current_route() != Route::Workspace,
+            Self::Utilities => view.workspace.is_none(),
+            _ => false,
+        }
+    }
+}
+
 impl DesktopView {
+    /// Single `...` trigger for a capped nav track. Taking the item list as
+    /// data keeps the rail and toolbar overflows consistent by construction.
+    fn render_nav_overflow(&self, id: &'static str, label: String, small: bool, items: &[NavMenuAction]) -> AnyElement {
+        let items: Vec<NavMenuAction> = items.to_vec();
+        let entries: Vec<(String, bool)> = items.iter().map(|item| (item.label(self), item.disabled(self))).collect();
+        desktop_button(id)
+            .icon(IconName::Ellipsis)
+            .ghost()
+            .when(small, |button| button.small())
+            .accessibility_label(label.as_str())
+            .tooltip(label)
+            .dropdown_menu(move |menu, _, _| {
+                items.iter().zip(entries.iter()).fold(menu, |menu, (item, (label, disabled))| {
+                    menu.menu_with_disabled(label.as_str(), item.action(), *disabled)
+                })
+            })
+            .into_any_element()
+    }
+
     pub(super) fn open_utilities(&mut self, cx: &mut Context<Self>) {
         self.open_inspector_tab(InspectorTab::Utilities, cx);
     }
@@ -9,34 +96,6 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let expanded = (self.sidebar_open || self.navigation_peek) && !narrow_panel;
         let navigation_on_right = self.preferences.navigation_on_right();
-        let utilities_selected = self.inspector_open && self.inspector_tab == InspectorTab::Utilities;
-        let update_available = self.can_offer_update_install();
-        let update_install_in_flight = self.update_install_state.is_in_flight();
-        let update_installed = matches!(&self.update_install_state, protocol::UpdateInstallState::Completed { .. });
-        let update_busy = self.update_request_pending || update_install_in_flight;
-        let update_label = if self.update_request_pending {
-            rust_i18n::t!("app.settings.about.checking").to_string()
-        } else if update_install_in_flight || update_installed {
-            about::update_install_status_description(&self.update_install_state)
-                .unwrap_or_else(|| rust_i18n::t!("app.settings.about.check_for_updates").to_string())
-        } else if update_available {
-            rust_i18n::t!("app.settings.about.install_update").to_string()
-        } else {
-            rust_i18n::t!("app.settings.about.check_for_updates").to_string()
-        };
-        let update_tooltip = match &self.update_install_state {
-            protocol::UpdateInstallState::Failed { message } if !self.update_request_pending => {
-                rust_i18n::t!("app.settings.about.install_failed", message = message.as_str()).to_string()
-            }
-            _ => update_label.clone(),
-        };
-        let update_icon = if update_available || update_install_in_flight {
-            IconName::Download
-        } else if update_installed {
-            IconName::Check
-        } else {
-            IconName::RefreshCw
-        };
         let rail = div()
             .id("navigation-rail")
             .test_support()
@@ -99,27 +158,8 @@ impl DesktopView {
                 )
             })
             // The sidebar owns New thread while expanded; the empty slot holds
-            // the lane so Utilities never shifts when the rail expands.
+            // the lane so Browse threads never shifts when the rail expands.
             .when(expanded, |rail| rail.child(div().size_8()))
-            .child(
-                desktop_button("nav-utilities")
-                    .icon(IconName::GitBranch)
-                    .ghost()
-                    .rounded_lg()
-                    .accessibility_label(if utilities_selected {
-                        rust_i18n::t!("app.navigation.workspace_utilities_selected").to_string()
-                    } else {
-                        rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string()
-                    })
-                    .tooltip_with_action(
-                        rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
-                        &OpenUtilities,
-                        Some(key_context::DESKTOP),
-                    )
-                    .desktop_disabled(self.workspace.is_none())
-                    .when(utilities_selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                    .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
-            )
             .child(
                 desktop_button("nav-browse-threads")
                     .icon(IconName::Clock)
@@ -136,45 +176,18 @@ impl DesktopView {
                     })
                     .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone()),
             )
-            .child(
-                desktop_button("nav-terminal")
-                    .icon(IconName::Terminal)
-                    .ghost()
-                    .rounded_lg()
-                    .accessibility_label(rust_i18n::t!("app.navigation.terminal").to_string())
-                    .tooltip_with_action(
-                        rust_i18n::t!("app.navigation.terminal").to_string(),
-                        &ToggleTerminal,
-                        Some(key_context::DESKTOP),
-                    )
-                    .toggled(self.terminal_visible)
-                    .when(self.terminal_visible, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                    .dispatches_desktop_action(ToggleTerminal, self.focus_handle.clone()),
-            )
+            // Three pinned icons above; everything else lives in one overflow.
+            .child(self.render_nav_overflow(
+                "nav-overflow",
+                rust_i18n::t!("app.navigation.workspace_actions").to_string(),
+                false,
+                &[
+                    NavMenuAction::Utilities,
+                    NavMenuAction::Terminal,
+                    NavMenuAction::Settings,
+                ],
+            ))
             .child(div().flex_grow(1.0))
-            .child(
-                desktop_button("nav-update")
-                    .icon(update_icon)
-                    .ghost()
-                    .rounded_lg()
-                    .accessibility_label(update_label)
-                    .tooltip(update_tooltip)
-                    .desktop_disabled(update_busy || update_installed)
-                    .on_click(cx.listener(|view, _, _, cx| {
-                        if view.update_request_pending
-                            || view.update_install_state.is_in_flight()
-                            || matches!(&view.update_install_state, protocol::UpdateInstallState::Completed { .. })
-                        {
-                            return;
-                        }
-                        if view.can_offer_update_install() {
-                            view.request_update_install();
-                        } else {
-                            let _ = view.request_update_check();
-                        }
-                        cx.notify();
-                    })),
-            )
             .into_any_element();
         let navigation = div()
             .id("primary-navigation")
@@ -205,40 +218,21 @@ impl DesktopView {
             .into_any_element()
     }
     pub(super) fn render_chrome_menu(&self, id: &'static str, label: String) -> AnyElement {
-        let can_new = self.new_thread_available();
-        let can_close = self.selected_session_id.is_some() && self.new_thread_available();
-        let has_workspace = self.workspace.is_some();
-        let panel_open = self.current_route() != Route::Workspace;
-        desktop_button(id)
-            .icon(IconName::Ellipsis)
-            .ghost()
-            .small()
-            .accessibility_label(label.as_str())
-            .tooltip(label)
-            .dropdown_menu(move |menu, _, _| {
-                menu.menu_with_disabled(
-                    rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
-                    Box::new(NewSession),
-                    !can_new,
-                )
-                .menu_with_disabled(
-                    rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string(),
-                    Box::new(CloseSession),
-                    !can_close,
-                )
-                .separator()
-                .menu(rust_i18n::t!(i18n::NAVIGATION_TOGGLE_NAVIGATION).to_string(), Box::new(ToggleSidebar))
-                .menu_with_disabled(
-                    rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
-                    Box::new(ToggleInspector),
-                    !has_workspace || panel_open,
-                )
-                .menu(rust_i18n::t!("app.navigation.toggle_zen_mode").to_string(), Box::new(ToggleZenMode))
-                .menu(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(), Box::new(OpenCommandPalette))
-                .separator()
-                .menu(rust_i18n::t!("app.navigation.toggle_status_bar").to_string(), Box::new(ToggleStatusBar))
-                .menu(rust_i18n::t!("app.navigation.settings_menu").to_string(), Box::new(OpenSettings))
-            })
-            .into_any_element()
+        self.render_nav_overflow(
+            id,
+            label,
+            true,
+            &[
+                NavMenuAction::NewThread,
+                NavMenuAction::CloseThread,
+                NavMenuAction::ToggleNavigation,
+                NavMenuAction::ToggleInspector,
+                NavMenuAction::ToggleZen,
+                NavMenuAction::SearchCommands,
+                NavMenuAction::ToggleStatusBar,
+                NavMenuAction::Settings,
+                NavMenuAction::Utilities,
+            ],
+        )
     }
 }

@@ -145,7 +145,7 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
             );
         });
         window.render_frame(cx);
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         select_settings_category(window, 0, cx);
         window.render_frame(cx);

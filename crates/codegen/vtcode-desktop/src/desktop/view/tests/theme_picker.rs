@@ -50,7 +50,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.apply_theme(ThemeId::ciapre::BASE.into(), window, cx));
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
         window.render_frame(cx);
@@ -144,7 +144,7 @@ fn inactive_system_swatch_carries_no_selection_state(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, DEFAULT_LIGHT_ID);
         assert_eq!(window.find("theme-system-light").label(), Some("System Light"));
@@ -163,7 +163,7 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.apply_theme(ThemeId::ciapre::BASE.into(), window, cx));
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
         window.render_frame(cx);
@@ -199,10 +199,10 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn typography_rows_keep_a_compact_vertical_rhythm(cx: &mut TestAppContext) {
-    let (window, _) = open_desktop(cx);
+    let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         let ui = window.find("choose-ui-font").bounds();
         let code = window.find("choose-code-font").bounds();
@@ -219,7 +219,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
     let (window, view) = open_desktop_sized(cx, 760., 900.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         let light_strip = window.find("theme-list-light").bounds();
         let dark_strip = window.find("theme-list-dark").bounds();
@@ -288,7 +288,7 @@ fn theme_picker_groups_swatches_by_mode(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         assert_eq!(window.find("theme-list-light").label(), Some("Light"));
         assert_eq!(window.find("theme-list-dark").label(), Some("Dark"));
@@ -334,7 +334,7 @@ fn theme_chevrons_scroll_only_the_visible_profile_grid(cx: &mut TestAppContext) 
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.apply_theme(ThemeId::ciapre::BASE.into(), window, cx));
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
         window.render_frame(cx);
@@ -367,7 +367,7 @@ fn theme_chevrons_scroll_only_the_visible_profile_grid(cx: &mut TestAppContext) 
 fn theme_rows_mount_only_the_visible_window(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         assert!(window.try_find(DEFAULT_DARK_SWATCH).is_some(), "the first dark swatch mounts");
         assert!(
@@ -384,7 +384,7 @@ fn theme_rows_mount_only_the_visible_window(cx: &mut TestAppContext) {
 fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, DEFAULT_LIGHT_ID, "the OS appearance picks the neutral default theme");

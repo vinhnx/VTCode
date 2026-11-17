@@ -63,9 +63,9 @@ fn terminal_ansi_setting_flips_live_palette(cx: &mut TestAppContext) {
 /// toggled (fresh installs default to Ciapre).
 #[gpui_kit::test]
 fn terminal_scheme_grid_marks_active_swatch(cx: &mut TestAppContext) {
-    let (window, _view, _dir) = open_workspace_terminal(cx);
+    let (window, view, _dir) = open_workspace_terminal(cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         for id in ["auto", "dark", "light", "ciapre", "latte"] {
             assert!(window.try_find(format!("terminal-scheme-{id}")).is_some(), "scheme swatch {id} must render");
@@ -81,9 +81,9 @@ fn terminal_scheme_grid_marks_active_swatch(cx: &mut TestAppContext) {
 /// button height and clipped every label.
 #[gpui_kit::test]
 fn terminal_scheme_buttons_fit_preview_and_label(cx: &mut TestAppContext) {
-    let (window, _view, _dir) = open_workspace_terminal(cx);
+    let (window, view, _dir) = open_workspace_terminal(cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         for id in ["auto", "dark", "light", "ciapre", "latte"] {
             let bounds = window.find(format!("terminal-scheme-{id}")).bounds();
@@ -105,7 +105,7 @@ fn terminal_scheme_swatch_click_applies_latte(cx: &mut TestAppContext) {
     let (window, view, _dir) = open_workspace_terminal(cx);
     let probe = write_probe_cell(&view, cx, b"\x1b[31mX");
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        view.update(cx, |view, cx| view.toggle_settings(window, cx));
         window.render_frame(cx);
         scroll_settings_into_view(window, "terminal-scheme-latte", cx);
         window.click("terminal-scheme-latte", cx);
