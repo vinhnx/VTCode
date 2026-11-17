@@ -385,16 +385,11 @@ impl DesktopView {
                     } else {
                         rust_i18n::t!("app.configuration.total_settings", count = row_count).to_string()
                     };
-                    let mut group = div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
+                    let mut group = div().flex().flex_col().gap_2().child(section_label(name.clone(), &colors));
                     if let Some(description) =
                         catalog_group.and_then(|catalog_group| catalog_group.description.as_ref())
                     {
-                        group =
-                            group.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
+                        group = group.child(row_description(description.clone(), &colors));
                     }
                     group = group.child(
                         div()

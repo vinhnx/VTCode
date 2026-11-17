@@ -87,7 +87,7 @@ impl DesktopView {
                     .rounded_md()
                     .bg(colors.popover)
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .shadow_md()
                     .px_4()
                     .py_2()

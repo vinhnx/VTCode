@@ -168,8 +168,8 @@ pub(super) fn desktop_folder_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabB
     TabBar::new(id).folder().w_full()
 }
 
-/// Sentence-case settings section heading: one rem step above body text at
-/// label-grade foreground with semibold weight.
+/// Label tiers, largest first: page `2xl`, panel `lg`, section/group `base`,
+/// row `sm`, eyebrow/help `xs` (see `docs/development/desktop-workspace.md`).
 pub(super) fn section_label(
     text: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
@@ -181,29 +181,39 @@ pub(super) fn section_label(
         .child(text.into())
 }
 
-/// Content page title: one step above section headings, naming the visible
+/// Content page title: the largest interface label, naming the visible
 /// settings page. Rendered once as the first child of the scroll content so
-/// scroll geometry is unchanged; the panel header keeps the stable dialog
-/// identity.
+/// scroll geometry is unchanged; the panel header keeps its own smaller tier.
 pub(super) fn content_page_title(
     text: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
-    div().text_xl().font_semibold().text_color(colors.foreground).child(text.into())
+    div()
+        .text_2xl()
+        .font_semibold()
+        .text_color(colors.foreground)
+        .child(text.into())
 }
 
-/// Eyebrow section label: the single owner of the ALL-CAPS short-section
-/// style used by the sidebar, the utilities pane, and popover group headers.
-/// Callers pass natural-case text; the builder applies the casing once, so no
-/// call site hand-rolls `.to_uppercase()` or ships pre-uppercased literals.
-/// Eyebrows stay at body size; settings and config surfaces keep sentence-case
-/// [`section_label`].
+/// Panel / dialog header title: one step below the page title and above
+/// section headings, so the chrome never competes with the page it contains.
+pub(super) fn panel_title(
+    text: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div().text_lg().font_semibold().text_color(colors.foreground).child(text.into())
+}
+
+/// Eyebrow section label: owns the ALL-CAPS style for short sidebar,
+/// utilities, and popover headers. Callers pass natural case; casing is applied
+/// once here. Uppercasing is opaque to most scripts, so localized text keeps
+/// its own casing; eyebrows share the micro tier with help text.
 pub(super) fn eyebrow_label(
     text: impl AsRef<str>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
     div()
-        .text_sm()
+        .text_xs()
         .font_semibold()
         .text_color(themes::label_foreground(colors))
         .child(gpui_kit::SharedString::from(text.as_ref().to_uppercase()))
@@ -259,14 +269,7 @@ pub(super) fn settings_group_box_untitled(colors: &gpui_kit::component::theme::T
 pub(super) fn card_border_style(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::StyleRefinement {
     gpui_kit::StyleRefinement::default()
         .border_1()
-        .border_color(soft_edge_color(colors))
-}
-
-/// Softened edge tone shared by card outlines and dividers: the theme
-/// border at reduced opacity so boundaries read as quiet hairlines rather
-/// than rules. One value for every surface — tune here, not per surface.
-pub(super) fn soft_edge_color(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
-    colors.border.opacity(0.55)
+        .border_color(themes::soft_edge_color(colors))
 }
 
 /// One settings row: title and description stacked left, a control pinned
@@ -314,22 +317,25 @@ pub(super) fn group_box_title(
         .child(title.into())
 }
 
-/// Settings-row title: one step below group headings, medium weight at
-/// primary foreground so it reads above its description.
+/// Settings-row title: one step below group headings, semibold at primary
+/// foreground so it reads as the field's label rather than its help text.
+/// Weight and size carry the tier, so the description can keep its bright
+/// secondary tone without the two lines collapsing into one.
 pub(super) fn row_title(
     text: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
-    div().text_sm().font_medium().text_color(colors.foreground).child(text.into())
+    div().text_sm().font_semibold().text_color(colors.foreground).child(text.into())
 }
 
-/// Settings-row description: same size as the title, set in the brighter
-/// secondary ramp so small muted copy stays readable on every fill.
+/// Settings-row description: one size below the title, set in the brighter
+/// secondary ramp so small muted copy stays readable on every fill. The size
+/// step keeps help text from masquerading as the label on the same line.
 pub(super) fn row_description(
     text: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
-    div().text_sm().text_color(themes::muted_text(colors)).child(text.into())
+    div().text_xs().text_color(themes::muted_text(colors)).child(text.into())
 }
 
 /// 1px separator for non-settings surfaces (navigation chrome, inspector
@@ -340,7 +346,7 @@ pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> im
     div()
         .w_full()
         .py_1()
-        .child(div().h(px(1.)).w_full().bg(soft_edge_color(colors)))
+        .child(div().h(px(1.)).w_full().bg(themes::soft_edge_color(colors)))
 }
 
 /// 1px hairline between panes: vertical in side-by-side bodies, horizontal in
@@ -352,7 +358,7 @@ pub(super) fn pane_divider(
     vertical: bool,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> AnyElement {
-    let tone = soft_edge_color(colors);
+    let tone = themes::soft_edge_color(colors);
     if vertical {
         div()
             .id(id)
@@ -497,7 +503,7 @@ pub(super) fn diff_pane_group(
         .min_h_0()
         .rounded_md()
         .border_1()
-        .border_color(colors.border)
+        .border_color(themes::soft_edge_color(colors))
         .child(child)
 }
 
@@ -556,13 +562,7 @@ pub(super) fn consent_title_row(
         .items_center()
         .gap_3()
         .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
-        .child(
-            div()
-                .font_semibold()
-                .text_lg()
-                .text_color(colors.foreground)
-                .child(title.into()),
-        )
+        .child(panel_title(title, colors))
 }
 
 pub(super) fn navigation_label(

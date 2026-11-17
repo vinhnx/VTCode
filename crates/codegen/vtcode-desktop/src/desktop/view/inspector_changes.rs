@@ -846,7 +846,7 @@ impl DesktopView {
                                 .flex()
                                 .flex_col()
                                 .gap_1()
-                                .child(div().text_lg().font_semibold().child(title))
+                                .child(panel_title(title, &colors))
                                 .child(div().text_xs().text_color(colors.muted_foreground).child(description)),
                         )
                         .child(

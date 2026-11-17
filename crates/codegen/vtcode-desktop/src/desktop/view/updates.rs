@@ -465,7 +465,7 @@ impl DesktopView {
                     .rounded_md()
                     .bg(colors.popover)
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .shadow_md()
                     .p_6()
                     .child(
@@ -571,7 +571,7 @@ impl DesktopView {
                     .py_2()
                     .rounded_md()
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .bg(colors.secondary)
                     .text_sm()
                     .text_color(colors.secondary_foreground)

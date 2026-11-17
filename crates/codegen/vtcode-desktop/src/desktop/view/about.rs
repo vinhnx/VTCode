@@ -216,13 +216,7 @@ impl DesktopView {
             // icon: the monochrome V follows the theme instead of shipping a
             // raster art tile that fights the card.
             .child(brand_mark("about-settings-mark", 56., colors.foreground))
-            .child(
-                div()
-                    .text_lg()
-                    .font_semibold()
-                    .text_color(colors.foreground)
-                    .child(app::NAME.to_string()),
-            )
+            .child(panel_title(app::NAME.to_string(), &colors))
             .child(
                 div()
                     .id("about-settings-version")
@@ -453,7 +447,7 @@ impl DesktopView {
                     .rounded_md()
                     .bg(colors.popover)
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .shadow_md()
                     .px_6()
                     .pt_6()
@@ -462,13 +456,7 @@ impl DesktopView {
                     // identity surface, so the Dock art would read as a second
                     // brand.
                     .child(brand_mark("about-dialog-mark", 56., colors.foreground))
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_semibold()
-                            .text_color(colors.foreground)
-                            .child(app::NAME.to_string()),
-                    )
+                    .child(content_page_title(app::NAME.to_string(), &colors))
                     .child(
                         div()
                             .id("about-version")

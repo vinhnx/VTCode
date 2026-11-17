@@ -45,12 +45,7 @@ impl DesktopView {
             .gap_4()
             .child(Self::render_curated_header_content(&props.curated, view.clone(), &colors))
             .child(Self::render_curated_overview_card_content(snapshot, &props.curated, view.clone(), &colors))
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .child(rust_i18n::t!("app.configuration.model_features").to_string()),
-            )
+            .child(section_label(rust_i18n::t!("app.configuration.model_features").to_string(), &colors))
             .child(Self::render_curated_efforts_card_content(&props.curated, view.clone(), &colors))
             .child(Self::render_config_page_footer_content(&props.cli, props.server_version.as_deref(), &colors))
             .into_any_element()
@@ -73,12 +68,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                            .child(rust_i18n::t!("app.configuration.page_title").to_string()),
-                    )
+                    .child(content_page_title(rust_i18n::t!("app.configuration.page_title").to_string(), &colors))
                     .child(row_description(rust_i18n::t!("app.configuration.tagline").to_string(), colors)),
             )
             .child(

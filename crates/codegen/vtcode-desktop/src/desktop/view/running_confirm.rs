@@ -212,7 +212,7 @@ impl DesktopView {
                     .rounded_md()
                     .bg(colors.popover)
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .shadow_md()
                     .p_5()
                     .child(consent_title_row(rust_i18n::t!("app.session.running_switch_title").to_string(), &colors))

@@ -34,7 +34,7 @@ impl Render for FileDragPreview {
             .rounded_md()
             .bg(colors.popover)
             .border_1()
-            .border_color(colors.border)
+            .border_color(themes::soft_edge_color(&colors))
             .shadow_md()
             .px_3()
             .py_1()
@@ -654,7 +654,7 @@ impl DesktopView {
                                 .secondary()
                                 .rounded(theme.radius_full())
                                 .border_1()
-                                .border_color(colors.border)
+                                .border_color(themes::soft_edge_color(&colors))
                                 .text_color(colors.foreground)
                                 .on_click(cx.listener(|view, _, _, cx| {
                                     view.output_scroll.scroll_to_bottom();

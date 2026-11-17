@@ -19,6 +19,26 @@ fn assert_subtle_surface_borders(id: &str, colors: &ThemeColor) {
     }
 }
 
+#[test]
+fn soft_edge_is_the_single_translucent_border_tone() {
+    let border = Hsla { h: 0.21, s: 0.37, l: 0.24, a: 1.0 };
+    let mut colors = ThemeColor::default();
+    colors.border = border;
+    let soft = soft_edge_color(&colors);
+    // Re-derive independently: hue/saturation/lightness are untouched and only
+    // alpha is scaled to the one soft-edge value. Do not assert against
+    // `.opacity(0.55)` here — that is the implementation under test.
+    for (name, actual, expected) in [
+        ("hue", soft.h, border.h),
+        ("saturation", soft.s, border.s),
+        ("lightness", soft.l, border.l),
+    ] {
+        assert!((actual - expected).abs() < 1e-6, "{name} must be inherited from the border token");
+    }
+    assert!((soft.a - 0.55).abs() < 1e-6, "soft edge alpha must be the one 0.55 knob");
+    assert!(soft.a < border.a, "soft edges must be translucent hairlines, not rules");
+}
+
 #[gpui_kit::test]
 fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {

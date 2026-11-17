@@ -82,7 +82,7 @@ impl DesktopView {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(div().font_semibold().text_sm().text_color(colors.foreground).child(title))
+                        .child(row_title(title, &colors))
                         .child(div().text_sm().text_color(colors.muted_foreground).child(body)),
                 )
         };
@@ -120,7 +120,7 @@ impl DesktopView {
                     .rounded_md()
                     .bg(colors.popover)
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .shadow_md()
                     .p_5()
                     .child(consent_title_row(rust_i18n::t!("app.permissions.confirm_full_title").to_string(), &colors))
@@ -136,7 +136,7 @@ impl DesktopView {
                             .flex_col()
                             .rounded_md()
                             .border_1()
-                            .border_color(colors.border)
+                            .border_color(themes::soft_edge_color(&colors))
                             .px_4()
                             .py_2()
                             .child(capability(

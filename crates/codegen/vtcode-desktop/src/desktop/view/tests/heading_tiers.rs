@@ -28,6 +28,12 @@ impl Render for HeadingTierProbe {
             )
             .child(
                 div()
+                    .id("probe-panel")
+                    .test_support()
+                    .child(panel_title("Appearance settings", &colors)),
+            )
+            .child(
+                div()
                     .id("probe-row")
                     .test_support()
                     .child(row_title("Appearance settings", &colors)),
@@ -40,9 +46,9 @@ impl Render for HeadingTierProbe {
             )
             .child(
                 div()
-                    .id("probe-row-upper")
+                    .id("probe-description")
                     .test_support()
-                    .child(row_title("APPEARANCE SETTINGS", &colors)),
+                    .child(row_description("Appearance settings", &colors)),
             )
             .child(
                 div()
@@ -73,12 +79,12 @@ fn open_probe(cx: &mut TestAppContext) -> AnyWindowHandle {
 }
 
 #[gpui_kit::test]
-fn section_headings_render_one_step_above_body_text(cx: &mut TestAppContext) {
+fn label_ladder_keeps_every_tier_distinct(cx: &mut TestAppContext) {
     let window = open_probe(cx);
-    // Asymmetric extremes: the smallest and largest UI base sizes must both
-    // preserve the tier ordering, not just the default.
-    let mut previous_section: Option<Pixels> = None;
-    for base_size in [14., 24.] {
+    // Smallest, default, and largest UI base sizes: no two neighbouring roles
+    // may collapse into one size, and the ladder must scale as a whole.
+    let mut previous_page: Option<Pixels> = None;
+    for base_size in [14., 16., 24.] {
         cx.update(|cx| {
             Theme::update(cx, |theme| {
                 theme.font_size = px(base_size);
@@ -86,29 +92,35 @@ fn section_headings_render_one_step_above_body_text(cx: &mut TestAppContext) {
         });
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
+            let page = window.find("probe-content-title").bounds().size.height;
+            let panel = window.find("probe-panel").bounds().size.height;
             let section = window.find("probe-section").bounds().size.height;
             let group = window.find("probe-group").bounds().size.height;
             let row = window.find("probe-row").bounds().size.height;
             let eyebrow = window.find("probe-eyebrow").bounds().size.height;
-            let row_upper = window.find("probe-row-upper").bounds().size.height;
-            let content_title = window.find("probe-content-title").bounds().size.height;
+            let description = window.find("probe-description").bounds().size.height;
+            assert!(page > panel, "page ({page:?}) > panel ({panel:?}) at {base_size}px");
             assert!(
-                section > row,
-                "section heading ({section:?}) must render taller than body text ({row:?}) at {base_size}px"
+                panel > section,
+                "panel title ({panel:?}) > section heading ({section:?}) at {base_size}px"
             );
             assert_eq!(group, section, "group-box titles share the section tier at {base_size}px");
-            assert_eq!(eyebrow, row_upper, "eyebrows stay at body size at {base_size}px");
             assert!(
-                content_title > section,
-                "content page title ({content_title:?}) must render one step above section headings ({section:?}) at {base_size}px"
+                section > row,
+                "section heading ({section:?}) > row label ({row:?}) at {base_size}px"
             );
-            if let Some(previous) = previous_section {
+            assert!(row > eyebrow, "row label ({row:?}) > eyebrow ({eyebrow:?}) at {base_size}px");
+            assert_eq!(
+                eyebrow, description,
+                "eyebrows and help text share the micro tier at {base_size}px"
+            );
+            if let Some(previous) = previous_page {
                 assert!(
-                    section > previous,
-                    "headings must scale with the UI base size ({previous:?} at 14px vs {section:?} at 24px)"
+                    page > previous,
+                    "the ladder scales with the UI base size ({previous:?} at the smaller base vs {page:?} at {base_size}px)"
                 );
             }
-            previous_section = Some(section);
+            previous_page = Some(page);
         })
         .unwrap();
     }

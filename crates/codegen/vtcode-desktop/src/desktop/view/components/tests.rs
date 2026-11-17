@@ -64,7 +64,7 @@ fn card_border_style_pins_a_1px_theme_border(cx: &mut gpui_kit::TestAppContext) 
         gpui_kit::init(cx);
         let colors = cx.theme().colors;
         let style = card_border_style(&colors);
-        assert_eq!(style.border_color, Some(soft_edge_color(&colors)));
+        assert_eq!(style.border_color, Some(themes::soft_edge_color(&colors)));
         let widths = style.border_widths;
         for width in [widths.top, widths.left, widths.bottom, widths.right] {
             assert_eq!(width, Some(gpui_kit::AbsoluteLength::Pixels(px(1.))));

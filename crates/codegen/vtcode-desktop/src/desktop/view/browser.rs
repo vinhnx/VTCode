@@ -378,7 +378,7 @@ impl DesktopView {
                 // background presses.
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(panel_header(
-                    div().text_lg().font_semibold().child(title),
+                    panel_title(title, &colors),
                     div()
                         .flex()
                         .flex_shrink_0()

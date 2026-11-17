@@ -205,7 +205,7 @@ impl DesktopView {
                         .rounded_md()
                         .bg(colors.popover)
                         .border_1()
-                        .border_color(colors.border)
+                        .border_color(themes::soft_edge_color(&colors))
                         .shadow_md()
                         // Click-away dismissal, mirroring the palette panel: a
                         // press outside the popover closes it. The close is

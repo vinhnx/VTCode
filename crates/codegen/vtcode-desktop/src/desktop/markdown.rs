@@ -324,7 +324,7 @@ pub(super) fn render_markdown_view(
             .h(gpui_kit::rems(MARKDOWN_VIEW_PANEL_HEIGHT_REMS))
             .rounded_md()
             .border_1()
-            .border_color(colors.border)
+            .border_color(super::themes::soft_edge_color(&colors))
             .bg(colors.background)
             .overflow_hidden()
             .p_3(),

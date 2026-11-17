@@ -299,12 +299,10 @@ impl DesktopView {
                 })
                 .child(panel_header(
                     div()
-                        .text_lg()
-                        .font_semibold()
                         // The shared header row insets at `px_3`; one extra
                         // step lands the title on the `px_4` body spine.
                         .pl_1()
-                        .child(div().id("settings-title").test_support().child(title)),
+                        .child(div().id("settings-title").test_support().child(panel_title(title, &colors))),
                     // Generic "Close" word shared across panels (owned by the browser surface).
                     desktop_dismiss_button("settings-dismiss", rust_i18n::t!("app.browser.close").to_string())
                         .small()

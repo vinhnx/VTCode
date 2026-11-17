@@ -431,7 +431,7 @@ fn shortcut_row_content(
             .py_1()
             .rounded_md()
             .border_1()
-            .border_color(colors.border)
+            .border_color(themes::soft_edge_color(colors))
             .bg(colors.popover)
             .text_xs()
             .text_color(colors.foreground)

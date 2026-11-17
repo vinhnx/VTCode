@@ -780,14 +780,17 @@ new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
 
-Type scale (all `rem`-based, so UI size changes preserve hierarchy): the welcome
+Type scale (all `rem`-based, so UI size changes preserve every step): the welcome
 display stays at 1.75rem regular in both modes (the Zen empty state differs in
-copy and chrome, not type size); group headings are semibold `text_sm` at
-primary foreground; micro labels are semibold `text_xs` at label-grade contrast;
-settings rows pair a medium `text_sm` title with a regular `text_sm` description
-separated by 1px hairlines. Secondary copy uses a brighter muted ramp targeting
-6:1, while the classic 4.5:1 muted floor remains for true captions and metadata.
-Transcript Markdown keeps 1.5x body leading with a 1rem paragraph gap; inline
+copy and chrome, not type size). `components.rs` owns the label ladder: page
+titles are semibold `text_2xl`, panel/dialog headers semibold `text_lg`, section
+and group headings semibold `text_base`, row/field labels semibold `text_sm`,
+and eyebrows plus help text `text_xs` (semibold and regular). Body copy is
+regular `text_sm`; call the helper for the role instead of repeating a size and
+weight chain. Secondary copy uses `muted_text` (7:1 target), true captions use
+`aa_muted` (5:1 floor), and both clear the WCAG AA 4.5:1 floor. Settings rows
+stack title and description with `gap_1` air (no dividers) and separate rows by
+the Kit `gap_4` rhythm. Transcript Markdown keeps 1.5x body leading with a 1rem paragraph gap; inline
 code renders as a mono pill with explicit text and fill colors that hold AA on
 both assistant canvas and user-bubble fills.
 The Settings dialog keeps its title and category tabs visible while the active page scrolls vertically;

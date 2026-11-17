@@ -539,6 +539,16 @@ fn subtle_border(secondary: Hsla, popover: Hsla, foreground: Hsla) -> Hsla {
     border
 }
 
+/// The single soft-edge tone: every decorative outline (cards, dialogs, pills,
+/// dividers, code panels) uses this one translucent blend of the `border`
+/// token so boundaries read as quiet hairlines rather than rules. This is the
+/// "soft edge thin" knob — tune here, not per surface. The `border` token
+/// itself stays opaque for Kit inputs and focus, where contrast must hold.
+pub(super) fn soft_edge_color(colors: &ThemeColor) -> Hsla {
+    const SOFT_EDGE_OPACITY: f32 = 0.55;
+    colors.border.opacity(SOFT_EDGE_OPACITY)
+}
+
 pub(super) fn readable_semantic_color(background: Hsla, foreground: Hsla, color: Hsla) -> Hsla {
     const AA_RATIO: f32 = 4.5;
     adjust_color_until_readable(background, foreground, color, |candidate| {

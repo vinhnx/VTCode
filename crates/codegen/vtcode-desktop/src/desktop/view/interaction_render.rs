@@ -157,7 +157,7 @@ impl DesktopView {
             .rounded_lg()
             .bg(colors.popover)
             .border_1()
-            .border_color(colors.border)
+            .border_color(themes::soft_edge_color(&colors))
             .p_4();
         // Questionnaire order: progress eyebrow, title, description. The
         // panel is one framed card; approvals keep the marker icon so the
@@ -200,15 +200,7 @@ impl DesktopView {
                             .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning)),
                     )
                 })
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .text_lg()
-                        .font_semibold()
-                        .text_color(colors.foreground)
-                        .child(interaction.title.clone()),
-                ),
+                .child(div().flex_1().min_w_0().child(panel_title(interaction.title.clone(), &colors))),
         );
         // The first detail line carries the decision facts; the rest recede as
         // supporting metadata.

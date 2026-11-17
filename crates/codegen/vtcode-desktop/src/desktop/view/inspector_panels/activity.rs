@@ -469,7 +469,7 @@ impl DesktopView {
                                 .secondary()
                                 .rounded(cx.theme().radius_full())
                                 .border_1()
-                                .border_color(colors.border)
+                                .border_color(themes::soft_edge_color(colors))
                                 .text_color(colors.foreground)
                                 .on_click(cx.listener(|view, _, _, cx| {
                                     view.activity_scroll.scroll_to_item(0, gpui_kit::ScrollStrategy::Top);

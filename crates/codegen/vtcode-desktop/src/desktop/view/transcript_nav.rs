@@ -318,7 +318,7 @@ impl DesktopView {
                 .secondary()
                 .rounded(cx.theme().radius_full())
                 .border_1()
-                .border_color(colors.border)
+                .border_color(themes::soft_edge_color(&colors))
                 .text_color(colors.foreground)
                 .on_click(cx.listener(|view, _, _, cx| {
                     let _scrolled = view.scroll_to_first_message(cx);
@@ -357,7 +357,7 @@ impl DesktopView {
             .small()
             .rounded(cx.theme().radius_full())
             .border_1()
-            .border_color(colors.border)
+            .border_color(themes::soft_edge_color(&colors))
             .text_color(colors.foreground)
             .on_click(cx.listener(|view, _, window, cx| {
                 let _cycled = view.cycle_filter_match(window, cx);

@@ -635,7 +635,7 @@ impl DesktopView {
             .rounded_full()
             .bg(colors.popover)
             .border_1()
-            .border_color(soft_edge_color(&colors))
+            .border_color(themes::soft_edge_color(&colors))
             .shadow_md()
             .fade_in("zen-toggle-float", cx.theme())
             .child(zen_mode_toggle(true, faded, &self.focus_handle))

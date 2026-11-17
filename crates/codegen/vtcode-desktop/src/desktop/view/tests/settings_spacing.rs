@@ -114,6 +114,31 @@ fn settings_row_separates_title_from_description(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn settings_row_title_outweighs_description(cx: &mut TestAppContext) {
+    let window = open_spacing_probe(cx);
+    // A field label and its help text must not read as the same tier: the
+    // title is one size step larger so hierarchy survives at both the
+    // smallest and largest UI base sizes, not just the default.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let title = window.find("probe-title").bounds().size.height;
+            let description = window.find("probe-description").bounds().size.height;
+            assert!(
+                title > description,
+                "row title ({title:?}) must render taller than its description ({description:?}) at {base_size}px"
+            );
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
 fn settings_group_separates_rows_by_gap_4_air(cx: &mut TestAppContext) {
     let window = open_spacing_probe(cx);
     // Asymmetric extremes: the Kit Settings rhythm (gap_4 = 1rem) must hold

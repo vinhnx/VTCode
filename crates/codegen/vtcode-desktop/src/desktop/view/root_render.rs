@@ -509,7 +509,7 @@ fn render_drop_overlay(cx: &Context<DesktopView>) -> AnyElement {
                 .rounded_md()
                 .bg(colors.popover)
                 .border_1()
-                .border_color(colors.border)
+                .border_color(themes::soft_edge_color(&colors))
                 .shadow_md()
                 .px_4()
                 .py_2()

@@ -325,16 +325,10 @@ impl DesktopView {
                     .rounded_md()
                     .bg(colors.popover)
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .shadow_md()
                     .p_5()
-                    .child(
-                        div()
-                            .font_semibold()
-                            .text_lg()
-                            .text_color(colors.foreground)
-                            .child(format!("Rename “{base_name}”")),
-                    )
+                    .child(panel_title(format!("Rename “{base_name}”"), &colors))
                     .child(div().text_sm().text_color(colors.muted_foreground).child(scope))
                     .child(
                         Input::new(&state.name_input)

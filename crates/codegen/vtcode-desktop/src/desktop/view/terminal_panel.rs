@@ -354,7 +354,7 @@ impl DesktopView {
                     .px(px(8.))
                     .gap_2()
                     .border_b_1()
-                    .border_color(colors.border)
+                    .border_color(themes::soft_edge_color(&colors))
                     .child(
                         div()
                             .id("terminal-tab")
