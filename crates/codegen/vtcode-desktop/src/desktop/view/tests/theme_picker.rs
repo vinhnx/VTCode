@@ -1,7 +1,7 @@
 use super::*;
 
 /// Swatch element id for the default dark theme (`themes::DEFAULT_THEME_ID`).
-const DEFAULT_DARK_SWATCH: &str = "theme-apple-system-colors";
+const DEFAULT_DARK_SWATCH: &str = "theme-noir";
 
 #[gpui_kit::test]
 fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: &mut TestAppContext) {

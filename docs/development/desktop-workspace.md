@@ -398,7 +398,7 @@ panel header carries an explicit Close control that dismisses without a Forward 
 
 ### Startup and desktop shortcuts
 
-Ciapre remains the CLI default; the desktop defaults to **Apple System Colors**, a neutral high-headroom
+Ciapre remains the CLI default; the desktop defaults to **Noir**, a neutral high-headroom
 palette whose near-white foreground gives the muted-text ramp room to read as a distinct tier. The CLI-resolved
 theme from `config/discover` still wins for new desktop profiles when present, so a user who already picked a
 CLI theme keeps it. Existing explicit desktop theme choices are preserved during preference migration.
