@@ -4,8 +4,7 @@
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
 <p>
-  <sub>Terminal-first coding agent. Desktop-ready on macOS.</sub><br />
-  <sub>Explore, plan, edit, and verify with your model of choice.</sub>
+  <sub>Terminal-first coding agent, desktop-ready on macOS — explore, plan, edit, and verify with your model of choice.</sub>
 </p>
 
 [![Rust](https://img.shields.io/badge/rust-1.100.0%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
@@ -36,7 +35,7 @@
 
 ## Overview
 
-VT Code runs an auditable, resumable agentic coding loop in your repo — terminal TUI and native macOS app,
+VT Code is an auditable, resumable agentic coding loop for your repo — terminal TUI plus native macOS app,
 open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and [License](#license)).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
@@ -55,8 +54,8 @@ Full map in [Documentation](#documentation).
 
 ## Quick start
 
-Three steps on macOS, Linux, or Windows/WSL. Windows artifacts are best effort; source builds need Rust 1.100.0+
-(edition 2024). See the [installation guide](./docs/installation/README.md) for all methods.
+Three steps on macOS, Linux, or Windows/WSL. Windows artifacts are best effort; source builds need Rust
+1.100.0+ (edition 2024). See the [installation guide](./docs/installation/README.md) for all methods.
 
 ### 1. Install
 
@@ -132,10 +131,10 @@ without another model call. See [interactive mode](./docs/user-guide/interactive
 
 ### Modes
 
-- **`ask`** is tool-free: prints one reply and exits.
+- **`ask`** is tool-free: one reply, then exit.
 - **`exec`** runs the full tool loop and needs workspace trust: approve the TTY prompt, or set
-  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead of prompting). Allow/deny lists and
-  execution policy still apply.
+  `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead of prompting). Allow/deny lists
+  and execution policy still apply.
 - **`review`** inspects uncommitted changes without the agent loop.
 
 Scheduled work reuses the exec runtime. Resume with `vtcode continue` (or `--session-id <id>`);
@@ -144,8 +143,8 @@ and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
-Native macOS app (macOS 15+) sharing the CLI runloop, providers, tool policy,
-sandboxing, sessions, config, and credentials. Configure a provider first (see [Quick start](#quick-start)).
+Native macOS app (macOS 15+) sharing the CLI runloop, providers, tool policy, sandboxing, sessions, config,
+and credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
@@ -202,8 +201,8 @@ Start from the [documentation index](./docs/index.md) or [Wiki](https://github.c
 
 ## Development
 
-25-crate workspace sketch (full list in the [architecture guide](./docs/architecture.md); `default-members` builds
-only the root binary, `vtcode-core`, and `vtcode-ui`):
+26-crate workspace sketch (full list in the [architecture guide](./docs/architecture.md); `default-members` builds
+only the root binary, `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and `vtcode-ui`):
 
 ```mermaid
 graph LR
@@ -212,10 +211,12 @@ graph LR
     CORE --> SAFETY["vtcode-safety"]
     CORE --> EVENTS["vtcode-exec-events (crates/common)"]
     CORE --> MEMORY["vtcode-memory"]
+    CORE --> SKILLS["vtcode-skills"]
+    CORE --> TUI["vtcode-tui-runtime"]
     CORE --> UI["vtcode-ui"]
 ```
 
-Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.4):
+Build with Rust 1.100.0+ (edition 2024; workspace version 0.182.7):
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git
