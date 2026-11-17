@@ -22,6 +22,7 @@ fn assert_recovery_expires_at_fresh_turn(history: &[vtcode_core::llm::provider::
     assert_eq!(restored.len(), history.len() + 1, "restoration must not duplicate itself");
 }
 
+mod approved_execution;
 mod churn_reclaim;
 mod empty_search;
 mod execution_guard;

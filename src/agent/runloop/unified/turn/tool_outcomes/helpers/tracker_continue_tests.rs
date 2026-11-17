@@ -676,6 +676,13 @@ fn recoverable_block_includes_wall_clock_budget_and_plan_fallback_shapes() {
     assert!(tracker_auto_continue_is_recoverable_block(Some(
         "Approved-plan execution stopped after recovery was exhausted. The approved plan and task checklist were retained."
     )));
+    // Same prefix, opposite verdict: the recurrent inspection stall must stay
+    // terminal, or auto-continue would re-queue it onto a fresh per-turn
+    // tracker and repeat the stall. Production
+    // APPROVED_EXECUTION_STALL_BLOCK_REASON, not a paraphrase.
+    assert!(!tracker_auto_continue_is_recoverable_block(Some(
+        crate::agent::runloop::unified::turn::guards::APPROVED_EXECUTION_STALL_BLOCK_REASON
+    )));
     assert!(tracker_auto_continue_is_recoverable_block(Some(
         "Verification is still pending: the turn wall-clock budget is exhausted. No verifier was scheduled."
     )));

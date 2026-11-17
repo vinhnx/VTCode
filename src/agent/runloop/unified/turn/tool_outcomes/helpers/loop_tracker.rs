@@ -111,7 +111,8 @@ pub(crate) struct LoopTracker {
     verifier_stalled_notice_pending: bool,
     /// Counter for consecutive read/search operations without action or synthesis
     pub consecutive_navigations: usize,
-    /// Number of times navigation-loop recovery has fired in this session.
+    /// Number of times navigation-loop recovery has fired this turn (the
+    /// tracker is rebuilt every turn).
     pub navigation_loop_recoveries: usize,
     /// One tool-enabled correction for repeated unchanged tracker observations.
     pub tracker_observation_warning_emitted: bool,
@@ -392,7 +393,8 @@ impl LoopTracker {
     }
 
     /// Number of redundant navigations (total - unique) in the current window.
-    /// The navigation-loop guard requires at least 3 redundant requests.
+    /// Outside approved-plan execution, the navigation-loop guard requires at
+    /// least 3 redundant requests.
     pub(crate) fn repeated_navigation_count(&self) -> usize {
         self.consecutive_navigations.saturating_sub(self.nav_signatures.len())
     }

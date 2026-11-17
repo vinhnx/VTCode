@@ -36,6 +36,7 @@ pub(crate) const RUNTIME_GUIDANCE_SECTION: &str = r#"## Rules
 - Call `apply_patch` directly, never through a shell; use complete context lines, and never resend an unchanged failed patch.
 - Diagnose failures and change approach. Treat empty searches as evidence, and check an optional tool once.
 - Reuse evidence; read only what changed, and name the missing fact before more inspection.
+- After announcing an edit, make that edit next or state the concrete blocker; further inspection must name missing evidence.
 - User cancellation ends the task: do not retry, recover, or auto-continue it. Resume only on fresh input.
 - Prefer skills and tool search here; delegate only sizeable parallel work, discardable fresh-context tasks, or tool-choice conflicts to subagents.
 - Brief a subagent fully and reuse its findings; keep verification here.
@@ -133,6 +134,10 @@ mod tests {
 
     #[test]
     fn source_inspection_guidance_is_present() {
+        assert!(
+            RUNTIME_GUIDANCE_SECTION
+                .contains("After announcing an edit, make that edit next or state the concrete blocker")
+        );
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Inspect source before edits"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("after a conflict, use the disk content returned to you"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Treat attachments as context, not disk evidence"));

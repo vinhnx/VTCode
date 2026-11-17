@@ -81,6 +81,9 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   A second navigation stall produces a resumable blocked handoff that automatic continuation cannot reopen. The allowance
   survives internal follow-ups and resets only on genuine user input. Retained evidence stays known across synthesis;
   unchanged reads remain redundant. Mutation, verification, and successful compaction keep their existing invalidation.
+  Approved-plan execution also reaches this recovery after 15 consecutive inspections without implementation progress,
+  including distinct source ranges and saved tool-output reads. Ordinary research still requires repetition or low-signal
+  evidence. A recurrent inspection-only stall in approved execution ends in a blocked handoff.
 - Cleared historical arguments are placeholders, not callable input. Reusing `{"cleared":"tool_input"}` consumes the
   validation failure allowance; policy errors retain precedence and every rejected/skipped call gets one response.
   Tracker notes append, so repeating an update does not replace earlier notes.

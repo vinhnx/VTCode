@@ -394,6 +394,14 @@ async fn arm_and_announce_early_recovery(
     true
 }
 
+/// Blocked reason for a recurrent inspection-only stall during approved-plan
+/// execution: two navigation-loop recoveries in one turn. The wording must
+/// match no auto-continue allow token — reopening this block automatically
+/// would hand the next turn a fresh tracker and repeat the stall, so only
+/// explicit user input resumes. Locked by
+/// `recoverable_block_includes_wall_clock_budget_and_plan_fallback_shapes`.
+pub(crate) const APPROVED_EXECUTION_STALL_BLOCK_REASON: &str = "Approved-plan execution stopped after repeated read-only/navigation actions made no implementation progress. The approved plan and task checklist were retained; retry from the pending step.";
+
 pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
@@ -456,16 +464,17 @@ pub(crate) async fn handle_turn_balancer(
     }
 
     // NL2Repo-Bench: Navigation Loop Detection
-    // Only trigger when there are actual repeated navigations (not just diverse exploration).
-    // Reading 15 different files is exploration; re-reading the same 3 files 5x each is a loop.
+    // Approved plans already carry research evidence. Bound implementation-free
+    // navigation even when changing ranges or spool paths makes every call unique.
+    // Ordinary research still requires actual repeated navigations.
     if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD
-        && repeated_tool_attempts.repeated_navigation_count() >= 3
+        && (ctx.is_approved_plan_execution() || repeated_tool_attempts.repeated_navigation_count() >= 3)
     {
         repeated_tool_attempts.navigation_loop_recoveries =
             repeated_tool_attempts.navigation_loop_recoveries.saturating_add(1);
         let recurrence = repeated_tool_attempts.navigation_loop_recoveries;
         if ctx.is_approved_plan_execution() && recurrence >= 2 {
-            let blocker = "Approved-plan execution stopped after repeated read-only/navigation actions made no implementation progress. The approved plan and task checklist were retained; retry from the pending step.";
+            let blocker = APPROVED_EXECUTION_STALL_BLOCK_REASON;
             ctx.renderer.line(MessageStyle::Warning, blocker).unwrap_or(());
             ctx.working_history.push(uni::Message::system(blocker.to_string()));
             return TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(blocker.to_string()) });
