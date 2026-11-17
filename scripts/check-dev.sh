@@ -165,7 +165,13 @@ run_tests() {
 	fi
 
 	if cargo nextest --version &>/dev/null; then
-		if nextest_profile_available quick; then
+		# Full-workspace runs need the load-insensitive default profile: quick's
+		# 10s slow-timeout trips on heavy tests under parallel load, and its
+		# fail-fast then SIGTERMs/SIGKILLs a moving set of siblings (see
+		# .vtcode/memory/issues.md). Keep quick for fast local iteration.
+		if [ "$RUN_WORKSPACE" = true ]; then
+			test_profile="default"
+		elif nextest_profile_available quick; then
 			test_profile="quick"
 		else
 			print_warning "nextest profile 'quick' is unavailable; using the default profile."

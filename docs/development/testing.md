@@ -243,6 +243,19 @@ Tests assigned to groups inherit resource and timeout constraints:
 | `slow`        | 2           | 120s    | Tests tagged with `/slow_\|bench_\|heavy/`              |
 | `integration` | 4           | 60s     | Integration binaries, tests tagged `/e2e\|integration/` |
 
+The `slow` group also caps vtcode-core's headless runner tests
+(`core::agent::runner::tests::{tool_exposure,clearing}`) to 2 threads in every
+profile. Each boots a full agent loop and they were SIGKILLed for memory
+pressure when a full-workspace run saturated all cores. Because nextest
+overrides are profile-scoped, the guard is repeated per profile in
+`.config/nextest.toml` — keep all five profiles in sync when changing it.
+
+`./scripts/check-dev.sh --test --workspace` deliberately uses the `default`
+profile rather than `quick`. Quick's 10s slow-timeout trips on heavy tests under
+full-workspace parallel load, and its fail-fast then SIGTERMs/SIGKILLs a moving
+set of siblings. Plain `check-dev.sh --test` (default members only) keeps
+`quick` for fast local iteration.
+
 ## **Test Categories**
 
 ### Unit Tests

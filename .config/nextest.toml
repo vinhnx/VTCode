@@ -47,6 +47,16 @@ test-group = "integration"
 filter = "test(/slow_|bench_|heavy/)"
 test-group = "slow"
 
+# vtcode-core's headless runner tests each boot a full agent loop; ~27 of them
+# in the 10-thread default pool get SIGKILLed for memory pressure on a full
+# workspace run. Cap them to the 2-thread slow group so peak memory stays
+# bounded while the rest of the suite keeps full parallelism (check-dev.sh
+# falls back to this profile when the quick profile is unavailable).
+[[profile.default.overrides]]
+filter = "test(/core::agent::runner::tests::(tool_exposure|clearing)/)"
+test-group = "slow"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
 # ── CI profile ────────────────────────────────────────────────────
 # Comprehensive: no fail-fast, retries flaky tests, records everything.
 [profile.ci]
@@ -61,6 +71,13 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 path = "target/nextest/ci-junit.xml"
 store-success-output = false
 store-failure-output = true
+
+# Full CI gate (scripts/check.sh): same OOM guard as profile.default/quick for
+# vtcode-core's memory-heavy headless runner tests.
+[[profile.ci.overrides]]
+filter = "test(/core::agent::runner::tests::(tool_exposure|clearing)/)"
+test-group = "slow"
+slow-timeout = { period = "60s", terminate-after = 2 }
 
 # ── Quick profile (TDD) ──────────────────────────────────────────
 # Fastest iteration: skips integration/e2e/slow tests entirely,
@@ -98,6 +115,25 @@ filter = "test(many_prepared_tool_calls_execute_without_call_count_cap)"
 test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
+# OOM guard for runs that select the quick profile (plain `check-dev.sh --test`
+# does; `--workspace --test` now uses the default profile): the runner module's
+# headless agent tests are memory-heavy and were SIGKILLed when all 10
+# quick-profile threads were busy. Keep them in the 2-thread slow group and give
+# them a load-safe timeout. Verified via nextest list: this filter matches
+# exactly the 27 tool_exposure/clearing runner tests.
+[[profile.quick.overrides]]
+filter = "test(/core::agent::runner::tests::(tool_exposure|clearing)/)"
+test-group = "slow"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+# merge_gateway tool_choice_none payload tests take ~6s standalone and crossed
+# the quick 10s ceiling under full-workspace load, tripping fail-fast's SIGTERM
+# cascade on 9 siblings. Isolate both variants into the slow group with headroom.
+[[profile.quick.overrides]]
+filter = "test(/payload_omits_callable_tools_for_tool_choice_none/)"
+test-group = "slow"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
 # ── Changed profile ──────────────────────────────────────────────
 # Run only tests in crates that have changed since a baseline ref.
 # Used via: cargo nextest run --profile changed --changed --since HEAD~1
@@ -111,6 +147,13 @@ failure-output = "immediate"
 success-output = "never"
 slow-timeout = { period = "30s", terminate-after = 2 }
 
+# OOM guard for vtcode-core's memory-heavy headless runner tests (see default
+# profile). The 30s ceiling is too tight for them under load either way.
+[[profile.changed.overrides]]
+filter = "test(/core::agent::runner::tests::(tool_exposure|clearing)/)"
+test-group = "slow"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
 # ── Partition profile (CI parallel) ──────────────────────────────
 [profile.ci-partition]
 fail-fast = false
@@ -118,4 +161,11 @@ retries = 1
 status-level = "all"
 final-status-level = "all"
 failure-output = "immediate-final"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+# OOM guard for vtcode-core's memory-heavy headless runner tests (see default
+# profile); keeps each CI shard from saturating its runner's memory budget.
+[[profile.ci-partition.overrides]]
+filter = "test(/core::agent::runner::tests::(tool_exposure|clearing)/)"
+test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
