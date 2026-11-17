@@ -269,7 +269,7 @@ impl DesktopView {
         let prompt = entry.prompt.clone();
         let params = json!({
             keys::SESSION_ID: session_id,
-            keys::PROMPT: prompt,
+            keys::TEXT: prompt,
             keys::ENTRY_ID: entry_id,
         });
         if !self.request(protocol::method::TURN_STEER, params) {
@@ -342,7 +342,7 @@ impl DesktopView {
         let params = json!({
             keys::SESSION_ID: session_id,
             keys::ENTRY_ID: entry_id,
-            keys::PROMPT: text.clone(),
+            keys::TEXT: text.clone(),
         });
         if !self.request(protocol::method::TURN_QUEUE_EDIT, params) {
             self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());

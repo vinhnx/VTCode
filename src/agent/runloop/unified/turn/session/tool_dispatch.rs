@@ -4,6 +4,7 @@ use std::path::Path;
 
 use crate::agent::runloop::git::normalize_workspace_path;
 use crate::agent::runloop::unified::display::display_user_message;
+use crate::agent::runloop::unified::inline_events::harness::{turn_completed_event, turn_started_event};
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::shell::shell_quote_if_needed;
 use crate::agent::runloop::unified::status_line::InputStatusState;
@@ -102,6 +103,17 @@ pub(crate) async fn execute_direct_tool_call(
 ) -> Result<Option<InteractionOutcome>> {
     // Construct HarnessTurnState (simplified for direct execution)
     let mut harness_state = begin_direct_tool_turn(&ctx.interaction_ctx.harness_config);
+    let direct_turn_id = harness_state.turn_id.0.clone();
+
+    // A directly executed tool is still a turn. Publish the canonical
+    // lifecycle so downstream consumers (notably the desktop client, which
+    // clears `running` only on a terminal turn event) see it start and finish.
+    // Also register the fresh id so tool events are not mis-attributed to the
+    // previously completed turn.
+    if let Some(emitter) = ctx.interaction_ctx.harness_emitter {
+        let _ = emitter.begin_task_turn(&direct_turn_id, input, vtcode_core::exec::events::InputOrigin::User);
+        let _ = emitter.emit(turn_started_event());
+    }
 
     let mut auto_finish_planning_attempted = false;
 
@@ -169,6 +181,9 @@ pub(crate) async fn execute_direct_tool_call(
             let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, &current_tool_name, current_args).await?;
 
             if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
+                if let Some(emitter) = t_ctx.ctx.harness_emitter {
+                    let _ = emitter.emit(turn_completed_event(vtcode_core::exec::events::Usage::default()));
+                }
                 return Ok(Some(InteractionOutcome::Exit { reason: vtcode_core::hooks::SessionEndReason::Exit }));
             }
 
@@ -221,6 +236,11 @@ pub(crate) async fn execute_direct_tool_call(
             .iter()
             .map(|path| normalize_workspace_path(ctx.interaction_ctx.config.workspace.as_path(), path)),
     );
+
+    // Close the direct turn's lifecycle now that its output is complete.
+    if let Some(emitter) = ctx.interaction_ctx.harness_emitter {
+        let _ = emitter.emit(turn_completed_event(vtcode_core::exec::events::Usage::default()));
+    }
 
     // Direct tool paths already executed and rendered output; skip creating an
     // immediate LLM turn for this interaction loop iteration. If this call

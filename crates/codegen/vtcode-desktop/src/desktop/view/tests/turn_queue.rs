@@ -556,7 +556,13 @@ fn steer_keeps_the_row_until_the_service_confirms(cx: &mut TestAppContext) {
         panic!("expected steer request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_STEER);
-    assert_eq!(params, serde_json::json!({ "sessionId": "session", "prompt": "ship it", "entryId": "qe-1" }));
+    assert_eq!(params, serde_json::json!({ "sessionId": "session", "text": "ship it", "entryId": "qe-1" }));
+    // Pin the wire contract: the service parses exactly this DTO, so a key
+    // rename here would otherwise pass a literal-only assertion and fail at
+    // runtime with "invalid request parameters".
+    let decoded: vtcode_desktop_protocol::TurnSteerParams =
+        serde_json::from_value(params.clone()).expect("steer params must decode into the protocol DTO");
+    assert_eq!(decoded.text, "ship it");
 }
 
 #[gpui_kit::test]
@@ -642,7 +648,10 @@ fn inline_edit_commits_a_queued_prompt_in_place(cx: &mut TestAppContext) {
         panic!("expected queue edit request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_QUEUE_EDIT);
-    assert_eq!(params, serde_json::json!({ "sessionId": "session", "entryId": "qe-old", "prompt": "revised" }));
+    assert_eq!(params, serde_json::json!({ "sessionId": "session", "entryId": "qe-old", "text": "revised" }));
+    let decoded: vtcode_desktop_protocol::TurnQueueEditParams =
+        serde_json::from_value(params.clone()).expect("edit params must decode into the protocol DTO");
+    assert_eq!(decoded.text, "revised");
     view.update(cx, |view, _| {
         assert_eq!(view.queued_submissions[0].prompt, "revised", "mirror updates optimistically");
         assert!(view.editing_queue_echo_id.is_none(), "editor closes after commit");

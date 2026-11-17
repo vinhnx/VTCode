@@ -983,6 +983,10 @@ impl DesktopView {
                                 .py_2()
                                 .rounded_md()
                                 .bg(colors.secondary)
+                                .overflow_hidden()
+                                .overflow_x_scroll()
+                                .whitespace_nowrap()
+                                .text_color(colors.muted_foreground)
                                 .font_family(cx.theme().mono_font_family.clone())
                                 .text_size(cx.theme().mono_font_size)
                                 .child(render_output_text(&output_excerpt)),

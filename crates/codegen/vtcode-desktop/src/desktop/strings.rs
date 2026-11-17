@@ -28,6 +28,9 @@ pub(super) mod keys {
     pub const INTERACTION_ID: &str = "interactionId";
     pub const CANCELLED: &str = "cancelled";
     pub const PROMPT: &str = "prompt";
+    /// Wire key for the `text` field on steer/edit params (the protocol DTO
+    /// names it `text`, not `prompt`).
+    pub const TEXT: &str = "text";
     pub const ATTACHMENTS: &str = "attachments";
     pub const BATCHABLE: &str = "batchable";
     pub const ENTRY_ID: &str = "entryId";
