@@ -657,7 +657,7 @@ async fn steer_request_injects_into_the_live_turn_and_drops_only_the_addressed_r
         jsonrpc: "2.0".into(),
         id: RequestId::Number(1),
         method: protocol::method::TURN_STEER.into(),
-        params: serde_json::json!({ "sessionId": "session", "text": "change of plan", "entryId": entry_ids[0] }),
+        params: serde_json::json!({ "sessionId": "session", "text": "older", "entryId": entry_ids[0] }),
     };
     let (result, stop) = dispatch::handle_request_inner(&context, &steer).await.expect("steer");
     assert!(!stop);
@@ -666,7 +666,7 @@ async fn steer_request_injects_into_the_live_turn_and_drops_only_the_addressed_r
     assert_eq!(steered.queue_depth, 1);
     let message = steer_rx.try_recv().expect("steering message");
     assert!(
-        matches!(message, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text == "change of plan"),
+        matches!(message, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(text) if text == "older"),
         "the queued prompt must reach the live turn verbatim"
     );
     let status = notifications.recv().await.expect("queue status on steer");
@@ -678,6 +678,47 @@ async fn steer_request_injects_into_the_live_turn_and_drops_only_the_addressed_r
     };
     assert_eq!(remaining, vec![entry_ids[1].clone()], "only the addressed row is removed");
     assert!(notifications.try_recv().is_err(), "one status per successful steer");
+
+    for (entry_id, text) in [(&entry_ids[0], "older"), (&entry_ids[1], "stale text")] {
+        let request = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::Number(2),
+            method: protocol::method::TURN_STEER.into(),
+            params: serde_json::json!({ "sessionId": "session", "text": text, "entryId": entry_id }),
+        };
+        let (result, _) = dispatch::handle_request_inner(&context, &request).await.expect("steer request");
+        let result: protocol::TurnSteerResult = serde_json::from_value(result).expect("steer result");
+        assert!(!result.steered);
+        assert_eq!(result.queue_depth, 1);
+        assert!(steer_rx.try_recv().is_err(), "stale requests must not inject input");
+    }
+
+    {
+        let mut state = context.state.lock().await;
+        state
+            .queue
+            .front_mut()
+            .expect("remaining entry")
+            .input
+            .attachments
+            .push(ContentPart::Text { text: "attachment content".into() });
+    }
+    let request = Request {
+        jsonrpc: "2.0".into(),
+        id: RequestId::Number(3),
+        method: protocol::method::TURN_STEER.into(),
+        params: serde_json::json!({ "sessionId": "session", "text": "newer", "entryId": entry_ids[1] }),
+    };
+    let (result, _) = dispatch::handle_request_inner(&context, &request).await.expect("steer request");
+    let result: protocol::TurnSteerResult = serde_json::from_value(result).expect("steer result");
+    assert!(!result.steered);
+    assert_eq!(result.queue_depth, 1);
+    assert!(steer_rx.try_recv().is_err(), "attachments must not be silently dropped");
+    let state = context.state.lock().await;
+    let queued = state.queue.front().expect("attachment remains queued");
+    assert_eq!(queued.entry_id(), entry_ids[1]);
+    assert_eq!(queued.input.attachments.len(), 1);
+    drop(state);
 
     drop(exit_sender);
     runtime_task.abort();

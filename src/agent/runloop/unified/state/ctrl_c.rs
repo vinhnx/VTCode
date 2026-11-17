@@ -6,7 +6,7 @@
 //! `pub(crate)` surface re-exported from `state.rs` is unchanged.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CtrlCSignal {
@@ -82,10 +82,10 @@ impl CtrlCPhase {
 /// escalating the state machine. This ensures that accidental double-taps
 /// don't immediately exit the program. Only after 200ms has elapsed since
 /// the first signal will a second signal trigger escalation to exit.
-#[derive(Default)]
 pub(crate) struct CtrlCState {
     phase: AtomicU8,
-    exit_started: std::sync::OnceLock<std::time::Instant>,
+    exit_started: std::sync::OnceLock<Instant>,
+    signal_clock_origin: Instant,
     last_signal_time: AtomicU64,
     /// Shared event-delivery counter: incremented by the UI event callback
     /// each time a Steer input is accepted by the live steering channel,
@@ -107,6 +107,19 @@ pub(crate) struct CtrlCState {
 
 const DOUBLE_CTRL_C_WINDOW: Duration = Duration::from_millis(1000);
 
+impl Default for CtrlCState {
+    fn default() -> Self {
+        Self {
+            phase: AtomicU8::default(),
+            exit_started: std::sync::OnceLock::new(),
+            signal_clock_origin: Instant::now(),
+            last_signal_time: AtomicU64::default(),
+            steer_delivered: AtomicUsize::default(),
+            force_kill: AtomicBool::default(),
+        }
+    }
+}
+
 impl CtrlCState {
     pub(crate) fn new() -> Self {
         Self::default()
@@ -118,7 +131,7 @@ impl CtrlCState {
 
     fn set_phase(&self, phase: CtrlCPhase) {
         if phase == CtrlCPhase::ExitRequested {
-            self.exit_started.get_or_init(std::time::Instant::now);
+            self.exit_started.get_or_init(Instant::now);
         }
         // Exit is terminal for this session, including when a UI reset races
         // the callback that accepts exit.
@@ -149,7 +162,12 @@ impl CtrlCState {
     /// exit. After this window, the state machine resets to `CancelRequested`
     /// on the next signal.
     pub(crate) fn register_signal(&self) -> CtrlCSignal {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        // Zero is reserved for no previous signal, including immediately after construction.
+        let now = self.signal_clock_origin.elapsed().as_millis().min(u128::from(u64::MAX - 1)) as u64 + 1;
+        self.register_signal_at(now)
+    }
+
+    fn register_signal_at(&self, now: u64) -> CtrlCSignal {
         let last = self.last_signal_time.swap(now, Ordering::SeqCst);
         let current_phase = self.phase();
 
@@ -202,7 +220,7 @@ impl CtrlCState {
     }
 
     pub(crate) fn request_exit(&self) {
-        self.exit_started.get_or_init(std::time::Instant::now);
+        self.exit_started.get_or_init(Instant::now);
         self.phase.store(CtrlCPhase::ExitRequested as u8, Ordering::SeqCst);
     }
 
@@ -285,5 +303,24 @@ impl CtrlCState {
             anyhow::bail!("Operation cancelled");
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ctrl_c_monotonic_window_boundaries() {
+        for (second, expected) in [
+            (200, CtrlCSignal::Cancel),
+            (201, CtrlCSignal::Exit),
+            (1001, CtrlCSignal::Exit),
+            (1002, CtrlCSignal::Cancel),
+        ] {
+            let state = CtrlCState::new();
+            assert_eq!(state.register_signal_at(1), CtrlCSignal::Cancel);
+            assert_eq!(state.register_signal_at(second), expected);
+        }
     }
 }

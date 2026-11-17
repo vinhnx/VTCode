@@ -738,12 +738,26 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 // Reuse the goal-loop steering channel: a live turn receives a
                 // FollowUpInput immediately instead of waking for a queued turn.
                 // With no live turn the client falls back to an ordinary submit.
+                let queue_position = params
+                    .entry_id
+                    .as_deref()
+                    .and_then(|entry_id| state.queue.iter().position(|queued| queued.entry_id() == entry_id));
+                let queued_input_matches = match params.entry_id.as_deref() {
+                    Some(_) => queue_position.is_some_and(|position| {
+                        state
+                            .queue
+                            .get(position)
+                            .is_some_and(|queued| queued.input.text == params.text && !queued.input.has_attachments())
+                    }),
+                    None => true,
+                };
                 let steered = {
                     let steering = state
                         .runtime
                         .as_ref()
                         .and_then(|runtime| stop_requests::host_steering_sender(&runtime.stop));
-                    state.active_turn_id.is_some()
+                    queued_input_matches
+                        && state.active_turn_id.is_some()
                         && steering.is_some_and(|sender| {
                             sender.send(SteeringMessage::FollowUpInput(params.text.clone())).is_ok()
                         })
@@ -751,10 +765,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 // Only drop the queued row once steering succeeded, so a closed
                 // channel never loses the prompt. The client reconciles the
                 // published snapshot either way.
-                if steered
-                    && let Some(entry_id) = params.entry_id.as_deref()
-                    && let Some(position) = state.queue.iter().position(|queued| queued.entry_id() == entry_id)
-                {
+                if steered && let Some(position) = queue_position {
                     state.queue.remove(position);
                 }
                 let queue_status =

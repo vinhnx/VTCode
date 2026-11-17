@@ -528,9 +528,10 @@ impl DesktopView {
                                 self.truncate_dispatched_to_depth(steered.queue_depth);
                             }
                             _ => {
-                                // No live turn channel: the row stays queued so
-                                // the prompt is never lost to a failed steer.
-                                self.error = Some("No active turn to steer; the prompt stays queued.".to_string());
+                                self.error = Some(
+                                    "Could not steer the prompt. It may have changed, have attachments, or have no active turn."
+                                        .to_string(),
+                                );
                             }
                         }
                     }
