@@ -251,7 +251,6 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 vtcode --version
 
 # Homebrew
-brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 vtcode --version
 ```

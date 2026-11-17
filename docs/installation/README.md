@@ -25,7 +25,6 @@ artifacts may not appear in every release.
 ### Homebrew (macOS & Linux)
 
 ```bash
-brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 
 # Desktop app (macOS 15+, Apple Silicon)
@@ -35,8 +34,8 @@ brew install --cask vinhnx/tap/vtcode-desktop
 vtcode dependencies install search-tools
 ```
 
-`brew trust` is required once per machine: Homebrew refuses to load formulae and casks from an untrusted third-party
-tap. The cask is separate from the formula — installing it gives you the GUI, while `brew install vinhnx/tap/vtcode`
+Installing with the fully-qualified `vinhnx/tap/...` name automatically trusts just that formula or cask, so no
+separate `brew trust` step is needed. The cask is separate from the formula — installing it gives you the GUI, while `brew install vinhnx/tap/vtcode`
 gives you the `vtcode` CLI, and either works alone.
 
 ### Cargo (Rust)
@@ -53,7 +52,7 @@ vtcode dependencies install search-tools
 | Method               | Platforms         | Command                                                   | Notes                                 |
 | -------------------- | ----------------- | --------------------------------------------------------- | ------------------------------------- |
 | **Native Installer** | macOS, Linux, WSL | See Quick Install above                                   | Recommended, auto-detects platform    |
-| **Homebrew**         | macOS, Linux      | `brew trust vinhnx/tap && brew install vinhnx/tap/vtcode` | Package manager, easy updates         |
+| **Homebrew**         | macOS, Linux      | `brew install vinhnx/tap/vtcode`                          | Package manager, easy updates         |
 | **Homebrew Cask**    | macOS 15+         | `brew install --cask vinhnx/tap/vtcode-desktop`           | Desktop app, Apple Silicon            |
 | **Cargo**            | All               | `cargo install vtcode`                                    | Build from source, latest dev version |
 
@@ -79,7 +78,6 @@ method per machine, because each manages updates differently.
 
 ```bash
 # Homebrew cask (Apple Silicon) — update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`
-brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 
 # Or let the native installer manage it: it asks during CLI install (default: install)

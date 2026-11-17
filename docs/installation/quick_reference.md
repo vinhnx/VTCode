@@ -10,7 +10,6 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 
 # Homebrew
-brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 
 # Homebrew cask (desktop app, macOS 15+, Apple Silicon)

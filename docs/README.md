@@ -22,7 +22,6 @@ cargo install vtcode
 #### Homebrew (macOS)
 
 ```bash
-brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 ```
 
@@ -31,7 +30,6 @@ brew install vinhnx/tap/vtcode
 #### Homebrew Cask (macOS desktop app, Apple Silicon)
 
 ```bash
-brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 

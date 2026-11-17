@@ -67,7 +67,6 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 Or with Homebrew or Cargo:
 
 ```bash
-brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 
 # Or from crates.io (see the installation guide)
@@ -149,7 +148,6 @@ and credentials. Configure a provider first (see [Quick start](#quick-start)).
 ### Install (macOS 15+)
 
 ```bash
-brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 

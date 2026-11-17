@@ -50,7 +50,6 @@ Every release ships a prebuilt Apple Silicon app on
 install it with Homebrew:
 
 ```sh
-brew trust vinhnx/tap
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 

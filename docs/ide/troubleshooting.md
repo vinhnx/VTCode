@@ -15,7 +15,6 @@ This guide covers common issues and solutions when using VT Code with your IDE.
    cargo install vtcode
 
    # Or with Homebrew
-   brew trust vinhnx/tap
    brew install vinhnx/tap/vtcode
 
    ```
