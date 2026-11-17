@@ -462,6 +462,11 @@ struct DesktopView {
     workspace: Option<PathBuf>,
     terminal: Option<super::terminal_tab::TerminalTab>,
     terminal_visible: bool,
+    /// Separate read-only grid for monitoring a running command. Kept apart
+    /// from `terminal` so opening it never drops the user's live shell.
+    terminal_monitor: Option<super::terminal_tab::TerminalTab>,
+    /// Transcript row whose command output the bottom pane is mirroring.
+    terminal_monitor_row: Option<String>,
     terminal_focus: FocusHandle,
     terminal_pump_generation: u64,
     /// Retained drain-pump loop. Dropping a GPUI `Task` cancels it, so a

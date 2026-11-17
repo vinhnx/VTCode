@@ -286,6 +286,11 @@ impl DesktopView {
     /// prompt. Only service-addressed rows (those with a bound entry id) can
     /// be edited; the shared input is moved to the newly selected row.
     pub(super) fn start_queue_edit(&mut self, echo_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        // One edit at a time: the pending rollback slot is not correlated to a
+        // response id, so a second in-flight edit would restore the wrong row.
+        if self.queue_edit_pending.is_some() {
+            return;
+        }
         let Some(entry) = self.queued_submissions.iter().find(|entry| entry.echo_id == echo_id) else {
             return;
         };
@@ -445,9 +450,9 @@ impl DesktopView {
                         .bg(colors.background)
                 };
 
-                // Inline editor for the selected row. Escape cancels and Enter
-                // commits through the shared input's subscription; Save/Cancel
-                // expose the same actions to pointer users.
+                // Inline editor for the selected row. Enter commits through
+                // the shared input's subscription; Save/Cancel expose the
+                // same actions to pointer and keyboard users.
                 if self.editing_queue_echo_id.as_deref() == echo_id.as_deref() {
                     return card()
                         .child(Icon::new(IconName::Pencil).size_3().text_color(muted).into_any_element())

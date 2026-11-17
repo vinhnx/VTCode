@@ -4,7 +4,7 @@ use super::*;
 
 /// Label for the running-command terminal CTA. English literal: the repo
 /// does not add locale keys without full native-quality translations.
-const TERMINAL_CTA_LABEL: &str = "Run in bottom terminal";
+const TERMINAL_CTA_LABEL: &str = "Monitor in bottom terminal";
 
 impl DesktopView {
     /// A small, theme-colored dotted rule under an actionable filename.
@@ -172,24 +172,12 @@ impl DesktopView {
             }))
     }
 
-    /// Show the built-in terminal panel without toggling it off when it
-    /// is already visible. Powers the running-command "open in terminal" CTA.
-    fn open_terminal_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.terminal_visible {
-            self.toggle_terminal(window, cx);
-        } else {
-            self.terminal_focus.focus(window, cx);
-            cx.notify();
-        }
-    }
-
-    /// Button beside the Output CTA on an expanded running command row. It
-    /// opens the bottom terminal pane, types the command into the retained
-    /// shell and runs it there, leaving the pane focused for monitoring.
-    /// Rows without a captured command still just open the pane. English
-    /// literal: the repo does not add locale keys without full translations.
+    /// Button beside the Output CTA on an expanded running command row. Opens
+    /// the bottom pane in read-only monitor mode, fed by this command's own
+    /// stdout/stderr deltas — the command is not run a second time in a
+    /// separate shell. English literal: new strings stay untranslated.
     pub(super) fn tool_terminal_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
-        let command = item.command.clone();
+        let row_id = item.id.clone();
         desktop_button(format!("tool-open-terminal-{}", item.id))
             .icon(IconName::SquareTerminal)
             .ghost()
@@ -197,11 +185,7 @@ impl DesktopView {
             .accessibility_label(TERMINAL_CTA_LABEL.to_string())
             .tooltip(TERMINAL_CTA_LABEL.to_string())
             .on_click(cx.listener(move |view, _, window, cx| {
-                if let Some(command) = command.as_ref() {
-                    view.run_command_in_terminal(command.as_ref(), window, cx);
-                } else {
-                    view.open_terminal_panel(window, cx);
-                }
+                view.open_terminal_monitor(row_id.clone(), window, cx);
             }))
     }
 

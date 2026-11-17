@@ -534,6 +534,25 @@ fn decode_frame(
     }
 
     let id_value = value.get_mut(keys::ID).map(Value::take).ok_or(ProtocolDecodeError)?;
+    // The service answers an invalid/oversized frame with a null-id JSON-RPC
+    // error. That is a service rejection with a real message, not a malformed
+    // frame — surface it so the user sees the cause instead of a misleading
+    // "malformed protocol message" and a reconnect loop.
+    if id_value.is_null() {
+        if let Some(message) = value
+            .get(keys::ERROR)
+            .and_then(|error| error.get(keys::MESSAGE))
+            .and_then(Value::as_str)
+        {
+            let safe = vtcode_commons::sanitizer::sanitize_provider_diagnostic(message)
+                .chars()
+                .filter(|character| !character.is_control())
+                .take(240)
+                .collect::<String>();
+            return Ok(Some(BackendEvent::LaunchFailed(safe)));
+        }
+        return Err(ProtocolDecodeError);
+    }
     let id = serde_json::from_value::<RequestId>(id_value).map_err(|_error| ProtocolDecodeError)?;
     let request = pending.remove(&id).ok_or(ProtocolDecodeError)?;
     if let Some(error) = value.get(keys::ERROR) {
@@ -753,6 +772,15 @@ mod tests {
             BackendEvent::PrimaryAgentChanged(protocol::PrimaryAgentChanged { session_id, display_name: Some(name) })
                 if session_id == "session-a" && name == "Plan"
         ));
+    }
+
+    #[test]
+    fn null_id_service_errors_surface_their_message() {
+        let mut pending = HashMap::new();
+        let frame = serde_json::to_vec(&protocol::error_response(None, -32700, "invalid JSON-RPC message")).unwrap();
+        let event = decode_frame(&frame, &mut pending).expect("null-id error must decode");
+        assert!(matches!(event, Some(BackendEvent::LaunchFailed(message)) if message.contains("invalid JSON-RPC")));
+        assert!(pending.is_empty());
     }
 
     #[test]

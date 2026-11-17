@@ -586,6 +586,7 @@ impl DesktopView {
         if !same_workspace && self.workspace.is_some() {
             self.terminal = None;
             self.terminal_visible = false;
+            self.terminal_monitor_row = None;
             self.terminal_pump_task = None;
         }
         self.reset_webmcp_state(None);

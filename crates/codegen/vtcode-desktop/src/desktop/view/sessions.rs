@@ -750,6 +750,9 @@ impl DesktopView {
         self.transcript_layout_settled = false;
         self.filter_matches = None;
         self.transcript.clear();
+        // A monitor is bound to a transcript row that no longer exists.
+        self.terminal_monitor = None;
+        self.terminal_monitor_row = None;
         self.clear_restored_activity();
         self.history_start_index = 0;
         self.history_has_earlier = false;

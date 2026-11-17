@@ -95,7 +95,9 @@ fn apply_chrome_slots(palette: &mut List, colors: &ThemeColor) {
 }
 
 pub(super) struct TerminalTab {
-    process: TerminalProcess,
+    /// `None` for a read-only monitor that renders an external command's
+    /// output in the grid without owning a shell (no second process).
+    process: Option<TerminalProcess>,
     size: PtySize,
     palette: List,
     pub(super) screen: TerminalScreen,
@@ -116,7 +118,7 @@ impl TerminalTab {
 
     fn with_process(process: TerminalProcess, size: PtySize, palette: List) -> Result<Self> {
         Ok(Self {
-            process,
+            process: Some(process),
             size,
             palette,
             screen: TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES),
@@ -126,8 +128,40 @@ impl TerminalTab {
         })
     }
 
+    /// Read-only monitor: renders bytes from the agent's own command stream in
+    /// the terminal grid. There is no shell process, so the command is never
+    /// run a second time and the pane stays in sync with the transcript.
+    pub(super) fn monitor(size: PtySize, palette: List) -> Self {
+        Self {
+            process: None,
+            size,
+            palette,
+            screen: TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES),
+            exit_status: None,
+            error: None,
+            output_closed: true,
+        }
+    }
+
+    /// Feed one output chunk from the monitored command into the grid.
+    pub(super) fn feed_output(&mut self, text: &str) -> TerminalDrain {
+        let mut events = Vec::new();
+        for event in self.screen.process(text.as_bytes()) {
+            if may_forward_to_view(&event) && events.len() < MAX_VIEW_EVENTS_PER_DRAIN {
+                events.push(event);
+            }
+        }
+        TerminalDrain { changed: true, events }
+    }
+
     pub(super) fn set_palette(&mut self, palette: List) {
         self.palette = palette;
+    }
+
+    /// Test-only: whether this tab owns a shell process (false for a monitor).
+    #[cfg(test)]
+    pub(super) fn has_process(&self) -> bool {
+        self.process.is_some()
     }
 
     pub(super) fn display_rows(&self) -> Vec<Vec<super::terminal_screen::TerminalRowRun>> {
@@ -192,7 +226,10 @@ impl TerminalTab {
     }
 
     pub(super) fn input(&self, bytes: Vec<u8>) -> Result<()> {
-        self.process
+        let Some(process) = self.process.as_ref() else {
+            return Ok(()); // read-only monitor accepts no input
+        };
+        process
             .input(bytes)
             .map_err(|error| anyhow::anyhow!("terminal input queue: {error}"))
     }
@@ -204,9 +241,11 @@ impl TerminalTab {
     pub(super) fn resize(&mut self, mut size: PtySize) -> Result<()> {
         size.rows = size.rows.max(1);
         size.cols = size.cols.max(1);
-        self.process
-            .resize(size)
-            .map_err(|error| anyhow::anyhow!("terminal resize queue: {error}"))?;
+        if let Some(process) = self.process.as_ref() {
+            process
+                .resize(size)
+                .map_err(|error| anyhow::anyhow!("terminal resize queue: {error}"))?;
+        }
         let _events = self.screen.resize(size.cols, size.rows);
         self.size = size;
         Ok(())
@@ -215,14 +254,18 @@ impl TerminalTab {
     /// Process a bounded batch, including output that arrives after shell exit.
     /// Returns whether state changed, another batch may be waiting, and view events.
     pub(super) fn drain(&mut self) -> TerminalDrain {
+        let Some(process) = self.process.as_ref() else {
+            return TerminalDrain { changed: false, events: Vec::new() };
+        };
         let mut view_events = Vec::new();
         for processed in 0..MAX_EVENTS_PER_DRAIN {
-            match self.process.try_recv() {
+            match process.try_recv() {
                 Ok(TerminalProcessEvent::Output(bytes)) => {
                     for event in self.screen.process(&bytes) {
                         let reply = terminal_reply(&event, self.size, &self.screen, &self.palette);
                         if let Some(reply) = reply
-                            && let Err(error) = self.process.input(reply.into_bytes())
+                            && let Some(process) = self.process.as_ref()
+                            && let Err(error) = process.input(reply.into_bytes())
                         {
                             self.error = Some(format!("Terminal reply: {error}"));
                         } else if may_forward_to_view(&event) {
@@ -278,6 +321,22 @@ fn terminal_reply(event: &RioEvent, size: PtySize, screen: &TerminalScreen, pale
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn monitor_renders_fed_output_without_a_shell_process() {
+        let size = PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
+        let mut tab = TerminalTab::monitor(size, List::from(&Colors::default()));
+        assert!(!tab.has_process(), "a monitor owns no shell");
+        let drain = tab.feed_output("live output from the agent PTY\n");
+        assert!(drain.changed);
+        let rendered = tab
+            .display_rows()
+            .iter()
+            .map(|row| row.iter().map(|run| run.text.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("live output from the agent PTY"), "{rendered}");
+    }
 
     #[test]
     fn terminal_tab_denies_clipboard_escape_sequences_but_preserves_bell() {

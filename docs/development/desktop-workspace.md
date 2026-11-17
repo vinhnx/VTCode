@@ -674,8 +674,8 @@ session, and WebMCP keeps its old busy rejection.
 The Activity tab derives from a bounded (300-row) newest-first projection whose cache key is an activity-only
 transcript revision: PTY stdout deltas bump the general revision for output consumers but not the activity
 revision, so a streaming command no longer rebuilds every activity row on each chunk. An expanded running
-command shows a three-line live stdout tail; its "Run in bottom terminal" action types the captured command
-into the retained shell pane and focuses it for monitoring. The coalescing live-event channel keeps one slot
+command shows a three-line live stdout tail; its "Monitor in bottom terminal" action mirrors that stdout into
+a read-only grid without a second process (the user's shell stays intact). The coalescing channel keeps one slot
 per item (a delta and its terminal snapshot share it) and moves active streams to the back, so saturation
 evicts quiet items instead of dropping a long-running command's accumulated preview.
 

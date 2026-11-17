@@ -705,7 +705,13 @@ fn running_command_row_shows_live_tail_and_terminal_cta(cx: &mut TestAppContext)
         window.click("tool-open-terminal-live", cx);
         window.render_frame(cx);
         assert!(view.read(cx).terminal_visible, "CTA opens the built-in terminal");
-        assert!(view.read(cx).terminal.is_some(), "CTA spawns the shell");
+        assert_eq!(view.read(cx).terminal_monitor_row.as_deref(), Some("live"), "CTA mirrors this row");
+        assert!(
+            view.read(cx).terminal_monitor.as_ref().is_some_and(|tab| !tab.has_process()),
+            "monitor must not spawn a second shell process"
+        );
+        // No shell process was spawned for the monitor.
+        assert!(view.read(cx).terminal.as_ref().is_none_or(|tab| !tab.has_process()));
 
         // Settled rows with captured output keep no inline excerpt and no
         // terminal CTA: the Output tab owns them.

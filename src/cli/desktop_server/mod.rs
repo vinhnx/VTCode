@@ -206,6 +206,15 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
         turn_finished: std::sync::Arc::new(Notify::new()),
         webmcp: Mutex::new(None),
     };
+    // The desktop service never runs the CLI's interactive preflight, so a
+    // cold/stale cache would leave `update/status` with no current-release
+    // notes and the "what's new" banner would never arm. Warm the running
+    // version's notes once before the request loop — there is no client to
+    // stall yet, and the bound keeps an offline launch responsive.
+    if let Err(error) = timeout(Duration::from_secs(1), crate::updater::backfill_current_release_notes(1)).await {
+        tracing::debug!(target: "vtcode.desktop", %error, "release notes warm skipped");
+    }
+
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin);
     let mut stdout = tokio::io::stdout();

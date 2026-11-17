@@ -174,9 +174,18 @@ impl DesktopView {
                 let accepted = self.transcript.accepts_item_turn(&item.id, notification.turn_id.as_deref())
                     && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
                 let mut truncated = None;
+                let monitor_row = self.terminal_monitor_row.clone();
                 if let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &mut item.details
                     && output.is_delta == Some(true)
                 {
+                    // Mirror this exact chunk into the read-only bottom-pane
+                    // monitor. The command runs once in the agent's PTY; the
+                    // monitor never starts a second shell process.
+                    if monitor_row.as_deref() == Some(row_id.as_str())
+                        && let Some(tab) = self.terminal_monitor.as_mut()
+                    {
+                        let _drain = tab.feed_output(&output.output);
+                    }
                     let row = self
                         .transcript
                         .position_by_id(&row_id)

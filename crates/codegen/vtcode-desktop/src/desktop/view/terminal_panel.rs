@@ -8,6 +8,7 @@
 use super::*;
 
 mod input;
+mod mouse;
 use input::*;
 
 /// Drain cadence: bounded redraws without a busy loop on floods.
@@ -34,19 +35,23 @@ impl DesktopView {
         }
     }
 
-    /// Show the panel, spawning the shell on first open (home directory
-    /// when no workspace is open yet).
-    fn show_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.ensure_terminal(cx) {
-            return;
+    /// Grid size from the current panel height and UI font scale.
+    fn terminal_grid_size(&self, cx: &App) -> portable_pty::PtySize {
+        let rows = terminal_content_rows(self.terminal_panel_height, cx.theme().mono_font_size)
+            .unwrap_or(DEFAULT_TERMINAL_ROWS);
+        portable_pty::PtySize {
+            rows,
+            cols: TERMINAL_GRID_COLUMNS,
+            pixel_width: 0,
+            pixel_height: 0,
         }
+    }
+
+    /// Retained pump: dropping the task cancels it before the first tick and
+    /// freezes the panel. Shared by the shell and monitor modes.
+    fn start_terminal_pump(&mut self, cx: &mut Context<Self>) {
         self.terminal_pump_generation = self.terminal_pump_generation.wrapping_add(1);
         let generation = self.terminal_pump_generation;
-        self.terminal_visible = true;
-        self.terminal_focus.focus(window, cx);
-        cx.notify();
-        // Retained: dropping the task would cancel the loop before its
-        // first tick and freeze the panel (no drains, ever).
         self.terminal_pump_task = Some(cx.spawn(async move |view, cx| {
             loop {
                 let keep_going = view
@@ -58,6 +63,34 @@ impl DesktopView {
                 cx.background_executor().timer(TERMINAL_PUMP_INTERVAL).await;
             }
         }));
+    }
+
+    /// Show the panel, spawning the shell on first open (home directory
+    /// when no workspace is open yet).
+    fn show_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.ensure_terminal(cx) {
+            return;
+        }
+        self.terminal_monitor = None;
+        self.terminal_monitor_row = None;
+        self.terminal_visible = true;
+        self.terminal_focus.focus(window, cx);
+        self.start_terminal_pump(cx);
+        cx.notify();
+    }
+
+    /// Read-only monitor: mirrors the agent's own PTY output, no second process.
+    /// `terminal` (the user's shell) is left intact so its jobs survive.
+    pub(super) fn open_terminal_monitor(&mut self, row_id: String, window: &mut Window, cx: &mut Context<Self>) {
+        let palette =
+            terminal_palette_for_setting(self.preferences.terminal_ansi_theme(), self.theme_mode, &cx.theme().colors);
+        let size = self.terminal_grid_size(cx);
+        self.terminal_monitor = Some(super::super::terminal_tab::TerminalTab::monitor(size, palette));
+        self.terminal_monitor_row = Some(row_id);
+        self.terminal_visible = true;
+        self.terminal_focus.focus(window, cx);
+        self.start_terminal_pump(cx);
+        cx.notify();
     }
 
     /// Show the panel (spawning if needed), focus it, and run one command
@@ -81,6 +114,8 @@ impl DesktopView {
 
     fn hide_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.terminal_visible = false;
+        self.terminal_monitor = None;
+        self.terminal_monitor_row = None;
         self.terminal_pump_task = None;
         self.focus_handle.focus(window, cx);
         cx.notify();
@@ -98,14 +133,7 @@ impl DesktopView {
         };
         let palette =
             terminal_palette_for_setting(self.preferences.terminal_ansi_theme(), self.theme_mode, &cx.theme().colors);
-        let rows = terminal_content_rows(self.terminal_panel_height, cx.theme().mono_font_size)
-            .unwrap_or(DEFAULT_TERMINAL_ROWS);
-        let size = portable_pty::PtySize {
-            rows,
-            cols: TERMINAL_GRID_COLUMNS,
-            pixel_width: 0,
-            pixel_height: 0,
-        };
+        let size = self.terminal_grid_size(cx);
         match super::super::terminal_tab::TerminalTab::spawn_login(
             &workspace,
             &super::super::terminal_process::default_shell(),
@@ -130,11 +158,11 @@ impl DesktopView {
         if self.terminal_pump_generation != generation || !self.terminal_visible {
             return false;
         }
-        let Some(tab) = self.terminal.as_mut() else {
-            return false;
-        };
-        // View events (bell/title) have no v1a surface yet.
-        if tab.drain().changed {
+        // View events (bell/title) have no v1a surface yet. The monitor has no
+        // shell to drain; its grid is fed directly from output deltas.
+        if let Some(tab) = self.terminal.as_mut()
+            && tab.drain().changed
+        {
             cx.notify();
         }
         self.sync_terminal_grid(cx);
@@ -153,14 +181,19 @@ impl DesktopView {
             terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
         let rows = terminal_rows_for_height(grid.size.height.as_f32(), row_height);
         let columns = terminal_cols_for_width(grid.size.width.as_f32(), char_width);
-        let Some(tab) = self.terminal.as_mut() else {
-            return;
+        let resize = |tab: &mut super::super::terminal_tab::TerminalTab| {
+            let size = tab.grid_size();
+            let rows = rows.unwrap_or(size.rows);
+            let columns = columns.unwrap_or(size.cols);
+            if size.rows != rows || size.cols != columns {
+                let _resized = tab.resize(portable_pty::PtySize { rows, cols: columns, ..size });
+            }
         };
-        let size = tab.grid_size();
-        let rows = rows.unwrap_or(size.rows);
-        let columns = columns.unwrap_or(size.cols);
-        if size.rows != rows || size.cols != columns {
-            let _resized = tab.resize(portable_pty::PtySize { rows, cols: columns, ..size });
+        if let Some(tab) = self.terminal.as_mut() {
+            resize(tab);
+        }
+        if let Some(tab) = self.terminal_monitor.as_mut() {
+            resize(tab);
         }
     }
 
@@ -220,152 +253,6 @@ impl DesktopView {
         }
     }
 
-    fn handle_terminal_mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.terminal_focus.focus(window, cx);
-        let (Some(tab), Some(grid)) = (self.terminal.as_mut(), self.terminal_grid_bounds.get()) else {
-            return;
-        };
-        let origin = grid.origin;
-        let char_width =
-            terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let size = tab.grid_size();
-        let Some(anchor) = terminal_cell_for_point(
-            event.position,
-            origin,
-            row_height,
-            char_width,
-            usize::from(size.rows),
-            usize::from(size.cols),
-        ) else {
-            return;
-        };
-        use rio_vt::{crosswords::pos::Side, selection::SelectionType};
-        // Shift-click extends from the retained anchor instead of
-        // re-anchoring; without a selection it behaves as a plain click.
-        // Multi-clicks ignore shift (word/line select wins).
-        if event.modifiers.shift
-            && event.click_count == 1
-            && let Some(retained) = self.terminal_select_anchor
-        {
-            let (start, end) = if anchor >= retained {
-                (retained, anchor)
-            } else {
-                (anchor, retained)
-            };
-            tab.start_selection(start.0, start.1, Side::Left, SelectionType::Simple);
-            tab.update_selection(end.0, end.1, Side::Right);
-            self.terminal_select_drag = Some(TerminalSelectDrag { anchor: retained, char_width });
-            cx.notify();
-            return;
-        }
-        // Clicks select by count; only single clicks start a drag. Clearing
-        // the drag on multi-clicks keeps a later up from collapsing the
-        // word or line just selected.
-        let (ty, dragging) = match event.click_count {
-            2 => (SelectionType::Semantic, false),
-            3.. => (SelectionType::Lines, false),
-            _ => (SelectionType::Simple, true),
-        };
-        tab.start_selection(anchor.0, anchor.1, Side::Left, ty);
-        self.terminal_select_drag = dragging.then_some(TerminalSelectDrag { anchor, char_width });
-        self.terminal_select_anchor = Some(anchor);
-        cx.notify();
-    }
-
-    fn handle_terminal_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
-        let Some(drag) = self.terminal_select_drag else {
-            return;
-        };
-        if event.pressed_button != Some(MouseButton::Left) {
-            // Released outside the panel: the up handler never fires.
-            self.terminal_select_drag = None;
-            return;
-        }
-        let (Some(tab), Some(grid)) = (self.terminal.as_mut(), self.terminal_grid_bounds.get()) else {
-            return;
-        };
-        let origin = grid.origin;
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let size = tab.grid_size();
-        let Some(endpoint) = terminal_cell_for_point(
-            event.position,
-            origin,
-            row_height,
-            drag.char_width,
-            usize::from(size.rows),
-            usize::from(size.cols),
-        ) else {
-            return;
-        };
-        // Rebuild from scratch each move: the anchor side must flip with the
-        // drag direction (an incremental update keeps the stale side and
-        // drops the anchor cell on backward drags).
-        let (start, end) = if endpoint >= drag.anchor {
-            (drag.anchor, endpoint)
-        } else {
-            (endpoint, drag.anchor)
-        };
-        use rio_vt::{crosswords::pos::Side, selection::SelectionType};
-        tab.start_selection(start.0, start.1, Side::Left, SelectionType::Simple);
-        tab.update_selection(end.0, end.1, Side::Right);
-        cx.notify();
-    }
-
-    fn handle_terminal_mouse_up(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) {
-        let Some(drag) = self.terminal_select_drag.take() else {
-            return;
-        };
-        let (Some(tab), Some(grid)) = (self.terminal.as_mut(), self.terminal_grid_bounds.get()) else {
-            return;
-        };
-        let origin = grid.origin;
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let size = tab.grid_size();
-        let endpoint = terminal_cell_for_point(
-            event.position,
-            origin,
-            row_height,
-            drag.char_width,
-            usize::from(size.rows),
-            usize::from(size.cols),
-        );
-        if endpoint == Some(drag.anchor) {
-            // Plain click: collapse the single-cell selection.
-            let _collapsed = tab.clear_selection();
-            self.terminal_select_anchor = None;
-        }
-        cx.notify();
-    }
-
-    fn handle_terminal_scroll(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let (lines, remainder) = wheel_line_delta(&event.delta, row_height, self.terminal_wheel_remainder);
-        self.terminal_wheel_remainder = remainder;
-        let Some(tab) = self.terminal.as_mut() else {
-            return;
-        };
-        if lines == 0 {
-            return;
-        }
-        // One event never moves more than a viewport; Rio clamps the rest.
-        let rows = i32::from(tab.grid_size().rows.max(1));
-        let lines = lines.clamp(-rows, rows);
-        if tab.in_alternate_screen() {
-            let arrow = if lines > 0 { b'A' } else { b'B' };
-            let step = cursor_bytes(tab.app_cursor(), arrow);
-            let mut bytes = Vec::with_capacity(step.len() * lines.unsigned_abs() as usize);
-            for _ in 0..lines.unsigned_abs() {
-                bytes.extend_from_slice(&step);
-            }
-            let _sent = tab.input(bytes);
-        } else {
-            tab.scroll_to(rio_vt::crosswords::grid::Scroll::Delta(lines));
-            cx.notify();
-        }
-        cx.stop_propagation();
-    }
-
     pub(super) fn render_terminal_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let mono = cx.theme().mono_font_family.clone();
@@ -374,8 +261,14 @@ impl DesktopView {
         // measures available space rather than rendered rows.
         let mut rows = div().flex().flex_col().w_full().flex_1().min_h_0();
         rows = rows.child(TerminalOriginProbe { sink: self.terminal_grid_bounds.clone() });
-        if let Some(tab) = &self.terminal {
-            for (index, runs) in tab.display_rows().iter().enumerate() {
+        let display_rows = self
+            .terminal_monitor
+            .as_ref()
+            .filter(|_| self.terminal_monitor_row.is_some())
+            .or(self.terminal.as_ref())
+            .map(|tab| tab.display_rows());
+        if let Some(display_rows) = display_rows {
+            for (index, runs) in display_rows.iter().enumerate() {
                 let mut row = div().id(("terminal-row", index)).test_support().flex().w_full();
                 for run in runs {
                     row = row.child(

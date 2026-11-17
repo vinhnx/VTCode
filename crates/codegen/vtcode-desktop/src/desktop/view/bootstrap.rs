@@ -13,6 +13,8 @@ pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
 
 mod keybindings;
 pub(super) use keybindings::{FIXED_RESERVED_CHORDS, apply_vim_navigation, init_keybindings, reinstall_shortcuts};
+mod handoff;
+pub(super) use handoff::*;
 
 pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
     let prefs_phase = vtcode_commons::startup_trace::phase_started();
@@ -66,57 +68,6 @@ pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
         // Async milestones print individually; welcome launches may never reach session-ready.
         vtcode_commons::startup_trace::emit_summary();
     });
-}
-
-/// Main window for `vtcode://` delivery. Weak: a closed window must drop
-/// its view instead of leaking it through the global.
-struct MainWindow {
-    view: gpui_kit::WeakEntity<DesktopView>,
-    window: gpui_kit::AnyWindowHandle,
-}
-
-impl gpui_kit::Global for MainWindow {}
-
-/// Route handoff links to the live main window. Unknown sessions and
-/// workspaces fail through the same notices as the argv path. A handoff
-/// with no live window reopens first: dropping the links silently would
-/// strand CLI `/desktop` invocations against a windowless app, and
-/// reopening also raises a hidden or backgrounded window since the user
-/// invoked the app. Only a failed reopen drops the links: there is no
-/// surface to report on.
-pub(super) fn dispatch_handoff_links(cx: &mut App, links: Vec<protocol::handoff_url::HandoffLink>) {
-    if links.is_empty() {
-        return;
-    }
-    if open_or_activate_main_window(cx, None, None).is_err() {
-        vtcode_commons::diagnostics::stderr(format_args!("handoff delivery missed its window"));
-        return;
-    }
-    let Some(main) = cx.try_global::<MainWindow>() else {
-        return;
-    };
-    let Some(view) = main.view.upgrade() else {
-        return;
-    };
-    let window = main.window;
-    if window
-        .update(cx, |_, window, cx| {
-            view.update(cx, |view, cx| {
-                for link in links {
-                    view.handle_handoff_link(link, window, cx);
-                }
-            });
-        })
-        .is_err()
-    {
-        vtcode_commons::diagnostics::stderr(format_args!("handoff delivery missed its window"));
-    }
-}
-
-pub(super) fn show_main_window(cx: &mut App) {
-    if let Err(error) = open_or_activate_main_window(cx, None, None) {
-        vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
-    }
 }
 
 /// Reopening must preserve an existing window's draft, session, and backend.
@@ -320,7 +271,7 @@ impl DesktopView {
         });
         // The inline queue editor is shared: only one queued row edits at a
         // time. Enter commits the row being edited (the click path shares the
-        // same commit method); Escape is handled on the row element.
+        // same commit method); the row's Cancel button dismisses the edit.
         let queue_edit_input = cx.new(|cx| InputState::new(window, cx));
         let queue_edit_subscription = cx.subscribe_in(&queue_edit_input, window, |view, _, event, window, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
@@ -461,6 +412,8 @@ impl DesktopView {
             workspace: None,
             terminal: None,
             terminal_visible: false,
+            terminal_monitor: None,
+            terminal_monitor_row: None,
             pending_workspace: None,
             navigation_history: NavigationHistory::default(),
             pending_navigation: None,
