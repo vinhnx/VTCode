@@ -179,9 +179,6 @@ impl Session {
             shimmer_state: ShimmerState::new(),
             progress: progress::TransientProgress::default(),
 
-            // --- Reverse Search ---
-            reverse_search_state: reverse_search::ReverseSearchState::new(),
-
             // --- PTY Session Management ---
             active_pty_sessions: None,
 

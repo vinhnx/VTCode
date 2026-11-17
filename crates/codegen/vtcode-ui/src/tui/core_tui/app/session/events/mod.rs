@@ -19,7 +19,6 @@ use crate::tui::core_tui::session::clipboard_image::{
 use crate::tui::core_tui::session::modal;
 use crate::tui::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 use crate::tui::core_tui::session::mode_switch_guard::{self};
-use crate::tui::core_tui::session::reverse_search;
 use crate::tui::core_tui::types::InlineSegment;
 use crate::tui::core_tui::types::{
     InlineEvent as CoreInlineEvent, OverlayEvent, OverlaySelectionChange, SubmittedInput,
@@ -396,35 +395,6 @@ fn process_key_with_clipboard_readers(
     if is_inline_lists_toggle_shortcut(&key, has_control, has_alt, has_command) {
         session.toggle_inline_lists_visibility();
         return None;
-    }
-
-    // Legacy reverse search handling (kept for backward compatibility)
-    // Handle reverse search (Ctrl+R) - disabled in favor of history picker
-    // if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
-    //     if !session.core.reverse_search_state.active {
-    //         session.core.reverse_search_state.start_search(
-    //             &session.core.input_manager,
-    //             &session.core.input_manager.history_texts(),
-    //         );
-    //         session.mark_dirty();
-    //         return None;
-    //     }
-    // }
-
-    // Handle reverse search if active (legacy)
-    if session.core.reverse_search_state.active {
-        // Get history first to avoid borrow conflicts
-        let history = session.core.input_manager.history_texts();
-        let handled = reverse_search::handle_reverse_search_key(
-            &key,
-            &mut session.core.reverse_search_state,
-            &mut session.core.input_manager,
-            &history,
-        );
-        if handled {
-            session.mark_dirty();
-            return None;
-        }
     }
 
     if let Some(action) = configured_action {

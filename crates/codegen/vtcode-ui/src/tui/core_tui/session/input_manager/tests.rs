@@ -199,7 +199,7 @@ fn prepend_archived_history_inserts_at_front() {
     ]);
 
     // After prepend: oldest archived at front, newest archived, then session.
-    let texts = manager.history_texts();
+    let texts: Vec<&str> = manager.history().iter().map(|entry| entry.content.as_str()).collect();
     assert_eq!(texts, vec!["archived-2", "archived-1", "session-prompt"]);
 }
 
@@ -214,10 +214,10 @@ fn prepend_archived_history_deduplicates() {
         InputHistoryEntry::from_content_and_timestamp("duplicate".to_owned(), now),
     ]);
 
-    let texts = manager.history_texts();
+    let texts: Vec<&str> = manager.history().iter().map(|entry| entry.content.as_str()).collect();
     // "duplicate" was already in session history, so the archived copy is skipped.
     assert_eq!(texts, vec!["unique", "duplicate"]);
-    assert_eq!(texts.iter().filter(|t| *t == "duplicate").count(), 1);
+    assert_eq!(texts.iter().filter(|t| **t == "duplicate").count(), 1);
 }
 
 #[test]
@@ -230,7 +230,8 @@ fn prepend_archived_history_skips_empty() {
         InputHistoryEntry::from_content_and_timestamp("real".to_owned(), now),
     ]);
 
-    assert_eq!(manager.history_texts(), vec!["real"]);
+    let texts: Vec<&str> = manager.history().iter().map(|entry| entry.content.as_str()).collect();
+    assert_eq!(texts, vec!["real"]);
 }
 
 #[test]

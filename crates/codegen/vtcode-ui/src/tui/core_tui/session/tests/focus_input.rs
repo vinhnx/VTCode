@@ -72,20 +72,6 @@ fn focus_input_closes_search_modal_in_one_press() {
 }
 
 #[test]
-fn focus_input_exits_reverse_search_and_restores_draft() {
-    let mut session = session_with_input("draft", 5);
-    let history = session.input_manager.history_texts();
-    session.reverse_search_state.start_search(&session.input_manager, &history);
-    assert!(session.reverse_search_state.active);
-
-    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
-
-    assert!(event.is_none());
-    assert!(!session.reverse_search_state.active);
-    assert_eq!(session.input_manager.content(), "draft");
-}
-
-#[test]
 fn focus_input_cancels_text_only_modal_with_cancel_event() {
     let mut session = session_with_input("draft", 5);
     session.handle_command(InlineCommand::ShowOverlay {

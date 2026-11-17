@@ -144,18 +144,14 @@ pub(crate) fn dispatch_rebindable_action(session: &mut Session, action: Action) 
     }
 }
 
-/// Dismiss key-capturing session state (overlay, reverse search) and return
-/// to the composer input. Mirrors what Esc does to these states — including
-/// modal Cancel emission — without Esc's interrupt, cancel-submit, or rewind
-/// tails. The synthetic Esc passes are bounded at three: a wizard notes
-/// editor deactivates first, then a modal/wizard search query clears, then
-/// the overlay cancels. Each pass strictly reduces open sub-state, so three
+/// Dismiss key-capturing session state (overlay) and return to the composer
+/// input. Mirrors what Esc does to these states — including modal Cancel
+/// emission — without Esc's interrupt, cancel-submit, or rewind tails. The
+/// synthetic Esc passes are bounded at three: a wizard notes editor
+/// deactivates first, then a modal/wizard search query clears, then the
+/// overlay cancels. Each pass strictly reduces open sub-state, so three
 /// always suffice.
 fn focus_input(session: &mut Session) -> Option<InlineEvent> {
-    if session.reverse_search_state.active {
-        session.reverse_search_state.cancel_search(&mut session.input_manager);
-        session.mark_dirty();
-    }
     if session.modal_state().is_some_and(|modal| modal.secure_prompt.is_some()) {
         // Masked secret entry: clear the shared scratch like the app-layer
         // secure Esc arm, never strand the secret in the composer draft.

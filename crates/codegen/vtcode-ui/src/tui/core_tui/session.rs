@@ -76,7 +76,6 @@ mod messages;
 pub(crate) mod mode_switch_guard;
 mod overlay_state;
 mod reflow;
-pub(crate) mod reverse_search;
 mod scroll_state;
 mod spinner;
 mod state;
@@ -359,9 +358,6 @@ pub struct Session {
     pub(crate) thinking_spinner: ThinkingSpinner,
     pub(crate) shimmer_state: ShimmerState,
     pub(crate) progress: progress::TransientProgress,
-
-    // --- Reverse Search ---
-    pub(crate) reverse_search_state: reverse_search::ReverseSearchState,
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,

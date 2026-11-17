@@ -871,10 +871,6 @@ impl InputManager {
         self.history.get(self.archived_count.min(self.history.len())..).unwrap_or(&[])
     }
 
-    pub fn history_texts(&self) -> Vec<String> {
-        self.history.iter().map(|entry| entry.content.clone()).collect()
-    }
-
     pub fn history_index(&self) -> Option<usize> {
         self.history_index
     }
@@ -953,14 +949,6 @@ impl InputManager {
         self.attachment_placeholders = attachment_placeholders_for_content(&entry.content, self.attachments.len());
         self.compact_paste_range = None;
         self.refresh_content_cache();
-    }
-
-    pub fn apply_history_index(&mut self, index: usize) -> bool {
-        let Some(entry) = self.history.get(index).cloned() else {
-            return false;
-        };
-        self.apply_history_entry(entry);
-        true
     }
 }
 

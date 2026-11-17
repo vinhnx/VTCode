@@ -237,22 +237,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
-    // Handle reverse search if active (legacy)
-    if session.reverse_search_state.active {
-        // Get history first to avoid borrow conflicts
-        let history = session.input_manager.history_texts();
-        let handled = reverse_search::handle_reverse_search_key(
-            &key,
-            &mut session.reverse_search_state,
-            &mut session.input_manager,
-            &history,
-        );
-        if handled {
-            session.mark_dirty();
-            return None;
-        }
-    }
-
     // Arrow-Up/Down navigate history only for single-row input. A multi-row
     // composer (soft-wrapped or logical lines) always consumes Up/Down as
     // intra-buffer cursor moves (no-op at the first/last visual row).
