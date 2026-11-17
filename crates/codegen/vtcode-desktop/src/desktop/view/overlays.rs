@@ -459,13 +459,37 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Centered content width for the transcript and composer. Zen mode uses
-    /// a narrower column so both stay on one shared spine.
+    /// Normal-mode reading column: ~80-column code at the UI-16/code-14 defaults
+    /// (768 - 64 title inset - 34 code padding/border is ~79 cols at 0.6 mono).
+    /// Centered `max_w`, so narrow windows are unaffected.
+    const CONTENT_WIDTH: f32 = 768.;
+    /// Zen reading column: trades the 80-column fit for focus (~69 cols at code
+    /// 14; longer lines wrap, contained). Narrower than normal.
+    const ZEN_CONTENT_WIDTH: f32 = 680.;
+    /// "Wide" chat-width preset: a roomy ~120-column reading line for code and
+    /// wide tables that would otherwise wrap in the comfortable column.
+    const WIDE_CONTENT_WIDTH: f32 = 1200.;
+    /// "Full extend" chat-width preset: an effectively unbounded `max_w` so the
+    /// centered column fills the whole conversation area. Sidebar and inspector
+    /// stay flex siblings, so they keep their space. Large *finite* value (rather
+    /// than `f32::MAX`) keeps downstream insets and flex math from overflowing.
+    const FULL_EXTEND_CONTENT_WIDTH: f32 = 100_000.;
+
+    /// Centered content width for the transcript and composer. The chat-width
+    /// preference selects the cap; in Zen mode the comfortable preset keeps
+    /// its narrower column so both stay on one shared spine, while wide and
+    /// full extend override it.
     pub(super) fn content_width(&self) -> f32 {
-        if self.zen_mode {
-            ZEN_CONTENT_WIDTH
-        } else {
-            CONTENT_WIDTH
+        match self.preferences.chat_width() {
+            preferences::ChatWidth::Comfortable => {
+                if self.zen_mode {
+                    Self::ZEN_CONTENT_WIDTH
+                } else {
+                    Self::CONTENT_WIDTH
+                }
+            }
+            preferences::ChatWidth::Wide => Self::WIDE_CONTENT_WIDTH,
+            preferences::ChatWidth::FullExtend => Self::FULL_EXTEND_CONTENT_WIDTH,
         }
     }
 

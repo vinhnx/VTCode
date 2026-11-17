@@ -19,6 +19,7 @@ pub(super) struct AppearanceSettingsProps {
     pub(super) ui_language_select: Entity<UiLanguageSelectState>,
     pub(super) terminal_ansi_theme: preferences::TerminalAnsiTheme,
     pub(super) terminal_position_select: Entity<preferences::TerminalPositionSelectState>,
+    pub(super) chat_width_select: Entity<preferences::ChatWidthSelectState>,
     pub(super) navigation_visible: bool,
     pub(super) navigation_on_right: bool,
     pub(super) translucent_sidebar: bool,
@@ -45,6 +46,7 @@ impl AppearanceSettingsProps {
             ui_language_select: view.ui_language_select.clone(),
             terminal_ansi_theme: view.preferences.terminal_ansi_theme(),
             terminal_position_select: view.terminal_position_select.clone(),
+            chat_width_select: view.chat_width_select.clone(),
             navigation_visible: view.preferences.navigation_visible(),
             navigation_on_right: view.preferences.navigation_on_right(),
             translucent_sidebar: view.preferences.translucent_sidebar,
@@ -908,6 +910,7 @@ impl DesktopView {
             "appearance-layout-group",
             layout.clone(),
             settings_group_box(layout, colors)
+                .child(appearance_chat_width::render_chat_width_row(&props.chat_width_select, colors))
                 .child(
                     div()
                         .w_full()

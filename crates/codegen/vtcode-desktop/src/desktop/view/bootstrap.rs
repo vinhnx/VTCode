@@ -374,6 +374,7 @@ impl DesktopView {
         });
         let (terminal_position_select, terminal_position_subscription) =
             Self::build_terminal_position_select(&preferences, window, cx);
+        let (chat_width_select, chat_width_subscription) = Self::build_chat_width_select(&preferences, window, cx);
         let destination = preferences.file_open_destination();
         // Bounded Info.plist scan; fast enough to run inline so the
         // dropdowns are correct on their first render. One scan feeds both
@@ -561,6 +562,8 @@ impl DesktopView {
             _ui_language_subscription: ui_language_subscription,
             terminal_position_select,
             _terminal_position_subscription: terminal_position_subscription,
+            chat_width_select,
+            _chat_width_subscription: chat_width_subscription,
             file_destination_select,
             _file_destination_subscription: file_destination_subscription,
             cli_terminal_select,

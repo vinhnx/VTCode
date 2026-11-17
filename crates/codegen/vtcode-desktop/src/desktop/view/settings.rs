@@ -114,6 +114,9 @@ impl SettingsTab {
             ],
             Self::Appearance => &[
                 "appearance",
+                "chat width",
+                "column width",
+                "width",
                 "themes",
                 "color",
                 "font",

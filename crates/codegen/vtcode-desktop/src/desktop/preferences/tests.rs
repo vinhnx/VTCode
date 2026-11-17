@@ -305,6 +305,33 @@ fn terminal_position_round_trips_and_invalid_values_fall_back_to_bottom() {
 }
 
 #[test]
+fn chat_width_round_trips_and_invalid_values_fall_back_to_comfortable() {
+    assert_eq!(ChatWidth::default(), ChatWidth::Comfortable);
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.chat_width(), ChatWidth::Comfortable);
+
+    for width in ChatWidth::ALL {
+        let mut preferences = Preferences::default();
+        preferences.set_chat_width(width);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(
+            serialized.contains(&format!("\"chatWidth\":\"{}\"", width.id())),
+            "saved id is stable for {width:?}: {serialized}"
+        );
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.chat_width(), width);
+    }
+
+    assert_eq!(ChatWidth::from_saved(Some("  WIDE ")), ChatWidth::Wide);
+    for saved in ["huge", "", "   "] {
+        let content = format!(r#"{{"theme":"ciapre","chatWidth":{saved:?}}}"#);
+        let loaded: Preferences = serde_json::from_str(&content).unwrap();
+        assert_eq!(loaded.chat_width(), ChatWidth::Comfortable, "saved {saved:?}");
+        assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
+    }
+}
+
+#[test]
 fn offered_terminals_combine_always_available_detected_and_saved() {
     // Terminal alone when nothing is detected: it ships with macOS.
     assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[]), vec![CliTerminal::Terminal]);

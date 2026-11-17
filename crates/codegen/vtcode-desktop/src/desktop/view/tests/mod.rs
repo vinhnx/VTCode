@@ -725,6 +725,7 @@ mod activity_summary;
 mod attachment_picker;
 mod browser_navigation;
 mod changelog_viewer;
+mod chat_width;
 mod cli_handoff;
 mod composer_alignment;
 mod composer_font_scale;

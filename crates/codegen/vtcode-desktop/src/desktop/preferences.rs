@@ -648,6 +648,8 @@ pub(super) struct Preferences {
     pub inspector_open: Option<bool>,
     /// Last zen layout choice. Missing values keep fresh installs in zen.
     pub zen_mode: Option<bool>,
+    /// Main chat column width preset. Missing values keep the comfortable column.
+    pub chat_width: Option<String>,
     /// Place the project and thread navigation on the right side of the workspace.
     /// Missing values keep existing installs on the new right-side default.
     pub navigation_on_right: Option<bool>,
@@ -988,6 +990,9 @@ pub(super) use terminal::{
     MAX_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_WIDTH, MIN_TERMINAL_PANEL_HEIGHT, MIN_TERMINAL_PANEL_WIDTH,
     TerminalAnsiTheme, TerminalPosition, TerminalPositionOption, TerminalPositionSelectState,
 };
+
+mod chat_width;
+pub(super) use chat_width::{ChatWidth, ChatWidthOption, ChatWidthSelectState};
 
 #[cfg(test)]
 mod tests;

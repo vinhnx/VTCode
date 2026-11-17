@@ -111,6 +111,7 @@ use overlays::{DiscardIntent, Route, RouteHistory, dismissable_route_page};
 mod about;
 mod app_icon_settings;
 mod appearance;
+mod appearance_chat_width;
 mod appearance_theme_picker;
 mod appearance_themes;
 mod attachment_cards;
@@ -219,13 +220,6 @@ use welcome_copy::*;
 use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
-/// Normal-mode reading column: ~80-column code at the UI-16/code-14 defaults
-/// (768 - 64 title inset - 34 code padding/border is ~79 cols at 0.6 mono).
-/// Centered `max_w`, so narrow windows are unaffected.
-const CONTENT_WIDTH: f32 = 768.;
-/// Zen reading column: trades the 80-column fit for focus (~69 cols at code 14;
-/// longer lines wrap, contained). Narrower than normal.
-const ZEN_CONTENT_WIDTH: f32 = 680.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 
 const ACTIVITY_ROW_HEIGHT: f32 = 44.;
@@ -673,6 +667,8 @@ struct DesktopView {
     _ui_language_subscription: Subscription,
     terminal_position_select: Entity<preferences::TerminalPositionSelectState>,
     _terminal_position_subscription: Subscription,
+    chat_width_select: Entity<preferences::ChatWidthSelectState>,
+    _chat_width_subscription: Subscription,
     file_destination_select: Entity<preferences::FileDestinationSelectState>,
     _file_destination_subscription: Subscription,
     cli_terminal_select: Entity<preferences::CliTerminalSelectState>,
