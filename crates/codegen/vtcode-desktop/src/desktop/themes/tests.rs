@@ -40,6 +40,48 @@ fn soft_edge_is_the_single_translucent_border_tone() {
 }
 
 #[gpui_kit::test]
+fn soft_edge_tracks_each_themes_border_in_both_modes(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut light: Option<Hsla> = None;
+        let mut dark: Option<Hsla> = None;
+        let mut distinct = std::collections::HashSet::new();
+
+        // Built-in palettes plus the two kit-base sentinels, which take the
+        // separate `normalize_system_interaction_colors` derivation path.
+        let mut ids: Vec<&str> = all_themes().iter().map(|theme| theme.id).collect();
+        ids.extend([SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]);
+
+        for id in ids {
+            let mode = apply_by_id(id, None, cx);
+            let colors = cx.global::<Theme>().colors;
+            let soft = soft_edge_color(&colors);
+
+            // A pure derivation of the live token: no per-mode branch, no
+            // cached value, no assumption about foreground/background polarity.
+            assert!((soft.h - colors.border.h).abs() < 1e-6, "{id}: hue must track the border token");
+            assert!((soft.s - colors.border.s).abs() < 1e-6, "{id}: saturation must track the border token");
+            assert!((soft.l - colors.border.l).abs() < 1e-6, "{id}: lightness must track the border token");
+            assert!((soft.a - 0.55).abs() < 1e-6, "{id}: alpha must stay the one knob");
+
+            let _ = distinct.insert((soft.h.to_bits(), soft.s.to_bits(), soft.l.to_bits()));
+            match mode {
+                ThemeMode::Light => light = light.or(Some(soft)),
+                ThemeMode::Dark => dark = dark.or(Some(soft)),
+            }
+        }
+
+        let light = light.expect("at least one light theme");
+        let dark = dark.expect("at least one dark theme");
+        assert!(distinct.len() > 1, "soft edge must follow the theme, never a constant tone");
+        assert!(
+            light.h != dark.h || light.s != dark.s || light.l != dark.l,
+            "light and dark modes must derive different soft-edge tones"
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
