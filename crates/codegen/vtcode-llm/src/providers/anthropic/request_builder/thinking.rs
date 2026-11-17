@@ -71,6 +71,12 @@ fn manual_thinking_config(budget: u32, max_tokens: u32, display: Option<Thinking
     if budget < 1024 {
         return None;
     }
+    // Anthropic requires `budget_tokens < max_tokens`, with a 1024 floor.
+    // For max_tokens <= 1024 no valid budget exists, so omit thinking rather
+    // than let the floor below push the value up to or past max_tokens.
+    if max_tokens <= 1024 {
+        return None;
+    }
 
     let effective_budget = budget.min(max_tokens.saturating_sub(100)).max(1024);
     Some(ThinkingConfig::Enabled { budget_tokens: effective_budget, display })
@@ -456,6 +462,27 @@ mod tests {
                 ..Default::default()
             }),
             ..Default::default()
+        }
+    }
+
+    /// An unprofiled Anthropic-compatible model takes the manual-budget path.
+    /// The budget floor must never be forced up to or past `max_tokens`:
+    /// Anthropic rejects `budget_tokens >= max_tokens` with a 400.
+    #[test]
+    fn manual_budget_never_emits_budget_at_or_above_max_tokens() {
+        let config = AnthropicConfig::default();
+        for max_tokens in [256, 512, 1024, 1025, 2048] {
+            let mut request = manual_budget_override_request("claude-compat-unprofiled", 4096);
+            request.max_tokens = Some(max_tokens);
+            let (thinking, _) =
+                build_thinking_config(&request, &config, anthropic::DEFAULT_MODEL).expect("thinking config");
+            match thinking {
+                Some(ThinkingConfig::Enabled { budget_tokens, .. }) => assert!(
+                    budget_tokens < max_tokens,
+                    "budget {budget_tokens} must stay below max_tokens {max_tokens}"
+                ),
+                other => assert!(other.is_none(), "unexpected thinking config {other:?}"),
+            }
         }
     }
 
