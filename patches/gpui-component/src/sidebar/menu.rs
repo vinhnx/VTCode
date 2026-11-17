@@ -8,7 +8,7 @@ use crate::{
     v_flex,
 };
 use gpui::{
-    AnyElement, App, ClickEvent, ElementId, InteractiveElement as _, IntoElement,
+    AnyElement, App, ClickEvent, CursorStyle, ElementId, InteractiveElement as _, IntoElement,
     ParentElement as _, Role, SharedString, StatefulInteractiveElement as _, StyleRefinement,
     Styled, Window, div, percentage, prelude::FluentBuilder,
 };
@@ -249,6 +249,17 @@ impl SidebarMenuItem {
 
 impl FluentBuilder for SidebarMenuItem {}
 
+/// Mouse cursor for a sidebar item row: a pointing hand marks a selectable
+/// section, the default arrow marks a disabled one. Kept as a pure helper so
+/// the cursor contract is testable without a window.
+fn sidebar_item_cursor(disabled: bool) -> CursorStyle {
+    if disabled {
+        CursorStyle::Arrow
+    } else {
+        CursorStyle::PointingHand
+    }
+}
+
 impl Collapsible for SidebarMenuItem {
     fn is_collapsed(&self) -> bool {
         self.collapsed
@@ -306,6 +317,7 @@ impl SidebarItem for SidebarMenuItem {
                     .gap_x_2()
                     .rounded(cx.theme().radius)
                     .text_sm()
+                    .cursor(sidebar_item_cursor(is_disabled))
                     .refine_style(&self.style)
                     .when(is_hoverable, |this| {
                         this.hover(|this| {
@@ -469,5 +481,13 @@ mod tests {
             SidebarMenuItem::new("Projects").children(vec![SidebarMenuItem::new("Overview")]);
 
         assert_eq!(item.caret_accessibility_label(), "Toggle Projects submenu");
+    }
+
+    #[test]
+    fn selectable_rows_show_a_hand_and_disabled_rows_an_arrow() {
+        // Enabled section rows are clickable and must advertise it with the
+        // pointing hand; disabled rows keep the default arrow.
+        assert_eq!(sidebar_item_cursor(false), CursorStyle::PointingHand);
+        assert_eq!(sidebar_item_cursor(true), CursorStyle::Arrow);
     }
 }

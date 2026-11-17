@@ -768,6 +768,13 @@ impl Sizable for Tab {
     }
 }
 
+/// A tab shows the pointing hand only when it can actually switch panels:
+/// a disabled tab or one without a click handler keeps the default arrow.
+/// Pure so the pointer-cursor contract is testable without a window.
+fn tab_is_clickable(disabled: bool, has_handler: bool) -> bool {
+    !disabled && has_handler
+}
+
 impl RenderOnce for Tab {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let mut normal_style = self.variant.normal(cx);
@@ -923,6 +930,9 @@ impl RenderOnce for Tab {
             .id(self.ix)
             .selected(self.selected)
             .disabled(self.disabled)
+            .when(tab_is_clickable(self.disabled, self.on_click.is_some()), |this| {
+                this.cursor_pointer()
+            })
             .when_some(aria_label, |this, label| this.accessibility_label(label))
             .styles(|styles| {
                 styles
@@ -1146,6 +1156,13 @@ mod tests {
         let tab = Tab::new().label("Account");
 
         assert_eq!(tab.a11y_label(), Some("Account".into()));
+    }
+
+    #[test]
+    fn only_clickable_tabs_show_a_hand_cursor() {
+        assert!(tab_is_clickable(false, true));
+        assert!(!tab_is_clickable(true, true), "disabled tabs keep the arrow");
+        assert!(!tab_is_clickable(false, false), "handler-less tabs keep the arrow");
     }
 
     #[gpui::test]

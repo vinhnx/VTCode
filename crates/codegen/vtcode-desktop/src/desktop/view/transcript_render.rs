@@ -489,7 +489,9 @@ impl DesktopView {
             .justify_center()
             // Clicking a row anchors the keyboard highlight as position
             // memory (and reveals its actions); the row is already visible,
-            // so no scroll is needed. Child controls keep their own clicks.
+            // so no scroll is needed. Child buttons keep their own cursors,
+            // so the row's control-free area advertises the pointing hand.
+            .cursor_pointer()
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.keyboard_focused_message = Some(clicked_id.clone());
                 cx.notify();
