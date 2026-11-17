@@ -53,7 +53,7 @@ pub struct ReconcileResult {
 /// Orchestrates the diff → verify → merge cycle for a completed worktree.
 ///
 /// The reconciler is internal infrastructure: git runs through the shared
-/// handle-bound [`git_command_at`] helper (same as `WorktreeManager`), and
+/// handle-bound `git_command_at` helper (same as `WorktreeManager`), and
 /// every ref input is validated before reaching argv.
 pub struct WorktreeReconciler {
     workspace_root: PathBuf,
