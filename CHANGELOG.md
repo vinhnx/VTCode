@@ -5,6 +5,62 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.183.2 - 2026-11-18
+
+### Highlights
+
+#### Bug Fixes
+
+- Route update notices to About and scope notes to installed binary (fa740276)
+- Strip inherited agent environment from SSH (d70864c7)
+- Reconcile queued prompts with steering receipts (117f9971)
+- Refine edited-file cards and Zen navigation (d1fb7e86)
+- Dismiss the model picker after a reasoning-effort commit (edc3a1ef)
+- Coalesce command session polls (39a74a55)
+- Split mermaid fences on CRLF line endings (e4a926d7)
+- Harden changed-package detection in check-dev (47a4963f)
+- Fail closed on chained commands and path bypasses (72cbb2af)
+- Unwrap bracketed verify commands at tracker handoff (5b0484d6)
+- Dual-deliver HITL notifications when focused (dc82d842)
+- Refine buttons, notices, and Home behavior (8c9fad57)
+- Preserve Unicode arrows in inline metadata (c6e5207e)
+
+#### Documentation
+
+- Refresh overview and sync workspace version (00678f8f) (@vinhnx)
+- Share fixes across CLI and desktop when related (782f724b)
+- Clear markdown lint findings and restore exact CLI syntax (83fce949)
+
+#### Features
+
+- Coalesce session poll headers with progress ticks (e35c4026)
+- Remove Pele diagram preview (88b2976b)
+- Order picker models newest generation first (eff60019)
+- Unify severity notices into announcement callouts (3dd10edf)
+- Animate navigation with opacity reveals (e7e56b91)
+- Return Home button to workspace landing page (5b7185e4)
+- Add inset edges to filled buttons (6e656650)
+- Extend recessed button styling (337f3ba2)
+
+### Other Changes
+
+#### Build
+
+- Validate Hawk 0.1.18 and add the desktop target (c607c112)
+
+#### Performance
+
+- Reuse cached rows for diagnostic clicks (7143852d)
+
+#### Refactors
+
+- Simplify transcript suppression guard (59bb5013)
+- Split oversized modules to restore the Rust length gate (7391b4ee)
+
+#### Tests
+
+- Order inner attributes after the doc comment (46238e17)
+
 ## 0.183.1 - 2026-11-18
 
 ### Highlights
