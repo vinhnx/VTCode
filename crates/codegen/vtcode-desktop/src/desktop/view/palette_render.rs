@@ -555,14 +555,7 @@ impl DesktopView {
             })
             .on_action(|_: &gpui_kit::base::actions::Cancel, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(command.with_animation(
-                ("command-palette-content", state.entity_id()),
-                Animation::new(cx.theme().motion_tokens().duration_fast).with_easing({
-                    let easing = cx.theme().motion_tokens().easing_enter.clone();
-                    move |progress| easing.sample(progress).clamp(0., 1.)
-                }),
-                |content, progress| content.opacity(progress),
-            ))
+            .child(command.navigation_fade(("command-palette-content", state.entity_id()), true, false, cx.theme()))
             .focus_trap(COMMAND_PALETTE_ELEMENT_ID, &self.palette_focus);
         if composer_popup {
             return deferred(

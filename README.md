@@ -118,7 +118,9 @@ without another model call. See [interactive mode](./docs/user-guide/interactive
 ## Desktop app
 
 Native macOS app (macOS 15+) sharing the CLI runloop, providers, tool policy, sandboxing, sessions, config,
-and credentials. Configure a provider first ([Quick start](#quick-start)).
+and credentials. Configure a provider first ([Quick start](#quick-start)). Opening a thread or page
+uses a short fade, and Back reveals the destination with ease-out. The composer stays in place when
+sending the first message. Settings → Accessibility controls Reduce Motion.
 
 ### Install (macOS 15+)
 

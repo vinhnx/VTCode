@@ -154,6 +154,8 @@ mod mcp_app;
 mod menu_bar;
 mod navigation;
 mod navigation_history;
+mod navigation_motion;
+use navigation_motion::{NavigationFadeExt as _, NavigationMotion};
 mod overlays;
 mod palette;
 mod palette_render;
@@ -706,6 +708,10 @@ struct DesktopView {
     change_viewer: Option<Entity<DiffState>>,
     change_viewer_dirty: bool,
     route_history: RouteHistory,
+    route_motion: NavigationMotion<Route>,
+    chat_motion: NavigationMotion<(Option<String>, bool)>,
+    settings_motion: NavigationMotion<usize>,
+    inspector_motion: NavigationMotion<InspectorTab>,
     workspace_review: Option<WorkspaceReviewState>,
     review_focus: FocusHandle,
     browser_focus: FocusHandle,

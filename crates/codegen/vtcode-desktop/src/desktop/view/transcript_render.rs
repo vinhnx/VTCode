@@ -70,7 +70,12 @@ impl DesktopView {
         });
     }
 
-    pub(super) fn render_transcript(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_transcript(
+        &mut self,
+        route_changed: bool,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         self.sync_transcript_layout(cx);
         // One style build per frame; rows clone it instead of rebuilding it each.
         self.transcript_markdown_style = Some(markdown_style(cx));
@@ -262,6 +267,37 @@ impl DesktopView {
             self.transcript_layout_settled = true;
             cx.notify();
         }
+        let destination_pending = self.pending_blank_transition()
+            || self.pending_navigation.is_some()
+            || self.session_request == Some(protocol::method::SESSION_LOAD);
+        let content = if !destination_pending {
+            let direction = self.navigation_history.take_committed_direction();
+            // Session creation can select a blank session before its first
+            // echo. Keep the welcome identity until conversation content exists.
+            let session_id = if empty_conversation {
+                None
+            } else {
+                self.selected_session_id.clone()
+            };
+            let destination = (session_id, empty_conversation);
+            // A fast Browser load can commit before the first Workspace frame.
+            // Only a return to the same conversation inherits the route's easing.
+            let returning = direction.map_or(
+                empty_conversation || (route_changed && self.chat_motion.is_current(&destination)),
+                |direction| direction == NavigationDirection::Back,
+            );
+            let _changed = self.chat_motion.update(
+                destination,
+                returning,
+                route_changed || direction.is_some(),
+                cx.background_executor().now(),
+            );
+            self.chat_motion
+                .fade(div().size_full().flex().flex_col().child(content), false, window, cx)
+                .into_any_element()
+        } else {
+            content
+        };
         div()
             .id("transcript-scroll")
             .aria_label(rust_i18n::t!("app.transcript.conversation_label").to_string())

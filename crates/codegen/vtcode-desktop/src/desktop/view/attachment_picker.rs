@@ -219,7 +219,8 @@ impl DesktopView {
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .p_3()
                         .child(tabs)
-                        .child(body),
+                        .child(body)
+                        .navigation_fade("attachment-picker-appearance", true, false, cx.theme()),
                 ),
         )
         .priority(2)

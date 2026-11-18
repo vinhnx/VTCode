@@ -116,7 +116,7 @@ impl DesktopView {
     /// workspace surface,
     /// so it carries the main-container canvas fill at the side-panel radius
     /// tier while every tab body shares [`inspector_tab_body`].
-    pub(super) fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_inspector(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let goal_pin = self.render_inspector_goal_pin(cx);
         let panel = div()
@@ -142,6 +142,15 @@ impl DesktopView {
             InspectorTab::Utilities => self.render_utilities(cx),
             InspectorTab::Plan => self.render_plan_tab(cx),
         };
+        let _changed = self
+            .inspector_motion
+            .update(self.inspector_tab, false, false, cx.background_executor().now());
+        let content = self.inspector_motion.fade(
+            div().flex_1().min_h_0().min_w_0().flex().flex_col().child(content),
+            true,
+            window,
+            cx,
+        );
         panel
             .child(content)
             .when(self.inspector_tab == InspectorTab::Changes, |panel| {
@@ -150,7 +159,7 @@ impl DesktopView {
                     .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_change_file(true, cx)))
                     .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| view.navigate_change_file(false, cx)))
             })
-            .fade_in("inspector-fade", cx.theme())
+            .navigation_fade("inspector-fade", true, false, cx.theme())
             .into_any_element()
     }
 

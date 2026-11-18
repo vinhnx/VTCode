@@ -352,11 +352,14 @@ fn thread_browser_row_load_selects_thread_and_closes(cx: &mut TestAppContext) {
     });
 
     cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let chat_motion = view.read(cx).chat_motion.started_at;
         window.click("nav-browse-threads", cx);
         window.render_frame(cx);
         window.click("browser-session-load-me", cx);
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_none(), "loading dismisses the browser");
+        assert_eq!(view.read(cx).chat_motion.started_at, chat_motion, "the old workspace does not fade");
     })
     .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
@@ -364,6 +367,45 @@ fn thread_browser_row_load_selects_thread_and_closes(cx: &mut TestAppContext) {
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
     assert_eq!(params, json!({ "sessionId": "load-me" }));
+}
+
+#[gpui_kit::test]
+fn thread_browser_fast_load_reveals_the_new_thread_forward(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    let session = browser_session("fast-load", "/work/other", Some(9), 0);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.sessions = vec![session.clone()];
+            view.open_thread_browser(window, cx);
+        });
+        window.render_frame(cx);
+        window.click("browser-session-fast-load", cx);
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                    result: Some(json!({
+                        "session": session,
+                        "messages": [{"role": "assistant", "text": "Restored thread"}],
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view = view.read(cx);
+        assert_eq!(view.selected_session_id.as_deref(), Some("fast-load"));
+        assert!(view.chat_motion.started_at.is_some());
+        assert!(!view.chat_motion.returning);
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

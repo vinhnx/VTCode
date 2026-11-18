@@ -567,7 +567,7 @@ impl DesktopView {
                             ),
                     ),
             )
-            .fade_in("license-viewer-fade", cx.theme())
+            .navigation_fade("license-viewer-fade", true, false, cx.theme())
             .into_any_element()
     }
 }

@@ -264,10 +264,12 @@ fn route_back_walks_settings_interior_before_the_history(cx: &mut TestAppContext
         view.update(cx, |view, cx| assert!(view.go_route_back(window, cx)));
         window.render_frame(cx);
         assert!(!view.read(cx).config_page_open, "back returns to the parent tab");
+        assert!(view.read(cx).settings_motion.returning);
         assert!(view.read(cx).current_route() == Route::Settings);
         view.update(cx, |view, cx| assert!(view.go_route_back(window, cx)));
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Workspace, "next back pops the panel");
+        assert!(view.read(cx).chat_motion.returning);
     })
     .unwrap();
 }

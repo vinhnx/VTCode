@@ -205,8 +205,11 @@ fn kit_sidebar_click_fetches_the_storage_summary(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         assert!(requests.try_recv().is_err(), "no fetch before Storage displays");
+        assert_eq!(view.read(cx).settings_motion.started_at, None);
         window.click("0-6", cx);
         window.render_frame(cx);
+        assert!(view.read(cx).settings_motion.started_at.is_some(), "the visible Kit page starts a reveal");
+        assert!(!view.read(cx).settings_motion.returning);
     })
     .unwrap();
     drain_summary_request(&mut requests);

@@ -256,7 +256,7 @@ impl DesktopView {
                             ),
                     ),
             )
-            .fade_in("running-confirm-fade", cx.theme())
+            .navigation_fade("running-confirm-fade", true, false, cx.theme())
             .into_any_element()
     }
 }

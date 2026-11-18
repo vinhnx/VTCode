@@ -453,7 +453,7 @@ impl DesktopView {
                             ),
                     ),
             )
-            .fade_in("changelog-fade", cx.theme())
+            .navigation_fade("changelog-fade", true, false, cx.theme())
             .into_any_element()
     }
 

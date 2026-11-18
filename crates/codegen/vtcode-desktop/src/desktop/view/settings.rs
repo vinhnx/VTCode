@@ -254,7 +254,7 @@ impl DesktopView {
     /// plus the CLI configuration entry, right content for the selection.
     /// The dialog identity stays `Settings` in every language so reopening
     /// and assistive technology see one stable surface.
-    pub(super) fn render_settings_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_settings_page(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!(i18n::SETTINGS_TITLE).to_string();
         let content = self.render_settings_content(window, cx);
@@ -262,6 +262,11 @@ impl DesktopView {
         // NARROW_PANEL_BREAKPOINT): the nav stacks above the content and
         // shares the height, mirroring the config rail breakpoint.
         let narrow = Self::settings_use_legacy_layout(window);
+        let content = if narrow && !(self.palette_kind == PaletteKind::SettingsSearch && self.palette.is_some()) {
+            self.render_settings_section_motion(self.settings_page_index(), content, window, cx)
+        } else {
+            content
+        };
         dismissable_route_page_with_layout(
             div()
                 .id("settings-panel")

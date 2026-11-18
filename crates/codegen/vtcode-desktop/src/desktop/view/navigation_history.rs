@@ -266,6 +266,7 @@ pub(super) struct NavigationLocation {
 pub(super) struct NavigationHistory {
     entries: Vec<NavigationLocation>,
     current_index: Option<usize>,
+    committed_direction: Option<NavigationDirection>,
 }
 
 impl NavigationHistory {
@@ -277,6 +278,7 @@ impl NavigationHistory {
         if let Some(index) = self.current_index {
             self.entries.truncate(index + 1);
         }
+        self.committed_direction = None;
         self.entries.push(location);
         self.current_index = Some(self.entries.len() - 1);
 
@@ -307,6 +309,11 @@ impl NavigationHistory {
         if index >= self.entries.len() {
             return false;
         }
+        self.committed_direction = self.current_index.and_then(|previous| match index.cmp(&previous) {
+            std::cmp::Ordering::Less => Some(NavigationDirection::Back),
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => Some(NavigationDirection::Forward),
+        });
         self.current_index = Some(index);
         true
     }
@@ -317,7 +324,12 @@ impl NavigationHistory {
         };
         *entry = location;
         self.current_index = Some(index);
+        self.committed_direction = None;
         true
+    }
+
+    pub(super) fn take_committed_direction(&mut self) -> Option<NavigationDirection> {
+        self.committed_direction.take()
     }
 }
 
@@ -361,6 +373,20 @@ mod tests {
         assert_eq!(history.back_index(), Some(0));
         assert_eq!(history.forward_index(), None);
         assert_eq!(history.location(1), Some(&location("/repo", Some("three"))));
+    }
+
+    #[test]
+    fn only_successful_history_moves_report_a_direction() {
+        let mut history = NavigationHistory::default();
+        history.record(location("/repo", Some("one")));
+        history.record(location("/repo", None));
+
+        assert!(history.navigate_to(0));
+        assert_eq!(history.take_committed_direction(), Some(NavigationDirection::Back));
+        assert!(history.navigate_to(1));
+        assert_eq!(history.take_committed_direction(), Some(NavigationDirection::Forward));
+        assert!(history.replace_and_navigate_to(0, location("/repo", None)));
+        assert_eq!(history.take_committed_direction(), None);
     }
 
     #[test]

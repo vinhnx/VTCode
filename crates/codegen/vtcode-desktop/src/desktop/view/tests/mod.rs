@@ -823,3 +823,23 @@ mod worktree_a11y;
 mod zen_chrome;
 mod zen_options;
 mod zen_workspace;
+
+#[test]
+fn navigation_motion_tracks_visits_and_keeps_direction_on_redraw() {
+    let mut motion = super::NavigationMotion::default();
+    let start = std::time::Instant::now();
+    let next = start + Duration::from_millis(16);
+    assert!(!motion.update(Route::Workspace, false, false, start));
+    assert_eq!(motion.started_at, None);
+    assert!(motion.update(Route::Settings, false, false, start));
+    assert_eq!(motion.started_at, Some(start));
+    assert!(!motion.returning);
+    assert!(motion.update(Route::Browser, false, false, next));
+    assert_eq!(motion.started_at, Some(next));
+    assert!(motion.update(Route::Workspace, true, false, start));
+    assert!(!motion.update(Route::Workspace, false, false, next));
+    assert!(motion.returning);
+    assert_eq!(motion.started_at, Some(start));
+    assert!(motion.update(Route::Workspace, true, true, next));
+    assert_eq!(motion.started_at, Some(next));
+}

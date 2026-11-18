@@ -526,6 +526,7 @@ fn user_turns_render_without_dividers(cx: &mut TestAppContext) {
 fn expanded_tool_output_paints_on_the_panel_fill(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
+        cx.set_reduce_motion(true);
         view.update(cx, |view, _| {
             view.transcript.push(TranscriptItem::new(
                 "explain".into(),

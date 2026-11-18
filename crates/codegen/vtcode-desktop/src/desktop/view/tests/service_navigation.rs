@@ -897,7 +897,7 @@ fn navigating_back_to_a_blank_thread_closes_the_service_session(cx: &mut TestApp
 
 #[gpui_kit::test]
 fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut TestAppContext) {
-    let (_window, view) = open_desktop(cx);
+    let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     let target_workspace = PathBuf::from("/workspace-a");
     let current_workspace = PathBuf::from("/workspace-b");
@@ -910,6 +910,7 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
         size_bytes: 0,
         updated_at: None,
     };
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
         view.workspace = Some(target_workspace.clone());
@@ -919,7 +920,6 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
         });
         view.navigation_history
             .record(NavigationLocation { workspace: current_workspace, session_id: None });
-        assert!(view.navigation_history.navigate_to(1));
         view.pending_navigation = Some(PendingNavigation { target_index: 0, workspace_switch: true });
     });
 
@@ -935,6 +935,11 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
         assert_eq!(view.pending_navigation.map(|pending| pending.target_index), Some(0));
         assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
     });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).chat_motion.started_at, None, "the intermediate workspace does not fade");
+    })
+    .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("session discovery should be followed by the destination load");
     };
@@ -953,13 +958,17 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
         assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
     });
     cx.run_until_parked();
-    cx.update(|cx| {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
         let view = view.read(cx);
         assert_eq!(view.selected_session_id.as_deref(), Some("target-session"));
         assert!(view.pending_navigation.is_none());
         assert_eq!(view.navigation_history.back_index(), None);
         assert_eq!(view.navigation_history.forward_index(), Some(1));
-    });
+        assert!(view.chat_motion.started_at.is_some());
+        assert!(view.chat_motion.returning, "only the committed Back destination eases out");
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

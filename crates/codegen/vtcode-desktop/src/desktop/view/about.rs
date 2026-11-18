@@ -496,7 +496,7 @@ impl DesktopView {
                             ),
                     ),
             )
-            .fade_in("about-fade", cx.theme())
+            .navigation_fade("about-fade", true, false, cx.theme())
             .into_any_element()
     }
 }

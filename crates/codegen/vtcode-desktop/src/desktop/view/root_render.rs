@@ -11,6 +11,85 @@ impl DesktopView {
             .unwrap_or(app::NAME)
     }
 
+    fn render_workspace_route(
+        &mut self,
+        window: &mut Window,
+        route_changed: bool,
+        inspector_visible: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let colors = cx.theme().colors;
+        // One identity row: several tabs get the switch strip, while zero or one
+        // tab gets the compact header for a thread with content or a selection
+        // (a lone tab would only repeat the window title). The header carries
+        // the conversation-column new-thread action the hidden strip would
+        // otherwise take with it. Threads with neither stay on the welcome or
+        // pending states, which own their own calls to action.
+        let multi_tab = self.open_tabs.len() > 1;
+        let conversation = div()
+            .id("conversation-column")
+            .test_support()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .when(multi_tab && !self.zen_mode, |column| column.child(self.render_thread_tabs(cx)))
+            .when(
+                !multi_tab
+                    && (!self.transcript.is_empty() || self.selected_session_id.is_some())
+                    && !self.zen_mode
+                    && !self.pending_blank_transition(),
+                |column| column.child(self.render_thread_header(cx.theme())),
+            )
+            .when(self.release_notes_banner_visible(), |column| column.child(self.render_release_notes_banner(cx)))
+            .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
+                column.child(self.render_navigation_loading(cx))
+            })
+            .child(self.render_transcript(route_changed, window, cx))
+            .child(self.render_composer(window, cx));
+        let workspace = div()
+            .id("workspace-surface")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label(rust_i18n::t!("app.navigation.conversation_workspace").to_string())
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .h_full()
+            .flex()
+            .gap_3()
+            .p_4()
+            .bg(colors.background)
+            .rounded_xl()
+            // Zen is the distraction-free surface: the card runs edge to edge,
+            // so square corners meet the title bar and window sides flush.
+            .when(self.zen_mode, |card| card.rounded_none())
+            .child(conversation);
+        // The inspector is a separated card beside the workspace surface,
+        // not nested in it: the row gap matches the pane padding so the
+        // two cards float on the chrome with one even rhythm.
+        let inspector = inspector_visible.then(|| {
+            div()
+                .relative()
+                .h_full()
+                .flex_shrink_0()
+                .child(self.render_inspector(window, cx))
+                .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
+        });
+        div()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .h_full()
+            .flex()
+            .gap_3()
+            .child(workspace)
+            .children(inspector)
+            .into_any_element()
+    }
+
     /// Chrome dock framing the terminal card. The relative wrapper anchors
     /// the absolute drag handle (kit `inside()` edges hug the wrapper, like
     /// the sidebar/inspector docks), and the pads float the card on the
@@ -61,7 +140,7 @@ impl DesktopView {
         // The dock mounts through ToggleTerminal (and remounts when the
         // position preference moves it between slots), so a stable id
         // replays the fade exactly on those appearances.
-        .fade_in("terminal-dock-fade", cx.theme())
+        .navigation_fade("terminal-dock-fade", true, false, cx.theme())
     }
 }
 
@@ -77,82 +156,31 @@ impl Render for DesktopView {
         // usable. The preference is untouched, so the sidebar returns when
         // the panel closes or the window widens.
         let narrow_panel = compact_viewport(window);
-        // One identity row: several tabs get the switch strip, while zero or one
-        // tab gets the compact header for a thread with content or a selection
-        // (a lone tab would only repeat the window title). The header carries
-        // the conversation-column new-thread action the hidden strip would
-        // otherwise take with it. Threads with neither stay on the welcome or
-        // pending states, which own their own calls to action.
-        let multi_tab = self.open_tabs.len() > 1;
-        let conversation = div()
-            .id("conversation-column")
-            .test_support()
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .flex()
-            .flex_col()
-            .when(multi_tab && !self.zen_mode, |column| column.child(self.render_thread_tabs(cx)))
-            .when(
-                !multi_tab
-                    && (!self.transcript.is_empty() || self.selected_session_id.is_some())
-                    && !self.zen_mode
-                    && !self.pending_blank_transition(),
-                |column| column.child(self.render_thread_header(cx.theme())),
-            )
-            .when(self.release_notes_banner_visible(), |column| column.child(self.render_release_notes_banner(cx)))
-            .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
-                column.child(self.render_navigation_loading(cx))
-            })
-            .child(self.render_transcript(cx))
-            .child(self.render_composer(window, cx));
-        let workspace = div()
-            .id("workspace-surface")
-            .test_support()
-            .role(gpui_kit::Role::Group)
-            .aria_label(rust_i18n::t!("app.navigation.conversation_workspace").to_string())
-            .relative()
-            .flex_1()
-            .min_w_0()
-            .min_h_0()
-            .h_full()
-            .flex()
-            .gap_3()
-            .p_4()
-            .bg(colors.background)
-            .rounded_xl()
-            // Zen is the distraction-free surface: the card runs edge to edge,
-            // so square corners meet the title bar and window sides flush.
-            .when(self.zen_mode, |card| card.rounded_none())
-            .child(conversation);
-        // The inspector is a separated card beside the workspace surface,
-        // not nested in it: the row gap matches the pane padding so the
-        // two cards float on the chrome with one even rhythm.
-        let inspector = inspector_visible.then(|| {
-            div()
-                .relative()
-                .h_full()
-                .flex_shrink_0()
-                .child(self.render_inspector(cx))
-                .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
-        });
+        let route = self.current_route();
+        let route_changed =
+            self.route_motion
+                .update(route, route == Route::Workspace, false, cx.background_executor().now());
+        if route_changed && route == Route::Settings {
+            self.settings_motion = NavigationMotion::default();
+        }
+        if !inspector_visible || route != Route::Workspace || route_changed {
+            self.inspector_motion = NavigationMotion::default();
+        }
         // Route panels embed in the content slot beneath the persistent
         // toolbar: chrome stays mounted and the panel inherits the pane
         // rhythm instead of taking over the window.
-        let center: AnyElement = match self.current_route() {
-            Route::Workspace => div()
-                .flex_1()
-                .min_w_0()
-                .min_h_0()
-                .h_full()
-                .flex()
-                .gap_3()
-                .child(workspace)
-                .children(inspector)
-                .into_any_element(),
+        let center: AnyElement = match route {
+            Route::Workspace => self.render_workspace_route(window, route_changed, inspector_visible, cx),
             Route::Settings => self.render_settings_page(window, cx),
             Route::Browser => self.render_thread_browser(window, cx),
             Route::Review => self.render_change_review(window, cx),
+        };
+        let center = if route == Route::Workspace {
+            center
+        } else {
+            self.route_motion
+                .fade(div().flex_1().min_w_0().min_h_0().h_full().flex().child(center), false, window, cx)
+                .into_any_element()
         };
         let content = div()
             .id("pane-root")

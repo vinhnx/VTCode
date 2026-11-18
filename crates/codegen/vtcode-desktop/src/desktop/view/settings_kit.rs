@@ -42,17 +42,38 @@ fn kit_page_icon(tab: SettingsTab) -> Icon {
     .size(nav_entry_icon_size())
 }
 
-fn kit_single_item_page<R, E>(tab: SettingsTab, render: R) -> SettingPage
+fn kit_single_item_page<R, E>(tab: SettingsTab, page_ix: usize, view: Entity<DesktopView>, render: R) -> SettingPage
 where
     R: Fn(&RenderOptions, &mut Window, &mut App) -> E + 'static,
-    E: IntoElement,
+    E: IntoElement + 'static,
 {
-    SettingPage::new(tab.label())
-        .icon(kit_page_icon(tab))
-        .group(SettingGroup::new().item(SettingItem::render(render).keywords(tab.search_keywords().iter().copied())))
+    SettingPage::new(tab.label()).icon(kit_page_icon(tab)).group(
+        SettingGroup::new().item(
+            SettingItem::render(move |options, window, cx| {
+                let content = render(options, window, cx).into_any_element();
+                view.update(cx, |view, cx| view.render_settings_section_motion(page_ix, content, window, cx))
+            })
+            .keywords(tab.search_keywords().iter().copied()),
+        ),
+    )
 }
 
 impl DesktopView {
+    pub(super) fn render_settings_section_motion(
+        &mut self,
+        page_ix: usize,
+        content: AnyElement,
+        window: &Window,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let _changed = self
+            .settings_motion
+            .update(page_ix, false, false, cx.background_executor().now());
+        self.settings_motion
+            .fade(div().flex_1().min_h_0().min_w_0().flex().flex_col().child(content), true, window, cx)
+            .into_any_element()
+    }
+
     /// Kit-hosted settings content. The remount id carries the selected
     /// page so view-driven selection (tabs, palette, deep links, tab-cycle
     /// actions) pushes into Kit's internal state. Kit-internal sidebar
@@ -74,24 +95,29 @@ impl DesktopView {
         let config_view = view.clone();
 
         let mut pages = Vec::with_capacity(SettingsTab::PAGE_COUNT);
-        for page in SettingsPage::ALL {
+        for (index, page) in SettingsPage::ALL.into_iter().enumerate() {
             let page_view = view.clone();
             let page = match page {
                 SettingsPage::Configuration => {
                     let config_props = config_props.clone();
                     let config_view = config_view.clone();
+                    let motion_view = view.clone();
                     SettingPage::new(rust_i18n::t!("app.configuration.page_title").to_string())
                         .icon(IconName::Settings2)
                         .group(
                             SettingGroup::new().item(
                                 SettingItem::render(move |_: &RenderOptions, window: &mut Window, cx: &mut App| {
                                     let wide = window.viewport_size().width >= px(CONFIG_WIDE_VIEWPORT);
-                                    Self::render_cli_config_page_content(
+                                    let content = Self::render_cli_config_page_content(
                                         config_props.clone(),
                                         config_view.clone(),
                                         wide,
                                         cx,
                                     )
+                                    .into_any_element();
+                                    motion_view.update(cx, |view, cx| {
+                                        view.render_settings_section_motion(index, content, window, cx)
+                                    })
                                 })
                                 .keywords(CONFIG_PAGE_KEYWORDS.iter().copied()),
                             ),
@@ -100,68 +126,108 @@ impl DesktopView {
                 SettingsPage::Tab(tab) => match tab {
                     SettingsTab::VtCode => {
                         let props = VtcodeSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            Self::render_vtcode_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                Self::render_vtcode_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                     SettingsTab::Appearance => {
                         let props = AppearanceSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            Self::render_appearance_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                Self::render_appearance_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                     SettingsTab::Accessibility => {
                         let props = AccessibilitySettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            Self::render_accessibility_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                Self::render_accessibility_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                     SettingsTab::Shortcuts => {
                         let props = ShortcutSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, window: &mut Window, cx: &mut App| {
-                            Self::render_shortcuts_content(props.clone(), page_view.clone(), window, cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, window: &mut Window, cx: &mut App| {
+                                Self::render_shortcuts_content(props.clone(), page_view.clone(), window, cx)
+                            },
+                        )
                     }
                     SettingsTab::Connections => {
                         let props = ConnectionsSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            Self::render_connections_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                Self::render_connections_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                     SettingsTab::Notifications => {
                         let props = NotificationSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            Self::render_notification_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                Self::render_notification_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                     SettingsTab::Storage => {
                         let props = StorageSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            // Fetch-on-display: Kit sidebar clicks bypass
-                            // view-driven selection, so without this the summary
-                            // would never load on that path. Kit renders only
-                            // the active page, so this fires exactly when
-                            // Storage shows. Guarded one-shot (missing summary,
-                            // no in-flight request); errored state waits for the
-                            // manual retry instead of refetching every render.
-                            page_view.update(cx, |view, cx| {
-                                if view.storage.error.is_none() {
-                                    view.maybe_request_storage_summary(cx);
-                                }
-                            });
-                            Self::render_storage_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                // Fetch-on-display: Kit sidebar clicks bypass
+                                // view-driven selection, so without this the summary
+                                // would never load on that path. Kit renders only
+                                // the active page, so this fires exactly when
+                                // Storage shows. Guarded one-shot (missing summary,
+                                // no in-flight request); errored state waits for the
+                                // manual retry instead of refetching every render.
+                                page_view.update(cx, |view, cx| {
+                                    if view.storage.error.is_none() {
+                                        view.maybe_request_storage_summary(cx);
+                                    }
+                                });
+                                Self::render_storage_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                     SettingsTab::About => {
                         let props = AboutSettingsProps::capture(self);
-                        kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                            // No fetch here: unlike the Storage summary there is no
-                            // retry affordance on this page, so a render-time
-                            // request would repeat on every frame for a service
-                            // that keeps failing. Launch already asks once, and
-                            // view-driven selection refreshes on navigation.
-                            Self::render_about_settings_content(props.clone(), page_view.clone(), cx)
-                        })
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                // No fetch here: unlike the Storage summary there is no
+                                // retry affordance on this page, so a render-time
+                                // request would repeat on every frame for a service
+                                // that keeps failing. Launch already asks once, and
+                                // view-driven selection refreshes on navigation.
+                                Self::render_about_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
                     }
                 },
             };

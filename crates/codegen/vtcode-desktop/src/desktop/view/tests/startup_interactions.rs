@@ -190,7 +190,10 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
             view.attachments.push(vtcode_desktop_protocol::TurnAttachment { path: "first.rs".into(), text: "first content".into() });
         });
         window.render_frame(cx);
+        let welcome_motion = view.read(cx).chat_motion.started_at;
         window.click("send-prompt", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).chat_motion.started_at, welcome_motion);
         assert_eq!(view.read(cx).session_request, Some(vtcode_desktop_protocol::method::SESSION_CREATE));
         assert!(view.read(cx).first_submission.is_some());
         assert_eq!(view.read(cx).composer.read(cx).value(), "");
@@ -214,6 +217,13 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
         assert!(view.read(cx).running);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Newer unsent draft");
         assert_eq!(view.read(cx).transcript.len(), 1);
+        window.render_frame(cx);
+        let thread_motion = view.read(cx).chat_motion.started_at;
+        assert!(thread_motion.is_some());
+        assert_ne!(thread_motion, welcome_motion);
+        assert!(!view.read(cx).chat_motion.returning);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).chat_motion.started_at, thread_motion);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else { panic!("submit") };
         assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
         assert_eq!(params, json!({ "sessionId": "created", "prompt": "First request", "attachments": [{ "path": "first.rs", "text": "first content" }] }));

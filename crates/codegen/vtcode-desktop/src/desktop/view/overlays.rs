@@ -392,6 +392,9 @@ impl DesktopView {
             self.close_palette(window, cx);
         } else if self.config_page_open {
             self.config_page_open = false;
+            let _changed =
+                self.settings_motion
+                    .update(self.settings_page_index(), true, false, cx.background_executor().now());
             self.focus_route(Route::Settings, window, cx);
             cx.notify();
         } else if self.route_history.can_back() {
@@ -762,10 +765,6 @@ pub(super) fn dismissable_route_page_with_layout(
         .h_full()
         .flex()
         .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| view.request_panel_dismiss(window, cx)))
-        // The gutter keeps one id across route swaps, so settings → browser →
-        // review never replays the fade; only the workspace ↔ panel transition
-        // remounts it.
-        .fade_in("route-page-fade", cx.theme())
         .child(route_page_with_layout(panel, layout))
 }
 #[cfg(test)]

@@ -788,7 +788,7 @@ impl DesktopView {
                         None => div().into_any_element(),
                     }),
             )
-            .fade_in("file-preview-fade", cx.theme())
+            .navigation_fade("file-preview-fade", true, false, cx.theme())
             .into_any_element()
     }
 }
