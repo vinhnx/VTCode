@@ -50,6 +50,17 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
+  # chrono 0.4.x was declared unmaintained (all versions affected, no patched
+  # release); recommended replacements are jiff/time. It is a direct dependency
+  # across many first-party crates and transitive via rmcp 3.9 / schemars 1.2,
+  # so migrating off it is a workspace-wide change. Re-check when upstream deps
+  # adopt jiff/time or chrono gains a maintained successor.
+  { id = "RUSTSEC-2026-0543", reason = "chrono 0.4 unmaintained, all versions affected, no patched release; direct + transitive via rmcp/schemars; migration to jiff/time is workspace-wide" },
+  # humantime 2.4.0 is flagged unmaintained because it wraps chrono (see
+  # RUSTSEC-2026-0543); no patched release. Used directly for duration parsing
+  # (vtcode-core) and RFC3339 log timestamps (vtcode-ui). Re-check alongside
+  # chrono once a maintained replacement is available.
+  { id = "RUSTSEC-2026-0542", reason = "humantime 2.4 unmaintained (wraps chrono), all versions affected, no patched release; re-check with RUSTSEC-2026-0543" },
 ]
 
 [licenses]
