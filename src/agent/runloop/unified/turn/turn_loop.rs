@@ -15,8 +15,7 @@ use std::time::{Duration, Instant};
 use crate::agent::runloop::unified::session_settings::SessionSettingsControl;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use anyhow::Result;
-use tokio::sync::RwLock;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::{RwLock, mpsc::UnboundedReceiver};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::runtime::RuntimeSteering;
@@ -27,8 +26,7 @@ use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_ui::tui::app::InlineHeaderContext;
-use vtcode_ui::tui::app::{InlineHandle, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, turn_started_event};
 use crate::agent::runloop::unified::planning_workflow::maybe_handle_planning_exit_trigger;
@@ -96,19 +94,14 @@ mod usage_accounting;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{ANTI_BLIND_EDITING_DIRECTIVE, LoopTracker};
 #[cfg(test)]
-use post_tool_recovery::POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON;
-#[cfg(test)]
-use post_tool_recovery::PostToolFailureRecovery;
-#[cfg(test)]
-use post_tool_recovery::maybe_recover_after_post_tool_llm_failure;
-#[cfg(test)]
-use post_tool_recovery::normalize_tool_free_recovery_break_outcome;
+use post_tool_recovery::{
+    POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON, PostToolFailureRecovery, maybe_recover_after_post_tool_llm_failure,
+    normalize_tool_free_recovery_break_outcome,
+};
 #[cfg(test)]
 use recovery_compaction::current_turn_preserve_index;
 #[cfg(test)]
-use usage_accounting::accumulate_turn_usage;
-#[cfg(test)]
-use usage_accounting::has_turn_usage;
+use usage_accounting::{accumulate_turn_usage, has_turn_usage};
 use usage_accounting::{enforce_response_budget, record_response_usage};
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;

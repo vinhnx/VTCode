@@ -37,48 +37,9 @@ const DEFAULT_TIMEOUT_SECS: u64 = 60;
 /// must be bounded or `run_session_end` can hang (and leak the hook task).
 const HOOK_POST_KILL_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Best-effort cleanup for a hook's process group on abort.
-///
-/// `kill_on_drop(true)` only kills the direct `sh` child, which leaves shell
-/// grandchildren alive and holding the captured pipes open. When the owning
-/// future is cancelled, this guard kills the whole group; it is disarmed once
-/// the hook finishes normally so a deliberately detached descendant is not
-/// retroactively killed. Mirrors `crate::exec::async_command`.
+mod process_guard;
 #[cfg(unix)]
-struct HookProcessGroupGuard {
-    pid: Option<u32>,
-    armed: bool,
-}
-
-#[cfg(unix)]
-impl HookProcessGroupGuard {
-    fn new(pid: Option<u32>) -> Self {
-        Self { pid, armed: true }
-    }
-
-    /// Kill at most once: once the child has been reaped its PID can be
-    /// recycled, so a second best-effort kill could hit an unrelated group.
-    fn kill(&mut self) {
-        if !self.armed {
-            return;
-        }
-        self.armed = false;
-        if let Some(pid) = self.pid {
-            let _ = vtcode_bash_runner::process_group::kill_process_group_by_pid(pid);
-        }
-    }
-
-    fn disarm(&mut self) {
-        self.armed = false;
-    }
-}
-
-#[cfg(unix)]
-impl Drop for HookProcessGroupGuard {
-    fn drop(&mut self) {
-        self.kill();
-    }
-}
+use process_guard::HookProcessGroupGuard;
 
 mod payloads;
 
@@ -820,69 +781,6 @@ pub struct LifecycleHookCommandPreview {
     pub timeout_seconds: Option<u64>,
 }
 
-/// Stable digest over the engine's exact compiled command set. Deterministic
-/// across processes so approvals can be persisted and revalidated. Commands
-/// are serialized as JSON lines (length-safe, no delimiter ambiguity) and
-/// hashed with SHA-256, matching the codebase's config-fingerprint approach
-/// (collision-resistant; a crafted command set cannot collide with an
-/// approved one).
-fn commands_digest(hooks: &CompiledLifecycleHooks) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    hooks.for_each_command(|event, matcher, command| {
-        let entry = LifecycleHookCommandPreview {
-            event,
-            matcher: matcher.map(str::to_string),
-            command: command.command.clone(),
-            timeout_seconds: command.timeout_seconds,
-        };
-        if let Ok(line) = serde_json::to_string(&entry) {
-            lines.push(line);
-        }
-    });
-    lines.sort();
-    vtcode_commons::utils::calculate_sha256(lines.join("\n").as_bytes())
-}
-
-/// Restore a persisted workspace lifecycle-hook approval onto a freshly built
-/// engine. The persisted record only applies when its digest still matches the
-/// engine's exact command set; any configuration change since approval leaves
-/// the engine fail-closed.
-pub async fn restore_workspace_hook_approval(engine: &LifecycleHookEngine, workspace: &std::path::Path) {
-    if !engine.workspace_gated() {
-        return;
-    }
-    let digest = engine.command_digest().to_string();
-    let Ok(Some(record)) = load_lifecycle_hook_approval(workspace).await else {
-        return;
-    };
-    if record.config_digest == digest {
-        engine.approve_workspace_hooks().await;
-    }
-}
-
-/// Carry an in-memory approval from a previous engine onto a rebuilt engine
-/// (primary-agent switch or config reload), falling back to the persisted
-/// record. A session-only approval that could not be persisted (e.g. dot-config
-/// write failure) survives the rebuild while the command set is unchanged,
-/// instead of being silently dropped mid-session. Fails closed in every other
-/// case: a changed command set, a previously unapproved engine, or a gated
-/// engine with no matching persisted record leaves the rebuilt engine gated.
-pub async fn carry_or_restore_workspace_hook_approval(
-    previous: Option<&LifecycleHookEngine>,
-    next: &LifecycleHookEngine,
-    workspace: &std::path::Path,
-) {
-    let previous_approved_same_set = match previous {
-        Some(prev) => {
-            prev.workspace_gated()
-                && prev.command_digest() == next.command_digest()
-                && !prev.workspace_hooks_need_approval().await
-        }
-        None => false,
-    };
-    if previous_approved_same_set {
-        next.approve_workspace_hooks().await;
-    } else {
-        restore_workspace_hook_approval(next, workspace).await;
-    }
-}
+mod approval;
+use approval::commands_digest;
+pub use approval::{carry_or_restore_workspace_hook_approval, restore_workspace_hook_approval};

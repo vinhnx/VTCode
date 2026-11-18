@@ -10,15 +10,12 @@
 
 use std::collections::{BTreeSet, VecDeque};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, atomic::AtomicU64};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use hashbrown::HashMap;
-use tokio::sync::broadcast;
-use tokio::sync::mpsc;
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::{Notify, RwLock, broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 use vtcode_commons::TaskGuard;
 use vtcode_config::core::agent::AgentHarnessConfig;
@@ -42,8 +39,7 @@ use vtcode_core::subagents::BackgroundCompletionEvent;
 use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
 use vtcode_core::tools::autonomous_executor::AutonomousExecutor;
 use vtcode_core::tools::circuit_breaker::CircuitBreaker;
-use vtcode_core::tools::exec_session::ExecSessionCompletionEvent;
-use vtcode_core::tools::exec_session::ExecSessionManager;
+use vtcode_core::tools::exec_session::{ExecSessionCompletionEvent, ExecSessionManager};
 use vtcode_core::tools::health::ToolHealthTracker;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};

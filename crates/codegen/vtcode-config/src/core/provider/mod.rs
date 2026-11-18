@@ -834,25 +834,11 @@ fn default_extended_thinking_enabled() -> bool {
     true
 }
 
-#[inline]
-fn default_interleaved_thinking_beta() -> String {
-    "interleaved-thinking-2025-05-14".to_string()
-}
-
-#[inline]
-fn default_interleaved_thinking_budget_tokens() -> u32 {
-    crate::constants::context::DEFAULT_THINKING_BUDGET
-}
-
-#[inline]
-fn default_interleaved_thinking_type() -> String {
-    "enabled".to_string()
-}
-
-#[inline]
-fn default_task_budget_beta() -> String {
-    "task-budgets-2026-03-13".to_string()
-}
+mod serde_defaults;
+use serde_defaults::{
+    default_interleaved_thinking_beta, default_interleaved_thinking_budget_tokens, default_interleaved_thinking_type,
+    default_task_budget_beta,
+};
 
 #[cfg(test)]
 mod tests;

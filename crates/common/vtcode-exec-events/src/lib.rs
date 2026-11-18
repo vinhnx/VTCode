@@ -923,12 +923,8 @@ impl HarnessEventItem {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct ErrorItem {
-    /// Error message displayed to the user or logs.
-    pub message: String,
-}
+mod error_item;
+pub use error_item::ErrorItem;
 
 #[cfg(test)]
 mod tests;

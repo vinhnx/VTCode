@@ -1,3 +1,4 @@
+mod events;
 mod observed;
 mod presentation;
 mod streaming;
@@ -14,8 +15,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio::sync::RwLock;
-use vtcode_config::auth::CopilotAuthConfig;
-use vtcode_config::core::permissions::AgentPermissionsConfig;
+use vtcode_config::{auth::CopilotAuthConfig, core::permissions::AgentPermissionsConfig};
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::copilot::{
     CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotPermissionDecision,
@@ -25,8 +25,7 @@ use vtcode_core::copilot::{
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::exec_policy::AskForApproval;
-use vtcode_core::llm::provider as uni;
-use vtcode_core::llm::provider::ToolDefinition;
+use vtcode_core::llm::provider::{self as uni, ToolDefinition};
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::types::CompactStr;
 use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
@@ -42,8 +41,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext};
-use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::state::SessionStats;
+use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_call_safety::{ToolCallSafetyValidator, invocation_id_from_call_id};
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
 use crate::agent::runloop::unified::tool_pipeline::{
@@ -54,14 +52,13 @@ use crate::agent::runloop::unified::tool_routing::{
     HitlDecision, PreToolHookPhaseResult, ToolPermissionFlow, ToolPermissionsContext,
     ensure_tool_permission_with_call_id, prompt_external_tool_permission,
 };
-use crate::agent::runloop::unified::turn::tool_outcomes::error_handling::tool_denial_diagnostic;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-    LoopTracker, mutation_was_applied, update_repetition_tracker_for_registry,
-};
 use crate::agent::runloop::unified::turn::tool_outcomes::{
     ToolFailureDiagnosis, bounded_diagnostic_field, bounded_error_evidence, bounded_output_evidence,
     classify_error_failure, classify_output_failure, deterministic_error_diagnosis, deterministic_output_diagnosis,
-    escape_untrusted_evidence, render_diagnosis,
+    error_handling::tool_denial_diagnostic,
+    escape_untrusted_evidence,
+    helpers::{LoopTracker, mutation_was_applied, update_repetition_tracker_for_registry},
+    render_diagnosis,
 };
 use crate::agent::runloop::unified::ui_interaction_stream::CopilotRuntimeRequestHandler;
 
@@ -667,55 +664,6 @@ impl<'a> CopilotRuntimeHost<'a> {
     fn record_out_of_band_tool_use(&mut self, tool_name: &str) {
         self.harness_state.record_out_of_band_tool_call();
         self.session_stats.record_tool(tool_name);
-    }
-
-    fn emit_tool_started_event(&self, tool_call_id: &str, tool_name: &str, arguments: &Value) {
-        let Some(emitter) = self.harness_emitter else {
-            return;
-        };
-        let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
-        let raw_id = raw_tool_call_id(tool_call_id);
-        let _ = emitter.emit(tool_started_event(item_id.clone(), tool_name, Some(arguments), raw_id));
-        let _ = emitter.emit(tool_output_started_event(item_id, raw_id));
-    }
-
-    fn emit_tool_finished_event(
-        &self,
-        tool_call_id: &str,
-        tool_name: &str,
-        arguments: &Value,
-        status: ToolCallStatus,
-        output: Option<String>,
-    ) {
-        let Some(emitter) = self.harness_emitter else {
-            return;
-        };
-        let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
-        let raw_id = raw_tool_call_id(tool_call_id);
-        let _ = emitter.emit(tool_invocation_completed_event(
-            item_id.clone(),
-            tool_name,
-            Some(arguments),
-            raw_id,
-            status.clone(),
-        ));
-        let _ = emitter.emit(tool_output_completed_event(
-            item_id,
-            raw_id,
-            status,
-            None,
-            None,
-            output.unwrap_or_default(),
-            Vec::new(),
-        ));
-    }
-
-    fn emit_tool_output_event(&self, tool_call_id: &str, tool_name: &str, output: &str) {
-        let Some(emitter) = self.harness_emitter else {
-            return;
-        };
-        let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
-        let _ = emitter.emit(tool_updated_event(item_id, raw_tool_call_id(tool_call_id), output));
     }
 
     fn handle_observed_tool_call(&mut self, update: CopilotObservedToolCall) {

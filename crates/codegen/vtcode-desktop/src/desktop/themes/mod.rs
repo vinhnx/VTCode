@@ -32,6 +32,8 @@ mod terminal;
 pub(super) use terminal::{ciapre_ansi_slots, latte_ansi_slots, light_ansi_slots};
 mod toolbar;
 pub(super) use toolbar::toolbar_band_surface;
+mod swatches;
+pub(super) use swatches::*;
 
 /// The built-in theme identifiers referenced in source, grouped by the prefix
 /// of their registry id. The CLI registry owns the full catalog at runtime;
@@ -293,117 +295,6 @@ fn build_themes() -> Vec<DesktopTheme> {
         .collect()
 }
 
-/// One selectable entry in the theme picker: a palette theme or one of the
-/// kit's system light/dark bases.
-#[derive(Clone, Copy)]
-pub(super) enum SwatchEntry {
-    System(ThemeMode),
-    Palette(DesktopTheme),
-}
-
-impl SwatchEntry {
-    pub(super) fn id(self) -> String {
-        match self {
-            Self::System(ThemeMode::Light) => SYSTEM_LIGHT_ID.to_string(),
-            Self::System(ThemeMode::Dark) => SYSTEM_DARK_ID.to_string(),
-            Self::Palette(theme) => theme.id.to_string(),
-        }
-    }
-
-    pub(super) fn label(self) -> &'static str {
-        match self {
-            Self::System(ThemeMode::Light) => "System Light",
-            Self::System(ThemeMode::Dark) => "System Dark",
-            Self::Palette(theme) => theme.label,
-        }
-    }
-
-    /// The two colors a picker swatch previews.
-    pub(super) fn preview(self) -> (Hsla, Hsla) {
-        match self {
-            Self::System(ThemeMode::Light) => (rgb(0xFFFFFF).into(), rgb(0x1F2937).into()),
-            Self::System(ThemeMode::Dark) => (rgb(0x0F172A).into(), rgb(0xE2E8F0).into()),
-            Self::Palette(theme) => (theme.background, theme.foreground),
-        }
-    }
-
-    pub(super) fn accent(self) -> Option<Hsla> {
-        match self {
-            Self::System(_) => None,
-            Self::Palette(theme) => Some(theme.accent),
-        }
-    }
-
-    pub(super) fn mode(self) -> ThemeMode {
-        match self {
-            Self::System(mode) => mode,
-            Self::Palette(theme) => theme.mode,
-        }
-    }
-}
-
-/// The two system entries shown first in the picker.
-pub(super) const SYSTEM_SWATCHES: [SwatchEntry; 2] = [
-    SwatchEntry::System(ThemeMode::Light),
-    SwatchEntry::System(ThemeMode::Dark),
-];
-
-const FEATURED_THEME_IDS: [&str; 3] = [DEFAULT_THEME_ID, ThemeId::ciapre::DARK, ThemeId::ciapre::BLUE];
-
-/// Picker order within one mode group leads with the VT Code themes of
-/// that mode, then the matching system base and the remaining shared
-/// palette catalog in its existing order.
-pub(super) fn picker_swatches_for(mode: ThemeMode) -> impl Iterator<Item = SwatchEntry> {
-    let themes = all_themes();
-    FEATURED_THEME_IDS
-        .iter()
-        .filter_map(|id| themes.iter().find(|theme| theme.id == *id))
-        .copied()
-        .filter(move |theme| theme.mode == mode)
-        .map(SwatchEntry::Palette)
-        .chain(SYSTEM_SWATCHES.into_iter().filter(move |entry| entry.mode() == mode))
-        .chain(
-            themes
-                .iter()
-                .copied()
-                .filter(move |theme| theme.mode == mode && !FEATURED_THEME_IDS.contains(&theme.id))
-                .map(SwatchEntry::Palette),
-        )
-}
-
-/// Picker order grouped by mode: every light swatch first, then every dark
-/// swatch. The settings picker renders the two groups as separate rows.
-pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
-    picker_swatches_for(ThemeMode::Light).chain(picker_swatches_for(ThemeMode::Dark))
-}
-
-/// Indexable snapshot of one mode's picker row. The registry is static and
-/// custom themes render in their own section, so the snapshot never goes
-/// stale; the virtualized rows index it by visible position.
-pub(super) fn picker_entries_for(mode: ThemeMode) -> &'static [SwatchEntry] {
-    static LIGHT: std::sync::LazyLock<Vec<SwatchEntry>> =
-        std::sync::LazyLock::new(|| picker_swatches_for(ThemeMode::Light).collect());
-    static DARK: std::sync::LazyLock<Vec<SwatchEntry>> =
-        std::sync::LazyLock::new(|| picker_swatches_for(ThemeMode::Dark).collect());
-    match mode {
-        ThemeMode::Light => &LIGHT,
-        ThemeMode::Dark => &DARK,
-    }
-}
-
-/// Label frequencies across both picker rows, so duplicate labels keep
-/// their disambiguating id prefix no matter which row is visible.
-pub(super) fn picker_label_counts() -> &'static HashMap<&'static str, usize> {
-    static COUNTS: std::sync::LazyLock<HashMap<&'static str, usize>> = std::sync::LazyLock::new(|| {
-        let mut counts = HashMap::new();
-        for entry in picker_swatches() {
-            *counts.entry(entry.label()).or_insert(0_usize) += 1;
-        }
-        counts
-    });
-    &COUNTS
-}
-
 /// Apply a theme by id: install the kit base for its mode, then override the
 /// core tokens from the palette.
 pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
@@ -598,7 +489,7 @@ fn subtle_border(secondary: Hsla, popover: Hsla, foreground: Hsla) -> Hsla {
 /// `border` (cards, dialogs, pills, dividers, code panels) use this one
 /// translucent blend so boundaries read as quiet hairlines rather than rules.
 /// This is the "soft edge thin" knob — tune here, not per surface. Contrast-
-/// derived [`hairline`] stays where a border must clear a floor on its own
+/// derived [`hairline()`] stays where a border must clear a floor on its own
 /// fill; `border` itself stays opaque for Kit inputs and focus.
 pub(super) fn soft_edge_color(colors: &ThemeColor) -> Hsla {
     const SOFT_EDGE_OPACITY: f32 = 0.55;

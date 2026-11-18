@@ -1,5 +1,4 @@
-use crate::agent::runloop::ui_list;
-use crate::agent::runloop::ui_list::Tone;
+use crate::agent::runloop::ui_list::{self, Tone};
 use anyhow::{Result, anyhow, bail};
 use serde_json::Value as YamlValue;
 type YamlMapping = serde_json::Map<String, YamlValue>;

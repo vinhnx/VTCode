@@ -5,8 +5,7 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::primary_agent_allows_tool;
-use vtcode_core::tools::registry::ToolExecutionError;
-use vtcode_core::tools::registry::labels::tool_action_label;
+use vtcode_core::tools::registry::{ToolExecutionError, labels::tool_action_label};
 use vtcode_tui_runtime::utils::ansi::MessageStyle;
 
 use super::error_handling::tool_denial_diagnostic;

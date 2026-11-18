@@ -1,5 +1,4 @@
-use crate::agent::runloop::ui_list;
-use crate::agent::runloop::ui_list::Tone;
+use crate::agent::runloop::ui_list::{self, Tone};
 
 use anyhow::Result;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
