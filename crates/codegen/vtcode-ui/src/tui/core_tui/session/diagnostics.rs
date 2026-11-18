@@ -115,21 +115,19 @@ impl Session {
     }
 
     pub(crate) fn toggle_diagnostic_at_row(&mut self, width: u16, row: usize) -> bool {
-        let mut start = 0;
-        for index in 0..self.lines.len() {
-            if self.lines[index]
-                .diagnostic
-                .as_ref()
-                .is_some_and(|entry| self.diagnostic_is_hidden(&entry.payload))
-            {
-                continue;
-            }
-            let rows = self.reflow_message_lines(index, width, true);
-            let count = rows.len();
-            if row >= start && row < start + count {
-                // Only the disclosure affordance toggles. Clicking summary or
-                // evidence text must preserve selection and link interaction.
-                let is_affordance = rows.get(row - start).is_some_and(|line| {
+        let target = {
+            let cache = self.ensure_reflow_cache(width);
+            // Hidden and grouped messages can share an offset. The last
+            // matching start owns the row if it has any rendered content.
+            cache
+                .row_offsets
+                .partition_point(|&start| start <= row)
+                .checked_sub(1)
+                .and_then(|index| {
+                    let start = *cache.row_offsets.get(index)?;
+                    let line = cache.messages.get(index)?.lines.get(row - start)?;
+                    // Only the disclosure affordance toggles. Summary and evidence
+                    // rows retain their normal selection and link behavior.
                     line.line
                         .spans
                         .iter()
@@ -137,12 +135,10 @@ impl Session {
                         .collect::<String>()
                         .trim_start()
                         .starts_with("Details (")
-                });
-                return is_affordance && self.toggle_diagnostic(index);
-            }
-            start += count;
-        }
-        false
+                        .then_some(index)
+                })
+        };
+        target.is_some_and(|index| self.toggle_diagnostic(index))
     }
 
     pub(super) fn reflow_diagnostic(&self, index: usize, width: u16, review: bool) -> Vec<TranscriptLine> {
@@ -669,6 +665,38 @@ mod tests {
             "disabling syntax highlighting must collapse the token colors: {plain_colors:?} vs {highlighted_colors:?}"
         );
     }
+    #[test]
+    fn diagnostic_click_maps_past_wrapped_text_and_zero_row_incidents() {
+        let mut session = Session::new(InlineTheme::default(), None, 30);
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![InlineSegment {
+                text: "An ordinary transcript line that wraps into several rows at the narrow width.".into(),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        );
+        let mut silent = diagnostic();
+        silent.code = "tool.execution_failed".into();
+        silent.correlation_id = "silent-before-disclosure".into();
+        session.upsert_diagnostic(silent);
+        session.upsert_diagnostic(diagnostic());
+
+        for width in [24, 100] {
+            let preceding_rows = session.reflow_message_lines(0, width, true).len();
+            assert!(session.reflow_message_lines(1, width, true).is_empty());
+            let visible = session.reflow_message_lines(2, width, true);
+            let disclosure = preceding_rows + affordance_row(&visible).expect("visible incident has a disclosure");
+
+            assert!(!session.toggle_diagnostic_at_row(width, preceding_rows - 1));
+            assert!(!session.toggle_diagnostic_at_row(width, preceding_rows));
+            assert!(!session.toggle_diagnostic_at_row(width, preceding_rows + visible.len()));
+            assert!(session.toggle_diagnostic_at_row(width, disclosure));
+            assert!(!session.lines[1].diagnostic.as_ref().unwrap().expanded);
+            assert!(session.lines[2].diagnostic.as_ref().unwrap().expanded);
+            assert!(session.toggle_diagnostic_at_row(width, disclosure));
+        }
+    }
+
     #[test]
     fn diagnostic_summary_details_resize_review_and_dedup() {
         let mut session = Session::new(InlineTheme::default(), None, 30);

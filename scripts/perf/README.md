@@ -34,6 +34,63 @@ comparison; none of these measurements is a CI performance gate.
 Criterion workloads are skipped by default so launch measurements do not wait for a full benchmark-profile rebuild. Set
 `PERF_RUN_BENCHMARKS=1` to include them in the JSON capture.
 
+## Responsiveness replay
+
+Build both applications with the same release profile and keep the matching
+`vtcode` executable beside each Desktop build.
+
+```bash
+cargo build --locked --release -p vtcode -p vtcode-desktop
+python3 scripts/perf/responsiveness.py --rounds 3 /path/to/baseline/vtcode /path/to/candidate/vtcode
+python3 scripts/perf/responsiveness.py --restored --rounds 3 target/release/vtcode
+python3 scripts/perf/responsiveness.py --fixed-size --rounds 3 target/release/vtcode
+python3 scripts/perf/responsiveness.py --command-output target/release/vtcode
+python3 scripts/perf/responsiveness.py --workspace-search target/release/vtcode
+python3 scripts/perf/responsiveness.py --native desktop target/release/vtcode-desktop
+python3 scripts/perf/responsiveness.py --native terminal target/release/vtcode
+```
+
+The automated CLI driver submits one prompt to a loopback fixture, injects
+typing, navigation, scroll and resize input during the assistant stream, and
+reports PTY bytes for idle, streaming and recovery plus the existing frame
+sampler summaries. Standard output is JSONL for the automated runs. The sampler's slow
+counters and maxima are cumulative within a run. Compare deltas and distributions across
+alternating runs. The child CPU total includes startup and cleanup. PTY bytes reflect
+application output, and visible feedback requires a native terminal capture. The fixture
+disables TUI copy-on-select to keep automated selection from modifying the host clipboard.
+On macOS, the automated run also samples CPU time, current and peak physical footprint,
+and cumulative disk bytes at its phase boundaries. Native Desktop logs the same counters
+once per second for the app and its immediate children, including the backend.
+
+`--restored` creates a session through the normal CLI, verifies its completed turns on disk, and resumes
+it before the measured run. The CLI fixture uses one 2,000-line response. Desktop uses 32 responses of
+40 lines each to stay below its per-message history preview limit.
+`--fixed-size` removes width changes and `--keyboard-only` removes mouse events. `--command-output`
+runs a local script using Bash mode in the CLI and the embedded terminal in Desktop.
+`--workspace-search` creates 2,048 small files and types a query during the automated
+replay. Open the file picker and type `fixture-files/unit-0` for the native search workload.
+
+To isolate transcript work from terminal output, run the existing transcript benchmark
+under the same release profile and record the width-change, scroll, selection and
+streaming cases separately.
+
+```bash
+cargo bench --locked --profile release -p vtcode-ui --bench transcript -- 'transcript_(reflow|interaction)'
+```
+
+For a native capture, submit `Replay the responsiveness fixture.` in each app.
+Open the printed workspace first in Desktop, or use `--restored` to launch it
+with the seeded session selected. With `--command-output`, open the Desktop terminal
+with Command+J or enter the printed command in the CLI. Record the display refresh rate, terminal and OS,
+release revision, and the sequence of actions. Repeat transcript scrolling,
+selection, typing and resize during the stream. Include click and keyboard
+actions, terminal scrolling, and zoom in, out and reset in Desktop. Use the same
+idle and recovery windows and record native input-to-visible latency and missed
+refresh intervals separately. Instruments System Trace can attribute main-thread
+work, and Activity Monitor and File Activity can measure the app and its
+backend child. Capture allocations or Metal activity separately to avoid
+combining profiler overhead with the comparison.
+
 ## Outputs
 
 All artifacts are written to `.vtcode/perf/`:

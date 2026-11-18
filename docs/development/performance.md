@@ -404,8 +404,13 @@ Related TUI invariants to preserve when optimizing the render path:
 - Transcript eviction drops only the evicted prefix of the reflow cache (`TranscriptReflowCache::evict_prefix`); do not
   call full `invalidate_transcript_cache` on eviction.
 - Hover and scroll use `mark_visual_dirty`; only content changes drop caches.
+- Diagnostic clicks use the cached transcript row offsets. Hidden incidents can share another message's offset,
+  so resolve the last matching offset and verify that the selected row exists before toggling.
 - Capture retention is bounded (`TUI_TOOL_OUTPUT_CAPTURE_MAX_LINES`, `TUI_TOOL_OUTPUT_BLOCKS_MAX`,
   `TUI_COMPACT_ACTIVITY_MAX_ENTRIES`).
+
+The [local responsiveness replay](../../scripts/perf/README.md#responsiveness-replay) compares release builds
+with fixed terminal dimensions, restored history, and mouse input controls.
 
 ## Standalone startup benchmark
 
