@@ -159,10 +159,7 @@ run_check() {
 run_tests() {
 	local nextest_args=()
 	local test_profile="default"
-
-	if [ "$RUN_WORKSPACE" = true ]; then
-		nextest_args+=("--workspace")
-	fi
+	local changed_package_args=()
 
 	if cargo nextest --version &>/dev/null; then
 		# Full-workspace runs need the load-insensitive default profile: quick's
@@ -223,26 +220,34 @@ import os
 import subprocess
 import sys
 
-changed_files = subprocess.check_output(["git", "diff", "--name-only", "HEAD~1", "--"], text=True).splitlines()
-changed_files += subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard"], text=True).splitlines()
-changed_paths = [os.path.abspath(path) for path in changed_files if path.strip()]
+changed_files = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", "-z", "HEAD~1", "--"]).split(b"\0")
+changed_files += subprocess.check_output(["git", "ls-files", "-z", "--others", "--exclude-standard"]).split(b"\0")
+changed_paths = [os.path.abspath(os.fsdecode(path)) for path in changed_files if path]
 
-for package in json.load(sys.stdin)["packages"]:
-    package_root = os.path.dirname(os.path.abspath(package["manifest_path"]))
-    for changed_path in changed_paths:
-        try:
-            if os.path.commonpath([package_root, changed_path]) == package_root:
-                print(package["name"])
-                break
-        except ValueError:
-            continue
+packages_by_root = {
+    os.path.dirname(os.path.abspath(package["manifest_path"])): package["name"]
+    for package in json.load(sys.stdin)["packages"]
+}
+changed_packages = set()
+# The workspace root is also a package, so stop at the closest package root.
+for changed_path in changed_paths:
+    directory = os.path.dirname(changed_path)
+    while directory not in packages_by_root:
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            break
+        directory = parent
+    if directory in packages_by_root:
+        changed_packages.add(packages_by_root[directory])
+
+for package_name in sorted(changed_packages):
+    print(package_name)
 '
 			); then
 				print_error "Failed to detect changed packages; test selection is unavailable."
 				return 1
 			fi
 
-			local changed_package_args=()
 			while IFS= read -r package_name; do
 				[ -z "$package_name" ] && continue
 				if [ "$RUN_WORKSPACE" = true ]; then
@@ -265,6 +270,10 @@ for package in json.load(sys.stdin)["packages"]:
 		else
 			print_warning "Not a git repo; ignoring --changed flag."
 		fi
+	fi
+
+	if [ "$RUN_WORKSPACE" = true ] && [ "${#changed_package_args[@]}" -eq 0 ]; then
+		nextest_args+=("--workspace")
 	fi
 
 	print_status "Running tests ($SCOPE_LABEL)..."

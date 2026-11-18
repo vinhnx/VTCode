@@ -66,7 +66,11 @@ class CheckDevTests(unittest.TestCase):
                 "if is_verifier and '--locked' not in args:\n"
                 "    pathlib.Path('Cargo.lock').write_text('unlocked resolution changed the lockfile\\n')\n"
                 "if args[0] == 'metadata':\n"
-                "    print(json.dumps({'packages': [{'name': 'vtcode', 'manifest_path': str(pathlib.Path.cwd() / 'Cargo.toml')}]}))\n"
+                "    root = pathlib.Path.cwd()\n"
+                "    print(json.dumps({'packages': [\n"
+                "        {'name': 'vtcode', 'manifest_path': str(root / 'Cargo.toml')},\n"
+                "        {'name': 'vtcode-desktop', 'manifest_path': str(root / 'crates/codegen/vtcode-desktop/Cargo.toml')},\n"
+                "    ]}))\n"
                 "    sys.exit(scenario.get('metadata_status', 0))\n"
                 "if args[:2] == ['nextest', 'run']:\n"
                 "    if scenario.get('empty_suite') and '--no-tests=fail' in args:\n"
@@ -81,7 +85,11 @@ class CheckDevTests(unittest.TestCase):
                 f"#!{sys.executable}\n"
                 "import json, os, sys\n"
                 "if sys.argv[1] == 'diff':\n"
-                "    print('\\n'.join(json.loads(os.environ['CHECK_DEV_CHANGED_PATHS'])))\n"
+                "    paths = json.loads(os.environ['CHECK_DEV_CHANGED_PATHS'])\n"
+                "    if '-z' in sys.argv:\n"
+                "        sys.stdout.buffer.write(b''.join(os.fsencode(p) + b'\\0' for p in paths))\n"
+                "    else:\n"
+                "        print('\\n'.join(paths))\n"
                 "elif sys.argv[1] == 'rev-parse':\n"
                 "    print('.git')\n"
                 "elif sys.argv[1] != 'ls-files':\n"
@@ -175,6 +183,31 @@ class CheckDevTests(unittest.TestCase):
         self.assert_failure(result)
         self.assertIn("Failed to detect changed packages", result.stdout)
         self.assertFalse(any(call[:2] == ["nextest", "run"] for call in calls))
+
+    def test_workspace_without_changed_selection_runs_workspace_tests(self):
+        result, calls, _ = self.run_fixture(("--test", "--workspace"))
+        self.assert_success(result)
+        call = next(call for call in calls if call[:2] == ["nextest", "run"])
+        self.assertIn("--workspace", call)
+        self.assertEqual(call[call.index("--profile") + 1], "default")
+
+    def test_nested_package_changes_only_select_the_owning_package(self):
+        paths = ("crates/codegen/vtcode-desktop/src/file\nwith a space.rs",)
+        result, calls, _ = self.run_fixture(("--changed",), changed_paths=paths)
+        self.assert_success(result)
+        self.assertIn("No changed packages in the selected test scope", result.stdout)
+        self.assertFalse(any(call[:2] == ["nextest", "run"] for call in calls))
+
+        result, calls, _ = self.run_fixture(
+            ("--changed", "--workspace"), changed_paths=paths
+        )
+        self.assert_success(result)
+        call = next(call for call in calls if call[:2] == ["nextest", "run"])
+        self.assertEqual(
+            [call[index + 1] for index, arg in enumerate(call) if arg == "-p"],
+            ["vtcode-desktop"],
+        )
+        self.assertNotIn("--workspace", call)
 
     def test_unchanged_scope_explicitly_skips_tests(self):
         for options in (("--changed",), ("--changed", "--quiet")):
