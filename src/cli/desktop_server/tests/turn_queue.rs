@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::desktop_server::turn_queue::DrainedTurn;
 use vtcode_core::core::agent::steering::SteerOutcome;
 
 type RuntimeStateFixture = (
@@ -102,8 +103,9 @@ async fn terminal_event_drains_one_batch_and_keeps_fifo_order() {
         .expect("idle submit");
     let _ = input_receiver.recv().await;
     let _ = received.recv().await;
+    let mut entry_ids = Vec::new();
     for (prompt, batchable) in [("a", true), ("b", true), ("c", false)] {
-        enqueue_turn(
+        let accepted = enqueue_turn(
             &state,
             &notifications,
             "session",
@@ -113,6 +115,7 @@ async fn terminal_event_drains_one_batch_and_keeps_fifo_order() {
         )
         .await
         .expect("queue behind the turn");
+        entry_ids.push(accepted.entry_id.expect("service-assigned queue identity"));
         let _ = received.recv().await;
     }
 
@@ -134,6 +137,8 @@ async fn terminal_event_drains_one_batch_and_keeps_fifo_order() {
     assert_eq!(status.method, protocol::method::TURN_QUEUE_STATUS);
     assert_eq!(status.params["queueDepth"], 1);
     assert_eq!(status.params["previews"], serde_json::json!(["c"]));
+    assert_eq!(status.params["dispatchedEntryIds"], serde_json::json!(&entry_ids[..2]));
+    assert_eq!(status.params["entryIds"], serde_json::json!(&entry_ids[2..]));
 
     publish_thread_event("session", completed_turn(), &state, &notifications, &finished)
         .await
@@ -513,9 +518,20 @@ async fn failed_drain_dispatch_restores_the_batch_at_the_front() {
     });
     let batch = QueuedInput::new("drained".into(), None);
 
-    dispatch_drained_turn(&state, &notifications, &Notify::new(), "session", "turn".into(), batch, input)
-        .await
-        .expect_err("closed runtime fails delivery");
+    dispatch_drained_turn(
+        &state,
+        &notifications,
+        &Notify::new(),
+        "session",
+        DrainedTurn {
+            turn_id: "turn".into(),
+            batch,
+            original_entries: Vec::new(),
+            input,
+        },
+    )
+    .await
+    .expect_err("closed runtime fails delivery");
     let state = state.lock().await;
     assert!(state.active_turn_id.is_none());
     assert_eq!(state.queue.len(), 2);
@@ -538,9 +554,20 @@ async fn failed_drain_dispatch_restores_without_touching_a_newer_turn() {
     });
     let batch = QueuedInput::new("drained".into(), None);
 
-    dispatch_drained_turn(&state, &notifications, &Notify::new(), "session", "stale-turn".into(), batch, input)
-        .await
-        .expect_err("closed runtime fails delivery");
+    dispatch_drained_turn(
+        &state,
+        &notifications,
+        &Notify::new(),
+        "session",
+        DrainedTurn {
+            turn_id: "stale-turn".into(),
+            batch,
+            original_entries: Vec::new(),
+            input,
+        },
+    )
+    .await
+    .expect_err("closed runtime fails delivery");
     let state = state.lock().await;
     assert_eq!(state.active_turn_id.as_deref(), Some("newer-turn"), "newer turn slot is untouched");
     assert_eq!(state.queue.len(), 1);
@@ -561,15 +588,18 @@ async fn stale_open_runtime_cannot_receive_a_drained_prompt() {
         &notifications,
         &finished,
         "session",
-        "old-turn".into(),
-        QueuedInput::new("preserved prompt".into(), None),
-        old_input,
+        DrainedTurn {
+            turn_id: "old-turn".into(),
+            batch: QueuedInput::new("preserved prompt".into(), None),
+            original_entries: Vec::new(),
+            input: old_input,
+        },
     )
     .await
     .expect_err("an open but replaced runtime is stale");
     assert!(old_receiver.try_recv().is_err());
     let drained = state.lock().await.pop_next_queued_turn().expect("prompt is restored");
-    dispatch_drained_turn(&state, &notifications, &finished, "session", drained.turn_id, drained.batch, drained.input)
+    dispatch_drained_turn(&state, &notifications, &finished, "session", drained)
         .await
         .expect("current runtime receives the restored prompt");
     assert!(matches!(current_input.recv().await, Some(InlineEvent::Submit(input)) if input.text == "preserved prompt"));

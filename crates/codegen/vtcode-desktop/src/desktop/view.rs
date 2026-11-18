@@ -879,12 +879,12 @@ struct DesktopView {
     pending_submission: Option<SubmissionDraft>,
     pending_first_submission: bool,
     first_submission: Option<SubmissionDraft>,
-    /// Prompts queued behind the running turn, oldest first. Entries are
-    /// added optimistically on submit and reconciled against authoritative
-    /// `turn/queue-status` snapshots; see `view/queue.rs`.
+    /// Optimistic queued prompts, oldest first.
     queued_submissions: Vec<QueuedSubmission>,
     /// Authoritative queue depth from the latest status snapshot.
     queue_depth: usize,
+    /// Modern services identify dispatch and discard by entry id.
+    queue_has_dispatch_ids: bool,
     /// Display previews from the latest status snapshot (backstop when local
     /// entries are missing; normally the panel renders `queued_submissions`).
     queue_previews: Vec<String>,

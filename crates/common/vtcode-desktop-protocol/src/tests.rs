@@ -680,16 +680,20 @@ fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(
         queued: true,
         queue_depth: 2,
         dropped: 1,
+        entry_id: Some("qe-3".into()),
+        discarded_entry_ids: vec!["qe-1".into()],
     };
     let value = serde_json::to_value(&accepted)?;
     assert_eq!(value["queued"], true);
     assert_eq!(value["queueDepth"], 2);
     assert_eq!(value["dropped"], 1);
+    assert_eq!(value["entryId"], "qe-3");
     assert_eq!(serde_json::from_value::<TurnAccepted>(value)?, accepted);
 
     let empty_take = TurnQueueTakeLatestResult {
         session_id: "s".to_string(),
         text: None,
+        entry_id: None,
         queue_depth: 0,
     };
     let value = serde_json::to_value(&empty_take)?;
@@ -712,6 +716,8 @@ fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(
         previews: vec!["first".to_string(), "second".to_string()],
         entry_ids: vec!["qe-1".to_string(), "qe-2".to_string()],
         queued_for_secs: vec![5, 90],
+        dispatched_entry_ids: Some(vec!["qe-ran".into()]),
+        discarded_entry_ids: vec!["qe-dropped".into()],
         dropped_total: 4,
     };
     let value = serde_json::to_value(&status)?;
@@ -720,6 +726,8 @@ fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(
     assert_eq!(value["entryIds"], serde_json::json!(["qe-1", "qe-2"]));
     assert_eq!(value["queuedForSecs"], serde_json::json!([5, 90]));
     assert_eq!(value["droppedTotal"], 4);
+    assert_eq!(value["dispatchedEntryIds"], serde_json::json!(["qe-ran"]));
+    assert_eq!(value["discardedEntryIds"], serde_json::json!(["qe-dropped"]));
     assert_eq!(serde_json::from_value::<TurnQueueStatus>(value)?, status);
     let remove_json = serde_json::json!({ "sessionId": "s", "removed": true, "queueDepth": 2 });
     let remove = serde_json::from_value::<TurnQueueRemoveResult>(remove_json)?;

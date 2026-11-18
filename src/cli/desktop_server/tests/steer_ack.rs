@@ -74,6 +74,15 @@ async fn steer_rejection_keeps_the_addressed_row_available_for_dispatch() {
 
 #[tokio::test]
 async fn steer_ack_after_turn_replacement_keeps_the_row_queued() {
+    steer_receipt_after_turn_changes(true).await;
+}
+
+#[tokio::test]
+async fn steer_acceptance_after_terminal_prevents_duplicate_dispatch() {
+    steer_receipt_after_turn_changes(false).await;
+}
+
+async fn steer_receipt_after_turn_changes(replaced: bool) {
     let directory = tempfile::tempdir().expect("workspace");
     let workspace = directory.path().to_path_buf();
     let (context, mut notifications) = test_service_context(test_startup_context(&workspace), workspace);
@@ -125,19 +134,31 @@ async fn steer_ack_after_turn_replacement_keeps_the_row_queued() {
         panic!("expected follow-up steer");
     };
 
-    context.state.lock().await.active_turn_id = Some("turn-2".into());
+    {
+        let mut state = context.state.lock().await;
+        assert_eq!(state.take_active_turn("session").as_deref(), Some("turn-1"));
+        assert!(state.pop_next_queued_turn().is_none(), "receipt owns the queue handoff");
+        if replaced {
+            state.active_turn_id = Some("turn-2".into());
+        }
+    }
     steer_msg.resolve(SteerOutcome::Accepted { intent_id: "stale-intent".into() });
 
     let notification = notifications.recv().await.expect("steer result notification");
     assert_eq!(notification.method, protocol::method::TURN_STEER_RESULT);
     let outcome: protocol::TurnSteerResultNotification =
         serde_json::from_value(notification.params).expect("steer result DTO");
-    assert!(!outcome.accepted, "a stale acceptance must not remove the row");
-    assert_eq!(outcome.reason, Some(protocol::TurnSteerRejection::Superseded));
+    assert_eq!(outcome.accepted, !replaced);
+    assert_eq!(outcome.reason, replaced.then_some(protocol::TurnSteerRejection::Superseded));
     assert_eq!(steered.receipt_id, outcome.receipt_id);
     let state = context.state.lock().await;
-    assert_eq!(state.queue.len(), 1);
-    assert_eq!(state.queue.front().expect("queued entry").entry_id(), entry_id);
+    assert!(state.queued_steer_entry_id.is_none());
+    assert_eq!(state.queue.len(), usize::from(replaced));
+    if replaced {
+        assert_eq!(state.queue.front().expect("queued entry").entry_id(), entry_id);
+    } else {
+        assert!(state.active_turn_id.is_none(), "accepted text never starts a second turn");
+    }
     drop(state);
 
     drop(exit_sender);

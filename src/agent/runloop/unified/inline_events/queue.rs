@@ -91,6 +91,14 @@ pub(crate) fn pop_batched_submission(
     queue: &mut VecDeque<QueuedInput>,
     prefer_latest_once: &mut bool,
 ) -> Option<QueuedInput> {
+    pop_batched_submission_recording(queue, prefer_latest_once, |_| {})
+}
+
+pub(crate) fn pop_batched_submission_recording(
+    queue: &mut VecDeque<QueuedInput>,
+    prefer_latest_once: &mut bool,
+    mut record: impl FnMut(&QueuedInput),
+) -> Option<QueuedInput> {
     // A Ctrl+Enter "run the latest now" promotion must stay a single-turn
     // dispatch: merging the newest item with older FIFO items would batch
     // turns the user asked to run individually.
@@ -101,6 +109,7 @@ pub(crate) fn pop_batched_submission(
     } else {
         queue.pop_front()?
     };
+    record(&batch);
     // Only batchable (Ctrl+Enter) submissions coalesce, and never a
     // submission carrying attachments — the association between an image
     // and its message must stay intact. A plain Enter that reached the
@@ -137,6 +146,7 @@ pub(crate) fn pop_batched_submission(
         let Some(next) = queue.pop_front() else {
             break;
         };
+        record(&next);
         batched_count += 1;
         if needs_separator {
             batch.input.text.push_str("\n\n");

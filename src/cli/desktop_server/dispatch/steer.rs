@@ -21,69 +21,79 @@ fn map_steer_rejection(reason: SteerRejection) -> protocol::TurnSteerRejection {
     }
 }
 
-/// Apply a runtime steer receipt outside the request path. The state lock is
-/// acquired only for the reconciliation itself, never while awaiting the
-/// receipt, so notifications and other requests keep flowing.
+/// Identifies the submitted steer across turn completion and session replacement.
+struct PendingSteer {
+    session_id: String,
+    turn_id: String,
+    receipt_id: String,
+    entry_id: String,
+}
+
+/// Resolve the receipt before any queued turn can take the reserved prompt.
 async fn resolve_steer_receipt(
     state: std::sync::Arc<Mutex<ServerState>>,
     notifications: mpsc::Sender<protocol::Notification>,
-    session_id: &str,
-    turn_id: &str,
-    receipt_id: &str,
-    entry_id: &str,
+    turn_finished: std::sync::Arc<Notify>,
+    PendingSteer { session_id, turn_id, receipt_id, entry_id }: PendingSteer,
     outcome: SteerOutcome,
 ) {
     let (accepted, reason, intent_id) = match outcome {
         SteerOutcome::Accepted { intent_id } => (true, None, intent_id),
         SteerOutcome::Rejected { reason } => (false, Some(map_steer_rejection(reason)), String::new()),
     };
-    let (current, queue_status, queue_depth) = {
+    // Reserve notification capacity before taking the state lock. Applying
+    // the result and publishing it together keeps later queue snapshots from
+    // exposing the removal before the client learns which entry it was.
+    let permit = notifications.reserve().await.ok();
+    let drained = {
         let mut state = state.lock().await;
-        let current =
-            state.session_id.as_deref() == Some(session_id) && state.active_turn_id.as_deref() == Some(turn_id);
-        let accepted_now = current && accepted;
-        if accepted_now
-            && !entry_id.is_empty()
+        let same_session = state.session_id.as_deref() == Some(session_id.as_str());
+        let reserved = same_session && state.queued_steer_entry_id.as_deref() == Some(entry_id.as_str());
+        let current = same_session
+            && (state.active_turn_id.as_deref() == Some(turn_id.as_str())
+                || (reserved && state.active_turn_id.is_none()));
+        let accepted = current && accepted;
+        if accepted
+            && reserved
             && let Some(position) = state.queue.iter().position(|queued| queued.entry_id() == entry_id)
         {
             state.queue.remove(position);
         }
-        let queue_status = accepted_now.then(|| state.queue_status(session_id));
-        (current, queue_status, state.queue.len())
+        let notification = protocol::TurnSteerResultNotification {
+            session_id: session_id.clone(),
+            turn_id,
+            receipt_id,
+            entry_id,
+            accepted,
+            reason: if current {
+                reason
+            } else {
+                Some(protocol::TurnSteerRejection::Superseded)
+            },
+            intent_id,
+            queue_depth: state.queue.len(),
+        };
+        if let Some(permit) = permit {
+            permit.send(protocol::Notification {
+                jsonrpc: "2.0".into(),
+                method: protocol::method::TURN_STEER_RESULT.into(),
+                params: serde_json::to_value(notification).unwrap_or(Value::Null),
+            });
+        }
+        if accepted && reserved {
+            publish_queue_status_sync(&notifications, &state.queue_status(&session_id));
+        }
+        if reserved {
+            state.queued_steer_entry_id = None;
+            state.pop_next_queued_turn()
+        } else {
+            None
+        }
     };
-    let accepted = current && accepted;
-    let reason = if current {
-        reason
-    } else {
-        Some(protocol::TurnSteerRejection::Superseded)
-    };
-    let notification = protocol::TurnSteerResultNotification {
-        session_id: session_id.to_string(),
-        turn_id: turn_id.to_string(),
-        receipt_id: receipt_id.to_string(),
-        entry_id: entry_id.to_string(),
-        accepted,
-        reason,
-        intent_id,
-        queue_depth,
-    };
-    if let Err(error) = send_notification(
-        &notifications,
-        protocol::method::TURN_STEER_RESULT,
-        serde_json::to_value(notification).unwrap_or(Value::Null),
-    )
-    .await
+    if let Some(drained) = drained
+        && let Err(error) = dispatch_drained_turn(&state, &notifications, &turn_finished, &session_id, drained).await
     {
-        tracing::warn!(target: "vtcode.desktop", %error, "could not publish steer result");
-    }
-    // Publish the snapshot last. The client removes the addressed row when it
-    // receives the steer result; if the snapshot arrived first, its depth-based
-    // front-truncation would drop the wrong row when the steered entry is not
-    // the oldest (the service removes an arbitrary row, not just the front).
-    // Result-first restores the client's "confirmed entries form a prefix"
-    // invariant before the snapshot reconciles it.
-    if let Some(status) = queue_status {
-        publish_queue_status_sync(&notifications, &status);
+        tracing::warn!(target: "vtcode.desktop", %error, "could not resume queue after steering");
     }
 }
 
@@ -95,7 +105,7 @@ pub(super) async fn handle_turn_steer(context: &ServiceContext, params: protocol
     // addressed row stays owned by the client until the runtime's terminal
     // acknowledgment arrives; no lock is held while awaiting it.
     let (steered, receipt_id, queue_depth) = {
-        let state = context.state.lock().await;
+        let mut state = context.state.lock().await;
         if state.session_id.as_deref() != Some(params.session_id.as_str()) {
             bail!("session is not selected");
         }
@@ -104,12 +114,15 @@ pub(super) async fn handle_turn_steer(context: &ServiceContext, params: protocol
             .as_deref()
             .and_then(|entry_id| state.queue.iter().position(|queued| queued.entry_id() == entry_id));
         let queued_input_matches = match params.entry_id.as_deref() {
-            Some(_) => queue_position.is_some_and(|position| {
-                state
-                    .queue
-                    .get(position)
-                    .is_some_and(|queued| queued.input.text == params.text && !queued.input.has_attachments())
-            }),
+            Some(_) => {
+                state.queued_steer_entry_id.is_none()
+                    && queue_position.is_some_and(|position| {
+                        state
+                            .queue
+                            .get(position)
+                            .is_some_and(|queued| queued.input.text == params.text && !queued.input.has_attachments())
+                    })
+            }
             None => true,
         };
         let turn_id = state.active_turn_id.clone();
@@ -123,26 +136,23 @@ pub(super) async fn handle_turn_steer(context: &ServiceContext, params: protocol
                 Some(sender) => {
                     let (steer, receipt) = FollowUpSteer::channel(params.text.clone());
                     if sender.send(SteeringMessage::FollowUpInput(steer)).is_ok() {
+                        if params.entry_id.is_some() {
+                            state.queued_steer_entry_id.clone_from(&params.entry_id);
+                        }
+                        let pending = PendingSteer {
+                            session_id: params.session_id.clone(),
+                            turn_id: turn_id.clone().unwrap_or_default(),
+                            receipt_id: receipt_id.clone(),
+                            entry_id: params.entry_id.clone().unwrap_or_default(),
+                        };
                         let state = context.state.clone();
                         let notifications = context.notifications.clone();
-                        let receipt_id_for_task = receipt_id.clone();
-                        let session_id = params.session_id.clone();
-                        let turn_id_for_task = turn_id.clone().unwrap_or_default();
-                        let entry_id = params.entry_id.clone().unwrap_or_default();
+                        let turn_finished = context.turn_finished.clone();
                         tokio::spawn(async move {
                             let outcome = receipt
                                 .await
                                 .unwrap_or(SteerOutcome::Rejected { reason: SteerRejection::Superseded });
-                            resolve_steer_receipt(
-                                state,
-                                notifications,
-                                &session_id,
-                                &turn_id_for_task,
-                                &receipt_id_for_task,
-                                &entry_id,
-                                outcome,
-                            )
-                            .await;
+                            resolve_steer_receipt(state, notifications, turn_finished, pending, outcome).await;
                         });
                         true
                     } else {

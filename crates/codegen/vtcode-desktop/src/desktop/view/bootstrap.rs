@@ -737,6 +737,7 @@ impl DesktopView {
             first_submission: None,
             queued_submissions: Vec::new(),
             queue_depth: 0,
+            queue_has_dispatch_ids: false,
             queue_previews: Vec::new(),
             queue_dropped_total: 0,
             take_latest_pending: false,

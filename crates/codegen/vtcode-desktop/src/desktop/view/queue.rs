@@ -12,16 +12,56 @@ use super::*;
 
 /// One prompt waiting behind the running turn.
 pub(super) struct QueuedSubmission {
-    /// Stable client echo id for the transcript row.
+    /// Stable client identity, reused when the message reaches the transcript.
     pub(super) echo_id: String,
-    /// Service-minted bounded entry id (from the ack's status snapshot or a
-    /// later `turn/queue-status`), matching the entry one-to-one. Absent on
-    /// optimistic entries until the next snapshot.
+    /// Service-minted entry id, assigned on queue acceptance.
     pub(super) entry_id: Option<String>,
     /// Submitted prompt text.
     pub(super) prompt: String,
+    /// Attachment card metadata retained until dispatch.
+    pub(super) user_attachments: Vec<UserAttachment>,
     /// Whether the service acknowledged this entry (vs optimistic).
     pub(super) acknowledged: bool,
+}
+
+impl QueuedSubmission {
+    pub(super) fn from_draft(draft: SubmissionDraft, acknowledged: bool) -> Self {
+        let user_attachments = Self::attachments(&draft);
+        Self {
+            echo_id: draft.echo_id,
+            entry_id: None,
+            prompt: draft.prompt,
+            user_attachments,
+            acknowledged,
+        }
+    }
+
+    fn attachments(draft: &SubmissionDraft) -> Vec<UserAttachment> {
+        draft
+            .attachments
+            .iter()
+            .map(|attachment| UserAttachment {
+                path: attachment.path.clone(),
+                byte_len: attachment.text.len(),
+                is_image: files::is_image_path(&attachment.path),
+            })
+            .collect()
+    }
+
+    fn echo(id: &str, prompt: &str, user_attachments: Vec<UserAttachment>) -> TranscriptItem {
+        let mut item = TranscriptItem::new(
+            id.to_string(),
+            TranscriptRole::User.as_str().into(),
+            rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string().into(),
+            prompt.to_string(),
+        );
+        item.user_attachments = user_attachments;
+        item
+    }
+
+    pub(super) fn into_echo(self) -> TranscriptItem {
+        Self::echo(&self.echo_id, &self.prompt, self.user_attachments)
+    }
 }
 
 /// Which queue surface the composer shows.
@@ -65,42 +105,21 @@ impl DesktopView {
             return Err(draft);
         }
         self.ensure_session_title(&session_id, &draft.prompt);
-        self.push_submission_echo(&draft);
-        self.queued_submissions.push(QueuedSubmission {
-            echo_id: draft.echo_id.clone(),
-            entry_id: None,
-            prompt: draft.prompt.clone(),
-            acknowledged: false,
-        });
-        // The queue entry keeps no attachments: the draft's images are consumed
-        // with the send, so their thumbnails must go with them.
+        self.queued_submissions.push(QueuedSubmission::from_draft(draft, false));
+        // Only card metadata stays with the queue; the service owns the payload.
         self.prune_attachment_thumbnails();
         self.transcript.follow_latest();
         cx.notify();
         Ok(())
     }
 
-    /// Echo a user submission into the transcript; shared by immediate and
-    /// queued submits. Attachments travel as structured card data (rendered
-    /// above the prompt); only the bare prompt reaches the Markdown body, so
-    /// filenames can no longer inject Markdown into the echo.
+    /// Echo an immediate submission into the transcript.
     pub(super) fn push_submission_echo(&mut self, draft: &SubmissionDraft) {
-        let mut item = TranscriptItem::new(
-            draft.echo_id.clone(),
-            TranscriptRole::User.as_str().into(),
-            rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string().into(),
-            draft.prompt.clone(),
-        );
-        item.user_attachments = draft
-            .attachments
-            .iter()
-            .map(|attachment| UserAttachment {
-                path: attachment.path.clone(),
-                byte_len: attachment.text.len(),
-                is_image: files::is_image_path(&attachment.path),
-            })
-            .collect();
-        self.transcript.push(item);
+        self.transcript.push(QueuedSubmission::echo(
+            &draft.echo_id,
+            &draft.prompt,
+            QueuedSubmission::attachments(draft),
+        ));
     }
 
     /// Fill an empty session title from the submission; shared by immediate
@@ -117,9 +136,10 @@ impl DesktopView {
 
     /// Confirm the oldest unconfirmed queued entry (FIFO: the service
     /// responds in request order). Returns whether an entry was confirmed.
-    pub(super) fn confirm_oldest_queued_submission(&mut self) -> bool {
+    pub(super) fn confirm_oldest_queued_submission(&mut self, entry_id: Option<String>) -> bool {
         if let Some(entry) = self.queued_submissions.iter_mut().find(|entry| !entry.acknowledged) {
             entry.acknowledged = true;
+            entry.entry_id = entry_id;
             true
         } else {
             false
@@ -129,58 +149,85 @@ impl DesktopView {
     /// Promote the oldest unconfirmed queued entry to the running turn: the
     /// service ran it immediately instead of queueing it (idle race), so it
     /// leaves the pending list — no queue snapshot follows an immediate
-    /// dispatch to clear it. Its transcript echo stays as the turn's user
-    /// row. Returns whether an entry was promoted.
+    /// dispatch to clear it. Adds the transcript echo when promoted.
     pub(super) fn promote_oldest_queued_submission(&mut self) -> bool {
         if let Some(index) = self.queued_submissions.iter().position(|entry| !entry.acknowledged) {
-            let _ = self.queued_submissions.remove(index);
+            let entry = self.queued_submissions.remove(index);
+            self.transcript.push(entry.into_echo());
+            self.transcript.follow_latest();
             true
         } else {
             false
         }
     }
 
-    /// Converge the pending list to an authoritative depth: confirmed
-    /// entries past it dispatched (their transcript rows stay as
-    /// history). Unconfirmed entries stay — their acks are still in
-    /// flight. Shared by snapshots, take-latest, and remove responses
-    /// so every depth report clears the same way.
+    /// Update the depth. Legacy services report FIFO dispatch implicitly
+    /// through depth decreases, so their confirmed prefix supplies the echoes.
     pub(super) fn truncate_dispatched_to_depth(&mut self, depth: usize) {
+        self.queue_depth = depth;
+        if self.queue_has_dispatch_ids {
+            return;
+        }
         // Confirmed entries always form a prefix: confirmation marks the
         // oldest unconfirmed entry, demotion appends only when nothing is
         // unconfirmed, and new entries append unconfirmed. Truncating the
         // front therefore only ever removes confirmed (dispatched) entries.
         let confirmed = self.queued_submissions.iter().filter(|entry| entry.acknowledged).count();
-        if confirmed > depth {
-            drop(self.queued_submissions.drain(..confirmed - depth));
+        for entry in self.queued_submissions.drain(..confirmed.saturating_sub(depth)) {
+            self.transcript.push(entry.into_echo());
         }
-        self.queue_depth = depth;
     }
 
     /// Whether the newest entry can be popped back into the composer: no
     /// request in flight and every entry acknowledged, so the service pop
     /// maps to the newest local row exactly.
     pub(super) fn take_latest_ready(&self) -> bool {
-        !self.take_latest_pending && !self.queued_submissions.iter().any(|entry| !entry.acknowledged)
+        self.steer_pending.is_empty()
+            && !self.take_latest_pending
+            && !self.queued_submissions.iter().any(|entry| !entry.acknowledged)
     }
 
-    /// Apply an authoritative queue snapshot: reconcile entries, record the
-    /// depth, previews, ids, elapsed seconds, and drop count. Confirmed entries
-    /// beyond the service depth dispatched (their transcript rows stay as
-    /// history); every unconfirmed entry is kept because its ack is still in
-    /// flight.
+    pub(super) fn discard_queued_entries(&mut self, entry_ids: &[String]) {
+        self.queued_submissions
+            .retain(|entry| entry.entry_id.as_ref().is_none_or(|id| !entry_ids.contains(id)));
+    }
+
+    /// Apply service dispatch and discard outcomes, along with queue previews.
     pub(super) fn apply_queue_status(&mut self, status: protocol::TurnQueueStatus) {
         if self.selected_session_id.as_deref() != Some(status.session_id.as_str()) {
             return;
         }
-        self.truncate_dispatched_to_depth(status.queue_depth);
-        // Bind optimistic entries to their wire identity: the service lists
-        // its queue oldest first, and confirmed entries (whose acks arrived)
-        // own the leading ids. Optimistic entries wait for a later snapshot.
-        let mut ids = status.entry_ids.into_iter();
-        for entry in self.queued_submissions.iter_mut().filter(|entry| entry.acknowledged) {
-            let Some(id) = ids.next() else { break };
-            entry.entry_id = Some(id);
+        if let Some(dispatched) = status.dispatched_entry_ids {
+            self.queue_has_dispatch_ids = true;
+            for id in dispatched {
+                if let Some(index) = self
+                    .queued_submissions
+                    .iter()
+                    .position(|entry| entry.entry_id.as_deref() == Some(&id))
+                {
+                    let entry = self.queued_submissions.remove(index);
+                    self.transcript.push(entry.into_echo());
+                }
+            }
+            self.discard_queued_entries(&status.discarded_entry_ids);
+            self.queue_depth = status.queue_depth;
+        } else {
+            let dropped = status.dropped_total.saturating_sub(self.queue_dropped_total);
+            let confirmed = self.queued_submissions.iter().take_while(|entry| entry.acknowledged).count();
+            let evicted = dropped
+                .min(confirmed)
+                .min(self.queued_submissions.len().saturating_sub(status.queue_depth));
+            drop(self.queued_submissions.drain(..evicted));
+            self.truncate_dispatched_to_depth(status.queue_depth);
+            // Legacy services only provide the oldest entry ids via snapshots.
+            for (entry, id) in self
+                .queued_submissions
+                .iter_mut()
+                .filter(|entry| entry.acknowledged)
+                .zip(status.entry_ids)
+            {
+                entry.entry_id = Some(id);
+            }
         }
         self.queue_previews = status.previews;
         if status.dropped_total > self.queue_dropped_total {
@@ -189,7 +236,7 @@ impl DesktopView {
             // submit like any other composer error.
             self.error = Some(rust_i18n::t!("app.composer.queue_dropped", dropped = status.dropped_total).to_string());
         }
-        self.queue_dropped_total = status.dropped_total;
+        self.queue_dropped_total = self.queue_dropped_total.max(status.dropped_total);
     }
 
     /// Pop the newest queued message back into the composer for editing.
@@ -204,7 +251,7 @@ impl DesktopView {
         let Some(session_id) = self.selected_session_id.clone() else {
             return;
         };
-        if self.queued_submissions.is_empty() && self.queue_depth == 0 {
+        if self.visible_queue_depth() == 0 {
             return;
         }
         if !self.composer.read(cx).value().is_empty() {
@@ -219,32 +266,35 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Remove one queued message by its service-minted entry id. The row is
-    /// removed optimistically when the local entry matches; the removal
-    /// stands even if the service reports it already left via dispatch.
-    /// Entries without an id (optimistic, unsnapped) cannot be removed
-    /// until their snapshot arrives.
+    /// Remove a service-addressed entry, retaining its payload until the
+    /// service reports whether removal won the race with dispatch.
     pub(super) fn remove_queued_submission(&mut self, echo_id: &str, cx: &mut Context<Self>) {
+        if self.steer_pending.contains_key(echo_id) {
+            return;
+        }
         let Some(session_id) = self.selected_session_id.clone() else {
             return;
         };
-        let Some(entry) = self.queued_submissions.iter().find(|entry| entry.echo_id == echo_id) else {
+        let Some((position, entry)) = self
+            .queued_submissions
+            .iter()
+            .enumerate()
+            .find(|(_, entry)| entry.echo_id == echo_id)
+        else {
             return;
         };
         let Some(entry_id) = entry.entry_id.clone() else {
             return;
         };
-        let position = self.queued_submissions.iter().position(|entry| entry.echo_id == echo_id);
-        if let Some(position) = position {
-            let removed = self.queued_submissions.remove(position);
-            self.transcript.remove(&removed.echo_id);
-        }
-        // The optimistic row hides immediately; the removal response and
-        // the resulting snapshot converge the depth right after.
-        if !self.request(
+        if self.request(
             protocol::method::TURN_QUEUE_REMOVE,
             json!({ keys::SESSION_ID: session_id, keys::ENTRY_ID: entry_id }),
         ) {
+            if !self.queue_has_dispatch_ids {
+                let entry = self.queued_submissions.remove(position);
+                self.transcript.remove(&entry.echo_id);
+            }
+        } else {
             self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
         cx.notify();
@@ -289,6 +339,9 @@ impl DesktopView {
     /// prompt. Only service-addressed rows (those with a bound entry id) can
     /// be edited; the shared input is moved to the newly selected row.
     pub(super) fn start_queue_edit(&mut self, echo_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.steer_pending.contains_key(echo_id) {
+            return;
+        }
         // One edit at a time: the pending rollback slot is not correlated to a
         // response id, so a second in-flight edit would restore the wrong row.
         if self.queue_edit_pending.is_some() {
@@ -311,6 +364,42 @@ impl DesktopView {
         cx.notify();
     }
 
+    pub(super) fn apply_queued_steer_result(
+        &mut self,
+        outcome: protocol::TurnSteerResultNotification,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_session_id.as_deref() != Some(outcome.session_id.as_str()) {
+            return;
+        }
+        let echo_id = self
+            .steer_pending
+            .iter()
+            .find(|(_, receipt_id)| **receipt_id == outcome.receipt_id)
+            .map(|(echo_id, _)| echo_id.clone());
+        if let Some(echo_id) = echo_id {
+            let _ = self.steer_pending.remove(&echo_id);
+            if outcome.accepted {
+                // The service removed the addressed row atomically with
+                // admission; converge our mirror to its depth.
+                if let Some(index) = self.queued_submissions.iter().position(|row| row.echo_id == echo_id) {
+                    let row = self.queued_submissions.remove(index);
+                    self.transcript.push(row.into_echo());
+                    if index < self.queue_previews.len() {
+                        let _ = self.queue_previews.remove(index);
+                    }
+                }
+                self.truncate_dispatched_to_depth(outcome.queue_depth);
+            } else {
+                self.error = Some(format!(
+                    "The prompt stayed queued: steering was rejected ({:?}).",
+                    outcome.reason.unwrap_or(protocol::TurnSteerRejection::Superseded)
+                ));
+            }
+            cx.notify();
+        }
+    }
+
     /// Close the inline editor without changing the queued prompt.
     pub(super) fn cancel_queue_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.editing_queue_echo_id.take().is_none() {
@@ -322,8 +411,7 @@ impl DesktopView {
 
     /// Commit the inline edit: replace this entry's text in place on the
     /// service (keeping FIFO position and entry id) and update the mirror
-    /// optimistically. The transcript echo stays as the original submission
-    /// record; only the prompt awaiting dispatch changes.
+    /// optimistically. The edited prompt supplies the eventual transcript echo.
     pub(super) fn commit_queue_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(echo_id) = self.editing_queue_echo_id.clone() else {
             return;
@@ -367,10 +455,21 @@ impl DesktopView {
         cx.notify();
     }
 
+    fn visible_queue_depth(&self) -> usize {
+        // Modern services acknowledge every Desktop draft by ID. Older
+        // preview snapshots can arrive after a dispatch and must not bring
+        // back a row whose exact entry has already left the local queue.
+        if self.queue_has_dispatch_ids {
+            self.queued_submissions.len()
+        } else {
+            self.queued_submissions.len().max(self.queue_depth)
+        }
+    }
+
     /// Which queue surface the composer shows: the entry list when
     /// something is queued, otherwise nothing.
     pub(super) fn queue_panel_state(&self) -> QueuePanelState {
-        if !self.queued_submissions.is_empty() || self.queue_depth > 0 {
+        if self.visible_queue_depth() > 0 {
             QueuePanelState::Entries
         } else {
             QueuePanelState::Hidden
@@ -385,7 +484,7 @@ impl DesktopView {
     /// non-empty queue is never hidden.
     pub(super) fn render_queued_messages(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
-        let count = self.queued_submissions.len().max(self.queue_depth);
+        let count = self.visible_queue_depth();
         let title = rust_i18n::t!("app.composer.queued_count", count = count).to_string();
         // (row index, echo id, entry id, prompt) per row, oldest first.
         // Authoritative previews (no local entries) carry no ids: their rows
@@ -432,6 +531,11 @@ impl DesktopView {
             // composer; the count stays on the shared title spine.
             .child(div().w_full().flex().items_center().px_1().child(row_title(title, &colors)))
             .children(rows.into_iter().map(|(row_index, echo_id, entry_id, prompt)| {
+                let steer_pending = echo_id.as_ref().is_some_and(|id| self.steer_pending.contains_key(id));
+                let steer_available = self
+                    .queued_submissions
+                    .get(row_index)
+                    .is_some_and(|entry| !entry.prompt.trim().is_empty() && entry.user_attachments.is_empty());
                 let remove_label = rust_i18n::t!("app.composer.remove_queued").to_string();
                 // Each entry reads as one card in a compact stack: its own
                 // surface, a hairline boundary, and stable icon/text/action
@@ -519,6 +623,7 @@ impl DesktopView {
                                 .child(
                                     desktop_button(queued_edit_element_id(row_index, echo_id.as_deref()))
                                         .icon(IconName::Pencil)
+                                        .disabled(steer_pending)
                                         .accessibility_label("Edit prompt".to_string())
                                         .tooltip("Edit prompt".to_string())
                                         .ghost()
@@ -536,7 +641,16 @@ impl DesktopView {
                                 .child(
                                     desktop_button(queued_steer_element_id(row_index, echo_id.as_deref()))
                                         .icon(IconName::ArrowRight)
-                                        .accessibility_label("Steer into the running turn".to_string())
+                                        .loading(steer_pending)
+                                        .disabled(!steer_available || !self.running || !self.steer_pending.is_empty())
+                                        .accessibility_label(
+                                            if steer_pending {
+                                                "Steering queued prompt"
+                                            } else {
+                                                "Steer into the running turn"
+                                            }
+                                            .to_string(),
+                                        )
                                         .tooltip("Steer into the running turn".to_string())
                                         .ghost()
                                         .xsmall()
@@ -553,6 +667,7 @@ impl DesktopView {
                                 .child(
                                     desktop_button(queued_remove_element_id(row_index, echo_id.as_deref()))
                                         .icon(IconName::Trash)
+                                        .disabled(steer_pending)
                                         .accessibility_label(remove_label.clone())
                                         .tooltip(remove_label)
                                         .ghost()
@@ -578,6 +693,7 @@ impl DesktopView {
     pub(super) fn clear_queue_state(&mut self) {
         self.queued_submissions.clear();
         self.queue_depth = 0;
+        self.queue_has_dispatch_ids = false;
         self.queue_previews.clear();
         self.queue_dropped_total = 0;
         self.take_latest_pending = false;
@@ -612,7 +728,7 @@ fn queued_remove_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit
 }
 
 /// Bounded steer-action element id, paired with its row.
-fn queued_steer_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit::ElementId {
+pub(super) fn queued_steer_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit::ElementId {
     gpui_kit::ElementId::named_usize("queued-steer", queued_row_discriminator(row_index, echo_id))
 }
 

@@ -185,6 +185,7 @@ fn running_confirm_warns_about_queued_prompts_only_when_queued(cx: &mut TestAppC
             echo_id: "echo-queued".into(),
             entry_id: None,
             prompt: "queued behind the turn".into(),
+            user_attachments: Vec::new(),
             acknowledged: false,
         });
     });

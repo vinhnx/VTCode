@@ -13,6 +13,7 @@ fn a_second_steer_is_suppressed_while_a_receipt_is_pending(cx: &mut TestAppConte
                 echo_id: echo.into(),
                 entry_id: Some(entry.into()),
                 prompt: prompt.into(),
+                user_attachments: Vec::new(),
                 acknowledged: true,
             });
         }
@@ -33,12 +34,14 @@ fn steer_result_acceptance_removes_only_the_addressed_row(cx: &mut TestAppContex
             echo_id: "echo-steer".into(),
             entry_id: Some("qe-1".into()),
             prompt: "ship it".into(),
+            user_attachments: Vec::new(),
             acknowledged: true,
         });
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-other".into(),
             entry_id: Some("qe-2".into()),
             prompt: "stay queued".into(),
+            user_attachments: Vec::new(),
             acknowledged: true,
         });
         let _ = view.steer_pending.insert("echo-steer".into(), "receipt-1".into());
@@ -56,6 +59,9 @@ fn steer_result_acceptance_removes_only_the_addressed_row(cx: &mut TestAppContex
         );
         assert_eq!(view.queued_submissions.len(), 1, "only the accepted row is removed");
         assert_eq!(view.queued_submissions[0].echo_id, "echo-other");
+        let ids: Vec<_> = view.transcript.items().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids.iter().filter(|id| **id == "echo-steer").count(), 1);
+        assert!(!ids.contains(&"echo-other"));
         assert!(view.steer_pending.is_empty());
         assert_eq!(view.queue_depth, 1);
     });
@@ -80,6 +86,7 @@ fn steering_a_middle_row_then_the_snapshot_keeps_the_other_rows(cx: &mut TestApp
                 echo_id: echo.into(),
                 entry_id: Some(entry.into()),
                 prompt: prompt.into(),
+                user_attachments: Vec::new(),
                 acknowledged: true,
             });
         }
@@ -131,6 +138,7 @@ fn steer_result_rejection_keeps_the_row_and_reports_reason(cx: &mut TestAppConte
             echo_id: "echo-steer".into(),
             entry_id: Some("qe-1".into()),
             prompt: "ship it".into(),
+            user_attachments: Vec::new(),
             acknowledged: true,
         });
         let _ = view.steer_pending.insert("echo-steer".into(), "receipt-2".into());

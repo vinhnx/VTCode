@@ -84,9 +84,15 @@ pub struct TurnAccepted {
     /// Queue depth after this acceptance.
     #[serde(default)]
     pub queue_depth: usize,
+    /// Service identity of the accepted queued draft.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_id: Option<String>,
     /// Oldest messages discarded by the queue cap while accepting this one.
     #[serde(default)]
     pub dropped: usize,
+    /// Queue entries evicted while accepting this prompt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub discarded_entry_ids: Vec<String>,
 }
 
 /// Parameters for cancelling an active turn.
@@ -174,6 +180,9 @@ pub struct TurnQueueTakeLatestParams {
 pub struct TurnQueueTakeLatestResult {
     /// Session that owns the queue.
     pub session_id: String,
+    /// The entry restored into the composer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_id: Option<String>,
     /// Popped message text, or `None` when the queue was empty.
     #[serde(default)]
     pub text: Option<String>,
@@ -199,6 +208,13 @@ pub struct TurnQueueStatus {
     /// falls back to newest-first take-latest and hides per-row actions.
     #[serde(default)]
     pub entry_ids: Vec<String>,
+    /// Entries delivered to the runtime by this update, in submission order.
+    /// Absent on older services. An empty list excludes dispatch as a cause.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatched_entry_ids: Option<Vec<String>>,
+    /// Entries explicitly discarded by the queue cap or a clear request.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub discarded_entry_ids: Vec<String>,
     /// Seconds since each entry was queued, oldest first, matching `previews`
     /// one-to-one. Absent (legacy services) hides the elapsed-time column.
     #[serde(default)]
@@ -224,6 +240,9 @@ pub struct TurnQueueRemoveParams {
 pub struct TurnQueueRemoveResult {
     /// Session that owns the queue.
     pub session_id: String,
+    /// The queue entry addressed by the request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_id: Option<String>,
     /// Whether the entry id matched a queued message and it was removed.
     pub removed: bool,
     /// Queue depth after the removal.

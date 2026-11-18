@@ -12,7 +12,7 @@ pub(crate) mod fast_mode;
 mod incremental_system_prompt;
 mod inline_events;
 pub(crate) mod instruction_audit;
-pub(crate) use inline_events::{QueuedInput, pop_batched_submission, push_capped};
+pub(crate) use inline_events::{MAX_QUEUED_INPUTS, QueuedInput, pop_batched_submission_recording, push_capped};
 mod intent_extractor;
 pub(crate) mod interactive_features;
 pub(crate) mod overlay_prompt;

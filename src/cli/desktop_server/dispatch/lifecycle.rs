@@ -97,6 +97,7 @@ pub async fn shutdown_current_session(context: &ServiceContext, cancel_active: b
             // Ephemeral queue state dies with the session; a queued prompt is
             // only meaningful while its runtime can dispatch it.
             state.queue.clear();
+            state.queued_steer_entry_id = None;
             state.queue_dropped_total = 0;
             state.interaction_registry.close_session(&session_id);
             state.pending_interactions.retain(|_, pending| pending.session_id != session_id);

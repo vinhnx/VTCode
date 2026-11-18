@@ -687,44 +687,8 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             Ok((serde_json::to_value(accepted)?, false))
         }
         method::TURN_QUEUE_EDIT => {
-            let params: protocol::TurnQueueEditParams = parse_params(&request.params)?;
-            // Keep the wire bounded: a queued prompt uses the same per-message
-            // budget as the batch drain so one edit cannot grow the queue
-            // without limit.
-            const MAX_EDIT_BYTES: usize = 64 * 1024;
-            if params.entry_id.is_empty() || params.entry_id.len() > protocol::MAX_QUEUE_ENTRY_ID_LEN {
-                bail!("invalid queue entry identity");
-            }
-            if params.text.is_empty() || params.text.len() > MAX_EDIT_BYTES {
-                bail!("edited prompt is empty or too long");
-            }
-            let (result, status) = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                let edited = state
-                    .queue
-                    .iter_mut()
-                    .find(|queued| queued.entry_id() == params.entry_id)
-                    .is_some_and(|queued| {
-                        queued.input.text = params.text.clone();
-                        true
-                    });
-                let status = edited.then(|| state.queue_status(&params.session_id));
-                (
-                    protocol::TurnQueueEditResult {
-                        session_id: params.session_id,
-                        edited,
-                        queue_depth: state.queue.len(),
-                    },
-                    status,
-                )
-            };
-            if let Some(status) = status {
-                publish_queue_status_sync(&context.notifications, &status);
-            }
-            Ok((serde_json::to_value(result)?, false))
+            let params = parse_params(&request.params)?;
+            Ok((turn_queue::edit_queued_turn(context, params).await?, false))
         }
         method::TURN_STEER => {
             let params: protocol::TurnSteerParams = parse_params(&request.params)?;
@@ -824,16 +788,18 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     }
                 }
                 if params.clear_queue && !state.queue.is_empty() {
-                    state.queue.clear();
-                    Some(state.queue_status(&params.session_id))
+                    let discarded_entry_ids = state.queue.drain(..).map(|entry| entry.entry_id()).collect();
+                    let mut status = state.queue_status(&params.session_id);
+                    status.discarded_entry_ids = discarded_entry_ids;
+                    Some(status)
                 } else {
                     None
                 }
             };
-            if let Some(status) = queue_status {
-                publish_queue_status_sync(&context.notifications, &status);
+            if let Some(status) = &queue_status {
+                publish_queue_status_sync(&context.notifications, status);
             }
-            Ok((json!({ "cancelRequested": true }), false))
+            Ok((json!({ "cancelRequested": true, "queueStatus": queue_status }), false))
         }
         method::EXEC_FORCE_CANCEL | method::EXEC_BACKGROUND => {
             let params: protocol::SessionIdParams = parse_params(&request.params)?;
@@ -876,57 +842,12 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             Ok((json!({ "accepted": true }), false))
         }
         method::TURN_QUEUE_TAKE_LATEST => {
-            let params: protocol::TurnQueueTakeLatestParams = parse_params(&request.params)?;
-            let (result, status) = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                // Text-only restore mirrors the CLI queue edit: attachments
-                // stay with their dispatched turn and the composer re-attaches
-                // on resubmit.
-                let text = state.queue.pop_back().map(|queued| queued.input.text);
-                let result = protocol::TurnQueueTakeLatestResult {
-                    session_id: params.session_id,
-                    queue_depth: state.queue.len(),
-                    text,
-                };
-                let status = result.text.is_some().then(|| state.queue_status(&result.session_id));
-                (result, status)
-            };
-            if let Some(status) = status {
-                publish_queue_status_sync(&context.notifications, &status);
-            }
-            Ok((serde_json::to_value(result)?, false))
+            let params = parse_params(&request.params)?;
+            Ok((turn_queue::take_latest_queued_turn(context, params).await?, false))
         }
         method::TURN_QUEUE_REMOVE => {
-            let params: protocol::TurnQueueRemoveParams = parse_params(&request.params)?;
-            let (result, status) = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                // Accepting removes never dispatch, so an empty queue stays a
-                // clean `removed: false` instead of an error: a stale id (a
-                // concurrent drain won the race) is a normal outcome the
-                // client reconciles from the published snapshot.
-                let position = state.queue.iter().position(|queued| queued.entry_id() == params.entry_id);
-                let removed = position.is_some();
-                if let Some(position) = position {
-                    state.queue.remove(position);
-                }
-                let status = removed.then(|| state.queue_status(&params.session_id));
-                let result = protocol::TurnQueueRemoveResult {
-                    session_id: params.session_id,
-                    removed,
-                    queue_depth: state.queue.len(),
-                };
-                (result, status)
-            };
-            if let Some(status) = status {
-                publish_queue_status_sync(&context.notifications, &status);
-            }
-            Ok((serde_json::to_value(result)?, false))
+            let params = parse_params(&request.params)?;
+            Ok((turn_queue::remove_queued_turn(context, params).await?, false))
         }
         method::INTERACTION_RESPOND => {
             let response: protocol::InteractionResponse = parse_params(&request.params)?;

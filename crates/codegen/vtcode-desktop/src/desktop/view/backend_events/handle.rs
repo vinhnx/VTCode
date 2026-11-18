@@ -392,38 +392,39 @@ impl DesktopView {
                             return;
                         };
                         if accepted.queued {
-                            if !self.confirm_oldest_queued_submission() {
+                            self.queue_has_dispatch_ids |= accepted.entry_id.is_some();
+                            self.queue_depth = accepted.queue_depth;
+                            self.discard_queued_entries(&accepted.discarded_entry_ids);
+                            if !self.confirm_oldest_queued_submission(accepted.entry_id.clone()) {
                                 // No unconfirmed entry: the ack belongs to an
                                 // in-flight immediate submit that the service
                                 // queued behind a fresh turn (demotion race).
                                 if let Some(draft) = self.pending_submission.take() {
                                     self.pending_first_submission = false;
-                                    self.queued_submissions.push(QueuedSubmission {
-                                        echo_id: draft.echo_id,
-                                        entry_id: None,
-                                        prompt: draft.prompt,
-                                        acknowledged: true,
-                                    });
+                                    self.transcript.remove(&draft.echo_id);
+                                    let mut entry = QueuedSubmission::from_draft(draft, true);
+                                    entry.entry_id = accepted.entry_id;
+                                    self.queued_submissions.push(entry);
                                     self.prune_attachment_thumbnails();
                                 }
                             }
                             self.try_send_pending_cancel(false);
                             return;
                         }
-                        // Immediate ack: the pending submit, or a queued entry
-                        // the service promoted when the session went idle first.
-                        // Lifecycle events can complete the turn before the request response arrives.
-                        // An already-started turn owns its ack: queued entries
-                        // are newer submissions whose own acks are still in
-                        // flight, so promotion only runs while idle. The
-                        // promoted entry leaves the pending list: it is the
-                        // running turn now, and no queue snapshot follows an
-                        // immediate dispatch to clear it.
-                        if self.pending_submission.is_none()
-                            && self.active_turn_id.is_none()
-                            && !self.promote_oldest_queued_submission()
-                        {
-                            return;
+                        // A response for the already started turn can arrive
+                        // after TurnStarted cleared its immediate submit. A
+                        // different id proves a queued draft won the idle race.
+                        if self.pending_submission.is_none() {
+                            if self.active_turn_id.as_deref() == Some(accepted.turn_id.as_str())
+                                || self.finished_turn_id.as_deref() == Some(accepted.turn_id.as_str())
+                                || !self.promote_oldest_queued_submission()
+                            {
+                                return;
+                            }
+                            if self.active_turn_id.is_some() {
+                                // The prior turn's terminal events are still in transit.
+                                return;
+                            }
                         }
                         self.pending_submission = None;
                         self.pending_first_submission = false;
@@ -450,10 +451,14 @@ impl DesktopView {
                             self.truncate_dispatched_to_depth(depth);
                             return;
                         };
-                        // Remove the newest confirmed entry (the request-time
-                        // newest; anything newer arrived after the request).
-                        // The service text is authoritative.
-                        if let Some(index) = self.queued_submissions.iter().rposition(|entry| entry.acknowledged) {
+                        let index = if let Some(entry_id) = taken.entry_id {
+                            self.queued_submissions
+                                .iter()
+                                .position(|entry| entry.entry_id.as_ref() == Some(&entry_id))
+                        } else {
+                            self.queued_submissions.iter().rposition(|entry| entry.acknowledged)
+                        };
+                        if let Some(index) = index {
                             let entry = self.queued_submissions.remove(index);
                             self.transcript.remove(&entry.echo_id);
                         }
@@ -476,14 +481,15 @@ impl DesktopView {
                         }
                     }
                     protocol::method::TURN_QUEUE_REMOVE => {
-                        // Convergence hint only: the row already dropped
-                        // optimistically. A mismatch is a stale response (the
-                        // session moved on) — ignore it quietly instead of
-                        // banner-ing; snapshots converge the rest.
                         let removed = serde_json::from_value::<protocol::TurnQueueRemoveResult>(result)
                             .ok()
                             .filter(|removed| self.selected_session_id.as_deref() == Some(removed.session_id.as_str()));
                         if let Some(removed) = removed {
+                            if removed.removed
+                                && let Some(entry_id) = &removed.entry_id
+                            {
+                                self.discard_queued_entries(std::slice::from_ref(entry_id));
+                            }
                             self.truncate_dispatched_to_depth(removed.queue_depth);
                         }
                     }
@@ -537,6 +543,11 @@ impl DesktopView {
                         cx.notify();
                     }
                     protocol::method::TURN_CANCEL => {
+                        if let Some(status) = result.get("queueStatus")
+                            && let Ok(status) = serde_json::from_value::<protocol::TurnQueueStatus>(status.clone())
+                        {
+                            self.apply_queue_status(status);
+                        }
                         self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
                     }
                     protocol::method::TURN_UNDO => {
@@ -691,32 +702,7 @@ impl DesktopView {
                 let Ok(outcome) = serde_json::from_value::<protocol::TurnSteerResultNotification>(result) else {
                     return;
                 };
-                if self.selected_session_id.as_deref() != Some(outcome.session_id.as_str()) {
-                    return;
-                }
-                let echo_id = self
-                    .steer_pending
-                    .iter()
-                    .find(|(_, receipt_id)| **receipt_id == outcome.receipt_id)
-                    .map(|(echo_id, _)| echo_id.clone());
-                if let Some(echo_id) = echo_id {
-                    let _ = self.steer_pending.remove(&echo_id);
-                    if outcome.accepted {
-                        // The service removed the addressed row atomically with
-                        // admission; converge our mirror to its depth.
-                        if let Some(index) = self.queued_submissions.iter().position(|row| row.echo_id == echo_id) {
-                            let row = self.queued_submissions.remove(index);
-                            self.transcript.remove(&row.echo_id);
-                        }
-                        self.truncate_dispatched_to_depth(outcome.queue_depth);
-                    } else {
-                        self.error = Some(format!(
-                            "The prompt stayed queued: steering was rejected ({:?}).",
-                            outcome.reason.unwrap_or(protocol::TurnSteerRejection::Superseded)
-                        ));
-                    }
-                    cx.notify();
-                }
+                self.apply_queued_steer_result(outcome, cx);
             }
             BackendEvent::TurnStatus(status) => self.handle_turn_status(status),
             BackendEvent::Exited { status, authentication_required } => {

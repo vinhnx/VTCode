@@ -118,6 +118,8 @@ struct ServerState {
     /// with CLI batching semantics. Desktop agent switches require an idle
     /// session, so every entry carries `primary_agent: None`.
     queue: VecDeque<QueuedInput>,
+    /// Queue entry awaiting a live steering receipt. FIFO drain waits for its outcome.
+    queued_steer_entry_id: Option<String>,
     /// Total oldest queued prompts discarded by the soft cap.
     queue_dropped_total: usize,
     pending_interactions: std::collections::HashMap<String, PendingInteraction>,

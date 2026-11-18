@@ -273,16 +273,7 @@ async fn publish_thread_event_for_runtime(
         .await?;
     }
     if let Some(drained) = drained {
-        dispatch_drained_turn(
-            state,
-            notifications,
-            turn_finished,
-            session_id,
-            drained.turn_id,
-            drained.batch,
-            drained.input,
-        )
-        .await?;
+        dispatch_drained_turn(state, notifications, turn_finished, session_id, drained).await?;
     }
     Ok(())
 }

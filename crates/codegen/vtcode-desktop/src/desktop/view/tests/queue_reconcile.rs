@@ -20,6 +20,7 @@ fn take_latest_empty_result_clears_confirmed_rows_to_depth(cx: &mut TestAppConte
                 echo_id: echo.to_string(),
                 entry_id: None,
                 prompt: echo.to_string(),
+                user_attachments: Vec::new(),
                 acknowledged,
             });
         }
@@ -51,6 +52,7 @@ fn take_latest_result_truncates_concurrently_dispatched_rows(cx: &mut TestAppCon
                 echo_id: echo.to_string(),
                 entry_id: None,
                 prompt: echo.to_string(),
+                user_attachments: Vec::new(),
                 acknowledged: true,
             });
         }
@@ -103,7 +105,7 @@ fn take_latest_waits_for_pending_acks(cx: &mut TestAppContext) {
             // wire id, so it cannot open an editor until a snapshot binds it.
             view.start_queue_edit("echo-flight", window, cx);
             assert!(view.editing_queue_echo_id.is_none(), "unbound row has no inline editor");
-            assert!(view.confirm_oldest_queued_submission());
+            assert!(view.confirm_oldest_queued_submission(None));
             view.take_latest_queued(cx);
             assert!(view.take_latest_pending, "acked entries pop");
         });
@@ -125,6 +127,7 @@ fn remove_response_converges_depth_and_clears_panel(cx: &mut TestAppContext) {
                 echo_id: echo.to_string(),
                 entry_id: Some(entry_id.to_string()),
                 prompt: echo.to_string(),
+                user_attachments: Vec::new(),
                 acknowledged: true,
             });
         }
@@ -160,4 +163,70 @@ fn remove_response_converges_depth_and_clears_panel(cx: &mut TestAppContext) {
         };
         assert_eq!(method, vtcode_desktop_protocol::method::TURN_QUEUE_REMOVE);
     }
+}
+
+#[gpui_kit::test]
+fn explicit_queue_outcomes_only_echo_the_dispatched_entry(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".into());
+        for entry_id in ["discarded", "sent", "waiting"] {
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: entry_id.into(),
+                entry_id: None,
+                prompt: "identical text".into(),
+                user_attachments: Vec::new(),
+                acknowledged: false,
+            });
+            view.handle_backend_event(
+                queue_response(
+                    vtcode_desktop_protocol::method::TURN_SUBMIT,
+                    serde_json::json!({
+                        "sessionId": "session", "turnId": "", "queued": true, "entryId": entry_id,
+                    }),
+                ),
+                cx,
+            );
+        }
+        // A removal that raced with dispatch cannot delete the local echo
+        // payload before the dispatch outcome arrives.
+        view.handle_backend_event(
+            queue_response(
+                vtcode_desktop_protocol::method::TURN_QUEUE_REMOVE,
+                serde_json::json!({
+                    "sessionId": "session", "removed": false, "entryId": "sent", "queueDepth": 1,
+                }),
+            ),
+            cx,
+        );
+        assert_eq!(view.queued_submissions.len(), 3);
+        view.handle_backend_event(
+            BackendEvent::TurnQueueStatus(serde_json::json!({
+                "sessionId": "session", "queueDepth": 1, "entryIds": ["waiting"],
+                "dispatchedEntryIds": ["sent"], "discardedEntryIds": ["discarded"],
+            })),
+            cx,
+        );
+
+        assert_eq!(view.queued_submissions.len(), 1);
+        assert_eq!(view.queued_submissions[0].entry_id.as_deref(), Some("waiting"));
+        let ids: Vec<_> = view.transcript.items().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids.iter().filter(|id| **id == "sent").count(), 1);
+        assert!(!ids.contains(&"discarded"));
+        assert!(!ids.contains(&"waiting"));
+
+        for snapshot in [
+            serde_json::json!({
+                "sessionId": "session", "queueDepth": 0, "dispatchedEntryIds": ["waiting"],
+            }),
+            serde_json::json!({
+                "sessionId": "session", "queueDepth": 1, "entryIds": ["waiting"],
+                "previews": ["identical text"], "dispatchedEntryIds": [],
+            }),
+        ] {
+            view.handle_backend_event(BackendEvent::TurnQueueStatus(snapshot), cx);
+        }
+        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden);
+        assert_eq!(view.transcript.items().filter(|item| item.id == "waiting").count(), 1);
+    });
 }

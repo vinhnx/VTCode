@@ -40,7 +40,7 @@ fn submit_while_running_queues_with_batchable_flag(cx: &mut TestAppContext) {
         assert_eq!(view.queued_submissions[0].prompt, "queued prompt");
         assert!(!view.queued_submissions[0].acknowledged);
         assert!(view.pending_submission.is_none(), "queue path leaves the immediate slot alone");
-        assert!(view.transcript.items().any(|item| item.text == "queued prompt"));
+        assert!(!view.transcript.items().any(|item| item.text == "queued prompt"));
     })
     .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
@@ -134,13 +134,8 @@ fn immediate_ack_promotes_a_queued_entry_when_idle_first(cx: &mut TestAppContext
             echo_id: "echo-promoted".to_string(),
             entry_id: None,
             prompt: "promoted".to_string(),
+            user_attachments: Vec::new(),
             acknowledged: false,
-        });
-        view.push_submission_echo(&SubmissionDraft {
-            prompt: "promoted".into(),
-            attachments: Vec::new(),
-            echo_id: "echo-promoted".into(),
-            delivery_uncertain: false,
         });
         view.handle_backend_event(
             submit_response(
@@ -174,6 +169,7 @@ fn delayed_immediate_ack_leaves_newer_queue_entries_unconfirmed(cx: &mut TestApp
             echo_id: "echo-newer".to_string(),
             entry_id: None,
             prompt: "newer".to_string(),
+            user_attachments: Vec::new(),
             acknowledged: false,
         });
         view.handle_backend_event(
@@ -225,8 +221,8 @@ fn queue_status_reconciles_dispatched_and_ignores_foreign_sessions(cx: &mut Test
         for prompt in ["dispatched", "waiting", "in-flight"] {
             view.enqueue_queued_submission(queued_draft(prompt), false, cx).expect("queue");
         }
-        assert!(view.confirm_oldest_queued_submission());
-        assert!(view.confirm_oldest_queued_submission());
+        assert!(view.confirm_oldest_queued_submission(None));
+        assert!(view.confirm_oldest_queued_submission(None));
         let rows_before = view.transcript.len();
 
         view.handle_backend_event(
@@ -246,17 +242,19 @@ fn queue_status_reconciles_dispatched_and_ignores_foreign_sessions(cx: &mut Test
                 "sessionId": "session",
                 "queueDepth": 1,
                 "previews": ["waiting"],
-                "droppedTotal": 2,
+                "droppedTotal": 0,
             })),
             cx,
         );
         assert_eq!(view.queue_depth, 1);
         assert_eq!(view.queue_previews, vec!["waiting".to_string()]);
-        assert_eq!(view.queue_dropped_total, 2);
+        assert_eq!(view.queue_dropped_total, 0);
         let prompts: Vec<&str> = view.queued_submissions.iter().map(|entry| entry.prompt.as_str()).collect();
         assert_eq!(prompts, vec!["waiting", "in-flight"], "dispatched confirmed entry leaves from the front");
         assert!(!view.queued_submissions[1].acknowledged, "unconfirmed entry is never truncated");
-        assert_eq!(view.transcript.len(), rows_before, "dispatched echo rows stay as history");
+        assert_eq!(view.transcript.len(), rows_before + 1, "dispatch adds the transcript echo");
+        assert!(view.transcript.items().any(|item| item.text == "dispatched"));
+        assert!(!view.transcript.items().any(|item| item.text == "waiting"));
 
         view.handle_backend_event(BackendEvent::TurnQueueStatus(serde_json::json!({"bogus": true})), cx);
         assert_eq!(view.queue_depth, 1, "malformed status ignored");
@@ -276,7 +274,7 @@ fn submit_error_drops_oldest_unconfirmed_and_keeps_the_turn(cx: &mut TestAppCont
             .expect("queue first");
         view.enqueue_queued_submission(queued_draft("spared"), false, cx)
             .expect("queue second");
-        assert!(view.confirm_oldest_queued_submission());
+        assert!(view.confirm_oldest_queued_submission(None));
         let rows_before = view.transcript.len();
 
         view.handle_backend_event(
@@ -289,7 +287,7 @@ fn submit_error_drops_oldest_unconfirmed_and_keeps_the_turn(cx: &mut TestAppCont
         );
         let prompts: Vec<&str> = view.queued_submissions.iter().map(|entry| entry.prompt.as_str()).collect();
         assert_eq!(prompts, vec!["doomed"], "only the oldest unconfirmed entry is dropped");
-        assert_eq!(view.transcript.len(), rows_before - 1, "dropped echo row is removed");
+        assert_eq!(view.transcript.len(), rows_before, "rejected draft never enters the transcript");
         assert!(view.running, "running turn is untouched");
         assert_eq!(view.active_turn_id.as_deref(), Some("turn-1"));
         assert!(view.error.is_some());
@@ -309,8 +307,8 @@ fn take_latest_restores_newest_text_into_composer(cx: &mut TestAppContext) {
                 .expect("queue older");
             view.enqueue_queued_submission(queued_draft("newer"), false, cx)
                 .expect("queue newer");
-            assert!(view.confirm_oldest_queued_submission());
-            assert!(view.confirm_oldest_queued_submission());
+            assert!(view.confirm_oldest_queued_submission(None));
+            assert!(view.confirm_oldest_queued_submission(None));
             view.take_latest_queued(cx);
             assert!(view.take_latest_pending);
             view.take_latest_queued(cx);
@@ -343,7 +341,7 @@ fn take_latest_restores_newest_text_into_composer(cx: &mut TestAppContext) {
             assert_eq!(prompts, vec!["older"]);
             assert_eq!(view.composer.read(cx).value(), "newer", "popped text restores into the composer");
             assert!(!view.transcript.items().any(|item| item.text == "newer"), "popped echo row is removed");
-            assert!(view.transcript.items().any(|item| item.text == "older"));
+            assert!(!view.transcript.items().any(|item| item.text == "older"));
         });
     })
     .unwrap();
@@ -362,8 +360,8 @@ fn alt_up_keypress_pops_newest_queued_into_composer(cx: &mut TestAppContext) {
                 .expect("queue older");
             view.enqueue_queued_submission(queued_draft("newer"), false, cx)
                 .expect("queue newer");
-            assert!(view.confirm_oldest_queued_submission());
-            assert!(view.confirm_oldest_queued_submission());
+            assert!(view.confirm_oldest_queued_submission(None));
+            assert!(view.confirm_oldest_queued_submission(None));
             view.composer.update(cx, |state, cx| {
                 state.set_value("wip", window, cx);
                 state.focus(window, cx);
@@ -404,7 +402,7 @@ fn take_latest_keeps_draft_and_retains_popped_text(cx: &mut TestAppContext) {
             view.running = true;
             view.enqueue_queued_submission(queued_draft("queued"), false, cx)
                 .expect("queue");
-            assert!(view.confirm_oldest_queued_submission());
+            assert!(view.confirm_oldest_queued_submission(None));
             view.composer.update(cx, |state, cx| state.set_value("fresh draft", window, cx));
             view.take_latest_queued(cx);
             assert!(!view.take_latest_pending, "non-empty composer blocks take-latest");
@@ -499,12 +497,14 @@ fn remove_button_sends_remove_request_and_drops_the_row(cx: &mut TestAppContext)
                 echo_id: "echo-older".into(),
                 entry_id: None,
                 prompt: "older".into(),
+                user_attachments: Vec::new(),
                 acknowledged: true,
             });
             view.queued_submissions.push(QueuedSubmission {
                 echo_id: "echo-newer".into(),
                 entry_id: Some("qe-2".into()),
                 prompt: "newer".into(),
+                user_attachments: Vec::new(),
                 acknowledged: true,
             });
             view.push_submission_echo(&SubmissionDraft {
@@ -537,21 +537,30 @@ fn remove_button_sends_remove_request_and_drops_the_row(cx: &mut TestAppContext)
 
 #[gpui_kit::test]
 fn steer_keeps_the_row_until_the_service_confirms(cx: &mut TestAppContext) {
-    let (_window, view) = open_desktop(cx);
+    let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
-    view.update(cx, |view, cx| {
-        view.backend = Some(BackendHandle { commands });
-        view.selected_session_id = Some("session".to_string());
-        view.queued_submissions.push(QueuedSubmission {
-            echo_id: "echo-steer".into(),
-            entry_id: Some("qe-1".into()),
-            prompt: "ship it".into(),
-            acknowledged: true,
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".into());
+            view.running = true;
+            view.queued_submissions.push(QueuedSubmission {
+                echo_id: "echo-steer".into(),
+                entry_id: Some("qe-1".into()),
+                prompt: "ship it".into(),
+                user_attachments: Vec::new(),
+                acknowledged: true,
+            });
+            cx.notify();
         });
-        view.steer_queued_submission("echo-steer", cx);
+        window.render_frame(cx);
+        window.click(super::super::queue::queued_steer_element_id(0, Some("echo-steer")), cx);
+        let view = view.read(cx);
         assert_eq!(view.queued_submissions.len(), 1, "the row waits for confirmation");
         assert!(view.steer_pending.contains_key("echo-steer"));
-    });
+        assert!(!view.transcript.items().any(|item| item.text == "ship it"));
+    })
+    .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().expect("steer request") else {
         panic!("expected steer request");
     };
@@ -577,6 +586,7 @@ fn remove_without_a_bound_entry_id_is_suppressed(cx: &mut TestAppContext) {
             echo_id: "echo-optimistic".into(),
             entry_id: None,
             prompt: "optimistic".into(),
+            user_attachments: Vec::new(),
             acknowledged: false,
         });
         view.remove_queued_submission("echo-optimistic", cx);
@@ -603,6 +613,7 @@ fn queue_panel_state_tracks_entries_and_depth(cx: &mut TestAppContext) {
             echo_id: "echo-1".to_string(),
             entry_id: None,
             prompt: "queued".to_string(),
+            user_attachments: Vec::new(),
             acknowledged: false,
         });
         assert_eq!(view.queue_panel_state(), QueuePanelState::Entries);
@@ -619,6 +630,7 @@ fn bound_queued_entry(prompt: &str) -> QueuedSubmission {
         echo_id: format!("echo-{prompt}"),
         entry_id: Some(format!("qe-{prompt}")),
         prompt: prompt.to_string(),
+        user_attachments: Vec::new(),
         acknowledged: true,
     }
 }
@@ -697,6 +709,7 @@ fn inline_edit_is_unavailable_for_unbound_rows(cx: &mut TestAppContext) {
                 echo_id: "echo-optimistic".into(),
                 entry_id: None,
                 prompt: "new".into(),
+                user_attachments: Vec::new(),
                 acknowledged: false,
             });
             view.start_queue_edit("echo-optimistic", window, cx);
@@ -772,33 +785,43 @@ fn batched_submit_marks_queued_but_never_immediate(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn cmd_enter_keypress_queues_one_batchable_turn_while_running(cx: &mut TestAppContext) {
+fn busy_tab_and_enter_submit_queue_intents_without_a_transcript_echo(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.selected_session_id = Some("session".to_string());
-            view.running = true;
-            view.composer.update(cx, |state, cx| {
-                state.set_value("batched prompt", window, cx);
-                state.focus(window, cx);
+    for (index, (key, prompt, batchable)) in [
+        ("tab", "batch from tab", true),
+        ("enter", "standalone from enter", false),
+        ("cmd-enter", "batch from command enter", true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.backend = Some(BackendHandle { commands: commands.clone() });
+                view.selected_session_id = Some("session".into());
+                view.running = true;
+                view.composer.update(cx, |state, cx| {
+                    state.set_value(prompt, window, cx);
+                    state.focus(window, cx);
+                });
             });
-        });
-        window.render_frame(cx);
-        window.press("cmd-enter", cx);
-        let view = view.read(cx);
-        assert_eq!(view.composer.read(cx).value(), "");
-        assert_eq!(view.queued_submissions.len(), 1);
-        assert_eq!(view.queued_submissions[0].prompt, "batched prompt");
-    })
-    .unwrap();
-    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
-        panic!("expected queued turn request");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    assert_eq!(params["batchable"], true, "cmd-enter queues a batchable turn");
-    assert!(requests.try_recv().is_err(), "one keypress sends exactly one turn");
+            window.render_frame(cx);
+            window.press(key, cx);
+            let view = view.read(cx);
+            assert_eq!(view.composer.read(cx).value(), "");
+            assert_eq!(view.queued_submissions.len(), index + 1);
+            assert_eq!(view.queued_submissions[index].prompt, prompt);
+            assert!(!view.transcript.items().any(|item| item.text == prompt));
+        })
+        .unwrap();
+        let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+            panic!("expected turn request");
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+        assert_eq!(params["batchable"], batchable);
+        assert!(requests.try_recv().is_err(), "one request per gesture");
+    }
 }
 
 #[test]
@@ -821,6 +844,7 @@ fn queue_state_clears_on_session_reset_and_service_exit(cx: &mut TestAppContext)
             echo_id: "echo-1".to_string(),
             entry_id: None,
             prompt: "queued".to_string(),
+            user_attachments: Vec::new(),
             acknowledged: true,
         });
         view.queue_depth = 1;
@@ -840,6 +864,7 @@ fn queue_state_clears_on_session_reset_and_service_exit(cx: &mut TestAppContext)
             echo_id: "echo-2".to_string(),
             entry_id: None,
             prompt: "queued".to_string(),
+            user_attachments: Vec::new(),
             acknowledged: false,
         });
         view.take_latest_pending = true;
