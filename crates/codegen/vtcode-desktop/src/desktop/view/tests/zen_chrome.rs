@@ -46,3 +46,73 @@ fn zen_floating_chrome_keeps_the_toggle_slot_and_exposes_navigation(cx: &mut Tes
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn zen_home_opens_thread_browser_without_changing_the_sidebar(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| view.preferences.navigation_visible = Some(false));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.toggle_zen_mode(window, cx));
+        window.render_frame(cx);
+
+        let home = window.find("nav-home");
+        assert_eq!(home.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(home.label(), Some("Browse threads"));
+
+        let back = window.find("navigate-back").bounds();
+        let forward = window.find("navigate-forward").bounds();
+        let toggle = window.find("zen-mode-toggle").bounds();
+        assert_eq!(home.bounds().size, back.size, "Home shares the zen icon band");
+        assert_eq!(home.bounds().center().y, back.center().y, "Home shares the band center line");
+        assert!(home.bounds().right() <= back.origin.x, "Home leads Back: {:?} {:?}", home.bounds(), back);
+        assert!(back.right() <= forward.origin.x, "Back precedes Forward");
+        assert!(forward.right() <= toggle.origin.x, "Forward precedes the trailing toggle");
+
+        let before = view.read(cx).sidebar_open;
+        window.click("nav-home", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).current_route(), Route::Browser);
+        assert!(window.find("thread-browser").visible());
+        assert!(view.read(cx).zen_mode);
+        assert_eq!(view.read(cx).sidebar_open, before);
+        assert!(!view.read(cx).preferences.navigation_visible());
+        assert_eq!(window.find("nav-home").checked(), Some(true));
+        assert!(window.try_find("primary-navigation").is_none());
+        assert_eq!(window.find("zen-mode-toggle").bounds(), toggle, "toggle stays pinned after Home");
+
+        window.click("nav-home", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).current_route(), Route::Workspace);
+        assert!(window.try_find("thread-browser").is_none());
+        assert_eq!(window.find("nav-home").checked(), Some(false));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn fullscreen_zen_home_keeps_the_browser_header_reachable(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.toggle_zen_mode(window, cx));
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.is_fullscreen());
+        window.click("nav-home", cx);
+        window.render_frame(cx);
+
+        let dismiss = window.find("browser-dismiss").bounds();
+        let floating = window.find("zen-mode-toggle").bounds();
+        assert!(
+            dismiss.top() >= floating.bottom(),
+            "browser actions clear floating chrome: dismiss={dismiss:?} floating={floating:?}"
+        );
+        window.click("browser-dismiss", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).current_route(), Route::Workspace);
+    })
+    .unwrap();
+}

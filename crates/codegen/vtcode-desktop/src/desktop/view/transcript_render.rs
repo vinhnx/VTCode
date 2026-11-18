@@ -5,6 +5,9 @@ use welcome::{WelcomeHeader, greeting_empty_state, welcome_header};
 
 mod welcome;
 
+// The tool title spine is the icon slot, gap, and small-button inset.
+const ASSISTANT_MESSAGE_INSET: gpui_kit::Rems = gpui_kit::rems(2.);
+
 impl DesktopView {
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
@@ -424,7 +427,12 @@ impl DesktopView {
             .when(show_turn_item, |column| column.children(group_header))
             .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)))
             .when(!item.turn_files.is_empty(), |column| {
-                column.child(transcript_changes_card::render_turn_files_card(self, item, cx))
+                column.child(
+                    div()
+                        .px(ASSISTANT_MESSAGE_INSET)
+                        .when(show_item, |slot| slot.pt_4())
+                        .child(transcript_changes_card::render_turn_files_card(self, item, cx)),
+                )
             });
         let message_id = item.id.clone();
         let clicked_id = item.id.clone();
@@ -557,7 +565,7 @@ impl DesktopView {
             // slot + gap + small-button padding (32px). Symmetric so the
             // column centering contracts keep holding. User pills stay
             // trailing and keep their own shape.
-            .when(!user, |message| message.px_8())
+            .when(!user, |message| message.px(ASSISTANT_MESSAGE_INSET))
             .content(
                 MessageContent::new().bubble(
                     Bubble::new()

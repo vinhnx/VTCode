@@ -622,11 +622,11 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// Floating zen chrome: Back/Forward plus the zen exit, pinned to the
-    /// main column's top-right corner and painted after the content so it
+    /// Floating zen chrome: Home, Back/Forward, plus the zen exit, pinned to
+    /// the main column's top-right corner and painted after the content so it
     /// floats above the edge-to-edge zen surface. The group is right-anchored
     /// and the toggle is its trailing child, so arrows appearing/disappearing
-    /// never move the toggle.
+    /// never move the toggle. Home opens the thread browser in Zen.
     ///
     /// The insets reproduce the docked slot exactly: the title bar's `pr_3`
     /// (12px) plus the small toolbar's `p_1` (4px), minus the pill's 1px
@@ -656,6 +656,7 @@ impl DesktopView {
             .border_color(themes::soft_edge_color(&colors))
             .shadow_md()
             .fade_in("zen-toggle-float", cx.theme())
+            .child(self.render_browse_threads_button(cx))
             .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
             .child(zen_mode_toggle(true, faded, &self.focus_handle))
     }

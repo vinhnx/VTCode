@@ -1,19 +1,10 @@
-//! Turn files-changes card: the per-turn edited-files summary appended to
-//! the final assistant response. Icon badge + title/totals header, per-file
-//! rows that jump to the file's diff in Changes, per-turn undo, and the
-//! show-more expander past three rows.
+//! Per-turn edited files and their actions below the final assistant response.
 
 use super::files_panel::file_row_menu;
 use super::turn_undo::{TurnUndoState, undo_turn_id};
 use super::*;
 use gpui_kit::component::menu::ContextMenuExt;
 
-/// Per-turn edited-files card under the final assistant response. The header
-/// pairs one icon badge with the "Edited N files" title and the turn's
-/// additive totals beside the Undo / View changes actions; each file row
-/// splits a dimmed directory from its basename and jumps to the file's diff
-/// in Changes on click with the shared file menu on right-click; past three
-/// rows the expander pages through the rest (3 then 50, `Transcript::toggle_turn_files`).
 pub(super) fn render_turn_files_card(
     view: &DesktopView,
     item: &TranscriptItem,
@@ -21,7 +12,6 @@ pub(super) fn render_turn_files_card(
 ) -> AnyElement {
     let colors = cx.theme().colors;
     let card_border = themes::hairline(colors.secondary, colors.foreground);
-    let (badge_surface, badge_border) = themes::tone_chip_surface(colors.foreground, &colors);
     let muted = themes::muted_text(&colors);
 
     let undo_control = undo_turn_id(item).map(|turn_id| {
@@ -63,69 +53,44 @@ pub(super) fn render_turn_files_card(
         rust_i18n::t!("app.transcript.turn_edited_files_many", n = item.turn_files.len()).to_string()
     };
     let header = div()
-        .px_3()
-        .py_1()
-        .w_full()
+        // Match the small ghost buttons' content inset in the rows and footer.
+        .px_2()
+        .py_2()
         .flex()
+        .flex_wrap()
         .items_center()
-        .justify_between()
         .gap_2()
         .child(
             div()
+                .min_w_0()
+                .max_w_full()
                 .flex()
+                .flex_wrap()
                 .items_center()
                 .gap_2()
-                .min_w_0()
-                .child(
-                    div()
-                        .size_6()
-                        .flex_none()
-                        .rounded_sm()
-                        .border_1()
-                        .border_color(badge_border)
-                        .bg(badge_surface)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(Icon::new(IconName::GitCompare).small().text_color(muted)),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_medium()
-                                .text_color(colors.foreground)
-                                .truncate()
-                                .child(title),
-                        )
-                        .when(item.turn_files_incomplete, |column| {
-                            column.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(muted)
-                                    .child(rust_i18n::t!("app.inspector.partial_diff").to_string()),
-                            )
-                        })
-                        .when_some(item.turn_file_totals, |column, (added, deleted)| {
-                            column.child(
-                                div()
-                                    .flex()
-                                    .gap_2()
-                                    .text_sm()
-                                    .child(div().text_color(colors.success).child(format!("+{added}")))
-                                    .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
-                            )
-                        }),
-                ),
+                .text_sm()
+                .child(div().min_w_0().font_semibold().text_color(colors.foreground).child(title))
+                .when_some(item.turn_file_totals, |summary, (added, deleted)| {
+                    summary.child(change_counts(added, deleted, &colors))
+                })
+                .when(item.turn_files_incomplete, |summary| {
+                    summary.child(
+                        div()
+                            .min_w_0()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(rust_i18n::t!("app.inspector.partial_diff").to_string()),
+                    )
+                }),
         )
         .child(
             div()
+                .ml_auto()
+                .min_w_0()
+                .max_w_full()
                 .flex()
-                .flex_shrink_0()
+                .flex_wrap()
+                .justify_end()
                 .items_center()
                 .gap_2()
                 .children(undo_control)
@@ -136,16 +101,21 @@ pub(super) fn render_turn_files_card(
     let count = if start == 0 { 3 } else { 50 };
     let end = start.saturating_add(count).min(item.turn_files.len());
     let mut card = div()
+        .id(format!("turn-files-card-{}", item.id))
+        .test_support()
         .w_full()
+        .min_w_0()
         .rounded_md()
         .border_1()
         .border_color(card_border)
         .bg(colors.secondary)
-        .py_1()
+        .px_1()
+        .pb_1()
         .flex()
         .flex_col()
         .gap_1()
-        .child(header);
+        .child(header)
+        .child(div().mx_2().h(px(1.)).bg(card_border));
     for file in item.turn_files.iter().skip(start).take(count) {
         let path = file.file.path.clone();
         let (directory, basename) = match path.rsplit_once('/') {
@@ -158,7 +128,6 @@ pub(super) fn render_turn_files_card(
                 .id(format!("turn-file-card-{}-{path}", item.id))
                 .test_support()
                 .w_full()
-                .px_3()
                 .context_menu(move |menu, _, _| file_row_menu(menu, &menu_path, false))
                 .child(
                     desktop_button(format!("turn-file-{}-{path}", item.id))
@@ -186,29 +155,21 @@ pub(super) fn render_turn_files_card(
                                         .min_w_0()
                                         .flex_1()
                                         .flex()
-                                        .truncate()
                                         .when_some(directory, |row, directory| {
                                             row.child(div().min_w_0().truncate().text_color(muted).child(directory))
                                         })
                                         .child(
                                             div()
-                                                .max_w(px(240.))
+                                                .max_w_full()
                                                 .flex_shrink_0()
                                                 .truncate()
                                                 .font_medium()
                                                 .text_color(colors.foreground)
-                                                .child(basename.clone()),
+                                                .child(basename),
                                         ),
                                 )
                                 .when_some(file.counts, |row, (added, deleted)| {
-                                    row.child(
-                                        div()
-                                            .flex()
-                                            .flex_shrink_0()
-                                            .gap_1()
-                                            .child(div().text_color(colors.success).child(format!("+{added}")))
-                                            .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
-                                    )
+                                    row.child(change_counts(added, deleted, &colors))
                                 }),
                         ),
                 ),
@@ -223,19 +184,34 @@ pub(super) fn render_turn_files_card(
             rust_i18n::t!("app.configuration.show_more", remaining = item.turn_files.len() - end).to_string()
         };
         card = card.child(
-            div().px_2().child(
-                desktop_button(format!("turn-files-toggle-{id}"))
-                    .label(label)
-                    .child(transcript_chevron_lane(expanded))
-                    .ghost()
-                    .small()
-                    .justify_start()
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.transcript.toggle_turn_files(&id);
-                        cx.notify();
-                    })),
-            ),
+            desktop_button(format!("turn-files-toggle-{id}"))
+                .accessibility_label(label.clone())
+                .child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(label)
+                        .child(transcript_chevron_lane(expanded).text_color(muted)),
+                )
+                .ghost()
+                .small()
+                .justify_start()
+                .on_click(cx.listener(move |view, _, _, cx| {
+                    view.transcript.toggle_turn_files(&id);
+                    cx.notify();
+                })),
         );
     }
     card.into_any_element()
+}
+
+fn change_counts(added: u64, deleted: u64, colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Div {
+    div()
+        .flex()
+        .flex_none()
+        .gap_1()
+        .child(div().text_color(colors.success).child(format!("+{added}")))
+        .child(div().text_color(colors.danger).child(format!("−{deleted}")))
 }

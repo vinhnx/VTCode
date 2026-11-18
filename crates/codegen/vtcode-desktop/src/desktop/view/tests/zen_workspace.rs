@@ -142,7 +142,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
             zen_slot.size.width >= px(24.) && zen_slot.size.height >= px(24.),
             "zen toggle must keep a comfortable pointer target: {zen_slot:?}"
         );
-        assert!(window.try_find("nav-home").is_none());
+        assert!(window.try_find("nav-home").is_some(), "zen offers Home in its floating chrome");
         assert!(window.try_find("nav-new-thread").is_none());
         assert!(window.try_find("nav-overflow").is_none());
         assert!(window.try_find("search-commands").is_none());

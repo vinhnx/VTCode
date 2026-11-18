@@ -266,3 +266,62 @@ fn wide_tables_stay_inside_the_conversation_column(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn edited_files_card_aligns_with_assistant_prose_and_tool_titles(cx: &mut TestAppContext) {
+    use crate::desktop::transcript::{DiffFile, DiffFileKind, TurnFile};
+
+    let (window, view) = open_desktop_sized(cx, 1600., 900.);
+    view.update(cx, |view, _| {
+        view.sidebar_open = false;
+        view.inspector_open = false;
+        view.transcript
+            .push(TranscriptItem::new("card-tool".into(), "tool".into(), "Edit".into(), "completed".into()));
+        let mut answer = TranscriptItem::new(
+            "card-answer".into(),
+            "assistant".into(),
+            "VT Code".into(),
+            "Updated the workspace.".into(),
+        );
+        answer.completed_at = Some("12:30".into());
+        answer.turn_files = vec![TurnFile {
+            file: DiffFile {
+                path: "src/edited.rs".into(),
+                kind: DiffFileKind::Update,
+            },
+            counts: Some((5, 2)),
+        }];
+        answer.turn_file_totals = Some((5, 2));
+        view.transcript.push(answer);
+    });
+
+    for base_size in [16., 24.] {
+        cx.update(|cx| Theme::update(cx, |theme| theme.font_size = px(base_size)));
+        cx.update_window(window, |_, window, cx| {
+            for zen in [false, true] {
+                if zen {
+                    window.press("ctrl-cmd-z", cx);
+                }
+                window.render_frame(cx);
+                assert_eq!(view.read(cx).zen_mode, zen);
+                let body = window.find("message-body-card-answer").bounds();
+                let tool = window.find("tool-title-card-tool").bounds();
+                let footer = window.find("message-actions-card-answer").bounds();
+                let card = window.find("turn-files-card-card-answer").bounds();
+                for (edge, difference) in [
+                    ("leading prose edge", card.origin.x - body.origin.x),
+                    ("trailing prose edge", card.right() - body.right()),
+                    ("tool title spine", card.origin.x - tool.origin.x),
+                    ("one-rem footer gap", card.origin.y - footer.bottom() - px(base_size)),
+                ] {
+                    assert!(
+                        difference.abs() <= px(1.),
+                        "{edge} differs by {difference:?} at {base_size}px (zen={zen})"
+                    );
+                }
+            }
+            window.press("ctrl-cmd-z", cx);
+        })
+        .unwrap();
+    }
+}

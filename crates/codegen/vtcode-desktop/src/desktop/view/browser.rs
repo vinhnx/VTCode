@@ -150,7 +150,7 @@ impl DesktopView {
     /// Full-window thread browser over the cached session list. Selecting a
     /// row loads the thread and dismisses the browser; Escape and backdrop
     /// click only dismiss.
-    pub(super) fn render_thread_browser(&mut self, _window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_thread_browser(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
         let row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
@@ -374,6 +374,8 @@ impl DesktopView {
                 .flex_col()
                 .rounded_xl()
                 .bg(colors.secondary)
+                // Fullscreen Zen has no drag strip above the floating chrome.
+                .when(self.zen_mode && window.is_fullscreen(), |panel| panel.pt_10())
                 // Inner presses stop here so the gutter only sees true
                 // background presses.
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

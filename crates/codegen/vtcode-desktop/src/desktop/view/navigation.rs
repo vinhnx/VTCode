@@ -92,6 +92,24 @@ impl DesktopView {
         self.open_inspector_tab(InspectorTab::Utilities, cx);
     }
 
+    pub(super) fn render_browse_threads_button(&self, cx: &mut Context<Self>) -> Button {
+        let colors = cx.theme().colors;
+        let label = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
+        let (id, icon) = if self.zen_mode {
+            ("nav-home", IconName::House)
+        } else {
+            ("nav-browse-threads", IconName::Clock)
+        };
+        desktop_button(id)
+            .icon(icon)
+            .rounded_lg()
+            .when(self.zen_mode, |button| button.small())
+            .desktop_selected(self.current_route() == Route::Browser, &colors)
+            .accessibility_label(label.clone())
+            .tooltip_with_action(label, &OpenThreadBrowser, Some(key_context::DESKTOP))
+            .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone())
+    }
+
     pub(super) fn render_navigation(&mut self, narrow_panel: bool, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let expanded = (self.sidebar_open || self.navigation_peek) && !narrow_panel;
@@ -160,22 +178,7 @@ impl DesktopView {
             // The sidebar owns New thread while expanded; the empty slot holds
             // the lane so Browse threads never shifts when the rail expands.
             .when(expanded, |rail| rail.child(div().size_8()))
-            .child(
-                desktop_button("nav-browse-threads")
-                    .icon(IconName::Clock)
-                    .ghost()
-                    .rounded_lg()
-                    .accessibility_label(rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string())
-                    .tooltip_with_action(
-                        rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string(),
-                        &OpenThreadBrowser,
-                        Some(key_context::DESKTOP),
-                    )
-                    .when(self.current_route() == Route::Browser, |button| {
-                        button.bg(colors.secondary).text_color(colors.foreground)
-                    })
-                    .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone()),
-            )
+            .child(self.render_browse_threads_button(cx))
             // Three pinned icons above; everything else lives in one overflow.
             .child(self.render_nav_overflow(
                 "nav-overflow",
