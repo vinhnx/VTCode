@@ -93,7 +93,7 @@ websocket_mode = true
 use_decisions_probe = true
 ```
 
-Select `gpt-6.1-sol` or `gpt-6-astra` for the main model and provide `OPENAI_API_KEY` or a key stored with
+Select `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6-astra`, or `gpt-6.1-sol` for the main model and provide `OPENAI_API_KEY` or a key stored with
 `vtcode secret add openai`. Restart VT Code after changing authentication and check `/auth`; the model header should
 show OpenAI API-key access. Decisions remains a separate `gpt-6-luna` classifier. Planning and empty tool output skip
 the classifier; validate with a non-empty tool result in Build mode. A selected tier is a request preference, so

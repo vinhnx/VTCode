@@ -17,6 +17,7 @@ fn gpt_62_openai_and_merge_gateway() {
         assert!(models::openai::RESPONSES_API_MODELS.contains(&id));
         assert!(!models::openai::STREAMING_REQUIRED_MODELS.contains(&id));
         assert!(Provider::OpenAI.supports_service_tier(id));
+        assert!(Provider::OpenAI.supports_service_tier_value(id, crate::core::OpenAIServiceTier::Ultrafast));
         assert!(variant.is_top_tier());
         assert_eq!(variant.generation(), "6.2");
         assert!(crate::core::prompt_cache::supports_openai_explicit_prompt_cache(id));

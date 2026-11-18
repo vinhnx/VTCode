@@ -5,8 +5,12 @@ and `off` removes that provider's override. Arguments are case-insensitive; inva
 
 | Native route | Setting | Eligible models | Header badge |
 | --- | --- | --- | --- |
-| OpenAI API key | `provider.openai.service_tier = "ultrafast"` | `gpt-6-astra`, `gpt-6.1-sol` | `ULTRAFAST` |
+| OpenAI API key | `provider.openai.service_tier = "ultrafast"` | `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6-astra`, `gpt-6.1-sol` | `ULTRAFAST` |
 | Anthropic Claude API | `provider.anthropic.speed = "fast"` | `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8` | `FAST` |
+
+Ultrafast has separate rate limits from Standard and Fast modes; check your organization's limits before raising traffic.
+Data residency is US-only on GPT-6.2 Astra/Sol, US/global on GPT-6 Astra, and US/EU/global on GPT-6.1 Sol. WebSockets are
+strongly recommended for agentic tool-call bursts, so pair Ultrafast with `provider.openai.websocket_mode = true`.
 
 Dated Claude snapshots use the same eligibility as their exact base model IDs. Opus 4.8 can be entered explicitly
 with `/model` as `anthropic claude-opus-4-8`; it is not added to the curated catalog. Cloud platforms, gateways,

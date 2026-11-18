@@ -737,6 +737,8 @@ fn test_service_tier_value_ultrafast_is_native_openai_only() {
     assert!(Provider::OpenAI.supports_service_tier_value(models::openai::GPT_6_1_SOL, OpenAIServiceTier::Priority));
     assert!(Provider::OpenAI.supports_service_tier_value(models::openai::GPT_6_1_SOL, OpenAIServiceTier::Ultrafast));
     assert!(Provider::OpenAI.supports_service_tier_value(models::openai::GPT_6_ASTRA, OpenAIServiceTier::Ultrafast));
+    assert!(Provider::OpenAI.supports_service_tier_value(models::openai::GPT_6_2_ASTRA, OpenAIServiceTier::Ultrafast));
+    assert!(Provider::OpenAI.supports_service_tier_value(models::openai::GPT_6_2_SOL, OpenAIServiceTier::Ultrafast));
     for model in ["gpt-5", "gpt-5.6-sol", "gpt-6-astra-pro", "gpt-6.1-sol-preview"] {
         assert!(!Provider::OpenAI.supports_service_tier_value(model, OpenAIServiceTier::Ultrafast), "{model}");
     }

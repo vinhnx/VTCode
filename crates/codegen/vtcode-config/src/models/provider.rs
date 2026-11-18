@@ -54,6 +54,8 @@ pub trait ProviderModelSupport: AsRef<str> {
         match tier {
             OpenAIServiceTier::Ultrafast => {
                 const ULTRAFAST_MODELS: &[&str] = &[
+                    crate::constants::models::openai::GPT_6_2_ASTRA,
+                    crate::constants::models::openai::GPT_6_2_SOL,
                     crate::constants::models::openai::GPT_6_ASTRA,
                     crate::constants::models::openai::GPT_6_1_SOL,
                 ];

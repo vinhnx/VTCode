@@ -295,15 +295,16 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **GPT-6 Luna (`gpt-6-luna`):** fast cost-efficient GPT-6 model for high-volume latency-sensitive workloads (1,050,000
   context, 128k max output, reasoning `low`/`medium`/`high`/`xhigh`/`max`, default `medium`). Same Responses API route,
   GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as Astra; sampling and logprobs unsupported.
-- **Service tiers:** Use `/fast [on|off]` to toggle ultrafast on Astra/6.1 Sol; `/fast off` clears the override.
-  See the [fast mode guide](../development/fast-mode.md). `provider.openai.service_tier` accepts `flex`, `priority`,
-  and `ultrafast` (`ultrafast` is
-  native-OpenAI-only; see the config field reference). `ultrafast` is the fastest tier: GA for `gpt-6-astra`
-  and `gpt-6.1-sol` for all API users (`model = "gpt-6-astra"` + `service_tier = "ultrafast"` on every `response.create`).
-  It costs more and has separate TPM limits (Astra 500k / 1M /
-  5M; 6.1-sol 1M / 4M / 40M), and supports US/global processing on Astra vs US/EU/global on 6.1-sol. Pair it with
-  `provider.openai.websocket_mode = true` to keep one persistent Responses WebSocket + `previous_response_id`
-  chain across turns and tool results — HTTP handshake overhead erodes the speedup on agentic tool-call bursts.
+- **Service tiers:** Use `/fast [on|off]` to toggle ultrafast on 6.2 Astra/Sol, Astra, and 6.1 Sol; `/fast off` clears
+  the override. See the [fast mode guide](../development/fast-mode.md). `provider.openai.service_tier` accepts `flex`,
+  `priority`, and `ultrafast` (`ultrafast` is native-OpenAI-only; see the config field reference). `ultrafast` is the
+  fastest tier: supported on `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6-astra`, and `gpt-6.1-sol`
+  (`model = "gpt-6-astra"` + `service_tier = "ultrafast"` on every `response.create`). It costs more and has separate
+  rate limits from Standard and Fast modes (check your organization's limits; Astra defaults 500k / 1M / 5M TPM and
+  6.1-sol 1M / 4M / 40M TPM). Data residency is US-only on 6.2 Astra/Sol, US/global on Astra, and US/EU/global on
+  6.1-sol. Pair it with `provider.openai.websocket_mode = true` to keep one persistent Responses WebSocket +
+  `previous_response_id` chain across turns and tool results — HTTP handshake overhead erodes the speedup on agentic
+  tool-call bursts.
   When OpenAI rejects the requested tier for a model — unsupported
   tier, account/model enablement gap, or project policy — VT Code remembers the rejection for that model and retries the
   request once without the tier (serving the provider default) instead of failing the turn.

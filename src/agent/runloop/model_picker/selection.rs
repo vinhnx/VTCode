@@ -522,7 +522,7 @@ pub(super) fn service_tier_choice_meta(tier: Option<OpenAIServiceTier>) -> (&'st
         }
         Some(OpenAIServiceTier::Ultrafast) => (
             "Ultrafast",
-            "Send service_tier=ultrafast for fastest processing at higher cost (Astra US/global, 6.1-sol US/EU/global).",
+            "Send service_tier=ultrafast for fastest processing at higher cost (6.2 Astra/Sol US-only, Astra US/global, 6.1-sol US/EU/global).",
         ),
     }
 }

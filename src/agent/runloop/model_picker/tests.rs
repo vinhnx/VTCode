@@ -650,11 +650,14 @@ fn available_service_tiers_hides_ultrafast_outside_native_openai() {
 
     use OpenAIServiceTier::{Flex, Priority, Ultrafast};
 
-    // Native OpenAI offers every tier on supported models.
-    assert_eq!(
-        available_service_tiers(&detail(Some(Provider::OpenAI), "gpt-6.1-sol", true)),
-        vec![None, Some(Flex), Some(Priority), Some(Ultrafast)]
-    );
+    // Native OpenAI offers every tier on all ultrafast-eligible models.
+    for model in ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra", "gpt-6.1-sol"] {
+        assert_eq!(
+            available_service_tiers(&detail(Some(Provider::OpenAI), model, true)),
+            vec![None, Some(Flex), Some(Priority), Some(Ultrafast)],
+            "{model}"
+        );
+    }
     // Other OpenAI models retain flex/priority without ultrafast.
     for model in ["gpt-5", "gpt-5.6-sol"] {
         assert_eq!(

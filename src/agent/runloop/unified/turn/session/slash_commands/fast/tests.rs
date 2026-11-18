@@ -133,6 +133,8 @@ fn fast_mode_failures_leave_active_state_unchanged() {
 fn fast_mode_requires_native_openai_and_supported_model() {
     let Fixture { mut config, cfg, .. } = setup(None);
     for (provider, model, supported) in [
+        ("openai", "gpt-6.2-astra", true),
+        ("openai", "gpt-6.2-sol", true),
         ("openai", "gpt-6-astra", true),
         ("openai", "gpt-6.1-sol", true),
         ("openai", "gpt-5.6-sol", false),
@@ -315,8 +317,8 @@ mod suggestions {
     }
 
     #[test]
-    fn fast_mode_suggestion_renders_actionable_info_for_both_models_and_inactive_tiers() {
-        for model in ["gpt-6-astra", "gpt-6.1-sol"] {
+    fn fast_mode_suggestion_renders_actionable_info_for_eligible_models_and_inactive_tiers() {
+        for model in ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra", "gpt-6.1-sol"] {
             for tier in [None, Some(OpenAIServiceTier::Flex), Some(OpenAIServiceTier::Priority)] {
                 let mut config = api_key_config();
                 config.model = model.to_string();
@@ -350,7 +352,7 @@ mod suggestions {
         config.model = "gpt-6.1-sol".to_string();
         maybe_render_fast_mode_suggestion(&mut ui.renderer, &config, Some(&cfg), &mut stats).unwrap();
         assert_eq!(ui.lines().len(), 1);
-        for model in ["gpt-6.1-sol", "gpt-6-astra"] {
+        for model in ["gpt-6.1-sol", "gpt-6-astra", "gpt-6.2-astra", "gpt-6.2-sol"] {
             config.model = model.to_string();
             maybe_render_fast_mode_suggestion(&mut ui.renderer, &config, Some(&cfg), &mut stats).unwrap();
             assert!(ui.lines().is_empty());

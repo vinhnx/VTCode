@@ -119,7 +119,13 @@ fn websocket_replay_retains_reasoning_on_models_that_support_it() {
 }
 #[test]
 fn fast_service_tier_rebuilt_client_payloads_follow_configuration() {
-    for model in ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-sol"] {
+    for model in [
+        "gpt-6.2-astra",
+        "gpt-6.2-sol",
+        "gpt-6-astra",
+        "gpt-6.1-sol",
+        "gpt-5.6-sol",
+    ] {
         for tier in [Some(vtcode_config::OpenAIServiceTier::Ultrafast), None] {
             let provider = OpenAIProvider::from_config(
                 Some("fixture-key".to_string()),

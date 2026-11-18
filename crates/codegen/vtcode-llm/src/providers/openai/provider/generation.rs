@@ -66,7 +66,7 @@ pub(super) fn log_service_tier_rejection(api: &str, model: &str, client_request_
             model = %model,
             client_request_id = %client_request_id,
             tier = %tier,
-            "OpenAI {api} request rejected service_tier=ultrafast; retrying without it (check the requested model, project settings, and organization limits; ultrafast is broadly available for gpt-6-astra/gpt-6.1-sol)"
+            "OpenAI {api} request rejected service_tier=ultrafast; retrying without it (check the requested model, project settings, and organization limits; ultrafast is available for gpt-6.2-astra/gpt-6.2-sol/gpt-6-astra/gpt-6.1-sol)"
         );
     } else {
         tracing::warn!(

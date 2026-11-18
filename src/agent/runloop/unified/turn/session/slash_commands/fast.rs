@@ -64,7 +64,7 @@ fn apply_fast_mode(
     let enabled = enable.unwrap_or(!fast_mode_selected(config, &runtime_cfg));
     if enabled && !supports_fast_mode(config, &runtime_cfg) {
         bail!(
-            "/fast on requires native OpenAI API-key authentication with gpt-6-astra or gpt-6.1-sol, or native Anthropic with claude-opus-5-5, claude-opus-5, or claude-opus-4-8. Select one with /model, or use /fast off to clear this provider override."
+            "/fast on requires native OpenAI API-key authentication with gpt-6.2-astra, gpt-6.2-sol, gpt-6-astra, or gpt-6.1-sol, or native Anthropic with claude-opus-5-5, claude-opus-5, or claude-opus-4-8. Select one with /model, or use /fast off to clear this provider override."
         );
     }
     set_fast_mode_preference(config, &mut runtime_cfg, enabled)?;
