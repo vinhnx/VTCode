@@ -26,6 +26,7 @@
 
 - Linux sandbox code never compiles on macOS, so every `unsafe` block there needs its own `// SAFETY:` comment plus a `#[allow(unsafe_code, reason = ...)]`, and seccomp `syscall_number` mappings must stay in sync with `BLOCKED_SYSCALLS`.
 - Windows-only `command_safety` DB builders are never compiled by Linux CI, so cross-check them with `cargo check --target x86_64-pc-windows-msvc`.
+- `split_shell_segments` rejects `\;` even though bash reads it literally: PowerShell uses `^` to escape, so `\;` hides `;` command chaining from this host-agnostic validator.
 - Keep `exec_policy_command_validation` fuzzing and traversal/symlink regressions aligned with containment or validation changes.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-safety.md) — read the section for the subsystem you change before editing it.

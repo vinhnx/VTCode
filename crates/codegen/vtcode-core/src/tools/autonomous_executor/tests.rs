@@ -170,6 +170,13 @@ fn test_workspace_boundary_validation() {
     let args = json!({"path": "/tmp/vtcode/test.txt"});
     let result = executor.validate_args(tools::WRITE_FILE, &args);
     result.unwrap();
+
+    // A sibling with the same string prefix must not inherit the exception.
+    for sibling in ["/tmp/vtcode-evil/secret.txt", "/tmp/vtcode_backdoor/key.pem"] {
+        let args = json!({"path": sibling});
+        let result = executor.validate_args(tools::WRITE_FILE, &args);
+        assert!(result.is_err(), "prefix-sibling {sibling} must be rejected");
+    }
 }
 
 #[test]

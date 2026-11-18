@@ -598,6 +598,13 @@ pub(crate) fn split_shell_segments(command: &str) -> Result<Vec<String>> {
             QuoteState::None => {
                 if escaped {
                     escaped = false;
+                    // A backslash-escaped semicolon is a literal in bash but a
+                    // statement separator in PowerShell (which escapes with
+                    // `^`, not `\`). Reject it here so this platform-agnostic
+                    // validator cannot be blinded to command chaining by `\;`.
+                    if ch == ';' {
+                        bail!("Escaped command chaining detected");
+                    }
                     continue;
                 }
 

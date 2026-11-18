@@ -8,13 +8,16 @@ pub fn is_safe_relative_path(path: &str) -> bool {
         return false;
     }
 
-    // Check for path traversal attempts
-    if path.contains("..") {
+    // Reject traversal only when `..` is a whole component. A substring check
+    // would drop legal names such as `v1..2.txt` on Unix/macOS.
+    if path.split(['/', '\\']).any(|component| component == "..") {
         return false;
     }
 
-    // Block absolute paths for security
-    if path.starts_with(['/', '\\']) || path.contains(':') {
+    // Both separators are treated as rooted on every host (defense in depth).
+    // ':' only denotes a drive or alternate data stream on Windows; on Unix it
+    // is an ordinary filename character (`@notes:Q1.txt`).
+    if path.starts_with(['/', '\\']) || (cfg!(windows) && path.contains(':')) {
         return false;
     }
 
@@ -64,12 +67,8 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
     // Windows critical paths
     #[cfg(windows)]
     {
-        let path_lower = path.to_lowercase();
-        static WIN_CRITICAL: &[&str] = &["c:\\windows", "c:\\program files", "c:\\system32"];
-        for prefix in WIN_CRITICAL {
-            if path_lower.starts_with(prefix) {
-                bail!("Access to Windows system directory denied");
-            }
+        if is_windows_critical_path(path) {
+            bail!("Access to Windows system directory denied");
         }
     }
 
@@ -87,6 +86,35 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
 
 fn matches_critical_prefix(path: &str, prefix: &str) -> bool {
     path == prefix || path.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Whether a Windows path points into a critical system directory.
+///
+/// Windows accepts `/` as a separator and these directories exist on every
+/// drive, so compare normalized, drive-prefix-stripped components rather than
+/// a hardcoded `c:\...` string prefix. Kept platform-agnostic so the logic can
+/// be regression-tested on any host.
+fn is_windows_critical_path(path: &str) -> bool {
+    let normalized = path.replace('/', "\\").to_lowercase();
+    let without_extended = normalized.strip_prefix("\\\\?\\").unwrap_or(&normalized);
+    let mut chars = without_extended.chars();
+    let after_drive = match (chars.next(), chars.next()) {
+        (Some(drive), Some(':')) if drive.is_ascii_lowercase() => chars.as_str(),
+        _ => without_extended,
+    };
+    let relative = after_drive.trim_start_matches('\\');
+    // `windows.old` holds a previous system installation (registry hives,
+    // system binaries); the old `c:\windows` string prefix covered it too.
+    const CRITICAL: &[&str] = &[
+        "windows",
+        "windows.old",
+        "program files",
+        "program files (x86)",
+        "system32",
+    ];
+    CRITICAL
+        .iter()
+        .any(|name| relative == *name || relative.strip_prefix(name).is_some_and(|rest| rest.starts_with('\\')))
 }
 
 /// Validate an archive entry name and return it as a destination-relative path.
@@ -135,6 +163,40 @@ mod tests {
     #[test]
     fn accepts_nested_relative_names() {
         assert_eq!(safe_archive_relative_path(Path::new("a/b/c.txt")).expect("safe"), PathBuf::from("a/b/c.txt"));
+    }
+
+    #[test]
+    fn unix_filenames_may_contain_colons_and_double_dots() {
+        if cfg!(windows) {
+            return;
+        }
+        assert!(is_safe_relative_path("@notes:Q1.txt"));
+        assert!(is_safe_relative_path("v1..2.txt"));
+        assert!(!is_safe_relative_path("a/../secret.txt"));
+        assert!(!is_safe_relative_path("a\\..\\secret.txt"));
+    }
+
+    #[test]
+    fn windows_critical_paths_normalize_separators_and_drives() {
+        for path in [
+            "C:/Windows/System32/drivers/etc/hosts",
+            "c:\\windows\\system32\\drivers\\etc\\hosts",
+            "D:\\Windows\\System32\\foo",
+            "C:/Windows.old/Windows/System32/config/SAM",
+            "\\\\?\\C:\\Windows\\foo",
+            "C:/Program Files/Tools/tool.exe",
+            "C:/Program Files (x86)/Tools/tool.exe",
+            "c:/system32/config/SAM",
+        ] {
+            assert!(is_windows_critical_path(path), "must be critical: {path}");
+        }
+        for path in [
+            "C:/Users/me/Documents/windows-notes.txt",
+            "C:/projects/myapp/src/main.rs",
+            "D:/data/windows_backup.tar",
+        ] {
+            assert!(!is_windows_critical_path(path), "must not be critical: {path}");
+        }
     }
 
     #[test]

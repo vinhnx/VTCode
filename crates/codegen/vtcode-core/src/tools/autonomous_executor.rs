@@ -335,8 +335,9 @@ impl AutonomousExecutor {
 
         // Check for absolute paths
         if path_obj.is_absolute() {
-            // Allow /tmp/vtcode paths
-            if path_str.starts_with("/tmp/vtcode") {
+            // Allow paths beneath /tmp/vtcode. Use component-aware matching so
+            // siblings like /tmp/vtcode-evil do not inherit the exception.
+            if path_obj.starts_with("/tmp/vtcode") {
                 return Ok(());
             }
 
