@@ -20,7 +20,7 @@
 - Every action is keyboard-reachable with visible focus, and overlays dismiss through `dismiss_overlay` paths, bind Escape on the topmost surface, and restore focus.
 - Destructive actions use a native `Delete "Name"?` confirm and are enforced server-side, while Full-access consent uses the checkbox-gated in-app modal with a one-shot attestation.
 - Keep views free of service/runtime logic, with thin response routers delegating to `apply_*`/`fail_*` beside each feature's request builders.
-- Transcript titles/details/labels delegate to `vtcode-commons::tool_headlines` (`tool_intent` probe); categories, collapse, renderers stay local — never mirror.
+- Transcript titles/details/labels delegate to `vtcode-commons::tool_headlines` (`tool_intent` probe); categories, collapse, renderers stay local — never mirror; check first, share with CLI if related.
 - No I/O or unbounded loops in render functions; memoize projections per revision, page long lists, and run blocking work via `background_spawn`.
 - External launches stay behind the fixed-argv boundary in `files/launch.rs`, and the app bundle must never declare `NSIsTouchNative`.
 - Session changes during a running turn route through the running-confirm modal, and every `running = false` writer must drain or drop the armed wait.

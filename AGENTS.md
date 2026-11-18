@@ -8,7 +8,7 @@ Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` 
 
 - Orient: repository instructions, relevant source/tests, and task-relevant entries in `.vtcode/memory/` (search, do not concatenate). For self-bugs, read `.vtcode/logs/trajectory.jsonl`, `.vtcode/checkpoints`, `.vtcode/sessions`.
 - Research hard problems only: DeepWiki MCP for `vinhnx/vtcode` (baseline) and `openai/codex` (upstream); verify claims against the checkout or pinned upstream source, attribute sources, stay within the original authorization. See the [reference workflow](docs/development/codex-reference-workflow.md).
-- Read and apply: use `read-and-apply`, `rust-skills`/`agentic-testing`, and `verification-discipline`; implement the smallest complete DRY/KISS improvement; preserve `ThreadEvent`, the harness config split, sandbox/approval boundaries, rollback, durable history, and unrelated work. Adapted upstream code keeps Apache-2.0 attribution ([root notes](docs/development/maintainer-notes/root.md)).
+- Read and apply: use `read-and-apply`, `rust-skills`/`agentic-testing`, and `verification-discipline`; implement the smallest complete DRY/KISS improvement for CLI and desktop when related; preserve `ThreadEvent`, the harness config split, sandbox/approval boundaries, rollback, durable history, and unrelated work. Adapted upstream code keeps Apache-2.0 attribution ([root notes](docs/development/maintainer-notes/root.md)).
 - Verify with `./scripts/check-dev.sh` + `cargo nextest run`; record durable learnings in `.vtcode/memory/` (local-only, gitignored). Interview the user on plan open questions via the interactive question tool (one at a time, recommended answer first) instead of assuming defaults.
 
 ## Rules
@@ -27,7 +27,7 @@ Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` 
 - Treat the sandbox/exec boundary as a primary adversarial surface: use sandbox-aware launch paths and add adversarial regression coverage for command injection, path/symlink escape, environment leakage, and fail-closed behavior.
 - **All built-in themes must meet WCAG AA 4.5:1 contrast** for foreground and all accent fields against background. Validate with `cargo nextest run -p vtcode-ui -E 'test(theme)'`. See `.vtcode/memory/gotchas.md` for catppuccin-latte special-case.
 - **Every new major feature must update docs**: user-facing behavior in `docs/development/` plus its quick-reference; tool surface in prompt guidance (`vtcode-core/src/prompts/guidelines/`) and schema (`vtcode-utility-tool-specs`); runtime contract in `ThreadEvent`.
-- DO NOT read or modify user's TODO.md (docs/project/TODO.md). This file is for the user's personal task management and should remain private and untouched by the agents.
+- DO NOT read or modify the user's TODO.md (docs/project/TODO.md): private task management, agents keep out.
 
 ## Self-Debugging (VT Code fixing itself)
 
