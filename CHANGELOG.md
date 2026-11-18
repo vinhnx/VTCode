@@ -5,6 +5,20 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.183.1 - 2026-11-18
+
+### Highlights
+
+#### Features
+
+- Support ultrafast on GPT-6.2 Astra and Sol (faacd32f)
+
+### Other Changes
+
+#### Refactors
+
+- Extract inline test modules to sibling tests.rs files (07c56870)
+
 ## 0.183.0 - 2026-11-17
 
 ### Highlights
