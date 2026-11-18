@@ -38,8 +38,11 @@ fn set_communication_style(view: &mut DesktopView, style: &str) {
 #[gpui_kit::test]
 fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let item =
-        diagnostic_item("tool-diagnosis:task-tracker", "Likely cause: duplicate create.", DiagnosticSeverity::Warning);
+    let item = diagnostic_item(
+        "tool-diagnosis:task-tracker",
+        "Likely cause: duplicate create.\nEvidence: two create calls in one batch.",
+        DiagnosticSeverity::Warning,
+    );
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             // Routine incidents paint under Verbose; Balanced coverage lives
@@ -75,12 +78,19 @@ fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) 
             toggle_right >= header_right - px(1.) && toggle_right <= header_right + px(1.),
             "details toggle docks at the header trailing edge: toggle={toggle_bounds:?} header={header:?}"
         );
-        assert!(
-            window.try_find("notice-details-body-tool-diagnosis:task-tracker").is_none(),
-            "collapsed notices hide the details body"
+        assert_eq!(
+            window.find("notice-text-tool-diagnosis:task-tracker").label(),
+            Some("Likely cause: duplicate create."),
+            "collapsed notice shows only the lead line"
         );
+        let header_before = window.find("notice-header-tool-diagnosis:task-tracker").bounds();
         window.click("notice-details-tool-diagnosis:task-tracker", cx);
         window.render_frame(cx);
+        assert_eq!(
+            window.find("notice-header-tool-diagnosis:task-tracker").bounds(),
+            header_before,
+            "expanding must not move the icon/title/CTA row"
+        );
         assert!(
             view.read(cx)
                 .transcript
@@ -118,6 +128,30 @@ fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) 
             .expect("diagnostic row survives updates");
         assert!(row.expanded, "streaming updates preserve expansion");
         assert!(row.text.contains("Attempts: 2"), "streaming updates refresh the details");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn short_diagnostic_renders_full_markdown_without_a_details_toggle(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            set_communication_style(view, "verbose");
+            view.update_runtime_item(&diagnostic_item(
+                "short-markdown",
+                "Command: `cargo check`",
+                DiagnosticSeverity::Warning,
+            ));
+        });
+        window.render_frame(cx);
+
+        assert!(window.try_find("notice-details-body-short-markdown").is_some());
+        assert!(window.try_find("notice-details-short-markdown").is_none());
+        assert!(
+            window.try_find("notice-text-short-markdown").is_none(),
+            "a complete diagnostic should use the Markdown body rather than the literal preview"
+        );
     })
     .unwrap();
 }

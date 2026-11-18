@@ -553,7 +553,7 @@ fn consecutive_full_remeasures_collapse_to_one_probe() {
 }
 
 #[test]
-fn notice_details_toggle_on_every_notice_with_a_body() {
+fn notice_details_toggle_updates_expansion_state() {
     use super::NoticeSeverity;
     let mut transcript = Transcript::default();
     transcript.push(TranscriptItem::diagnostic_notice(

@@ -71,8 +71,8 @@ impl DesktopView {
         )
     }
 
-    /// One segmented option button: same selected styling as the settings
-    /// profile buttons, keyboard-focusable like every other action.
+    /// One option in a recessed track, using the same selection semantics
+    /// and keyboard behavior as the settings profile buttons.
     fn diff_option_button<Select>(
         id: &'static str,
         label: String,
@@ -87,7 +87,9 @@ impl DesktopView {
         desktop_button(id)
             .label(label)
             .small()
+            .rounded(ButtonRounded::Medium)
             .desktop_selected(selected, colors)
+            .when(selected, |button| button.bg(themes::button_face(colors.button_active, colors.foreground)))
             .on_click({
                 let view = view.clone();
                 move |_, _: &mut Window, cx: &mut App| {
@@ -114,7 +116,10 @@ impl DesktopView {
             .flex()
             .flex_wrap()
             .items_center()
-            .gap_2();
+            .gap_1()
+            .p_0p5()
+            .rounded_xl()
+            .bg(colors.background);
         for option in options {
             group = group.child(option);
         }

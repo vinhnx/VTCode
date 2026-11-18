@@ -141,7 +141,11 @@ impl DesktopView {
     /// edits are never silently dropped, and interior layers unwind one step
     /// at a time just as they do for Back/Escape.
     pub(super) fn go_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.navigation_peek = false;
+        self.disarm_double_escape();
+        self.cancel_pending_swipe(cx);
+        if std::mem::take(&mut self.navigation_peek) {
+            cx.notify();
+        }
         if self.current_route() != Route::Workspace {
             self.request_panel_dismiss(window, cx);
         }

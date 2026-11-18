@@ -821,18 +821,18 @@ fn scroll_column_inner(
         .child(child)
 }
 
-/// Interactive buttons: pointing hand (disabled keeps arrow); all share the round Large tier.
+/// Interactive button baseline: keyboard focus and a pointing-hand cursor.
 pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer().rounded(ButtonRounded::Large)
 }
 
 /// Ordinary visible action: a filled push button for commands that deserve a
 /// control frame (dialog secondaries, Save/Cancel pairs, labeled toolbar
-/// actions). Kit's Default variant paints the themed button fill with an input
+/// actions). Kit's Default variant paints the highlighted face with an input
 /// hairline; rails, nav rows, and icon-only toolbar actions stay on
 /// [`desktop_button`] + `.ghost()` instead.
 pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id)
+    desktop_button(id).rounded(ButtonRounded::Medium)
 }
 
 /// Decision-area default commit: the one emphasized action per view, normally

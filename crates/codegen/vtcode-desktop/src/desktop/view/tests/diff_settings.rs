@@ -44,12 +44,18 @@ fn diff_appearance_clicks_persist_and_relaunch_applies_them(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
+        scroll_settings_into_view(window, "diff-indicator-bars", cx);
+        assert_eq!(window.find("diff-indicator-signs").checked(), Some(true));
+        assert_eq!(window.find("diff-indicator-bars").checked(), Some(false));
         for id in ["diff-soft-wrap", "diff-indicator-bars", "diff-context-unfolded"] {
             scroll_settings_into_view(window, id, cx);
             window.click(id, cx);
             window.render_frame(cx);
         }
         assert_eq!(window.find("diff-soft-wrap").checked(), Some(false));
+        scroll_settings_into_view(window, "diff-indicator-bars", cx);
+        assert_eq!(window.find("diff-indicator-signs").checked(), Some(false));
+        assert_eq!(window.find("diff-indicator-bars").checked(), Some(true));
         assert!(!view.read(cx).preferences.diff.soft_wrap());
         assert_eq!(view.read(cx).preferences.diff.change_indicator(), DiffChangeIndicator::Bars);
         assert_eq!(view.read(cx).preferences.diff.context_lines(), None);

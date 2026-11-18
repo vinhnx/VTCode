@@ -62,10 +62,14 @@ fn home_button_on_workspace_keeps_the_composer_draft(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.press("cmd-l", cx);
         window.input("keep this draft", cx);
+        window.press("escape", cx);
+        assert!(view.read(cx).last_escape_press.is_some());
 
         window.click("nav-home", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).current_route(), Route::Workspace);
+        assert!(view.read(cx).last_escape_press.is_none());
+        window.press("escape", cx);
         assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
     })

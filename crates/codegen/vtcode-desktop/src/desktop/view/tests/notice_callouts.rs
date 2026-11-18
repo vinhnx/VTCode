@@ -40,14 +40,14 @@ fn transcript_notices_render_severity_without_message_chrome(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn notice_callout_capitalizes_and_hides_its_body_behind_a_cta(cx: &mut TestAppContext) {
+fn notice_callout_keeps_its_title_row_stable_while_expanding(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.transcript.push(TranscriptItem::notice(
                 "callout".into(),
                 "run status".into(),
-                "turn blocked by a failing check".into(),
+                "turn blocked by a failing check\ncheck the verify step for details".into(),
                 NoticeSeverity::Warning,
             ));
         });
@@ -59,17 +59,87 @@ fn notice_callout_capitalizes_and_hides_its_body_behind_a_cta(cx: &mut TestAppCo
             "the visible lead capitalizes its first letter: {:?}",
             lead.label()
         );
-        assert!(window.try_find("notice-details-callout").is_some(), "the details CTA is always reachable");
-        assert!(window.try_find("notice-details-body-callout").is_none(), "the full message stays behind the CTA");
+        assert!(window.try_find("notice-details-callout").is_some(), "a body with hidden lines offers a CTA");
+        let header_before = window.find("notice-header-callout").bounds();
+        let toggle_before = window.find("notice-details-callout").bounds();
 
         window.click("notice-details-callout", cx);
         window.render_frame(cx);
+        assert_eq!(
+            window.find("notice-header-callout").bounds(),
+            header_before,
+            "the icon/title/CTA row never jumps between states"
+        );
+        assert_eq!(
+            window.find("notice-details-callout").bounds(),
+            toggle_before,
+            "the CTA keeps its exact slot when the label flips"
+        );
         let body = window.find("notice-text-callout");
         assert!(
-            body.label().is_some_and(|label| label == "Turn blocked by a failing check"),
-            "the expanded body keeps capitalization"
+            body.label()
+                .is_some_and(|label| label.contains("check the verify step for details")),
+            "expanding reveals the rest of the body"
         );
         assert!(window.try_find("notice-details-body-callout").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn short_notice_body_shows_in_full_without_a_details_cta(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::notice(
+                "short".into(),
+                "run status".into(),
+                "turn cancelled".into(),
+                NoticeSeverity::Warning,
+            ));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(
+            window.find("notice-text-short").label(),
+            Some("Turn cancelled"),
+            "a short body is shown verbatim with no truncated lead"
+        );
+        assert!(
+            window.try_find("notice-details-short").is_none(),
+            "there is no redundant expand step when the full body is already visible"
+        );
+        let header = window.find("notice-header-short").bounds();
+        let body = window.find("notice-details-body-short").bounds();
+        assert!(body.origin.y > header.origin.y, "the body sits on its own row under the title");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn long_single_line_notice_offers_a_cta_with_a_truncated_lead(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::notice(
+                "long".into(),
+                "run status".into(),
+                "x".repeat(200),
+                NoticeSeverity::Warning,
+            ));
+        });
+        window.render_frame(cx);
+
+        let lead_element = window.find("notice-text-long");
+        let lead = lead_element.label().unwrap_or_default();
+        assert_eq!(lead.chars().count(), 181, "the lead truncates at 180 chars plus an ellipsis");
+        assert!(lead.ends_with('…'));
+        assert!(window.try_find("notice-details-long").is_some(), "a truncated body offers a CTA");
+
+        window.click("notice-details-long", cx);
+        window.render_frame(cx);
+        let body_element = window.find("notice-text-long");
+        assert_eq!(body_element.label().unwrap_or_default().chars().count(), 200, "expanding reveals the full body");
     })
     .unwrap();
 }

@@ -38,6 +38,21 @@ fn scroll_crossing_arms_overlay_without_navigating(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn home_cancels_an_armed_swipe_before_it_can_switch_threads(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    swipe_navigate(window, NavigationDirection::Forward, cx);
+    assert_swipe_overlay(window, "Forward to Thread swipe-third", cx);
+    cx.update_window(window, |_, window, cx| window.click("nav-home", cx)).unwrap();
+
+    settle_swipe_commit(cx);
+    assert_no_swipe_overlay(window, cx);
+    assert!(requests.try_recv().is_err(), "Home supersedes the pending session load");
+}
+
+#[gpui_kit::test]
 fn finger_lift_commits_armed_scroll(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

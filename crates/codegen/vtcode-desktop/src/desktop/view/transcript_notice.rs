@@ -2,9 +2,11 @@
 //! compaction/reset notices, run status, and ThreadEvent diagnostic notices.
 //!
 //! Every severity uses the same card geometry, typography, icon slot, and CTA
-//! placement; only the tone-resolved color and icon differ. A non-empty body
-//! stays behind a Show/Hide details CTA, and consecutive ephemeral notices
-//! fold into one callout whose count CTA reveals the rest.
+//! placement; only the tone-resolved color and icon differ. The body always
+//! sits on its own row below a constant-height title row; a Show/Hide details
+//! CTA appears only when the body holds more than the visible lead, so short
+//! notices never offer a redundant expanded state. Consecutive ephemeral
+//! notices fold into one callout whose count CTA reveals the rest.
 
 use super::*;
 
@@ -23,12 +25,23 @@ fn capitalize_first(text: &str) -> String {
 
 fn notice_lead(text: &str) -> String {
     let line = text.lines().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
-    let length = line.chars().count();
-    let mut lead: String = line.chars().take(NOTICE_LEAD_CHARS).collect();
-    if length > NOTICE_LEAD_CHARS {
+    let mut chars = line.chars();
+    let mut lead: String = chars.by_ref().take(NOTICE_LEAD_CHARS).collect();
+    if chars.next().is_some() {
         lead.push('…');
     }
     capitalize_first(&lead)
+}
+
+/// Whether the collapsed lead hides any of the body. Short single-line bodies
+/// render in full with no Details CTA, so the expanded state never repeats
+/// content the collapsed callout already shows verbatim.
+fn notice_has_hidden_details(text: &str) -> bool {
+    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
+    let Some(first) = lines.next() else {
+        return false;
+    };
+    lines.next().is_some() || first.trim().chars().nth(NOTICE_LEAD_CHARS).is_some()
 }
 
 /// Shared callout shell, used by both the head notice and each folded entry.
@@ -82,6 +95,7 @@ impl DesktopView {
         let style = severity_marker_style(item.notice_severity, &colors);
         let title = capitalize_first(item.title.as_str());
         let has_body = item.collapsible_details && !item.text.trim().is_empty();
+        let has_details = has_body && notice_has_hidden_details(item.text.as_str());
         let stack_count = item.notice_count();
         let has_stack = stack_count > 1;
 
@@ -95,37 +109,16 @@ impl DesktopView {
             aria.push_str(entry.text.as_str());
         }
 
-        let lead = if has_body && !item.expanded {
-            notice_lead(item.text.as_str())
-        } else {
-            String::new()
-        };
+        // Title owns the whole header row; the body lives in its own row below
+        // so the icon and trailing CTA never shift between collapsed/expanded.
         let heading = div()
             .min_w_0()
             .flex_1()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .text_sm()
-                    .font_semibold()
-                    .text_color(chrome.title_color)
-                    .child(title.clone()),
-            )
-            .when(!lead.is_empty(), |column| {
-                column.child(
-                    div()
-                        .id(format!("notice-text-{}", item.id))
-                        .test_support()
-                        .aria_label(lead.clone())
-                        .text_xs()
-                        .text_color(chrome.body_color)
-                        .child(lead),
-                )
-            });
+            .truncate()
+            .text_sm()
+            .font_semibold()
+            .text_color(chrome.title_color)
+            .child(title.clone());
 
         let mut header = div()
             .id(format!("notice-header-{}", item.id))
@@ -174,7 +167,7 @@ impl DesktopView {
             );
         }
 
-        if has_body {
+        if has_details {
             let toggle = if item.expanded {
                 rust_i18n::t!("app.transcript.hide_details").to_string()
             } else {
@@ -234,10 +227,11 @@ impl DesktopView {
             .gap_2()
             .child(header);
 
-        if has_body && item.expanded {
+        if has_body {
             card = card.child(self.render_notice_body(
                 item.id.as_str(),
                 item.text.as_str(),
+                item.expanded || (item.notice_is_diagnostic && !has_details),
                 item.notice_is_diagnostic,
                 &chrome,
                 cx,
@@ -253,48 +247,48 @@ impl DesktopView {
         card.into_any_element()
     }
 
-    /// Expanded body of one callout. Diagnostic evidence keeps its Markdown
-    /// treatment (fenced blocks still read as code); plain notices stay literal
-    /// so backend backticks are never reinterpreted.
+    /// Body of one callout, always visible in its own row on the title spine.
+    /// Collapsed notices show the short lead; the Details CTA reveals the full
+    /// text. Diagnostic evidence keeps its Markdown treatment (fenced blocks
+    /// still read as code); plain notices stay literal so backend backticks
+    /// are never reinterpreted.
     fn render_notice_body(
         &self,
         id: &str,
         text: &str,
+        show_full_body: bool,
         markdown: bool,
         chrome: &CalloutChrome,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if markdown {
-            div()
-                .id(format!("notice-details-body-{id}"))
-                .test_support()
-                .pl_6()
-                .text_sm()
-                .text_color(chrome.body_color)
-                .child(render_markdown_with_style(
-                    format!("notice-details-markdown-{id}"),
-                    text.to_string().into(),
-                    false,
-                    self.transcript_markdown_style.clone().unwrap_or_else(|| markdown_style(cx)),
-                ))
-                .into_any_element()
+        let mut body = div()
+            .id(format!("notice-details-body-{id}"))
+            .test_support()
+            .pl_6()
+            .text_sm()
+            .text_color(chrome.body_color);
+        if markdown && show_full_body {
+            body = body.child(render_markdown_with_style(
+                format!("notice-details-markdown-{id}"),
+                text.to_string().into(),
+                false,
+                self.transcript_markdown_style.clone().unwrap_or_else(|| markdown_style(cx)),
+            ));
         } else {
-            let body = capitalize_first(text);
-            div()
-                .id(format!("notice-details-body-{id}"))
-                .test_support()
-                .pl_6()
-                .text_sm()
-                .text_color(chrome.body_color)
-                .child(
-                    div()
-                        .id(format!("notice-text-{id}"))
-                        .test_support()
-                        .aria_label(body.clone())
-                        .child(body),
-                )
-                .into_any_element()
+            let content = if show_full_body {
+                capitalize_first(text)
+            } else {
+                notice_lead(text)
+            };
+            body = body.child(
+                div()
+                    .id(format!("notice-text-{id}"))
+                    .test_support()
+                    .aria_label(content.clone())
+                    .child(content),
+            );
         }
+        body.into_any_element()
     }
 
     /// One folded announcement revealed by the stack count CTA. It shares the
