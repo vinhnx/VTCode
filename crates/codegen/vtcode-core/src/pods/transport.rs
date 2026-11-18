@@ -96,10 +96,45 @@ fn build_ssh_command(ssh_target: &str, remote_command: &str) -> Result<Command> 
     };
 
     let mut command = Command::new(program);
+    // Keep inherited agent sockets out of the pod transport process.
+    command.env_remove("SSH_AUTH_SOCK").env_remove("GPG_AGENT_INFO");
     command.args(args);
     command.arg(remote_command);
     Ok(command)
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn pod_ssh_removes_agent_environment_and_preserves_arguments() {
+        let remote_command = "printf '%s\\n' ready";
+        let command = build_ssh_command("ssh -p 2222 -i 'pod key' runner@pod.example", remote_command).unwrap();
+        let command = command.as_std();
+
+        for name in ["SSH_AUTH_SOCK", "GPG_AGENT_INFO"] {
+            assert!(
+                command
+                    .get_envs()
+                    .any(|(key, value)| { key == OsStr::new(name) && value.is_none() })
+            );
+        }
+        assert_eq!(command.get_program(), OsStr::new("ssh"));
+        assert!(
+            command
+                .get_args()
+                .eq(["-p", "2222", "-i", "pod key", "runner@pod.example", remote_command].map(OsStr::new))
+        );
+    }
+
+    #[test]
+    fn pod_ssh_preserves_explicit_flags_and_wrapper_arguments() {
+        let ssh = build_ssh_command("/usr/bin/ssh -A pod", "true").unwrap();
+        assert!(ssh.as_std().get_args().eq(["-A", "pod", "true"].map(OsStr::new)));
+
+        let wrapper = build_ssh_command("ssh-wrapper --profile pod", "true").unwrap();
+        assert!(wrapper.as_std().get_args().eq(["--profile", "pod", "true"].map(OsStr::new)));
+    }
+}

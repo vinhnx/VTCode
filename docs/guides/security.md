@@ -95,6 +95,12 @@ sanitized environment removes credential, token, cloud-provider, linker, and dyn
 command override cannot re-add one of those variables; this prevents an inherited credential from crossing the process
 boundary accidentally.
 
+Sandboxed commands and remote pod SSH processes strip the inherited `SSH_AUTH_SOCK` and
+`GPG_AGENT_INFO` variables. VT Code adds no agent-forwarding flags to pod SSH commands.
+OpenSSH can still forward an agent socket explicitly configured by path, and custom SSH wrappers
+control their own forwarding behavior. Pod logins that relied on `SSH_AUTH_SOCK` need a separate
+authentication method, such as an SSH identity file.
+
 MCP stdio providers inherit the session sandbox through the public `McpSandboxContext` API. `McpClient::new` remains
 available for library callers that intentionally manage their own process isolation, while the application constructs
 the context and passes it through initial connections, connection pools, and reconnects. MCP stderr is bounded and
