@@ -6,6 +6,7 @@ use crate::utils::transcript;
 
 use anyhow::Result;
 use vtcode_commons::formatting::{RAN_COMMAND_CONTINUATION_WIDTH, RAN_COMMAND_FIRST_WIDTH};
+use vtcode_commons::tool_headlines::SessionPollKey;
 use vtcode_commons::tool_types::CompactStr;
 use vtcode_commons::ui_protocol::{CompactActivityMetadata, ToolOutputId};
 
@@ -14,8 +15,61 @@ impl AnsiRenderer {
     /// The grouping state is intentionally kept in the renderer rather than
     /// the persisted execution event stream. Callers use this before a turn
     /// ends or before rendering a non-command result.
+    ///
+    /// This deliberately does not end the session poll run: plain body and
+    /// hint lines flush through here, and a run must survive its own bodies.
+    /// Poll runs end only at explicit boundaries (other headers, turn ends,
+    /// failures) via [`AnsiRenderer::end_session_poll_run`].
     pub fn flush_compact_command_group(&mut self) {
         self.compact_command_group = None;
+    }
+
+    /// Whether `key` continues the active session poll/wait run.
+    pub fn session_poll_continues(&self, key: &SessionPollKey) -> bool {
+        self.session_poll_run.as_ref() == Some(key)
+    }
+
+    /// Start (or restart) a session poll/wait run after rendering its header.
+    pub fn start_session_poll_run(&mut self, key: SessionPollKey, waited_secs: f64) {
+        self.session_poll_run = Some(key);
+        self.poll_run_attempts = 1;
+        self.poll_run_waited_secs = waited_secs.max(0.0);
+    }
+
+    /// Record a follow-up within the active run, returning its progress tick
+    /// (`×3 · waited 12s`) for the compact continuation line.
+    pub fn note_session_poll_followup(&mut self, waited_secs: f64) -> Option<String> {
+        self.session_poll_run.as_ref()?;
+        self.poll_run_attempts = self.poll_run_attempts.saturating_add(1);
+        self.poll_run_waited_secs = (self.poll_run_waited_secs + waited_secs.max(0.0)).max(0.0);
+        Some(vtcode_commons::tool_headlines::poll_run_tick(self.poll_run_attempts, self.poll_run_waited_secs))
+    }
+
+    /// End the active session poll/wait run, if any. Called at explicit
+    /// boundaries only: a non-matching header, a command activity row, a
+    /// failure, a turn end, or a cleared screen. Body, hint, and detail lines
+    /// of the run itself must never end it.
+    pub fn end_session_poll_run(&mut self) {
+        self.session_poll_run = None;
+        self.poll_run_attempts = 0;
+        self.poll_run_waited_secs = 0.0;
+        self.last_poll_hint = None;
+    }
+
+    /// Suppress an identical consecutive follow-up hint within the active run.
+    ///
+    /// Returns true when `hint` was already shown for this run and must be
+    /// skipped; otherwise records it and returns false. Outside a run every
+    /// hint renders.
+    pub fn suppress_repeated_poll_hint(&mut self, hint: &str) -> bool {
+        if self.session_poll_run.is_none() {
+            return false;
+        }
+        if self.last_poll_hint.as_deref() == Some(hint) {
+            return true;
+        }
+        self.last_poll_hint = Some(hint.to_owned());
+        false
     }
 
     fn next_compact_activity(
@@ -65,6 +119,8 @@ impl AnsiRenderer {
         suffix: Option<String>,
         review_anchor: Option<ToolOutputId>,
     ) -> Result<()> {
+        // A command row is never a session follow-up: it ends any poll run.
+        self.end_session_poll_run();
         let command = command.into();
         if !self.supports_inline_ui() {
             // Plain-text fallback (no inline UI): wrap long commands with
@@ -111,6 +167,8 @@ impl AnsiRenderer {
         suffix: Option<String>,
         review_anchor: Option<ToolOutputId>,
     ) -> Result<()> {
+        // A command row is never a session follow-up: it ends any poll run.
+        self.end_session_poll_run();
         if !self.supports_inline_ui() {
             return Ok(());
         }

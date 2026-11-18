@@ -39,6 +39,7 @@ fn plain_tracker_lines(texts: &[&str]) -> Vec<TrackerLine> {
 mod compact_command;
 mod compact_groups;
 mod compact_pty;
+mod compact_session_polls;
 mod mcp_spool;
 mod pipe_output_lines;
 mod pipe_streams;

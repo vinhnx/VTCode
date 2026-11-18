@@ -68,6 +68,17 @@ pub struct AnsiRenderer {
     /// Needed for `unified_exec` follow-ups: the tool name alone cannot tell a
     /// session poll from a command launch.
     session_body: bool,
+    /// Active session poll/wait run: consecutive follow-ups for one session
+    /// share a single header instead of one per round-trip (desktop parity).
+    /// Cleared by any other header and at group boundaries.
+    session_poll_run: Option<vtcode_commons::tool_headlines::SessionPollKey>,
+    /// Follow-ups rendered in the active run (1 after the first header).
+    poll_run_attempts: usize,
+    /// Accumulated `waited_seconds` across the active run.
+    poll_run_waited_secs: f64,
+    /// Last follow-up hint printed within the active poll run, so an
+    /// identical consecutive hint renders once instead of once per wait.
+    last_poll_hint: Option<String>,
     diagnostic_sink: Option<DiagnosticSink>,
     diagnostic_history: std::collections::VecDeque<vtcode_commons::diagnostics::Diagnostic>,
 }

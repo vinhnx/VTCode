@@ -532,6 +532,14 @@ fn is_script_prefix_only(first_line: &str) -> bool {
     shell_words::split(first_line).is_err()
 }
 
+/// Session follow-up labels that coalesce into one transcript row per run.
+///
+/// Both surfaces (CLI renderer, desktop app) collapse consecutive polls and
+/// waits for one session; matching on these consts (never retyped literals)
+/// keeps the run predicate and the row titles in agreement by construction.
+pub const WAIT_FOR_COMMAND_SESSION: &str = "Wait for command session";
+pub const READ_COMMAND_SESSION: &str = "Read command session";
+
 /// Action-aware label for `command_session_internal` follow-up calls.
 ///
 /// Canonical home of the session labels: `vtcode-core` re-exports this, and
@@ -547,9 +555,9 @@ pub fn unified_exec_action_label(args: &Value) -> &'static str {
     } else if action.eq_ignore_ascii_case("write") {
         "Send command input"
     } else if action.eq_ignore_ascii_case("poll") {
-        "Read command session"
+        READ_COMMAND_SESSION
     } else if action.eq_ignore_ascii_case("wait") {
-        "Wait for command session"
+        WAIT_FOR_COMMAND_SESSION
     } else if action.eq_ignore_ascii_case("continue") {
         "Continue command session"
     } else if action.eq_ignore_ascii_case("inspect") {
@@ -650,7 +658,7 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
 pub fn session_followup_title(name: &str, args: &Value) -> Option<String> {
     match name {
         "send_pty_input" => Some("Send command input".to_string()),
-        "read_pty_session" => Some("Read command session".to_string()),
+        "read_pty_session" => Some(READ_COMMAND_SESSION.to_string()),
         "write_stdin" => Some(write_stdin_action_label(args).to_string()),
         "command_session_internal" => {
             let action = crate::tool_intent::command_session_action(args).unwrap_or("run");
@@ -745,10 +753,10 @@ pub fn compact_command_headline(command: &str) -> String {
 pub fn write_stdin_action_label(args: &Value) -> &'static str {
     if let Some(action) = args.get("action").and_then(Value::as_str) {
         if action.eq_ignore_ascii_case("wait") {
-            return "Wait for command session";
+            return WAIT_FOR_COMMAND_SESSION;
         }
         if action.eq_ignore_ascii_case("poll") {
-            return "Read command session";
+            return READ_COMMAND_SESSION;
         }
         if action.eq_ignore_ascii_case("inspect") {
             return "Inspect command output";
@@ -765,7 +773,7 @@ pub fn write_stdin_action_label(args: &Value) -> &'static str {
             return if has_session_input(args) {
                 "Send command input"
             } else {
-                "Read command session"
+                READ_COMMAND_SESSION
             };
         }
     }
@@ -774,7 +782,7 @@ pub fn write_stdin_action_label(args: &Value) -> &'static str {
     } else {
         // A session_id-only follow-up polls output; calling it "Send" misleads
         // (screenshot 2026-10-02: pure waits rendered as sends).
-        "Read command session"
+        READ_COMMAND_SESSION
     }
 }
 
@@ -837,6 +845,10 @@ pub fn harness_is_user_visible(kind: &vtcode_exec_events::HarnessEventKind) -> b
         | BackgroundSubprocessCompleted => true,
     }
 }
+
+mod session_poll;
+
+pub use session_poll::{SessionPollKey, poll_run_tick, session_poll_key};
 
 #[cfg(test)]
 mod tests;

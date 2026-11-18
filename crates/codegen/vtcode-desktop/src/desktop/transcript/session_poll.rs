@@ -8,9 +8,7 @@
 //! different action, or any intervening row — starts a fresh run.
 
 use serde_json::Value;
-use vtcode_commons::tool_headlines::lookup_string;
 
-use super::activity_verbs::session_tool_title;
 use super::{SessionPollRun, Transcript, TranscriptItem};
 
 /// Identity of one coalescible poll run: the session plus the base row title.
@@ -22,18 +20,16 @@ pub(crate) struct SessionPollKey {
 
 /// Extract the coalescing key for a session poll/wait invocation.
 ///
-/// `None` for launches, stdin sends, closes, inspects, and calls without a
-/// session id: those always project their own row. The title comes from the
-/// same reader as the row title, so the key can never disagree with it.
+/// Delegates to the shared predicate so desktop and CLI runs agree by
+/// construction; `None` rows (launches, stdin sends, closes, inspects, and
+/// calls without a session id) always project their own row.
 pub(crate) fn session_poll_key(tool_name: &str, args: Option<&Value>) -> Option<SessionPollKey> {
     let empty = Value::Null;
-    let args = args.unwrap_or(&empty);
-    let base_title = session_tool_title(tool_name, Some(args))?;
-    if base_title != "Wait for command session" && base_title != "Read command session" {
-        return None;
-    }
-    let session_id = lookup_string(args, "session_id")?;
-    Some(SessionPollKey { session_id, base_title })
+    let key = vtcode_commons::tool_headlines::session_poll_key(tool_name, args.unwrap_or(&empty))?;
+    Some(SessionPollKey {
+        session_id: key.session_id,
+        base_title: key.label.to_string(),
+    })
 }
 
 /// Row title for a poll run: the base title alone for a single poll, with a

@@ -62,6 +62,10 @@ impl AnsiRenderer {
             pending_tool_output_anchor: None,
             session_expand_anchor: None,
             session_body: false,
+            session_poll_run: None,
+            poll_run_attempts: 0,
+            poll_run_waited_secs: 0.0,
+            last_poll_hint: None,
             diagnostic_sink: None,
             diagnostic_history: std::collections::VecDeque::new(),
         }

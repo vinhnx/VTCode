@@ -100,6 +100,11 @@ generic stream label is dropped next to it so the header reads `• Wait for com
 further into a single row whose title gains a repeat count (`Wait for command session ×7`) and whose detail
 line tracks the latest wait deadline. A different session, action, turn, or intervening row starts a fresh run.
 The surviving row displays the latest nonblank capture. If an earlier call's capture arrives late, it gets its own row.
+The CLI coalesces the same runs through the shared `vtcode-commons::tool_headlines::session_poll_key` predicate:
+only the first header prints, each follow-up prints a compact progress tick (`└ ×3 · waited 12s`, same shared
+format as the desktop `×N` suffix), bodies always print, and an identical consecutive follow-up hint prints once.
+Failures and diagnostic stream labels keep their header and break the run, since the CLI cannot restyle a printed
+header the way the desktop row updates. The first header keeps the first wait's deadline rather than the latest.
 Output-token caps, yield windows, and the raw stdin payload are not rendered; the model still
 receives the full arguments and result. A still-running session ends with a human hint
 (`Still running — check again for more output.` / `More output available — read the next chunk.`) instead of the

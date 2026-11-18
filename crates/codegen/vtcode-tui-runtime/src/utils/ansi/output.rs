@@ -95,6 +95,8 @@ impl AnsiRenderer {
     ) -> (vtcode_commons::diagnostics::Diagnostic, Option<anyhow::Error>) {
         use vtcode_commons::diagnostics::redact_diagnostic;
         self.flush_compact_command_group();
+        // A diagnostic line breaks the transcript like any foreign row.
+        self.end_session_poll_run();
         let mut diagnostic = redact_diagnostic(diagnostic);
         let already_persisted = self.diagnostic_history.iter().any(|previous| previous == &diagnostic);
         let persistence_error = if !persist || already_persisted {
@@ -246,6 +248,8 @@ impl AnsiRenderer {
 
     pub fn clear_screen(&mut self) {
         self.flush_compact_command_group();
+        // The coalesced header is gone with the screen: start fresh.
+        self.end_session_poll_run();
         if let Some(sink) = &self.sink {
             sink.handle.clear_screen();
         }

@@ -123,6 +123,9 @@ pub(super) async fn render_tool_output_common(
         if compact_pty_without_live_preview {
             render_command_summary(renderer, name, args_val, output, command_success, workspace_root, viewer_id, true)?;
         } else {
+            // A completed PTY result ends any session poll run in every mode:
+            // its live block already broke the run visually.
+            renderer.end_session_poll_run();
             record_summary_line(name, args_val, output, command_success);
         }
 
@@ -220,6 +223,8 @@ pub(super) async fn render_tool_output_common(
         // Flush before rendering the file heading so a preceding command row
         // cannot absorb it and the following command starts a fresh group.
         renderer.flush_compact_command_group();
+        // The file heading renders outside the summary path: end the run here.
+        renderer.end_session_poll_run();
     }
     if compact_command {
         renderer.render_compact_command_activity(

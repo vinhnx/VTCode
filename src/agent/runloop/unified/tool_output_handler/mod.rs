@@ -83,6 +83,8 @@ async fn handle_success_common(
 
     if is_task_tracker_tool(name) && ctx.renderer.supports_inline_ui() {
         ctx.renderer.flush_compact_command_group();
+        // Tracker blocks render outside the summary path: end the run here.
+        ctx.renderer.end_session_poll_run();
         // Display-mode split: compact transcript shows header plus the current
         // task; expanded appends the truncated tree. The docked panel body
         // always keeps the full tree with per-row statuses for text-styling.
@@ -149,6 +151,9 @@ fn handle_non_success_common(
     status: &ToolExecutionStatus,
 ) -> Result<()> {
     ctx.renderer.flush_compact_command_group();
+    // Failures and cancellations always render (never coalesced) and break
+    // any session poll run: the header is the failure signal.
+    ctx.renderer.end_session_poll_run();
 
     // Expanded PTY tools already rendered "• Ran ..." in the pre-execution
     // inline block. Compact PTY tools suppress that block, so retain the

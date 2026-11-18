@@ -1,6 +1,7 @@
 //! Compact command summary rendering for completed command outcomes.
 
 use super::*;
+use vtcode_commons::tool_headlines::session_poll_key;
 
 /// Extract the command string from tool call arguments for display.
 ///
@@ -65,7 +66,21 @@ pub(super) fn render_command_summary(
     let summary_ctx = crate::agent::runloop::unified::tool_summary::ToolSummaryRenderContext { workspace_root };
     let status = ToolDisplayStatus::from_command_output(output, command_success);
     let bullet_color = status.color(ColorPalette::default());
-    if force_expanded {
+    // Consecutive session polls/waits for one run share a single header
+    // (desktop parity, same shared predicate): follow-ups print a compact
+    // progress tick instead of a full repeat, but only for clean successes —
+    // failures and diagnostic stream labels keep their header as the failure
+    // signal, and break the run.
+    let poll_key = session_poll_key(name, args_val);
+    let clean = matches!(status, ToolDisplayStatus::Success) && stream_label.is_none_or(|label| label == "output");
+    if poll_key.as_ref().is_some_and(|key| renderer.session_poll_continues(key)) && clean {
+        if let Some(tick) = renderer.note_session_poll_followup(waited_seconds(output)) {
+            crate::agent::runloop::tool_output::render_tree_detail(renderer, &tick)?;
+        }
+        return Ok(());
+    }
+    renderer.end_session_poll_run();
+    let result = if force_expanded {
         crate::agent::runloop::unified::tool_summary::render_expanded_tool_call_summary(
             renderer,
             name,
@@ -83,7 +98,18 @@ pub(super) fn render_command_summary(
             &summary_ctx,
             bullet_color,
         )
+    };
+    if result.is_ok() && clean {
+        if let Some(key) = poll_key {
+            renderer.start_session_poll_run(key, waited_seconds(output));
+        }
     }
+    result
+}
+
+/// Actual seconds the session call waited, when the result reports it.
+fn waited_seconds(output: &serde_json::Value) -> f64 {
+    output.get("waited_seconds").and_then(serde_json::Value::as_f64).unwrap_or(0.0)
 }
 
 pub(super) fn value_has_content(value: &serde_json::Value) -> bool {

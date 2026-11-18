@@ -142,6 +142,11 @@ pub(super) fn render_tool_follow_up_hints(
         if rendered_output.is_some_and(|output| output.contains(hint.as_str())) {
             continue;
         }
+        // Within a session poll run, an identical consecutive hint ("Still
+        // running ...") renders once instead of once per wait.
+        if renderer.suppress_repeated_poll_hint(&hint) {
+            continue;
+        }
         if !rendered_any {
             renderer.line(MessageStyle::ToolDetail, "")?;
             rendered_any = true;
