@@ -658,8 +658,8 @@ pub(super) struct SeverityMarkerStyle {
 
 /// Desktop severity mapping for status rows: errors announce as alerts in
 /// the danger tone, warnings keep their own warning tone and status role,
-/// info stays quiet muted text. Only errors earn semibold: icon + tone
-/// already carry severity.
+/// info stays quiet muted text. Typography is identical across levels —
+/// icon + tone carry severity, so weight is never the differentiator.
 pub(super) fn severity_marker_style(
     severity: NoticeSeverity,
     colors: &gpui_kit::component::theme::ThemeColor,
@@ -675,14 +675,14 @@ pub(super) fn severity_marker_style(
         NoticeSeverity::Warning => SeverityMarkerStyle {
             icon: IconName::TriangleAlert,
             tone: colors.warning,
-            semibold_title: false,
+            semibold_title: true,
             role: gpui_kit::Role::Status,
             status_label: "warning",
         },
         NoticeSeverity::Info => SeverityMarkerStyle {
             icon: IconName::Info,
             tone: themes::muted_text(colors),
-            semibold_title: false,
+            semibold_title: true,
             role: gpui_kit::Role::Status,
             status_label: "info",
         },

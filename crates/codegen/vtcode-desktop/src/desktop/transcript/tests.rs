@@ -4,6 +4,7 @@ use super::{
 };
 
 mod activity_revision;
+mod notice_stack;
 use vtcode_exec_events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, ErrorItem, FileChangeItem,
     HarnessEventItem, HarnessEventKind, McpToolCallItem, PatchApplyStatus, PlanItem, ReasoningItem, ThreadItemDetails,
@@ -552,7 +553,7 @@ fn consecutive_full_remeasures_collapse_to_one_probe() {
 }
 
 #[test]
-fn diagnostic_notices_toggle_details_while_plain_notices_stay_fixed() {
+fn notice_details_toggle_on_every_notice_with_a_body() {
     use super::NoticeSeverity;
     let mut transcript = Transcript::default();
     transcript.push(TranscriptItem::diagnostic_notice(
@@ -570,10 +571,11 @@ fn diagnostic_notices_toggle_details_while_plain_notices_stay_fixed() {
 
     transcript.toggle_notice("diag-1");
     assert!(transcript.get(0).unwrap().expanded);
-    assert!(!transcript.get(1).unwrap().expanded, "plain notices have no details toggle");
+    assert!(!transcript.get(1).unwrap().expanded, "details start collapsed");
+    transcript.toggle_notice("plain-1");
+    assert!(transcript.get(1).unwrap().expanded, "plain notices carry the same details CTA");
 
     let before = transcript.revision();
-    transcript.toggle_notice("plain-1");
     transcript.toggle_notice("missing");
     assert_eq!(transcript.revision(), before, "no-op toggles must not bump");
 

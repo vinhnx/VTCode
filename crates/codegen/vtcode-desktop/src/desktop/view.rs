@@ -89,11 +89,11 @@ use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;
 use super::transcript::{
-    DiffCard, DiffFile, DiffFileKind, EditTotals, NoticeSeverity, SessionPollKey, SessionPollRun, ToolCategory,
-    ToolCategoryCounts, Transcript, TranscriptItem, TranscriptRole, UserAttachment, activity_details_summary,
-    activity_output_text, activity_payload, activity_text, describe_activity_verbs, harness_is_user_visible,
-    humanize_elapsed, session_poll_key, split_tool_title_verb, status as tool_status, title_with_poll_count,
-    tool_row_gist,
+    DiffCard, DiffFile, DiffFileKind, EditTotals, NoticePayload, NoticeSeverity, SessionPollKey, SessionPollRun,
+    ToolCategory, ToolCategoryCounts, Transcript, TranscriptItem, TranscriptRole, UserAttachment,
+    activity_details_summary, activity_output_text, activity_payload, activity_text, describe_activity_verbs,
+    harness_is_user_visible, humanize_elapsed, session_poll_key, split_tool_title_verb, status as tool_status,
+    title_with_poll_count, tool_row_gist,
 };
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,

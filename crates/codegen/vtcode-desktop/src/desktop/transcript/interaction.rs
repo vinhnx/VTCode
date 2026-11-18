@@ -136,6 +136,24 @@ impl Transcript {
         }
     }
 
+    /// Expand or collapse the folded notices of a stacked callout. Folding is
+    /// identity-free (members are immutable), so the head owns the state.
+    pub fn toggle_notice_stack(&mut self, id: &str) {
+        let index = self
+            .items
+            .iter()
+            .rposition(|item| item.id == id && item.is_notice() && !item.notice_stack.is_empty());
+        if let Some(index) = index {
+            if let Some(item) = self.items.get_mut(index) {
+                item.notice_stack_expanded.toggle();
+            }
+            self.bump_revision();
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+        }
+    }
+
     pub fn follow_latest(&mut self) {
         self.layout_changes.push(TranscriptLayoutChange::FollowLatest);
     }

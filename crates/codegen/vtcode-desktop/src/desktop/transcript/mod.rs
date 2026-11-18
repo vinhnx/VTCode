@@ -37,13 +37,25 @@ pub(super) enum TranscriptLayoutChange {
 }
 
 /// Severity for `notice` rows (runtime errors, compaction/reset notices,
-/// run status). Other roles leave the default untouched.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// run status). Other roles leave the default untouched. Declaration order is
+/// ascending severity, so a folded stack can take the loudest level with `max`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum NoticeSeverity {
     #[default]
     Info,
     Warning,
     Error,
+}
+
+/// An ephemeral notice folded into a consecutive notice stack. Only plain
+/// notices (which are appended with a fresh id and never updated in place) are
+/// foldable, so a payload never needs id-based lookup after it is absorbed.
+#[derive(Clone, Debug)]
+pub(super) struct NoticePayload {
+    pub(super) id: String,
+    pub(super) title: SharedString,
+    pub(super) text: SharedString,
+    pub(super) severity: NoticeSeverity,
 }
 
 /// Canonical activity-status labels.
@@ -387,6 +399,31 @@ impl Transcript {
         if prepare_render_content {
             item.prepare_render_content();
         }
+        // Consecutive ephemeral notices collapse into one announcement. The
+        // head keeps its own body behind a Details CTA; folded entries surface
+        // through a count CTA, so a blocked turn reads as one callout instead
+        // of a wall of near-identical rows.
+        if item.can_fold_notice() {
+            let head_index = self.items.len().checked_sub(1);
+            let foldable = head_index
+                .and_then(|index| self.items.get(index))
+                .is_some_and(TranscriptItem::can_fold_notice);
+            if let Some(index) = head_index.filter(|_| foldable)
+                && let Some(head) = self.items.get_mut(index)
+            {
+                head.notice_stack.push(NoticePayload {
+                    id: item.id,
+                    title: item.title.clone(),
+                    text: item.text.clone(),
+                    severity: item.notice_severity,
+                });
+                head.notice_severity = head.notice_severity.max(item.notice_severity);
+                self.bump_revision();
+                self.layout_changes
+                    .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+                return;
+            }
+        }
         let item_is_tool = item.is_tool();
         let item_status = ToolActivityStatus::from_text(&item.text);
         if item_is_tool {
@@ -599,6 +636,11 @@ impl Transcript {
                 item.has_list = existing.has_list;
             }
             item.expanded = existing.expanded;
+            if item.is_notice() && existing.is_notice() {
+                item.notice_is_diagnostic = existing.notice_is_diagnostic;
+                item.notice_stack.clone_from(&existing.notice_stack);
+                item.notice_stack_expanded = existing.notice_stack_expanded;
+            }
             item.completed_at.clone_from(&existing.completed_at);
             item.turn_id.clone_from(&existing.turn_id);
             item.canonical_turn_id.clone_from(&existing.canonical_turn_id);

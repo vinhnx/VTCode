@@ -32,6 +32,8 @@ fn transcript_copy_is_localized_for_every_language() {
             "app.transcript.archived_output",
             "app.transcript.hide_details",
             "app.transcript.show_details",
+            "app.transcript.notice_stack_show",
+            "app.transcript.notice_stack_hide",
             "app.transcript.copy_full_output",
             "app.transcript.patch_failed",
             "app.transcript.preview_incomplete",

@@ -309,11 +309,17 @@ fn context_boundary_events_notice_and_reset_stale_usage(cx: &mut TestAppContext)
                     tool_budget_reset: true,
                 })),
             });
-            assert_eq!(view.transcript.len(), 2);
-            let notice = view.transcript.get(1).unwrap();
+            assert_eq!(view.transcript.len(), 1, "consecutive notices share one callout");
+            let notice = view.transcript.get(0).unwrap();
             assert_eq!(notice.role, "notice");
+            assert_eq!(notice.notice_count(), 2);
+            let restored = notice
+                .notice_stack
+                .iter()
+                .find(|entry| entry.title.contains("Context reset"))
+                .expect("the context reset folds into the compaction callout");
             for expected in ["plan approval", "87"] {
-                assert!(notice.text.contains(expected), "notice dropped {expected}");
+                assert!(restored.text.contains(expected), "notice dropped {expected}");
             }
 
             view.handle_thread_event(ThreadEventNotification {
@@ -368,37 +374,6 @@ fn sandbox_denied_event_pushes_warning_notice(cx: &mut TestAppContext) {
                 assert!(notice.text.contains(expected), "notice dropped {expected}");
             }
         });
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn transcript_notices_render_severity_without_message_chrome(cx: &mut TestAppContext) {
-    use crate::desktop::transcript::NoticeSeverity;
-
-    let (window, view) = open_desktop(cx);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            for (id, severity, title, text) in [
-                ("notice-error", NoticeSeverity::Error, "Runtime error", "Boom `code` here"),
-                ("notice-warning", NoticeSeverity::Warning, "Run status", "Turn ended early"),
-                ("notice-info", NoticeSeverity::Info, "Compaction", "120 into 8 messages"),
-            ] {
-                let mut item = TranscriptItem::new(id.into(), "notice".into(), title.into(), text.into());
-                item.notice_severity = severity;
-                view.transcript.push(item);
-            }
-            cx.notify();
-        });
-        window.render_frame(cx);
-        // Severity roles: errors announce as alerts, the rest as status.
-        assert_eq!(window.find("notice-notice-error").role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(window.find("notice-notice-warning").role(), Some(gpui_kit::Role::Status));
-        assert_eq!(window.find("notice-notice-info").role(), Some(gpui_kit::Role::Status));
-        // No message chrome: notices carry no copy action.
-        for id in ["notice-error", "notice-warning", "notice-info"] {
-            assert!(window.try_find(format!("copy-message-{id}")).is_none(), "{id} must not offer message copy");
-        }
     })
     .unwrap();
 }

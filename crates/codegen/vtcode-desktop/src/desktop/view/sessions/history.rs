@@ -78,6 +78,11 @@ pub(in super::super) fn prepare_session_history(
             }
             // Preserve collapsed archive tool text without inventing activity status.
             let mut item = TranscriptItem::new(id, role, title.into(), text);
+            if item.is_notice() && !item.text.trim().is_empty() {
+                // Live notices hide their body behind a Details CTA; archived
+                // rows must use the same treatment after a session reload.
+                item.collapsible_details = true;
+            }
             item.archived_phase = phase.map(Into::into);
             item.canonical_item_id = event_item_id.filter(|id| !id.is_empty() && id.len() <= 512).map(Into::into);
             item.has_activity_status = false;
@@ -140,5 +145,29 @@ mod tests {
         assert_eq!(rows[0].text, "Fix @README.md");
         assert_eq!(rows[0].id, restored_history_element_id("s", "user", raw, 0));
         assert_eq!(rows[1].text, raw);
+    }
+
+    #[test]
+    fn restored_notices_get_the_same_details_cta_as_live_notices() {
+        let message = |role: &str, text: &str| SessionHistoryMessage {
+            hidden: false,
+            archive_index: None,
+            role: role.into(),
+            phase: None,
+            event_item_id: None,
+            text: text.into(),
+        };
+        let rows = prepare_session_history(
+            "s",
+            vec![
+                message("notice", "verification pending"),
+                message("notice", "   "),
+                message("assistant", "body text"),
+            ],
+        );
+        assert!(rows[0].is_notice());
+        assert!(rows[0].collapsible_details, "restored notice bodies collapse like live ones");
+        assert!(!rows[1].collapsible_details, "empty evidence offers no CTA");
+        assert!(!rows[2].collapsible_details, "assistant prose is never collapsible");
     }
 }

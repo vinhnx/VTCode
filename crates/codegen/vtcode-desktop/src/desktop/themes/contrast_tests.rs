@@ -53,6 +53,37 @@ fn severity_chip_tones_stay_readable_on_the_wash_for_every_theme(cx: &mut gpui_k
     });
 }
 
+/// Full-width severity announcements use a quieter wash than chips because
+/// the surface is much larger. Both the tone-resolved title and the muted body
+/// must stay AA against that wash in every theme and contrast setting.
+#[gpui_kit::test]
+fn severity_callout_text_stays_readable_on_the_wash_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                for (name, tone) in [
+                    ("danger", colors.danger),
+                    ("warning", colors.warning),
+                    ("info", muted_text(&colors)),
+                ] {
+                    let (surface, _) = tone_callout_surface(tone, &colors);
+                    let title = readable_indicator_color(surface, colors.foreground, tone);
+                    let title_ratio = contrast_ratio(title, surface);
+                    assert!(title_ratio >= 4.5, "{id} at {amount} {name}: callout title is {title_ratio:.2}");
+                    let body_ratio = contrast_ratio(muted_text(&colors), surface);
+                    assert!(body_ratio >= 4.5, "{id} at {amount} {name}: callout body is {body_ratio:.2}");
+                }
+            }
+        }
+    });
+}
+
 /// Custom themes ride the same seed derivation as built-in rows, so their
 /// derived tokens must clear the same floors even when a saved seed was hand
 /// edited into an unreadable value.

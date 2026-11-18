@@ -77,23 +77,25 @@ fn goal_transitions_notice_once_per_state_change(cx: &mut TestAppContext) {
 
         view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Active))));
         assert_eq!(view.transcript.len(), base + 1);
+        assert_eq!(view.transcript.get(base).unwrap().notice_count(), 1);
 
         // Same-state refreshes (per-turn updates) stay quiet.
         view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Active))));
-        assert_eq!(view.transcript.len(), base + 1);
+        assert_eq!(view.transcript.get(base).unwrap().notice_count(), 1);
 
         view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Paused))));
-        assert_eq!(view.transcript.len(), base + 2);
-        let latest = view
-            .transcript
-            .items()
-            .rev()
-            .find(|item| item.title.as_ref() == "Goal")
-            .unwrap();
-        assert!(latest.text.contains("Paused goal: Ship it"), "{}", latest.text);
+        assert_eq!(view.transcript.len(), base + 1, "consecutive notices share one callout");
+        let head = view.transcript.get(base).unwrap();
+        assert_eq!(head.notice_count(), 2);
+        assert!(
+            head.notice_stack
+                .iter()
+                .any(|entry| entry.text.contains("Paused goal: Ship it")),
+            "the newest goal state is folded into the callout"
+        );
 
         view.handle_thread_event(goal_notification(None));
-        assert_eq!(view.transcript.len(), base + 3);
+        assert_eq!(view.transcript.get(base).unwrap().notice_count(), 3);
     });
 }
 

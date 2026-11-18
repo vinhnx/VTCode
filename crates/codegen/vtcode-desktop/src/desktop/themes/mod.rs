@@ -521,6 +521,16 @@ pub(super) fn tone_chip_surface(tone: Hsla, colors: &ThemeColor) -> (Hsla, Hsla)
     (mix(colors.secondary, tone, WASH), mix(colors.secondary, tone, BORDER))
 }
 
+/// Surface for a full-width severity announcement (notice callout): a quieter
+/// wash than [`tone_chip_surface`] because the card is much larger, plus a
+/// softened edge so the boundary reads as a hairline rather than a badge.
+/// Returns `(surface, border)`, both derived from theme tokens only.
+pub(super) fn tone_callout_surface(tone: Hsla, colors: &ThemeColor) -> (Hsla, Hsla) {
+    const WASH: f32 = 0.08;
+    const BORDER: f32 = 0.24;
+    (mix(colors.secondary, tone, WASH), mix(colors.secondary, tone, BORDER))
+}
+
 /// Minimum contrast between chart data colors (and against the canvas).
 /// Data colors carry redundant labels, so they hold the vanish floor rather
 /// than the text floor. Shared by [`distinct_chart_secondary`] and its test

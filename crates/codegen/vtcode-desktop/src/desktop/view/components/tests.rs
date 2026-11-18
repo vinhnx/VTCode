@@ -98,8 +98,10 @@ fn severity_marker_style_maps_each_level_to_its_own_tone() {
         themes::contrast_ratio(info.tone, colors.popover) >= 4.5,
         "info tone holds AA against its surface, unlike a raw token pick"
     );
-    assert!(error.semibold_title, "only errors earn semibold");
-    assert!(!warning.semibold_title && !info.semibold_title, "icon + tone already carry severity");
+    assert!(
+        error.semibold_title && warning.semibold_title && info.semibold_title,
+        "all severities share one callout typography; icon + tone carry severity"
+    );
     assert_eq!(error.role, gpui_kit::Role::Alert, "errors announce as alerts");
     assert_eq!(warning.role, gpui_kit::Role::Status, "warnings announce as status");
     assert_eq!(info.role, gpui_kit::Role::Status, "info announces as status");

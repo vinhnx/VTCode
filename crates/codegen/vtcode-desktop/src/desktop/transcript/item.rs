@@ -6,9 +6,13 @@ use super::super::markdown::prepare_markdown;
 use super::activity_verbs::ToolCategory;
 use super::user_attachments::UserAttachment;
 use super::{
-    ActivityGroupSummary, ActivityState, AppPreviewItem, DiffCard, NoticeSeverity, ToolActivityStatus, TranscriptRole,
-    TurnFile,
+    ActivityGroupSummary, ActivityState, AppPreviewItem, DiffCard, NoticePayload, NoticeSeverity, ToolActivityStatus,
+    TranscriptRole, TurnFile,
 };
+
+/// How many ephemeral notices one callout absorbs before a fresh head starts.
+/// Caps both the rendered stack and the accessibility string it carries.
+pub(crate) const NOTICE_STACK_LIMIT: usize = 6;
 
 /// Per-call added/deleted line counts stamped onto an edit row. `Copy` so
 /// re-projections can read it through a row borrow.
@@ -61,8 +65,17 @@ pub(crate) struct TranscriptItem {
     pub has_list: bool,
     pub expanded: bool,
     /// Whether this notice row carries collapsible operational details behind
-    /// a Show/Hide toggle. Plain notices render their full text instead.
+    /// a Show/Hide toggle. Every notice with a body now offers this CTA; the
+    /// collapsed state shows only a short lead line.
     pub collapsible_details: bool,
+    /// Diagnostic notices carry Markdown evidence and may be upserted by id,
+    /// so they never fold into a consecutive notice stack.
+    pub notice_is_diagnostic: bool,
+    /// Ephemeral plain notices absorbed into this callout. The head keeps its
+    /// own title/text/severity as the visible first entry.
+    pub notice_stack: Vec<NoticePayload>,
+    /// Shared expansion state for the folded stack, toggled from the head.
+    pub notice_stack_expanded: bool,
     /// Shared expansion state copied to each row so virtualized rendering stays constant-time.
     pub activity_expanded: bool,
     /// Whether this tool row is part of a consecutive group of at least two rows.
@@ -183,21 +196,34 @@ impl TranscriptItem {
     }
 
     /// Notice row (runtime errors, compaction/reset notices, run status) with
-    /// its severity set at construction.
+    /// its severity set at construction. A non-empty body gets a Details CTA;
+    /// the collapsed callout shows only a short lead line.
     pub fn notice(id: String, title: SharedString, text: String, severity: NoticeSeverity) -> Self {
+        let collapsible = !text.trim().is_empty();
         let mut item = Self::new(id, TranscriptRole::Notice.as_str().to_string(), title, text);
         item.notice_severity = severity;
+        item.collapsible_details = collapsible;
         item
     }
 
     /// Diagnostic notice from a `ThreadEvent` reasoning payload: a
-    /// severity-styled summary with collapsible operational details. Empty
-    /// evidence offers no toggle, mirroring the terminal transcript.
+    /// severity-styled summary with Markdown evidence behind a Details CTA.
+    /// Empty evidence offers no toggle, mirroring the terminal transcript.
+    /// Diagnostics are upserted by id, so they never join a folded stack.
     pub fn diagnostic_notice(id: String, title: SharedString, details: String, severity: NoticeSeverity) -> Self {
-        let collapsible = !details.trim().is_empty();
         let mut item = Self::notice(id, title, details, severity);
-        item.collapsible_details = collapsible;
+        item.notice_is_diagnostic = true;
         item
+    }
+
+    /// Total notices represented by this callout, including folded entries.
+    pub(crate) fn notice_count(&self) -> usize {
+        1 + self.notice_stack.len()
+    }
+
+    /// Whether this ephemeral notice can be absorbed by the preceding callout.
+    pub(crate) fn can_fold_notice(&self) -> bool {
+        self.is_notice() && !self.notice_is_diagnostic && self.notice_stack.len() + 1 < NOTICE_STACK_LIMIT
     }
 
     pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
@@ -234,6 +260,9 @@ impl TranscriptItem {
             has_list: false,
             expanded: false,
             collapsible_details: false,
+            notice_is_diagnostic: false,
+            notice_stack: Vec::new(),
+            notice_stack_expanded: false,
             activity_expanded: false,
             activity_grouped: false,
             activity_group_head: false,

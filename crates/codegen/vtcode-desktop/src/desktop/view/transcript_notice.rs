@@ -1,122 +1,356 @@
-//! Severity notice rows: runtime errors, compaction/reset notices, run status,
-//! and collapsible ThreadEvent diagnostic notices.
+//! Severity announcements: one shared callout for runtime errors,
+//! compaction/reset notices, run status, and ThreadEvent diagnostic notices.
+//!
+//! Every severity uses the same card geometry, typography, icon slot, and CTA
+//! placement; only the tone-resolved color and icon differ. A non-empty body
+//! stays behind a Show/Hide details CTA, and consecutive ephemeral notices
+//! fold into one callout whose count CTA reveals the rest.
 
 use super::*;
 
-impl DesktopView {
-    /// Severity rows for runtime errors, compaction/reset notices, and run
-    /// status: a tone-tinted pill chip (icon + title) built from kit `Tag`,
-    /// with the message body below and no bubble, Markdown, or copy action.
-    /// The wrapper keeps test identity, roles, and aria labels. Diagnostic
-    /// notices carry their Show/Hide details toggle docked at the row's
-    /// trailing edge, with the operational evidence below only while
-    /// expanded. Weight is the last resort: icon + tone already carry
-    /// severity, so only errors earn semibold.
-    pub(super) fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let style = severity_marker_style(item.notice_severity, &colors);
-        let (surface, border) = themes::tone_chip_surface(style.tone, &colors);
-        let title_tone = themes::readable_indicator_color(surface, colors.foreground, style.tone);
-        let chip = Tag::custom(surface, title_tone, border)
-            .rounded_full()
-            .small()
-            .text_xs()
-            .px_2()
-            .when(style.semibold_title, |tag| tag.font_semibold())
-            .child(Icon::new(style.icon).small().text_color(title_tone))
-            .child(item.title.clone());
-        let header = div()
-            .id(format!("notice-header-{}", item.id))
-            .test_support()
-            // The leading inset matches a small button's `px_2`, so chip
-            // titles start on the same spine as group and tool headers
-            // (inset + `transcript_icon_slot` + `gap_2`).
-            .pl_2()
+/// Announcement body lead length before the Details CTA takes over. Long
+/// verification paragraphs are announcements, not transcripts: the first
+/// sentence-sized line identifies the condition and the rest stays on demand.
+const NOTICE_LEAD_CHARS: usize = 180;
+
+fn capitalize_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+fn notice_lead(text: &str) -> String {
+    let line = text.lines().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
+    let length = line.chars().count();
+    let mut lead: String = line.chars().take(NOTICE_LEAD_CHARS).collect();
+    if length > NOTICE_LEAD_CHARS {
+        lead.push('…');
+    }
+    capitalize_first(&lead)
+}
+
+/// Shared callout shell, used by both the head notice and each folded entry.
+/// Keeps the surface, border, padding, icon tile, and title spine identical
+/// across severities so the three levels read as one announcement family.
+struct CalloutChrome {
+    surface: gpui_kit::Hsla,
+    border: gpui_kit::Hsla,
+    icon_surface: gpui_kit::Hsla,
+    title_color: gpui_kit::Hsla,
+    body_color: gpui_kit::Hsla,
+    icon: IconName,
+}
+
+fn callout_chrome(severity: NoticeSeverity, colors: &gpui_kit::component::theme::ThemeColor) -> CalloutChrome {
+    let style = severity_marker_style(severity, colors);
+    let (surface, border) = themes::tone_callout_surface(style.tone, colors);
+    let (icon_surface, _) = themes::tone_chip_surface(style.tone, colors);
+    CalloutChrome {
+        surface,
+        border,
+        icon_surface,
+        title_color: themes::readable_indicator_color(surface, colors.foreground, style.tone),
+        body_color: themes::muted_text(colors),
+        icon: style.icon,
+    }
+}
+
+fn callout_icon_tile(chrome: &CalloutChrome) -> gpui_kit::Div {
+    // The 16px slot is `transcript_icon_slot`'s geometry, so a callout title
+    // lands on the same 32px spine as tool, group, and assistant rows.
+    transcript_icon_slot(
+        div()
+            .size_4()
+            .rounded_md()
             .flex()
             .items_center()
-            .gap_2()
-            .child(chip)
-            .when(item.collapsible_details, |row| {
-                let id = item.id.clone();
-                let toggle = if item.expanded {
-                    rust_i18n::t!("app.transcript.hide_details").to_string()
-                } else {
-                    rust_i18n::t!("app.transcript.show_details").to_string()
-                };
-                row.child(
-                    desktop_button(format!("notice-details-{}", item.id))
-                        .accessibility_label(
-                            rust_i18n::t!(
-                                "app.transcript.details_label",
-                                toggle = toggle.as_str(),
-                                title = item.title.as_str(),
-                                status = style.status_label
-                            )
-                            .to_string(),
-                        )
-                        .ghost()
-                        // Small like the group and tool toggles: one row
-                        // height, one text size, and one chevron inset
-                        // across headers.
-                        .small()
-                        .ml_auto()
-                        .flex_shrink_0()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .italic()
-                                .text_color(themes::muted_text(&colors))
-                                .child(toggle)
-                                .child(transcript_chevron_lane(item.expanded)),
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.transcript.toggle_notice(&id);
-                            cx.notify();
-                        })),
-                )
-            });
-        let mut panel = div()
-            .id(format!("notice-{}", item.id))
-            .test_support()
-            .role(style.role)
-            .aria_label(format!("{}: {}", item.title, item.accessibility_text))
-            .w_full()
-            .max_w(px(self.content_width()))
+            .justify_center()
+            .bg(chrome.icon_surface)
+            .child(Icon::new(chrome.icon).small().text_color(chrome.title_color)),
+    )
+}
+
+impl DesktopView {
+    /// Severity rows for runtime errors, compaction/reset notices, run status,
+    /// and collapsible diagnostic notices. The wrapper keeps test identity,
+    /// roles, and aria labels; the card is the shared announcement treatment.
+    pub(super) fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let chrome = callout_chrome(item.notice_severity, &colors);
+        let style = severity_marker_style(item.notice_severity, &colors);
+        let title = capitalize_first(item.title.as_str());
+        let has_body = item.collapsible_details && !item.text.trim().is_empty();
+        let stack_count = item.notice_count();
+        let has_stack = stack_count > 1;
+
+        // Aria text carries every folded message so assistive tech never loses
+        // an announcement just because it is visually collapsed.
+        let mut aria = format!("{}: {}", title, item.accessibility_text.as_str());
+        for entry in &item.notice_stack {
+            aria.push_str(": ");
+            aria.push_str(entry.title.as_str());
+            aria.push_str(": ");
+            aria.push_str(entry.text.as_str());
+        }
+
+        let lead = if has_body && !item.expanded {
+            notice_lead(item.text.as_str())
+        } else {
+            String::new()
+        };
+        let heading = div()
+            .min_w_0()
+            .flex_1()
             .flex()
             .flex_col()
             .gap_1()
-            .child(header);
-        if item.collapsible_details {
-            if item.expanded {
-                // Evidence renders as Markdown so fenced blocks keep their
-                // code treatment, with quieter body text than conversation.
-                panel = panel.child(
-                    div()
-                        .id(format!("notice-details-body-{}", item.id))
-                        .test_support()
-                        .text_sm()
-                        .text_color(themes::muted_text(&colors))
-                        .child(render_markdown_with_style(
-                            format!("notice-details-markdown-{}", item.id),
-                            item.text.clone(),
-                            false,
-                            self.transcript_markdown_style.clone().unwrap_or_else(|| markdown_style(cx)),
-                        )),
-                );
-            }
-        } else if !item.text.trim().is_empty() {
-            panel = panel.child(
+            .child(
                 div()
-                    .id(format!("notice-text-{}", item.id))
-                    .test_support()
+                    .min_w_0()
+                    .truncate()
                     .text_sm()
-                    .text_color(themes::muted_text(&colors))
-                    .child(item.text.clone()),
+                    .font_semibold()
+                    .text_color(chrome.title_color)
+                    .child(title.clone()),
+            )
+            .when(!lead.is_empty(), |column| {
+                column.child(
+                    div()
+                        .id(format!("notice-text-{}", item.id))
+                        .test_support()
+                        .aria_label(lead.clone())
+                        .text_xs()
+                        .text_color(chrome.body_color)
+                        .child(lead),
+                )
+            });
+
+        let mut header = div()
+            .id(format!("notice-header-{}", item.id))
+            .test_support()
+            .w_full()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(callout_icon_tile(&chrome))
+            .child(heading);
+
+        if has_stack {
+            let label = if item.notice_stack_expanded {
+                rust_i18n::t!("app.transcript.notice_stack_hide", n = item.notice_stack.len())
+            } else {
+                rust_i18n::t!("app.transcript.notice_stack_show", n = item.notice_stack.len())
+            }
+            .to_string();
+            let toggle_word = if item.notice_stack_expanded {
+                rust_i18n::t!("app.transcript.hide_details").to_string()
+            } else {
+                rust_i18n::t!("app.transcript.show_details").to_string()
+            };
+            let stack_id = item.id.clone();
+            header = header.child(
+                desktop_button(format!("notice-stack-toggle-{}", item.id))
+                    .accessibility_label(
+                        rust_i18n::t!(
+                            "app.transcript.details_label",
+                            toggle = toggle_word.as_str(),
+                            title = label.as_str(),
+                            status = style.status_label
+                        )
+                        .to_string(),
+                    )
+                    .ghost()
+                    .small()
+                    .flex_shrink_0()
+                    .text_color(chrome.title_color)
+                    .child(label)
+                    .child(transcript_chevron_lane(item.notice_stack_expanded))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.transcript.toggle_notice_stack(&stack_id);
+                        cx.notify();
+                    })),
             );
         }
-        panel.into_any_element()
+
+        if has_body {
+            let toggle = if item.expanded {
+                rust_i18n::t!("app.transcript.hide_details").to_string()
+            } else {
+                rust_i18n::t!("app.transcript.show_details").to_string()
+            };
+            let details_id = item.id.clone();
+            header = header.child(
+                desktop_button(format!("notice-details-{}", item.id))
+                    .accessibility_label(
+                        rust_i18n::t!(
+                            "app.transcript.details_label",
+                            toggle = toggle.as_str(),
+                            title = title.as_str(),
+                            status = style.status_label
+                        )
+                        .to_string(),
+                    )
+                    .ghost()
+                    .small()
+                    .flex_shrink_0()
+                    .text_color(chrome.title_color)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .text_xs()
+                            .child(toggle)
+                            .child(transcript_chevron_lane(item.expanded)),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.transcript.toggle_notice(&details_id);
+                        cx.notify();
+                    })),
+            );
+        }
+
+        let mut card = div()
+            .id(format!("notice-{}", item.id))
+            .test_support()
+            .role(style.role)
+            .aria_label(aria)
+            .w_full()
+            .max_w(px(self.content_width()))
+            .rounded_md()
+            .border_1()
+            .border_color(chrome.border)
+            .bg(chrome.surface)
+            // Leading inset + icon slot + gap reproduce the 32px transcript
+            // title spine; no right padding so the trailing CTA docks on the
+            // same edge as group and tool disclosure rows.
+            .py_3()
+            .pl_2()
+            .pr_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(header);
+
+        if has_body && item.expanded {
+            card = card.child(self.render_notice_body(
+                item.id.as_str(),
+                item.text.as_str(),
+                item.notice_is_diagnostic,
+                &chrome,
+                cx,
+            ));
+        }
+
+        if has_stack && item.notice_stack_expanded {
+            for (index, entry) in item.notice_stack.iter().enumerate() {
+                card = card.child(self.render_folded_notice(entry, index, cx));
+            }
+        }
+
+        card.into_any_element()
+    }
+
+    /// Expanded body of one callout. Diagnostic evidence keeps its Markdown
+    /// treatment (fenced blocks still read as code); plain notices stay literal
+    /// so backend backticks are never reinterpreted.
+    fn render_notice_body(
+        &self,
+        id: &str,
+        text: &str,
+        markdown: bool,
+        chrome: &CalloutChrome,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if markdown {
+            div()
+                .id(format!("notice-details-body-{id}"))
+                .test_support()
+                .pl_6()
+                .text_sm()
+                .text_color(chrome.body_color)
+                .child(render_markdown_with_style(
+                    format!("notice-details-markdown-{id}"),
+                    text.to_string().into(),
+                    false,
+                    self.transcript_markdown_style.clone().unwrap_or_else(|| markdown_style(cx)),
+                ))
+                .into_any_element()
+        } else {
+            let body = capitalize_first(text);
+            div()
+                .id(format!("notice-details-body-{id}"))
+                .test_support()
+                .pl_6()
+                .text_sm()
+                .text_color(chrome.body_color)
+                .child(
+                    div()
+                        .id(format!("notice-text-{id}"))
+                        .test_support()
+                        .aria_label(body.clone())
+                        .child(body),
+                )
+                .into_any_element()
+        }
+    }
+
+    /// One folded announcement revealed by the stack count CTA. It shares the
+    /// head's chrome; the body is already on demand, so no second toggle is
+    /// needed inside the expanded stack.
+    fn render_folded_notice(&self, entry: &NoticePayload, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let entry_chrome = callout_chrome(entry.severity, &colors);
+        let title = capitalize_first(entry.title.as_str());
+        let has_body = !entry.text.trim().is_empty();
+        let mut body = div()
+            .id(format!("notice-stack-entry-{}-{}", entry.id, index))
+            .test_support()
+            .role(if entry.severity == NoticeSeverity::Error {
+                gpui_kit::Role::Alert
+            } else {
+                gpui_kit::Role::Status
+            })
+            .aria_label(format!("{}: {}", title, entry.text))
+            .w_full()
+            .rounded_md()
+            .border_1()
+            .border_color(entry_chrome.border)
+            .bg(entry_chrome.surface)
+            .py_2()
+            .px_2()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(callout_icon_tile(&entry_chrome))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_sm()
+                            .font_semibold()
+                            .text_color(entry_chrome.title_color)
+                            .child(title),
+                    ),
+            );
+        if has_body {
+            body = body.child(
+                div().pl_6().text_sm().text_color(entry_chrome.body_color).child(
+                    div()
+                        .id(format!("notice-text-{}", entry.id))
+                        .test_support()
+                        .child(capitalize_first(entry.text.as_str())),
+                ),
+            );
+        }
+        body.into_any_element()
     }
 }

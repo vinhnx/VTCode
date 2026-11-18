@@ -762,6 +762,7 @@ mod mcp_app;
 mod menu_bar_actions;
 mod model_palette;
 mod nav_track;
+mod notice_callouts;
 mod notifications;
 mod option_popups;
 mod options_misc;
