@@ -311,11 +311,10 @@ impl DesktopView {
         let label = rust_i18n::t!("app.transcript.scroll_first").to_string();
         let colors = cx.theme().colors;
         Some(
-            desktop_button("transcript-scroll-first")
+            desktop_secondary_button("transcript-scroll-first")
                 .icon(IconName::ArrowUp)
                 .accessibility_label(label.clone())
                 .tooltip(label)
-                .secondary()
                 .rounded(cx.theme().radius_full())
                 .border_1()
                 .border_color(themes::soft_edge_color(&colors))
@@ -348,12 +347,11 @@ impl DesktopView {
         // the accessible name above carries the translated meaning.
         let count = format!("{position}/{total}");
         let colors = cx.theme().colors;
-        let next = desktop_button("transcript-filter-next")
+        let next = desktop_secondary_button("transcript-filter-next")
             .icon(IconName::ArrowDown)
             .label(count)
             .accessibility_label(name.clone())
             .tooltip(name)
-            .secondary()
             .small()
             .rounded(cx.theme().radius_full())
             .border_1()

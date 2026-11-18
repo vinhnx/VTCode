@@ -2,23 +2,6 @@ use super::super::*;
 use super::*;
 use gpui_kit::component::theme::ActiveTheme;
 
-#[gpui_kit::test]
-fn default_button_highlight_survives_palette_and_contrast_updates(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        gpui_kit::init(cx);
-        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID] {
-            for contrast in [0, 80] {
-                let _mode = apply_selection_with_contrast(id, contrast, &[], None, cx);
-                let theme = cx.theme();
-                assert_eq!(theme.tokens.button.color, theme.colors.button);
-                assert!(theme.tokens.button.background.as_solid().is_none(), "{id}, contrast {contrast}");
-                assert_eq!(theme.tokens.button_hover.background.as_solid(), Some(theme.colors.button_hover));
-                assert_eq!(theme.tokens.button_active.background.as_solid(), Some(theme.colors.button_active));
-            }
-        }
-    });
-}
-
 #[test]
 fn button_face_skips_the_highlight_when_text_would_lose_aa_contrast() {
     let foreground = white();
@@ -366,7 +349,7 @@ fn folder_tab_states_join_canvas_content(cx: &mut gpui_kit::TestAppContext) {
             assert_eq!(kit.colors.tab_active, kit.colors.background, "{id}");
             assert_eq!(
                 kit.tokens.tab_active,
-                ThemeToken::from(kit.colors.background),
+                gpui_kit::component::theme::ThemeToken::from(kit.colors.background),
                 "{id}: the selected folder fill must reconcile into the tokens Kit reads"
             );
             // Transparent band: the bar never stripes a non-canvas surface.

@@ -18,7 +18,10 @@ use super::*;
 /// replaced by `fill`. Every seat funnels through here so geometry, text,
 /// and disabled handling cannot drift between seats.
 fn glass_primary_button_with(id: impl Into<gpui_kit::ElementId>, fill: gpui_kit::Hsla, disabled: bool) -> Button {
-    desktop_primary_button(id).bg(fill).desktop_disabled(disabled)
+    desktop_primary_button(id)
+        .bg(fill)
+        .desktop_disabled(disabled)
+        .when(disabled, |button| button.shadow_none())
 }
 
 /// Decision-area default commit with a translucent rest fill: the one

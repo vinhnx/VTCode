@@ -45,17 +45,27 @@ fn button_tiers_keep_the_pointing_hand_cursor() {
 }
 
 #[test]
-fn desktop_elevated_pins_an_instance_shadow_while_plain_buttons_stay_flat() {
-    let mut plain = desktop_primary_button("tier-shadow-plain");
-    assert!(plain.style().box_shadow.is_none(), "in-layer primaries carry no instance shadow");
+fn filled_button_tiers_share_inset_edges_and_elevation_preserves_them() {
+    for mut button in [
+        desktop_primary_button("inset-primary"),
+        desktop_default_button("inset-default"),
+        desktop_secondary_button("inset-secondary"),
+    ] {
+        let edges = button.style().box_shadow.as_ref().expect("filled buttons have inset edges");
+        assert_eq!(edges.len(), 2);
+        assert!(edges.iter().all(|edge| edge.inset));
+        assert_eq!(edges[0].offset.y, px(1.));
+        assert_eq!(edges[1].offset.y, px(-1.));
+    }
 
-    let mut elevated = desktop_primary_button("tier-shadow-elevated").desktop_elevated();
-    let shadows = elevated
-        .style()
-        .box_shadow
-        .as_ref()
-        .expect("elevated buttons set an instance shadow");
-    assert_eq!(shadows.len(), 1, "elevation is one xs shadow layer");
+    let mut elevated = desktop_primary_button("inset-elevated").desktop_elevated();
+    let shadows = elevated.style().box_shadow.as_ref().expect("elevated button has shadows");
+    assert_eq!(shadows.iter().filter(|shadow| shadow.inset).count(), 2);
+    assert_eq!(shadows.iter().filter(|shadow| !shadow.inset).count(), 1);
+
+    let mut disabled = desktop_glass_primary_button("inset-disabled", &Default::default(), true);
+    assert!(disabled.style().box_shadow.as_ref().is_some_and(Vec::is_empty));
+    assert!(desktop_button("quiet-ghost").ghost().style().box_shadow.is_none());
 }
 
 #[gpui_kit::test]

@@ -828,18 +828,28 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
 
 /// Ordinary visible action: a filled push button for commands that deserve a
 /// control frame (dialog secondaries, Save/Cancel pairs, labeled toolbar
-/// actions). Kit's Default variant paints the highlighted face with an input
+/// actions). Kit's Default variant paints the neutral face with an input
 /// hairline; rails, nav rows, and icon-only toolbar actions stay on
 /// [`desktop_button`] + `.ghost()` instead.
 pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id).rounded(ButtonRounded::Medium)
+    desktop_filled_button(id)
+}
+
+pub(super) fn desktop_secondary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_filled_button(id).secondary()
+}
+
+fn desktop_filled_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id)
+        .rounded(ButtonRounded::Medium)
+        .shadow(themes::button_inset_edges())
 }
 
 /// Decision-area default commit: the one emphasized action per view, normally
 /// the Enter action. Paints the brand accent fill; never use for destructive
 /// actions even when destruction is the most likely choice.
 pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id).primary()
+    desktop_filled_button(id).primary()
 }
 
 /// Destructive commitment: irreversible or data-losing actions only. Pair with
@@ -938,7 +948,7 @@ pub(super) trait DesktopButtonExt {
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
     /// Floating-layer elevation for a decision action that sits over content
     /// (the composer send and its running-state cluster). In-layer actions
-    /// (dialog commits) take no shadow: the dialog already carries the
+    /// (dialog commits) take no drop shadow: the dialog already carries the
     /// elevation. Gate at the call site with `.when(enabled, ...)` so
     /// disabled buttons stay flat: Kit replays the instance style inside its
     /// disabled arm, after its own shadow reset.
@@ -973,8 +983,11 @@ impl DesktopButtonExt for Button {
         self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
     }
 
-    fn desktop_elevated(self) -> Self {
-        self.shadow_xs()
+    fn desktop_elevated(mut self) -> Self {
+        let existing = self.style().box_shadow.take().unwrap_or_default();
+        let mut elevated = self.shadow_xs();
+        elevated.style().box_shadow.get_or_insert_with(Vec::new).extend(existing);
+        elevated
     }
 }
 

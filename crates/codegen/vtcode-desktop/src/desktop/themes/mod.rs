@@ -19,7 +19,7 @@ use vtcode_ui::theme::{self, UiThemeColors};
 
 mod custom;
 mod fills;
-pub(super) use fills::button_face;
+pub(super) use fills::{button_face, button_inset_edges};
 mod hairline;
 pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
@@ -361,8 +361,7 @@ pub(super) fn apply_selection_with_contrast(
             rgb(0).into()
         };
         colors.foreground = mix(colors.foreground, target, f32::from(contrast.min(100)) / 100.0);
-        apply_filled_surfaces(theme);
-        let colors = &mut theme.colors;
+        apply_filled_surfaces(colors);
         apply_surface_borders(colors);
         apply_unified_hover_surface(colors, hover_surface(colors.background, colors.foreground));
         colors.ring = accessible_focus_color(colors.primary, colors);
@@ -385,10 +384,10 @@ fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App)
     Theme::change(seeds.mode, window, cx);
     Theme::update(cx, |kit_theme| {
         apply_desktop_radii(kit_theme);
-        kit_theme.colors.background = seeds.background;
-        kit_theme.colors.foreground = seeds.foreground;
-        apply_filled_surfaces(kit_theme);
         let colors = &mut kit_theme.colors;
+        colors.background = seeds.background;
+        colors.foreground = seeds.foreground;
+        apply_filled_surfaces(colors);
         apply_surface_borders(colors);
         colors.chart_2 = distinct_chart_secondary(
             colors.background,
@@ -439,8 +438,8 @@ fn accessible_focus_color(accent: Hsla, colors: &ThemeColor) -> Hsla {
 fn normalize_system_interaction_colors(cx: &mut App) {
     Theme::update(cx, |kit_theme| {
         apply_desktop_radii(kit_theme);
-        apply_filled_surfaces(kit_theme);
         let colors = &mut kit_theme.colors;
+        apply_filled_surfaces(colors);
         apply_surface_borders(colors);
         let surface = hover_surface(colors.background, colors.foreground);
         apply_unified_hover_surface(colors, surface);

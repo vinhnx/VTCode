@@ -7,8 +7,8 @@
 //! too: they are fills under the same readability contract.
 
 use super::{aa_muted, contrast_ratio, mix};
-use gpui_kit::component::theme::{Theme, ThemeColor, ThemeToken};
-use gpui_kit::{Background, Hsla, linear_color_stop, linear_gradient, white};
+use gpui_kit::component::theme::ThemeColor;
+use gpui_kit::{Background, BoxShadow, Hsla, black, linear_color_stop, linear_gradient, px, white};
 
 /// Hard ceilings (percent of the background-to-foreground span) for the fill
 /// search. Fills take the *weakest* step that still separates from the canvas,
@@ -30,8 +30,7 @@ pub(super) const PRIMARY_ACTIVE_MAX_STEP: u8 = 30;
 
 /// Give panels and controls a visible neutral fill while keeping their text at
 /// WCAG AA. Popovers and input fields use a stronger layer than resting panels.
-pub(super) fn apply_filled_surfaces(theme: &mut Theme) {
-    let colors = &mut theme.colors;
+pub(super) fn apply_filled_surfaces(colors: &mut ThemeColor) {
     let surface = filled_surface(colors.background, colors.foreground, RESTING_FILL_MAX_STEP, None);
     let raised_surface = filled_surface(colors.background, colors.foreground, RAISED_FILL_MAX_STEP, Some(surface));
 
@@ -46,7 +45,6 @@ pub(super) fn apply_filled_surfaces(theme: &mut Theme) {
     colors.list_active = surface;
     colors.button = surface;
     colors.button_foreground = colors.foreground;
-    theme.tokens.button = ThemeToken::new(surface, button_face(surface, colors.foreground));
     // Press states sit deeper than resting so Default, Secondary, and Ghost
     // buttons all show a visible press; Kit keeps border and text identical
     // across states, so the fill carries the whole signal.
@@ -79,6 +77,14 @@ pub(super) fn apply_filled_surfaces(theme: &mut Theme) {
     // into the legacy `tokens` Kit reads at render time.
     colors.tab_bar = gpui_kit::transparent_black();
     colors.tab_active = colors.background;
+}
+
+/// The narrow highlight and shade follow the button's own rounded bounds.
+pub(in crate::desktop) fn button_inset_edges() -> Vec<BoxShadow> {
+    vec![
+        BoxShadow::new(px(0.), px(1.), white().opacity(0.10)).inset(),
+        BoxShadow::new(px(0.), px(-1.), black().opacity(0.12)).inset(),
+    ]
 }
 
 /// A short top-edge highlight. Keep both endpoints readable so even controls

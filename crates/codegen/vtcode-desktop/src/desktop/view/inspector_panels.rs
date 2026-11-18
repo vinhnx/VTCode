@@ -718,11 +718,10 @@ impl DesktopView {
                     let label = rust_i18n::t!("app.inspector.jump_latest").to_string();
                     wrap.child(
                         div().absolute().left_0().right_0().bottom_2().flex().justify_center().child(
-                            desktop_button("output-jump-latest")
+                            desktop_secondary_button("output-jump-latest")
                                 .icon(IconName::ArrowDown)
                                 .accessibility_label(label.clone())
                                 .tooltip(label)
-                                .secondary()
                                 .rounded(theme.radius_full())
                                 .border_1()
                                 .border_color(themes::soft_edge_color(&colors))
