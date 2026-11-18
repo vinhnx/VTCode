@@ -489,19 +489,22 @@ fn navigation_can_collapse_and_restore_without_losing_the_composer(cx: &mut Test
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("nav-home").label(), Some("Projects and threads (expanded)"));
-        assert_eq!(window.find("nav-home").checked(), Some(true));
+        assert_eq!(window.find("nav-home").label(), Some("Workspace"));
         window.press("cmd-l", cx);
         window.input("keep this draft", cx);
         window.press("cmd-b", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).sidebar_open);
-        assert_eq!(window.find("nav-home").checked(), Some(false));
         assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
+        // Home returns to the workspace instead of toggling the rail; the
+        // sidebar still restores through its own shortcut.
         window.click("nav-home", cx);
         window.render_frame(cx);
+        assert!(!view.read(cx).sidebar_open);
+        assert_eq!(view.read(cx).current_route(), Route::Workspace);
+        window.press("cmd-b", cx);
+        window.render_frame(cx);
         assert!(view.read(cx).sidebar_open);
-        assert_eq!(window.find("nav-home").checked(), Some(true));
         assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
     })
     .unwrap();

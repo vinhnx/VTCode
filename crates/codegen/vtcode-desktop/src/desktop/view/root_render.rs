@@ -374,6 +374,7 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
             .on_action(cx.listener(|view, _: &OpenThreadBrowser, window, cx| view.open_thread_browser(window, cx)))
+            .on_action(cx.listener(|view, _: &GoHome, window, cx| view.go_home(window, cx)))
             .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {
                 if let Some(session_id) = view.selected_session_id.clone() {
                     view.open_conversation_search(session_id, window, cx);

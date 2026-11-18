@@ -358,6 +358,7 @@ actions!(
         OpenWorkspaceReview,
         OpenThreadBrowser,
         RefreshWorkspace,
+        GoHome,
         NavigateBack,
         NavigateForward,
         ToggleInspector,

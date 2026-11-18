@@ -8,10 +8,11 @@ the accent emphasizes primary actions. The gpui-kit textarea and model/attachmen
 actions share one composer surface. Existing VT Code theme tokens drive all colors.
 
 <!-- markdownlint-disable MD060 -- intentionally unpadded compact table -->
-| Action                         | Control                              |
-| ------------------------------ | ------------------------------------ |
-| Collapse or restore navigation | Navigation rail Home button or `Cmd+B` |
-| Search commands                | Toolbar search button or `Cmd+K`     |
+| Action                         | Control                                 |
+| ------------------------------ | --------------------------------------- |
+| Return to the workspace        | Navigation rail Home button             |
+| Collapse or restore navigation | `Cmd+B` or window-actions overflow menu |
+| Search commands                | Toolbar search button or `Cmd+K`        |
 <!-- markdownlint-enable MD060 -->
 
 Collapsing navigation retains the active session, draft, and pane width for the

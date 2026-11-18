@@ -626,7 +626,8 @@ impl DesktopView {
     /// the main column's top-right corner and painted after the content so it
     /// floats above the edge-to-edge zen surface. The group is right-anchored
     /// and the toggle is its trailing child, so arrows appearing/disappearing
-    /// never move the toggle. Home opens the thread browser in Zen.
+    /// never move the toggle. Home returns to the workspace in Zen while
+    /// Browse threads keeps its own slot in the band.
     ///
     /// The insets reproduce the docked slot exactly: the title bar's `pr_3`
     /// (12px) plus the small toolbar's `p_1` (4px), minus the pill's 1px
@@ -657,6 +658,7 @@ impl DesktopView {
             .shadow_md()
             .fade_in("zen-toggle-float", cx.theme())
             .child(self.render_browse_threads_button(cx))
+            .child(self.render_go_home_button(true))
             .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
             .child(zen_mode_toggle(true, faded, &self.focus_handle))
     }

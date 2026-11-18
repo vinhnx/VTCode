@@ -421,15 +421,18 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
         window.hover("nav-home", cx);
         window.render_frame(cx);
         assert!(view.read(cx).navigation_peek);
-        assert_eq!(window.find("nav-home").label(), Some("Projects and threads (expanded)"));
-        assert_eq!(window.find("nav-home").checked(), Some(true));
+        assert_eq!(window.find("nav-home").label(), Some("Workspace"));
         assert!(!view.read(cx).sidebar_open, "hover does not pin the sidebar");
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).navigation_peek);
-        assert_eq!(window.find("nav-home").label(), Some("Projects and threads"));
-        assert_eq!(window.find("nav-home").checked(), Some(false));
+        // Home no longer toggles the sidebar: it returns to the workspace and
+        // leaves rail visibility to Cmd+B.
         window.click("nav-home", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).current_route(), Route::Workspace);
+        assert!(!view.read(cx).sidebar_open);
+        window.press("cmd-b", cx);
         assert!(view.read(cx).sidebar_open);
         window.press("cmd-b", cx);
         assert!(!view.read(cx).sidebar_open);

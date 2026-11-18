@@ -135,6 +135,21 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Return to the main workspace landing page from any route, clearing the
+    /// transient overlays stacked above it and restoring composer focus. Route
+    /// exits go through [`Self::request_panel_dismiss`] so staged settings
+    /// edits are never silently dropped, and interior layers unwind one step
+    /// at a time just as they do for Back/Escape.
+    pub(super) fn go_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.navigation_peek = false;
+        if self.current_route() != Route::Workspace {
+            self.request_panel_dismiss(window, cx);
+        }
+        if self.current_route() == Route::Workspace {
+            self.activate_composer(window, cx);
+        }
+    }
+
     /// Currently visible route: the entry under the history cursor.
     pub(super) fn current_route(&self) -> Route {
         self.route_history.current()

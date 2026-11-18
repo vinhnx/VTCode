@@ -95,19 +95,29 @@ impl DesktopView {
     pub(super) fn render_browse_threads_button(&self, cx: &mut Context<Self>) -> Button {
         let colors = cx.theme().colors;
         let label = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
-        let (id, icon) = if self.zen_mode {
-            ("nav-home", IconName::House)
-        } else {
-            ("nav-browse-threads", IconName::Clock)
-        };
-        desktop_button(id)
-            .icon(icon)
+        desktop_button("nav-browse-threads")
+            .icon(IconName::Clock)
             .rounded_lg()
             .when(self.zen_mode, |button| button.small())
             .desktop_selected(self.current_route() == Route::Browser, &colors)
             .accessibility_label(label.clone())
             .tooltip_with_action(label, &OpenThreadBrowser, Some(key_context::DESKTOP))
             .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone())
+    }
+
+    /// The House button returns to the main workspace landing page from any
+    /// route. Shared by the rail and Zen's floating chrome so every Home
+    /// affordance dispatches the same action.
+    pub(super) fn render_go_home_button(&self, small: bool) -> Button {
+        let label = rust_i18n::t!("app.navigation.workspace_fallback").to_string();
+        desktop_button("nav-home")
+            .icon(IconName::House)
+            .ghost()
+            .rounded_lg()
+            .when(small, |button| button.small())
+            .accessibility_label(label.clone())
+            .tooltip_with_action(label, &GoHome, Some(key_context::DESKTOP))
+            .dispatches_desktop_action(GoHome, self.focus_handle.clone())
     }
 
     pub(super) fn render_navigation(&mut self, narrow_panel: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -139,25 +149,7 @@ impl DesktopView {
                             cx.notify();
                         }
                     }))
-                    .child(
-                        desktop_button("nav-home")
-                            .icon(IconName::House)
-                            .ghost()
-                            .rounded_lg()
-                            .accessibility_label(if expanded {
-                                rust_i18n::t!("app.navigation.projects_threads_expanded").to_string()
-                            } else {
-                                rust_i18n::t!("app.navigation.projects_threads").to_string()
-                            })
-                            .toggled(expanded)
-                            .tooltip_with_action(
-                                rust_i18n::t!("app.navigation.projects_threads").to_string(),
-                                &ToggleSidebar,
-                                Some(key_context::DESKTOP),
-                            )
-                            .when(expanded, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                            .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
-                    ),
+                    .child(self.render_go_home_button(false)),
             )
             .when(!expanded, |rail| {
                 rail.child(
