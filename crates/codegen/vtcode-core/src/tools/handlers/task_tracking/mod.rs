@@ -5,6 +5,9 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+mod inline_metadata;
+pub use inline_metadata::split_task_description_metadata;
+
 mod persistence;
 pub(crate) use persistence::{
     TrackerArtifact, persist_tracker_artifacts, read_tracker_artifact, write_tracker_artifact,
@@ -537,67 +540,6 @@ pub fn metadata_from_input(
     metadata
 }
 
-/// Markers that may trail a task description as inline `Action -> files: [...]
-/// -> verify: [...]` metadata. `outcome` is accepted so a polluted suffix is
-/// still stripped from the visible row even though the compact view never
-/// renders it.
-const INLINE_TASK_METADATA_MARKERS: &[&str] = &[" -> files:", " -> verify:", " -> outcome:"];
-
-fn parse_inline_bracket_list(raw: &str) -> Vec<String> {
-    // Inline plan metadata uses the same bracket shapes as plan validation:
-    // `[a, b]`, `[a], [b]`, or bare comma-separated values. Reuse the shared
-    // quote- and bracket-aware parser so the tracker handoff cannot fragment
-    // `[cmd_a], [cmd_b]` into `cmd_a]` / `[cmd_b` (which would become required
-    // verifier identities that no real command can satisfy).
-    super::planning_workflow::parse_bracket_list(raw)
-}
-
-/// Split an inline `Action -> files: [...] -> verify: [...]` suffix out of a
-/// task description.
-///
-/// Returns `(clean_description, files, verify)`. Markers are recognized only
-/// outside inline-code spans so `` `a -> files: b` `` stays intact, and the
-/// Unicode `→` arrow is normalized first so both spellings agree with plan
-/// validation. When no marker exists outside backticks the description is
-/// returned trimmed with empty metadata.
-pub fn split_task_description_metadata(description: &str) -> (String, Vec<String>, Vec<String>) {
-    let normalized;
-    let source = if description.contains('→') {
-        normalized = description.replace('→', "->");
-        normalized.as_str()
-    } else {
-        description
-    };
-    let Some(first) = find_inline_metadata_marker(source, 0) else {
-        return (source.trim().to_string(), Vec::new(), Vec::new());
-    };
-    let head = source[..first.0].trim();
-    if head.is_empty() {
-        return (source.trim().to_string(), Vec::new(), Vec::new());
-    }
-
-    let mut files = Vec::new();
-    let mut verify = Vec::new();
-    let mut cursor = first.0;
-    while let Some((marker_start, marker)) = find_inline_metadata_marker(source, cursor) {
-        let value_start = marker_start + marker.len();
-        let next = find_inline_metadata_marker(source, value_start)
-            .map(|(start, _)| start)
-            .unwrap_or(source.len());
-        let value = source[value_start..next].trim();
-        if marker.contains("files:") {
-            files.extend(parse_inline_bracket_list(value));
-        } else if marker.contains("verify:") {
-            verify.extend(parse_inline_bracket_list(value));
-        }
-        cursor = next;
-        if cursor >= source.len() {
-            break;
-        }
-    }
-    (head.to_string(), files, verify)
-}
-
 /// Strip an inline `-> files:` / `-> verify:` / `-> outcome:` suffix for
 /// display. Structured metadata stays in the payload; the visible compact row
 /// must not reintroduce it as detail text.
@@ -633,34 +575,6 @@ pub fn short_task_description(description: &str) -> String {
     }
     let short = collapsed[..cut].trim().trim_end_matches([',', ';', ':', '.']).trim();
     if short.is_empty() { collapsed } else { short.to_string() }
-}
-
-fn find_inline_metadata_marker(source: &str, from: usize) -> Option<(usize, &'static str)> {
-    let mut inline_ticks: Option<usize> = None;
-    let mut cursor = from.min(source.len());
-    while cursor < source.len() {
-        let remainder = &source[cursor..];
-        if remainder.starts_with('`') {
-            let run = remainder.bytes().take_while(|byte| *byte == b'`').count();
-            if inline_ticks.is_some_and(|ticks| ticks == run) {
-                inline_ticks = None;
-            } else if inline_ticks.is_none() {
-                inline_ticks = Some(run);
-            }
-            cursor += run;
-            continue;
-        }
-        if inline_ticks.is_none() {
-            for marker in INLINE_TASK_METADATA_MARKERS {
-                if remainder.starts_with(marker) {
-                    return Some((cursor, marker));
-                }
-            }
-        }
-        let character = remainder.chars().next()?;
-        cursor += character.len_utf8();
-    }
-    None
 }
 
 /// A renderer-independent task tree used by both task-tracker implementations.

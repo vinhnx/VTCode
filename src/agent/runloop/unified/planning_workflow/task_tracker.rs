@@ -570,12 +570,10 @@ mod tests {
 
     #[test]
     fn approved_plan_per_item_verify_brackets_become_clean_tracker_commands() {
-        // Session session-vtcode-20261118T025102Z_882340-08275: plan validation
-        // accepted this per-item `verify:` list, but the handoff leaked `[`/`]`
-        // into the required verifier identities and blocked completion twice.
+        // Keep Markdown list delimiters out of commands while preserving literal arrows.
         let plan = PlanContent::from_markdown(
             "crisp-river".to_string(),
-            "## Summary\nSync README version strings.\n\n## Implementation Steps\n1. Sync version -> files: [README.md] -> verify: [grep -n '0.183.1' README.md], [python3 -c \"assert '0.182.7' not in open('README.md').read()\"]\n",
+            "## Summary\nSync README version strings.\n\n## Implementation Steps\n1. Sync version → files: [README.md] -> verify: [grep -n '0.183.1 → latest -> outcome: literal' README.md], [python3 -c \"assert '0.182.7' not in open('README.md').read()\"]\n",
             None,
         );
 
@@ -586,10 +584,25 @@ mod tests {
         assert_eq!(
             items[0]["verify"],
             json!([
-                "grep -n '0.183.1' README.md",
+                "grep -n '0.183.1 → latest -> outcome: literal' README.md",
                 r#"python3 -c "assert '0.182.7' not in open('README.md').read()""#,
             ])
         );
+    }
+
+    #[test]
+    fn approved_readme_plan_preserves_recorded_verifier_commands() {
+        let plan = PlanContent::from_markdown(
+            "readme-refinement".to_string(),
+            "## Summary\nRefine the README.\n\n## Implementation Steps\n1. Tighten intro plus Overview plus At a glance to one install path and one version source -> files: [README.md] -> verify: [sed -n '1,70p' README.md], [rg -n \"At a glance\" README.md]\n",
+            None,
+        );
+
+        let items = task_items_from_plan(&plan);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["files"], json!(["README.md"]));
+        assert_eq!(items[0]["verify"], json!(["sed -n '1,70p' README.md", r#"rg -n "At a glance" README.md"#]));
     }
 
     #[test]
@@ -737,10 +750,10 @@ mod tests {
     }
 
     #[test]
-    fn inline_files_and_verify_are_split_into_structured_fields() {
+    fn inline_files_and_verification_alias_are_split_into_structured_fields() {
         let plan = PlanContent::from_markdown(
             "Launch plan".to_string(),
-            "## Summary\nImprove startup behavior.\n\n## Implementation Steps\n1. Emit summary -> files: [src/a.rs, src/b.rs] -> verify: [cargo check]\n\n## Test Cases and Validation\n1. Run cargo check.\n\n## Assumptions and Defaults\n1. Existing policy remains unchanged.",
+            "## Summary\nImprove startup behavior.\n\n## Implementation Steps\n1. Emit summary -> files: [src/a.rs, src/b.rs] -> Verification: [cargo check]\n\n## Test Cases and Validation\n1. Run cargo check.\n\n## Assumptions and Defaults\n1. Existing policy remains unchanged.",
             None,
         );
 

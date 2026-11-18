@@ -316,6 +316,59 @@ fn split_task_description_metadata_keeps_inline_code_arrows_intact() {
 }
 
 #[test]
+fn split_task_description_metadata_preserves_arrows_in_metadata_values() {
+    let (description, files, verify) = split_task_description_metadata(
+        r#"Check A → B `→ files: literal` → files: ["A → B.md"] -> verify: [rg -n 'A → B -> outcome: literal' "A → B.md"], [sed -n '1,70p' README.md] → outcome: checked"#,
+    );
+
+    assert_eq!(description, "Check A → B `→ files: literal`");
+    assert_eq!(files, [r#""A → B.md""#]);
+    assert_eq!(
+        verify,
+        [
+            r#"rg -n 'A → B -> outcome: literal' "A → B.md""#,
+            "sed -n '1,70p' README.md",
+        ]
+    );
+}
+
+#[test]
+fn split_task_description_metadata_accepts_punctuation_in_bare_paths() {
+    for path in ["docs/user's-guide.md", "docs/[draft.md", r"docs\"] {
+        let source = format!("Update guide -> files: {path} -> verify: [cargo check]");
+        let (description, files, verify) = split_task_description_metadata(&source);
+
+        assert_eq!(description, "Update guide");
+        assert_eq!(files, [path]);
+        assert_eq!(verify, ["cargo check"]);
+    }
+}
+
+#[test]
+fn split_task_description_metadata_preserves_unquoted_bracket_in_verifier() {
+    let (_, _, verify) =
+        split_task_description_metadata("Check text -> verify: [grep -F [ README.md] -> outcome: result inspected");
+
+    assert_eq!(verify, ["grep -F [ README.md"]);
+}
+
+#[test]
+fn split_task_description_metadata_preserves_punctuation_in_check_text() {
+    for check in [
+        "git diff -- README.md # user's edits",
+        r#"git diff -- README.md # the "heading"#,
+        "Confirm the README's heading appears",
+    ] {
+        let source = format!(
+            "Inspect docs -> verify: [{check}] -> verification: [rg -n \"At a glance\" README.md] -> outcome: user's result"
+        );
+        let (_, _, verify) = split_task_description_metadata(&source);
+
+        assert_eq!(verify, [check, r#"rg -n "At a glance" README.md"#]);
+    }
+}
+
+#[test]
 fn split_task_description_metadata_without_markers_returns_trimmed_description() {
     let (clean, files, verify) = split_task_description_metadata("  Just an action  ");
     assert_eq!(clean, "Just an action");
