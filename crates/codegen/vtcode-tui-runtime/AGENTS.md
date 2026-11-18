@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # vtcode-tui-runtime
 
 [Root AGENTS.md](../../../AGENTS.md) | TUI/ANSI rendering stack extracted from `vtcode-core`: theming, markdown-to-ANSI, transcript presentation, inline-session protocol, and terminal setup.

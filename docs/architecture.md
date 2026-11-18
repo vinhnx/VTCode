@@ -215,9 +215,11 @@ The command-line interface is built on specific principles for robustness and in
 ### Workspace crates
 
 The workspace has 26 crates: the root `vtcode` binary plus 25 library crates under `crates/codegen/` (runtime) and
-`crates/common/` (shared contracts and utilities). `default-members` build the root, `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and `vtcode-ui`.
+`crates/common/` (shared contracts and utilities). `default-members` build the root, `vtcode-core`,
+`vtcode-skills`, `vtcode-tui-runtime`, and `vtcode-ui`.
 New reusable logic belongs in an existing small crate (or a new one) rather than in `vtcode-core` by default.
 
+<!-- markdownlint-disable MD060 -- intentionally unpadded crate role table -->
 | Crate                       | Role                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
 | `vtcode` (root `src/`)      | Binary, CLI, session bootstrap.                                                             |
@@ -248,6 +250,8 @@ New reusable logic belongs in an existing small crate (or a new one) rather than
 | `vtcode-desktop`            | Local macOS desktop workspace (non-publishable GPUI app).                                   |
 | `xtask`                     | Release packaging automation.                                                               |
 
+<!-- markdownlint-enable MD060 -->
+
 ### TUI Architecture
 
 The terminal UI now has a dedicated crate boundary:
@@ -267,7 +271,8 @@ The full TUI source tree is now located in:
 - `crates/codegen/vtcode-ui/src/tui/core_tui/`
 
 `crates/codegen/vtcode-tui-runtime/src/ui/tui.rs` re-exports this migrated source tree to preserve the
-`vtcode_tui_runtime::ui::tui` path. `vtcode-core` has no `ui` or `terminal_setup` module; the slash catalog lives in `vtcode-skills` and terminal detection in `vtcode-commons`.
+`vtcode_tui_runtime::ui::tui` path. `vtcode-core` has no `ui` or `terminal_setup` module; the slash
+catalog lives in `vtcode-skills` and terminal detection in `vtcode-commons`.
 
 The TUI runner is organized into focused modules:
 

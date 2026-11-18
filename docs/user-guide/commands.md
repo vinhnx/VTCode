@@ -63,7 +63,9 @@ fast mode is off. Using `/fast` dismisses the reminder. Claude speed changes aff
 
 ## Goal loop (`/goal`)
 
-Set a persistent thread goal and let the agent keep working across turns until it is paused, cleared, or done. The goal survives restarts (restored paused, never self-driving) and accrues elapsed time and token usage while active.
+Set a persistent thread goal and let the agent keep working across turns until it is paused,
+cleared, or done. The goal survives restarts (restored paused, never self-driving) and accrues
+elapsed time and token usage while active.
 
 | Command | Purpose |
 | --- | --- |
@@ -73,9 +75,19 @@ Set a persistent thread goal and let the agent keep working across turns until i
 | `/goal resume` | Resume a paused goal and continue working |
 | `/goal edit` | Show the saved objective (`/goal <text>` replaces it) |
 | `/goal clear` | Clear the goal entirely |
-| `/goal budget [<tokens>|0 to clear]` | Show, set, or clear the token budget |
+| `/goal budget [<tokens>\|0 to clear]` | Show, set, or clear the token budget |
 
-While a goal is active, completed turns automatically continue toward the objective (up to the cross-turn budget; type `continue` to resume after it exhausts). Pausing, clearing, stopping, hard budget stops, and turns that ask for input all idle the loop instead of continuing. The agent can also complete the goal itself by ending its turn with a first line of exactly `GOAL ACHIEVED:` once the work verifies, or through its `get_goal`/`update_goal` tools. A token budget set via `/goal budget` limits the loop when usage reaches the cap; `0` clears it. While a goal is active or paused, every turn prints a one-line status (`[i] Pursuing goal: …`) above its output. In VT Code Desktop the same commands run through the goal bar above the composer, which shows the `Pursuing goal` / `Paused goal` status with pause/resume, clear, and expand actions. The bar's elapsed timer ticks live while the goal is active, and ending the session pauses the goal.
+While a goal is active, completed turns automatically continue toward the objective (up to the
+cross-turn budget; type `continue` to resume after it exhausts). Pausing, clearing, stopping, hard
+budget stops, and turns that ask for input all idle the loop instead of continuing. The agent can
+also complete the goal itself by ending its turn with a first line of exactly `GOAL ACHIEVED:` once
+the work verifies, or through its `get_goal`/`update_goal` tools.
+
+A token budget set via `/goal budget` limits the loop when usage reaches the cap; `0` clears it.
+While a goal is active or paused, every turn prints a one-line status (`[i] Pursuing goal: …`) above
+its output. In VT Code Desktop the same commands run through the goal bar above the composer, which
+shows the `Pursuing goal` / `Paused goal` status with pause/resume, clear, and expand actions. The
+bar's elapsed timer ticks live while the goal is active, and ending the session pauses the goal.
 
 ## Execution explanations
 

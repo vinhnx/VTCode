@@ -269,9 +269,10 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   gpt-5.4-nano, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, etc.) are removed from the
   model picker but retained in routing constants for backward compatibility with existing configs.
 - **GPT-6.2 Astra (`gpt-6.2-astra`):** most capable OpenAI model for hardest end-to-end work (1,050,000 context, 128k max
-  output, reasoning `low`/`medium` (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported; $8 input / $40 output per
-  1M). Same Responses API route, GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as Astra/6.1 Sol;
-  sampling and logprobs unsupported. Supports the Multi-agent beta (`responses_multi_agent=v1`) for subagent delegation.
+  output, reasoning `low`/`medium` (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported;
+  $8 input / $40 output per 1M). Same Responses API route, GPT-6 prompt contract, explicit cache
+  breakpoints, and `30m` cache TTL as Astra/6.1 Sol; sampling and logprobs unsupported. Supports the
+  Multi-agent beta (`responses_multi_agent=v1`) for subagent delegation.
 - **GPT-6.2 Sol (`gpt-6.2-sol`):** go-to model for everyday coding and agents at scale (1,050,000 context, 128k max output,
   reasoning `low`/`medium` (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported; $2 input / $10 output per 1M).
   Same Responses API route, GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as 6.2 Astra; sampling
