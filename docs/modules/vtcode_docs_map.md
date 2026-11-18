@@ -1462,7 +1462,7 @@ below based on the topic area.
 
 - **File**: `docs/development/maintainer-notes/vtcode-desktop.md`
   - **Content**: vtcode-desktop maintainer notes
-  - **Topics**: Hard rules, Best practice, Typography & accessibility, Gotchas, Embedded terminal
+  - **Topics**: Hard rules, Best practice, Typography & accessibility, Gotchas, Linux readiness spike
   - **User Questions**: "What can you tell me about vtcode-desktop maintainer notes?", "How does Hard rules work?", "How
     does Best practice work?"
 

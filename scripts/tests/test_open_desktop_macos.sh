@@ -4,7 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/vtcode-open-desktop-test.XXXXXX")"
+TEST_TMPDIR="${TMPDIR:-/tmp}"
+TEST_ROOT="$(mktemp -d "${TEST_TMPDIR%/}/vtcode-open-desktop-test.XXXXXX")"
 trap 'rm -rf -- "${TEST_ROOT}"' EXIT
 
 STUB_BIN="${TEST_ROOT}/bin"

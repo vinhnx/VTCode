@@ -100,6 +100,28 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-desktop/`, moved verba
 - Running tool rows preview the live tail inline: `TranscriptItem::{is_running_tool,shows_inline_tail}` owns the inline-vs-Output-tab split (expanded running rows with non-empty output show the memoized 8-line `compact_output_tail`; settled/empty/archived rows don't), shared by `expanded_tool_tail` and `render_tool_item` so projection and render cannot disagree. Running Run rows also carry a `tool-open-terminal-{id}` CTA (`SquareTerminal`, registered in `assets.rs` ExtraIcons) that idempotently shows the built-in terminal for manual monitoring — live deltas carry no spool path (completion-only), so v1 does not attach/tail the process; threading the spool path into deltas is the follow-up.
 - Busy-thread loads surface the shared remedy in banner and status: the service builds `session_busy_message` (`vtcode-desktop-protocol::session_lock`), and `handle_response_error` detects it for `SESSION_LOAD` and copies it to `status` so it survives banner dismissal. Never retype the marker.
 
+## Linux readiness spike
+
+The November 2026 spike used published `main` at `5d1a3133f` and a disposable branch. One manual job on the standard
+`ubuntu-24.04` x86_64 runner had a 25-minute timeout. The baseline locked all-targets check and build passed, and the
+binary exited before GPUI startup with status 1 and the existing macOS requirement message.
+[Actions run](https://github.com/vinhnx/VTCode/actions/runs/44282604883) ·
+[Spike branch](https://github.com/vinhnx/VTCode/tree/spike/linux-desktop-20261118)
+
+GPUI Kit `0.9.1` enables the pinned `gpui-pre-platform 0.3.12` X11 and Wayland backends. The spike reused the app's
+`syntect` and dev-only `test-support` features. The runner installed candidate development packages
+`libasound2-dev`, `libdbus-1-dev`, `libfontconfig1-dev`, `libudev-dev`, `libwayland-dev`,
+`libxkbcommon-dev`, `libxkbcommon-x11-dev`, and `pkg-config`. Their minimum required subset still needs verification.
+
+The full locked all-targets check reached `vtcode-desktop` after checking `gpui-pre-linux` and `gpui-kit`. It failed
+with unresolved Objective-C imports in Dock and app icons, trash, font preferences, About, window bounds, reduced
+transparency, the status menu, and login items. The window-bounds startup tests also import Foundation types.
+The check stopped before linking or running the app.
+
+There was no native Ubuntu LTS x86_64 desktop available. Resume with text rendering, IME, focus, HiDPI, and GPU-less
+startup under both Wayland and X11 before extracting platform code or adding ongoing Linux CI. The preview also
+requires documented demand, maintainer approval, and clean-machine verification on both display backends.
+
 ## Embedded terminal
 
 - One login shell per workspace (`terminal_process.rs` spawn/close, `terminal_screen.rs` Rio grid wrapper, `terminal_tab.rs` retained session, `view/terminal_panel.rs` toggle/pump/render/input). User guide: [desktop-terminal](../desktop-terminal.md) + [quick reference](../desktop-terminal-quick-reference.md). Not an agent tool: no harness events, no `ThreadEvent`, no sandbox relationship — keystrokes are the user's, output is untrusted.
