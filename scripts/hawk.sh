@@ -10,9 +10,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HAWK_TOOLCHAIN="1.100.0"
 # Hawk links rustc internals, so a build only runs against the exact compiler it
 # shipped with. Keep this pinned to the release built for HAWK_TOOLCHAIN.
-# 0.1.15's prebuilt archives track rustc 1.99.0. Build from source with
-# HAWK_TOOLCHAIN until upstream publishes an archive for this compiler.
-HAWK_VERSION="${HAWK_VERSION:-0.1.15}"
+# 0.1.18 builds against rustc 1.100.0; 0.1.17 and older do not. Install it for
+# the pinned toolchain with:
+#   rustup toolchain install $HAWK_TOOLCHAIN --component rustc-dev
+#   RUSTC_BOOTSTRAP=1 cargo +$HAWK_TOOLCHAIN install --locked --force cargo-hawk --version $HAWK_VERSION
+HAWK_VERSION="${HAWK_VERSION:-0.1.18}"
 
 # Default arguments
 CONFIG="${HAWK_CONFIG:-$PROJECT_ROOT/hawk.toml}"

@@ -3,6 +3,11 @@ package = "vtcode"
 bin = "vtcode"
 reason = "shipped terminal coding agent binary"
 
+[[production]]
+package = "vtcode-desktop"
+bin = "vtcode-desktop"
+reason = "shipped macOS desktop application"
+
 [[feature-profile]]
 name = "all"
 all-features = true
@@ -216,10 +221,11 @@ reason = "used in doctest: name.into_inner()"
 
 # Planned CLI permission handler: `PermissionPromptHandler`/`set_permission_handler`
 # already exist in `tool_policy`, and docs/development/tui_only_refactoring.md
-# documents this prompt as the CLI implementation of that trait.
+# documents this prompt as the CLI implementation of that trait. The item moved
+# from vtcode-core to vtcode-tui-runtime in the 2026-11-17 UI extraction.
 [[override]]
 lint = "hawk::dead_public"
-crate = "vtcode_core"
+crate = "vtcode_tui_runtime"
 item = "ui::user_confirmation::UserConfirmation::confirm_tool_usage"
 level = "allow"
 reason = "CLI PermissionPromptHandler implementation planned in docs/development/tui_only_refactoring.md"
