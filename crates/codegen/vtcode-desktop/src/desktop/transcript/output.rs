@@ -1,12 +1,12 @@
 use super::*;
 
 impl Transcript {
-    pub(in crate::desktop) fn set_output_identity(&mut self, id: &str, output_id: &str) {
+    pub(in crate::desktop) fn set_output_identity(&mut self, id: &str, output_id: Option<&str>) {
         if let Some(index) = self.position_by_id(id)
             && let Some(item) = self.items.get_mut(index)
-            && item.output_item_id.as_deref() != Some(output_id)
+            && item.output_item_id.as_deref() != output_id
         {
-            item.output_item_id = Some(output_id.to_owned());
+            item.output_item_id = output_id.map(str::to_owned);
             self.bump_output_revision();
         }
     }

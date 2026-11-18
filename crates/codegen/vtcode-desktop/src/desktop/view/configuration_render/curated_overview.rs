@@ -68,7 +68,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(content_page_title(rust_i18n::t!("app.configuration.page_title").to_string(), &colors))
+                    .child(content_page_title(rust_i18n::t!("app.configuration.page_title").to_string(), colors))
                     .child(row_description(rust_i18n::t!("app.configuration.tagline").to_string(), colors)),
             )
             .child(

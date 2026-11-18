@@ -75,7 +75,7 @@ fn soft_edge_tracks_each_themes_border_in_both_modes(cx: &mut gpui_kit::TestAppC
         let dark = dark.expect("at least one dark theme");
         assert!(distinct.len() > 1, "soft edge must follow the theme, never a constant tone");
         assert!(
-            light.h != dark.h || light.s != dark.s || light.l != dark.l,
+            (light.h - dark.h).abs() > 1e-6 || (light.s - dark.s).abs() > 1e-6 || (light.l - dark.l).abs() > 1e-6,
             "light and dark modes must derive different soft-edge tones"
         );
     });

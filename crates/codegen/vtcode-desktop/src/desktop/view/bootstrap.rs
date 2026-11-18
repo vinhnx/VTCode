@@ -487,6 +487,7 @@ impl DesktopView {
             filter_matches: None,
             restored_activity: Vec::new(),
             restored_activity_revision: 0,
+            restored_poll_redirects: HashMap::new(),
             activity_projection_cache: None,
             output_view_cache: None,
             tool_tail_cache: HashMap::new(),

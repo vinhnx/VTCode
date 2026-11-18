@@ -310,6 +310,7 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
 #[derive(Clone, Debug)]
 pub(super) struct OutputView {
     pub id: String,
+    pub row_id: String,
     pub title: SharedString,
     pub text: SharedString,
     pub running: bool,
@@ -321,34 +322,33 @@ pub(super) fn output_for(
     restored: &[TranscriptItem],
     selected_id: Option<&str>,
 ) -> Option<OutputView> {
-    selected_id
-        .and_then(|id| {
-            restored
-                .iter()
-                .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
-                .or_else(|| {
-                    transcript
-                        .items()
-                        .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
-                })
-        })
-        .and_then(|item| {
-            output_view(item).or_else(|| {
-                item.has_archived_output().then(|| OutputView {
-                    id: item.id.to_string(),
-                    title: item.title.clone(),
-                    text: super::output_sections::human_output_text(&item.text).into(),
-                    truncated: false,
-                    running: false,
-                })
+    if let Some(item) = selected_id.and_then(|id| {
+        restored
+            .iter()
+            .chain(transcript.items())
+            .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
+    }) {
+        let selected = output_view(item).or_else(|| {
+            item.has_archived_output().then(|| OutputView {
+                id: item.id.clone(),
+                row_id: item.id.clone(),
+                title: item.title.clone(),
+                text: super::output_sections::human_output_text(&item.text).into(),
+                truncated: false,
+                running: false,
             })
-        })
-        .or_else(|| restored.iter().chain(transcript.items()).rev().find_map(output_view))
+        });
+        if selected.is_some() || item.session_poll.is_some() {
+            return selected;
+        }
+    }
+    restored.iter().chain(transcript.items()).rev().find_map(output_view)
 }
 
 fn output_view(item: &TranscriptItem) -> Option<OutputView> {
     Some(OutputView {
         id: item.output_item_id.clone().unwrap_or_else(|| item.id.clone()),
+        row_id: item.id.clone(),
         title: item.title.clone(),
         text: output_with_truncation_notice(item.output.as_ref()?, item.output_truncated),
         truncated: item.output_truncated,

@@ -18,6 +18,17 @@ pub(crate) struct EditTotals {
     pub deletions: u64,
 }
 
+/// Coalescing identity of a session poll/wait run survivor: consecutive
+/// follow-ups for `session_id` merge into this row instead of projecting one
+/// row per round-trip, and `count` feeds the `×N` title suffix.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SessionPollRun {
+    pub session_id: String,
+    pub base_title: String,
+    pub count: usize,
+    pub latest_call_id: String,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct TranscriptItem {
     pub id: String,
@@ -90,9 +101,19 @@ pub(crate) struct TranscriptItem {
     pub app_previews: Vec<AppPreviewItem>,
     /// Structured attachments for user echo rows; history rows and other roles leave this empty.
     pub user_attachments: Vec<UserAttachment>,
+    /// Session poll/wait run this row survives, if any. `None` for every
+    /// other row; set at projection and preserved across re-projections.
+    pub session_poll: Option<SessionPollRun>,
 }
 
 impl TranscriptItem {
+    pub(in crate::desktop) fn accepts_tool_capture(&self, output_id: &str, call_id: &str) -> bool {
+        self.session_poll.as_ref().map_or_else(
+            || self.output_item_id.as_deref().is_none_or(|id| id == output_id),
+            |run| run.latest_call_id == call_id,
+        )
+    }
+
     fn has_role(&self, role: TranscriptRole) -> bool {
         self.role == role.as_str()
     }
@@ -228,6 +249,7 @@ impl TranscriptItem {
             output_truncated: false,
             app_previews: Vec::new(),
             user_attachments: Vec::new(),
+            session_poll: None,
         }
     }
 

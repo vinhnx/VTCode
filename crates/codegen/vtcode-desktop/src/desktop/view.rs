@@ -89,10 +89,11 @@ use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;
 use super::transcript::{
-    DiffCard, DiffFile, DiffFileKind, EditTotals, NoticeSeverity, ToolCategory, ToolCategoryCounts, Transcript,
-    TranscriptItem, TranscriptRole, UserAttachment, activity_details_summary, activity_output_text, activity_payload,
-    activity_text, describe_activity_verbs, harness_is_user_visible, humanize_elapsed, split_tool_title_verb,
-    status as tool_status, tool_row_gist,
+    DiffCard, DiffFile, DiffFileKind, EditTotals, NoticeSeverity, SessionPollKey, SessionPollRun, ToolCategory,
+    ToolCategoryCounts, Transcript, TranscriptItem, TranscriptRole, UserAttachment, activity_details_summary,
+    activity_output_text, activity_payload, activity_text, describe_activity_verbs, harness_is_user_visible,
+    humanize_elapsed, session_poll_key, split_tool_title_verb, status as tool_status, title_with_poll_count,
+    tool_row_gist,
 };
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,
@@ -162,6 +163,7 @@ mod resize;
 mod root_render;
 mod running_confirm;
 mod runtime_items;
+mod runtime_tool_output;
 mod secret_store;
 mod session_nav;
 mod session_options;
@@ -535,6 +537,10 @@ struct DesktopView {
     /// inspector projection caches.
     restored_activity: Vec<TranscriptItem>,
     restored_activity_revision: u64,
+    /// Absorbed restored poll call ids → surviving restored row id. Restored
+    /// counterpart of `Transcript::coalesced_call_rows`; cleared with the
+    /// restored list. Restored and live id spaces never share entries.
+    restored_poll_redirects: HashMap<String, String>,
     activity_projection_cache: Option<inspector::ActivityProjectionCache>,
     output_view_cache: Option<inspector::OutputViewCache>,
     /// Bounded tails for expanded transcript tool rows, keyed by row id and

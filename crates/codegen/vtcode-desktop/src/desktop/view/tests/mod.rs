@@ -783,6 +783,7 @@ mod secret_store;
 mod service_navigation;
 mod session_link;
 mod session_navigation;
+mod session_poll_coalesce;
 mod sessions_startup;
 mod settings_kit_host;
 mod settings_kit_spike;

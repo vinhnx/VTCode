@@ -56,10 +56,77 @@ impl DesktopView {
         self.bump_restored_activity_revision();
     }
 
+    /// Append a restored session poll/wait row, merging it into the trailing
+    /// survivor when the previous restored row polls the same session.
+    ///
+    /// Restored counterpart of [`Transcript::upsert_session_poll`]: the
+    /// inspector's activity list shows one `×N` row per run instead of one
+    /// row per round-trip. Returns the surviving row id.
+    pub(super) fn push_restored_session_poll(&mut self, mut item: TranscriptItem, key: SessionPollKey) {
+        let row_id = self.restored_poll_redirects.get(&item.id).unwrap_or(&item.id);
+        if let Some(existing) = self.restored_activity.iter_mut().find(|row| &row.id == row_id) {
+            if existing.canonical_turn_id != item.canonical_turn_id
+                || existing.session_poll.as_ref().is_some_and(|run| run.latest_call_id != item.id)
+            {
+                return;
+            }
+            // Repeated projection of a known row (started → completed
+            // snapshots): refresh status text without growing the run.
+            existing.text = item.text;
+            self.bump_restored_activity_revision();
+            return;
+        }
+        let run_count = self
+            .restored_activity
+            .last()
+            .filter(|row| row.is_tool() && row.canonical_turn_id == item.canonical_turn_id)
+            .and_then(|row| row.session_poll.as_ref())
+            .filter(|run| run.session_id == key.session_id && run.base_title == key.base_title)
+            .map(|run| run.count);
+        if let Some(count) = run_count
+            && self.restored_poll_redirects.len() < super::super::transcript::MAX_TRANSCRIPT_ITEMS
+        {
+            let count = count.saturating_add(1);
+            let absorbed_id = item.id.clone();
+            if let Some(last) = self.restored_activity.last_mut() {
+                let survivor_id = last.id.clone();
+                last.title = title_with_poll_count(&key.base_title, count).into();
+                // The latest status and wait deadline win; output stays: the
+                // invocation carries none, and the survivor may already hold a
+                // merged capture from its own output event.
+                last.text = item.text.clone();
+                last.session_poll = Some(SessionPollRun {
+                    session_id: key.session_id,
+                    base_title: key.base_title,
+                    count,
+                    latest_call_id: absorbed_id.clone(),
+                });
+                if absorbed_id != survivor_id {
+                    let _previous = self.restored_poll_redirects.insert(absorbed_id, survivor_id.clone());
+                }
+                self.bump_restored_activity_revision();
+                return;
+            }
+        }
+        item.title = title_with_poll_count(&key.base_title, 1).into();
+        item.session_poll = Some(SessionPollRun {
+            session_id: key.session_id,
+            base_title: key.base_title,
+            count: 1,
+            latest_call_id: item.id.clone(),
+        });
+        self.push_restored_activity(item);
+    }
+
     pub(super) fn retain_restored_activity(&mut self, mut keep: impl FnMut(&TranscriptItem) -> bool) {
         let before = self.restored_activity.len();
         self.restored_activity.retain(|item| keep(item));
         if self.restored_activity.len() != before {
+            if !self.restored_poll_redirects.is_empty() {
+                let remaining: HashSet<&str> = self.restored_activity.iter().map(|row| row.id.as_str()).collect();
+                self.restored_poll_redirects
+                    .retain(|_, survivor| remaining.contains(survivor.as_str()));
+            }
             self.bump_restored_activity_revision();
         }
     }
@@ -69,6 +136,7 @@ impl DesktopView {
             self.restored_activity.clear();
             self.bump_restored_activity_revision();
         }
+        self.restored_poll_redirects.clear();
     }
 
     /// Toggle the Activity tab's status filter. Selecting the active status
@@ -424,7 +492,10 @@ impl DesktopView {
             self.output_scroll.scroll_to_bottom();
         }
         let pinned = output_pinned_to_bottom(&self.output_scroll);
-        let is_selected_output = self.selected_output_id.as_deref() == Some(output.id.as_str());
+        let is_selected_output = self
+            .selected_output_id
+            .as_deref()
+            .is_some_and(|selected| selected == output.id || selected == output.row_id);
         let has_more_output = self.restored_output_cursors.contains_key(&output.id);
         let output_page_loading = self
             .output_page_pending

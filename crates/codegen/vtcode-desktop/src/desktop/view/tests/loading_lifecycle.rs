@@ -40,7 +40,7 @@ fn disconnect_while_an_install_is_running_fails_the_row(cx: &mut TestAppContext)
         view.update(cx, |view, _| view.event_rx = receiver);
         drop(sender);
         view.update(cx, |view, cx| {
-            view.drain_events(window, cx);
+            let _ = view.drain_events(window, cx);
         });
         view.update(cx, |view, _| {
             match &view.update_install_state {

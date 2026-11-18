@@ -37,46 +37,46 @@ pub(super) use toolbar::toolbar_band_surface;
 /// of their registry id. The CLI registry owns the full catalog at runtime;
 /// this namespace gives the ids code names by one typed home instead of
 /// scattered string literals.
-#[allow(non_snake_case)]
+#[allow(non_snake_case, reason = "ThemeId is the namespace for built-in theme identifiers")]
 pub(super) mod ThemeId {
     /// Unprefixed id.
-    pub(super) const NOIR: &'static str = "noir";
+    pub(super) const NOIR: &str = "noir";
 
     /// Kit light/dark base sentinels — no palette override.
     pub(crate) mod system {
-        pub(crate) const LIGHT: &'static str = "system-light";
-        pub(crate) const DARK: &'static str = "system-dark";
+        pub(crate) const LIGHT: &str = "system-light";
+        pub(crate) const DARK: &str = "system-dark";
     }
 
     pub(crate) mod ciapre {
-        pub(crate) const BASE: &'static str = "ciapre";
-        pub(crate) const DARK: &'static str = "ciapre-dark";
-        pub(crate) const BLUE: &'static str = "ciapre-blue";
+        pub(crate) const BASE: &str = "ciapre";
+        pub(crate) const DARK: &str = "ciapre-dark";
+        pub(crate) const BLUE: &str = "ciapre-blue";
     }
 
     pub(crate) mod vitesse {
-        pub(crate) const LIGHT: &'static str = "vitesse-light";
+        pub(crate) const LIGHT: &str = "vitesse-light";
     }
 
     pub(crate) mod catppuccin {
-        pub(crate) const LATTE: &'static str = "catppuccin-latte";
+        pub(crate) const LATTE: &str = "catppuccin-latte";
         #[cfg(test)]
-        pub(crate) const MOCHA: &'static str = "catppuccin-mocha";
+        pub(crate) const MOCHA: &str = "catppuccin-mocha";
     }
 
     #[cfg(test)]
     pub(crate) mod gruvbox {
-        pub(crate) const DARK: &'static str = "gruvbox-dark";
+        pub(crate) const DARK: &str = "gruvbox-dark";
     }
 
     #[cfg(test)]
     pub(crate) mod github {
-        pub(crate) const DARK: &'static str = "github-dark";
+        pub(crate) const DARK: &str = "github-dark";
     }
 
     #[cfg(test)]
     pub(crate) mod solarized {
-        pub(crate) const LIGHT: &'static str = "solarized-light";
+        pub(crate) const LIGHT: &str = "solarized-light";
     }
 }
 

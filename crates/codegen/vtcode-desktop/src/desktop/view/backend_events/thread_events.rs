@@ -158,21 +158,17 @@ impl DesktopView {
                 }
             }
             ThreadEvent::ItemStarted(event) => {
-                let row_id = self.runtime_output_row_id(&event.item).to_owned();
-                let accepted = self
-                    .transcript
-                    .accepts_item_turn(&event.item.id, notification.turn_id.as_deref())
-                    && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
+                let row_id = self.runtime_output_row_id(&event.item);
+                let accepted = self.accepts_runtime_item_turn(&event.item, &row_id, notification.turn_id.as_deref());
                 self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref());
                 if accepted && matches!(event.item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)) {
-                    self.transcript.set_output_truncated(&row_id, false);
+                    self.mark_runtime_output_truncated(&row_id, &event.item.id, false);
                 }
             }
             ThreadEvent::ItemUpdated(event) => {
                 let mut item = event.item.clone();
-                let row_id = self.runtime_output_row_id(&item).to_owned();
-                let accepted = self.transcript.accepts_item_turn(&item.id, notification.turn_id.as_deref())
-                    && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
+                let row_id = self.runtime_output_row_id(&item);
+                let accepted = self.accepts_runtime_item_turn(&item, &row_id, notification.turn_id.as_deref());
                 let mut truncated = None;
                 let monitor_row = self.terminal_monitor_row.clone();
                 if let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &mut item.details
@@ -191,6 +187,8 @@ impl DesktopView {
                         .transcript
                         .position_by_id(&row_id)
                         .and_then(|index| self.transcript.get(index));
+                    let row =
+                        row.filter(|row| row.id == item.id || row.output_item_id.as_deref() == Some(item.id.as_str()));
                     let previous = row.and_then(|row| row.output.as_deref()).unwrap_or_default();
                     truncated = Some(
                         row.is_some_and(|row| row.output_truncated)
@@ -202,18 +200,15 @@ impl DesktopView {
                 }
                 self.update_runtime_item_for_turn(&item, notification.turn_id.as_deref());
                 if accepted && let Some(truncated) = truncated {
-                    self.transcript.set_output_truncated(&row_id, truncated);
+                    self.mark_runtime_output_truncated(&row_id, &item.id, truncated);
                 }
             }
             ThreadEvent::ItemCompleted(event) => {
-                let row_id = self.runtime_output_row_id(&event.item).to_owned();
-                let accepted = self
-                    .transcript
-                    .accepts_item_turn(&event.item.id, notification.turn_id.as_deref())
-                    && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
+                let row_id = self.runtime_output_row_id(&event.item);
+                let accepted = self.accepts_runtime_item_turn(&event.item, &row_id, notification.turn_id.as_deref());
                 self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref());
                 if accepted && matches!(event.item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)) {
-                    self.transcript.set_output_truncated(&row_id, false);
+                    self.mark_runtime_output_truncated(&row_id, &event.item.id, false);
                 }
             }
             ThreadEvent::Error(event) => {

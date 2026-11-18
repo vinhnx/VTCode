@@ -128,7 +128,7 @@ impl Render for ThemeGrid {
                             let Some(desktop) = grid.view.upgrade() else {
                                 return Vec::new();
                             };
-                            let selection = ThemeSelection::capture(&desktop.read(cx));
+                            let selection = ThemeSelection::capture(desktop.read(cx));
                             range
                                 .filter_map(|ix| {
                                     let entry = entries.get(ix).copied()?;

@@ -17,7 +17,8 @@ tool_display_mode = "compact"
 ```
 
 Compact mode keeps one concise activity row for each contiguous run of successful command/PTY calls. A single command
-can show its program headline and hidden line count, for example `• Ran cargo · … +12 lines`; consecutive calls collapse to
+can show its program headline and hidden line count, for example `• Ran cargo · … +12 lines`;
+consecutive calls collapse to
 `• Ran 2 commands`. The review suffix includes the configured shortcut and a styled `click to expand` affordance. In
 expanded mode, running PTY blocks show a bounded live tail; after completion, successful bodies collapse to the activity
 row. Failures, non-zero exits, cancellations, warnings, stderr diagnostics, meaningful diffs, and useful artifacts
@@ -95,7 +96,11 @@ identity plus an explicit wait deadline is the only parameter row shown
 (`└ Session run-2d5752f2 · wait up to 600s`), and the
 generic stream label is dropped next to it so the header reads `• Wait for command session`, `• Read command session`, or
 `• Send command input` (action-aware: pure waits no longer misrender as sends) instead of appending
-`Use write_stdin output`. Output-token caps, yield windows, and the raw stdin payload are not rendered; the model still
+`Use write_stdin output`. On the desktop transcript, consecutive waits or polls for the same session collapse
+further into a single row whose title gains a repeat count (`Wait for command session ×7`) and whose detail
+line tracks the latest wait deadline. A different session, action, turn, or intervening row starts a fresh run.
+The surviving row displays the latest nonblank capture. If an earlier call's capture arrives late, it gets its own row.
+Output-token caps, yield windows, and the raw stdin payload are not rendered; the model still
 receives the full arguments and result. A still-running session ends with a human hint
 (`Still running — check again for more output.` / `More output available — read the next chunk.`) instead of the
 model-facing `Reuse next_continue_args` jargon.

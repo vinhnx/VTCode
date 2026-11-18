@@ -1,5 +1,5 @@
 mod turn;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
 
 use gpui_kit::SharedString;
@@ -9,12 +9,14 @@ mod activity;
 mod activity_verbs;
 mod item;
 mod output;
+mod session_poll;
 mod tool_summary;
 mod user_attachments;
 pub(super) use activity_verbs::{
     ToolCategory, ToolCategoryCounts, describe_activity_verbs, split_tool_title_verb, tool_row_gist,
 };
-pub(super) use item::{EditTotals, TranscriptItem};
+pub(super) use item::{EditTotals, SessionPollRun, TranscriptItem};
+pub(super) use session_poll::{SessionPollKey, session_poll_key, title_with_poll_count};
 pub(super) use tool_summary::{activity_details_summary, activity_output_text, activity_payload, activity_text};
 pub(super) use turn::humanize_elapsed;
 pub(super) use user_attachments::UserAttachment;
@@ -241,6 +243,9 @@ pub(super) struct Transcript {
     /// text deltas bump `revision` but not this counter, so the Activity
     /// projection is not rebuilt for every PTY chunk of a streaming command.
     activity_revision: u64,
+    /// Absorbed session-poll call ids → surviving row id, so a merged wait's
+    /// later output still lands on the survivor.
+    coalesced_call_rows: HashMap<String, String>,
 }
 
 impl Transcript {
@@ -325,6 +330,7 @@ impl Transcript {
         self.items.clear();
         self.layout_changes.clear();
         self.trailing_tool_group_start = None;
+        self.coalesced_call_rows.clear();
         self.layout_changes.push(TranscriptLayoutChange::Reset(0));
         self.bump_revision();
     }
@@ -393,6 +399,9 @@ impl Transcript {
         let mut promoted_group_head = false;
         if evict_oldest {
             if let Some(removed) = self.items.pop_front() {
+                if removed.session_poll.is_some() {
+                    self.coalesced_call_rows.retain(|_, survivor| survivor != &removed.id);
+                }
                 if removed.turn_group_head {
                     self.promote_turn_group_head(removed.turn_id.as_deref());
                 }
@@ -460,6 +469,9 @@ impl Transcript {
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.position_by_id(id) {
             let removed = self.items.remove(index);
+            if removed.as_ref().is_some_and(|row| row.session_poll.is_some()) {
+                self.coalesced_call_rows.retain(|_, survivor| survivor != id);
+            }
             let removed_was_tool = removed.as_ref().is_some_and(|item| item.is_tool());
             if let Some(removed) = removed.as_ref().filter(|item| item.turn_group_head) {
                 self.promote_turn_group_head(removed.turn_id.as_deref());
@@ -610,6 +622,15 @@ impl Transcript {
             }
             if item.activity_category.is_none() {
                 item.activity_category = existing.activity_category;
+            }
+            if item.session_poll.is_none() {
+                item.session_poll.clone_from(&existing.session_poll);
+            }
+            if item.session_poll.is_some() && item.app_previews.is_empty() {
+                item.app_previews.clone_from(&existing.app_previews);
+            }
+            if item.tool_name.is_none() {
+                item.tool_name.clone_from(&existing.tool_name);
             }
             if item.command.is_none() {
                 item.command.clone_from(&existing.command);

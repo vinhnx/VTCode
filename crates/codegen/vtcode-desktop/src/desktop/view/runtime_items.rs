@@ -1,7 +1,6 @@
 //! Runtime item projection: ThreadItems into transcript rows, diff cards,
 //! activity summaries, and bounded diff classification.
 
-use super::super::output_sections::human_output_option;
 use super::*;
 use vtcode_commons::formatting::collapse_whitespace;
 use vtcode_commons::tool_headlines::{command_text, compact_command_headline, relativize_to_workspace};
@@ -40,33 +39,6 @@ pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
 mod live_output_tests;
 
 impl DesktopView {
-    /// Resolve a live tool output to its invocation row when identities are unambiguous.
-    ///
-    /// Merges into any tool row the `call_id` names — shell, MCP, read, edit,
-    /// or search — so one tool call renders as exactly one row. A row that
-    /// already absorbed a different capture keeps it (the newcomer stands
-    /// alone) and non-tool rows never absorb output.
-    pub(super) fn runtime_output_row_id<'a>(&self, item: &'a vtcode_exec_events::ThreadItem) -> &'a str {
-        let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &item.details else {
-            return &item.id;
-        };
-        if self.transcript.position_by_id(&item.id).is_some() {
-            return &item.id;
-        }
-        let Some(row) = self
-            .transcript
-            .position_by_id(&output.call_id)
-            .and_then(|index| self.transcript.get(index))
-        else {
-            return &item.id;
-        };
-        if row.is_tool() && row.output_item_id.as_deref().is_none_or(|id| id == item.id) {
-            &output.call_id
-        } else {
-            &item.id
-        }
-    }
-
     pub(super) fn restore_review_summaries(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
         let mut completions: HashMap<&str, usize> = HashMap::new();
         let mut item_turns: HashMap<&str, Option<&str>> = HashMap::new();
@@ -227,9 +199,10 @@ impl DesktopView {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
         self.drop_superseded_restored_item(&item.id);
-        self.project_runtime_item(item, false);
+        self.project_runtime_item_with_turn(item, false, None);
     }
 
     /// Effective CLI communication style for diagnostic projection. Older
@@ -254,13 +227,12 @@ impl DesktopView {
             .as_deref()
             .map(|context| context.turn_id.as_str())
             .filter(|id| !id.is_empty());
-        let row_id = self.runtime_output_row_id(item).to_owned();
-        if !self.transcript.accepts_item_turn(&item.id, turn_id) || !self.transcript.accepts_item_turn(&row_id, turn_id)
-        {
-            // Conflicting turn identity: the stale item is dropped.
+        let row_id = self.runtime_output_row_id(item);
+        if !self.accepts_runtime_item_turn(item, &row_id, turn_id) {
             return;
         }
-        self.update_runtime_item(item);
+        self.drop_superseded_restored_item(&item.id);
+        self.project_runtime_item_with_turn(item, false, turn_id);
         if let Some(turn_id) = turn_id {
             self.transcript.set_item_turn(&row_id, turn_id);
         }
@@ -300,6 +272,15 @@ impl DesktopView {
     }
 
     pub(super) fn project_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem, historical: bool) {
+        self.project_runtime_item_with_turn(item, historical, None);
+    }
+
+    fn project_runtime_item_with_turn(
+        &mut self,
+        item: &vtcode_exec_events::ThreadItem,
+        historical: bool,
+        turn_id: Option<&str>,
+    ) {
         use vtcode_exec_events::ThreadItemDetails;
         // Routine harness telemetry never reaches the transcript (live or
         // restored): latency records and lifecycle chatter would drown the
@@ -309,68 +290,10 @@ impl DesktopView {
         {
             return;
         }
-        if historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
-            let incoming_turn = item
-                .context
-                .as_deref()
-                .map(|context| context.turn_id.as_str())
-                .filter(|id| !id.is_empty());
-            let index = self.restored_activity.iter().position(|row| {
-                row.id == output.call_id
-                    && row.is_tool()
-                    && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
-                    && !matches!((row.canonical_turn_id.as_deref(), incoming_turn), (Some(a), Some(b)) if a != b)
-            });
-            if let Some(index) = index {
-                let (_, mut status) = describe_activity(&item.details, None);
-                if ActivityState::from_status(&status) == ActivityState::Running {
-                    status = tool_status::INTERRUPTED.to_string();
-                }
-                let Some(row) = self.restored_activity.get_mut(index) else {
-                    return;
-                };
-                let payload = activity_payload(&row.text);
-                row.text = activity_text(&status, payload).into();
-                // Identity implies output: `output_for` resolves a selection by
-                // identity and falls back to the newest capture when the row is
-                // output-less, so a blank merge must not plant an identity.
-                if let Some(human) = human_output_option(&output.output) {
-                    row.output = Some(human.into());
-                    row.output_item_id = Some(item.id.clone());
-                } else {
-                    row.output = None;
-                }
-                row.app_previews.clone_from(&output.app_previews);
-                self.bump_restored_activity_revision();
-                return;
-            }
-        }
-        if !historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
-            let row_id = self.runtime_output_row_id(item).to_owned();
-            if row_id != item.id
-                && let Some(row) = self
-                    .transcript
-                    .position_by_id(&row_id)
-                    .and_then(|index| self.transcript.get(index))
-            {
-                let title = row.title.to_string();
-                let payload = activity_payload(&row.text);
-                let status = describe_activity(&item.details, None).1;
-                let text = activity_text(&status, payload);
-                self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
-                // Identity implies output (see the historical merge above): a
-                // blank capture stores no output and plants no identity.
-                if let Some(human) = human_output_option(&output.output) {
-                    self.transcript.set_output(&row_id, Some(human.into()));
-                    self.transcript.set_output_identity(&row_id, &item.id);
-                } else {
-                    self.transcript.set_output(&row_id, None);
-                }
-                if !output.app_previews.is_empty() {
-                    self.transcript.set_app_previews(&row_id, output.app_previews.clone());
-                }
-                return;
-            }
+        if let ThreadItemDetails::ToolOutput(output) = &item.details
+            && self.merge_runtime_tool_output(item, output, historical)
+        {
+            return;
         }
         let id = item.id.clone();
         match &item.details {
@@ -476,8 +399,33 @@ impl DesktopView {
                         .and_then(|change| change.diff.as_ref())
                         .and_then(|diff| edit_path_for_change(&item, diff))
                         .map(Into::into);
-                    self.push_restored_activity(item);
+                    if let ThreadItemDetails::ToolInvocation(tool) = details
+                        && let Some(key) = session_poll_key(&tool.tool_name, tool.arguments.as_ref())
+                    {
+                        self.push_restored_session_poll(item, key);
+                    } else {
+                        self.push_restored_activity(item);
+                    }
                 } else {
+                    // Consecutive session polls/waiting for one session share a
+                    // single row (`×N`) instead of one row per round-trip.
+                    if let ThreadItemDetails::ToolInvocation(tool) = details
+                        && let Some(key) = session_poll_key(&tool.tool_name, tool.arguments.as_ref())
+                    {
+                        let mut row =
+                            TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
+                        row.turn_id = turn_id.map(Into::into);
+                        row.canonical_turn_id = item
+                            .context
+                            .as_deref()
+                            .map(|context| context.turn_id.as_str())
+                            .filter(|id| !id.is_empty())
+                            .map(Into::into);
+                        row.activity_category = ToolCategory::from_details(details);
+                        row.tool_name = Some(tool.tool_name.as_str().into());
+                        let _survivor = self.transcript.upsert_session_poll(row, key);
+                        return;
+                    }
                     // Carry stamped edit totals across re-projections: the fresh
                     // gist never carries the suffix, so suffixing here cannot
                     // double-append.
@@ -736,6 +684,7 @@ impl DesktopView {
             .iter()
             .chain(self.transcript.items())
             .find(|row| row.id == id)
+            .filter(|row| row.session_poll.is_none())
             .and_then(|row| row.output_item_id.clone())
             .unwrap_or(id);
         self.selected_output_id = Some(capture_id);
@@ -787,7 +736,7 @@ fn invocation_tool_name(details: &vtcode_exec_events::ThreadItemDetails) -> Opti
 /// than in each reader. (A multi-line title used to overflow its row,
 /// clipping to a bare middle line with ghosted neighbors and hiding the
 /// `Ran` prefix on its clipped first line.)
-fn describe_activity(
+pub(super) fn describe_activity(
     details: &vtcode_exec_events::ThreadItemDetails,
     workspace_root: Option<&Path>,
 ) -> (String, String) {

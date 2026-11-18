@@ -276,7 +276,7 @@ impl DesktopView {
     /// an update *offer*, not something the user has already received.
     pub(super) fn installed_changelog_version(&self) -> Option<&str> {
         let status = self.update_status.as_ref()?;
-        self.can_view_current_changelog().then(|| status.current_version.as_str())
+        self.can_view_current_changelog().then_some(status.current_version.as_str())
     }
 
     /// Whether the running version's own notes are known (the post-update
