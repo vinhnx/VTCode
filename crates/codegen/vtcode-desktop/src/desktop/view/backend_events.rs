@@ -238,9 +238,10 @@ impl DesktopView {
         ) {
             return;
         }
-        // Focused windows toast in-app where the click target lives;
-        // backgrounded windows banner through the OS center, mirroring the
-        // update notice. Either way the click resolves the same target.
+        // Backgrounded windows banner through the OS center; focused windows
+        // toast in-app, with HITL activities additionally reaching the OS
+        // center (see `background_agent_activity`). Either way the click
+        // resolves the same target.
         let system = !window.is_window_active();
         let weak = cx.entity().downgrade();
         super::super::notifications::background_agent_activity(

@@ -63,6 +63,27 @@ fn activity_delivery_follows_modes_toggles_and_focus() {
 }
 
 #[test]
+fn focused_dual_delivery_claims_every_activity() {
+    use crate::desktop::notifications::BackgroundAgentActivity;
+
+    // Only HITL activities escape to the OS center while focused; a new
+    // variant misses every arm and fails until the table claims it.
+    for activity in [
+        BackgroundAgentActivity::Completed,
+        BackgroundAgentActivity::NeedsAttention,
+        BackgroundAgentActivity::PermissionRequired,
+        BackgroundAgentActivity::QuestionWaiting,
+        BackgroundAgentActivity::ServiceDisconnected,
+    ] {
+        assert_eq!(
+            activity.dual_when_focused(),
+            matches!(activity, BackgroundAgentActivity::PermissionRequired | BackgroundAgentActivity::QuestionWaiting),
+            "{activity:?} focused delivery"
+        );
+    }
+}
+
+#[test]
 fn interaction_kinds_map_to_permission_or_question_activities() {
     use crate::desktop::notifications::{BackgroundAgentActivity, activity_for_interaction_kind};
 
@@ -549,11 +570,20 @@ fn deeplink_thread_fixture(id: &str) -> vtcode_desktop_protocol::SessionSummary 
 }
 
 fn question_interaction_event(session_id: &str, turn_id: &str, interaction_id: &str) -> BackendEvent {
+    interaction_event_with_kind(session_id, turn_id, interaction_id, vtcode_desktop_protocol::InteractionKind::Question)
+}
+
+fn interaction_event_with_kind(
+    session_id: &str,
+    turn_id: &str,
+    interaction_id: &str,
+    kind: vtcode_desktop_protocol::InteractionKind,
+) -> BackendEvent {
     BackendEvent::Interaction(vtcode_desktop_protocol::InteractionRequest {
         session_id: session_id.into(),
         turn_id: turn_id.into(),
         interaction_id: interaction_id.into(),
-        kind: vtcode_desktop_protocol::InteractionKind::Question,
+        kind,
         wizard: false,
         title: "private prompt detail".into(),
         details: Vec::new(),
@@ -737,7 +767,7 @@ fn system_notification_click_opens_update_settings(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn focused_waiting_prompt_posts_an_in_app_toast_instead_of_a_system_banner(cx: &mut TestAppContext) {
+fn focused_waiting_prompt_posts_in_app_toast_and_system_banner(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
@@ -761,30 +791,36 @@ fn focused_waiting_prompt_posts_an_in_app_toast_instead_of_a_system_banner(cx: &
     })
     .unwrap();
 
-    let shown_before = cx.shown_system_notifications().len();
-    cx.update_window(window, |_, window, cx| {
-        assert!(window.notifications(cx).is_empty(), "backgrounded prompts stay system-only");
-        view.update(cx, |view, cx| {
-            view.event_tx
-                .send(question_interaction_event("session", "turn-3", "interaction-2"))
-                .unwrap();
-            let _batch_full = view.drain_events(window, cx);
-        });
-        window.render_frame(cx);
-        // Toast bodies stay private to Kit; the delivery split (no new system
-        // notice, one new in-app toast) is the behavioral oracle.
+    // HITL kinds dual-deliver when focused: the in-app toast keeps the click
+    // target where the prompt lives, and the OS banner survives a user
+    // looking away from the toast corner. Toast bodies stay private to Kit;
+    // the delivery pair (one new system notice, one new in-app toast per
+    // prompt) is the behavioral oracle.
+    for (interaction_id, kind) in [
+        ("interaction-2", vtcode_desktop_protocol::InteractionKind::Question),
+        ("interaction-3", vtcode_desktop_protocol::InteractionKind::Approval),
+    ] {
+        let shown_before = cx.shown_system_notifications().len();
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.event_tx
+                    .send(interaction_event_with_kind("session", "turn-3", interaction_id, kind))
+                    .unwrap();
+                let _batch_full = view.drain_events(window, cx);
+            });
+            window.render_frame(cx);
+            assert!(
+                !window.notifications(cx).is_empty(),
+                "a focused {kind:?} prompt toasts in-app where its click target lives"
+            );
+        })
+        .unwrap();
         assert_eq!(
-            window.notifications(cx).len(),
-            1,
-            "a focused waiting prompt toasts in-app where its click target lives"
+            cx.shown_system_notifications().len(),
+            shown_before + 1,
+            "a focused {kind:?} prompt must also reach the OS center"
         );
-    })
-    .unwrap();
-    assert_eq!(
-        cx.shown_system_notifications().len(),
-        shown_before,
-        "a focused prompt must not also escape to the OS center"
-    );
+    }
 }
 
 #[gpui_kit::test]

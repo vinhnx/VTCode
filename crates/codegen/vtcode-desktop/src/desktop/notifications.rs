@@ -34,6 +34,14 @@ impl BackgroundAgentActivity {
         }
     }
 
+    /// HITL activities block the turn on a human decision. They dual-deliver
+    /// when focused (in-app toast plus OS banner) so a waiting approval or
+    /// question survives a user looking away from the toast corner; every
+    /// other activity keeps the exclusive focus split.
+    pub(super) fn dual_when_focused(self) -> bool {
+        matches!(self, Self::PermissionRequired | Self::QuestionWaiting)
+    }
+
     /// Localized banner body. Every activity carries its own message so the
     /// delivery split (system vs in-app) never changes what is said.
     pub(super) fn message(self) -> String {
@@ -116,11 +124,15 @@ pub(super) fn background_agent_activity(
         .title(app::NAME)
         .id1::<BackgroundAgentActivityNotification>(key)
         .on_click(on_click);
-    // Focused windows toast in-app where the click target lives; backgrounded
-    // windows banner through the OS center. System-banner clicks activate the
-    // window and fire this same callback, so one handler covers both paths.
+    // Backgrounded windows banner through the OS center only. Focused
+    // windows toast in-app where the click target lives, and HITL activities
+    // additionally banner through the OS center so a waiting decision stays
+    // in the center after the toast autohides. Banner clicks activate the
+    // window and fire this same callback, so one handler covers every path.
     if system {
         window.push_notification(notification.system(), cx);
+    } else if activity.dual_when_focused() {
+        window.push_notification(notification.placement(Anchor::BottomRight).in_app_and_system(), cx);
     } else {
         window.push_notification(notification.placement(Anchor::BottomRight), cx);
     }
