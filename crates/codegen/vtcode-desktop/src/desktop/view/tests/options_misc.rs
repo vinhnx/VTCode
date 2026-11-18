@@ -766,7 +766,7 @@ fn effort_option_click_commits_the_supported_level(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppContext) {
+fn effort_commit_dismisses_the_model_options_panel(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
     settle_fade_animations(cx);
@@ -780,7 +780,7 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
-        // medium -> high exercises a successful commit; the panel must survive it.
+        // medium -> high is a successful commit; it closes the panel.
         window.press("right", cx);
         window.render_frame(cx);
     })
@@ -794,32 +794,16 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let state = view.read(cx);
-        assert!(state.palette.is_some(), "effort change must keep the panel open");
-        assert!(state.palette_kind == super::super::PaletteKind::ModelOptions);
-        assert!(state.effort_slider.is_some(), "slider state must survive the commit");
-        assert_eq!(state._effort_slider_subscriptions.len(), 2);
-        assert!(state.effort_focus.is_focused(window), "focus must stay on the knob, not jump to the composer");
-        assert_eq!(window.find("command-palette").label(), Some("Select model"));
-        assert!(!state.can_select_session_options(), "controls lock while the CLI request is pending");
-        // While pending, knob input and the speed toggle must neither submit nor move state.
-        let slider_value = state.effort_slider.as_ref().unwrap().read(cx).value().start();
-        assert_eq!(slider_value, 2., "knob shows the committed high level");
-        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
-        window.press("left", cx);
-        window.render_frame(cx);
-        assert_eq!(
-            view.read(cx).effort_slider.as_ref().unwrap().read(cx).value().start(),
-            2.,
-            "pending knob input must not move the slider"
-        );
-        window.click("fast-mode-toggle", cx);
-        window.render_frame(cx);
+        assert!(state.palette.is_none(), "effort commit dismisses the panel");
+        assert!(state.effort_slider.is_none(), "the knob is released with the panel");
+        assert!(state._effort_slider_subscriptions.is_empty());
+        assert!(window.try_find("command-palette").is_none());
+        assert!(!state.effort_focus.is_focused(window), "focus leaves the dismissed knob");
     })
     .unwrap();
-    cx.run_until_parked();
-    assert!(requests.try_recv().is_err(), "pending input must not submit");
+
+    // A blocked choice is not a commit: it keeps the panel open for a retry.
     cx.update_window(window, |_, window, cx| {
-        // CLI acknowledgement re-enables the panel without dismissing it.
         let mut ack = runtime_options_config();
         ack.session_options.as_mut().unwrap().reasoning_effort = "high".into();
         view.update(cx, |view, cx| {
@@ -831,35 +815,23 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
                 },
                 cx,
             );
+            view.open_model_options(window, cx);
         });
         window.render_frame(cx);
-        let state = view.read(cx);
-        assert!(state.palette.is_some(), "CLI ack must keep the panel open");
-        assert!(state.palette_kind == super::super::PaletteKind::ModelOptions);
-        assert!(state.can_select_session_options(), "ack re-enables the controls");
-        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: high"));
-        // Boundary no-op when idle: already at high, pressing right submits nothing.
-        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
-        window.press("right", cx);
+        view.update(cx, |view, _| view.session_request = Some(vtcode_desktop_protocol::method::CONFIG_OPTIONS));
         window.render_frame(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    assert!(requests.try_recv().is_err(), "boundary press must not submit");
-    cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
         window.press("left", cx);
         window.render_frame(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    let BackendCommand::Request { method, params } = requests.try_recv().expect("medium request") else {
-        panic!("medium request expected")
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
-    assert_eq!(params["reasoningEffort"], "medium");
-    cx.update_window(window, |_, window, cx| {
-        // A drag released while blocked must revert to the CLI value, not stick.
+        assert!(view.read(cx).palette.is_some(), "blocked input keeps the panel open");
+        assert_eq!(
+            view.read(cx).effort_slider.as_ref().unwrap().read(cx).value().start(),
+            2.,
+            "blocked knob input must not move the slider"
+        );
+        // A drag released while blocked must revert to the CLI value instead of
+        // sticking on the uncommitted level; the early-return commit path must
+        // not swallow that revert.
         view.update(cx, |view, cx| {
             let slider = view.effort_slider.clone().unwrap();
             slider.update(cx, |state, cx| {
@@ -879,37 +851,18 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
             2.,
             "blocked drag must revert to the CLI high level"
         );
-        assert!(view.read(cx).palette.is_some(), "revert must keep the panel open");
-        let mut ack = runtime_options_config();
-        ack.session_options.as_mut().unwrap().reasoning_effort = "medium".into();
-        view.update(cx, |view, cx| {
-            view.handle_backend_event(
-                BackendEvent::Response {
-                    method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
-                    result: Some(json!(ack)),
-                    error: None,
-                },
-                cx,
-            );
-        });
-        window.render_frame(cx);
-        // Slider (high) now trails the acked CLI value (medium); the next knob
-        // step re-syncs without a spurious request.
-        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
-        window.press("left", cx);
+        assert!(view.read(cx).palette.is_some(), "a blocked revert keeps the panel open");
+        window.click("fast-mode-toggle", cx);
         window.render_frame(cx);
     })
     .unwrap();
     cx.run_until_parked();
-    assert!(requests.try_recv().is_err(), "re-sync step must not submit");
+    assert!(requests.try_recv().is_err(), "blocked input must not submit");
+
+    // The speed toggle is not an effort choice: it still keeps the panel open.
     cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.session_request = None);
         window.render_frame(cx);
-        assert_eq!(
-            view.read(cx).effort_slider.as_ref().unwrap().read(cx).value().start(),
-            1.,
-            "re-sync step must land on the CLI medium level"
-        );
-        assert!(view.read(cx).palette.is_some(), "boundary no-op must keep the panel open");
         window.click("fast-mode-toggle", cx);
         window.render_frame(cx);
     })
@@ -923,12 +876,12 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let state = view.read(cx);
-        assert!(state.palette.is_some(), "speed toggle must keep the panel open");
+        assert!(state.palette.is_some(), "speed toggle keeps the panel open");
         assert!(state.palette_kind == super::super::PaletteKind::ModelOptions);
         assert!(state.effort_slider.is_some());
         let mut ack = runtime_options_config();
         let options = ack.session_options.as_mut().unwrap();
-        options.reasoning_effort = "medium".into();
+        options.reasoning_effort = "high".into();
         options.fast_mode_enabled = false;
         view.update(cx, |view, cx| {
             view.handle_backend_event(
@@ -961,13 +914,8 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let state = view.read(cx);
-        assert!(state.palette.is_some(), "explicit effort choice must keep the panel open");
-        assert!(state.palette_kind == super::super::PaletteKind::ModelOptions);
-        assert!(window.try_find("command-palette").is_some());
-        // Escape still dismisses the topmost surface and returns focus.
-        view.update(cx, |view, cx| view.dismiss_overlay(window, cx));
-        window.render_frame(cx);
-        assert!(view.read(cx).palette.is_none(), "Escape must still dismiss the panel");
+        assert!(state.palette.is_none(), "explicit effort choice dismisses the panel too");
+        assert!(window.try_find("command-palette").is_none());
     })
     .unwrap();
 }

@@ -590,14 +590,18 @@ impl DesktopView {
             cx.notify();
             return;
         }
-        // Keep the compact model panel open for explicit effort choices so
-        // users can compare levels without reopening the knob.
+        // An explicit effort choice in the model panel is a complete task:
+        // commit it and dismiss the panel, like the compact knob does. A
+        // blocked choice leaves the panel open so the user can retry.
         if let PaletteAction::SelectSessionOptions(options) = &action
             && self.palette_kind == PaletteKind::ModelOptions
             && options.reasoning_effort.is_some()
         {
-            let _selected = self.select_session_options(options.clone(), cx);
-            cx.notify();
+            if self.select_session_options(options.clone(), cx) {
+                self.close_palette(window, cx);
+            } else {
+                cx.notify();
+            }
             return;
         }
         // Close clears the query, so search jumps capture it first.

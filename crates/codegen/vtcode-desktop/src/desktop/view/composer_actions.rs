@@ -762,17 +762,23 @@ impl DesktopView {
                         {
                             return;
                         }
-                        // Keep the model options panel open so effort
-                        // adjustments do not dismiss the knob.
                         let params = protocol::SessionOptionsSelectParams {
                             reasoning_effort: Some(effort),
                             ..Default::default()
                         };
                         let selected = view.select_session_options(params.clone(), cx);
-                        if !selected && !view.session_option_is_current(&params) {
+                        if selected {
+                            // A committed effort choice completes the picker:
+                            // dismiss it and restore focus instead of leaving
+                            // the knob open for another adjustment.
+                            view.close_palette(window, cx);
+                            return;
+                        }
+                        if !view.session_option_is_current(&params) {
                             // Blocked by a pending request. Revert the knob to
                             // the CLI value so the panel never shows an
-                            // uncommitted level as selected.
+                            // uncommitted level as selected. No commit means
+                            // the panel stays open for a retry.
                             let current = view.session_options().and_then(|options| {
                                 revert_levels.iter().position(|level| level == &options.reasoning_effort)
                             });

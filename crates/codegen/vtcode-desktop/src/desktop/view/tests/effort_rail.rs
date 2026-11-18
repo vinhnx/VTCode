@@ -29,7 +29,8 @@ fn reasoning_effort_rail_labels_every_stop_and_home_end_jump(cx: &mut TestAppCon
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
     assert_eq!(params["reasoningEffort"], "low");
     cx.update_window(window, |_, window, cx| {
-        // CLI acknowledgement re-enables the rail; End jumps to the maximum.
+        // A commit dismisses the panel, so the CLI acknowledgement has to
+        // reopen it before End can jump to the maximum.
         let mut ack = runtime_options_config();
         ack.session_options.as_mut().unwrap().reasoning_effort = "low".into();
         view.update(cx, |view, cx| {
@@ -41,6 +42,7 @@ fn reasoning_effort_rail_labels_every_stop_and_home_end_jump(cx: &mut TestAppCon
                 },
                 cx,
             );
+            view.open_model_options(window, cx);
             view.focus_palette_state(window, cx);
         });
         window.render_frame(cx);
@@ -55,6 +57,7 @@ fn reasoning_effort_rail_labels_every_stop_and_home_end_jump(cx: &mut TestAppCon
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
     assert_eq!(params["reasoningEffort"], "high");
     assert!(requests.try_recv().is_err());
+    cx.update(|cx| assert!(view.read(cx).palette.is_none(), "the second commit dismisses the panel too"));
 }
 
 #[gpui_kit::test]
@@ -109,7 +112,6 @@ fn reasoning_effort_option_click_commits_the_selected_level(cx: &mut TestAppCont
         assert!(top.origin.y < bottom.origin.y, "highest effort renders first: top={top:?} bottom={bottom:?}");
         window.click(("effort-label", 2usize), cx);
         window.render_frame(cx);
-        assert_eq!(window.find(("effort-label", 2usize)).selected(), Some(true));
     })
     .unwrap();
     cx.run_until_parked();
@@ -119,6 +121,12 @@ fn reasoning_effort_option_click_commits_the_selected_level(cx: &mut TestAppCont
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
     assert_eq!(params["reasoningEffort"], "high");
     assert!(requests.try_recv().is_err());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "clicking an effort level dismisses the panel");
+        assert!(window.try_find(("effort-label", 2usize)).is_none());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
