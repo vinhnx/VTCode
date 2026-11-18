@@ -1,15 +1,13 @@
 //! Cached updater status: refresh requests, snapshot storage, notifications,
 //! and the changelog viewer.
+//!
+//! The reader only ever presents the running (installed) binary's notes. A
+//! cached newer release remains readable to the updater as an *offer* — it
+//! drives the update notification and the About install action — but its
+//! notes are never shown before it is actually installed, so the app cannot
+//! advertise a release the user has not received.
 
 use super::*;
-
-/// Which release the changelog viewer presents: the available update, or the
-/// running version's own notes for the post-update "what's new" moment.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ChangelogMode {
-    Latest,
-    Current,
-}
 
 impl DesktopView {
     pub(super) fn request_update_status(&mut self) {
@@ -112,6 +110,24 @@ impl DesktopView {
         self.update_install_state = state;
     }
 
+    /// Reset in-flight update bookkeeping when the service goes away. The
+    /// client sets an optimistic `Downloading 0 bytes` phase the moment Install
+    /// is clicked, and a crashing or exiting service has no terminal progress
+    /// tick (or error response) to replace it. Without this the About row
+    /// would claim a download that can never finish, keep Install suppressed,
+    /// and show "Checking…" forever for a request that died with the service.
+    /// Failing locally re-arms both actions; the service becomes authoritative
+    /// again on the next successful status/check response.
+    pub(super) fn reset_update_state_on_disconnect(&mut self) {
+        if self.update_install_state.is_in_flight() {
+            self.update_install_state = protocol::UpdateInstallState::Failed {
+                message: rust_i18n::t!("app.service.review_disconnected").to_string(),
+            };
+        }
+        self.update_request_pending = false;
+        self.update_backfill_in_flight = false;
+    }
+
     /// Store a status snapshot and re-derive the release-notes banner. Shared
     /// by the status request and the acknowledgement response (which also
     /// carries a snapshot) without touching the status-request in-flight flag.
@@ -124,10 +140,10 @@ impl DesktopView {
                 // notifications still drive the live row between refreshes.
                 self.update_install_state = status.install.clone();
                 self.update_status = Some(status);
-                // The viewer implies viewable content; a refresh that clears
-                // the open mode (updated elsewhere) closes it rather than
+                // The viewer implies viewable content; a refresh that drops
+                // the installed version's notes closes it rather than
                 // stranding an empty dialog.
-                if self.changelog_open && !self.can_view_changelog_in(self.changelog_mode) {
+                if self.changelog_open && !self.can_view_current_changelog() {
                     self.changelog_open = false;
                     self.changelog_return_focus = None;
                 }
@@ -147,6 +163,10 @@ impl DesktopView {
     /// (`vtcode update` prints notes without marking, so the first app launch
     /// still announces them.) Versions without notes never record, so a
     /// notes-less launch retries instead of marking seen.
+    ///
+    /// The `current_release_highlights` field only ever describes the running
+    /// version: the service self-matches cached notes against its own binary
+    /// before sending them, so a newer cached release cannot arm this banner.
     fn should_show_release_notes_banner(&self) -> bool {
         let Some(status) = self.update_status.as_ref() else {
             return false;
@@ -185,7 +205,7 @@ impl DesktopView {
     /// Open the viewer for the running version's notes from the banner, then
     /// retire the banner: the reader has seen what it advertised.
     pub(super) fn view_release_notes_from_banner(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_current_changelog(window, cx);
+        self.open_changelog(window, cx);
         self.dismiss_release_notes_banner(cx);
     }
 
@@ -240,10 +260,10 @@ impl DesktopView {
             window,
             latest,
             system,
-            deeplinks::click_handler(
-                deeplinks::NotificationTarget::UpdateChangelog { version: latest.to_string() },
-                weak,
-            ),
+            // The toast announces an *offer*, so clicking it lands on the
+            // About page's Update status row (Check / Install) rather than
+            // opening notes for a release that is not installed yet.
+            deeplinks::click_handler(deeplinks::NotificationTarget::UpdateSettings, weak),
             cx,
         );
         self.preferences.notifications.last_notified_update = Some(latest.to_string());
@@ -251,94 +271,35 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Whether the viewer has an update to show. Drives the update
-    /// notification and the `Latest` viewer's upgrade subtitle: both advertise
-    /// an *update*, which needs both the offer and a version. Reading the
-    /// changelog without one is [`Self::can_view_latest_changelog`].
-    pub(super) fn can_view_changelog(&self) -> bool {
-        self.update_status
-            .as_ref()
-            .is_some_and(|status| status.update_available && status.latest_version.is_some())
-    }
-
-    /// Whether the latest known release is readable, with or without an
-    /// offered update. Drives the Settings → About row and the relaxed
-    /// `Latest` viewer gate: reading notes is not the same as being offered an
-    /// update. A release whose cached notes carry no Highlights section still
-    /// counts — the viewer renders its link-only state.
-    pub(super) fn can_view_latest_changelog(&self) -> bool {
-        self.latest_changelog_version().is_some()
-    }
-
-    /// The release the `Latest` viewer would present. `None` means no reader
-    /// entry point should appear.
-    fn latest_changelog_version(&self) -> Option<&str> {
-        self.update_status
-            .as_ref()
-            .filter(|status| status.latest_version.is_some())
-            .and_then(|status| status.latest_version.as_deref())
-    }
-
-    /// The release a reader entry point should offer: the latest known release
-    /// with notes, else the running version's own notes. Version and mode stay
-    /// paired so a caller cannot name one release while the viewer opens
-    /// another.
-    pub(super) fn best_changelog_release(&self) -> Option<(&str, ChangelogMode)> {
-        if let Some(latest) = self.latest_changelog_version() {
-            return Some((latest, ChangelogMode::Latest));
-        }
-        let current = self.update_status.as_ref()?.current_version.as_str();
-        self.can_view_current_changelog().then_some((current, ChangelogMode::Current))
+    /// The installed version whose notes the reader may present. `None`
+    /// means no reader entry point should appear: a cached newer release is
+    /// an update *offer*, not something the user has already received.
+    pub(super) fn installed_changelog_version(&self) -> Option<&str> {
+        let status = self.update_status.as_ref()?;
+        self.can_view_current_changelog().then(|| status.current_version.as_str())
     }
 
     /// Whether the running version's own notes are known (the post-update
-    /// "what's new" moment). Unlike [`Self::can_view_changelog`], this needs
-    /// no available update.
+    /// "what's new" moment). Needs no available update: the notes belong to
+    /// the binary the user is running, not to a cached offer.
     pub(super) fn can_view_current_changelog(&self) -> bool {
         self.update_status
             .as_ref()
             .is_some_and(|status| !status.current_release_highlights.is_empty())
     }
 
-    /// Whether the viewer can present `mode` from the stored status.
-    pub(super) fn can_view_changelog_in(&self, mode: ChangelogMode) -> bool {
-        match mode {
-            ChangelogMode::Latest => self.can_view_latest_changelog(),
-            ChangelogMode::Current => self.can_view_current_changelog(),
-        }
-    }
-
-    /// Whether either viewer mode has content (the `/go changelog` verb).
+    /// Alias used by the `/go changelog` reachability gate: the only readable
+    /// notes are the installed binary's.
     pub(super) fn can_view_any_changelog(&self) -> bool {
-        self.can_view_latest_changelog() || self.can_view_current_changelog()
+        self.can_view_current_changelog()
     }
 
-    /// Open the changelog viewer for the latest known release.
+    /// Open the viewer for the installed binary's release notes. Reads
+    /// `update_status` live at render time instead of snapshotting it, so a
+    /// refresh that lands while the viewer is open updates the notes rather
+    /// than showing stale ones.
     pub(super) fn open_changelog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_changelog_in(ChangelogMode::Latest, window, cx);
-    }
-
-    /// Open the viewer for the running version's own notes (post-update).
-    pub(super) fn open_current_changelog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_changelog_in(ChangelogMode::Current, window, cx);
-    }
-
-    /// Open the viewer for the `/go changelog` verb and the Settings → About
-    /// row: the latest known release when its notes are cached, else the
-    /// running version's known notes.
-    pub(super) fn open_best_changelog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.can_view_latest_changelog() {
-            self.open_changelog_in(ChangelogMode::Latest, window, cx);
-        } else {
-            self.open_changelog_in(ChangelogMode::Current, window, cx);
-        }
-    }
-
-    /// Open the viewer in `mode`. Reads `update_status` live at render time
-    /// instead of snapshotting it, so a refresh that lands while the viewer
-    /// is open updates the notes rather than showing stale ones.
-    fn open_changelog_in(&mut self, mode: ChangelogMode, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.can_view_changelog_in(mode) {
+        if !self.can_view_current_changelog() {
             return;
         }
         self.disarm_double_escape();
@@ -349,7 +310,6 @@ impl DesktopView {
         if !self.changelog_open {
             self.changelog_return_focus = window.focused(cx);
         }
-        self.changelog_mode = mode;
         self.changelog_open = true;
         self.changelog_focus.focus(window, cx);
         cx.notify();
@@ -369,33 +329,22 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Changelog viewer: the open mode's Highlights over the shared modal
-    /// scrim, with the full release notes one click away in the browser.
-    /// Without cached highlights it renders a link-only state; an invalid
-    /// or missing release URL hides the browser action entirely. The upgrade
-    /// subtitle only makes sense for an available update, so it renders only
-    /// when the presented release is one.
+    /// Changelog viewer: the installed binary's Highlights over the shared
+    /// modal scrim, with its full release notes one click away in the browser.
+    /// An invalid or missing release URL hides the browser action entirely.
+    /// There is no upgrade subtitle: the viewer only ever describes a release
+    /// the user already has, never a cached offer. The empty-body branch is a
+    /// rendering fallback; `open_changelog` refuses to open without Highlights.
     pub(super) fn render_changelog_viewer(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let weak = cx.entity().downgrade();
         let status = self.update_status.as_ref();
-        let current = status.map(|status| status.current_version.as_str()).unwrap_or_default();
-        let latest = status.and_then(|status| status.latest_version.as_deref()).unwrap_or_default();
-        let (shown_version, highlights, raw_url): (&str, &[String], Option<&str>) = match self.changelog_mode {
-            ChangelogMode::Latest => (
-                latest,
-                status.map(|status| status.release_highlights.as_slice()).unwrap_or_default(),
-                status.and_then(|status| status.release_url.as_deref()),
-            ),
-            ChangelogMode::Current => (
-                current,
-                status
-                    .map(|status| status.current_release_highlights.as_slice())
-                    .unwrap_or_default(),
-                status.and_then(|status| status.current_release_url.as_deref()),
-            ),
-        };
-        let release_url = raw_url
+        let shown_version = status.map(|status| status.current_version.as_str()).unwrap_or_default();
+        let highlights: &[String] = status
+            .map(|status| status.current_release_highlights.as_slice())
+            .unwrap_or_default();
+        let release_url = status
+            .and_then(|status| status.current_release_url.as_deref())
             .and_then(super::super::markdown::external_web_url)
             .map(|url| url.to_string());
 
@@ -477,22 +426,6 @@ impl DesktopView {
                             .text_color(colors.foreground)
                             .child(rust_i18n::t!("app.changelog.title", version = shown_version).to_string()),
                     )
-                    .when(self.changelog_mode == ChangelogMode::Latest && self.can_view_changelog(), |dialog| {
-                        // Only an offered upgrade reads as "current → latest";
-                        // reading a release's notes without one would render a
-                        // backwards or self-referential arrow.
-                        dialog.child(
-                            div()
-                                .id("changelog-subtitle")
-                                .test_support()
-                                .text_sm()
-                                .text_color(colors.muted_foreground)
-                                .child(
-                                    rust_i18n::t!("app.changelog.subtitle", current = current, latest = latest)
-                                        .to_string(),
-                                ),
-                        )
-                    })
                     .child(body)
                     .child(
                         div()

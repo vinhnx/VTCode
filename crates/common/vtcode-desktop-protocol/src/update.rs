@@ -11,10 +11,11 @@ pub struct UpdateStatusSnapshot {
     /// Version of the running service binary.
     pub current_version: String,
     /// Newest release the service's update cache knows about that is *newer*
-    /// than `current_version`; clients read its notes. Never the running or an
-    /// older release, so a reader row cannot label a back-version "latest".
-    /// Only [`Self::update_available`] means an update is actually offered (a
-    /// dismissed update keeps its notes readable while this stays `true`).
+    /// than `current_version`; it names the update offer, not a readable
+    /// changelog. Never the running or an older release, so a row cannot label
+    /// a back-version "latest". Only [`Self::update_available`] means an update
+    /// is actually offered (a dismissed update keeps this version known so its
+    /// notes remain available to consumers that want to preview the offer).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_version: Option<String>,
     /// Whether `latest_version` is newer than `current_version` and not dismissed.
@@ -25,7 +26,9 @@ pub struct UpdateStatusSnapshot {
     pub release_url: Option<String>,
     /// Parsed `### Highlights` bullets for `latest_version`, taken from the
     /// cached release notes. Empty when the cache holds notes without a
-    /// Highlights section; clients render a link-only state then.
+    /// Highlights section. These describe the offered release; the desktop
+    /// reader only presents [`Self::current_release_highlights`], so a
+    /// not-yet-installed release is never advertised as readable notes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub release_highlights: Vec<String>,
     /// Parsed `### Highlights` bullets for the running `current_version`,

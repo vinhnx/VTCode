@@ -88,9 +88,9 @@ pub(super) enum DeepLink {
     Palette(PaletteLink),
     Command(shortcuts::CommandId),
     Action(PaletteAction),
-    /// The changelog viewer: latest release when an update is available,
-    /// else the running version's known notes. A viewer, not a palette
-    /// action, so it bypasses [`PaletteAction`].
+    /// The changelog viewer for the installed binary's release notes. A
+    /// cached but uninstalled release is an offer, not reader content. A
+    /// viewer, not a palette action, so it bypasses [`PaletteAction`].
     Changelog,
 }
 
@@ -106,11 +106,10 @@ pub(super) enum NotificationTarget {
     Interaction { session_id: String, interaction_id: String },
     /// Service disconnect: land on the workspace status.
     Workspace,
-    /// New release: the About settings tab (update row + Check button).
+    /// New release: the About settings tab (Update status row + Check /
+    /// Install buttons). The offer is an action, not a readable changelog,
+    /// so the notification never opens the viewer for an uninstalled release.
     UpdateSettings,
-    /// New release: the changelog viewer for the notified version, falling
-    /// back to [`NotificationTarget::UpdateSettings`] when the status moved on.
-    UpdateChangelog { version: String },
 }
 
 impl NotificationTarget {
@@ -129,9 +128,6 @@ impl NotificationTarget {
             }
             Self::Workspace => DeepLink::Route(Route::Workspace),
             Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::About),
-            // The viewer has a real link form; the pinned version only rides
-            // the live click, which falls back to the tab when stale.
-            Self::UpdateChangelog { .. } => DeepLink::Changelog,
         }
     }
 
@@ -483,7 +479,7 @@ impl DesktopView {
             }
             DeepLink::Changelog => {
                 let reachable = self.can_view_any_changelog();
-                self.open_best_changelog(window, cx);
+                self.open_changelog(window, cx);
                 reachable
             }
         }
@@ -527,23 +523,6 @@ impl DesktopView {
             NotificationTarget::Workspace => self.open_route_link(Route::Workspace, window, cx),
             NotificationTarget::UpdateSettings => {
                 self.run_palette_action(PaletteAction::SelectSettingsTab(settings::SettingsTab::About), window, cx);
-            }
-            NotificationTarget::UpdateChangelog { version } => {
-                // Stale-tolerance: the status may have refreshed between the
-                // notification and the click. Open the viewer only when it
-                // still describes the notified release; otherwise land on
-                // the update row, which always reflects the live status.
-                let still_current = self
-                    .update_status
-                    .as_ref()
-                    .filter(|status| status.update_available)
-                    .and_then(|status| status.latest_version.as_deref())
-                    == Some(version.as_str());
-                if still_current {
-                    self.open_changelog(window, cx);
-                } else {
-                    self.open_notification_target(NotificationTarget::UpdateSettings, window, cx);
-                }
             }
         }
     }
@@ -915,7 +894,6 @@ mod tests {
             },
             NotificationTarget::Workspace,
             NotificationTarget::UpdateSettings,
-            NotificationTarget::UpdateChangelog { version: "0.182.0".into() },
         ];
         for target in targets {
             let path = target.path().expect("every target has a link form");
@@ -934,14 +912,8 @@ mod tests {
             Some("action/load-session/s")
         );
         assert_eq!(NotificationTarget::Workspace.path().as_deref(), Some("workspace"));
+        // The update toast lands on About → Update status, never on the
+        // changelog viewer for a release that is not installed yet.
         assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/about"));
-        // The viewer has a real link form now (the pinned version only rides
-        // the live click).
-        assert_eq!(
-            NotificationTarget::UpdateChangelog { version: "0.182.0".into() }
-                .path()
-                .as_deref(),
-            Some("changelog")
-        );
     }
 }

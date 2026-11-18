@@ -1,7 +1,6 @@
 use super::super::deeplinks::{DeepLink, NotificationTarget};
 use super::super::licenses::LicenseDocument;
 use super::super::settings::SettingsTab;
-use super::super::updates::ChangelogMode;
 use super::*;
 
 fn status_payload(
@@ -37,6 +36,18 @@ fn with_current_notes(mut payload: serde_json::Value, highlights: &[&str], url: 
     payload
 }
 
+/// Status carrying the installed binary's own notes, already announced so it
+/// does not arm the what's-new banner. The reader only ever shows these, never
+/// the notes of a cached-but-uninstalled newer release.
+fn installed_notes_payload(current: &str, highlights: &[&str], url: Option<&str>) -> serde_json::Value {
+    let mut payload = with_current_notes(status_payload(current, None, false, &[], None), highlights, url);
+    let _ = payload
+        .as_object_mut()
+        .expect("status payload is an object")
+        .insert("currentReleaseSeen".into(), json!(true));
+    payload
+}
+
 /// Deliver a launch-path status response through the drain loop (the only
 /// path with a window, so the only one that can auto-open the dialog).
 fn drain_status(
@@ -66,12 +77,10 @@ fn about_release_notes_row_opens_viewer_with_highlights(cx: &mut TestAppContext)
     let (window, view) = open_desktop(cx);
     seed_status(
         &view,
-        status_payload(
+        installed_notes_payload(
             "0.181.0",
-            Some("0.182.0"),
-            true,
             &["Faster startup", "New model picker"],
-            Some("https://github.com/vinhnx/vtcode/releases/tag/0.182.0"),
+            Some("https://github.com/vinhnx/vtcode/releases/tag/0.181.0"),
         ),
         cx,
     );
@@ -116,7 +125,7 @@ fn about_pane_offers_a_single_changelog_entry(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn done_button_closes_and_consumes_return_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
+    seed_status(&view, installed_notes_payload("0.181.0", &["Faster startup"], None), cx);
     open_about_settings(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
         scroll_settings_into_view(window, "about-settings-changelog", cx);
@@ -137,7 +146,7 @@ fn done_button_closes_and_consumes_return_focus(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn escape_dismisses_viewer_before_settings(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
+    seed_status(&view, installed_notes_payload("0.181.0", &["Faster startup"], None), cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
@@ -154,26 +163,19 @@ fn escape_dismisses_viewer_before_settings(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn empty_highlights_render_link_only_state(cx: &mut TestAppContext) {
+fn empty_highlights_keep_the_reader_closed(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    // The installed version's cached notes have no Highlights section: there
+    // is nothing to read, so neither the row nor the verb opens a shell dialog.
     seed_status(
         &view,
-        status_payload(
-            "0.181.0",
-            Some("0.182.0"),
-            true,
-            &[],
-            Some("https://github.com/vinhnx/vtcode/releases/tag/0.182.0"),
-        ),
+        installed_notes_payload("0.181.0", &[], Some("https://github.com/vinhnx/vtcode/releases/tag/0.181.0")),
         cx,
     );
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_changelog(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("changelog-dialog").is_some());
-        assert!(window.try_find("changelog-empty").is_some(), "empty state explains itself");
-        assert!(window.try_find("changelog-highlights").is_none(), "no list without items");
-        assert!(window.try_find("open-release-notes").is_some(), "browser action still offers recovery");
+        assert!(window.try_find("changelog-dialog").is_none());
     })
     .unwrap();
 }
@@ -182,7 +184,7 @@ fn empty_highlights_render_link_only_state(cx: &mut TestAppContext) {
 fn invalid_release_url_hides_browser_action(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     for bad_url in ["not a url", "javascript:alert(1)", "ftp://example.test/release"] {
-        seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], Some(bad_url)), cx);
+        seed_status(&view, installed_notes_payload("0.181.0", &["Faster startup"], Some(bad_url)), cx);
         cx.update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| view.open_changelog(window, cx));
             window.render_frame(cx);
@@ -195,41 +197,18 @@ fn invalid_release_url_hides_browser_action(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn notification_click_opens_viewer_for_current_version(cx: &mut TestAppContext) {
+fn update_notification_click_lands_on_about_update_status(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.open_notification_target(
-                NotificationTarget::UpdateChangelog { version: "0.182.0".into() },
-                window,
-                cx,
-            );
+            view.open_notification_target(NotificationTarget::UpdateSettings, window, cx);
         });
         window.render_frame(cx);
-        assert!(view.read(cx).changelog_open, "click opens the viewer");
-        assert!(window.try_find("changelog-dialog").is_some());
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn stale_notification_click_falls_back_to_settings(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.181.0", Some("0.183.0"), true, &["Something newer"], None), cx);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            // The banner advertised 0.182.0, but a refresh moved on already.
-            view.open_notification_target(
-                NotificationTarget::UpdateChangelog { version: "0.182.0".into() },
-                window,
-                cx,
-            );
-        });
-        window.render_frame(cx);
-        assert!(!view.read(cx).changelog_open, "stale click never opens a mismatched viewer");
-        assert!(view.read(cx).current_route() == Route::Settings, "stale click lands on settings");
-        assert_eq!(view.read(cx).settings_tab, SettingsTab::About);
+        assert!(view.read(cx).current_route() == Route::Settings, "an offer lands on Settings");
+        assert_eq!(view.read(cx).settings_tab, SettingsTab::About, "on the About page");
+        assert!(!view.read(cx).changelog_open, "never opens notes for an uninstalled release");
+        assert!(window.try_find("about-settings-check-for-updates").is_some(), "Update status actions are visible");
     })
     .unwrap();
 }
@@ -237,12 +216,12 @@ fn stale_notification_click_falls_back_to_settings(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn refresh_clearing_availability_closes_viewer(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
+    seed_status(&view, installed_notes_payload("0.181.0", &["Faster startup"], None), cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_changelog(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).changelog_open);
-        // Updated elsewhere: the refresh reports nothing available.
+        // Updated elsewhere: the refresh reports no installed notes.
         view.update(cx, |view, _| {
             view.handle_update_status_response(status_payload("0.182.0", None, false, &[], None));
         });
@@ -255,7 +234,7 @@ fn refresh_clearing_availability_closes_viewer(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn opening_viewer_discards_license_viewer_instead_of_stacking(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.181.0", Some("0.182.0"), true, &["Faster startup"], None), cx);
+    seed_status(&view, installed_notes_payload("0.181.0", &["Faster startup"], None), cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_license_viewer(LicenseDocument::Mit, window, cx);
@@ -271,7 +250,7 @@ fn opening_viewer_discards_license_viewer_instead_of_stacking(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn open_changelog_refuses_without_an_available_update(cx: &mut TestAppContext) {
+fn open_changelog_refuses_without_installed_notes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_changelog(window, cx));
@@ -544,9 +523,8 @@ fn release_notes_banner_view_opens_current_changelog(cx: &mut TestAppContext) {
         window.click("release-notes-open", cx);
         window.render_frame(cx);
         assert!(view.read(cx).changelog_open, "View opens the viewer on demand");
-        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Current, "what's new shows current, not latest");
         assert!(!view.read(cx).release_notes_banner_visible(), "viewing retires the banner");
-        assert!(window.try_find("changelog-subtitle").is_none(), "current mode, not the upgrade view");
+        assert!(window.try_find("changelog-subtitle").is_none(), "installed notes carry no upgrade arrow");
         assert!(window.try_find("open-release-notes").is_some(), "current notes link out");
     })
     .unwrap();
@@ -566,7 +544,6 @@ fn launch_status_with_unseen_notes_auto_opens_current_changelog(cx: &mut TestApp
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).changelog_open, "first sight opens the dialog");
-        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Current, "what's new shows current");
         assert!(window.try_find("changelog-dialog").is_some());
         assert!(window.try_find("changelog-highlights").is_some(), "highlights render");
         assert!(!view.read(cx).release_notes_banner_visible(), "auto-open retires the banner");
@@ -629,12 +606,12 @@ fn release_notes_auto_open_fires_once_per_launch(cx: &mut TestAppContext) {
     });
 }
 
-/// An already-open viewer keeps its mode: notes arriving mid-read leave the
-/// upgrade view alone and the banner stays as the fallback.
+/// An already-open viewer is left alone: notes arriving mid-read do not yank
+/// what the user is reading, and the banner stays as the fallback.
 #[gpui_kit::test]
 fn release_notes_auto_open_yields_to_an_open_viewer(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    seed_status(&view, status_payload("0.182.0", Some("0.183.0"), true, &["Something newer"], None), cx);
+    seed_status(&view, installed_notes_payload("0.182.0", &["Previously read"], None), cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_changelog(window, cx));
         window.render_frame(cx);
@@ -649,48 +626,46 @@ fn release_notes_auto_open_yields_to_an_open_viewer(cx: &mut TestAppContext) {
     drain_status(window, &view, payload, cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Latest, "the open view keeps its mode");
-        assert!(window.try_find("changelog-subtitle").is_some(), "the upgrade view stays intact");
+        assert!(view.read(cx).changelog_open, "the open viewer stays intact");
+        assert!(window.try_find("changelog-dialog").is_some());
         assert!(view.read(cx).release_notes_banner_visible(), "the banner stays as the fallback");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn changelog_verb_prefers_the_available_update(cx: &mut TestAppContext) {
+fn changelog_verb_opens_installed_notes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let payload = with_current_notes(
-        status_payload(
-            "0.182.0",
-            Some("0.183.0"),
-            true,
-            &["Something newer"],
-            Some("https://github.com/vinhnx/vtcode/releases/tag/v0.183.0"),
+    // A newer release is offered, but only the installed binary's notes are
+    // readable — the verb must ignore the cached offer.
+    seed_status(
+        &view,
+        with_current_notes(
+            status_payload("0.182.0", Some("0.183.0"), true, &["Something newer"], None),
+            &["Freshly installed"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
         ),
-        &["Freshly installed"],
-        Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
+        cx,
     );
-    seed_status(&view, payload, cx);
     cx.update_window(window, |_, window, cx| {
         let reachable = view.update(cx, |view, cx| view.open_deeplink(DeepLink::Changelog, window, cx));
         window.render_frame(cx);
-        assert!(reachable, "an update makes the verb reachable");
+        assert!(reachable, "installed notes make the verb reachable");
         assert!(view.read(cx).changelog_open);
-        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Latest, "the verb prefers latest");
-        assert!(window.try_find("changelog-subtitle").is_some(), "upgrade view renders");
+        assert!(window.try_find("changelog-subtitle").is_none(), "no upgrade arrow for installed notes");
+        assert!(window.try_find("changelog-highlights").is_some());
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn changelog_verb_falls_back_to_current_notes(cx: &mut TestAppContext) {
+fn changelog_verb_with_only_installed_notes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(&view, post_update_payload(), cx);
     cx.update_window(window, |_, window, cx| {
         let reachable = view.update(cx, |view, cx| view.open_deeplink(DeepLink::Changelog, window, cx));
         window.render_frame(cx);
-        assert!(reachable, "known current notes make the verb reachable");
-        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Current);
+        assert!(reachable, "known installed notes make the verb reachable");
         assert!(window.try_find("changelog-dialog").is_some());
     })
     .unwrap();
@@ -735,12 +710,10 @@ fn changelog_viewer_traps_tab_across_its_footer_actions(cx: &mut TestAppContext)
     let (window, view) = open_desktop(cx);
     seed_status(
         &view,
-        status_payload(
+        installed_notes_payload(
             "0.181.0",
-            Some("0.182.0"),
-            true,
             &["Faster startup"],
-            Some("https://github.com/vinhnx/vtcode/releases/tag/0.182.0"),
+            Some("https://github.com/vinhnx/vtcode/releases/tag/0.181.0"),
         ),
         cx,
     );
@@ -768,20 +741,18 @@ fn open_about_settings(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: 
     cx.run_until_parked();
 }
 
-/// Up-to-date launch that still knows the newest release from the cache: the
-/// About row must offer the notes even though no update is pending, while the
-/// update-specific changelog action stays hidden.
+/// Up-to-date launch: the About row offers the installed binary's own notes
+/// even though no update is pending. A cached newer release never becomes the
+/// reader's subject, with or without an offer.
 #[gpui_kit::test]
-fn about_row_reads_latest_notes_without_an_offered_update(cx: &mut TestAppContext) {
+fn about_row_reads_installed_notes_without_an_offered_update(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(
         &view,
-        status_payload(
-            "0.182.0",
-            Some("0.183.0"),
-            false,
-            &["Something newer"],
-            Some("https://github.com/vinhnx/vtcode/releases/tag/0.183.0"),
+        with_current_notes(
+            status_payload("0.182.0", Some("0.183.0"), false, &["Something newer"], None),
+            &["Freshly installed"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
         ),
         cx,
     );
@@ -804,16 +775,47 @@ fn about_row_reads_latest_notes_without_an_offered_update(cx: &mut TestAppContex
     cx.update(|cx| {
         let view = view.read(cx);
         assert!(view.changelog_open, "the About row opens the viewer");
-        assert_eq!(view.changelog_mode, ChangelogMode::Latest);
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("changelog-dialog").is_some());
-        assert!(
-            window.try_find("changelog-subtitle").is_none(),
-            "reading notes without an offered update omits the upgrade arrow"
-        );
+        assert!(window.try_find("changelog-subtitle").is_none(), "installed notes never show an upgrade arrow");
         assert!(window.try_find("changelog-highlights").is_some());
+    })
+    .unwrap();
+}
+
+/// The exact stale-cache shape: the service knows a newer release (with its
+/// notes) but the running binary is older and has no installed-release notes.
+/// The reader must stay inert — advertising those notes would describe a
+/// release the user has not installed yet. The update offer itself is separate
+/// and still lives in the Update status row.
+#[gpui_kit::test]
+fn newer_release_notes_never_become_a_reader_entry_point(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(
+        &view,
+        status_payload(
+            "0.183.0",
+            Some("0.183.1"),
+            true,
+            &["Support ultrafast on GPT-6.2 Astra and Sol"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/v0.183.1"),
+        ),
+        cx,
+    );
+    open_about_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        assert_eq!(window.find("about-settings-changelog").disabled(), Some(true), "uninstalled notes stay unreadable");
+        assert!(window.try_find("about-settings-install-update").is_some(), "the offer stays actionable");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_changelog(window, cx));
+        window.render_frame(cx);
+        assert!(!view.read(cx).changelog_open, "the verb refuses too");
+        assert!(window.try_find("changelog-dialog").is_none());
     })
     .unwrap();
 }
@@ -835,10 +837,10 @@ fn about_row_is_disabled_without_cached_notes(cx: &mut TestAppContext) {
     cx.update(|cx| assert!(!view.read(cx).changelog_open, "a disabled row cannot open an empty viewer"));
 }
 
-/// The running version's own cached notes are the best available changelog,
-/// so the row falls back to `Current` mode when no newer release is cached.
+/// With no newer release cached, the running version's own notes are still a
+/// readable changelog.
 #[gpui_kit::test]
-fn about_row_falls_back_to_current_notes(cx: &mut TestAppContext) {
+fn about_row_reads_current_notes_when_no_newer_release_is_cached(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(&view, post_update_payload(), cx);
     open_about_settings(window, &view, cx);
@@ -848,42 +850,27 @@ fn about_row_falls_back_to_current_notes(cx: &mut TestAppContext) {
         window.render_frame(cx);
     })
     .unwrap();
-    cx.update(|cx| {
-        let view = view.read(cx);
-        assert!(view.changelog_open);
-        assert_eq!(view.changelog_mode, ChangelogMode::Current, "running notes are all there is");
-    });
+    cx.update(|cx| assert!(view.read(cx).changelog_open, "running notes are all there is"));
 }
 
-/// A cached release whose notes carry no Highlights section is still readable:
-/// the row stays enabled and the viewer explains the gap while keeping the
-/// full-release-notes link.
+/// A cached release whose notes carry no Highlights section has nothing to
+/// read: the About row stays inert rather than opening an empty viewer, even
+/// when that release is the offered update.
 #[gpui_kit::test]
-fn about_row_opens_a_link_only_viewer_without_highlights(cx: &mut TestAppContext) {
+fn about_row_stays_inert_when_installed_notes_have_no_highlights(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(
         &view,
-        status_payload(
-            "0.182.0",
-            Some("0.183.0"),
-            false,
-            &[],
-            Some("https://github.com/vinhnx/vtcode/releases/tag/0.183.0"),
-        ),
+        installed_notes_payload("0.182.0", &[], Some("https://github.com/vinhnx/vtcode/releases/tag/0.182.0")),
         cx,
     );
     open_about_settings(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
         scroll_settings_into_view(window, "about-settings-changelog", cx);
-        assert_ne!(
-            window.find("about-settings-changelog").disabled(),
-            Some(true),
-            "notes without Highlights still describe a readable release"
-        );
+        assert_eq!(window.find("about-settings-changelog").disabled(), Some(true), "nothing to read");
         window.click("about-settings-changelog", cx);
         window.render_frame(cx);
-        assert!(window.try_find("changelog-empty").is_some(), "the gap explains itself");
-        assert!(window.try_find("open-release-notes").is_some(), "the release page stays reachable");
+        assert!(window.try_find("changelog-dialog").is_none(), "a disabled row opens nothing");
     })
     .unwrap();
 }
@@ -918,10 +905,8 @@ fn about_pane_never_requests_a_status_while_rendering(cx: &mut TestAppContext) {
     assert!(requests.try_recv().is_err(), "rendering the pane must not request a status");
 }
 
-/// The service never sends an older release as `latest_version`, but the
-/// client's chooser must still compose correctly when it does not: with only
-/// the running version's notes cached, the About row names *that* version and
-/// opens Current mode rather than inventing a "latest" release.
+/// With only the running version's notes cached, the About row names *that*
+/// version rather than inventing a newer "latest" release.
 #[gpui_kit::test]
 fn about_row_names_the_running_version_when_no_newer_release_is_known(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -936,11 +921,10 @@ fn about_row_names_the_running_version_when_no_newer_release_is_known(cx: &mut T
     cx.update(|cx| {
         let view = view.read(cx);
         assert!(view.changelog_open);
-        assert_eq!(view.changelog_mode, ChangelogMode::Current);
         assert_eq!(
-            view.best_changelog_release(),
-            Some((view.update_status.as_ref().expect("status").current_version.as_str(), ChangelogMode::Current)),
-            "the chooser pairs the running version with Current mode"
+            view.installed_changelog_version(),
+            Some(view.update_status.as_ref().expect("status").current_version.as_str()),
+            "the reader names the running version"
         );
     });
 }

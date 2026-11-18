@@ -538,7 +538,6 @@ impl DesktopView {
             license_return_focus: None,
             license_open_task: None,
             changelog_open: false,
-            changelog_mode: updates::ChangelogMode::Latest,
             changelog_focus: cx.focus_handle(),
             changelog_return_focus: None,
             changelog_scroll: ScrollHandle::default(),

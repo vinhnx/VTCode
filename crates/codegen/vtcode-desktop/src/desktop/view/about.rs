@@ -9,7 +9,6 @@
 //! the monochrome V ([`brand_mark`]) rather than the Dock app-icon art.
 use super::bootstrap::HELP_URL;
 use super::storage::format_bytes;
-use super::updates::ChangelogMode;
 use super::*;
 
 /// Present AppKit's standard About panel. Returns false off the main thread
@@ -59,14 +58,12 @@ fn show_native_about_panel() -> bool {
 }
 
 /// Cloned render inputs for the About pane: the cached update-status line plus
-/// the row's advertised release. The changelog row advertises the release a
-/// reader can actually open — the newest cached one, else the running
-/// version's own notes — which is independent of whether an update is offered.
-/// Version and mode are captured together so the description cannot name a
-/// release the viewer would not present.
+/// the installed release whose notes the reader can actually open. A cached
+/// newer release is an offer (it drives the update row), never a readable
+/// changelog, so the reader row only ever names the running binary's version.
 #[derive(Clone)]
 pub(super) struct AboutSettingsProps {
-    pub(super) changelog: Option<ChangelogReleaseProps>,
+    pub(super) changelog: Option<String>,
     pub(super) update_status_description: String,
     /// Whether a live check is in flight, so the row can show progress and
     /// refuse a second one instead of looking inert.
@@ -79,21 +76,10 @@ pub(super) struct AboutSettingsProps {
     pub(super) can_install_update: bool,
 }
 
-/// One readable release: the version the viewer will title, plus the mode it
-/// will open in. A named struct rather than a pair so a caller cannot swap the
-/// two (see the repo's named-struct rule).
-#[derive(Clone)]
-pub(super) struct ChangelogReleaseProps {
-    version: String,
-    mode: ChangelogMode,
-}
-
 impl AboutSettingsProps {
     pub(super) fn capture(view: &DesktopView) -> Self {
         Self {
-            changelog: view
-                .best_changelog_release()
-                .map(|(version, mode)| ChangelogReleaseProps { version: version.to_owned(), mode }),
+            changelog: view.installed_changelog_version().map(str::to_owned),
             update_status_description: view.update_status_description(),
             update_check_pending: view.update_request_pending,
             update_install: view.update_install_state.clone(),
@@ -358,12 +344,11 @@ impl DesktopView {
             .is_some_and(|status| status.update_available && status.latest_version.is_some())
     }
 
-    /// Release-notes row: offers whichever release a reader can actually open
-    /// — the newest cached one, else the running version's own notes — and so
-    /// does not require an offered update. The description names that release
-    /// and its mode; when nothing is cached the row stays visible but inert
-    /// and explains what fills it, because hiding it would leave no hint that
-    /// release notes exist at all.
+    /// Release-notes row: offers the installed binary's own notes. A cached
+    /// newer release is only an update offer, so the row stays inert until
+    /// that release is actually installed and becomes the running version.
+    /// When no notes are cached the row stays visible but explains what fills
+    /// it, because hiding it would leave no hint that release notes exist.
     fn about_changelog_row(
         props: &AboutSettingsProps,
         view: &Entity<Self>,
@@ -371,7 +356,7 @@ impl DesktopView {
     ) -> AnyElement {
         let title = rust_i18n::t!("app.changelog.release_notes").to_string();
         let action_label = rust_i18n::t!("app.changelog.view_release_notes").to_string();
-        let Some(release) = props.changelog.as_ref() else {
+        let Some(version) = props.changelog.as_deref() else {
             return settings_row(
                 title,
                 rust_i18n::t!("app.changelog.unavailable").to_string(),
@@ -382,14 +367,7 @@ impl DesktopView {
             )
             .into_any_element();
         };
-        let description = match release.mode {
-            ChangelogMode::Latest => {
-                rust_i18n::t!("app.changelog.description", version = release.version.as_str()).to_string()
-            }
-            ChangelogMode::Current => {
-                rust_i18n::t!("app.changelog.description_current", version = release.version.as_str()).to_string()
-            }
-        };
+        let description = rust_i18n::t!("app.changelog.description_current", version = version).to_string();
         let view = view.clone();
         settings_row(
             title.clone(),
@@ -399,7 +377,7 @@ impl DesktopView {
                 .accessibility_label(title)
                 .on_click(move |_, window: &mut Window, cx: &mut App| {
                     view.update(cx, |view, cx| {
-                        view.open_best_changelog(window, cx);
+                        view.open_changelog(window, cx);
                     });
                 }),
             colors,

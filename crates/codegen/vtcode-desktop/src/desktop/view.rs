@@ -631,7 +631,6 @@ struct DesktopView {
     license_return_focus: Option<FocusHandle>,
     license_open_task: Option<Task<()>>,
     changelog_open: bool,
-    changelog_mode: updates::ChangelogMode,
     changelog_focus: FocusHandle,
     changelog_return_focus: Option<FocusHandle>,
     changelog_scroll: ScrollHandle,

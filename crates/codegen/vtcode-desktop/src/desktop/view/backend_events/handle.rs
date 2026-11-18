@@ -725,6 +725,7 @@ impl DesktopView {
                 self.interrupt_secret_save();
                 self.interrupt_armed_running_switch();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
+                self.reset_update_state_on_disconnect();
                 self.fail_workspace_review(rust_i18n::t!("app.service.review_exited").to_string());
                 self.clear_pending_interaction();
                 self.session_request = None;
@@ -781,6 +782,7 @@ impl DesktopView {
             BackendEvent::LaunchFailed(error) => {
                 self.cancel_session_load_task();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
+                self.reset_update_state_on_disconnect();
                 self.fail_workspace_review(rust_i18n::t!("app.service.review_no_start").to_string());
                 self.clear_pending_interaction();
                 self.session_request = None;

@@ -21,6 +21,41 @@ fn disconnect_events_clear_transient_loading_state(cx: &mut TestAppContext) {
     }
 }
 
+/// A service that dies mid-install leaves the optimistic `Downloading 0 bytes`
+/// phase with no terminal tick to retire it. The disconnect must fail the row
+/// locally so the user can retry instead of staring at a frozen download.
+#[gpui_kit::test]
+fn disconnect_while_an_install_is_running_fails_the_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.update_install_state =
+                vtcode_desktop_protocol::UpdateInstallState::Downloading { downloaded: 0, total: None };
+            view.update_request_pending = true;
+            view.update_backfill_in_flight = true;
+        });
+        // Swap in a fresh event channel and drop its sender: the drain loop
+        // then observes the same `Disconnected` a dying service produces.
+        let (sender, receiver) = crate::desktop::transport::BackendEventSender::channel(1);
+        view.update(cx, |view, _| view.event_rx = receiver);
+        drop(sender);
+        view.update(cx, |view, cx| {
+            view.drain_events(window, cx);
+        });
+        view.update(cx, |view, _| {
+            match &view.update_install_state {
+                vtcode_desktop_protocol::UpdateInstallState::Failed { message } => {
+                    assert!(message.contains("disconnected"), "{message}");
+                }
+                other => panic!("an interrupted install must be failed locally, got {other:?}"),
+            }
+            assert!(!view.update_request_pending, "a check that died with the service is no longer pending");
+            assert!(!view.update_backfill_in_flight, "a backfill that died with the service is no longer in flight");
+        });
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn global_shimmer_covers_thinking_then_follows_the_turn(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

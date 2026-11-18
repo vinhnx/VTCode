@@ -69,7 +69,9 @@ impl DesktopView {
                     self.clear_pending_turn_undos();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
                     self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
-                    self.fail_workspace_review(rust_i18n::t!("app.service.review_disconnected").to_string());
+                    let disconnected = rust_i18n::t!("app.service.review_disconnected").to_string();
+                    self.reset_update_state_on_disconnect();
+                    self.fail_workspace_review(disconnected);
                     self.running = false;
                     self.clear_queue_state();
                     self.status = rust_i18n::t!("app.service.disconnected").to_string();
