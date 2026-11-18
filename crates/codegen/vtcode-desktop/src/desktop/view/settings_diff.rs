@@ -89,7 +89,7 @@ impl DesktopView {
             .small()
             .rounded(ButtonRounded::Medium)
             .desktop_selected(selected, colors)
-            .when(selected, |button| button.bg(themes::button_face(colors.button_active, colors.foreground)))
+            .when(selected, |button| button.shadow(themes::button_inset_edges()))
             .on_click({
                 let view = view.clone();
                 move |_, _: &mut Window, cx: &mut App| {

@@ -43,6 +43,7 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
             let policy_button = window.find("composer-policy").bounds();
             let policy_label = window.find("composer-policy-label").bounds();
             let send = window.find("send-prompt").bounds();
+            assert_eq!(send.size.width, send.size.height, "Send stays circular at {base_size}px");
 
             // The frame carries no horizontal inset, so the context row
             // starts on the frame edge and its buttons land on the input

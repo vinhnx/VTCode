@@ -828,8 +828,7 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
 
 /// Ordinary visible action: a filled push button for commands that deserve a
 /// control frame (dialog secondaries, Save/Cancel pairs, labeled toolbar
-/// actions). Kit's Default variant paints the neutral face with an input
-/// hairline; rails, nav rows, and icon-only toolbar actions stay on
+/// actions). Kit's Default variant supplies the neutral fill; rails, nav rows, and icon-only toolbar actions stay on
 /// [`desktop_button`] + `.ghost()` instead.
 pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     desktop_filled_button(id)
@@ -842,6 +841,7 @@ pub(super) fn desktop_secondary_button(id: impl Into<gpui_kit::ElementId>) -> Bu
 fn desktop_filled_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     desktop_button(id)
         .rounded(ButtonRounded::Medium)
+        .border_0()
         .shadow(themes::button_inset_edges())
 }
 
@@ -855,7 +855,7 @@ pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Butt
 /// Destructive commitment: irreversible or data-losing actions only. Pair with
 /// an explicit confirmation for consequential work.
 pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id).danger()
+    desktop_filled_button(id).danger()
 }
 
 /// Quiet header dismiss control: ghost X icon with an accessible name and a

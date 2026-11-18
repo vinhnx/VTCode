@@ -2,15 +2,6 @@ use super::super::*;
 use super::*;
 use gpui_kit::component::theme::ActiveTheme;
 
-#[test]
-fn button_face_skips_the_highlight_when_text_would_lose_aa_contrast() {
-    let foreground = white();
-    let fill = rgb(0x767676).into();
-    assert!(contrast_ratio(foreground, fill) >= 4.5);
-    assert_eq!(button_face(fill, foreground).as_solid(), Some(fill));
-    assert!(button_face(rgb(0x18181b).into(), foreground).as_solid().is_none());
-}
-
 #[gpui_kit::test]
 fn selected_controls_use_a_readable_stronger_surface(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {

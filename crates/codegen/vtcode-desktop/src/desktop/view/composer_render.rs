@@ -361,6 +361,7 @@ impl DesktopView {
             if draft_ready {
                 model_actions = model_actions.child(
                     desktop_glass_primary_button("queue-prompt", &colors, !can_queue)
+                        .rounded(cx.theme().radius_full())
                         .accessibility_label(rust_i18n::t!("app.composer.queue").to_string())
                         .tooltip(rust_i18n::t!("app.composer.queue_tooltip").to_string())
                         .icon(IconName::ArrowUp)
@@ -370,6 +371,7 @@ impl DesktopView {
             } else {
                 model_actions = model_actions.child(
                     desktop_glass_primary_button("cancel-turn", &colors, false)
+                        .rounded(cx.theme().radius_full())
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -384,6 +386,7 @@ impl DesktopView {
         } else {
             model_actions = model_actions.child(
                 desktop_glass_primary_button("send-prompt", &colors, !can_submit)
+                    .rounded(cx.theme().radius_full())
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)

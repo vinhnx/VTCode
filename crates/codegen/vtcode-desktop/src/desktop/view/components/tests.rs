@@ -50,12 +50,14 @@ fn filled_button_tiers_share_inset_edges_and_elevation_preserves_them() {
         desktop_primary_button("inset-primary"),
         desktop_default_button("inset-default"),
         desktop_secondary_button("inset-secondary"),
+        desktop_danger_button("inset-danger"),
     ] {
         let edges = button.style().box_shadow.as_ref().expect("filled buttons have inset edges");
         assert_eq!(edges.len(), 2);
         assert!(edges.iter().all(|edge| edge.inset));
         assert_eq!(edges[0].offset.y, px(1.));
-        assert_eq!(edges[1].offset.y, px(-1.));
+        assert_eq!(edges[1].offset.y, px(-0.5));
+        assert!(edges.iter().all(|edge| edge.spread_radius == px(2.)));
     }
 
     let mut elevated = desktop_primary_button("inset-elevated").desktop_elevated();

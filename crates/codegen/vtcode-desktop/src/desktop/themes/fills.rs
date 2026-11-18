@@ -8,7 +8,7 @@
 
 use super::{aa_muted, contrast_ratio, mix};
 use gpui_kit::component::theme::ThemeColor;
-use gpui_kit::{Background, BoxShadow, Hsla, black, linear_color_stop, linear_gradient, px, white};
+use gpui_kit::{BoxShadow, Hsla, black, px, white};
 
 /// Hard ceilings (percent of the background-to-foreground span) for the fill
 /// search. Fills take the *weakest* step that still separates from the canvas,
@@ -79,23 +79,17 @@ pub(super) fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.tab_active = colors.background;
 }
 
-/// The narrow highlight and shade follow the button's own rounded bounds.
+/// Paint the face highlight first, then mask its outer edge with a recessed
+/// frame. Both layers follow the button's rounded bounds.
 pub(in crate::desktop) fn button_inset_edges() -> Vec<BoxShadow> {
     vec![
-        BoxShadow::new(px(0.), px(1.), white().opacity(0.10)).inset(),
-        BoxShadow::new(px(0.), px(-1.), black().opacity(0.12)).inset(),
+        BoxShadow::new(px(0.), px(1.), white().opacity(0.10))
+            .spread_radius(px(2.))
+            .inset(),
+        BoxShadow::new(px(0.), px(-0.5), black().opacity(0.66))
+            .spread_radius(px(2.))
+            .inset(),
     ]
-}
-
-/// A short top-edge highlight. Keep both endpoints readable so even controls
-/// with compact labels or a tight custom palette retain their text contrast.
-pub(in crate::desktop) fn button_face(fill: Hsla, foreground: Hsla) -> Background {
-    let highlight = mix(fill, white(), 0.07);
-    if contrast_ratio(foreground, highlight) < 4.5 || highlight == fill {
-        return fill.into();
-    }
-
-    linear_gradient(180., linear_color_stop(highlight, 0.), linear_color_stop(fill, 0.09))
 }
 
 /// Resting tab labels sit on canvas (thread strip, inspector) and directly on
