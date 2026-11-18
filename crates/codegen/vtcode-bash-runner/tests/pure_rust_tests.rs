@@ -1,13 +1,10 @@
-#![cfg(feature = "pure-rust")]
-#![allow(
-    missing_docs,
-    reason = "Intentional compatibility, platform, or test-only suppression."
-)]
 //! Regression tests for structured pure-Rust option flags.
 //!
 //! The executor must read recursion/hidden behavior from the invocation
 //! instead of inferring flags from the command text, where path names can
 //! contain flag-like substrings.
+
+#![cfg(feature = "pure-rust")]
 
 use std::fs;
 
