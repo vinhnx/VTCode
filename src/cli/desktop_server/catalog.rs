@@ -306,7 +306,13 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
 /// The selectable model catalog, mirroring the TUI picker's source.
 pub(super) fn catalog_models(active_provider: &str, active_model: &str) -> Vec<ModelInfo> {
     let recommended_models = ModelId::fallback_models();
-    ModelId::all_models()
+    let mut models = ModelId::all_models();
+    // Newest generation first within each provider group. The desktop
+    // palette regroups by provider and keeps this arrival order, so sorting
+    // here gives both pickers the same within-group ordering. Stable sort
+    // preserves catalog order for equal versions.
+    models.sort_by_key(|model| model.generation_sort_key());
+    models
         .into_iter()
         .map(|model| {
             let provider = model.provider().as_ref().to_string();

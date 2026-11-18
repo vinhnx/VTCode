@@ -132,7 +132,10 @@ StepFun5Preview {
 
 **File:** `crates/codegen/vtcode-config/src/models/model_id/collection.rs`
 
-Add to `all_models()` vector (keep alphabetically sorted within provider):
+Add to `all_models()` vector. Both model pickers group by provider and order
+models newest generation first (`ModelId::generation_sort_key()`), so the
+insertion order is only the tie-breaker for equal versions — group related
+variants together in the provider's section.
 
 ```rust
 ModelId::GPT56Sol,

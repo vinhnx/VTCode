@@ -430,6 +430,24 @@ fn static_picker_indexes_resolve_provider_models() {
 }
 
 #[test]
+fn static_picker_options_are_version_descending_within_each_provider() {
+    let mut previous_by_provider = std::collections::HashMap::new();
+    for option in MODEL_OPTIONS.iter() {
+        let key = option.model.generation_sort_key();
+        if let Some(previous) = previous_by_provider.get(&option.provider) {
+            let previous: &std::cmp::Reverse<Vec<u64>> = previous;
+            assert!(
+                previous <= &key,
+                "{} ({}) appears after an older generation in its provider group",
+                option.id,
+                option.model.generation()
+            );
+        }
+        previous_by_provider.insert(option.provider, key);
+    }
+}
+
+#[test]
 fn preferred_model_selection_returns_none_for_unknown_model() {
     let picker = base_picker_state("anthropic", "does-not-exist");
     assert_eq!(picker.preferred_model_selection(), None);

@@ -34,5 +34,6 @@ Enum values `/config` cycles come from quoted `"..."` strings after `Options:` i
 
 - Changing token-efficiency or timeout defaults requires updating `docs/config/config_field_reference.md` and the guard-rail tests.
 - `accessibility.rs` Windows FFI is never compile-checked on other hosts, so keep its `#[expect(unsafe_code, ...)]` and `// SAFETY:` attached.
+- `ModelId::generation_sort_key()` orders newest generation first from numeric digit runs; both pickers rely on it, so keep `generation()` values numeric-prefixed.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-config.md) — read the section for the subsystem you change before editing it.

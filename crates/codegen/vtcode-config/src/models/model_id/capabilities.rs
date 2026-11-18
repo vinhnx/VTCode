@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use crate::models::{Provider, ProviderModelSupport};
 
 use super::ModelId;
@@ -188,6 +190,24 @@ pub fn supported_models_for_provider(provider: &str) -> Option<&'static [&'stati
 
 pub fn catalog_provider_keys() -> &'static [&'static str] {
     capability_generated::PROVIDERS
+}
+
+/// Numeric components of a generation string, e.g. `v2.6` -> `[2, 6]`.
+fn generation_components(generation: &str) -> Vec<u64> {
+    let mut components = Vec::new();
+    let mut digits = String::new();
+    for character in generation.chars() {
+        if character.is_ascii_digit() {
+            digits.push(character);
+        } else if !digits.is_empty() {
+            components.push(digits.parse().unwrap_or_default());
+            digits.clear();
+        }
+    }
+    if !digits.is_empty() {
+        components.push(digits.parse().unwrap_or_default());
+    }
+    components
 }
 
 impl ModelId {
@@ -552,6 +572,16 @@ impl ModelId {
         }
     }
 
+    /// Sort key that orders models by generation, newest first.
+    ///
+    /// Generation strings are heterogeneous (`6.2`, `v2.6`, `M3.1`,
+    /// `Muse-Spark-1.3`, `oss`), so every run of ASCII digits is read as a
+    /// version component. Models without digits sort last, and equal keys
+    /// keep their input order when used with a stable sort.
+    pub fn generation_sort_key(&self) -> Reverse<Vec<u64>> {
+        Reverse(generation_components(self.generation()))
+    }
+
     /// Determine if this model supports GPT-5.1+/5.2+/5.3+ shell tool type
     pub(crate) fn supports_shell_tool(&self) -> bool {
         matches!(
@@ -598,5 +628,46 @@ mod tests {
         assert!(model_catalog_entry("openai", "no-such-model-xyz").is_none());
         assert!(model_catalog_entry("openai", "openai/no-such-model-xyz").is_none());
         assert!(model_catalog_entry("openai", "other-org/gpt-5.6-luna").is_none());
+    }
+
+    #[test]
+    fn generation_components_reads_digit_runs_across_generation_shapes() {
+        assert_eq!(generation_components("6.2"), [6, 2]);
+        assert_eq!(generation_components("v2.6"), [2, 6]);
+        assert_eq!(generation_components("M3.1"), [3, 1]);
+        assert_eq!(generation_components("Muse-Spark-1.3"), [1, 3]);
+        assert_eq!(generation_components("5.6-luna"), [5, 6]);
+        assert_eq!(generation_components("oss"), Vec::<u64>::new());
+        assert_eq!(generation_components(""), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn generation_sort_key_orders_versions_newest_first_and_keeps_ties_stable() {
+        let mut models = vec![
+            ModelId::GPT56Sol, // 5.6
+            ModelId::GPT62Sol, // 6.2
+            ModelId::GPT6Sol,  // 6
+            ModelId::GPT61Sol, // 6.1
+        ];
+        models.sort_by_key(|model| model.generation_sort_key());
+        assert_eq!(
+            models,
+            [
+                ModelId::GPT62Sol,
+                ModelId::GPT61Sol,
+                ModelId::GPT6Sol,
+                ModelId::GPT56Sol
+            ]
+        );
+
+        // Equal generations keep their arrival order (stable sort).
+        let mut ties = vec![ModelId::GPT6Luna, ModelId::GPT6Astra, ModelId::GPT6Sol]; // all "6"
+        ties.sort_by_key(|model| model.generation_sort_key());
+        assert_eq!(ties, [ModelId::GPT6Luna, ModelId::GPT6Astra, ModelId::GPT6Sol]);
+
+        // Generations with no numeric component sort after versioned ones.
+        let mut mixed = vec![ModelId::OllamaGptOss20b, ModelId::GPT6Sol]; // "oss", "6"
+        mixed.sort_by_key(|model| model.generation_sort_key());
+        assert_eq!(mixed, [ModelId::GPT6Sol, ModelId::OllamaGptOss20b]);
     }
 }

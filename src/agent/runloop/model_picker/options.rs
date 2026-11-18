@@ -44,6 +44,9 @@ pub(super) static MODEL_OPTIONS: LazyLock<Vec<ModelOption>> = LazyLock::new(|| {
             provider,
         });
     }
+    // Newest generation first within each provider group; the stable sort
+    // keeps the catalog's arrival order for equal versions.
+    options.sort_by_key(|option| option.model.generation_sort_key());
     options
 });
 
@@ -104,6 +107,7 @@ pub(super) fn build_model_options_with_overrides(
             provider,
         });
     }
+    options.sort_by_key(|option| option.model.generation_sort_key());
     Cow::Owned(options)
 }
 

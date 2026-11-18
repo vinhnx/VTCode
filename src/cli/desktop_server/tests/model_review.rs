@@ -25,6 +25,23 @@ fn model_catalog_preserves_cli_recommended_model_order() {
     assert!(capabilities.input_modalities.iter().any(|modality| modality == "audio"));
 }
 #[test]
+fn model_catalog_orders_generations_newest_first_within_each_provider() {
+    let mut expected_models = ModelId::all_models();
+    expected_models.sort_by_key(|model| model.generation_sort_key());
+    let expected: Vec<(String, String)> = expected_models
+        .into_iter()
+        .map(|model| (model.provider().as_ref().to_string(), model.as_str().to_string()))
+        .collect();
+
+    let actual: Vec<(String, String)> = catalog_models("", "")
+        .into_iter()
+        .map(|model| (model.provider, model.id))
+        .collect();
+
+    assert_eq!(actual, expected, "catalog mirrors the newest-first model order");
+}
+
+#[test]
 fn failed_interaction_delivery_keeps_response_retryable() {
     let interaction = InteractionRequest {
         session_id: "session-a".into(),

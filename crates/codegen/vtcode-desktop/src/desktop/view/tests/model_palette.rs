@@ -174,3 +174,41 @@ fn model_palette_marks_catalog_route_current_through_provider_alias(cx: &mut Tes
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn model_palette_preserves_catalog_generation_order_within_group(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = None;
+            // The catalog arrives newest-first within a provider; grouping
+            // must keep that arrival order (no alphabetical re-sort).
+            view.models = vec![
+                catalog_model("openai", "gpt-6.2-astra"),
+                catalog_model("openai", "gpt-6.1-sol"),
+                catalog_model("openai", "gpt-6-sol"),
+            ];
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_model_palette(window, cx));
+
+        let openai = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .find(|(label, _)| label == "OpenAI")
+            .expect("openai group");
+        let order: Vec<&str> = openai
+            .1
+            .iter()
+            .filter_map(|entry| match &entry.action {
+                super::super::PaletteAction::SelectModel { model, .. } => Some(model.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(order, ["gpt-6.2-astra", "gpt-6.1-sol", "gpt-6-sol"]);
+    })
+    .unwrap();
+}
