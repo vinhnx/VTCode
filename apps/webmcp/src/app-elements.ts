@@ -25,11 +25,6 @@ export interface AppElements {
   readonly revertPatch: HTMLButtonElement;
   readonly reloadFile: HTMLButtonElement;
   readonly discardDraft: HTMLButtonElement;
-  readonly previewDiagram: HTMLButtonElement;
-  readonly diagramDialog: HTMLDialogElement;
-  readonly diagramContainer: HTMLDivElement;
-  readonly diagramError: HTMLPreElement;
-  readonly closeDiagram: HTMLButtonElement;
   readonly runChecks: HTMLButtonElement;
   readonly requestTurn: HTMLButtonElement;
   readonly connectBridge: HTMLButtonElement;

@@ -1,9 +1,7 @@
 import { connectVtCode, createBackend } from "./backend.ts";
 import { $ } from "./app-elements.ts";
 import { copyText, isTypingTarget, log, message, panelFromValue, selectTerminal, status, toast } from "./app-feedback.ts";
-import { createAppState, createWorkspaceView, current, dirtyPaths, isDirty, paths, snapshot, type AppBackend } from "./workspace-view.ts";
-import { diagramSourceFor, isDiagramTooLarge, mountDiagramPreview } from "./diagrams.ts";
-import type { Mounted } from "pele";
+import { createAppState, createWorkspaceView, dirtyPaths, isDirty, paths, snapshot, type AppBackend } from "./workspace-view.ts";
 import { createProposalFlow } from "./proposal-flow.ts";
 import { createWebMcpBridge, webMcpEnvironmentState } from "./webmcp-bridge.ts";
 import { createEvidenceController } from "./evidence-controller.ts";
@@ -47,7 +45,6 @@ const editor = new CodeEditor($("editor"), {
     renderTabs();
     renderProposal();
     updateEditorFooter();
-    refreshDiagramAction();
     status("Draft buffer changed", "Save or review to create a proposal; the workspace is unchanged.");
   },
   onSave: () => { void run(reviewChanges); },
@@ -75,7 +72,7 @@ const {
 });
 
 const {
-  renderTree, renderTabs, updateEditorFooter, renderSelectedEditor, refreshDiagramAction,
+  renderTree, renderTabs, updateEditorFooter, renderSelectedEditor,
   openFile, refreshFile, invalidatePendingOpens,
 } = createWorkspaceView({
   state, editor,
@@ -440,28 +437,6 @@ async function run(action: () => void | Promise<void>): Promise<void> {
   }
 }
 
-let activeDiagram: Mounted | null = null;
-
-function openDiagramPreview(): void {
-  if ($("diagramDialog").open) return;
-  const selected = state.selected;
-  const source = selected ? diagramSourceFor(selected, current(state, selected)) : null;
-  if (!source) return;
-  activeDiagram?.destroy();
-  activeDiagram = null;
-  const container = $("diagramContainer");
-  const errorBox = $("diagramError");
-  container.replaceChildren();
-  if (isDiagramTooLarge(source)) {
-    errorBox.hidden = false;
-    errorBox.textContent = "Diagram is too large to preview.";
-  } else {
-    activeDiagram = mountDiagramPreview(container, errorBox, source);
-  }
-  $("diagramDialog").showModal();
-  $("closeDiagram").focus();
-}
-
 function confirmAction(title: string, copy: string, label: string, action: () => void | Promise<void>): void {
   const dialog = $("confirmDialog");
   if ($("settingsDialog").open) $("settingsDialog").close();
@@ -686,9 +661,6 @@ $("revertPatch").onclick = () => backend.kind === "fallback"
   : run(revertLastChange);
 $("reloadFile").onclick = () => run(reloadFile);
 $("discardDraft").onclick = () => run(discardDraft);
-$("previewDiagram").onclick = () => run(openDiagramPreview);
-$("closeDiagram").onclick = () => $("diagramDialog").close();
-$("diagramDialog").addEventListener("close", () => { activeDiagram?.destroy(); activeDiagram = null; });
 $("runChecks").onclick = () => run(runChecks);
 $("requestTurn").onclick = () => run(requestTurn);
 $("connectBridge").onclick = () => run(connect);
