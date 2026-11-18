@@ -20,6 +20,7 @@ pub mod state;
 // Preserved external surface. Do not remove without updating the consumers in
 // `handlers/mod.rs`, `task_tracker.rs`, `planning_task_tracker.rs`,
 // `continuation.rs`, `turn/context.rs`, and `turn/.../plan_seed.rs`.
+pub(crate) use artifacts::parse_bracket_list;
 pub(in crate::tools::handlers) use artifacts::render_plan_with_tracker;
 pub use artifacts::{
     CANONICAL_STEP_FORMAT, PLANNING_VERIFY_INVALID_EXAMPLES, PLANNING_VERIFY_VALID_EXAMPLES, PlanValidationReport,

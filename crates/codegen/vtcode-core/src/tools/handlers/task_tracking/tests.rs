@@ -334,6 +334,60 @@ fn split_task_description_metadata_preserves_quoted_commas_in_files_and_verify()
 }
 
 #[test]
+fn split_task_description_metadata_unwraps_per_item_verify_brackets() {
+    // Exact approved-plan step from session-vtcode-20261118T025102Z_882340-08275.
+    // The old parser produced `"grep -n '0.183.1' README.md]"` and
+    // `"[python3 -c ..."`, which the completion gate then required verbatim.
+    let (clean, files, verify) = split_task_description_metadata(
+        "Sync version -> files: [README.md] -> verify: [grep -n '0.183.1' README.md], \
+         [python3 -c \"assert '0.182.7' not in open('README.md').read()\"]",
+    );
+    assert_eq!(clean, "Sync version");
+    assert_eq!(files, vec!["README.md".to_string()]);
+    assert_eq!(
+        verify,
+        vec![
+            "grep -n '0.183.1' README.md".to_string(),
+            "python3 -c \"assert '0.182.7' not in open('README.md').read()\"".to_string(),
+        ]
+    );
+    assert!(
+        verify
+            .iter()
+            .all(|command| !command.starts_with('[') && !command.ends_with(']'))
+    );
+}
+
+#[test]
+fn split_task_description_metadata_accepts_whole_group_and_bare_verify_forms() {
+    let (_, _, whole_group) = split_task_description_metadata("Validate -> verify: [cargo check, cargo fmt]");
+    assert_eq!(whole_group, vec!["cargo check".to_string(), "cargo fmt".to_string()]);
+
+    let (_, _, bare) = split_task_description_metadata("Validate -> verify: cargo check");
+    assert_eq!(bare, vec!["cargo check".to_string()]);
+}
+
+#[test]
+fn split_task_description_metadata_keeps_quoted_commas_in_per_item_verify() {
+    let (_, _, verify) = split_task_description_metadata(
+        "Inspect -> verify: [sed -n '/^## A/,/^## B/p' README.md], [cargo check --locked]",
+    );
+    assert_eq!(
+        verify,
+        vec![
+            "sed -n '/^## A/,/^## B/p' README.md".to_string(),
+            "cargo check --locked".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn parse_files_metadata_unwraps_both_bracket_shapes() {
+    assert_eq!(parse_files_metadata("[src/a.rs], [src/b.rs]"), vec!["src/a.rs".to_string(), "src/b.rs".to_string()]);
+    assert_eq!(parse_files_metadata("[src/a.rs, src/b.rs]"), vec!["src/a.rs".to_string(), "src/b.rs".to_string()]);
+}
+
+#[test]
 fn compact_task_tree_view_from_items_strips_inline_metadata_into_fields() {
     let items = vec![json!({
         "index_path": "1",

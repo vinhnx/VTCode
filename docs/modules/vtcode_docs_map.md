@@ -1336,13 +1336,13 @@ below based on the topic area.
 
 - **File**: `docs/harness/session_log_review.md`
   - **Content**: Session Log Review
-  - **Topics**: 2026-11-01 | Terminal plan rejection hid the draft in desktop and retry never rearmed, 2026-10-11 |
-    Semantic operation identity bounds repeated preflight rejections across turns, 2026-10-11 | Per-item bracket
-    `verify:` list terminally rejected a valid README plan, 2026-09-19 | Post-merge review: inspection verify allowlist
-    tightening, 2026-09-19 | Planning recovery rejects inspection-command verifies
-  - **User Questions**: "What can you tell me about Session Log Review?", "How does 2026-11-01 | Terminal plan rejection
-    hid the draft in desktop and retry never rearmed work?", "How does 2026-10-11 | Semantic operation identity bounds
-    repeated preflight rejections across turns work?"
+  - **Topics**: 2026-11-18 | Approved-plan tracker handoff leaked bracket syntax into required verifiers, 2026-11-01 |
+    Terminal plan rejection hid the draft in desktop and retry never rearmed, 2026-10-11 | Semantic operation identity
+    bounds repeated preflight rejections across turns, 2026-10-11 | Per-item bracket `verify:` list terminally rejected
+    a valid README plan, 2026-09-19 | Post-merge review: inspection verify allowlist tightening
+  - **User Questions**: "What can you tell me about Session Log Review?", "How does 2026-11-18 | Approved-plan tracker
+    handoff leaked bracket syntax into required verifiers work?", "How does 2026-11-01 | Terminal plan rejection hid the
+    draft in desktop and retry never rearmed work?"
 
 - **File**: `docs/styling/styling_integration.md`
   - **Content**: Styling Integration: anstyle-crossterm

@@ -569,6 +569,30 @@ mod tests {
     }
 
     #[test]
+    fn approved_plan_per_item_verify_brackets_become_clean_tracker_commands() {
+        // Session session-vtcode-20261118T025102Z_882340-08275: plan validation
+        // accepted this per-item `verify:` list, but the handoff leaked `[`/`]`
+        // into the required verifier identities and blocked completion twice.
+        let plan = PlanContent::from_markdown(
+            "crisp-river".to_string(),
+            "## Summary\nSync README version strings.\n\n## Implementation Steps\n1. Sync version -> files: [README.md] -> verify: [grep -n '0.183.1' README.md], [python3 -c \"assert '0.182.7' not in open('README.md').read()\"]\n",
+            None,
+        );
+
+        let items = task_items_from_plan(&plan);
+
+        assert_eq!(items.len(), 1, "handoff must produce one tracker item: {items:?}");
+        assert_eq!(items[0]["files"], json!(["README.md"]));
+        assert_eq!(
+            items[0]["verify"],
+            json!([
+                "grep -n '0.183.1' README.md",
+                r#"python3 -c "assert '0.182.7' not in open('README.md').read()""#,
+            ])
+        );
+    }
+
+    #[test]
     fn sparse_plan_scope_lines_are_not_distilled_into_tracker_items() {
         // Sparse plans without an Implementation Steps heading must still skip
         // numbered/checkbox Scope lines.

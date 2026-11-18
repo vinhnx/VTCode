@@ -9,6 +9,7 @@ mod tracker;
 mod validation;
 mod verification;
 
+pub(crate) use steps::parse_bracket_list;
 pub use steps::split_bracket_items;
 pub(in crate::tools::handlers) use tracker::render_plan_with_tracker;
 pub(super) use tracker::{extract_embedded_tracker, tracker_has_progress_or_notes};

@@ -132,7 +132,7 @@ pub(super) fn step_action_segments(action: &str) -> Vec<String> {
 /// `[cmd_b` fragments for the per-item form, so an otherwise valid README plan
 /// failed with `verification item 2 must be a concrete command or check`
 /// (session session-vtcode-20261011T125442Z_154501-05568).
-pub(super) fn parse_bracket_list(raw: &str) -> Vec<String> {
+pub(crate) fn parse_bracket_list(raw: &str) -> Vec<String> {
     let trimmed = raw.trim();
     match whole_bracket_group(trimmed) {
         Some(inner) => strip_entries(split_bracket_items(inner)),

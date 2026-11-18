@@ -433,13 +433,10 @@ pub fn normalize_optional_text(value: Option<&str>) -> Option<String> {
 }
 
 /// Parse a `files: [...]` metadata value into trimmed non-empty paths.
-/// Commas inside single/double quotes stay part of one item.
+/// Commas inside single/double quotes stay part of one item, and both the
+/// whole-group (`[a, b]`) and per-item (`[a], [b]`) forms are unwrapped.
 pub fn parse_files_metadata(value: &str) -> Vec<String> {
-    super::planning_workflow::split_bracket_items(value)
-        .into_iter()
-        .map(|item| item.trim().to_owned())
-        .filter(|item| !item.is_empty())
-        .collect()
+    super::planning_workflow::parse_bracket_list(value)
 }
 
 /// Consume one indented markdown metadata line (`files:`, `outcome:`,
@@ -547,16 +544,12 @@ pub fn metadata_from_input(
 const INLINE_TASK_METADATA_MARKERS: &[&str] = &[" -> files:", " -> verify:", " -> outcome:"];
 
 fn parse_inline_bracket_list(raw: &str) -> Vec<String> {
-    let trimmed = raw.trim();
-    let inner = trimmed
-        .strip_prefix('[')
-        .and_then(|value| value.strip_suffix(']'))
-        .unwrap_or(trimmed);
-    super::planning_workflow::split_bracket_items(inner)
-        .into_iter()
-        .map(|item| item.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .collect()
+    // Inline plan metadata uses the same bracket shapes as plan validation:
+    // `[a, b]`, `[a], [b]`, or bare comma-separated values. Reuse the shared
+    // quote- and bracket-aware parser so the tracker handoff cannot fragment
+    // `[cmd_a], [cmd_b]` into `cmd_a]` / `[cmd_b` (which would become required
+    // verifier identities that no real command can satisfy).
+    super::planning_workflow::parse_bracket_list(raw)
 }
 
 /// Split an inline `Action -> files: [...] -> verify: [...]` suffix out of a

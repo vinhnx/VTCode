@@ -1,5 +1,34 @@
 # Session Log Review
 
+## 2026-11-18 | Approved-plan tracker handoff leaked bracket syntax into required verifiers
+
+### Baseline
+
+Session `session-vtcode-20261118T025102Z_882340-08275` ("use plan mode, refine and update @README.md") approved a
+valid README plan whose step 1 carried
+`verify: [grep -n '0.183.1' README.md], [python3 -c "assert '0.182.7' not in open('README.md').read()"]`. The plan
+validated and was approved, but the handoff stored `grep -n '0.183.1' README.md]` and `[python3 -c ...` as mandatory
+verifier identities. The harness auto-verifier ran the malformed `grep` verbatim (exit 2, `README.md]: No such file
+or directory`) and blocked the turn twice with `Turn blocked: verification pending`; the agent's correct command
+could not clear an exact-match requirement. Completion only succeeded after a later `cargo check --locked` passed.
+
+| Observation | Disposition |
+| --- | --- |
+| `parse_inline_bracket_list` in `task_tracking/mod.rs` stripped the first `[` and last `]` of the whole value, then split with `split_bracket_items` (no bracket-depth tracking), fragmenting `[a], [b]` into `a]` / `[b`. | It now delegates to the shared `parse_bracket_list` (quote- and bracket-depth aware) that plan validation already uses, so whole-group and per-item bracket forms unwrap identically at both boundaries. |
+| The 2026-10-11 fix covered plan validation only; the plan→tracker handoff parser was a separate, stale copy of the same logic. | One parser now serves both surfaces: `parse_bracket_list` is `pub(crate)` and re-exported through `planning_workflow`. `parse_files_metadata` delegates to it as well. |
+| Restored tracker markdown can also carry bracketed `files:` values. | `parse_files_metadata` now unwraps `[a, b]` and `[a], [b]` without breaking quoted-comma paths. Markdown `verify:` lines are written bracket-free and are intentionally unchanged here. |
+| The same session also blocked a turn as "tools are disabled for recovery synthesis. No verifier was scheduled" while `cargo check --locked` was running; it exited 0 ten seconds later. | Separate recovery/wall-clock race, out of scope for this fix; not altered. |
+
+### Verification
+
+<!-- markdownlint-disable-next-line MD013 -->
+- `cargo nextest run --locked -p vtcode-core -E 'test(split_task_description_metadata) or test(parse_files_metadata) or test(bracket)'` — 24 passed (new `split_task_description_metadata_unwraps_per_item_verify_brackets` uses the exact live plan step)
+<!-- markdownlint-disable-next-line MD013 -->
+- `cargo nextest run --locked -p vtcode -E 'test(plan) or test(tracker)'` — 525 passed (incl. new `approved_plan_per_item_verify_brackets_become_clean_tracker_commands` at the shipped plan→tracker handoff)
+- `cargo clippy --locked -p vtcode-core -p vtcode --all-targets -- -D warnings` — clean
+- `cargo fmt --all -- --check` — clean
+- `./scripts/check-dev.sh` — PASS
+
 ## 2026-11-01 | Terminal plan rejection hid the draft in desktop and retry never rearmed
 
 ### Baseline
@@ -62,7 +91,7 @@ reaching approval. The model emitted each verification command in its own bracke
 
 | Observation | Disposition |
 | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parse_bracket_list` stripped only the outermost `[`/`]` *before* `split_bracket_items`, so the per-item group form fragmented into `npx markdownlint-cli2 README.md]` and `[git diff -- README.md`; item 2 then failed as non-concrete. | `parse_bracket_list` now detects a single whole-string bracket group (`whole_bracket_group`, quote- and bracket-aware) and otherwise splits on top-level commas (bracket-depth aware, `split_top_level_bracket_items`) before unwrapping one balanced pair per entry (`unwrap_bracket_group`). `split_bracket_items` still serves the whole-group body and the three tracker callers. |
+| `parse_bracket_list` stripped only the outermost `[`/`]` *before* `split_bracket_items`, so the per-item group form fragmented into `npx markdownlint-cli2 README.md]` and `[git diff -- README.md`; item 2 then failed as non-concrete. | `parse_bracket_list` now detects a single whole-string bracket group (`whole_bracket_group`, quote- and bracket-aware) and otherwise splits on top-level commas (bracket-depth aware, `split_top_level_bracket_items`) before unwrapping one balanced pair per entry (`unwrap_bracket_group`). `split_bracket_items` then served the whole-group body and the three tracker callers (tracker callers later moved to `parse_bracket_list`; see the 2026-11-18 entry above). |
 | The prior 2026-09-30 issue was the whole-group form `[a, b]` with `npx` missing from `COMMAND_NAMES`; this is a distinct bracket-shape bug, not an allowlist gap. | No allowlist change. Regressions: `per_item_brackets_in_verify_list_validate_as_one_plan` (exact live plan) and `parse_bracket_list_supports_whole_group_and_per_item_forms` (whole-group, per-item, mixed, bare, nested-comma, `[]`). |
 | The earlier-session rate-limit `trajectory-20261011T125442Z.jsonl` (`ts` 09:47:56Z) is a rotated file whose name reflects rotation time, not this session; it is not the reported failure. | Confirmed non-cause; the reported session's only turn failed on plan validation. |
 
