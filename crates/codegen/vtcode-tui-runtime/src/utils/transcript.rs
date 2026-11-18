@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -20,65 +20,30 @@ static REPLACEABLE_TRACKER_BLOCK: LazyLock<RwLock<Option<Vec<String>>>> = LazyLo
 /// (the two stores can diverge when other writers hit only one side).
 static REPLACEABLE_TRACKER_UI_LEN: LazyLock<RwLock<Option<usize>>> = LazyLock::new(|| RwLock::new(None));
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TranscriptMode {
-    #[expect(
-        dead_code,
-        reason = "Intentional compatibility, platform, test, or API-shape suppression."
-    )]
-    Normal,
-    Suppressed,
-}
-
 thread_local! {
-    static MODE_STACK: RefCell<Vec<TranscriptMode>> = const { RefCell::new(Vec::new()) };
+    static SUPPRESSED: Cell<bool> = const { Cell::new(false) };
 }
 
 fn is_suppressed() -> bool {
-    MODE_STACK.with(|stack| matches!(stack.borrow().last(), Some(TranscriptMode::Suppressed)))
+    SUPPRESSED.get()
 }
 
 struct SuspensionGuard {
-    active: bool,
-}
-
-impl SuspensionGuard {
-    fn new() -> Self {
-        MODE_STACK.with(|stack| stack.borrow_mut().push(TranscriptMode::Suppressed));
-        Self { active: true }
-    }
+    previously_suppressed: bool,
 }
 
 impl Drop for SuspensionGuard {
     fn drop(&mut self) {
-        if !self.active {
-            return;
-        }
-        MODE_STACK.with(|stack| {
-            let mut stack = stack.borrow_mut();
-            match stack.pop() {
-                Some(TranscriptMode::Suppressed) | None => {}
-                Some(TranscriptMode::Normal) => {
-                    debug_assert!(false, "transcript suspension stack corrupted: expected Suppressed");
-                }
-            };
-        });
-        self.active = false;
+        SUPPRESSED.set(self.previously_suppressed);
     }
-}
-
-fn suspend() -> SuspensionGuard {
-    SuspensionGuard::new()
 }
 
 pub fn with_suppressed<F, R>(operation: F) -> R
 where
     F: FnOnce() -> R,
 {
-    let guard = suspend();
-    let result = operation();
-    drop(guard);
-    result
+    let _guard = SuspensionGuard { previously_suppressed: SUPPRESSED.replace(true) };
+    operation()
 }
 
 /// Structured message with metadata for queuing
@@ -99,12 +64,12 @@ pub fn append(line: &str) {
         return;
     }
     let mut log = TRANSCRIPT.write();
+    if log.last().is_some_and(|last| last == line) {
+        return;
+    }
     if log.len() == MAX_LINES {
         let drop_count = MAX_LINES / 5;
         log.drain(0..drop_count);
-    }
-    if log.last().is_some_and(|last| last == line) {
-        return;
     }
     log.push(line.to_string());
 }
@@ -402,6 +367,8 @@ mod tests {
             append(&format!("line {idx}"));
         }
         assert_eq!(len(), MAX_LINES);
+        append(&format!("line {}", MAX_LINES - 1));
+        assert_eq!(len(), MAX_LINES, "an adjacent duplicate must not evict older lines");
         for extra in 0..10 {
             append(&format!("extra {extra}"));
         }
@@ -474,6 +441,8 @@ mod tests {
         clear();
         with_suppressed(|| {
             append("hidden");
+            with_suppressed(|| append("also hidden"));
+            append("still hidden after the nested scope");
         });
         append("visible");
         let snap = snapshot();
