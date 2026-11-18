@@ -39,7 +39,7 @@ const FENCE_CLOSE = /^\s*`{3,}\s*$/;
 
 /** First closed ```mermaid fence body, or null. Unclosed fences never match: only complete blocks preview. */
 export function extractMermaidFence(content: string): string | null {
-  const lines = content.split("\n");
+  const lines = content.split(/\r?\n/);
   let start = -1;
   for (const [index, line] of lines.entries()) {
     if (start < 0) {

@@ -26,6 +26,7 @@ test("mermaid paths match by extension, mirroring the editor language idiom", ()
 test("fence extraction takes the first closed mermaid block only", () => {
   assert.equal(extractMermaidFence("```mermaid\nflowchart TD\n  A --> B\n```"), "flowchart TD\n  A --> B");
   assert.equal(extractMermaidFence("```MERMAID\nA\n```"), "A");
+  assert.equal(extractMermaidFence("```mermaid\r\nflowchart TD\r\n  A --> B\r\n```"), "flowchart TD\n  A --> B");
   assert.equal(extractMermaidFence("```mermaid title here\nA\n```"), "A");
   assert.equal(extractMermaidFence("```rust\ncode\n```\n```mermaid\nA\n```"), "A");
   assert.equal(
