@@ -310,7 +310,9 @@ impl ModelId {
             self,
             ModelId::Gemini38Flash
                 | ModelId::MergeGatewayGoogleGemini38Flash
+                | ModelId::Gemini4Neon
                 | ModelId::Gemini4Hydrogen
+                | ModelId::MergeGatewayGoogleGemini4Neon
                 | ModelId::MergeGatewayGoogleGemini4Hydrogen
                 | ModelId::GPT56Luna
                 | ModelId::GPT6Luna
@@ -351,9 +353,11 @@ impl ModelId {
                 | ModelId::MergeGatewayGoogleGemini38Flash
                 | ModelId::Gemini4Argon
                 | ModelId::Gemini4Carbon
+                | ModelId::Gemini4Neon
                 | ModelId::Gemini4Hydrogen
                 | ModelId::MergeGatewayGoogleGemini4Argon
                 | ModelId::MergeGatewayGoogleGemini4Carbon
+                | ModelId::MergeGatewayGoogleGemini4Neon
                 | ModelId::MergeGatewayGoogleGemini4Hydrogen
                 | ModelId::GPT62Astra
                 | ModelId::GPT62Sol
@@ -492,9 +496,11 @@ impl ModelId {
             ModelId::MergeGatewayGoogleGemini38Flash => "3.8",
             ModelId::Gemini4Argon => "4",
             ModelId::Gemini4Carbon => "4",
+            ModelId::Gemini4Neon => "4",
             ModelId::Gemini4Hydrogen => "4",
             ModelId::MergeGatewayGoogleGemini4Argon => "4",
             ModelId::MergeGatewayGoogleGemini4Carbon => "4",
+            ModelId::MergeGatewayGoogleGemini4Neon => "4",
             ModelId::MergeGatewayGoogleGemini4Hydrogen => "4",
             ModelId::OpenCodeGoGlm53 => "5.3",
             ModelId::OpenCodeGoGpt56Luna => "5.6-luna",

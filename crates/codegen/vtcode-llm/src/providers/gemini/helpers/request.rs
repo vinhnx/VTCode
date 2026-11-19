@@ -637,7 +637,7 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
             }
             ReasoningEffortLevel::Low => Some("low"),
             ReasoningEffortLevel::Medium => {
-                // Gemini 3 Flash, 4 Argon/Carbon, and 4 Hydrogen natively support medium;
+                // Gemini 3 Flash, 4 Argon/Carbon, and 4 Neon/Hydrogen natively support medium;
                 // Gemini 3 Pro and unknown models fall back to high.
                 if supported.contains(&"medium") {
                     Some("medium")
@@ -648,7 +648,7 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
             ReasoningEffortLevel::High => Some("high"),
             ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => {
                 if supported.contains(&"xhigh") {
-                    // Only Gemini 4 Hydrogen supports the `xhigh` thinking level
+                    // Only Gemini 4 Neon/Hydrogen support the `xhigh` thinking level
                     Some("xhigh")
                 } else {
                     Some("high")

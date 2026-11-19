@@ -30,6 +30,7 @@ pub mod zai;
 pub const GEMINI_3_7_FLASH: &str = google::GEMINI_3_7_FLASH;
 pub const GEMINI_3_6_FLASH: &str = google::GEMINI_3_6_FLASH;
 pub const GEMINI_3_8_FLASH: &str = google::GEMINI_3_8_FLASH;
+pub const GEMINI_4_NEON: &str = google::GEMINI_4_NEON;
 pub const GEMINI_4_HYDROGEN: &str = google::GEMINI_4_HYDROGEN;
 pub const GEMINI_4_ARGON: &str = google::GEMINI_4_ARGON;
 pub const GEMINI_4_CARBON: &str = google::GEMINI_4_CARBON;

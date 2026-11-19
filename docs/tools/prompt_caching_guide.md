@@ -379,9 +379,9 @@ explicit_ttl_seconds = 900
   session that always sends hosted/built-in tools (code execution, Google Search, URL context, …) will not use
   `cachedContents` at all. Create failures fall back to the implicit shape. Implicit caching needs 2,048+ tokens (2.5
   family) or 4,096+ (3.x) of stable prefix — below that, expect no hits by design.
-- **Implicit-caching-only models:** Gemini 4 Argon rejects `cachedContents` entirely (creation fails and references in
-  `generateContent` bodies error), so an `explicit` mode config is ignored for it and requests always use the implicit
-  shape. Add future implicit-only models to `IMPLICIT_CACHING_ONLY_MODELS` in
+- **Implicit-caching-only models:** Gemini 4 Neon, Hydrogen, Argon, and Carbon reject `cachedContents` entirely
+  (creation fails and references in `generateContent` bodies error), so an `explicit` mode config is ignored for them
+  and requests always use the implicit shape. Add future implicit-only models to `IMPLICIT_CACHING_ONLY_MODELS` in
   [`crates/codegen/vtcode-config/src/constants/models/google.rs`](../../crates/codegen/vtcode-config/src/constants/models/google.rs).
 
 ### Stable tool catalog across planning modes

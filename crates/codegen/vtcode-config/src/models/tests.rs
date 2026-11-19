@@ -246,6 +246,7 @@ fn test_models_for_provider() {
     let gemini_models = ModelId::models_for_provider(Provider::Gemini);
     assert!(gemini_models.contains(&ModelId::Gemini38Flash));
     assert!(gemini_models.contains(&ModelId::Gemini4Carbon));
+    assert!(gemini_models.contains(&ModelId::Gemini4Neon));
     assert!(gemini_models.contains(&ModelId::Gemini4Hydrogen));
     assert!(!gemini_models.contains(&ModelId::GPT56Sol));
 
@@ -282,7 +283,7 @@ fn test_models_for_provider() {
     assert!(nvidia_models.contains(&ModelId::NvidiaNemotron3Super120bA12b));
 
     let merge_gateway_models = ModelId::models_for_provider(Provider::MergeGateway);
-    assert_eq!(merge_gateway_models.len(), 37);
+    assert_eq!(merge_gateway_models.len(), 38);
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayMoonshotKimiK31Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Flash));
@@ -290,6 +291,7 @@ fn test_models_for_provider() {
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayGoogleGemini38Flash));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayGoogleGemini4Argon));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayGoogleGemini4Carbon));
+    assert!(merge_gateway_models.contains(&ModelId::MergeGatewayGoogleGemini4Neon));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayGoogleGemini4Hydrogen));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeFable51));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayDeepseekFlash));
@@ -486,6 +488,17 @@ fn test_generated_model_capability_lookup() {
     assert_eq!(merge_gateway_hydrogen.context_window, 1_048_576);
     assert!(merge_gateway_hydrogen.vision);
     assert!(merge_gateway_hydrogen.is_pro);
+    let merge_gateway_neon =
+        model_catalog_entry("merge-gateway", models::merge_gateway::GOOGLE_GEMINI_4_NEON).expect("Neon metadata");
+    assert_eq!(merge_gateway_neon.context_window, 1_048_576);
+    assert!(merge_gateway_neon.vision);
+    assert!(merge_gateway_neon.is_pro);
+    let gemini_neon = model_catalog_entry("google", "gemini-4-neon").expect("gemini-4-neon metadata");
+    assert_eq!(gemini_neon.context_window, 1_048_576);
+    assert!(gemini_neon.reasoning);
+    assert!(gemini_neon.reasoning_efforts.contains(&"xhigh"));
+    assert_eq!(gemini_neon.pricing.input, Some(3e-6));
+    assert_eq!(gemini_neon.pricing.output, Some(15e-6));
     let gemini_carbon = model_catalog_entry("google", "gemini-4-carbon").expect("gemini-4-carbon metadata");
     assert_eq!(gemini_carbon.provider, "gemini");
     assert_eq!(gemini_carbon.context_window, 1_048_576);

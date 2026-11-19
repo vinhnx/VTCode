@@ -64,6 +64,7 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `google/gemini-3.7-flash` | 1M | Yes | Google route |
 | `google/gemini-4-argon` | 1.05M | Yes | Google route, flagship reasoning model |
 | `google/gemini-4-carbon` | 1.05M | Yes | Google route, strongest reasoning model |
+| `google/gemini-4-neon` | 1.05M | Yes | Google route, frontier coding, knowledge work, and science model |
 | `google/gemini-4-hydrogen` | 1.05M | Yes | Google route, fast and efficient coding and agentic model |
 | `deepseek/deepseek-v4.1-flash-1017` | 1M | No | DeepSeek route |
 | `xai/grok-4.6` | 500k | No | xAI route |

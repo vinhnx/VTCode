@@ -7,6 +7,22 @@ use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn gemini_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
+            id: "gemini-4-neon".to_string(),
+            model: "gemini-4-neon".to_string(),
+            display_name: "Gemini 4 Neon".to_string(),
+            description:
+                "Frontier intelligence with fast end-to-end task completion for complex software engineering, knowledge work, and science, with a unified 1M context window and long decode"
+                    .to_string(),
+            provider: Provider::Gemini,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: reasoning_ladder_low_medium_high_xhigh_verbose(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
+        },
+        ModelPreset {
             id: "gemini-4-hydrogen".to_string(),
             model: "gemini-4-hydrogen".to_string(),
             display_name: "Gemini 4 Hydrogen".to_string(),

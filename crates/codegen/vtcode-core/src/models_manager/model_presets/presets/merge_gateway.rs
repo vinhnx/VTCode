@@ -96,6 +96,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::GOOGLE_GEMINI_4_NEON,
+            "Gemini 4 Neon (Merge Gateway)",
+            "Google Gemini 4 Neon frontier coding, knowledge work, and science model through Merge Gateway",
+            1_048_576,
+            false,
+        ),
+        (
             models::merge_gateway::GOOGLE_GEMINI_4_HYDROGEN,
             "Gemini 4 Hydrogen (Merge Gateway)",
             "Google Gemini 4 Hydrogen fast and efficient coding and agentic model through Merge Gateway",

@@ -398,6 +398,41 @@ fn gemini4_hydrogen_xhigh_thinking_mapping() {
 }
 
 #[test]
+fn gemini4_neon_medium_and_xhigh_thinking_mapping() {
+    use vtcode_config::constants::models;
+    use vtcode_config::types::ReasoningEffortLevel;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Neon natively supports medium and xhigh (low/medium/high default/xhigh).
+    // It must not take the medium->high fallback used by Argon/Carbon, nor the
+    // xhigh->high fallback used by models without a native xhigh level.
+    for (effort, expected) in [
+        (ReasoningEffortLevel::Medium, "medium"),
+        (ReasoningEffortLevel::XHigh, "xhigh"),
+    ] {
+        let request = LLMRequest {
+            messages: vec![Message::user("test".to_string())].into(),
+            model: models::google::GEMINI_4_NEON.to_string(),
+            reasoning_effort: Some(effort),
+            ..Default::default()
+        };
+
+        let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+        let generation_config = gemini_request.generation_config.expect("generation_config should be present");
+        let thinking_config = generation_config
+            .thinking_config
+            .as_ref()
+            .expect("thinking_config should be present");
+        assert_eq!(
+            thinking_config.thinking_level.as_deref().unwrap(),
+            expected,
+            "Gemini 4 Neon should map {effort:?} reasoning effort to {expected} thinking level"
+        );
+    }
+}
+
+#[test]
 fn gemini4_argon_unsupported_levels_fall_back() {
     use vtcode_config::constants::models;
     use vtcode_config::types::ReasoningEffortLevel;
@@ -405,9 +440,9 @@ fn gemini4_argon_unsupported_levels_fall_back() {
     let provider = GeminiProvider::new("test-key".to_string());
 
     // Argon supports low/medium/high: minimal falls back to low (the API
-    // rejects `minimal`), and xhigh falls back to high (only Hydrogen
-    // supports xhigh) — the opposite sides of the preview-minimal and
-    // hydrogen-xhigh mappings.
+    // rejects `minimal`), and xhigh falls back to high (only Neon/Hydrogen
+    // support xhigh) — the opposite sides of the preview-minimal and
+    // neon-hydrogen xhigh mappings.
     for (effort, expected) in [
         (ReasoningEffortLevel::Minimal, "low"),
         (ReasoningEffortLevel::XHigh, "high"),
