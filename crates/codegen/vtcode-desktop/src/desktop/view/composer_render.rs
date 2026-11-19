@@ -347,7 +347,7 @@ impl DesktopView {
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
                         .icon(IconName::X)
-                        .desktop_elevated()
+                        .shadow_xs()
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
             });
@@ -359,7 +359,6 @@ impl DesktopView {
                         .accessibility_label(rust_i18n::t!("app.composer.queue").to_string())
                         .tooltip(rust_i18n::t!("app.composer.queue_tooltip").to_string())
                         .icon(IconName::ArrowUp)
-                        .when(can_queue, |button| button.desktop_elevated())
                         .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
                 );
             } else {
@@ -373,7 +372,6 @@ impl DesktopView {
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                         .icon(IconName::Square)
-                        .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
             }
@@ -385,7 +383,6 @@ impl DesktopView {
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
-                    .when(can_submit, |button| button.desktop_elevated())
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
             );
         }

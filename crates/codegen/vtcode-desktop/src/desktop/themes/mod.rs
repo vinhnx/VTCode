@@ -19,7 +19,7 @@ use vtcode_ui::theme::{self, UiThemeColors};
 
 mod custom;
 mod fills;
-pub(super) use fills::button_inset_edges;
+pub(super) use fills::{accented_button_shadows, button_inset_edges};
 mod hairline;
 pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,

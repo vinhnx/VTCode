@@ -101,6 +101,16 @@ pub(in crate::desktop) fn button_inset_edges() -> Vec<BoxShadow> {
     ]
 }
 
+/// A soft drop shadow and narrow, neutral face edges keep opaque accented buttons
+/// dimensional on both light and dark surfaces.
+pub(in crate::desktop) fn accented_button_shadows() -> Vec<BoxShadow> {
+    vec![
+        BoxShadow::new(px(0.), px(1.), black().opacity(0.24)).blur_radius(px(3.)),
+        BoxShadow::new(px(0.), px(1.), white().opacity(0.22)).inset(),
+        BoxShadow::new(px(0.), px(-1.), black().opacity(0.14)).inset(),
+    ]
+}
+
 /// Resting tab labels sit on canvas (thread strip, inspector) and directly on
 /// popover (attachment picker folder bar); the segmented track survives only
 /// as the dimming anchor. Dim the palette foreground toward the track as far

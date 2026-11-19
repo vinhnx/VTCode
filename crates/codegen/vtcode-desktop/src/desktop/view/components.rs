@@ -844,13 +844,19 @@ fn desktop_filled_button(id: impl Into<gpui_kit::ElementId>) -> Button {
 /// the Enter action. Paints the brand accent fill; never use for destructive
 /// actions even when destruction is the most likely choice.
 pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id).primary()
+    desktop_accented_button(id).primary()
 }
 
 /// Destructive commitment: irreversible or data-losing actions only. Pair with
 /// an explicit confirmation for consequential work.
 pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id).danger().shadow(themes::button_inset_edges())
+    desktop_accented_button(id).danger()
+}
+
+fn desktop_accented_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_filled_button(id)
+        .font_semibold()
+        .shadow(themes::accented_button_shadows())
 }
 
 /// Quiet header dismiss control: ghost X icon with an accessible name and a
@@ -939,13 +945,6 @@ impl<T: AnimationExt + Sized> FadeInExt for T {}
 pub(super) trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
-    /// Floating-layer elevation for a decision action that sits over content
-    /// (the composer send and its running-state cluster). In-layer actions
-    /// (dialog commits) take no drop shadow: the dialog already carries the
-    /// elevation. Gate at the call site with `.when(enabled, ...)` so
-    /// disabled buttons stay flat: Kit replays the instance style inside its
-    /// disabled arm, after its own shadow reset.
-    fn desktop_elevated(self) -> Self;
     /// Selected-option treatment for Ghost buttons: pressed-state metadata plus a stronger
     /// interaction fill when selected, quiet ghost otherwise. Every call site
     /// sits on a `secondary`-equivalent surface (settings panel, group-box fill), where
@@ -976,13 +975,6 @@ impl DesktopButtonExt for Button {
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
         self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
-    }
-
-    fn desktop_elevated(mut self) -> Self {
-        let existing = self.style().box_shadow.take().unwrap_or_default();
-        let mut elevated = self.shadow_xs();
-        elevated.style().box_shadow.get_or_insert_with(Vec::new).extend(existing);
-        elevated
     }
 }
 

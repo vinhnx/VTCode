@@ -40,18 +40,14 @@ fn button_tiers_keep_the_pointing_hand_cursor() {
 }
 
 #[test]
-fn secondary_and_danger_buttons_keep_their_inset_edges() {
-    for mut button in [
-        desktop_secondary_button("inset-secondary"),
-        desktop_danger_button("inset-danger"),
-    ] {
-        let edges = button.style().box_shadow.as_ref().expect("filled buttons have inset edges");
-        assert_eq!(edges.len(), 2);
-        assert!(edges.iter().all(|edge| edge.inset));
-        assert_eq!(edges[0].offset.y, px(1.));
-        assert_eq!(edges[1].offset.y, px(-0.5));
-        assert!(edges.iter().all(|edge| edge.spread_radius == px(2.)));
-    }
+fn secondary_buttons_keep_their_inset_edges() {
+    let mut button = desktop_secondary_button("inset-secondary");
+    let edges = button.style().box_shadow.as_ref().expect("secondary buttons have inset edges");
+    assert_eq!(edges.len(), 2);
+    assert!(edges.iter().all(|edge| edge.inset));
+    assert_eq!(edges[0].offset.y, px(1.));
+    assert_eq!(edges[1].offset.y, px(-0.5));
+    assert!(edges.iter().all(|edge| edge.spread_radius == px(2.)));
 
     assert!(desktop_ghost_button("quiet-ghost").style().box_shadow.is_none());
 }
@@ -61,7 +57,7 @@ fn disabled_buttons_drop_instance_shadows() {
     for button in [
         desktop_secondary_button("disabled-secondary"),
         desktop_danger_button("disabled-danger"),
-        desktop_primary_button("disabled-floating").desktop_elevated(),
+        desktop_primary_button("disabled-primary"),
     ] {
         let mut enabled = button.desktop_disabled(false);
         assert!(enabled.style().box_shadow.as_ref().is_some_and(|shadows| !shadows.is_empty()));
@@ -73,22 +69,23 @@ fn disabled_buttons_drop_instance_shadows() {
 }
 
 #[test]
-fn primary_buttons_use_kit_fills_and_only_floating_actions_have_neutral_elevation() {
-    let mut resting = desktop_primary_button("primary-resting");
-    let mut disabled = desktop_primary_button("primary-disabled").desktop_disabled(true);
-    for button in [&mut resting, &mut disabled] {
-        assert!(button.style().background.is_none(), "Kit owns the primary state fills");
-        assert!(button.style().box_shadow.as_ref().is_none_or(Vec::is_empty), "in-layer primaries are flat");
-    }
-    assert_eq!(disabled.style().mouse_cursor, Some(CursorStyle::Arrow));
-
-    let mut floating = desktop_primary_button("primary-floating").desktop_elevated();
-    let shadows = floating.style().box_shadow.as_ref().expect("floating primary has elevation");
-    let [shadow] = shadows.as_slice() else {
-        panic!("expected one neutral drop shadow");
+fn primary_and_danger_share_weight_and_soft_neutral_shadows() {
+    let mut button = desktop_primary_button("primary-resting");
+    let mut danger = desktop_danger_button("danger-resting");
+    assert_eq!(button.style().text.font_weight, danger.style().text.font_weight);
+    assert!(danger.style().background.is_none(), "Kit owns the danger state fills");
+    assert_eq!(button.style().box_shadow, danger.style().box_shadow);
+    assert_eq!(button.style().text.font_weight, Some(gpui_kit::FontWeight::SEMIBOLD));
+    assert!(button.style().background.is_none(), "Kit owns the primary state fills");
+    let shadows = button.style().box_shadow.as_ref().expect("primary has shadows");
+    let [drop, highlight, shade] = shadows.as_slice() else {
+        panic!("expected one drop shadow and two face edges");
     };
-    assert!(!shadow.inset);
-    assert_eq!(shadow.color.s, 0.0);
+    assert!(!drop.inset);
+    assert!(drop.blur_radius > px(0.));
+    assert!(highlight.inset && shade.inset);
+    assert!(highlight.offset.y > px(0.) && shade.offset.y < px(0.));
+    assert!(shadows.iter().all(|shadow| shadow.color.s == 0.0 && shadow.color.a < 0.30));
 }
 
 #[gpui_kit::test]
