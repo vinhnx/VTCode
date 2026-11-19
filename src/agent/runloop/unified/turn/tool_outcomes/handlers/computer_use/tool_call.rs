@@ -273,6 +273,53 @@ mod tests {
         }
     }
 
+    // The headless harness auto-allows before reaching the interactive
+    // prompt, so the scope-prompt skip itself is not headless-observable
+    // (verified by mutation: proceed-without-session-skip passes with and
+    // without the skip). The headless-pinned properties are that validation
+    // proceeds by default (usability pin, not a skip proof) and that denies
+    // still apply, since the skip sits after every deny check.
+    #[tokio::test]
+    async fn computer_use_validation_proceeds_by_default() {
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.session.set_skip_confirmations(false);
+        let result = super::super::super::validation::validate_tool_call(
+            &mut ctx,
+            "proceed-1",
+            "computer_use",
+            &serde_json::json!({"task": "take a screenshot"}),
+        )
+        .await
+        .expect("validate");
+        assert!(
+            !matches!(result, super::super::super::types::ValidationResult::Blocked),
+            "default validation must proceed for computer_use"
+        );
+    }
+
+    #[tokio::test]
+    async fn computer_use_cached_denial_still_blocks() {
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.tool_permission_cache
+            .write()
+            .await
+            .cache_grant_tool("computer_use", vtcode_core::acp::PermissionGrant::Denied);
+        let result = super::super::super::validation::validate_tool_call(
+            &mut ctx,
+            "deny-1",
+            "computer_use",
+            &serde_json::json!({"task": "take a screenshot"}),
+        )
+        .await
+        .expect("validate");
+        assert!(
+            matches!(result, super::super::super::types::ValidationResult::Blocked),
+            "cached denial must still block computer_use"
+        );
+    }
+
     #[tokio::test]
     async fn tool_call_headless_denial_cancels_before_launch() {
         let mut backing = super::super::super::tests::TestContextBacking::new().await;

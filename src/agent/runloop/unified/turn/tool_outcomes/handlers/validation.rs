@@ -300,8 +300,23 @@ pub(crate) async fn validate_tool_call<'a>(
 
     // Ensure tool permission. The PreToolUse hook phase already ran above;
     // forwarding it here prevents a second hook invocation.
+    let mut permission_context =
+        build_tool_permissions_context_with_safety(ctx, safety_approval_justification.as_deref());
+    if canonical_tool_name == computer_use::TOOL_NAME {
+        // Single approval per turn: skip only the generic scope prompt here.
+        // The load-bearing approval is the concrete proposed-action batch
+        // review performed later in `handle_computer_use_tool_call`, where
+        // the user sees exactly what would execute. Deny checks ahead of
+        // the skip (PreToolUse hook, cache, policy, permission, full-auto,
+        // auto-permission Block) still apply at validation; the
+        // PermissionRequest-hook and approval-policy prompt decisions are
+        // re-evaluated at the batch approval instead (after proposal cost).
+        // Safety-gateway-flagged calls still prompt. Only the unflagged
+        // interactive prompt is skipped.
+        permission_context.skip_confirmations = true;
+    }
     let permission_result = ensure_tool_permission_with_call_id(
-        build_tool_permissions_context_with_safety(ctx, safety_approval_justification.as_deref()),
+        permission_context,
         &canonical_tool_name,
         Some(effective_args),
         Some(tool_call_id),
