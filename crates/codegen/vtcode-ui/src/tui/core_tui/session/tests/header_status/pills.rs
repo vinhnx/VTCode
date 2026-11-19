@@ -245,3 +245,33 @@ fn ultrafast_header_badge_respects_narrow_terminal_widths_and_can_be_disabled() 
     session.handle_command(InlineCommand::SetHeaderContext { context: Box::new(context) });
     assert!(!header_line_text(&mut session).contains("ULTRAFAST"));
 }
+#[test]
+fn computer_use_header_badge_marks_the_enabled_runtime() {
+    let mut session = fresh_session();
+    session.header_context.computer_use = Some(format!("{}on", ui::HEADER_COMPUTER_USE_PREFIX));
+    let line = session.header_title_line();
+    let badge = line
+        .spans
+        .iter()
+        .find(|span| span.content == " COMPUTER USE ")
+        .expect("computer-use badge");
+
+    let colors_enabled = vtcode_commons::color_policy::color_output_enabled();
+    let (foreground, background) = if colors_enabled {
+        (Color::Rgb(0, 0, 0), Color::Rgb(0xD9, 0x9A, 0x4E))
+    } else {
+        (Color::Reset, Color::Reset)
+    };
+    assert_eq!(badge.style.fg, Some(foreground));
+    assert_eq!(badge.style.bg, Some(background));
+    assert!(header_line_text(&mut session).contains(" COMPUTER USE "));
+}
+#[test]
+fn computer_use_header_badge_hides_without_an_enabled_switch() {
+    for raw in [None, Some(""), Some("unavailable"), Some("Computer use: unavailable")] {
+        let mut session = fresh_session();
+        session.header_context.computer_use = raw.map(str::to_string);
+        let line = line_text(&session.header_title_line());
+        assert!(!line.contains("COMPUTER USE"), "raw={raw:?} must hide the badge, got: {line}");
+    }
+}

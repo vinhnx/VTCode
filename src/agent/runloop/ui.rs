@@ -280,6 +280,9 @@ pub(crate) async fn build_inline_header_context(
     let service_tier = vt_cfg
         .and_then(|cfg| super::unified::fast_mode::effective_speed_label(config, cfg))
         .map(|label| format!("{}{}", ui::HEADER_SERVICE_TIER_PREFIX, label));
+    let computer_use = vt_cfg
+        .filter(|cfg| cfg.computer_use.enabled)
+        .map(|_| format!("{}{}", ui::HEADER_COMPUTER_USE_PREFIX, "on"));
 
     let trust_value = match session_bootstrap.acp_workspace_trust {
         Some(level) => {
@@ -348,6 +351,7 @@ pub(crate) async fn build_inline_header_context(
         git: chain_entries.get(1).cloned().unwrap_or_default(),
         reasoning,
         service_tier,
+        computer_use,
         workspace_trust: trust_value,
         tools: chain_entries.first().cloned().unwrap_or_default(),
         mcp: mcp_value,
@@ -559,5 +563,83 @@ usage_tips = ["Keep requests focused"]
         assert_eq!(format_strategy_label("bandit"), "Bandit");
         assert_eq!(format_strategy_label("actor-critic"), "Actor-Critic");
         assert_eq!(format_strategy_label("ACTOR_CRITIC"), "Actor-Critic");
+    }
+
+    #[tokio::test]
+    async fn header_builder_marks_enabled_computer_use() {
+        use super::{CoreAgentConfig, SessionBootstrap, VTCodeConfig, build_inline_header_context};
+        use std::collections::BTreeMap;
+        use vtcode_core::config::core::PromptCachingConfig;
+        use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
+        use vtcode_core::core::agent::snapshots::{
+            DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+        };
+
+        let dir = tempfile::tempdir().expect("workspace");
+        let config = CoreAgentConfig {
+            model: "test-model".to_string(),
+            api_key: String::new(),
+            provider: "openai".to_string(),
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            workspace: dir.path().to_path_buf(),
+            verbose: false,
+            quiet: false,
+            theme: String::new(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        };
+        let bootstrap = SessionBootstrap::default();
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.computer_use.enabled = true;
+        let context = build_inline_header_context(
+            &config,
+            Some(&vt_cfg),
+            &bootstrap,
+            "OpenAI".to_string(),
+            "test-model".to_string(),
+            1000,
+            "high".to_string(),
+        )
+        .await
+        .expect("header context");
+        assert_eq!(context.computer_use.as_deref(), Some("Computer use: on"));
+
+        vt_cfg.computer_use.enabled = false;
+        let context = build_inline_header_context(
+            &config,
+            Some(&vt_cfg),
+            &bootstrap,
+            "OpenAI".to_string(),
+            "test-model".to_string(),
+            1000,
+            "high".to_string(),
+        )
+        .await
+        .expect("header context");
+        assert_eq!(context.computer_use, None);
+
+        let context = build_inline_header_context(
+            &config,
+            None,
+            &bootstrap,
+            "OpenAI".to_string(),
+            "test-model".to_string(),
+            1000,
+            "high".to_string(),
+        )
+        .await
+        .expect("header context");
+        assert_eq!(context.computer_use, None);
     }
 }

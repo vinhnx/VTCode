@@ -15,8 +15,8 @@ use super::flow::{
 };
 use super::management::{handle_local_command, handle_mcp_command, handle_secret_command};
 use super::models::{
-    AgentDefinitionScope, AgentManagerAction, LogFormat, LogScope, SlashCommandOutcome, SubprocessManagerAction,
-    ThemePaletteMode,
+    AgentDefinitionScope, AgentManagerAction, ComputerUseAction, LogFormat, LogScope, SlashCommandOutcome,
+    SubprocessManagerAction, ThemePaletteMode,
 };
 use super::parsing::{self, parse_compact_command, parse_session_log_export_format};
 use super::rendering::{render_help, render_theme_list};
@@ -40,6 +40,41 @@ fn handle_fast_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 // new command requires a handler and a match-arm registration, and that arm is
 // what keeps the handler live for rustc — no `#[allow(dead_code)]` is needed,
 // and adding one would hide a handler whose arm was dropped.
+
+fn handle_computer_use_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    const USAGE: &str = "Usage: /computer-use [on|off|status|target <absolute-path>|run <task>]";
+    let mut tokens = args.split_whitespace();
+    let action = match tokens.next().map(str::to_ascii_lowercase).as_deref() {
+        None => ComputerUseAction::Toggle,
+        Some("on") if tokens.next().is_none() => ComputerUseAction::On,
+        Some("off") if tokens.next().is_none() => ComputerUseAction::Off,
+        Some("status") if tokens.next().is_none() => ComputerUseAction::Status,
+        Some("target") => match tokens.next() {
+            Some(path) if tokens.next().is_none() => ComputerUseAction::SetTarget { path: path.to_string() },
+            _ => {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+        },
+        Some("run") => {
+            let trimmed = args.trim_start();
+            let task = trimmed
+                .find(char::is_whitespace)
+                .map(|split| trimmed[split..].trim())
+                .unwrap_or("");
+            if task.is_empty() {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            ComputerUseAction::Run { task: task.to_string() }
+        }
+        _ => {
+            renderer.line(MessageStyle::Error, USAGE)?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+    Ok(SlashCommandOutcome::ComputerUse { action })
+}
 
 fn handle_donate_command(renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     renderer.line(
@@ -560,6 +595,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "local" => handle_local_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "fast" => handle_fast_command(args, renderer),
+        "computer-use" => handle_computer_use_command(args, renderer),
         "mode" => handle_mode_command(args),
         "files" => handle_files_command(args, renderer),
         "share" => handle_share_command(args, renderer),

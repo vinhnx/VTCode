@@ -245,6 +245,11 @@ pub struct InlineHeaderContext {
     /// Configured native OpenAI `service_tier` (`Tier: <name>`), when set.
     /// Rendered in the header summary only when present; `None` hides it.
     pub service_tier: Option<String>,
+    /// Computer-use master switch (`Computer use: on`), when enabled.
+    /// Rendered as a premium header badge only when present; `None` hides
+    /// it. Mirrors the switch, not target/provider readiness: turns still
+    /// fail closed until a target is set on a supporting provider.
+    pub computer_use: Option<String>,
     pub workspace_trust: String,
     pub tools: String,
     pub mcp: String,
@@ -275,6 +280,7 @@ impl Default for InlineHeaderContext {
             reasoning: "unavailable".to_string(),
             reasoning_stage: None,
             service_tier: None,
+            computer_use: None,
             workspace_trust: "Trust: unavailable".to_string(),
             tools: "Tools: unavailable".to_string(),
             mcp: "MCP: unavailable".to_string(),

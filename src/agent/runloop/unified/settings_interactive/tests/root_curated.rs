@@ -65,6 +65,7 @@ fn root_settings_contains_only_curated_groups_and_global_actions() {
             "Tools & Integrations",
             "Context & Memory",
             "Interface & Terminal",
+            "Computer Use",
             "Performance & Diagnostics",
             "Advanced settings",
             "Actions",

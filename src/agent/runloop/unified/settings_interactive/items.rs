@@ -144,6 +144,21 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         ],
     },
     CuratedSettingsGroup {
+        id: "computer_use",
+        title: "Computer Use",
+        description: "Enable the computer-use runtime and tune its browser target and limits.",
+        // browser_build stays out: None-default free-form paths render
+        // nothing in curated groups (see curated_setting_item). It is set
+        // via /computer-use target <absolute-path>.
+        paths: &[
+            "computer_use.enabled",
+            "computer_use.image",
+            "computer_use.decisions_review",
+            "computer_use.max_actions_per_turn",
+            "computer_use.turn_timeout_secs",
+        ],
+    },
+    CuratedSettingsGroup {
         id: "performance_diagnostics",
         title: "Performance & Diagnostics",
         description: "Balance runtime limits, caching, timeouts, and diagnostics.",

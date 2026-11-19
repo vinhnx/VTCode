@@ -16,9 +16,9 @@ mod rendering;
 use dispatch::normalize_command_key;
 pub(crate) use dispatch::{execute_command_skill_by_name, handle_slash_command};
 pub(crate) use models::{
-    AgentDefinitionScope, AgentManagerAction, CompactConversationCommand, LocalServerAction, LogFormat, LogScope,
-    McpCommandAction, OAuthProviderAction, SecretCommandAction, SessionLogExportFormat, SessionPaletteMode,
-    SlashCommandOutcome, StatuslineTargetMode, SubprocessManagerAction, ThemePaletteMode,
+    AgentDefinitionScope, AgentManagerAction, CompactConversationCommand, ComputerUseAction, LocalServerAction,
+    LogFormat, LogScope, McpCommandAction, OAuthProviderAction, SecretCommandAction, SessionLogExportFormat,
+    SessionPaletteMode, SlashCommandOutcome, StatuslineTargetMode, SubprocessManagerAction, ThemePaletteMode,
 };
 pub(crate) use rendering::render_theme_list;
 

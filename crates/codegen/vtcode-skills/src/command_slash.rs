@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn prefix_matches_are_sorted_alphabetically() {
         let names = names_for("c");
-        assert_eq!(names, vec!["clear", "compact", "config", "copy"]);
+        assert_eq!(names, vec!["clear", "compact", "computer-use", "config", "copy"]);
     }
 
     #[test]

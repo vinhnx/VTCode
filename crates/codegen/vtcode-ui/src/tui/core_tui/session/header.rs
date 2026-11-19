@@ -259,6 +259,13 @@ impl Session {
             spans.push(self.header_service_tier_span(&tier));
         }
 
+        if self.header_computer_use_short_value().is_some() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(" · ".to_owned(), self.header_secondary_style()));
+            }
+            spans.push(self.header_computer_use_span());
+        }
+
         spans
     }
 
@@ -308,6 +315,13 @@ impl Session {
                 spans.push(Span::raw(" "));
             }
             spans.push(self.header_service_tier_span(&tier));
+        }
+
+        if self.header_computer_use_short_value().is_some() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
+            }
+            spans.push(self.header_computer_use_span());
         }
 
         if spans.is_empty() {
@@ -419,6 +433,26 @@ impl Session {
         let raw = self.header_context.service_tier.as_deref()?;
         let tier = Self::strip_prefix(raw, ui::HEADER_SERVICE_TIER_PREFIX).trim();
         (!tier.is_empty() && !tier.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)).then(|| tier.to_owned())
+    }
+
+    fn header_computer_use_short_value(&self) -> Option<String> {
+        let raw = self.header_context.computer_use.as_deref()?;
+        let state = Self::strip_prefix(raw, ui::HEADER_COMPUTER_USE_PREFIX).trim();
+        (!state.is_empty() && !state.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)).then(|| state.to_owned())
+    }
+
+    /// Premium badge for the computer-use master switch. Presence means the
+    /// switch is on; the header has exactly one badge idiom, so an enabled
+    /// runtime borrows the same gold treatment as the premium speed tiers.
+    fn header_computer_use_span(&self) -> Span<'static> {
+        Span::styled(
+            " COMPUTER USE ",
+            ultrafast_badge_style(
+                vtcode_commons::color_policy::current_color_output_policy().enabled,
+                crate::theme::is_safe_colors_only(),
+                crate::theme::is_bold_bright_mode(),
+            ),
+        )
     }
 
     fn header_service_tier_span(&self, tier: &str) -> Span<'static> {

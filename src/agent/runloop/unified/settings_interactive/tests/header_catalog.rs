@@ -88,6 +88,17 @@ fn desktop_config_catalog_reuses_cli_advanced_fields_and_curated_groups() {
         .expect("unset documented CLI setting");
     assert!(optional_storage.type_name.contains("string"));
     assert!(optional_storage.editable, "typed optional fields can be initialized from Desktop");
+    let master = fields
+        .iter()
+        .find(|field| field.path == "computer_use.enabled")
+        .expect("computer-use master switch");
+    assert_eq!(master.group, "Computer Use");
+    assert!(master.editable, "desktop Switch writes the master switch");
+    let target = fields
+        .iter()
+        .find(|field| field.path == "computer_use.browser_build")
+        .expect("browser target field");
+    assert!(target.editable, "unset target can be initialized from Desktop");
     let theme = fields
         .iter()
         .find(|field| field.path == "agent.theme")
