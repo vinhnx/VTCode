@@ -33,10 +33,12 @@ use std::time::Duration;
 /// (`vtcode-config` depends on this crate).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RejectedCredentialSource {
-    /// Process environment variable; carries the variable name.
-    Environment { env_var: String },
-    /// Workspace `.env` file.
-    WorkspaceDotEnv,
+    /// Process environment variable; carries the variable name when known.
+    /// `None` (a fully custom variable) keeps the source-level wording
+    /// rather than guessing the provider default.
+    Environment { env_var: Option<String> },
+    /// Workspace `.env` file; carries the variable name when known.
+    WorkspaceDotEnv { env_var: Option<String> },
     /// OS keyring / encrypted file storage.
     SecureStorage,
 }
@@ -339,10 +341,15 @@ impl ErrorCategory {
         }
         match rejected_source {
             Some(RejectedCredentialSource::Environment { env_var }) => vec![format!(
-                "Authentication failed for {provider_label}. The rejected key came from `{env_var}` in the process environment, which shadows the workspace `.env` file and secure storage — check the export, or unset it so the next source applies."
+                "Authentication failed for {provider_label}. The rejected key came from {} in the process environment, which shadows the workspace `.env` file and secure storage — check the export, or unset it so the next source applies.",
+                env_var.map_or_else(|| "a custom variable".to_string(), |name| format!("`{name}`"))
             )],
-            Some(RejectedCredentialSource::WorkspaceDotEnv) => vec![format!(
-                "Authentication failed for {provider_label}. The rejected key came from the workspace `.env` file — check the value there."
+            Some(RejectedCredentialSource::WorkspaceDotEnv { env_var }) => vec![format!(
+                "Authentication failed for {provider_label}. The rejected key came from {} — check the value there.",
+                env_var.map_or_else(
+                    || "the workspace `.env` file".to_string(),
+                    |name| format!("`{name}` in the workspace `.env` file")
+                )
             )],
             Some(RejectedCredentialSource::SecureStorage) => vec![format!(
                 "Authentication failed for {provider_label}. The stored API key was rejected — run /secret add {provider_key} to replace it with a valid key."

@@ -404,12 +404,20 @@ fn auth_recovery_guidance_names_each_rejected_source() {
             "The stored API key was rejected — run /secret add stepfun to replace it with a valid key.",
         ),
         (
-            RejectedCredentialSource::WorkspaceDotEnv,
+            RejectedCredentialSource::WorkspaceDotEnv { env_var: Some("STEPFUN_API_KEY".to_string()) },
+            "The rejected key came from `STEPFUN_API_KEY` in the workspace `.env` file — check the value there.",
+        ),
+        (
+            RejectedCredentialSource::Environment { env_var: Some("STEPFUN_API_KEY".to_string()) },
+            "The rejected key came from `STEPFUN_API_KEY` in the process environment, which shadows the workspace `.env` file and secure storage",
+        ),
+        (
+            RejectedCredentialSource::WorkspaceDotEnv { env_var: None },
             "The rejected key came from the workspace `.env` file — check the value there.",
         ),
         (
-            RejectedCredentialSource::Environment { env_var: "STEPFUN_API_KEY".to_string() },
-            "The rejected key came from `STEPFUN_API_KEY` in the process environment, which shadows the workspace `.env` file and secure storage",
+            RejectedCredentialSource::Environment { env_var: None },
+            "The rejected key came from a custom variable in the process environment",
         ),
     ] {
         let guidance =

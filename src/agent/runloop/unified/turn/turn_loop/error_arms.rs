@@ -120,24 +120,18 @@ pub(super) async fn handle_response_parse_error(
     Err(err)
 }
 
-/// Map credential discovery to the auth-guidance source label. Env reports
-/// the exact variable read (the alternate name when discovery used it);
-/// OAuth, managed, and local sources name no key, so they stay `None` and
-/// the guidance keeps its source-neutral wording.
-fn rejected_credential_source(
-    provider: &vtcode_core::config::models::Provider,
-    detail: Option<&DiscoveredProvider>,
-) -> Option<RejectedCredentialSource> {
+/// Map credential discovery to the auth-guidance source label. Env and
+/// workspace sources report the exact variable read (the alternate name
+/// when discovery used it); OAuth, managed, and local sources name no key,
+/// so they stay `None` and the guidance keeps its source-neutral wording.
+fn rejected_credential_source(detail: Option<&DiscoveredProvider>) -> Option<RejectedCredentialSource> {
     let detail = detail?;
+    // Pass the discovered name through untouched: falling back to the
+    // provider default here would misname fully custom variables.
+    let env_var = detail.env_var.map(str::to_string);
     match detail.source {
-        CredentialSource::Env => {
-            let env_var = detail
-                .env_var
-                .map(str::to_string)
-                .unwrap_or_else(|| provider.default_api_key_env().to_string());
-            Some(RejectedCredentialSource::Environment { env_var })
-        }
-        CredentialSource::Workspace => Some(RejectedCredentialSource::WorkspaceDotEnv),
+        CredentialSource::Env => Some(RejectedCredentialSource::Environment { env_var: env_var.clone() }),
+        CredentialSource::Workspace => Some(RejectedCredentialSource::WorkspaceDotEnv { env_var }),
         CredentialSource::SecureStorage => Some(RejectedCredentialSource::SecureStorage),
         CredentialSource::OAuth | CredentialSource::ManagedAuth | CredentialSource::Local => None,
     }
@@ -238,7 +232,7 @@ pub(super) async fn handle_llm_request_error(
                         Some(&turn_processing_ctx.config.workspace),
                         storage_mode,
                     );
-                    let rejected_source = rejected_credential_source(&p, detail.as_ref());
+                    let rejected_source = rejected_credential_source(detail.as_ref());
                     (
                         p.label().to_string(),
                         p.as_ref().to_string(),
@@ -301,36 +295,45 @@ mod tests {
     fn rejected_source_names_each_credential_origin() {
         let provider = openai();
         assert_eq!(
-            rejected_credential_source(&provider, Some(&detail(provider, CredentialSource::SecureStorage))),
+            rejected_credential_source(Some(&detail(provider, CredentialSource::SecureStorage))),
             Some(RejectedCredentialSource::SecureStorage)
         );
         assert_eq!(
-            rejected_credential_source(&provider, Some(&detail(provider, CredentialSource::Workspace))),
-            Some(RejectedCredentialSource::WorkspaceDotEnv)
+            rejected_credential_source(Some(&DiscoveredProvider {
+                provider,
+                source: CredentialSource::Workspace,
+                env_var: Some("OPENAI_API_KEY"),
+            })),
+            Some(RejectedCredentialSource::WorkspaceDotEnv { env_var: Some("OPENAI_API_KEY".to_string()) })
         );
         assert_eq!(
-            rejected_credential_source(
-                &provider,
-                Some(&DiscoveredProvider {
-                    provider,
-                    source: CredentialSource::Env,
-                    env_var: Some("OPENAI_API_KEY"),
-                })
-            ),
-            Some(RejectedCredentialSource::Environment { env_var: "OPENAI_API_KEY".to_string() })
+            rejected_credential_source(Some(&DiscoveredProvider {
+                provider,
+                source: CredentialSource::Env,
+                env_var: Some("OPENAI_API_KEY"),
+            })),
+            Some(RejectedCredentialSource::Environment { env_var: Some("OPENAI_API_KEY".to_string()) })
         );
-        // Primary env vars carry no alternate name: fall back to the default.
-        assert_eq!(
-            rejected_credential_source(&provider, Some(&detail(provider, CredentialSource::Env))),
-            Some(RejectedCredentialSource::Environment { env_var: "OPENAI_API_KEY".to_string() })
-        );
+        // Unknown names stay unknown: never guess the provider default.
+        for source in [CredentialSource::Env, CredentialSource::Workspace] {
+            let mapped = rejected_credential_source(Some(&detail(provider, source))).expect("mapped");
+            match (source, mapped) {
+                (CredentialSource::Env, RejectedCredentialSource::Environment { env_var }) => {
+                    assert_eq!(env_var, None)
+                }
+                (CredentialSource::Workspace, RejectedCredentialSource::WorkspaceDotEnv { env_var }) => {
+                    assert_eq!(env_var, None)
+                }
+                (source, mapped) => panic!("wrong mapping for {source:?}: {mapped:?}"),
+            }
+        }
         for source in [
             CredentialSource::OAuth,
             CredentialSource::ManagedAuth,
             CredentialSource::Local,
         ] {
-            assert_eq!(rejected_credential_source(&provider, Some(&detail(provider, source))), None);
+            assert_eq!(rejected_credential_source(Some(&detail(provider, source))), None);
         }
-        assert_eq!(rejected_credential_source(&provider, None), None);
+        assert_eq!(rejected_credential_source(None), None);
     }
 }
