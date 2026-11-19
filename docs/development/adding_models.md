@@ -21,10 +21,29 @@ such as Meta Muse on OpenRouter, add generated metadata to both `docs/models.jso
 `crates/codegen/vtcode-config/build_data/openrouter_models.json`; keep the official Meta provider's bare model IDs
 separate from OpenRouter's `meta/...` namespace.
 
+**Cross-provider mirroring rule (always):** when you add a model to an official/native provider, also mirror it into
+**Merge Gateway** and **OpenRouter** — the native-provider entry alone is not a complete model addition.
+
+- **Merge Gateway:** add a curated `vendor/model` route to
+  `crates/codegen/vtcode-config/src/constants/models/merge_gateway.rs` and `docs/models.json` (the `merge-gateway`
+  section), and list it in the curated-models table of `docs/providers/merge-gateway.md`. Gateway IDs are route IDs,
+  not the bare native model ID.
+- **OpenRouter:** add the namespaced `vendor/model` entry under `docs/models.json` → `"openrouter" > "models"` with a
+  `vtcode` metadata block (mirror it in `build_data/openrouter_models.json`), plus the `ModelId` variant and
+  `Provider::OpenRouter` arm. Do not hand-edit generated OpenRouter mapping files (see the `adding-llm-providers`
+  skill, Pathway A).
+- Verify the route actually exists before adding it; look up context window, reasoning, tool calling, modalities, and
+  cost in `docs/models.json`, `docs/providers/<provider>.md`, and `build_data/openrouter_models.json`. Never invent a
+  gateway or marketplace route.
+
 ## Quick Checklist
 
 - [ ] Add to the provider constants module (for example, NVIDIA uses `constants/models/nvidia.rs`)
 - [ ] Add to model metadata (`docs/models.json`)
+- [ ] Mirror the model into Merge Gateway (`constants/models/merge_gateway.rs`, `docs/models.json`,
+      `docs/providers/merge-gateway.md`)
+- [ ] Mirror the model into OpenRouter (`docs/models.json` openrouter section + `build_data/openrouter_models.json`,
+      `ModelId` variant, `Provider::OpenRouter` arm)
 - [ ] For a gateway provider, document the default endpoint, API-key variable, curated picker routes, and pass-through
       rules for arbitrary provider/model IDs
 - [ ] If the model is OpenRouter-only, mirror its metadata in `build_data/openrouter_models.json`
