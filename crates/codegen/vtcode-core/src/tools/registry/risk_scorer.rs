@@ -259,6 +259,11 @@ impl ToolRiskScorer {
             // of the low-risk auto-approval path even in trusted workspaces.
             tools::LOAD_SKILL => 60,
 
+            // Computer use drives real input targets. Keep it out of the
+            // low-risk auto-approval path in every workspace: the per-turn
+            // human approval must never become an automatic Allow.
+            "computer_use" => 60,
+
             // PTY/interactive commands (base: 35)
             tools::CREATE_PTY_SESSION | tools::RUN_PTY_CMD | tools::SEND_PTY_INPUT | tools::UNIFIED_EXEC => 35,
 
@@ -289,6 +294,17 @@ mod tests {
         assert!(RiskLevel::Low < RiskLevel::Medium);
         assert!(RiskLevel::Medium < RiskLevel::High);
         assert!(RiskLevel::High < RiskLevel::Critical);
+    }
+
+    #[test]
+    fn computer_use_never_scores_low_risk() {
+        // should_auto_approve_by_risk hardcodes Trusted, so these are the
+        // load-bearing contexts for the auto-approval gate.
+        for trust in [WorkspaceTrust::Trusted, WorkspaceTrust::Untrusted] {
+            let ctx = ToolRiskContext::new("computer_use".to_string(), ToolSource::Internal, trust);
+            let risk = ToolRiskScorer::calculate_risk(&ctx);
+            assert!(risk >= RiskLevel::Medium, "{trust:?} scored {risk:?}");
+        }
     }
 
     #[test]

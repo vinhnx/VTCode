@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use crate::acp::AgentClientProtocolConfig;
 use crate::codex::{FileOpener, HistoryConfig, TuiConfig};
+use crate::computer_use::ComputerUseConfig;
 use crate::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
@@ -227,6 +228,10 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub webmcp: WebmcpConfig,
 
+    /// Opt-in computer-use runtime configuration
+    #[serde(default)]
+    pub computer_use: ComputerUseConfig,
+
     /// Agent Client Protocol configuration
     #[serde(default)]
     pub acp: AgentClientProtocolConfig,
@@ -314,6 +319,7 @@ impl Default for VTCodeConfig {
             prompt_cache: PromptCachingConfig::default(),
             mcp: McpClientConfig::default(),
             webmcp: WebmcpConfig::default(),
+            computer_use: ComputerUseConfig::default(),
             acp: AgentClientProtocolConfig::default(),
             hooks: HooksConfig::default(),
             model: ModelConfig::default(),
@@ -344,6 +350,16 @@ impl VTCodeConfig {
         self.prompt_cache.validate().context("Invalid prompt_cache configuration")?;
 
         self.webmcp.validate().context("Invalid webmcp configuration")?;
+
+        self.computer_use.validate().context("Invalid computer_use configuration")?;
+
+        self.permissions.validate().context("Invalid permissions configuration")?;
+
+        if let Some(agent_permissions) = &self.runtime_agent_permissions {
+            agent_permissions
+                .validate()
+                .context("Invalid runtime_agent_permissions configuration")?;
+        }
 
         self.agent
             .validate_llm_params()

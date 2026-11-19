@@ -1,4 +1,5 @@
 use crate::env_helpers::default_enabled;
+use anyhow::{Result, bail};
 use serde::Deserializer;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
@@ -57,6 +58,25 @@ impl AgentPermissionsConfig {
             deny: Vec::new(),
         }
     }
+
+    /// Reject rules that would silently auto-approve computer use.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the allow list names the computer-use tool:
+    /// its approval stays per-turn by design.
+    pub fn validate(&self) -> Result<()> {
+        reject_computer_use_allow(&self.allow, "agent allow rules")
+    }
+}
+
+/// Reject allow rules matching the computer-use tool exactly as the rule
+/// compiler normalizes them, so no spelling smuggles it past validation.
+fn reject_computer_use_allow(rules: &[String], owner: &str) -> Result<()> {
+    if rules.iter().any(|rule| normalize_permission_rule(rule) == "computer_use") {
+        bail!("{owner} must not allowlist 'computer_use': computer-use approval is always per-turn");
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +232,18 @@ pub struct PermissionsConfig {
     /// Default: 300 seconds (5 minutes)
     #[serde(default = "default_cache_ttl_seconds")]
     pub cache_ttl_seconds: u64,
+}
+
+impl PermissionsConfig {
+    /// Reject rules that would silently auto-approve computer use.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the allow list names the computer-use tool:
+    /// its approval stays per-turn by design.
+    pub fn validate(&self) -> Result<()> {
+        reject_computer_use_allow(&self.allow, "permissions.allow")
+    }
 }
 
 /// Classifier-backed auto permission review configuration.
@@ -420,6 +452,24 @@ impl Default for PermissionsConfig {
 #[cfg(test)]
 mod tests {
     use super::{AgentPermissionsConfig, PermissionDefault, PermissionsConfig};
+
+    #[test]
+    fn computer_use_cannot_join_allow_lists() {
+        for spelling in ["computer_use", " Computer_Use ", "COMPUTER_USE"] {
+            let global: PermissionsConfig =
+                toml::from_str(&format!(r#"allow = ["{spelling}"]"#)).expect("global permissions");
+            let error = global.validate().unwrap_err();
+            assert!(error.to_string().contains("per-turn"), "{spelling}: {error:#}");
+
+            let agent: AgentPermissionsConfig =
+                toml::from_str(&format!("default = \"ask\"\nallow = [\"{spelling}\"]")).expect("agent permissions");
+            agent.validate().unwrap_err();
+        }
+        let clean: PermissionsConfig =
+            toml::from_str("allow = [\"read\"]\nask = [\"computer_use\"]\ndeny = [\"computer_use\"]")
+                .expect("clean permissions");
+        clean.validate().expect("ask/deny lists may name computer use");
+    }
 
     #[test]
     fn parses_agent_permission_defaults_and_empty_buckets() {

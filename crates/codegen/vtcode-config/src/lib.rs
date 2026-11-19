@@ -51,6 +51,7 @@ pub mod acp;
 pub mod api_keys;
 pub mod auth;
 pub mod codex;
+pub mod computer_use;
 pub mod constants;
 pub mod context;
 pub mod core;
@@ -86,6 +87,7 @@ pub use acp::{
     AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode, WorkspaceTrustLevel,
 };
 pub use api_keys::ApiKeySources;
+pub use computer_use::ComputerUseConfig;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AnthropicSpeed,
