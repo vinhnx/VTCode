@@ -32,5 +32,6 @@ Paths are under `src/`. `core/agent/` runtime, event recording, runner, request 
 - Async setup paths must use Tokio filesystem APIs or `spawn_blocking` for synchronous scans, persistence, or Git work.
 - Force-cancel retains a session when direct-child termination is unconfirmed, because direct-child exit does not prove descendant cleanup.
 - Read-only intent skips the approval gate, so an allow-listed program name must never be able to write or execute.
+- Classifiers recognize `bun x` (repo) plus `npx`/`npm` (foreign tolerance); never drop foreign forms.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-core.md) — read before editing.

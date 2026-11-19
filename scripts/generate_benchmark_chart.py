@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["matplotlib"]
+# ///
 """
 Generate visual benchmark charts from HumanEval results.
 Supports both matplotlib (PNG) and ASCII art fallback.
@@ -60,7 +64,7 @@ def generate_matplotlib_chart(data, output_path):
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
     except ImportError:
-        print("  matplotlib not installed. Install with: pip install matplotlib")
+        print("  matplotlib not installed. Run via 'uv run scripts/generate_benchmark_chart.py'.")
         return False
 
     summary = data['summary']
@@ -151,7 +155,7 @@ def main():
         if generate_matplotlib_chart(data, png_path):
             print(f"\n Visual chart generated: {png_path}")
         else:
-            print("\n Tip: Install matplotlib for visual charts: pip install matplotlib")
+            print("\n Tip: run via 'uv run scripts/generate_benchmark_chart.py' for visual charts.")
 
 if __name__ == "__main__":
     main()

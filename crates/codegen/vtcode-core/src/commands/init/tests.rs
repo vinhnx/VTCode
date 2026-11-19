@@ -192,3 +192,25 @@ fn grounding_summary_and_defaults_render_into_agents() {
     assert!(rendered.contains("Terminal-first coding agent for repository work."));
     assert!(rendered.contains("Default verification command: `cargo nextest run`."));
 }
+
+#[test]
+fn lockfile_selects_package_manager_guidance() {
+    for (locks, expected) in [
+        (vec!["bun.lock"], "`bun install`"),
+        (vec!["bun.lockb"], "`bun install`"),
+        (vec!["package-lock.json"], "`npm install`"),
+        (vec!["pnpm-lock.yaml"], "`pnpm install`"),
+        (vec!["yarn.lock"], "`yarn install`"),
+        (vec!["bun.lock", "package-lock.json"], "`bun install`"),
+        (Vec::<&str>::new(), "`npm install`"),
+    ] {
+        let workspace = TempDir::new().expect("workspace");
+        write_file(&workspace, "package.json", "{\"name\": \"demo\"}\n");
+        for lock in &locks {
+            write_file(&workspace, lock, "");
+        }
+        let plan = prepare_guided_init(workspace.path(), false).expect("plan");
+        let rendered = render_agents_md(&plan, &GuidedInitAnswers::default()).expect("rendered");
+        assert!(rendered.contains(expected), "locks {locks:?}:\n{rendered}");
+    }
+}

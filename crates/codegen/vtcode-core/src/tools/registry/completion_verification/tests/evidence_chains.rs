@@ -144,20 +144,28 @@ async fn completion_verification_reports_the_exact_remaining_check() {
     assert!(registry.completion_verification_pending());
 }
 #[tokio::test]
-async fn completion_verification_npx_logging_does_not_invalidate_required_evidence() {
+async fn completion_verification_lint_logging_does_not_invalidate_required_evidence() {
     let dir = tempfile::tempdir().unwrap();
     let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
     registry.restore_completion_verification_debt();
     registry.set_required_completion_verifiers(vec!["cargo check".into()]);
     let args = json!({"cmd":"cargo check"});
-    let launch = registry.begin_completion_verifier(&args);
-    registry.observe_completion_verifier(launch, &args, &Ok(json!({"exit_code":0})));
-    for (command, pending) in [
-        ("npx --yes --loglevel=error markdownlint-cli2@0.23.3 README.md", false),
-        ("npx --yes --loglevel=error markdownlint-cli2@0.23.3 --fix README.md", true),
+    for (clean, fix) in [
+        (
+            "bun x --silent markdownlint-cli2@0.23.3 README.md",
+            "bun x --silent markdownlint-cli2@0.23.3 --fix README.md",
+        ),
+        (
+            "npx --yes --loglevel=error markdownlint-cli2@0.23.3 README.md",
+            "npx --yes --loglevel=error markdownlint-cli2@0.23.3 --fix README.md",
+        ),
     ] {
-        registry.observe_completion_mutation(tools::EXEC_COMMAND, &json!({"cmd":command}), &json!({"exit_code":0}));
-        assert_eq!(registry.completion_verification_pending(), pending, "{command}");
-        assert_eq!(registry.completion_verifier_passed("cargo check"), !pending, "{command}");
+        let launch = registry.begin_completion_verifier(&args);
+        registry.observe_completion_verifier(launch, &args, &Ok(json!({"exit_code":0})));
+        for (command, pending) in [(clean, false), (fix, true)] {
+            registry.observe_completion_mutation(tools::EXEC_COMMAND, &json!({"cmd":command}), &json!({"exit_code":0}));
+            assert_eq!(registry.completion_verification_pending(), pending, "{command}");
+            assert_eq!(registry.completion_verifier_passed("cargo check"), !pending, "{command}");
+        }
     }
 }

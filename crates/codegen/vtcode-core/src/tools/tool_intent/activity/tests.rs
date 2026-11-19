@@ -87,7 +87,7 @@ fn compiler_artifact_writes_remain_eligible_verification() {
 #[test]
 fn verifier_diagnostics_recognize_masked_status_without_granting_admission() {
     for command in [
-        "npx markdownlint-cli2 README.md; echo \"lint exit: $?\"",
+        "bun x markdownlint-cli2 README.md; echo \"lint exit: $?\"",
         "cargo check; echo $?",
         "python3 scripts/check_markdown.py; echo \"lint exit: $?\"",
         "cargo check --locked || true",
@@ -97,15 +97,15 @@ fn verifier_diagnostics_recognize_masked_status_without_granting_admission() {
         assert!(shell_command_contains_verifier(&args), "{command}");
         assert_eq!(classify_shell_activity(tools::EXEC_COMMAND, &args), ShellActivity::Mutation);
     }
-    let masked = exec_command("npx markdownlint-cli2 README.md; echo \"lint exit: $?\"");
+    let masked = exec_command("bun x markdownlint-cli2 README.md; echo \"lint exit: $?\"");
     assert!(!shell_command_is_admitted_verification_attempt(&masked));
     assert_eq!(shell_args_as_executed(tools::EXEC_COMMAND, &masked).as_ref(), &masked);
     for args in [
         exec_command("echo 'cargo check; echo $?'"),
         exec_command("grep 'cargo check' README.md"),
-        exec_command("npx markdownlint-cli2 --fix README.md"),
+        exec_command("bun x markdownlint-cli2 --fix README.md"),
         json!({"cmd":"cargo check; true", "raw_command":"echo hello"}),
-        json!({"cmd":"npx markdownlint-cli2", "args":["--fix", "README.md"]}),
+        json!({"cmd":"bun x markdownlint-cli2", "args":["--fix", "README.md"]}),
     ] {
         assert!(!shell_command_contains_verifier(&args), "{args}");
     }
@@ -115,10 +115,12 @@ fn verifier_diagnostics_recognize_masked_status_without_granting_admission() {
 fn markdownlint_verification_preserves_command_boundaries() {
     for command in [
         "markdownlint-cli2 README.md",
+        "bun x markdownlint-cli2 README.md",
+        "bun x --no-install markdownlint-cli2@0.23.3 README.md",
+        "bun x --silent markdownlint-cli2@0.23.3 --config .markdownlint-cli2.jsonc ':README.md'",
+        "bun x markdownlint-cli2 README.md && cargo check --locked",
         "npx --yes markdownlint-cli2 README.md",
-        "npx --no-install markdownlint-cli2@0.23.3 README.md",
         "npx --yes --loglevel=error markdownlint-cli2@0.23.3 --config .markdownlint-cli2.jsonc ':README.md'",
-        "npx -y markdownlint-cli2 README.md && cargo check --locked",
         "python3 scripts/check_markdown.py",
         "python ./scripts/check_markdown.py",
         "python3 scripts/check_markdown.py README.md",
@@ -137,15 +139,21 @@ fn markdownlint_verification_preserves_command_boundaries() {
     }
     for command in [
         "markdownlint-cli2 --fix README.md",
-        "npx --yes markdownlint-cli2 -f README.md",
-        "npx --yes markdownlint-cli2 --fix=true README.md",
+        "bun x markdownlint-cli2 -f README.md",
+        "bun x markdownlint-cli2 --fix=true README.md",
         "markdownlint-cli2 --version",
+        "bun x --package evil markdownlint-cli2 README.md",
+        "bun x --silent --package evil markdownlint-cli2 README.md",
+        "bun x --silent markdownlint-cli2 --fix README.md",
+        "bun x --silent=unknown markdownlint-cli2 README.md",
+        "bun x markdownlint-cli2@evil README.md",
+        "bun x markdownlint-cli2 README.md && rm README.md",
+        "bun install",
+        "bun run dev",
+        "bun --silent markdownlint-cli2 README.md",
+        "npx --yes markdownlint-cli2 --fix README.md",
         "npx --package evil markdownlint-cli2 README.md",
-        "npx --loglevel=error --package evil markdownlint-cli2 README.md",
-        "npx --loglevel=error markdownlint-cli2 --fix README.md",
-        "npx --loglevel=unknown markdownlint-cli2 README.md",
         "npx markdownlint-cli2@evil README.md",
-        "npx markdownlint-cli2 README.md && rm README.md",
         "python3 scripts/check_markdown.py --fix",
         "python3 scripts/check_markdown.py --list",
         "python3 scripts/check_markdown.py --help",
@@ -157,7 +165,7 @@ fn markdownlint_verification_preserves_command_boundaries() {
         assert!(!shell_command_is_admitted_verification_attempt(&exec_command(command)), "{command}");
     }
     assert_ne!(
-        classify_shell_activity(tools::EXEC_COMMAND, &exec_command("npx markdownlint-cli2 README.md | grep error")),
+        classify_shell_activity(tools::EXEC_COMMAND, &exec_command("bun x markdownlint-cli2 README.md | grep error")),
         ShellActivity::Verification
     );
 }
@@ -869,10 +877,14 @@ fn dynamic_readonly_inspections_do_not_incur_mutation_debt() {
         "ls docs/guides/zed-acp.md",
         "git diff --stat -- README.md",
         "git status --short",
+        "bun x markdownlint-cli2 README.md",
         "npx markdownlint-cli2 README.md",
         "cargo check --locked",
     ] {
-        let expected = if command.starts_with("npx markdownlint") || command.starts_with("cargo check") {
+        let expected = if command.starts_with("bun x markdownlint")
+            || command.starts_with("npx markdownlint")
+            || command.starts_with("cargo check")
+        {
             ShellActivity::Verification
         } else if command.starts_with("for") {
             ShellActivity::Mutation
@@ -906,6 +918,8 @@ fn dynamic_readonly_inspections_do_not_incur_mutation_debt() {
     assert!(!exec_mutation_should_incur_debt("rg -n 'x' README.md 2>&1", &clean_output));
     // Shared classifiers decide verifier-shaped commands: mutating
     // variants count, clean checks do not. Asymmetric pairs.
+    assert!(exec_mutation_should_incur_debt("bun x markdownlint-cli2 --fix README.md", &clean_output));
+    assert!(!exec_mutation_should_incur_debt("bun x markdownlint-cli2 README.md", &clean_output));
     assert!(exec_mutation_should_incur_debt("npx markdownlint-cli2 --fix README.md", &clean_output));
     assert!(!exec_mutation_should_incur_debt("npx markdownlint-cli2 README.md", &clean_output));
     assert!(exec_mutation_should_incur_debt("cargo fmt", &clean_output));

@@ -17,6 +17,8 @@
 ## Verification and boundaries
 
 - Run `bun run typecheck`, `bun run test`, and `bun run build` from this directory; use the committed `bun.lock`.
+- Bun is the repo-wide JS toolchain (CI pins `oven-sh/setup-bun@v2.2.0`); run `bun install` here
+  after any `package.json` bump so the lock stays exact.
 - Keep pairing codes and session tokens in memory. Persist only permitted setup/workspace values through the existing codecs.
 - Render external text through `textContent`; preserve shell quoting in copied workspace setup commands.
 - Preserve terminal-authoritative approvals and proposal revalidation. Browser tools may edit drafts and request review,

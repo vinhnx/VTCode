@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["datasets"]
+# ///
 # MBPP pass@1 + latency; free-tier friendly (sleep/retries/backoff)
 import os, re, json, time, tempfile, subprocess, sys, random, pathlib
 from datetime import datetime

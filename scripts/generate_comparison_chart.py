@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["matplotlib", "numpy"]
+# ///
 """
 Generate side-by-side comparison charts for multiple benchmark results.
 """
@@ -75,7 +79,7 @@ def generate_matplotlib_comparison(reports, output_path):
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
-        print("  matplotlib not installed. Install with: pip install matplotlib")
+        print("  matplotlib not installed. Run via 'uv run scripts/generate_comparison_chart.py'.")
         return False
     
     if len(reports) != 2:
@@ -257,7 +261,7 @@ def main():
         if generate_matplotlib_comparison(reports, png_path):
             print(f"\n Visual comparison chart generated: {png_path}")
         else:
-            print("\n Tip: Install matplotlib for visual charts: pip install matplotlib")
+            print("\n Tip: run via 'uv run scripts/generate_comparison_chart.py' for visual charts.")
 
 if __name__ == "__main__":
     main()

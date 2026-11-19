@@ -2,7 +2,7 @@
 """Lint tracked, maintained Markdown with one pinned tool (run by `check.sh` and `check-dev.sh --lints`).
 
 Exit codes: 0 = clean, 1 = lint findings, 2 = usage error or linter toolchain
-unavailable (e.g. `npx` not on PATH). Exit 2 keeps a broken environment
+unavailable (e.g. `bun` not on PATH). Exit 2 keeps a broken environment
 distinct from failing content so harnesses do not re-run it as a code fix.
 """
 
@@ -24,15 +24,18 @@ MISSING_TOOLCHAIN_EXIT = 2
 def linter_command() -> list[str]:
     """Build the pinned linter invocation, preferring the local install.
 
-    `npm install` provides `markdownlint-cli2` under `node_modules`, which keeps
-    the check offline-capable and avoids a registry fetch on every run. When the
-    local package is absent (e.g. CI without a Node setup step), fall back to a
-    pinned `npx` fetch so the same linter version still runs.
+    `bun install` provides `markdownlint-cli2` under `node_modules`, which keeps
+    the check offline-capable and avoids a registry fetch on every run. The local
+    branch names the package bare: a `@version` suffix makes `bun x --no-install`
+    skip local bins. Exactness still holds because the root `devDependencies`
+    pin is exact and `bun.lock` is frozen (see `test_pinned_version_matches_package_json`).
+    When the local package is absent (e.g. CI without a bun setup step), fall back
+    to a pinned `bun x` fetch so the same linter version still runs.
     """
     pinned = f"markdownlint-cli2@{MARKDOWNLINT_CLI2_VERSION}"
     if (ROOT / "node_modules" / "markdownlint-cli2" / "package.json").is_file():
-        return ["npx", "--no-install", "--loglevel=error", pinned, "--config", ".markdownlint-cli2.jsonc"]
-    return ["npx", "--yes", "--loglevel=error", pinned, "--config", ".markdownlint-cli2.jsonc"]
+        return ["bun", "x", "--no-install", "--silent", "markdownlint-cli2", "--config", ".markdownlint-cli2.jsonc"]
+    return ["bun", "x", "--silent", pinned, "--config", ".markdownlint-cli2.jsonc"]
 
 
 def is_maintained_markdown(path: str) -> bool:
@@ -61,18 +64,18 @@ def tracked_markdown() -> list[str]:
 def run_linter(command: list[str]) -> int:
     """Run the pinned linter, translating a missing binary into exit 2.
 
-    `npx` may be absent from PATH (GUI-launched processes, minimal CI
+    `bun` may be absent from PATH (GUI-launched processes, minimal CI
     images); an actionable toolchain error keeps that distinct from a lint
     failure (exit 1).
     """
     try:
         result = subprocess.run(command, cwd=ROOT, check=False)
     except FileNotFoundError:
-        binary = command[0] if command else "npx"
+        binary = command[0] if command else "bun"
         print(
             f"error: cannot run the Markdown linter: '{binary}' was not found on PATH. "
-            "Install Node.js 22 or newer, run `npm install`, and ensure the "
-            "executing process inherits a PATH containing npm binaries.",
+            "Install Bun, run `bun install` at the repo root, and ensure the "
+            "executing process inherits a PATH containing the bun binary.",
             file=sys.stderr,
         )
         return MISSING_TOOLCHAIN_EXIT

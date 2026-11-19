@@ -672,6 +672,10 @@ yarn-error.log*
 package-lock.json
 yarn.lock
 !apps/webmcp/bun.lock
+# Integrity-pinned browser image build; the Dockerfile installs with bun.
+!crates/codegen/vtcode-computer-use/browser/bun.lock
+# Root JS tooling (markdown gate) installs with bun; npm lockfiles stay ignored.
+!/bun.lock
 
 # Vagrant
 .vagrant/

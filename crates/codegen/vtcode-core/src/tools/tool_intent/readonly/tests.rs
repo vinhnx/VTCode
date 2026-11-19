@@ -7,7 +7,7 @@ fn run_cmd(command: &str) -> Value {
 
 #[test]
 fn command_availability_probes_do_not_admit_execution() {
-    for command in ["command -v npx", "command -V python3 cargo", "command -v npx || true"] {
+    for command in ["command -v bun", "command -V python3 cargo", "command -v bun || true"] {
         assert!(is_readonly_command_session_command(&run_cmd(command)), "{command}");
     }
     for command in [

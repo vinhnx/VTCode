@@ -101,6 +101,9 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "python",
     "pip3",
     "pip",
+    "uv",
+    "uv run",
+    "uvx",
     "virtualenv",
     // Node.js ecosystem
     "node",

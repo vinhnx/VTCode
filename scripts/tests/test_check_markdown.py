@@ -70,7 +70,7 @@ class MarkdownSelectionTests(unittest.TestCase):
 class MarkdownInvocationTests(unittest.TestCase):
     def test_linter_exit_status_is_preserved_with_a_bounded_summary(self):
         files = ["README.md", "docs/another guide.md"]
-        base = ["npx", "--no-install", "--loglevel=error", "markdownlint-cli2@0.23.3",
+        base = ["bun", "x", "--no-install", "--silent", "markdownlint-cli2@0.23.3",
                 "--config", ".markdownlint-cli2.jsonc"]
         for exit_code, status in [(0, "passed"), (1, "failed (exit 1)"), (2, "failed (exit 2)")]:
             with self.subTest(exit_code=exit_code), \
@@ -82,7 +82,7 @@ class MarkdownInvocationTests(unittest.TestCase):
                 with redirect_stdout(output):
                     self.assertEqual(module.main(), exit_code)
                 command = run.call_args.args[0]
-                self.assertIn("--loglevel=error", command)
+                self.assertIn("--silent", command)
                 self.assertIn("markdownlint-cli2@0.23.3", command)
                 self.assertEqual(command[-2:], [":README.md", ":docs/another guide.md"])
                 self.assertEqual(run.call_args.kwargs, {"cwd": module.ROOT, "check": False})
@@ -99,23 +99,23 @@ class MarkdownInvocationTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_missing_linter_binary_reports_a_toolchain_error_with_exit_two(self):
-        base = ["npx", "--no-install", "--loglevel=error", "markdownlint-cli2@0.23.3",
+        base = ["bun", "x", "--no-install", "--silent", "markdownlint-cli2@0.23.3",
                 "--config", ".markdownlint-cli2.jsonc"]
         with mock.patch.object(module, "tracked_markdown", return_value=["README.md"]), \
                 mock.patch.object(module, "linter_command", return_value=list(base)), \
                 mock.patch.object(sys, "argv", ["check_markdown.py"]), \
                 mock.patch.object(module.subprocess, "run",
-                                  side_effect=FileNotFoundError(2, "No such file or directory", "npx")):
+                                  side_effect=FileNotFoundError(2, "No such file or directory", "bun")):
             stdout, stderr = io.StringIO(), io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 self.assertEqual(module.main(), 2)
-            self.assertIn("'npx' was not found on PATH", stderr.getvalue())
-            self.assertIn("Install Node.js 22", stderr.getvalue())
+            self.assertIn("'bun' was not found on PATH", stderr.getvalue())
+            self.assertIn("run `bun install` at the repo root", stderr.getvalue())
             self.assertIn("failed (exit 2)", stdout.getvalue())
 
     def test_scoped_paths_lint_only_the_requested_files_in_requested_order(self):
         files = ["README.md", "docs/guide.md", "docs/other.md"]
-        base = ["npx", "--no-install", "--loglevel=error", "markdownlint-cli2@0.23.3",
+        base = ["bun", "x", "--no-install", "--silent", "markdownlint-cli2@0.23.3",
                 "--config", ".markdownlint-cli2.jsonc"]
         with mock.patch.object(module, "tracked_markdown", return_value=files), \
                 mock.patch.object(module, "linter_command", return_value=list(base)), \
@@ -163,14 +163,16 @@ class LinterCommandTests(unittest.TestCase):
             package.parent.mkdir(parents=True)
             package.write_text('{"name": "markdownlint-cli2", "version": "0.23.3"}\n')
             with mock.patch.object(module, "ROOT", root):
+                # Bare name: a @version suffix makes `bun x --no-install` skip
+                # local bins; exactness comes from the frozen lock instead.
                 self.assertEqual(module.linter_command(), [
-                    "npx", "--no-install", "--loglevel=error",
-                    "markdownlint-cli2@0.23.3", "--config", ".markdownlint-cli2.jsonc",
+                    "bun", "x", "--no-install", "--silent",
+                    "markdownlint-cli2", "--config", ".markdownlint-cli2.jsonc",
                 ])
 
     def test_missing_local_install_falls_back_to_a_pinned_fetch(self):
         expected = [
-            "npx", "--yes", "--loglevel=error",
+            "bun", "x", "--silent",
             "markdownlint-cli2@0.23.3", "--config", ".markdownlint-cli2.jsonc",
         ]
         with tempfile.TemporaryDirectory() as directory:

@@ -56,6 +56,21 @@ pub(super) fn is_verification_invocation(words: &[String]) -> bool {
 
     match program.as_str() {
         "markdownlint-cli2" => command_words.get(1..).is_some_and(markdownlint_arguments_verify),
+        // The repo's own gates run `bun x`; the `npx` form stays so lint
+        // runs on npm-based foreign repos still count as verification.
+        "bun" => {
+            if second.as_deref() == Some("x") {
+                let package_index = command_words
+                    .iter()
+                    .enumerate()
+                    .skip(2)
+                    .find(|(_, word)| !matches!(word.as_str(), "--no-install" | "--silent"))
+                    .map(|(index, _)| index);
+                markdownlint_package_verifies(command_words, package_index)
+            } else {
+                bun_test_or_run_verifies(second.as_deref(), third.as_deref())
+            }
+        }
         "npx" => {
             let package_index = command_words
                 .iter()
@@ -71,19 +86,7 @@ pub(super) fn is_verification_invocation(words: &[String]) -> bool {
                         })
                 })
                 .map(|(index, _)| index);
-            package_index.is_some_and(|index| {
-                let Some(package) = command_words.get(index) else {
-                    return false;
-                };
-                let is_markdownlint = package == "markdownlint-cli2"
-                    || package.strip_prefix("markdownlint-cli2@").is_some_and(|version| {
-                        version.split('.').count() == 3
-                            && version
-                                .split('.')
-                                .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-                    });
-                is_markdownlint && command_words.get(index + 1..).is_some_and(markdownlint_arguments_verify)
-            })
+            markdownlint_package_verifies(command_words, package_index)
         }
         "cargo" => {
             if second.as_deref() == Some("fmt") {
@@ -100,11 +103,7 @@ pub(super) fn is_verification_invocation(words: &[String]) -> bool {
                 || (second.as_deref() == Some("run")
                     && matches!(third.as_deref(), Some("test" | "build" | "lint" | "check")))
         }
-        "bun" | "bunx" => {
-            matches!(second.as_deref(), Some("test"))
-                || (second.as_deref() == Some("run")
-                    && matches!(third.as_deref(), Some("test" | "build" | "lint" | "check")))
-        }
+        "bunx" => bun_test_or_run_verifies(second.as_deref(), third.as_deref()),
         "deno" => matches!(second.as_deref(), Some("test" | "lint" | "check")),
         "make" | "gmake" | "just" => make_like_verification_targets(command_words),
         "uv" => {
@@ -147,6 +146,30 @@ fn markdownlint_arguments_verify(arguments: &[String]) -> bool {
             matches!(argument.as_str(), "--fix" | "-f" | "--help" | "-h" | "--version" | "-v")
                 || argument.starts_with("--fix=")
         })
+}
+
+/// Whether `bun test` or `bun run <test|build|lint|check>` runs a suite.
+fn bun_test_or_run_verifies(second: Option<&str>, third: Option<&str>) -> bool {
+    matches!(second, Some("test"))
+        || (second == Some("run") && matches!(third, Some("test" | "build" | "lint" | "check")))
+}
+
+/// Whether the located `bun x`/`npx` package slot names pinned markdownlint
+/// with verifying trailing arguments.
+fn markdownlint_package_verifies(command_words: &[String], package_index: Option<usize>) -> bool {
+    package_index.is_some_and(|index| {
+        let Some(package) = command_words.get(index) else {
+            return false;
+        };
+        let is_markdownlint = package == "markdownlint-cli2"
+            || package.strip_prefix("markdownlint-cli2@").is_some_and(|version| {
+                version.split('.').count() == 3
+                    && version
+                        .split('.')
+                        .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+            });
+        is_markdownlint && command_words.get(index + 1..).is_some_and(markdownlint_arguments_verify)
+    })
 }
 
 pub(super) fn contains_verification_invocation(command: &str) -> bool {

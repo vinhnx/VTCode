@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["datasets"]
+# ///
 # SWE-bench Lite (DRY) – agent latency/behavior; free-tier friendly
 import os, json, random, re, time, subprocess, pathlib
 from datetime import datetime

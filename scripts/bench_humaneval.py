@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["datasets"]
+# ///
 # HumanEval pass@1 + latency; vtcode-based; Gemini-friendly.
 # - Provider default: gemini
 # - Model default: gemini-3-flash-preview
@@ -10,7 +14,7 @@ from datetime import datetime
 try:
     from datasets import load_dataset
 except ModuleNotFoundError:
-    print("Missing dependency 'datasets'. Run 'make setup' or 'pip install datasets'.", file=sys.stderr)
+    print("Missing dependency 'datasets'. Run via 'uv run scripts/bench_humaneval.py'.", file=sys.stderr)
     sys.exit(2)
 
 # -------- Config (env) --------

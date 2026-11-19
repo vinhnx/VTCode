@@ -482,7 +482,7 @@ fn plan_quality_line_shows_canonical_step_format() {
 #[test]
 fn plan_quality_line_requires_concrete_verify_checks() {
     assert!(PLANNING_WORKFLOW_PLAN_QUALITY_LINE.contains("never as a semicolon chain"));
-    assert!(PLANNING_WORKFLOW_PLAN_QUALITY_LINE.contains("npx markdownlint-cli2 README.md"));
+    assert!(PLANNING_WORKFLOW_PLAN_QUALITY_LINE.contains("bun x markdownlint-cli2 README.md"));
     let line = PLANNING_WORKFLOW_PLAN_QUALITY_LINE;
     assert!(line.contains("must exit 0 on success"));
     assert!(line.contains("grep/rg exit 1 cannot satisfy completion"));

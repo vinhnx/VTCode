@@ -128,6 +128,7 @@ const DEFAULT_PROTECTED_DOTFILES: &[&str] = &[
     ".yarnrc",
     ".yarnrc.yml",
     ".pnpmrc",
+    ".bunfig.toml",
     // Code formatting
     ".prettierrc",
     ".prettierrc.json",
@@ -386,6 +387,7 @@ mod tests {
         assert!(config.is_protected(".bashrc"));
         assert!(config.is_protected(".ssh/config"));
         assert!(config.is_protected("/home/user/.npmrc"));
+        assert!(config.is_protected("/home/user/.bunfig.toml"));
 
         // Should not be protected (not dotfiles)
         assert!(!config.is_protected("README.md"));

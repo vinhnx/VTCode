@@ -17,8 +17,12 @@ fi
 if [ -n "$file_path" ] && [ -f "$file_path" ]; then
     case "$file_path" in
         *.ts|*.tsx|*.js|*.jsx|*.json)
-            # Format with prettier if available
-            if command -v npx >/dev/null 2>&1; then
+            # Format with prettier if available (bun first; npx stays as a
+            # last resort for machines without bun)
+            if command -v bun >/dev/null 2>&1; then
+                bun x prettier --write "$file_path" 2>/dev/null
+                echo "Formatted $file_path with prettier"
+            elif command -v npx >/dev/null 2>&1; then
                 npx prettier --write "$file_path" 2>/dev/null
                 echo "Formatted $file_path with prettier"
             elif command -v prettier >/dev/null 2>&1; then

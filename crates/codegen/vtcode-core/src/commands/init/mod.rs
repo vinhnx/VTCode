@@ -25,6 +25,7 @@ enum PackageManager {
     Npm,
     Pnpm,
     Yarn,
+    Bun,
 }
 
 impl PackageManager {
@@ -33,6 +34,7 @@ impl PackageManager {
             Self::Npm => "npm",
             Self::Pnpm => "pnpm",
             Self::Yarn => "yarn",
+            Self::Bun => "bun",
         }
     }
 }

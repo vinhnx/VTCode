@@ -24,7 +24,9 @@ updates:
         patterns:
           - "*"
 
-  # Maintain dependencies for Node.js/npm (for scripts/utils that might exist)
+  # Maintain JS dependencies (repo toolchain is bun; the npm ecosystem entry
+  # keys off package.json files). Dependabot does not refresh bun.lock, so
+  # every merged bump must run `bun install` in the touched directory first.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:

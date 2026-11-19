@@ -90,9 +90,9 @@ fn analyze_file(analysis: &mut ProjectAnalysis, path: &str) {
         }
         "package.json" => {
             analysis.languages.push("JavaScript/TypeScript".to_owned());
-            analysis.build_systems.push("npm/yarn/pnpm".to_owned());
+            analysis.build_systems.push("npm/yarn/pnpm/bun".to_owned());
         }
-        "package-lock.json" | "pnpm-lock.yaml" | "yarn.lock" => {
+        "package-lock.json" | "pnpm-lock.yaml" | "yarn.lock" | "bun.lock" | "bun.lockb" => {
             analysis.config_files.push(path.to_owned());
         }
         "requirements.txt" | "pyproject.toml" | "setup.py" | "Pipfile" => {
@@ -246,7 +246,9 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
 }
 
 fn detect_package_manager(workspace: &Path) -> Option<PackageManager> {
-    if workspace.join("pnpm-lock.yaml").exists() {
+    if workspace.join("bun.lock").exists() || workspace.join("bun.lockb").exists() {
+        Some(PackageManager::Bun)
+    } else if workspace.join("pnpm-lock.yaml").exists() {
         Some(PackageManager::Pnpm)
     } else if workspace.join("yarn.lock").exists() {
         Some(PackageManager::Yarn)
@@ -307,7 +309,7 @@ fn analyze_project_characteristics(analysis: &mut ProjectAnalysis) {
     analysis.is_library = analysis
         .build_systems
         .iter()
-        .any(|system| matches!(system.as_str(), "Cargo" | "npm/yarn/pnpm" | "pip/poetry" | "Go Modules"));
+        .any(|system| matches!(system.as_str(), "Cargo" | "npm/yarn/pnpm/bun" | "pip/poetry" | "Go Modules"));
     analysis.is_application = analysis
         .source_dirs
         .iter()
