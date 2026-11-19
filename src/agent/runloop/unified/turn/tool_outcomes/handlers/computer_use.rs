@@ -16,10 +16,10 @@ use super::build_tool_permissions_context_with_safety;
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission_with_call_id};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
-/// Tool identity used for computer-use permission prompts. It stays
-/// unregistered so policy defaults to Prompt and no full-auto allowlist
-/// admits it.
-pub(crate) const TOOL_NAME: &str = "computer_use";
+/// Tool identity shared by permission prompts and pack registration.
+/// Registered with an explicit Prompt policy; the allow-list validation and
+/// base risk score keep it out of every auto-approval path.
+pub(crate) use vtcode_core::config::constants::tools::COMPUTER_USE as TOOL_NAME;
 
 /// An approved computer-use target. The macOS app variant joins this enum
 /// with the signed-app driver; v1 serves the browser target only.
@@ -68,6 +68,7 @@ pub(crate) fn action_kind(action: &Action) -> &'static str {
 /// One per-turn approval request: precomputed display data over the proposed
 /// native calls. Malformed members contribute their member name, never a
 /// decoded action, so every proposed call is represented.
+#[derive(Debug, Clone)]
 pub(crate) struct ApprovalRequest {
     pub target: ComputerUseTarget,
     pub recipient: String,
@@ -115,10 +116,6 @@ pub(crate) fn approval_granted(flow: &ToolPermissionFlow) -> bool {
 ///
 /// Returns an error if the permission flow itself fails. Denials resolve to
 /// `Ok(false)`, never to an error.
-#[allow(
-    dead_code,
-    reason = "Forward API: model-initiated turns must approve through the permission flow."
-)]
 pub(crate) async fn request_target_approval(
     ctx: &mut TurnProcessingContext<'_>,
     request: &ApprovalRequest,
@@ -137,7 +134,9 @@ pub(crate) async fn request_target_approval(
 }
 
 pub(crate) mod execution;
+pub(crate) mod report;
 mod review;
+pub(crate) mod tool_call;
 
 #[cfg(test)]
 mod tests;

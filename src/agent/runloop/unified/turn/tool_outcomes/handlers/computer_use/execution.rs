@@ -4,8 +4,10 @@
 //! route and always tears the launched target down: cancellation and
 //! timeouts funnel through the same teardown as completion and failure.
 //! Approval arrives as injected logic so tests script the human decision;
-//! production passes an overlay confirm for user-initiated turns.
+//! production model-initiated turns approve through the permission flow
+//! between proposal and execution.
 
+#[cfg(test)]
 use std::future::Future;
 use std::time::Duration;
 
@@ -209,12 +211,34 @@ pub(crate) enum TeardownOutcome {
     Failed(String),
 }
 
-/// Run one explicit computer turn end to end.
-///
-/// The approval decision arrives as injected logic so tests script it;
-/// user-initiated turns pass an overlay confirm, while model-initiated
-/// turns must pass [`super::request_target_approval`]. Every exit path
-/// after launch tears the target down through one funnel.
+/// A proposed turn awaiting the human decision: everything generation and
+/// review produced, with nothing launched yet.
+pub(crate) struct ProposedComputerTurn {
+    /// The approval prompt payload; also identifies the turn in events.
+    pub(crate) approval: ApprovalRequest,
+    model: String,
+    pub(crate) usage: Option<Usage>,
+    calls: Vec<NativeCall>,
+    summary: NativeCallSummary,
+    target: ComputerUseTarget,
+    recipient: String,
+    review_armed: bool,
+    review_verdict: BatchReviewVerdict,
+    turn_token: CancellationToken,
+}
+
+/// Either a turn ready for approval or an already-terminal outcome.
+/// Splitting proposal from execution lets model-initiated callers approve
+/// through the permission flow (which needs the turn context) without
+/// holding dispatcher borrows across the prompt.
+pub(crate) enum ComputerTurnProposal {
+    Proceed(ProposedComputerTurn),
+    Done(ComputerTurnOutcome),
+}
+
+/// Test-only combined entry: production flows propose, approve through the
+/// permission flow, then execute, so only tests drive turns end to end.
+#[cfg(test)]
 pub(crate) async fn run_computer_turn<Fut>(
     provider: &dyn LLMProvider,
     request: LLMRequest,
@@ -225,13 +249,31 @@ pub(crate) async fn run_computer_turn<Fut>(
 where
     Fut: Future<Output = Result<bool>>,
 {
+    match propose_computer_turn(provider, request, config, runtime).await? {
+        ComputerTurnProposal::Done(outcome) => Ok(outcome),
+        ComputerTurnProposal::Proceed(proposed) => {
+            let granted = approve(proposed.approval.clone()).await?;
+            execute_proposed_turn(proposed, config, runtime, granted).await
+        }
+    }
+}
+
+/// Run the turn through batch proposal: gates, native generation, budget,
+/// and Decisions review. Returns `Done` for every terminal-before-approval
+/// outcome; `Proceed` carries a turn with nothing launched.
+pub(crate) async fn propose_computer_turn(
+    provider: &dyn LLMProvider,
+    request: LLMRequest,
+    config: &ComputerUseConfig,
+    runtime: &mut ComputerTurnRuntime<'_>,
+) -> Result<ComputerTurnProposal> {
     let model = request.model.clone();
     let disabled = |reason: &'static str| {
-        Ok(ComputerTurnOutcome {
+        Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
             kind: ComputerTurnOutcomeKind::Disabled { reason },
             model: model.clone(),
             usage: None,
-        })
+        }))
     };
     if !config.enabled {
         return disabled("disabled");
@@ -248,62 +290,62 @@ where
     let response = tokio::select! {
         biased;
         _ = wait_for_stop(runtime.stop, runtime.notify) => {
-            return Ok(ComputerTurnOutcome {
+            return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
                 kind: ComputerTurnOutcomeKind::Cancelled,
                 model,
                 usage: None,
-            });
+            }));
         }
         response = provider.generate_native(request) => match response {
             Ok(response) => response,
             Err(error) => {
-                return Ok(ComputerTurnOutcome {
+                return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
                     kind: ComputerTurnOutcomeKind::Failed {
                         stage: ComputerFailureStage::Generate,
                         message: error.to_string(),
                     },
                     model,
                     usage: None,
-                });
+                }));
             }
         },
     };
     let model = response.model.clone();
     let usage = response.usage.clone();
     if response.native_calls.is_empty() {
-        return Ok(ComputerTurnOutcome {
+        return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
             kind: ComputerTurnOutcomeKind::NoNativeCalls {
                 content: response.content,
                 ordinaries: response.tool_calls,
             },
             model,
             usage,
-        });
+        }));
     }
 
     let turn_token = CancellationToken::new();
     let summary = match summarize_native_calls(&response.native_calls) {
         Ok(summary) => summary,
         Err(error) => {
-            return Ok(ComputerTurnOutcome {
+            return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
                 kind: ComputerTurnOutcomeKind::Failed {
                     stage: ComputerFailureStage::Generate,
                     message: error.to_string(),
                 },
                 model,
                 usage,
-            });
+            }));
         }
     };
     if summary.valid_actions > config.max_actions_per_turn {
-        return Ok(ComputerTurnOutcome {
+        return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
             kind: ComputerTurnOutcomeKind::BudgetExceeded {
                 proposed: summary.valid_actions,
                 max: config.max_actions_per_turn,
             },
             model,
             usage,
-        });
+        }));
     }
 
     let review_armed = config.decisions_review && provider.supports_decisions();
@@ -346,7 +388,7 @@ where
             &redacted.message(kind.outcome_word()),
             ToolCallStatus::Failed,
         );
-        return Ok(ComputerTurnOutcome { kind, model, usage });
+        return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome { kind, model, usage }));
     }
 
     let approval = ApprovalRequest {
@@ -356,8 +398,41 @@ where
         action_kinds: summary.kinds.clone(),
         action_count: summary.valid_actions,
     };
-    let started_args = approval_args(&approval);
-    let granted = approve(approval).await?;
+    Ok(ComputerTurnProposal::Proceed(ProposedComputerTurn {
+        approval,
+        model,
+        usage,
+        calls: response.native_calls,
+        summary,
+        target,
+        recipient,
+        review_armed,
+        review_verdict: review.verdict,
+        turn_token,
+    }))
+}
+
+/// Execute a proposed turn after the human decision. Denial ends the turn
+/// before anything launches; approval launches, executes, and tears down
+/// through the same guarded path as before.
+pub(crate) async fn execute_proposed_turn(
+    proposed: ProposedComputerTurn,
+    config: &ComputerUseConfig,
+    runtime: &mut ComputerTurnRuntime<'_>,
+    granted: bool,
+) -> Result<ComputerTurnOutcome> {
+    let ProposedComputerTurn {
+        approval,
+        model,
+        usage,
+        calls,
+        summary,
+        target,
+        recipient,
+        review_armed,
+        review_verdict,
+        turn_token,
+    } = proposed;
     if !granted {
         return Ok(ComputerTurnOutcome {
             kind: if stop_requested(runtime.stop) {
@@ -371,10 +446,9 @@ where
     }
 
     let item_id = format!("computer_use:{}", summary.call_ids.first().map_or("turn", String::as_str));
+    let started_args = approval_args(&approval);
     emit_computer_turn_started(runtime.emitter, &item_id, &started_args, summary.call_ids.first());
-    let execution =
-        run_guarded_execution(&summary, response.native_calls, &config.image, &target, config, runtime, &turn_token)
-            .await;
+    let execution = run_guarded_execution(&summary, calls, &config.image, &target, config, runtime, &turn_token).await;
     let executed_units = match &execution.outcome {
         GuardedOutcome::Completed { units, .. } => *units,
         _ => 0,
@@ -386,7 +460,7 @@ where
         action_kinds: summary.kinds,
         action_count: summary.valid_actions,
         executed_units,
-        review: review_armed.then_some(review.verdict),
+        review: review_armed.then_some(review_verdict),
         teardown_trigger: execution.teardown_trigger,
         teardown: execution.teardown.clone(),
     };

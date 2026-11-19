@@ -25,12 +25,42 @@ fn curated_groups_resolve_to_their_declared_field_paths() {
         assert!(editable > 0, "{} should expose editable settings", group.title);
         for path in group.paths {
             assert!(
-                get_node(&draft, path).is_some() || FIELD_DOCS.lookup(path).is_some_and(|doc| !doc.options.is_empty()),
-                "curated path {path} should resolve or have documented options"
+                get_node(&draft, path).is_some() || FIELD_DOCS.lookup(path).is_some(),
+                "curated path {path} should resolve or be documented"
             );
         }
     }
 }
+#[test]
+fn computer_use_group_renders_unset_target_as_editable() {
+    let state = SettingsPaletteState {
+        workspace: PathBuf::from("."),
+        source_path: PathBuf::from("vtcode.toml"),
+        source_label: None,
+        draft: VTCodeConfig::default(),
+        view_path: Some(format!("{SETTINGS_GROUP_PREFIX}computer_use")),
+        last_selection: None,
+        selection_by_view: BTreeMap::new(),
+        pending_edit_path: None,
+        status: None,
+    };
+    // Default config leaves browser_build unset, exactly the state that
+    // used to hide the row and strand CLI target setup.
+    let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+    assert!(get_node(&draft, "computer_use.browser_build").is_none());
+    let items = build_settings_items(&state, &draft).expect("computer_use group items");
+    let row = items
+        .iter()
+        .find(|item| {
+            matches!(&item.selection, Some(InlineListSelection::ConfigAction(action)) if action.contains("computer_use.browser_build"))
+        })
+        .expect("unset browser_build should render an editable row");
+    let InlineListSelection::ConfigAction(action) = row.selection.as_ref().expect("row action") else {
+        panic!("browser_build row must carry a config action");
+    };
+    assert!(action.starts_with(ACTION_PREFIX_EDIT), "unset free-form row must open the editor: {action}");
+}
+
 #[test]
 fn resolve_settings_view_path_maps_model_aliases() {
     assert_eq!(resolve_settings_view_path("model"), SETTINGS_MODEL_CONFIG_PATH);

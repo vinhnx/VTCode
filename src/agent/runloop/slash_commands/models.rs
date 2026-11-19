@@ -131,9 +131,6 @@ pub(crate) enum SlashCommandOutcome {
     ToggleFastMode {
         enable: Option<bool>,
     },
-    ComputerUse {
-        action: ComputerUseAction,
-    },
     StartModePalette,
     SelectPrimaryAgent {
         name: String,
@@ -286,16 +283,6 @@ pub(crate) enum SecretCommandAction {
     /// `/secret migrate [provider]` — move API keys from workspace `.env` to
     /// secure storage.
     Migrate { provider: Option<String> },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ComputerUseAction {
-    On,
-    Off,
-    Toggle,
-    Status,
-    SetTarget { path: String },
-    Run { task: String },
 }
 
 #[derive(Clone, Debug)]

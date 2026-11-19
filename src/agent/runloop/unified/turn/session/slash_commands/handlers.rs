@@ -8,8 +8,6 @@ mod agents;
 mod apps;
 #[path = "compact.rs"]
 mod compact;
-#[path = "computer_use.rs"]
-mod computer_use;
 #[path = "config_toml.rs"]
 mod config_toml;
 #[path = "control.rs"]
@@ -69,7 +67,6 @@ pub(super) use diagnostics::{
 // config_toml, the future checkup flow, etc.) share one tested
 // load -> mutate -> save -> refresh persistence unit instead of re-implementing
 // the ConfigManager dance inline.
-pub(super) use computer_use::handle_computer_use_command;
 #[expect(unused_imports, reason = "guard-rail for the upcoming /checkup 7-step flow")]
 pub(super) use diagnostics::memory::config_persistence::persist_workspace_config_change;
 pub(super) use fast::handle_toggle_fast_mode;

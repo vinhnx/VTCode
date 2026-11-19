@@ -211,56 +211,18 @@ async fn fast_command_catalog_and_parser() {
 }
 
 #[tokio::test]
-async fn computer_use_command_catalog_and_parser() {
-    let spec = command_skill_specs()
-        .iter()
-        .find(|spec| spec.slash_name == "computer-use")
-        .expect("computer-use catalog entry");
-    assert_eq!(spec.usage, "/computer-use [on|off|status|target <path>|run <task>]");
-    let workspace = tempfile::tempdir().unwrap();
-    let mut renderer = renderer_for_tests();
-    for (input, expected) in [
-        ("computer-use", ComputerUseAction::Toggle),
-        ("  COMPUTER-USE  ", ComputerUseAction::Toggle),
-        ("computer-use on", ComputerUseAction::On),
-        ("computer-use OFF", ComputerUseAction::Off),
-        ("computer-use \t Status \n", ComputerUseAction::Status),
-        ("cua", ComputerUseAction::Toggle),
-        ("cua on", ComputerUseAction::On),
-    ] {
-        let outcome = handle_slash_command(input, &mut renderer, workspace.path()).await.unwrap();
-        assert!(matches!(outcome, SlashCommandOutcome::ComputerUse { action } if action == expected), "{input}");
-    }
-    let outcome = handle_slash_command("computer-use target /tmp/build", &mut renderer, workspace.path())
-        .await
-        .unwrap();
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::ComputerUse { action: ComputerUseAction::SetTarget { path } }
-        if path == "/tmp/build"
-    ));
-    for (input, task) in [
-        ("computer-use run take a screenshot", "take a screenshot"),
-        ("computer-use RUN  open settings  and  click  save ", "open settings  and  click  save"),
-        ("cua run type hello", "type hello"),
-    ] {
+async fn computer_use_slash_command_is_gone_in_favor_of_the_tool() {
+    assert!(
+        command_skill_specs().iter().all(|spec| spec.slash_name != "computer-use"),
+        "computer-use must not be registered; turns run through the computer_use tool"
+    );
+    for input in ["computer-use", "computer-use run take a screenshot", "cua on"] {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut renderer = renderer_for_tests();
         let outcome = handle_slash_command(input, &mut renderer, workspace.path()).await.unwrap();
         assert!(
-            matches!(outcome, SlashCommandOutcome::ComputerUse { action: ComputerUseAction::Run { task: actual } } if actual == task),
-            "{input}"
+            matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. }),
+            "{input} must fall through as prompt text now that the command is gone"
         );
-    }
-    for input in [
-        "computer-use true",
-        "computer-use toggle",
-        "computer-use on off",
-        "computer-use target",
-        "computer-use target /a /b",
-        "computer-use run",
-        "computer-use run   ",
-        "computer-use --help",
-    ] {
-        let outcome = handle_slash_command(input, &mut renderer, workspace.path()).await.unwrap();
-        assert!(matches!(outcome, SlashCommandOutcome::Handled), "{input}");
     }
 }

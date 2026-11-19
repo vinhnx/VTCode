@@ -132,9 +132,9 @@ impl DesktopView {
 
     /// Write the master switch; the service confirmation refreshes the
     /// snapshot that render reads, so the Switch follows asynchronously.
-    /// Unlike `/computer-use on`, this does not refuse a missing target:
-    /// the tab shows "Not configured" beside the Switch, and turns still
-    /// fail closed until a target is set.
+    /// The switch persists without a target (validation accepts the
+    /// intermediate state): the tab shows "Not configured" beside the
+    /// Switch, and turns fail closed until a target is set.
     pub(super) fn set_computer_use_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
         self.save_cli_config_value(COMPUTER_USE_ENABLED_PATH.to_string(), Value::Bool(enabled), cx);
     }

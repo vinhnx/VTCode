@@ -2,8 +2,8 @@ pub(super) use super::builtins::{
     CheckupCommand, DoctorCommand, parse_checkup_args, parse_doctor_args, parse_update_args,
 };
 pub(super) use super::{
-    AgentManagerAction, CompactConversationCommand, ComputerUseAction, SecretCommandAction, SessionLogExportFormat,
-    SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
+    AgentManagerAction, CompactConversationCommand, SecretCommandAction, SessionLogExportFormat, SlashCommandOutcome,
+    SubprocessManagerAction, handle_slash_command,
 };
 pub(super) use vtcode_core::compaction::ManualCompactionOptions;
 pub(super) use vtcode_core::config::types::ReasoningEffortLevel;

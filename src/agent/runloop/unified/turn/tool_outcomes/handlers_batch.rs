@@ -698,7 +698,13 @@ async fn execute_and_handle_tool_call_inner<'a>(
     }
     let tool_execution_start = std::time::Instant::now();
     let circuit_before = snapshot_circuit_diagnostics(ctx.tool_registry, tool_name);
-    let pipeline_outcome = {
+    // Model-initiated computer turns run through the turn dispatcher, not
+    // the registry: approval, review gates, and the isolated target live on
+    // this side of the core/binary boundary. Everything downstream (batch
+    // tracking, circuit, repetition, result handling) stays shared.
+    let pipeline_outcome = if tool_name == super::computer_use::TOOL_NAME {
+        super::computer_use::tool_call::handle_computer_use_tool_call(ctx, &args_val).await?
+    } else {
         let ctrl_c_state = ctx.ctrl_c_state;
         let ctrl_c_notify = ctx.ctrl_c_notify;
         let default_placeholder = ctx.default_placeholder.clone();

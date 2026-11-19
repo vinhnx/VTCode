@@ -133,39 +133,39 @@ per-turn timeout. Document each field where the config reference lives.
 
 Both apps share the `computer_use` config section with `enabled` as the
 master switch; per-turn human approval still gates every turn, and v1
-has no always-allowed list. CLI: `/computer-use [on|off|status|target
-<path>]` (alias `/cua`) plus a Computer Use group in `/config` (the
-`browser_build` target is set via the command because None-default
-free-form paths do not render in curated groups). Desktop: a Computer
-Use settings tab (master Switch, Decisions Switch, target summary,
-deep link into CLI configuration), a ⌘K "Computer use: Turn on/off"
-entry, and `settings/computer-use` + `action/toggle-computer-use`
-deeplinks. No composer button: the composer rows hold a pixel-contract
-single line and a fifth labeled button wraps the zen row.
+has no always-allowed list. CLI: the Computer Use group in `/config`
+(enabled, browser target, image, review, limits — unset free-form
+fields render editable rows that create the node on submit). Desktop: a
+Computer Use settings tab (master Switch, Decisions Switch, target
+summary, user guide, deep link into CLI configuration), a ⌘K
+"Computer use: Turn on/off" entry, and
+`settings/computer-use` + `action/toggle-computer-use` deeplinks. No
+composer button: the composer rows hold a pixel-contract single line
+and a fifth labeled button wraps the zen row. There is no
+`/computer-use` slash command: the switch and target stay
+human-operated; the model only ever runs turns.
 
-## Turn trigger (landed: explicit user invocation)
+## Turn trigger (landed: model tool calls)
 
-`/computer-use run <task>` runs one turn end to end: it builds the
-request from the session model, calls `run_computer_turn`, confirms the
-proposed batch through an inline overlay (Esc denies; every
-non-confirm outcome denies), records usage, and renders a redacted
-report. The overlay replaces the permission flow for user-initiated
-turns only: the typed command already carries human intent, and the
-overlay has no cache or auto-approval surface at all. Model-initiated
-turns (a future `computer` tool) must approve through
-`request_target_approval` instead, since only the permission flow
-defends the confused deputy. The dispatcher re-checks enabled, target,
-and provider support; the command pre-checks the same gates with
-usage guidance before spending a model call.
+Turns start when the model calls the registered `computer_use` tool
+with a plain-words `task`. The turn loop intercepts the validated call
+and runs the dispatcher: propose (gates, native generation, budget,
+Decisions review), approve the proposed batch through the permission
+flow (`request_target_approval`), execute, tear down. The tool itself
+carries an explicit Prompt policy plus the first permission prompt, so
+every turn gets human eyes twice — once on scope (task + target) and
+once on the concrete proposed batch — and neither prompt is
+auto-approvable (base risk plus the allow-list rejection). Fail-closed
+refusals (disabled, missing target, unsupported provider, unverified
+model) return as tool errors carrying guidance the model relays. The
+registry executor for the tool is a fail-closed stub: execution only
+ever happens through the turn dispatcher.
 
 ## Then
 
-Model-initiated invocation (tool registration, schema, prompt
-guidance), multi-turn chaining/continuation, streaming native
-accumulation, and the verified model/action matrix. After that: prompt guidance
-(`vtcode-core/src/prompts/guidelines/`), tool schema
-(`vtcode-utility-tool-specs`), `ThreadEvent` contract updates, budget /
-presence tests, user guide plus quick reference, and the verified
-model/action matrix — per the repo's major-feature docs rule. macOS
-driver isolation and the Desktop Settings pane stay a separate release
-gate behind signed-app acceptance.
+Multi-turn chaining/continuation, streaming native accumulation, and
+more verified model/action matrix entries. After that: `ThreadEvent`
+contract updates if turn-specific events prove necessary, and the user
+guide plus quick reference — per the repo's major-feature docs rule.
+macOS driver isolation stays a separate release gate behind signed-app
+acceptance.

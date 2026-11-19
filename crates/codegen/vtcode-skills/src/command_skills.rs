@@ -180,15 +180,6 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/fast [on|off]",
         "configuration"
     ),
-    CommandSkillSpec {
-        slash_name: "computer-use",
-        skill_name: "cmd-computer-use",
-        description: "Manage the computer-use runtime and run approved browser turns (usage: /computer-use [on|off|status|target <path>|run <task>])",
-        usage: "/computer-use [on|off|status|target <path>|run <task>]",
-        category: "configuration",
-        aliases: &["cua"],
-        backend: CommandSkillBackend::BuiltInCommand { executor: BuiltInCommandExecutor::SlashAlias },
-    },
     built_in_command_spec!(
         "mode",
         "Switch the active agent mode (usage: /mode [agent-name])",
@@ -493,9 +484,10 @@ mod tests {
         assert!(splash.is_built_in());
         assert_eq!(splash.usage, "/splash");
 
-        let computer_use = find_command_skill_by_slash_name("computer-use").expect("computer-use spec");
-        assert!(computer_use.is_built_in());
-        assert_eq!(find_command_skill_by_slash_name("cua"), Some(computer_use));
+        // computer-use turns run through the computer_use tool; no slash
+        // command or alias may reappear.
+        assert_eq!(find_command_skill_by_slash_name("computer-use"), None);
+        assert_eq!(find_command_skill_by_slash_name("cua"), None);
     }
 
     #[test]

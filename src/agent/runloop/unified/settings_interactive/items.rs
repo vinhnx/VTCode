@@ -147,11 +147,9 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         id: "computer_use",
         title: "Computer Use",
         description: "Enable the computer-use runtime and tune its browser target and limits.",
-        // browser_build stays out: None-default free-form paths render
-        // nothing in curated groups (see curated_setting_item). It is set
-        // via /computer-use target <absolute-path>.
         paths: &[
             "computer_use.enabled",
+            "computer_use.browser_build",
             "computer_use.image",
             "computer_use.decisions_review",
             "computer_use.max_actions_per_turn",
@@ -376,10 +374,15 @@ fn curated_setting_item(path: &str, draft: &TomlValue, open_prefix: Option<&str>
         ));
     }
 
-    let doc = FIELD_DOCS.lookup(path)?;
-    (!doc.options.is_empty()).then(|| {
-        with_open_context(item_for_missing_doc_value(path.rsplit('.').next().unwrap_or(path), path), open_prefix)
-    })
+    // Render every documented-but-unset field: option lists cycle, and
+    // free-form fields (e.g. computer_use.browser_build) open the string
+    // editor, which creates the node on submit. Without this row, unset
+    // free-form settings are unreachable from curated groups.
+    FIELD_DOCS.lookup(path)?;
+    Some(with_open_context(
+        item_for_missing_doc_value(path.rsplit('.').next().unwrap_or(path), path),
+        open_prefix,
+    ))
 }
 
 fn append_advanced_items(items: &mut Vec<InlineListItem>, view_path: &str, draft: &TomlValue) -> Result<()> {

@@ -70,6 +70,15 @@ pub(crate) fn tool_denial_diagnostic(tool_name: &str) -> Option<serde_json::Valu
             "directive": "request_user_input is unavailable for the rest of this session; every further call returns the same denial.",
             "present_plan": "If you have a clarifying question, present it to the user in plain text and end your turn — the user's next message will answer it. Otherwise, finalize the plan from the evidence already gathered and present it to the user in plain text. End your message by offering a simple choice: type `yes` (or `implement`) to start implementation, `no` to abandon, or `edit` (or `keep planning`) to refine — if the user picks edit, they will describe what to revise in their next message."
         })),
+        // A denied computer turn must not be retried unchanged: the human
+        // explicitly refused this task (or headless fail-closed denied it),
+        // so re-calling burns another approval prompt for the same answer.
+        // Tell the model to stop and report instead.
+        "computer_use" => Some(serde_json::json!({
+            "cause": "The computer_use turn was not approved for this task.",
+            "impact": "No browser actions executed; nothing launched.",
+            "directive": "Do not retry the same computer_use task unchanged. Report what was refused and continue with work that does not need computer control, or ask the user in plain text whether to adjust the task."
+        })),
         _ => None,
     }
 }
@@ -559,6 +568,23 @@ mod tests {
         assert!(
             present_plan.contains("finalize the plan"),
             "present_plan must tell the model to finalize the plan from gathered evidence: {present_plan}"
+        );
+    }
+
+    #[test]
+    fn computer_use_denial_tells_model_not_to_retry() {
+        let diagnostic = tool_denial_diagnostic("computer_use").expect("computer_use should have a diagnostic");
+        let directive = diagnostic
+            .get("directive")
+            .and_then(serde_json::Value::as_str)
+            .expect("diagnostic should have a directive field");
+        assert!(
+            directive.contains("Do not retry") && directive.contains("unchanged"),
+            "directive must forbid unchanged retries: {directive}"
+        );
+        assert!(
+            diagnostic["cause"].as_str().is_some_and(|cause| cause.contains("not approved")),
+            "cause must name the refusal"
         );
     }
 
