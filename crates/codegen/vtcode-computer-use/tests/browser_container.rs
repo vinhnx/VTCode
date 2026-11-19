@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use tokio::time::sleep;
 use vtcode_computer_use::browser::BrowserDriver;
-use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, docker_available};
-use vtcode_computer_use::{Action, Driver, MouseButton, Observation, Point};
+use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, TerminateOutcome, docker_available};
+use vtcode_computer_use::{Action, Driver, MouseButton, Observation, Point, TurnControl};
 
 const IMAGE: &str = "vtcode-computer-use-browser:1.64.1";
 const FLOW_TIMEOUT: Duration = Duration::from_secs(240);
@@ -182,7 +182,10 @@ async fn browser_container_delivers_input_and_contains_the_target() {
         assert!(driver.execute(&out_of_bounds, &token).await.is_err());
 
         poll_until_gone("container exit", TEARDOWN_TIMEOUT, handle.id()).await;
-        handle.terminate().await.unwrap();
+        assert!(matches!(
+            handle.terminate().await.unwrap(),
+            TerminateOutcome::Removed | TerminateOutcome::AlreadyGone
+        ));
         assert!(container_running(handle.id()).await != Some(true));
     })
     .await
@@ -207,9 +210,9 @@ async fn browser_container_terminate_is_exact_and_idempotent() {
         assert_eq!(mounts[0]["Destination"], "/build");
         assert_eq!(mounts[0]["RW"], false);
 
-        handle.terminate().await.unwrap();
+        assert_eq!(handle.terminate().await.unwrap(), TerminateOutcome::Removed);
         assert_eq!(container_running(handle.id()).await, None);
-        handle.terminate().await.unwrap();
+        assert_eq!(handle.terminate().await.unwrap(), TerminateOutcome::AlreadyGone);
         assert_eq!(container_running(handle.id()).await, None);
 
         let token = tokio_util::sync::CancellationToken::new();
@@ -239,6 +242,227 @@ async fn browser_container_dropped_pipes_end_the_target() {
 }
 
 #[tokio::test]
+async fn browser_control_executes_ordered_batch_over_real_target() {
+    if !require_docker().await {
+        return;
+    }
+    tokio::time::timeout(FLOW_TIMEOUT, async {
+        let (handle, driver) = launch_for_test().await;
+        let turn = tokio_util::sync::CancellationToken::new();
+        let mut control = TurnControl::after_approval(driver, &turn);
+        let batch = [
+            Action::Click {
+                at: Some(Point { x: 600, y: 580 }),
+                button: MouseButton::Left,
+                count: 1,
+                modifiers: Vec::new(),
+            },
+            Action::Type("hello".into()),
+            Action::Click {
+                at: Some(Point { x: 600, y: 340 }),
+                button: MouseButton::Left,
+                count: 1,
+                modifiers: Vec::new(),
+            },
+            Action::Screenshot,
+        ];
+        let observations = control
+            .execute_batch("call_real", &batch, Duration::from_secs(30))
+            .await
+            .unwrap();
+        assert_eq!(observations.len(), 4);
+        let Observation::Screenshot(image) = observations.last().unwrap() else {
+            panic!("expected a final screenshot");
+        };
+        let shot = image::load_from_memory(image.as_png()).unwrap().to_rgb8();
+        assert_eq!(pixel(&shot, 560, 460), GREEN);
+        assert_eq!(pixel(&shot, 560, 680), GREEN);
+
+        assert!(
+            control
+                .execute_batch("call_real", &batch, Duration::from_secs(30))
+                .await
+                .is_err()
+        );
+        assert_eq!(handle.terminate().await.unwrap(), TerminateOutcome::Removed);
+        assert_eq!(container_running(handle.id()).await, None);
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn browser_control_partial_failure_revokes_real_target() {
+    if !require_docker().await {
+        return;
+    }
+    tokio::time::timeout(FLOW_TIMEOUT, async {
+        let (handle, driver) = launch_for_test().await;
+        let turn = tokio_util::sync::CancellationToken::new();
+        let mut control = TurnControl::after_approval(driver, &turn);
+        let delivered = [
+            Action::Click {
+                at: Some(Point { x: 600, y: 340 }),
+                button: MouseButton::Left,
+                count: 1,
+                modifiers: Vec::new(),
+            },
+            Action::Screenshot,
+        ];
+        let observations = control
+            .execute_batch("call_ok", &delivered, Duration::from_secs(30))
+            .await
+            .unwrap();
+        let Observation::Screenshot(image) = observations.last().unwrap() else {
+            panic!("expected a screenshot");
+        };
+        let shot = image::load_from_memory(image.as_png()).unwrap().to_rgb8();
+        assert_eq!(pixel(&shot, 560, 460), GREEN);
+
+        let failing = [
+            Action::Type("before-failure".into()),
+            Action::Click {
+                at: Some(Point { x: 5000, y: 5000 }),
+                button: MouseButton::Left,
+                count: 1,
+                modifiers: Vec::new(),
+            },
+        ];
+        assert!(
+            control
+                .execute_batch("call_fail", &failing, Duration::from_secs(30))
+                .await
+                .is_err()
+        );
+        assert!(
+            control
+                .execute_batch("call_after", &delivered, Duration::from_secs(30))
+                .await
+                .is_err()
+        );
+
+        poll_until_gone("container exit", TEARDOWN_TIMEOUT, handle.id()).await;
+        assert!(matches!(
+            handle.terminate().await.unwrap(),
+            TerminateOutcome::Removed | TerminateOutcome::AlreadyGone
+        ));
+        assert_eq!(container_running(handle.id()).await, None);
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn browser_control_revocation_stops_real_dispatch_without_teardown() {
+    if !require_docker().await {
+        return;
+    }
+    tokio::time::timeout(FLOW_TIMEOUT, async {
+        let (handle, driver) = launch_for_test().await;
+        let turn = tokio_util::sync::CancellationToken::new();
+        let mut control = TurnControl::after_approval(driver, &turn);
+        let held_batch = [Action::Wait(Duration::from_secs(60))];
+        let mut run = std::pin::pin!(control.execute_batch("call_held", &held_batch, SETTLE_TIMEOUT));
+        assert!(futures::poll!(&mut run).is_pending());
+        turn.cancel();
+        assert!(run.await.is_err());
+
+        assert_eq!(container_running(handle.id()).await, Some(true));
+        assert_eq!(handle.terminate().await.unwrap(), TerminateOutcome::Removed);
+        assert_eq!(container_running(handle.id()).await, None);
+    })
+    .await
+    .unwrap();
+}
+
+async fn raw_exchange(frames: Vec<serde_json::Value>) -> (Vec<String>, bool) {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+    let (handle, replies, commands) =
+        ContainerHandle::launch(&ContainerSpec::approved(IMAGE, &fixture_app()).await.unwrap())
+            .await
+            .unwrap();
+    let mut commands = commands;
+    let mut lines = tokio::io::BufReader::new(replies).lines();
+    assert_eq!(lines.next_line().await.unwrap().unwrap(), "{\"kind\":\"ready\"}");
+    let mut kinds = Vec::with_capacity(frames.len());
+    for frame in frames {
+        let mut frame = serde_json::to_vec(&frame).unwrap();
+        frame.push(b'\n');
+        commands.write_all(&frame).await.unwrap();
+        commands.flush().await.unwrap();
+        let reply = lines.next_line().await.unwrap().unwrap();
+        kinds.push(reply_kind(&reply));
+    }
+    // A live runner holds the stream open; an exited one delivers EOF promptly.
+    let closed = tokio::time::timeout(Duration::from_secs(5), lines.next_line())
+        .await
+        .is_ok_and(|line| line.unwrap().is_none());
+    assert!(matches!(
+        handle.terminate().await.unwrap(),
+        TerminateOutcome::Removed | TerminateOutcome::AlreadyGone
+    ));
+    (kinds, closed)
+}
+
+fn reply_kind(reply: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(reply)
+        .unwrap()
+        .get("kind")
+        .and_then(|kind| kind.as_str())
+        .unwrap()
+        .to_string()
+}
+
+#[tokio::test]
+async fn browser_runner_rejects_malformed_actions() {
+    if !require_docker().await {
+        return;
+    }
+    tokio::time::timeout(FLOW_TIMEOUT, async {
+        // Positive control proves the harness: a valid action succeeds and
+        // the runner stays alive for the next one.
+        let (kinds, closed) = raw_exchange(vec![serde_json::json!({
+            "kind": "click", "at": {"x": 100, "y": 100}, "button": "left", "count": 1, "modifiers": []
+        })])
+        .await;
+        assert_eq!(kinds, ["done"]);
+        assert!(!closed);
+
+        // Each probe isolates exactly one invalid field; the runner must
+        // refuse and exit rather than act or hang.
+        let mut malformed = vec![
+            serde_json::json!({"kind": "click", "at": {"x": 100, "y": 100}, "button": "left",
+                               "count": 999999999, "modifiers": []}),
+            serde_json::json!({"kind": "click", "at": {"x": 100, "y": 100}, "button": "left",
+                               "count": 1, "modifiers": "shift"}),
+            serde_json::json!({"kind": "click", "at": 0, "button": "left",
+                               "count": 1, "modifiers": []}),
+            serde_json::json!({"kind": "scroll_ticks", "at": {"x": 100, "y": 100}, "direction": "diagonal",
+                               "amount": 3, "modifiers": []}),
+            serde_json::json!({"kind": "key", "keys": "a", "repeat": 1}),
+            serde_json::json!({"kind": "key", "keys": ["a"], "repeat": 101}),
+            serde_json::json!({"kind": "wait", "milliseconds": -5}),
+            serde_json::json!({"kind": "type", "text": 123}),
+            serde_json::json!({"kind": "hold_key", "keys": ["shift"], "milliseconds": 99999999}),
+            serde_json::json!({"kind": "drag", "path": {"x": 1}, "modifiers": []}),
+        ];
+        let long_path: Vec<serde_json::Value> = (0..4097).map(|i| serde_json::json!({"x": i % 1280, "y": 0})).collect();
+        malformed.push(serde_json::json!({"kind": "drag", "path": long_path, "modifiers": []}));
+        let probes = malformed
+            .into_iter()
+            .map(|frame| tokio::spawn(async move { raw_exchange(vec![frame]).await }));
+        for probe in probes {
+            let (kinds, closed) = probe.await.unwrap();
+            assert_eq!(kinds, ["failed"]);
+            assert!(closed);
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn browser_container_stop_during_dispatch_removes_the_target() {
     if !require_docker().await {
         return;
@@ -254,7 +478,7 @@ async fn browser_container_stop_during_dispatch_removes_the_target() {
             driver.execute(&action, &token).await
         });
         sleep(Duration::from_secs(2)).await;
-        handle.terminate().await.unwrap();
+        assert_eq!(handle.terminate().await.unwrap(), TerminateOutcome::Removed);
         assert_eq!(container_running(handle.id()).await, None);
         assert!(held.await.unwrap().is_err());
     })

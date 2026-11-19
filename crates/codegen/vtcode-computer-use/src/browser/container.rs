@@ -3,7 +3,8 @@
 //! The caller approves the image and the static build. The launcher enforces
 //! pinning, directory shape, and mount-spec safety, starts the container with
 //! a fixed hardening flag set over `argv` (never a shell), and tears down the
-//! exact container it started.
+//! exact container it started. The flag set never degrades: any failure
+//! refuses the target instead of launching weaker isolation.
 
 use std::{ffi::OsString, path::Path, time::Duration};
 
@@ -14,7 +15,7 @@ const DOCKER_TIMEOUT: Duration = Duration::from_secs(30);
 const AVAILABILITY_TIMEOUT: Duration = Duration::from_secs(10);
 const IDENTIFY_TIMEOUT: Duration = Duration::from_secs(15);
 const IDENTIFY_INTERVAL: Duration = Duration::from_millis(200);
-const CONTAINER_NAME_PREFIX: &str = "vtcode-cu-";
+const CONTAINER_NAME_PREFIX: &str = "vtcode-cua-";
 const CONTAINER_ID_LEN: usize = 64;
 const DIAGNOSTIC_MAX_BYTES: usize = 512;
 
@@ -38,10 +39,7 @@ impl ContainerSpec {
     pub async fn approved(image: &str, build_dir: &Path) -> Result<Self> {
         ensure!(!image.is_empty() && image.len() <= 512, "invalid browser container image");
         ensure!(image.chars().all(|c| !c.is_control() && !c.is_whitespace()), "invalid browser container image");
-        ensure!(
-            (image.contains(':') || image.contains('@')) && !image.ends_with(":latest"),
-            "browser container image must be pinned"
-        );
+        ensure!(has_image_pin(image) && !image.ends_with(":latest"), "browser container image must be pinned");
         let canonical = vtcode_commons::fs::canonicalize_with_context_async(build_dir, "browser build").await?;
         ensure!(canonical.is_dir(), "browser build is not a directory");
         let Some(dir) = canonical.to_str() else {
@@ -60,6 +58,15 @@ pub struct ContainerHandle {
     id: String,
     #[allow(dead_code, reason = "Owned for its kill-on-drop backstop; never read directly.")]
     child: Child,
+}
+
+/// What `terminate` found: the container it removed, or one already gone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TerminateOutcome {
+    /// The exact container was removed by this call.
+    Removed,
+    /// The container was already gone; teardown stays idempotent.
+    AlreadyGone,
 }
 
 impl ContainerHandle {
@@ -102,13 +109,25 @@ impl ContainerHandle {
 
     /// Remove the exact container, succeeding when it is already gone.
     /// Call this on Stop, failure, and teardown paths; dropping the handle
-    /// only stops the attached client.
+    /// only stops the attached client. The caller reports the outcome with
+    /// the trigger that caused it, so teardown stays auditable.
+    ///
+    /// `Removed` means this call ensured removal; `AlreadyGone` means the
+    /// container was observably absent before attempting it.
     ///
     /// # Errors
     ///
-    /// Returns an error if `docker` is unavailable, the removal times out,
-    /// or the container cannot be removed.
-    pub async fn terminate(&self) -> Result<()> {
+    /// Returns an error if `docker` is unavailable, a step times out, or
+    /// the container is still present afterwards.
+    pub async fn terminate(&self) -> Result<TerminateOutcome> {
+        // `rm --force` succeeds silently for a missing container on current
+        // daemons, so presence is established with `inspect` first. Only a
+        // clean miss short-circuits: unknown presence and probe errors both
+        // proceed, since `rm` below surfaces the truth and a probe failure
+        // must never block the real removal.
+        if matches!(self.present().await, Ok(Presence::Missing)) {
+            return Ok(TerminateOutcome::AlreadyGone);
+        }
         let output = run_docker(&[
             OsString::from("rm"),
             OsString::from("--force"),
@@ -117,14 +136,65 @@ impl ContainerHandle {
         .await?;
         if !output.status.success() {
             let diagnostic = diagnostic_text(&output.stderr);
-            ensure!(
-                diagnostic.to_ascii_lowercase().contains("no such container"),
-                "could not remove browser container {}: {diagnostic}",
-                self.id
-            );
+            if is_missing_message(&diagnostic) {
+                return Ok(TerminateOutcome::AlreadyGone);
+            }
+            bail!("could not remove browser container {}: {diagnostic}", self.id);
         }
-        Ok(())
+        // Verify removal; retry an unreadable answer so one daemon blip
+        // cannot turn a successful teardown into a false alarm.
+        for _ in 0..3 {
+            match self.present().await? {
+                Presence::Missing => return Ok(TerminateOutcome::Removed),
+                Presence::Exists => {
+                    bail!("browser container {} is still present", self.id);
+                }
+                Presence::Unknown => tokio::time::sleep(IDENTIFY_INTERVAL).await,
+            }
+        }
+        bail!("could not verify removal of browser container {}", self.id);
     }
+
+    /// Presence of the exact container: exists, cleanly missing, or
+    /// unreadable.
+    async fn present(&self) -> Result<Presence> {
+        let output = run_docker(&[OsString::from("inspect"), OsString::from(&self.id)]).await?;
+        if output.status.success() {
+            return Ok(Presence::Exists);
+        }
+        if is_missing_message(&diagnostic_text(&output.stderr)) {
+            return Ok(Presence::Missing);
+        }
+        Ok(Presence::Unknown)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Presence {
+    Exists,
+    Missing,
+    Unknown,
+}
+
+/// Whether the reference carries a tag or digest. A registry port colon
+/// (`registry:5000/foo`) is not a tag: only a colon after the last slash
+/// counts. Mirrors the config fail-fast in
+/// `vtcode_config::computer_use`.
+fn has_image_pin(image: &str) -> bool {
+    if image.contains('@') {
+        return true;
+    }
+    match image.rsplit_once('/') {
+        Some((_, last)) => last.contains(':'),
+        None => image.contains(':'),
+    }
+}
+
+/// Whether docker reports the target as absent across command wordings
+/// (`rm` says container, `inspect` says object).
+fn is_missing_message(diagnostic: &str) -> bool {
+    let lower = diagnostic.to_ascii_lowercase();
+    lower.contains("no such container") || lower.contains("no such object")
 }
 
 /// Whether a Docker daemon answers. Callers use this to skip container-backed

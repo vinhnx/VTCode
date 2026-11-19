@@ -10,7 +10,9 @@ body { margin: 0; background: #ffffff; }
 #m-external { left: 150px; top: 10px; }
 #m-evil { left: 290px; top: 10px; }
 #m-click { left: 500px; top: 400px; }
+#m-type { left: 500px; top: 620px; }
 #btn { position: absolute; left: 500px; top: 300px; width: 200px; height: 80px; font-size: 24px; }
+#field { position: absolute; left: 500px; top: 560px; width: 200px; height: 40px; font-size: 20px; }
 .hidden { position: absolute; left: -1000px; top: 0; width: 10px; height: 10px; }
 </style>
 </head>
@@ -20,6 +22,8 @@ body { margin: 0; background: #ffffff; }
 <div class="marker" id="m-evil"></div>
 <button id="btn" type="button">Run</button>
 <div class="marker" id="m-click"></div>
+<input id="field" type="text" autocomplete="off">
+<div class="marker" id="m-type"></div>
 <img class="hidden" alt="" src="ok.png"
   onload="document.getElementById('m-local').style.background='#00ff00'"
   onerror="document.getElementById('m-local').style.background='#ff0000'">
@@ -32,6 +36,9 @@ body { margin: 0; background: #ffffff; }
 <script>
 document.getElementById('btn').onclick = () => {
   document.getElementById('m-click').style.background = '#00ff00';
+};
+document.getElementById('field').oninput = () => {
+  document.getElementById('m-type').style.background = '#00ff00';
 };
 </script>
 </body>

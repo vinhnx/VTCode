@@ -24,7 +24,33 @@ function validPoint(point) {
       || point.x < 0 || point.y < 0 || point.x >= viewport.width || point.y >= viewport.height) {
     throw new Error("Invalid coordinate");
   }
-  return point;
+  return { x: point.x, y: point.y };
+}
+
+function validInt(value, min, max, what) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`Invalid ${what}`);
+  }
+  return value;
+}
+
+function validKeyNames(value, what) {
+  if (!Array.isArray(value) || !value.every(key => typeof key === "string" && key.length > 0 && key.length <= 64)) {
+    throw new Error(`Invalid ${what}`);
+  }
+  return value;
+}
+
+function validModifiers(modifiers) {
+  if (modifiers === undefined) return [];
+  return validKeyNames(modifiers, "modifiers");
+}
+
+function validDuration(milliseconds) {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0 || milliseconds > 300_000) {
+    throw new Error("Invalid action duration");
+  }
+  return milliseconds;
 }
 
 function writeLine(text) {
@@ -82,7 +108,7 @@ function deliver(page) {
     if (page.isClosed() || !page.url().startsWith(`${origin}/`)) {
       throw new Error("Target page is unavailable");
     }
-    const modifiers = action.modifiers ?? [];
+    const modifiers = validModifiers(action.modifiers);
     switch (action.kind) {
       case "screenshot":
         return image();
@@ -101,15 +127,17 @@ function deliver(page) {
       case "move":
         await withKeys(modifiers, () => move(action.at));
         break;
-      case "click":
+      case "click": {
         if (leftHeld || !["left", "middle", "right"].includes(action.button)) {
           throw new Error("Unsupported mouse button or state");
         }
+        const count = validInt(action.count, 1, 10, "click count");
         await withKeys(modifiers, async () => {
-          if (action.at) await move(action.at);
-          await page.mouse.click(cursor.x, cursor.y, { button: action.button, clickCount: action.count });
+          if (action.at != null) await move(action.at);
+          await page.mouse.click(cursor.x, cursor.y, { button: action.button, clickCount: count });
         });
         break;
+      }
       case "left_mouse_down":
         if (leftHeld) throw new Error("Mouse button already held");
         await page.mouse.down();
@@ -122,6 +150,9 @@ function deliver(page) {
         break;
       case "drag":
         if (leftHeld) throw new Error("Mouse button already held");
+        if (!Array.isArray(action.path) || action.path.length === 0 || action.path.length > 4096) {
+          throw new Error("Invalid drag path");
+        }
         for (const point of action.path) validPoint(point);
         await withKeys(modifiers, async () => {
           const [start, ...rest] = action.path;
@@ -136,32 +167,41 @@ function deliver(page) {
         break;
       case "scroll_pixels":
       case "scroll_ticks": {
-        const ticks = action.amount * 100;
-        const dx = action.kind === "scroll_pixels" ? action.x : (
-          action.direction === "left" ? -ticks : action.direction === "right" ? ticks : 0
-        );
-        const dy = action.kind === "scroll_pixels" ? action.y : (
-          action.direction === "up" ? -ticks : action.direction === "down" ? ticks : 0
-        );
+        let dx;
+        let dy;
+        if (action.kind === "scroll_pixels") {
+          if (!Number.isFinite(action.x) || !Number.isFinite(action.y)) throw new Error("Invalid scroll offset");
+          dx = action.x;
+          dy = action.y;
+        } else {
+          const ticks = validInt(action.amount, 0, 1_000_000, "scroll amount") * 100;
+          if (!["up", "down", "left", "right"].includes(action.direction)) {
+            throw new Error("Invalid scroll direction");
+          }
+          dx = action.direction === "left" ? -ticks : action.direction === "right" ? ticks : 0;
+          dy = action.direction === "up" ? -ticks : action.direction === "down" ? ticks : 0;
+        }
         await withKeys(modifiers, async () => {
-          if (action.at) await move(action.at);
+          if (action.at != null) await move(action.at);
           await page.mouse.wheel(dx, dy);
         });
         break;
       }
       case "key": {
-        const chord = action.keys.map(keyName).join("+");
-        for (let repeat = 0; repeat < action.repeat; repeat++) await page.keyboard.press(chord);
+        const chord = validKeyNames(action.keys, "keys").map(keyName).join("+");
+        const repeat = validInt(action.repeat, 1, 100, "key repeat");
+        for (let n = 0; n < repeat; n++) await page.keyboard.press(chord);
         break;
       }
       case "hold_key":
-        await withKeys(action.keys, () => setTimeout(action.milliseconds));
+        await withKeys(validKeyNames(action.keys, "keys"), () => setTimeout(validDuration(action.milliseconds)));
         break;
       case "type":
+        if (typeof action.text !== "string") throw new Error("Invalid text");
         await page.keyboard.insertText(action.text);
         break;
       case "wait":
-        await setTimeout(action.milliseconds);
+        await setTimeout(validDuration(action.milliseconds));
         break;
       default:
         throw new Error("Unsupported computer action");

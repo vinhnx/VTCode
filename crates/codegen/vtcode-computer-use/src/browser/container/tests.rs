@@ -57,7 +57,7 @@ fn container_mount_spec_rejects_separators_quotes_and_controls() {
 async fn container_spec_rejects_a_comma_directory() {
     // Comma is legal in directory names on every platform; the remaining
     // rejections are covered portably through `mount_spec_safe`.
-    let dir = std::env::temp_dir().join(format!("vtcode-cu-mount-{},comma", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("vtcode-cua-mount-{},comma", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let contaminated = ContainerSpec::approved("registry.invalid/runner:1.0", &dir).await;
     assert!(contaminated.is_err());
@@ -69,7 +69,7 @@ async fn container_launch_argv_locks_the_hardening_flags() {
     let spec = ContainerSpec::approved("registry.invalid/runner:1.64.1", &manifest_dir())
         .await
         .unwrap();
-    let argv = docker_run_argv(&spec, "vtcode-cu-test");
+    let argv = docker_run_argv(&spec, "vtcode-cua-test");
     let flags: Vec<_> = argv.iter().map(|arg| arg.to_string_lossy()).collect();
     assert_eq!(
         flags[..13].join(" "),
@@ -77,7 +77,7 @@ async fn container_launch_argv_locks_the_hardening_flags() {
          --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=256 --memory=1g \
          --tmpfs=/tmp:rw,nosuid,nodev,size=512m --env=HOME=/tmp"
     );
-    assert_eq!(flags[13], "--name=vtcode-cu-test");
+    assert_eq!(flags[13], "--name=vtcode-cua-test");
     assert!(flags[14].starts_with("--mount=type=bind,src="));
     assert!(flags[14].ends_with(",dst=/build,readonly"));
     assert_eq!(flags[15], "registry.invalid/runner:1.64.1");
@@ -102,6 +102,14 @@ fn container_identity_must_be_a_full_hex_id() {
 }
 
 #[test]
+fn container_missing_message_covers_both_docker_wordings() {
+    assert!(is_missing_message("Error response from daemon: No such container: abc"));
+    assert!(is_missing_message("error: no such object: abc"));
+    assert!(!is_missing_message("Cannot connect to the Docker daemon"));
+    assert!(!is_missing_message(""));
+}
+
+#[test]
 fn container_diagnostics_are_bounded_on_char_boundaries() {
     assert_eq!(diagnostic_text(b"gone"), "gone");
     let multibyte = "é".repeat(DIAGNOSTIC_MAX_BYTES + 8);
@@ -109,4 +117,21 @@ fn container_diagnostics_are_bounded_on_char_boundaries() {
     assert!(diagnostic.len() <= DIAGNOSTIC_MAX_BYTES);
     assert!(diagnostic.chars().all(|c| c == 'é'));
     assert_eq!(diagnostic_text(b"\xff\xfe"), "��");
+}
+
+#[test]
+fn container_image_pin_rejects_registry_ports_without_tags() {
+    // NOTE: `runner:latest` carries a tag, so it passes here; callers
+    // reject `:latest` separately.
+    for image in ["runner", "registry.invalid:5000/runner"] {
+        assert!(!has_image_pin(image), "accepted {image:?}");
+    }
+    for image in [
+        "runner:1.64.1",
+        "registry.invalid/runner:1.64.1",
+        "registry.invalid/runner@sha256:abc",
+        "registry.invalid:5000/runner:1.64.1",
+    ] {
+        assert!(has_image_pin(image), "rejected {image:?}");
+    }
 }
