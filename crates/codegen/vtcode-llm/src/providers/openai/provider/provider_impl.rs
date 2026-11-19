@@ -1,9 +1,14 @@
+use super::super::errors::format_openai_error;
+use super::super::headers;
 use super::OpenAIProvider;
 use crate::client::LLMClient;
+use crate::error_display;
 use crate::provider::{self, LLMNormalizedStream};
+use crate::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use crate::types as llm_types;
 use async_trait::async_trait;
 use futures::StreamExt;
+use serde_json::Value;
 use vtcode_config::constants::models;
 
 #[async_trait]
@@ -181,6 +186,68 @@ impl provider::LLMProvider for OpenAIProvider {
             tracker.record_completion(&response);
         }
         Ok(response)
+    }
+
+    fn supports_computer_use(&self) -> bool {
+        true
+    }
+
+    async fn generate_native(
+        &self,
+        request: provider::LLMRequest,
+    ) -> Result<provider::NativeResponse, provider::LLMError> {
+        // No WebSocket, harmony, chat fallback, flex retry, or model fallback:
+        // native turns run Responses HTTP on verified models only, and any
+        // failure surfaces for the run loop to decide on. Rate limits keep
+        // their retryable error shape.
+        let mut request = request;
+        crate::providers::common::ensure_model(&mut request, &self.model);
+        let model = request.model.clone();
+        if !vtcode_computer_use::gate::verified_target_default(
+            "openai",
+            &model,
+            &self.base_url,
+            super::super::computer_use::PROTOCOL,
+        ) {
+            return Err(provider::LLMError::Provider {
+                message: format!("Computer use is not verified for model {model}"),
+                metadata: None,
+            });
+        }
+        let mut openai_request = self.convert_to_openai_responses_format(&request)?;
+        super::super::native::declare(&mut openai_request);
+        let url = &self.responses_url[..];
+        let client_request_id = Self::new_client_request_id();
+        let response = self
+            .send_authorized(|auth| {
+                headers::apply_turn_metadata(
+                    headers::apply_client_request_id(
+                        headers::apply_responses_beta(self.authorize_with_api_key(self.http_client.post(url), auth)),
+                        &client_request_id,
+                    ),
+                    request.metadata.as_ref(),
+                )
+                .json(&openai_request)
+            })
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let headers = response.headers().clone();
+            let error_text = crate::providers::common::read_provider_error_body(response).await;
+            if is_rate_limit_error(status.as_u16(), &error_text) {
+                return Err(parse_api_error("OpenAI", status, &error_text));
+            }
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format_openai_error(status, &error_text, &headers, "Responses API error", Some(&client_request_id)),
+            );
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
+        }
+        let openai_response: Value = response.json().await.map_err(|e| {
+            let formatted_error = error_display::format_llm_error("OpenAI", &format!("Failed to parse response: {e}"));
+            provider::LLMError::Provider { message: formatted_error, metadata: None }
+        })?;
+        super::super::native::parse_response_native(openai_response, model)
     }
 
     async fn generate_auxiliary(

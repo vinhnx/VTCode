@@ -11,8 +11,13 @@ use vtcode_computer_use::{
     Action, Driver, MAX_BATCH_ACTIONS, MouseButton, Observation, Point, Screenshot, TurnControl,
 };
 
+use crate::provider::{NativeCall, NativeCallBody};
+
+/// Native protocol version declared on the wire and checked by the gate.
+pub(crate) const PROTOCOL: &str = "computer";
+
 pub fn declaration() -> Value {
-    json!({"type": "computer"})
+    json!({"type": PROTOCOL})
 }
 
 /// Carries the original item for turn-local stateless replay. This type
@@ -43,6 +48,21 @@ impl ComputerCall<'_> {
             }
         })
     }
+}
+
+/// Execute one bound-route call decoded by `generate_native`. The replay
+/// item and actions ride along from the decoded body; anything else bails
+/// before the driver runs.
+pub async fn execute_decoded_call<D: Driver>(
+    control: &mut TurnControl<D>,
+    call: NativeCall,
+    timeout: Duration,
+) -> Result<Value> {
+    let NativeCallBody::OpenAi { replay_item, actions } = call.body else {
+        bail!("mixed-provider computer batch");
+    };
+    let decoded = ComputerCall { id: &call.id, item: &replay_item, actions };
+    execute_call(control, &decoded, timeout).await
 }
 
 /// Execute an admitted Responses call and prepare its private wire result.

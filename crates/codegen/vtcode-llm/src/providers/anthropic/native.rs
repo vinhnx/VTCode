@@ -76,6 +76,7 @@ pub(super) fn parse_response_native(response_json: Value, model: String) -> Resu
                     native_calls.push(NativeCall {
                         id: call.id().to_string(),
                         provider: NativeProvider::Anthropic,
+                        index: position,
                         body: NativeCallBody::Anthropic {
                             name,
                             action: call.action.map_err(|error| error.to_string()),

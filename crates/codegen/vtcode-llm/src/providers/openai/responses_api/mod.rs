@@ -71,7 +71,7 @@ fn responses_tool_call_output_type(kind: ResponsesToolCallKind) -> &'static str 
     }
 }
 
-fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
+pub(crate) fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
     let item_type = item.get("type").and_then(|value| value.as_str()).unwrap_or("");
     if item_type == "custom_tool_call" {
         let call_id = item

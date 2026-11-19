@@ -47,6 +47,14 @@ fn computer_use_anthropic_returns_images_and_redacts_invalid_inputs() {
     };
     assert_eq!(error.to_string(), "invalid Anthropic computer action field duration");
     assert_eq!(call.result(ComputerOutcome::Failed)["tool_use_id"], "bad");
+
+    let excessive = json!({"type": "tool_use", "id": "many", "toolset_name": "computer", "name": "scroll",
+        "input": {"scroll_direction": "down", "scroll_amount": 100_001}});
+    let call = decode_call(&excessive).unwrap().unwrap();
+    let Err(error) = &call.action else {
+        panic!("expected excessive scroll to fail");
+    };
+    assert_eq!(error.to_string(), "invalid computer scroll amount");
 }
 
 #[test]
@@ -153,4 +161,70 @@ async fn computer_use_anthropic_discards_prior_screenshot_when_turn_ends_mid_bat
     let error = execute_batch(&mut control, &blocks, Duration::from_secs(1)).await.unwrap_err();
     assert_eq!(error.to_string(), "computer turn has ended");
     assert!(turn.is_cancelled());
+}
+
+#[tokio::test]
+async fn computer_use_anthropic_decoded_batch_keeps_positions_and_refuses_mixed() {
+    use std::sync::{Arc, Mutex};
+
+    use tokio_util::sync::CancellationToken;
+
+    use crate::provider::NativeProvider;
+
+    struct Fixture(Arc<Mutex<Vec<String>>>);
+
+    impl Driver for Fixture {
+        async fn execute(&mut self, action: &Action, _: &CancellationToken) -> Result<Observation> {
+            match action {
+                Action::Type(text) => {
+                    self.0.lock().unwrap().push(text.clone());
+                    Ok(Observation::Done)
+                }
+                _ => panic!("unexpected driver action"),
+            }
+        }
+    }
+
+    let decoded = |index, id: &str, text: &str| NativeCall {
+        id: id.to_string(),
+        provider: NativeProvider::Anthropic,
+        index,
+        body: NativeCallBody::Anthropic {
+            name: "type".to_string(),
+            action: Ok(Action::Type(text.to_string())),
+        },
+    };
+    let actions = Arc::new(Mutex::new(Vec::new()));
+    let turn = CancellationToken::new();
+    let mut control = TurnControl::after_approval(Fixture(actions.clone()), &turn);
+    let results = execute_decoded(
+        &mut control,
+        vec![decoded(1, "first", "one"), decoded(4, "second", "two")],
+        Duration::from_secs(1),
+    )
+    .await
+    .unwrap();
+    let [(1, first), (4, second)] = results.as_slice() else {
+        panic!("decoded positions were lost");
+    };
+    assert_eq!(first["tool_use_id"], "first");
+    assert_eq!(first["content"], "OK");
+    assert_eq!(second["tool_use_id"], "second");
+    assert_eq!(second["content"], "OK");
+    assert_eq!(*actions.lock().unwrap(), ["one", "two"]);
+
+    let mixed = vec![NativeCall {
+        id: "foreign".to_string(),
+        provider: NativeProvider::OpenAi,
+        index: 0,
+        body: NativeCallBody::OpenAi { replay_item: json!({}), actions: Vec::new() },
+    }];
+    let error = execute_decoded(&mut control, mixed, Duration::from_secs(1)).await.unwrap_err();
+    assert_eq!(error.to_string(), "mixed-provider computer batch");
+    assert_eq!(*actions.lock().unwrap(), ["one", "two"]);
+
+    let dupes = vec![decoded(0, "same", "dup-one"), decoded(2, "same", "dup-two")];
+    let error = execute_decoded(&mut control, dupes, Duration::from_secs(1)).await.unwrap_err();
+    assert!(error.to_string().contains("duplicate"));
+    assert_eq!(*actions.lock().unwrap(), ["one", "two"]);
 }

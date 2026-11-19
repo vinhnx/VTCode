@@ -30,6 +30,7 @@ fn computer_use_native_parses_mixed_turns_and_keeps_verbatim_blocks() {
     assert_eq!(native.native_calls.len(), 2);
     assert_eq!(native.native_calls[0].id, "native_click");
     assert_eq!(native.native_calls[0].provider, NativeProvider::Anthropic);
+    assert_eq!((native.native_calls[0].index, native.native_calls[1].index), (3, 4));
     let NativeCallBody::Anthropic { name, action } = &native.native_calls[0].body else {
         panic!("expected an Anthropic native body");
     };
@@ -126,6 +127,56 @@ fn computer_use_native_declaration_preserves_function_tools() {
         with_function["tools"],
         json!([{"type": "function", "name": "shell"}, {"type": "computer_toolset_20260801"}])
     );
+}
+
+#[tokio::test]
+async fn computer_use_native_parse_and_execute_agree_on_actions() {
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use tokio_util::sync::CancellationToken;
+    use vtcode_computer_use::{Driver, Observation, TurnControl};
+
+    use super::super::computer_use::execute_batch;
+
+    struct RecordingDriver(Arc<Mutex<Vec<String>>>);
+
+    impl Driver for RecordingDriver {
+        async fn execute(&mut self, action: &Action, _: &CancellationToken) -> anyhow::Result<Observation> {
+            let tag = match action {
+                Action::Click { at: Some(point), .. } => format!("click:{},{}", point.x, point.y),
+                Action::Type(text) => format!("type:{text}"),
+                _ => panic!("unexpected driver action"),
+            };
+            self.0.lock().unwrap().push(tag);
+            Ok(Observation::Done)
+        }
+    }
+
+    let response = json!({
+        "content": [
+            {"type": "text", "text": "acting now"},
+            {"type": "tool_use", "id": "ordinary", "name": "shell", "input": {}},
+            {"type": "tool_use", "id": "native_click", "toolset_name": "computer", "name": "left_click",
+             "input": {"coordinate": [19, 3]}},
+            {"type": "tool_use", "id": "native_type", "toolset_name": "computer", "name": "type",
+             "input": {"text": "second"}},
+        ],
+        "stop_reason": "tool_use",
+    });
+    let native = parse_response_native(response, "claude-sonnet-5".to_string()).unwrap();
+    assert_eq!(native.native_calls.len(), 2);
+
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let mut control = TurnControl::after_approval(RecordingDriver(recorded.clone()), &CancellationToken::new());
+    let results = execute_batch(&mut control, &native.assistant_blocks, Duration::from_secs(5))
+        .await
+        .unwrap();
+    let [(first, _), (second, _)] = results.as_slice() else {
+        panic!("expected two native results");
+    };
+    assert_eq!((*first, *second), (2, 3));
+    assert_eq!(*recorded.lock().unwrap(), ["click:19,3", "type:second"]);
 }
 
 #[tokio::test]

@@ -36,6 +36,9 @@ pub struct NativeCall {
     pub id: String,
     /// Which provider produced the call.
     pub provider: NativeProvider,
+    /// Position in the original content/output array, so results merge back
+    /// with ordinary calls after the computer batch runs.
+    pub index: usize,
     /// Decoded provider-native body.
     pub body: NativeCallBody,
 }
@@ -99,6 +102,7 @@ impl std::fmt::Debug for NativeCall {
         f.debug_struct("NativeCall")
             .field("id", &self.id)
             .field("provider", &self.provider.as_str())
+            .field("index", &self.index)
             .field("body", &body)
             .finish()
     }

@@ -12,6 +12,8 @@ use vtcode_computer_use::{
     TurnControl,
 };
 
+use crate::provider::{NativeCall, NativeCallBody};
+
 pub(super) const TOOLSET: &str = "computer";
 /// Native protocol version declared on the wire and checked by the gate.
 pub(crate) const PROTOCOL: &str = "computer_toolset_20260801";
@@ -41,28 +43,32 @@ impl ComputerCall<'_> {
     }
 
     pub fn result(&self, outcome: ComputerOutcome<'_>) -> Value {
-        let (is_error, content) = match outcome {
-            ComputerOutcome::Executed(observation) => match observation {
-                Observation::Done => (false, json!("OK")),
-                Observation::CursorPosition(Point { x, y }) => (false, json!(format!("X={x}, Y={y}"))),
-                Observation::Screenshot(image) => (
-                    false,
-                    json!([{"type": "image", "source": {
-                        "type": "base64", "media_type": "image/png", "data": STANDARD.encode(image.as_png())
-                    }}]),
-                ),
-            },
-            ComputerOutcome::Failed => (true, json!("Computer action failed.")),
-            ComputerOutcome::Skipped => (true, json!(NOT_EXECUTED)),
-        };
-        json!({
-            "type": "tool_result",
-            "tool_use_id": self.id,
-            "toolset_name": TOOLSET,
-            "is_error": is_error,
-            "content": content,
-        })
+        computer_result(self.id, outcome)
     }
+}
+
+fn computer_result(id: &str, outcome: ComputerOutcome<'_>) -> Value {
+    let (is_error, content) = match outcome {
+        ComputerOutcome::Executed(observation) => match observation {
+            Observation::Done => (false, json!("OK")),
+            Observation::CursorPosition(Point { x, y }) => (false, json!(format!("X={x}, Y={y}"))),
+            Observation::Screenshot(image) => (
+                false,
+                json!([{"type": "image", "source": {
+                    "type": "base64", "media_type": "image/png", "data": STANDARD.encode(image.as_png())
+                }}]),
+            ),
+        },
+        ComputerOutcome::Failed => (true, json!("Computer action failed.")),
+        ComputerOutcome::Skipped => (true, json!(NOT_EXECUTED)),
+    };
+    json!({
+        "type": "tool_result",
+        "tool_use_id": id,
+        "toolset_name": TOOLSET,
+        "is_error": is_error,
+        "content": content,
+    })
 }
 
 pub enum ComputerOutcome<'a> {
@@ -85,6 +91,13 @@ pub fn decode_call(block: &Value) -> Result<Option<ComputerCall<'_>>> {
     }))
 }
 
+/// Admitted call with owned identity, ready for the fail-open loop.
+struct PreparedCall {
+    index: usize,
+    id: String,
+    action: Result<Action>,
+}
+
 /// Return private result blocks with their original output positions. The
 /// caller can merge ordinary client-tool results at the intervening positions.
 pub async fn execute_batch<D: Driver>(
@@ -92,37 +105,68 @@ pub async fn execute_batch<D: Driver>(
     blocks: &[Value],
     timeout: Duration,
 ) -> Result<Vec<(usize, Value)>> {
-    let result = execute_batch_inner(control, blocks, timeout).await;
+    let mut prepared = Vec::new();
+    for (index, block) in blocks.iter().enumerate() {
+        if let Some(call) = decode_call(block)? {
+            prepared.push(PreparedCall {
+                index,
+                id: call.id().to_string(),
+                action: call.action,
+            });
+        }
+    }
+    let result = execute_calls(control, prepared, timeout).await;
     if result.is_err() {
         control.revoke_target();
     }
     result
 }
 
-async fn execute_batch_inner<D: Driver>(
+/// Execute bound-route calls decoded by `generate_native`. Positions ride
+/// along from [`NativeCall::index`] so results merge back with ordinaries.
+pub async fn execute_decoded<D: Driver>(
     control: &mut TurnControl<D>,
-    blocks: &[Value],
+    calls: Vec<NativeCall>,
+    timeout: Duration,
+) -> Result<Vec<(usize, Value)>> {
+    let mut prepared = Vec::with_capacity(calls.len());
+    for call in calls {
+        let NativeCallBody::Anthropic { action, .. } = call.body else {
+            bail!("mixed-provider computer batch");
+        };
+        prepared.push(PreparedCall {
+            index: call.index,
+            id: call.id,
+            action: action.map_err(|message| anyhow::anyhow!(message)),
+        });
+    }
+    let result = execute_calls(control, prepared, timeout).await;
+    if result.is_err() {
+        control.revoke_target();
+    }
+    result
+}
+
+async fn execute_calls<D: Driver>(
+    control: &mut TurnControl<D>,
+    prepared: Vec<PreparedCall>,
     timeout: Duration,
 ) -> Result<Vec<(usize, Value)>> {
     control.ensure_turn_active()?;
-    let mut calls = Vec::new();
     let mut identities = HashSet::new();
-    for (index, block) in blocks.iter().enumerate() {
-        if let Some(call) = decode_call(block)? {
-            ensure!(calls.len() < MAX_BATCH_ACTIONS, "too many Anthropic computer actions");
-            ensure!(identities.insert(call.id), "duplicate Anthropic computer call identity");
-            calls.push((index, call));
-        }
+    for call in &prepared {
+        ensure!(identities.insert(call.id.as_str()), "duplicate Anthropic computer call identity");
     }
+    ensure!(prepared.len() <= MAX_BATCH_ACTIONS, "too many Anthropic computer actions");
 
     let start = tokio::time::Instant::now();
     let mut failed = false;
     let mut screenshot_bytes = 0;
-    let mut results = Vec::with_capacity(calls.len());
-    for (index, call) in calls {
+    let mut results = Vec::with_capacity(prepared.len());
+    for call in &prepared {
         let observations = match &call.action {
             Ok(action) if !failed => control
-                .execute_batch(call.id, std::slice::from_ref(action), timeout.saturating_sub(start.elapsed()))
+                .execute_batch(&call.id, std::slice::from_ref(action), timeout.saturating_sub(start.elapsed()))
                 .await
                 .ok(),
             _ => None,
@@ -139,7 +183,7 @@ async fn execute_batch_inner<D: Driver>(
                 ComputerOutcome::Failed
             }
         };
-        results.push((index, call.result(outcome)));
+        results.push((call.index, computer_result(&call.id, outcome)));
     }
     control.ensure_turn_active()?;
     Ok(results)
@@ -199,18 +243,22 @@ fn decode_action(name: &str, input: &Value) -> Result<Action> {
             at: point(field(input, "coordinate")?),
             modifiers: Vec::new(),
         },
-        "scroll" => Action::ScrollTicks {
-            at: optional_point(input)?,
-            direction: match input["scroll_direction"].as_str() {
-                Some("up") => ScrollDirection::Up,
-                Some("down") => ScrollDirection::Down,
-                Some("left") => ScrollDirection::Left,
-                Some("right") => ScrollDirection::Right,
-                _ => bail!("invalid computer scroll direction"),
-            },
-            amount: field(input, "scroll_amount")?,
-            modifiers: modifiers(input)?,
-        },
+        "scroll" => {
+            let amount: u32 = field(input, "scroll_amount")?;
+            ensure!(amount <= 100_000, "invalid computer scroll amount");
+            Action::ScrollTicks {
+                at: optional_point(input)?,
+                direction: match input["scroll_direction"].as_str() {
+                    Some("up") => ScrollDirection::Up,
+                    Some("down") => ScrollDirection::Down,
+                    Some("left") => ScrollDirection::Left,
+                    Some("right") => ScrollDirection::Right,
+                    _ => bail!("invalid computer scroll direction"),
+                },
+                amount,
+                modifiers: modifiers(input)?,
+            }
+        }
         "type" => Action::Type(field(input, "text")?),
         "key" => {
             let repeat = optional_field(input, "repeat")?.unwrap_or(1);

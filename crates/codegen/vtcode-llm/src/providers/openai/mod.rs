@@ -31,6 +31,7 @@ mod custom_provider_auth;
 pub(crate) mod errors;
 mod harmony;
 pub(crate) mod headers;
+mod native;
 pub(crate) mod request_builder;
 pub(crate) mod response_parser;
 pub(crate) mod responses_api;

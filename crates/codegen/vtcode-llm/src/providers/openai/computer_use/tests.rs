@@ -6,14 +6,14 @@ fn computer_use_openai_keeps_item_identity_and_orders_actions() {
     let ordinary = json!({"type": "function_call", "name": "computer", "call_id": "ordinary"});
     assert!(decode_call(&ordinary).unwrap().is_none());
 
-    let native = json!({"type":"computer_call","id":"cu_item","call_id":"call_17","status":"completed","actions":[
+    let native = json!({"type":"computer_call","id":"cua_item","call_id":"call_17","status":"completed","actions":[
         {"type":"move","x":29,"y":17,"keys":["SHIFT"]},
         {"type":"scroll","x":17,"y":29,"scroll_x":-11,"scroll_y":7},
         {"type":"type","text":"payload"}
     ]});
     let call = decode_call(&native).unwrap().unwrap();
     assert_eq!(call.id(), "call_17");
-    assert_eq!(call.replay_item()["id"], "cu_item");
+    assert_eq!(call.replay_item()["id"], "cua_item");
     let [
         Action::Move { at: Point { x: 29, y: 17 }, modifiers },
         Action::ScrollPixels { at: Point { x: 17, y: 29 }, x: -11, y: 7, .. },
@@ -92,4 +92,57 @@ async fn computer_use_openai_execution_revokes_when_the_final_image_is_missing()
     let error = execute_call(&mut control, &call, Duration::from_secs(1)).await.unwrap_err();
     assert_eq!(error.to_string(), "computer control has ended");
     assert!(!turn.is_cancelled());
+}
+
+#[tokio::test]
+async fn computer_use_openai_decoded_call_keeps_identity_and_image() {
+    use tokio_util::sync::CancellationToken;
+
+    use crate::provider::NativeProvider;
+
+    struct Fixture;
+
+    impl Driver for Fixture {
+        async fn execute(&mut self, action: &Action, _: &CancellationToken) -> Result<Observation> {
+            match action {
+                Action::Screenshot => {
+                    Ok(Observation::Screenshot(Screenshot::png(b"\x89PNG\r\n\x1a\ndecoded-probe".to_vec()).unwrap()))
+                }
+                _ => Ok(Observation::Done),
+            }
+        }
+    }
+
+    let turn = CancellationToken::new();
+    let mut control = TurnControl::after_approval(Fixture, &turn);
+    let call = NativeCall {
+        id: "call_9".to_string(),
+        provider: NativeProvider::OpenAi,
+        index: 2,
+        body: NativeCallBody::OpenAi {
+            replay_item: json!({"type": "computer_call", "call_id": "call_9"}),
+            actions: vec![Action::Type("hi".to_string()), Action::Screenshot],
+        },
+    };
+    let output = execute_decoded_call(&mut control, call, Duration::from_secs(1)).await.unwrap();
+    assert_eq!(output["type"], "computer_call_output");
+    assert_eq!(output["call_id"], "call_9");
+    let image_url = output["output"]["image_url"].as_str().unwrap();
+    let payload = image_url.trim_start_matches("data:image/png;base64,");
+    assert_ne!(payload, image_url, "output must embed a data URL");
+    assert_eq!(STANDARD.decode(payload).unwrap(), b"\x89PNG\r\n\x1a\ndecoded-probe");
+
+    let foreign = NativeCall {
+        id: "foreign".to_string(),
+        provider: NativeProvider::Anthropic,
+        index: 0,
+        body: NativeCallBody::Anthropic {
+            name: "type".to_string(),
+            action: Ok(Action::Type("no".to_string())),
+        },
+    };
+    let error = execute_decoded_call(&mut control, foreign, Duration::from_secs(1))
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "mixed-provider computer batch");
 }
