@@ -706,6 +706,98 @@ async fn computer_use_turn_executes_over_real_container() {
     assert_eq!(completed[0]["event"]["item"]["status"], serde_json::json!("completed"));
 }
 
+/// Live dogfood: a real model drives a real computer turn against the real
+/// container, asserting verified execution end to end. Default-off: needs
+/// docker, network, an `OPENAI_API_KEY` (process env or workspace `.env`),
+/// and OpenAI billing, so it runs only with `VTCODE_LIVE_CUA=1` (never in
+/// CI or default suites). Uses the probe-verified direct-endpoint tuple.
+const LIVE_MODEL: &str = "gpt-6-luna";
+
+#[tokio::test]
+async fn computer_use_live_turn_executes_over_real_container() {
+    if std::env::var("VTCODE_LIVE_CUA").as_deref() != Ok("1") {
+        eprintln!("skipping live computer-use turn: set VTCODE_LIVE_CUA=1 to run");
+        return;
+    }
+    if !docker_available().await {
+        eprintln!("skipping live computer-use turn: docker is unavailable");
+        return;
+    }
+    let key = std::env::var("OPENAI_API_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+        .or_else(|| {
+            vtcode_config::read_workspace_env_value(std::path::Path::new(env!("CARGO_MANIFEST_DIR")), "OPENAI_API_KEY")
+                .ok()
+                .flatten()
+                .filter(|key| !key.trim().is_empty())
+        });
+    let Some(key) = key else {
+        eprintln!("skipping live computer-use turn: no OPENAI_API_KEY in env or workspace .env");
+        return;
+    };
+    let provider = vtcode_llm::providers::openai::OpenAIProvider::from_config(
+        Some(key),
+        None,
+        Some(LIVE_MODEL.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("events.jsonl");
+    let emitter = HarnessEventEmitter::new(path.clone()).unwrap();
+    let stop = CtrlCState::new();
+    let notify = Notify::new();
+    let mut stats = SessionStats::default();
+    let request = LLMRequest {
+        model: LIVE_MODEL.to_string(),
+        messages: std::sync::Arc::new(vec![vtcode_core::llm::provider::Message {
+            role: vtcode_core::llm::provider::MessageRole::User,
+            content: vtcode_core::llm::provider::MessageContent::Text(
+                "Take a screenshot of the current screen.".to_string(),
+            ),
+            ..Default::default()
+        }]),
+        ..Default::default()
+    };
+    // This test is its own human: the isolated container plus a read-only
+    // screenshot task make auto-approval safe here.
+    let outcome = run_computer_turn(
+        &provider,
+        request,
+        &e2e_config(),
+        &mut ComputerTurnRuntime {
+            stop: &stop,
+            notify: &notify,
+            stats: &mut stats,
+            emitter: Some(&emitter),
+        },
+        |_| async { Ok(true) },
+    )
+    .await
+    .unwrap();
+    let ComputerTurnOutcomeKind::Completed { results, summary } = outcome.kind else {
+        panic!("live turn must complete, got {:?}", outcome.kind);
+    };
+    assert!(summary.executed_units >= 1, "live turn executed nothing: {summary:?}");
+    assert!(
+        matches!(summary.teardown, TeardownOutcome::Removed | TeardownOutcome::AlreadyGone),
+        "live turn must remove its container: {:?}",
+        summary.teardown
+    );
+    let NativeTurnResults::OpenAi(outputs) = results else {
+        panic!("expected OpenAI results, got {results:?}");
+    };
+    assert!(!outputs.is_empty(), "live turn returned no call outputs");
+    assert!(outcome.usage.as_ref().is_some_and(|usage| usage.total_tokens > 0), "live turn must report usage");
+    assert!(!summary.message("completed").contains("base64"), "summary must stay redacted");
+    eprintln!("live turn verified: {} executed units, usage={:?}", summary.executed_units, outcome.usage);
+}
+
 /// Unique typed-text sentinel: the release gate scans durable outputs for it.
 const TYPED_SENTINEL: &str = "SENTINEL-TYPED-vtcode-7f3a";
 

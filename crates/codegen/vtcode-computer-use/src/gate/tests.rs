@@ -19,6 +19,22 @@ fn computer_use_gate_denies_everything_until_a_probe_lands() {
 }
 
 #[test]
+fn computer_use_gate_admits_the_probe_verified_luna_target() {
+    assert!(verified_target_default("openai", "gpt-6-luna", "https://api.openai.com/v1", "computer"));
+    for (provider, model, endpoint, protocol) in [
+        ("openai", "gpt-6-luna-code", "https://api.openai.com/v1", "computer"),
+        ("openai", "gpt-6-luna", "https://proxy.invalid/v1", "computer"),
+        ("openai", "gpt-6-luna", "https://api.openai.com/v1", "computer_20251124"),
+        ("openai", "GPT-6-LUNA", "https://api.openai.com/v1", "computer"),
+    ] {
+        assert!(
+            !verified_target_default(provider, model, endpoint, protocol),
+            "admitted {provider}/{model}/{endpoint}/{protocol}"
+        );
+    }
+}
+
+#[test]
 fn computer_use_gate_requires_an_exact_match_in_every_dimension() {
     assert!(verified_target(
         MATRIX,
