@@ -151,15 +151,26 @@ Turns start when the model calls the registered `computer_use` tool
 with a plain-words `task`. The turn loop intercepts the validated call
 and runs the dispatcher: propose (gates, native generation, budget,
 Decisions review), approve the proposed batch through the permission
-flow (`request_target_approval`), execute, tear down. The tool itself
-carries an explicit Prompt policy plus the first permission prompt, so
-every turn gets human eyes twice — once on scope (task + target) and
-once on the concrete proposed batch — and neither prompt is
-auto-approvable (base risk plus the allow-list rejection). Fail-closed
-refusals (disabled, missing target, unsupported provider, unverified
-model) return as tool errors carrying guidance the model relays. The
-registry executor for the tool is a fail-closed stub: execution only
-ever happens through the turn dispatcher.
+flow (`request_target_approval`), execute, tear down. Single approval
+per turn: validation skips the generic scope prompt for `computer_use`
+(the batch review shows what would actually execute), while every deny
+path (hook, cache, policy, permission, full-auto) and
+safety-gateway-flagged prompts still apply, and the batch prompt is
+never auto-approvable. Fail-closed refusals (disabled, missing target,
+unsupported provider, unverified model) return as tool errors carrying
+guidance the model relays. The registry executor for the tool is a
+fail-closed stub: execution only ever happens through the turn
+dispatcher.
+
+Shell screenshots route here too: while computer use is runnable
+(advertised, enabled, target configured, provider capable), an
+`exec_command` carrying a headless `--screenshot` flag or an
+open-URL-plus-`screencapture` compound is blocked in validation with a
+steering error, so the model re-issues the task as `computer_use`.
+Bare `open <url>` (viewing) and bare `screencapture` (desktop captures
+v1 cannot replace) pass through, as does everything when computer use
+cannot run. The master switch stays the human-operated escape hatch
+for sessions that need raw headless output.
 
 ## Then
 
