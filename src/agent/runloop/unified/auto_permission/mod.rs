@@ -27,7 +27,7 @@ const STAGE_TWO_RESPONSE_FORMAT: &str = "Return strict JSON: {\"decision\":\"all
 mod probe;
 pub(crate) use probe::{
     DECISIONS_SUGGESTION, ProbeRuntime, ProbeWarning, decisions_suggestion_applicable, probe_tool_output,
-    recent_user_context,
+    recent_user_context, wait_for_stop,
 };
 
 const MAX_TRANSCRIPT_ENTRIES: usize = 48;

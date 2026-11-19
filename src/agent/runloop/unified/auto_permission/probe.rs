@@ -116,7 +116,7 @@ impl ProbeVerdict {
     }
 }
 
-async fn wait_for_stop(stop: &CtrlCState, notify: &Notify) {
+pub(crate) async fn wait_for_stop(stop: &CtrlCState, notify: &Notify) {
     loop {
         let notified = notify.notified();
         tokio::pin!(notified);

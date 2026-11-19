@@ -27,6 +27,7 @@ pub(crate) use looping::low_signal_family_key;
 use looping::maybe_apply_spool_read_offset_hint;
 pub(crate) use looping::{shell_failure_error_signature, shell_run_signature};
 mod budget;
+pub(crate) mod computer_use;
 mod fallbacks;
 mod guards;
 #[path = "../handlers_batch.rs"]

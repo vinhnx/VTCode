@@ -382,6 +382,7 @@ vtcode-ui = { workspace = true }
 vtcode-config = { workspace = true }
 vtcode-auth = { workspace = true }
 vtcode-core = { workspace = true }
+vtcode-computer-use = { workspace = true }
 vtcode-skills = { workspace = true }
 vtcode-tui-runtime = { workspace = true }
 vtcode-webmcp = { workspace = true }
@@ -390,6 +391,7 @@ vtcode-memory = { workspace = true }
 vtcode-eval = { workspace = true }
 vtcode-desktop-protocol = { workspace = true }
 vtcode-utility-tool-specs = { workspace = true }
+vtcode-llm = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
