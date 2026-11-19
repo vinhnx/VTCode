@@ -24,6 +24,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 GATE_SEVERITY=${CODERABBIT_GATE_SEVERITY:-major}
 REVIEW_SCOPE=""
+REVIEW_DIR=""
 BASE_REF=""
 FORCE=false
 # Hourly throttle: CodeRabbit bills pushes, not commits, and a gated review always
@@ -36,8 +37,11 @@ THROTTLE_SECONDS=${CODERABBIT_THROTTLE_SECONDS:-3600}
 # future date to adopt the review without blocking work.
 GRACE_UNTIL=${CODERABBIT_GRACE_UNTIL:-}
 # Where the throttle and last outcome are recorded. Local and untracked, so it
-# never becomes repository state.
-STATE_DIR=${CODERABBIT_STATE_DIR:-.git/coderabbit-review}
+# never becomes repository state. Resolved through `--git-dir` so a linked
+# worktree (where `.git` is a file) still records state instead of silently
+# failing and re-running a network review every time.
+GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null || printf '.git')
+STATE_DIR=${CODERABBIT_STATE_DIR:-${GIT_DIR_PATH}/coderabbit-review}
 
 # Bound the call so a stalled network review cannot hang the agent loop. macOS
 # bash 3.2 has no builtin timeout, so fall back to GNU timeout/gtimeout when
@@ -115,7 +119,14 @@ has_changes() {
 }
 
 has_uncommitted_changes() {
-	if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+	# Capture the status separately: a failed query (not a git worktree, dubious
+	# ownership) produces empty output, and treating that as "no changes" would
+	# report success without reviewing anything.
+	local porcelain
+	if ! porcelain=$(git -C "$REVIEW_DIR" status --porcelain 2>/dev/null); then
+		return 0 # Defer to the CLI rather than claiming the tree is clean.
+	fi
+	if [ -n "$porcelain" ]; then
 		return 0
 	fi
 	return 1
@@ -126,10 +137,10 @@ has_committed_changes() {
 	if ! base=$(resolve_base_ref); then
 		return 0
 	fi
-	if ! git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
+	if ! git -C "$REVIEW_DIR" rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
 		return 0
 	fi
-	if git diff --quiet "${base}...HEAD" 2>/dev/null; then
+	if git -C "$REVIEW_DIR" diff --quiet "${base}...HEAD" 2>/dev/null; then
 		return 1
 	fi
 	return 0
@@ -142,14 +153,16 @@ resolve_base_ref() {
 		printf '%s\n' "$BASE_REF"
 		return 0
 	fi
-	if git symbolic-ref -q refs/remotes/origin/HEAD >/dev/null 2>&1; then
-		git symbolic-ref -q --short refs/remotes/origin/HEAD
+	if git -C "$REVIEW_DIR" symbolic-ref -q refs/remotes/origin/HEAD >/dev/null 2>&1; then
+		git -C "$REVIEW_DIR" symbolic-ref -q --short refs/remotes/origin/HEAD
 		return 0
 	fi
-	if git rev-parse --verify --quiet main >/dev/null 2>&1; then
+	if git -C "$REVIEW_DIR" rev-parse --verify --quiet main >/dev/null 2>&1; then
 		printf 'main\n'
 		return 0
 	fi
+	# No resolvable base: return failure so the caller defers to the CLI rather
+	# than silently concluding there is nothing to review.
 	return 1
 }
 
@@ -179,7 +192,8 @@ main() {
 			shift 2
 			;;
 		--dir)
-			args+=("--dir" "${2:?--dir requires a path}")
+			REVIEW_DIR=${2:?--dir requires a path}
+			args+=("--dir" "$REVIEW_DIR")
 			shift 2
 			;;
 		--force)
@@ -232,6 +246,14 @@ main() {
 		exit $?
 	fi
 
+	# The scope predicate counts untracked files, so the review must cover them too;
+	# otherwise a tree whose only change is untracked starts a review that sees
+	# nothing and still spends an allowance unit. The CLI rejects the flag together
+	# with --committed.
+	if [ "$REVIEW_SCOPE" != "committed" ]; then
+		args+=("--include-untracked")
+	fi
+
 	print_status "Running CodeRabbit review (gate: ${GATE_SEVERITY}, timeout: ${timeout_seconds}s)..."
 	# Findings stream to stdout as NDJSON; keep them visible for the agent loop.
 	local status=0
@@ -248,20 +270,22 @@ diff_key() {
 	local payload=""
 	case "$REVIEW_SCOPE" in
 	uncommitted) payload=$(
-		git status --porcelain 2>/dev/null
-		git diff 2>/dev/null
+		git -C "$REVIEW_DIR" status --porcelain 2>/dev/null
+		git -C "$REVIEW_DIR" diff 2>/dev/null
 	) ;;
 	committed)
 		local base
 		base=$(resolve_base_ref) || return 1
-		payload=$(git diff "${base}...HEAD" 2>/dev/null)
+		payload=$(git -C "$REVIEW_DIR" diff "${base}...HEAD" 2>/dev/null)
 		;;
 	*) payload=$(
-		git status --porcelain 2>/dev/null
-		git diff 2>/dev/null
+		git -C "$REVIEW_DIR" status --porcelain 2>/dev/null
+		git -C "$REVIEW_DIR" diff 2>/dev/null
 	) ;;
 	esac
-	printf '%s\n%s\n%s\n' "$GATE_SEVERITY" "$REVIEW_SCOPE" "$payload" |
+	# The directory is part of the key: two different --dir targets can share a
+	# caller-repository diff, and a verdict for one must never satisfy the other.
+	printf '%s\n%s\n%s\n%s\n' "$GATE_SEVERITY" "$REVIEW_SCOPE" "$REVIEW_DIR" "$payload" |
 		git hash-object --stdin 2>/dev/null
 }
 
