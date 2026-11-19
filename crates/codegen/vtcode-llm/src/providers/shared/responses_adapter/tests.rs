@@ -657,16 +657,12 @@ fn overlay_conversion_shapes_remain_strict() {
         .is_err()
     );
 
-    assert!(
-        ResponsesStreamAdapter::parse_sse_data(
-            &json!({
-                "type": "response.not_a_real_event",
-                "sequence_number": 1
-            })
-            .to_string()
-        )
-        .is_err()
-    );
+    // Unknown event *types* are deliberately NOT strict: providers add
+    // stream events without client coordination, and failing the whole
+    // response on an unrecognized marker turns every upstream deploy
+    // into a client outage. See
+    // `unknown_future_event_types_parse_as_unknown_instead_of_failing`.
+    // Strictness here covers malformed *shapes* of known types only.
 }
 
 #[test]
@@ -988,4 +984,13 @@ fn function_call_stream_preserves_call_id_across_start_delta_and_completion() {
             output_index: Some(0)
         }
     );
+}
+
+#[test]
+fn unknown_future_event_types_parse_as_unknown_instead_of_failing() {
+    // Unrecognized markers (e.g. `response.metadata`) must not fail the response.
+    for event_type in ["response.metadata", "response.some_future_event"] {
+        let event = event_fixture(json!({"type": event_type, "sequence_number": 0}));
+        assert_eq!(event, ResponsesStreamEvent::Unknown, "{event_type} must parse, not fail");
+    }
 }

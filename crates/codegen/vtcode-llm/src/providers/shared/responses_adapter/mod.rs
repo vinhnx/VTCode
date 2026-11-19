@@ -286,11 +286,19 @@ fn adapt_policy_payload(provider_name: &str, payload: Value) -> Result<Responses
         ResponsesStreamEventPolicy::VtcodeOverlayConversion => adapt_overlay_conversion(provider_name, &payload),
         ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop => Ok(ResponsesStreamEvent::Unknown),
         ResponsesStreamEventPolicy::DocumentedValueBearingRigGap => adapt_value_bearing_rig_gap(payload),
-        ResponsesStreamEventPolicy::Unsupported => Err(StreamAssemblyError::InvalidPayload(format!(
-            "unsupported Responses stream event type `{}`",
-            payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
-        ))
-        .into_llm_error(provider_name)),
+        ResponsesStreamEventPolicy::Unsupported => {
+            // Unknown event types are skipped, not fatal: providers add
+            // stream events (e.g. `response.metadata`) without client
+            // coordination, and failing the whole response on an
+            // unrecognized marker turns every upstream deploy into a
+            // client outage. Final `response.completed` replay preserves
+            // complete state. The warning keeps protocol drift visible.
+            tracing::warn!(
+                event_type = payload.get("type").and_then(|value| value.as_str()).unwrap_or("<missing>"),
+                "Skipping unsupported Responses stream event type"
+            );
+            Ok(ResponsesStreamEvent::Unknown)
+        }
         ResponsesStreamEventPolicy::RigSupportedTyped => Err(StreamAssemblyError::InvalidPayload(format!(
             "Rig-supported Responses stream event `{}` reached overlay fallback",
             payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")

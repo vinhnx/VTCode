@@ -566,10 +566,15 @@ pub(crate) fn create_responses_stream(
                             // preserved by final `response.completed` replay.
                         }
                         ResponsesStreamEventPolicy::Unsupported => {
-                            Err(StreamAssemblyError::InvalidPayload(format!(
-                                "unsupported Responses stream event type `{event_type}`"
-                            ))
-                            .into_llm_error("OpenAI"))?;
+                            // Unknown event types are skipped, not fatal:
+                            // providers add stream events (e.g.
+                            // `response.metadata`) without client
+                            // coordination. See the adapter policy for the
+                            // full rationale.
+                            tracing::warn!(
+                                event_type,
+                                "Skipping unsupported Responses stream event type"
+                            );
                         }
                         ResponsesStreamEventPolicy::MeaningfulConversion => match event_type {
                             "response.output_text.delta" => {

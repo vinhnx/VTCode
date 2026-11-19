@@ -147,52 +147,63 @@ impl WebSocketLease {
     }
 
     pub(crate) async fn read(&mut self) -> Result<Value, LLMError> {
-        let deadline = self.deadline;
-        let event = timeout_at(deadline, read_websocket_event(self.session()?))
-            .await
-            .map_err(|_elapsed| websocket_deadline_error())??;
-        let policy = crate::providers::shared::response_stream_event_policy(&event)
-            .map_err(|message| format_provider_error(message.to_string()))?;
-        if policy == crate::providers::shared::ResponsesStreamEventPolicy::Unsupported {
-            return Err(format_provider_error("Unsupported OpenAI WebSocket event".to_string()));
-        }
-        let event_type = event.get("type").and_then(Value::as_str);
-        if matches!(event_type, Some("error" | "response.failed" | "response.incomplete")) {
-            let error = event.get("response").unwrap_or(&event);
-            let status = event
-                .get("status")
-                .and_then(Value::as_u64)
-                .and_then(|status| u16::try_from(status).ok())
-                .and_then(|status| reqwest::StatusCode::from_u16(status).ok())
-                .unwrap_or(reqwest::StatusCode::BAD_REQUEST);
-            if self.tier_requested && is_flex_service_tier_unsupported(status, &error.to_string()) {
-                self.tier_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(self.model.clone(), true);
-                tracing::warn!(model = %self.model, "OpenAI WebSocket rejected service tier; using tier-less HTTP");
+        // Unknown event types are skipped, not fatal: providers add
+        // stream events without client coordination. The absolute
+        // deadline still bounds the wait below.
+        loop {
+            let deadline = self.deadline;
+            let event = timeout_at(deadline, read_websocket_event(self.session()?))
+                .await
+                .map_err(|_elapsed| websocket_deadline_error())??;
+            let policy = crate::providers::shared::response_stream_event_policy(&event)
+                .map_err(|message| format_provider_error(message.to_string()))?;
+            if policy == crate::providers::shared::ResponsesStreamEventPolicy::Unsupported {
+                tracing::warn!(
+                    event_type = event.get("type").and_then(|value| value.as_str()).unwrap_or("<missing>"),
+                    "Skipping unsupported OpenAI WebSocket event"
+                );
+                continue;
             }
-            let error = error.get("error").unwrap_or(error);
-            let code = error.get("code").and_then(Value::as_str).unwrap_or("unknown_error");
-            let message = error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("OpenAI WebSocket response failed or incomplete");
-            return Err(format_provider_error(format!("{code}: {message}")));
-        }
-        if event_type == Some("response.completed") {
-            let response = event.get("response").filter(|value| value.is_object()).ok_or_else(|| {
-                format_provider_error("OpenAI WebSocket completed event missing response".to_string())
-            })?;
-            if response
-                .get("status")
-                .and_then(Value::as_str)
-                .is_some_and(|status| status != "completed")
-            {
-                return Err(format_provider_error("OpenAI WebSocket completion has unsuccessful status".to_string()));
+            let event_type = event.get("type").and_then(Value::as_str);
+            if matches!(event_type, Some("error" | "response.failed" | "response.incomplete")) {
+                let error = event.get("response").unwrap_or(&event);
+                let status = event
+                    .get("status")
+                    .and_then(Value::as_u64)
+                    .and_then(|status| u16::try_from(status).ok())
+                    .and_then(|status| reqwest::StatusCode::from_u16(status).ok())
+                    .unwrap_or(reqwest::StatusCode::BAD_REQUEST);
+                if self.tier_requested && is_flex_service_tier_unsupported(status, &error.to_string()) {
+                    self.tier_cache
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(self.model.clone(), true);
+                    tracing::warn!(model = %self.model, "OpenAI WebSocket rejected service tier; using tier-less HTTP");
+                }
+                let error = error.get("error").unwrap_or(error);
+                let code = error.get("code").and_then(Value::as_str).unwrap_or("unknown_error");
+                let message = error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("OpenAI WebSocket response failed or incomplete");
+                return Err(format_provider_error(format!("{code}: {message}")));
             }
+            if event_type == Some("response.completed") {
+                let response = event.get("response").filter(|value| value.is_object()).ok_or_else(|| {
+                    format_provider_error("OpenAI WebSocket completed event missing response".to_string())
+                })?;
+                if response
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .is_some_and(|status| status != "completed")
+                {
+                    return Err(format_provider_error(
+                        "OpenAI WebSocket completion has unsuccessful status".to_string(),
+                    ));
+                }
+            }
+            return Ok(event);
         }
-        Ok(event)
     }
 
     pub(crate) async fn read_response(&mut self) -> Result<Value, LLMError> {
