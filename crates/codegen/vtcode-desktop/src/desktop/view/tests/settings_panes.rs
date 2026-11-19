@@ -388,3 +388,50 @@ fn computer_use_tab_reflects_snapshot_and_writes_on_toggle(cx: &mut TestAppConte
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn computer_use_configure_lands_on_the_browser_target_setting(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (commands, _requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(PathBuf::from("/work/demo"));
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![
+                    config_page_setting("computer_use.enabled", json!(false), "Computer Use"),
+                    config_page_setting("computer_use.browser_build", json!("/tmp/fixture-build"), "Computer Use"),
+                ],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            }));
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        // Keyboard-navigate to the Computer Use tab (page index 7):
+        // view-driven pushes keep Kit selection in sync.
+        window.press("home", cx);
+        window.render_frame(cx);
+        for _ in 0..7 {
+            window.press("right", cx);
+            window.render_frame(cx);
+        }
+        assert!(window.try_find("computer-use-settings").is_some());
+        scroll_settings_by(window, px(-3000.), cx);
+        window.render_frame(cx);
+        window.click("computer-use-open-config", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open, "Configure target opens the config page");
+        assert_eq!(
+            view.read(cx).config_search_input.read(cx).value().as_str(),
+            "computer_use.browser_build",
+            "the deep link narrows to the target setting, not the master switch"
+        );
+        assert!(window.try_find("config-edit-computer_use.browser_build").is_some());
+        assert!(window.try_find("config-edit-computer_use.enabled").is_none());
+    })
+    .unwrap();
+}

@@ -3,6 +3,7 @@ use super::*;
 const COMPUTER_USE_SETTINGS_GROUP_ID: &str = "computer-use-settings-group";
 const COMPUTER_USE_ENABLED_PATH: &str = "computer_use.enabled";
 const COMPUTER_USE_DECISIONS_PATH: &str = "computer_use.decisions_review";
+const COMPUTER_USE_BROWSER_BUILD_PATH: &str = "computer_use.browser_build";
 
 /// Cloned render inputs for the Computer Use tab. Values come from the
 /// shared CLI config snapshot; writes go through `save_cli_config_value`.
@@ -26,7 +27,7 @@ impl ComputerUseSettingsProps {
             can_edit: view.can_edit_cli_settings(),
             enabled: snapshot_bool(snapshot, COMPUTER_USE_ENABLED_PATH),
             decisions_review: snapshot_bool(snapshot, COMPUTER_USE_DECISIONS_PATH),
-            target: snapshot_string(snapshot, "computer_use.browser_build"),
+            target: snapshot_string(snapshot, COMPUTER_USE_BROWSER_BUILD_PATH),
             image: snapshot_string(snapshot, "computer_use.image"),
             max_actions: snapshot_number(snapshot, "computer_use.max_actions_per_turn"),
             timeout_secs: snapshot_number(snapshot, "computer_use.turn_timeout_secs"),
@@ -221,7 +222,7 @@ impl DesktopView {
                         .label(rust_i18n::t!("app.settings.computer_use.configure").to_string())
                         .on_click(move |_, window: &mut Window, cx: &mut App| {
                             view.update(cx, |view, cx| {
-                                view.open_config_link(Some(COMPUTER_USE_ENABLED_PATH.to_string()), window, cx)
+                                view.open_config_link(Some(COMPUTER_USE_BROWSER_BUILD_PATH.to_string()), window, cx)
                             });
                         }),
                 ),
