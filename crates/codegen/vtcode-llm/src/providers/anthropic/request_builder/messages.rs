@@ -409,12 +409,11 @@ fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
         for call in tool_calls {
             if let Some(ref func) = call.function {
                 let args: Value = call.parsed_arguments().unwrap_or_else(|_| json!({}));
-                blocks.push(AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock {
-                    id: call.id.clone(),
-                    name: func.name.clone(),
-                    input: args,
-                    cache_control: None,
-                })));
+                blocks.push(AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock::function(
+                    call.id.clone(),
+                    func.name.clone(),
+                    args,
+                ))));
             }
         }
     }

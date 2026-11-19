@@ -360,12 +360,11 @@ mod tests {
     }
 
     fn tool_use(id: &str) -> AnthropicContentBlock {
-        AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock {
-            id: id.to_owned(),
-            name: "read_file".to_owned(),
-            input: json!({}),
-            cache_control: None,
-        }))
+        AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock::function(
+            id.to_owned(),
+            "read_file".to_owned(),
+            json!({}),
+        )))
     }
 
     fn kinds(blocks: &[AnthropicContentBlock]) -> Vec<String> {

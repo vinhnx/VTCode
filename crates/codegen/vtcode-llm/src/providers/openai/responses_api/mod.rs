@@ -373,6 +373,7 @@ pub(crate) fn parse_responses_payload(
     let mut tool_references: Vec<String> = Vec::new();
 
     for item in output {
+        crate::providers::shared::reject_unbound_computer_item(item)?;
         let item_type = item.get("type").and_then(|value| value.as_str()).unwrap_or("");
 
         match item_type {

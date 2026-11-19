@@ -5,6 +5,9 @@ use serde_json::{Map, Value};
 
 use crate::provider::MessageClearAt;
 
+mod tool_blocks;
+pub use tool_blocks::{AnthropicToolResultBlock, AnthropicToolUseBlock};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum AnthropicFallback {
@@ -231,27 +234,6 @@ pub enum AnthropicContentBlock {
     /// Catch-all for unknown content block types added by the Anthropic API.
     #[serde(other)]
     Unknown,
-}
-
-/// Extracted struct for `AnthropicContentBlock::ToolUse` (boxed to reduce enum size).
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AnthropicToolUseBlock {
-    pub(crate) id: String,
-    pub(crate) name: String,
-    pub(crate) input: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) cache_control: Option<CacheControl>,
-}
-
-/// Extracted struct for `AnthropicContentBlock::ToolResult` (boxed to reduce enum size).
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AnthropicToolResultBlock {
-    pub(crate) tool_use_id: String,
-    pub(crate) content: Value, // string or array of blocks
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) is_error: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) cache_control: Option<CacheControl>,
 }
 
 /// Content of a tool search result

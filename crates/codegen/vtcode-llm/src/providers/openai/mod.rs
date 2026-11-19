@@ -26,6 +26,7 @@
 //! ```
 
 pub(crate) mod backend_setup;
+pub mod computer_use;
 mod custom_provider_auth;
 pub(crate) mod errors;
 mod harmony;

@@ -83,6 +83,9 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                 );
             }
             Some("tool_use") => {
+                if block["toolset_name"].as_str() == Some(super::computer_use::TOOLSET) {
+                    return Err(super::computer_use::unbound_route_error());
+                }
                 let id = block.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
 

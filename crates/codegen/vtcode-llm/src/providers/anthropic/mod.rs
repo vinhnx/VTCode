@@ -18,6 +18,7 @@ pub mod api;
 mod block_order;
 pub mod capabilities;
 pub mod compat;
+pub mod computer_use;
 mod fallback_retry;
 mod headers;
 mod prompt_cache;

@@ -12227,6 +12227,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-computer-use"
+version = "0.184.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "compact_str 0.10.0",
+ "futures",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "vtcode-config"
 version = "0.184.0"
 dependencies = [
@@ -12476,6 +12489,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
+ "base64 0.23.1",
  "bytes",
  "compact_str 0.10.0",
  "crossterm",
@@ -12502,11 +12516,13 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.30.0",
+ "tokio-util",
  "tower-http 0.7.1",
  "tracing",
  "url",
  "uuid",
  "vtcode-commons",
+ "vtcode-computer-use",
  "vtcode-config",
  "vtcode-exec-events",
  "vtcode-macros",

@@ -749,3 +749,17 @@ fn missing_delta_reports_provider_error() {
     assert!(error.to_string().contains("TestProvider"));
     assert!(error.to_string().contains("invalid stream payload"));
 }
+
+#[test]
+fn computer_use_responses_normalized_stream_rejects_unbound_items() {
+    let mut processor = ResponsesNormalizedStreamProcessor::new(options(), parse_response);
+    let error = processor
+        .handle_payload(json!({
+            "type": "response.output_item.done",
+            "item": {"type": "computer_call", "id": "cu_item", "call_id": "call_17",
+                "actions": [{"type": "type", "text": "private-sentinel"}]}
+        }))
+        .unwrap_err();
+    assert!(error.to_string().contains("requires an active computer-use route"));
+    assert!(!error.to_string().contains("private-sentinel"));
+}

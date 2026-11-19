@@ -242,12 +242,9 @@ mod tests {
     fn tool_use_msg(id: &str) -> AnthropicMessage {
         AnthropicMessage {
             role: "assistant".to_string(),
-            content: vec![AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock {
-                id: id.to_string(),
-                name: "shell".to_string(),
-                input: json!({}),
-                cache_control: None,
-            }))],
+            content: vec![AnthropicContentBlock::ToolUse(Box::new(
+                AnthropicToolUseBlock::function(id.to_string(), "shell".to_string(), json!({})),
+            ))],
             clear_at: None,
         }
     }

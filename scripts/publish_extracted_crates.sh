@@ -32,7 +32,8 @@ Options:
                      crates: vtcode-diff, vtcode-exec-events, vtcode-commons, vtcode-desktop-protocol,
                      vtcode-auth, vtcode-memory, vtcode-macros, vtcode-threads, vtcode-config,
                      vtcode-indexer, vtcode-bash-runner, vtcode-utility-tool-specs,
-                     vtcode-eval, vtcode-safety, vtcode-webmcp, vtcode-a2a, vtcode-llm,
+                     vtcode-eval, vtcode-safety, vtcode-webmcp, vtcode-computer-use,
+                     vtcode-a2a, vtcode-llm,
                      vtcode-skills, vtcode-agent-plugins, vtcode-ui, vtcode-mcp, vtcode-core,
                      vtcode-tui-runtime, vtcode-acp, vtcode.
   --skip-tests       Skip running the workspace fmt/clippy/test checks. Use with
@@ -124,6 +125,7 @@ PUBLISH_CRATES=(
 	vtcode-eval
 	vtcode-safety
 	vtcode-webmcp
+	vtcode-computer-use
 	vtcode-a2a
 	vtcode-llm
 	vtcode-skills

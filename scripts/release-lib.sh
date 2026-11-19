@@ -393,7 +393,7 @@ trigger_docs_rs_rebuild() {
 	fi
 	print_distribution "Triggering docs.rs rebuild for version $version..."
 	local crates=(
-		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-desktop-protocol vtcode-webmcp vtcode-memory vtcode-macros vtcode-threads
+		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-desktop-protocol vtcode-webmcp vtcode-computer-use vtcode-memory vtcode-macros vtcode-threads
 		vtcode-config vtcode-indexer vtcode-bash-runner vtcode-utility-tool-specs vtcode-eval
 		vtcode-safety vtcode-a2a vtcode-llm vtcode-skills vtcode-agent-plugins vtcode-ui vtcode-mcp
 		vtcode-core vtcode-tui-runtime vtcode-acp vtcode

@@ -136,6 +136,7 @@ vtcode-safety = { path = "crates/codegen/vtcode-safety", version = "0.184.0" }
 vtcode-a2a = { path = "crates/codegen/vtcode-a2a", version = "0.184.0" }
 vtcode-mcp = { path = "crates/codegen/vtcode-mcp", version = "0.184.0" }
 vtcode-llm = { path = "crates/codegen/vtcode-llm", version = "0.184.0" }
+vtcode-computer-use = { path = "crates/codegen/vtcode-computer-use", version = "0.184.0" }
 vtcode-skills = { path = "crates/codegen/vtcode-skills", version = "0.184.0" }
 vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.184.0" }
 vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.184.0" }
@@ -181,6 +182,7 @@ members = [
     "crates/codegen/vtcode-skills",
     "crates/codegen/vtcode-ui",
     "crates/codegen/vtcode-webmcp",
+    "crates/codegen/vtcode-computer-use",
     "crates/codegen/xtask",
 ]
 default-members = [

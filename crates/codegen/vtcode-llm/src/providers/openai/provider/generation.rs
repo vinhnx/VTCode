@@ -22,10 +22,6 @@ fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
     !matches!(state, ResponsesApiState::Disabled)
 }
 
-fn truncate_for_log(input: &str, max_chars: usize) -> String {
-    vtcode_commons::formatting::truncate_text(input, max_chars, "")
-}
-
 /// Whether the payload carries a tier eligible for the strip-and-retry
 /// fallback. The `flex_` name is historical (built for flex first): any
 /// user-selectable tier can be rejected per model, account, or project
@@ -439,7 +435,8 @@ impl OpenAIProvider {
                     tracing::error!(
                         client_request_id = %client_request_id,
                         status = %status,
-                        openai_request = %truncate_for_log(&openai_request.to_string(), 12_000),
+                        input_items = openai_request["input"].as_array().map_or(0, Vec::len),
+                        tool_count = openai_request["tools"].as_array().map_or(0, Vec::len),
                         openai_error_body = %sanitize_provider_diagnostic(error_text.as_bytes()),
                         "OpenAI Responses request rejected with invalid input payload"
                     );

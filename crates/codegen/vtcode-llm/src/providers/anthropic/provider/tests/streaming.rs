@@ -359,3 +359,42 @@ async fn stream_mid_output_fallback_drops_declined_thinking_and_tool_use() {
         ])
     );
 }
+
+#[tokio::test]
+async fn computer_use_anthropic_ordinary_stream_rejects_native_calls() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    let body = concat!(
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"type\",\"toolset_name\":\"computer\",\"input\":{}}}\n\n",
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"private-sentinel\"}}\n\n",
+    );
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(body, "text/event-stream"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = AnthropicProvider::new_with_client(
+        "test-key".into(),
+        models::CLAUDE_SONNET_5.into(),
+        reqwest::Client::builder().no_proxy().build().unwrap(),
+        format!("{}/v1", server.uri()),
+        vtcode_config::TimeoutsConfig::default(),
+    );
+    let mut stream = LLMProvider::stream(
+        &provider,
+        LLMRequest {
+            model: models::CLAUDE_SONNET_5.into(),
+            messages: vec![Message::user("fixture".into())].into(),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let error = stream.next().await.unwrap().unwrap_err();
+    assert!(error.to_string().contains("requires an active computer-use route"));
+    assert!(!error.to_string().contains("private-sentinel"));
+}

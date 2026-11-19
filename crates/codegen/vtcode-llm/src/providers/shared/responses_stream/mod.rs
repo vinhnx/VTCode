@@ -252,6 +252,9 @@ where
                 return Err(provider_error(self.options.provider_name, message));
             }
             ResponsesStreamEvent::ProviderValueBearingRigGap { event_type, payload, .. } => {
+                if let Some(item) = payload.get("item") {
+                    super::responses_adapter::reject_unbound_computer_item(item)?;
+                }
                 // `added` compaction items can contain an incomplete opaque
                 // state. Replay only the completed snapshot so a partial item
                 // cannot replace or duplicate the continuation token.

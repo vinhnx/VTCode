@@ -214,7 +214,7 @@ The command-line interface is built on specific principles for robustness and in
 
 ### Workspace crates
 
-The workspace has 26 crates: the root `vtcode` binary plus 25 library crates under `crates/codegen/` (runtime) and
+The workspace has 27 crates: the root `vtcode` binary plus 26 library crates under `crates/codegen/` (runtime) and
 `crates/common/` (shared contracts and utilities). `default-members` build the root, `vtcode-core`,
 `vtcode-skills`, `vtcode-tui-runtime`, and `vtcode-ui`.
 New reusable logic belongs in an existing small crate (or a new one) rather than in `vtcode-core` by default.
@@ -234,6 +234,7 @@ New reusable logic belongs in an existing small crate (or a new one) rather than
 | `vtcode-exec-events`        | `ThreadEvent` contract and ATIF export.                                                     |
 | `vtcode-diff`               | Bounded structured diffs and renderer-neutral preview rows.                                 |
 | `vtcode-webmcp`             | Authenticated browser editor bridge, pairing, event replay, and bounded workspace adapter.  |
+| `vtcode-computer-use`      | Computer-use action types and turn-local driver lifecycle.                                  |
 | `vtcode-commons`            | Shared utilities.                                                                           |
 | `vtcode-macros`             | Procedural macros.                                                                          |
 | `vtcode-threads`            | Thread identifiers and lifecycle types.                                                     |

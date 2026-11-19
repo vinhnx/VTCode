@@ -158,6 +158,9 @@ pub fn create_stream(
                             index,
                             content_block: AnthropicContentBlock::ToolUse(tool_use),
                         } => {
+                            if tool_use.toolset_name.as_deref() == Some(super::computer_use::TOOLSET) {
+                                Err(super::computer_use::unbound_route_error())?;
+                            }
                             if aggregator.tool_builders.len() <= index {
                                 aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
                             }

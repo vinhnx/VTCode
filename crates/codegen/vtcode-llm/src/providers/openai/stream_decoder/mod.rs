@@ -637,6 +637,7 @@ pub(crate) fn create_responses_stream(
                             }
                             "response.output_item.added" | "response.output_item.done" => {
                                 if let Some(item) = payload.get("item") {
+                                    crate::providers::shared::reject_unbound_computer_item(item)?;
                                     tool_call_state.capture_metadata(
                                         &mut aggregator,
                                         item,

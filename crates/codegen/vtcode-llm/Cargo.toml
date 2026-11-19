@@ -17,6 +17,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 async-stream = { workspace = true }
 axum = { workspace = true, features = ["json", "macros"], optional = true }
+base64 = { workspace = true }
 bytes = "1.11"
 compact_str = { workspace = true }
 futures = { workspace = true }
@@ -40,6 +41,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 vtcode-commons = { workspace = true }
+vtcode-computer-use = { workspace = true }
 vtcode-config = { workspace = true }
 vtcode-exec-events = { workspace = true }
 vtcode-macros = { workspace = true }
@@ -56,6 +58,7 @@ crossterm = { workspace = true }
 hotpath = { workspace = true, optional = true }
 
 [dev-dependencies]
+tokio-util = { workspace = true }
 assert_fs = { workspace = true }
 serial_test = { workspace = true }
 tempfile = { workspace = true }

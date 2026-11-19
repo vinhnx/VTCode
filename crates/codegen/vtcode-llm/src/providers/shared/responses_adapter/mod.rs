@@ -89,6 +89,16 @@ struct ResponsesEventHeader<'a> {
     call_id: Option<&'a str>,
 }
 
+pub(crate) fn reject_unbound_computer_item(item: &Value) -> Result<(), LLMError> {
+    if matches!(item["type"].as_str(), Some("computer_call" | "computer_call_output")) {
+        return Err(LLMError::Provider {
+            message: "Responses computer item requires an active computer-use route.".into(),
+            metadata: None,
+        });
+    }
+    Ok(())
+}
+
 pub(crate) struct ResponsesStreamAdapter;
 
 impl ResponsesStreamAdapter {

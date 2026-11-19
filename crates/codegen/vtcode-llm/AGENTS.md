@@ -20,6 +20,7 @@
 - `ModelResolver::resolve_with_mode` and `availability_with_mode` must receive the loaded config's credential storage mode, and availability must not be inferred from provider alone.
 - `ToolChoice::None` must disable callable tools on the wire, and Decisions uses a separate no-redirect client that fails closed.
 - Anthropic Messages routes never send `temperature`/`top_p`/`top_k` (standalone auxiliary requests included), and Claude 4.6+/5.x profiles never send assistant prefill or forced `tool_choice`, fallbacks included.
+- Keep native computer items out of function dispatch, durable history, and replay metadata. Route them only through approved turn-local execution.
 - After output has been exposed, streaming failures must fail without replay, and only explicit endpoint unavailability may disable Responses.
 
 ## Gotchas
