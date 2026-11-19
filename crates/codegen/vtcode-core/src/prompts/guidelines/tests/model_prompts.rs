@@ -169,6 +169,7 @@ fn computer_use_guidance_has_presence_and_budget_in_both_densities() {
         assert!(enabled.contains("asks the user for approval before acting"));
         assert!(enabled.contains("local files, shells, or secrets entry"));
         assert!(enabled.contains("instead of exploring code or shelling around"));
+        assert!(enabled.contains("native desktop app rather than a web page"));
         assert!(!disabled.contains("screen-sized browser task"));
         assert!(vtcode_commons::estimate_tokens(&enabled) <= 170, "{profile:?}: {enabled}");
     }
