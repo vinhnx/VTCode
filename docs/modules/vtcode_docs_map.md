@@ -142,6 +142,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Checkpoints and combined rewind?", "How does Rewind in the terminal
     work?"
 
+- **File**: `docs/development/coderabbit.md`
+  - **Content**: CodeRabbit Setup
+  - **Topics**: What is configured today, Repository settings walkthrough, Verify (not configured), Local CLI review,
+    Verifying the setup
+  - **User Questions**: "What can you tell me about CodeRabbit Setup?", "How does What is configured today work?", "How
+    does Repository settings walkthrough work?"
+
 - **File**: `docs/development/compaction.md`
   - **Content**: Compaction Engine
   - **Topics**: Request history and local clearing, Headless staging and module ownership, Strategy dispatch, Live

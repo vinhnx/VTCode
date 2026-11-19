@@ -105,7 +105,7 @@ Example pivot:
 ```text
  git status, git diff, git log, git checkout
  cargo test, cargo build, cargo check
- npm install, npm test, npm run build
+ bun install, bun test, bun run build
  python scripts/setup.py
  Editing files, reading logs, viewing diffs
 ```

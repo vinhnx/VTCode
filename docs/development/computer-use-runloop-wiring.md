@@ -26,7 +26,8 @@ without entering function dispatch:
   `LLMResponse`/`LLMRequest` fields change. Streaming needs the same
   treatment later (`stream_native` plus native accumulation in the
   Anthropic and Responses stream decoders).
-- Preserve mixed-turn positions. The Anthropic adapter already returns
+- Preserve mixed-turn positions. Every `NativeCall` carries its content
+  position in `NativeCall::index`, and the Anthropic adapter returns
   `Vec<(usize, Value)>` so the loop can merge ordinary results at the
   intervening slots; the OpenAI adapter consumes one batched call.
 - Decode with the committed `decode_call` codecs. A decode error on a
@@ -45,22 +46,45 @@ Reuse the tool permission flow, not a parallel prompt system:
   (build directory or app) and the screenshot recipient, per the plan.
 - Approval is per turn and per target. Denial, or any new control
   sequence after resume, starts over: no lease reuse, no replay.
+- Computer-use approval must resolve through the human reviewer even
+  when automation policies would auto-approve ordinary tools (the
+  Codex `NeedsHumanApproval` analog): no caching, no remembered
+  targets, no full-auto bypass in v1.
 - Only after approval construct `TurnControl::after_approval` with the
-  active turn's `CancellationToken`.
+  active turn's `CancellationToken`. The lease binds the turn, not the
+  issuing agent: subagent completion does not revoke it, and the turn
+  runner owns the handle, never a subagent scope.
+- When `computer_use.decisions_review` is set, each proposed batch is
+  screened by OpenAI Decisions (task text plus action kinds/counts,
+  never screenshots or typed values) before execution: `SUSPECT` halts
+  the turn, while review outages degrade to proceed-with-warning
+  because the human approval remains the primary control. OpenAI
+  routes only.
 
 ## Execution
 
-All pieces exist; the loop needs a turn-scoped owner for them:
+The turn-scoped owner is `run_computer_turn`
+(`src/agent/runloop/unified/turn/tool_outcomes/handlers/computer_use/execution.rs`):
+generate over the bound route, budget check, Decisions review, injected
+human approval, then launch, execute, and tear down through one funnel.
+Cancellation and timeouts take the same teardown as completion and
+failure, and a teardown failure after completion flips the verdict.
 
 - Launch via `browser::container` (validated spec, pinned image,
   argv-locked hardening flags) and attach `BrowserDriver` to the pipes.
-- Execute through the provider adapters (`openai::computer_use::execute_call`,
-  `anthropic::computer_use::execute_batch`) against the `TurnControl`.
-- The existing Stop path (`src/cli/desktop_server/cancel.rs`, Desktop
-  transport) must call `ContainerHandle::terminate` so delivery
+- Execute decoded natives through the provider adapters
+  (`openai::computer_use::execute_decoded_call`,
+  `anthropic::computer_use::execute_decoded`) against the `TurnControl`.
+  The raw-block adapters (`execute_call`, `execute_batch`) stay for the
+  unbound/codec paths; the dispatcher never re-decodes wire.
+- The Stop path funnels through the dispatcher's `wait_for_stop` select
+  and post-launch check into `ContainerHandle::terminate`, so delivery
   interrupted mid-action still removes the exact container. The runner
-  now also exits on its own after any failed action or input close;
-  treat that as backstop, not the primary path.
+  also exits on its own after any failed action or input close; treat
+  that as backstop, not the primary path.
+- Every teardown records its trigger (finished, failed, stopped) with
+  the `TerminateOutcome` in the redacted turn audit, mirroring the
+  `turn_ended` hook contract: idempotent, trigger-named, turn-keyed.
 
 ## Outbound: results to the next request
 
@@ -105,9 +129,41 @@ New `computer_use` section in `vtcode-config`: enabled flag, target
 (browser build directory; macOS app identity later), image pin, and
 per-turn timeout. Document each field where the config reference lives.
 
+## Activation surfaces (landed)
+
+Both apps share the `computer_use` config section with `enabled` as the
+master switch; per-turn human approval still gates every turn, and v1
+has no always-allowed list. CLI: `/computer-use [on|off|status|target
+<path>]` (alias `/cua`) plus a Computer Use group in `/config` (the
+`browser_build` target is set via the command because None-default
+free-form paths do not render in curated groups). Desktop: a Computer
+Use settings tab (master Switch, Decisions Switch, target summary,
+deep link into CLI configuration), a ⌘K "Computer use: Turn on/off"
+entry, and `settings/computer-use` + `action/toggle-computer-use`
+deeplinks. No composer button: the composer rows hold a pixel-contract
+single line and a fifth labeled button wraps the zen row.
+
+## Turn trigger (landed: explicit user invocation)
+
+`/computer-use run <task>` runs one turn end to end: it builds the
+request from the session model, calls `run_computer_turn`, confirms the
+proposed batch through an inline overlay (Esc denies; every
+non-confirm outcome denies), records usage, and renders a redacted
+report. The overlay replaces the permission flow for user-initiated
+turns only: the typed command already carries human intent, and the
+overlay has no cache or auto-approval surface at all. Model-initiated
+turns (a future `computer` tool) must approve through
+`request_target_approval` instead, since only the permission flow
+defends the confused deputy. The dispatcher re-checks enabled, target,
+and provider support; the command pre-checks the same gates with
+usage guidance before spending a model call.
+
 ## Then
 
-Prompt guidance (`vtcode-core/src/prompts/guidelines/`), tool schema
+Model-initiated invocation (tool registration, schema, prompt
+guidance), multi-turn chaining/continuation, streaming native
+accumulation, and the verified model/action matrix. After that: prompt guidance
+(`vtcode-core/src/prompts/guidelines/`), tool schema
 (`vtcode-utility-tool-specs`), `ThreadEvent` contract updates, budget /
 presence tests, user guide plus quick reference, and the verified
 model/action matrix — per the repo's major-feature docs rule. macOS

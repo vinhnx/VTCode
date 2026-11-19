@@ -38,8 +38,8 @@ The benchmark chart includes four key visualizations:
 ### Prerequisites
 
 ```bash
-# Install matplotlib (optional, for PNG charts)
-pip install matplotlib
+# PNG charts resolve matplotlib via uv (no install step needed)
+uv run scripts/generate_benchmark_chart.py reports/HE_*.json --png
 
 # Or use ASCII-only mode (no dependencies)
 ```
@@ -161,8 +161,8 @@ To add custom metrics to the chart:
 ### matplotlib Not Found
 
 ```bash
-# Install matplotlib
-pip install matplotlib
+# Run via uv so matplotlib resolves automatically
+uv run scripts/generate_benchmark_chart.py reports/HE_*.json --png
 
 # Or use ASCII-only mode
 python3 scripts/generate_benchmark_chart.py reports/HE_*.json

@@ -1,10 +1,10 @@
 # Markdown Quality
 
 Run `python3 scripts/check_markdown.py` locally and in CI. It uses
-`markdownlint-cli2@0.23.3` and requires Node.js 22 or newer. Run `npm install`
+`markdownlint-cli2@0.23.3` and requires Bun. Run `bun install`
 once so the pinned linter is available locally (a `devDependencies` entry);
-without the local install the script falls back to a pinned `npx` fetch, which
-needs network access. If `npx` is not on PATH the script reports a toolchain
+without the local install the script falls back to a pinned `bun x` fetch, which
+needs network access. If `bun` is not on PATH the script reports a toolchain
 error and exits 2 (distinct from a lint failure, exit 1). Use `--list` to
 inspect the selected paths, or `--fix` to apply supported formatting fixes.
 Pass maintained paths (`python3 scripts/check_markdown.py README.md`) to lint

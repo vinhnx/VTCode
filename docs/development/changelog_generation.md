@@ -33,7 +33,7 @@ When editing `cliff.toml`, regenerate and lint the result:
 
 ```bash
 git-cliff --config cliff.toml -o /tmp/changelog.md
-npx --yes markdownlint-cli2@0.23.3 --config .markdownlint-cli2.jsonc /tmp/changelog.md
+bun x --silent markdownlint-cli2@0.23.3 --config .markdownlint-cli2.jsonc /tmp/changelog.md
 ```
 
 Keep exactly one blank line around headings and lists. git-cliff's `\` line-continuation swallows the newline

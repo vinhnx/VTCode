@@ -115,8 +115,8 @@ See [README.md](README.md) for detailed comparison. | Estimated Cost | $0.0000 |
 #### Prerequisites
 
 ```bash
-# Install Python dependencies
-pip install datasets
+# Install uv (manages each script's pinned dependencies; no venv needed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Ensure vtcode is built
 cargo build --release
@@ -126,38 +126,33 @@ cargo build --release
 
 ```bash
 # Run full benchmark (164 tasks)
-make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview'
+PROVIDER=gemini MODEL='gemini-3-flash-preview' uv run scripts/bench_humaneval.py
 
 # Run subset for quick testing
-make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview' N_HE=10
+PROVIDER=gemini MODEL='gemini-3-flash-preview' N_HE=10 uv run scripts/bench_humaneval.py
 
 # Run with custom parameters
-make bench-humaneval \
-  PROVIDER=openai \
-  MODEL='gpt-5' \
-  N_HE=50 \
-  SEED=42 \
-  SLEEP_MS=500 \
-  RETRY_MAX=3
+PROVIDER=openai MODEL='gpt-5' N_HE=50 SEED=42 SLEEP_BETWEEN_TASKS_MS=500 RETRY_MAX=3 \
+  uv run scripts/bench_humaneval.py
 ```
 
 #### Environment Variables
 
-| Variable       | Default                  | Description                                    |
-| -------------- | ------------------------ | ---------------------------------------------- |
-| `PROVIDER`     | `gemini`                 | LLM provider (gemini, openai, anthropic, etc.) |
-| `MODEL`        | `gemini-3-flash-preview` | Model identifier                               |
-| `N_HE`         | `164`                    | Number of tasks to run (max 164)               |
-| `SEED`         | `1337`                   | Random seed for reproducibility                |
-| `USE_TOOLS`    | `0`                      | Enable tool usage (0=disabled, 1=enabled)      |
-| `TEMP`         | `0.0`                    | Temperature for sampling                       |
-| `MAX_OUT`      | `1024`                   | Maximum output tokens                          |
-| `TIMEOUT_S`    | `120`                    | Timeout per task in seconds                    |
-| `SLEEP_MS`     | `0`                      | Sleep between tasks (ms)                       |
-| `RETRY_MAX`    | `2`                      | Maximum retry attempts                         |
-| `BACKOFF_MS`   | `500`                    | Backoff delay for retries (ms)                 |
-| `INPUT_PRICE`  | `0.0`                    | Cost per 1k input tokens (USD)                 |
-| `OUTPUT_PRICE` | `0.0`                    | Cost per 1k output tokens (USD)                |
+| Variable                 | Default                  | Description                                    |
+|--------------------------|--------------------------|------------------------------------------------|
+| `PROVIDER`               | `gemini`                 | LLM provider (gemini, openai, anthropic, etc.) |
+| `MODEL`                  | `gemini-3-flash-preview` | Model identifier                               |
+| `N_HE`                   | `164`                    | Number of tasks to run (max 164)               |
+| `SEED`                   | `1337`                   | Random seed for reproducibility                |
+| `USE_TOOLS`              | `0`                      | Enable tool usage (0=disabled, 1=enabled)      |
+| `TEMP`                   | `0.0`                    | Temperature for sampling                       |
+| `MAX_OUT`                | `1024`                   | Maximum output tokens                          |
+| `TIMEOUT_S`              | `120`                    | Timeout per task in seconds                    |
+| `SLEEP_BETWEEN_TASKS_MS` | `0`                      | Sleep between tasks (ms)                       |
+| `RETRY_MAX`              | `2`                      | Maximum retry attempts                         |
+| `BACKOFF_MS`             | `500`                    | Backoff delay for retries (ms)                 |
+| `INPUT_PRICE`            | `0.0`                    | Cost per 1k input tokens (USD)                 |
+| `OUTPUT_PRICE`           | `0.0`                    | Cost per 1k output tokens (USD)                |
 
 #### Visualization
 

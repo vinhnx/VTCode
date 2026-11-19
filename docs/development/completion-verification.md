@@ -64,8 +64,9 @@ as unchanged segments of a statically proven pure `&&` chain. A terminal exit ze
 credits those segments; changed arguments, directory changes, dynamic syntax,
 mutating tails, pipelines, negation, subshells, `;`, and `||` do not gain segment credit. Nonzero or
 running chains remain unverified. Preserve verification metadata when updating task status.
-Recognized `npx --loglevel=<level>` options change logging only: a Markdown lint
-check remains verification, while `--fix` still counts as a mutation.
+Recognized logging-only runner options (`bun x --silent`, `npx --loglevel=<level>`)
+change logging only: a Markdown lint check remains verification, while `--fix`
+still counts as a mutation.
 The repository's `python3 scripts/check_docs_links.py` is also a verifier, so a
 successful link check does not create new mutation debt of its own.
 Native terminal adapters may supply empty argv and environment containers.
