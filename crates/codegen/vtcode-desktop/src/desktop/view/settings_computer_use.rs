@@ -92,6 +92,32 @@ fn computer_use_group_title(status: Option<bool>, colors: &gpui_kit::component::
         })
 }
 
+/// User guide block: title plus the three facts a first-time user needs
+/// (where the target lives, where turns run, what the requirements are).
+/// Muted help-text styling shared with row descriptions; shown only while
+/// the snapshot is available, since the steps assume a live service.
+fn computer_use_guide(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
+    let title = rust_i18n::t!("app.settings.computer_use.guide_title").to_string();
+    div()
+        .id("computer-use-guide")
+        .test_support()
+        .role(gpui_kit::Role::Group)
+        .aria_label(title.clone())
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .font_semibold()
+                .text_color(themes::muted_text(colors))
+                .child(title),
+        )
+        .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_setup").to_string(), colors))
+        .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_run").to_string(), colors))
+        .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_safety").to_string(), colors))
+}
+
 impl DesktopView {
     /// Whether the shared config enables the computer-use runtime.
     pub(super) fn computer_use_enabled(&self) -> bool {
@@ -226,7 +252,8 @@ impl DesktopView {
                             });
                         }),
                 ),
-            );
+            )
+            .child(computer_use_guide(&theme.colors));
         div()
             .id("computer-use-settings")
             .test_support()

@@ -374,6 +374,7 @@ fn computer_use_tab_reflects_snapshot_and_writes_on_toggle(cx: &mut TestAppConte
         assert_eq!(window.find("computer-use-enabled").checked(), Some(false));
         assert_eq!(window.find("computer-use-decisions").checked(), Some(true));
         assert_eq!(window.find("computer-use-status").label(), Some("Computer use Off"));
+        assert_eq!(window.find("computer-use-guide").label(), Some("How to use"));
         assert!(!view.read(cx).computer_use_enabled());
         assert!(view.read(cx).can_edit_cli_settings(), "fixture must satisfy the edit gate");
 

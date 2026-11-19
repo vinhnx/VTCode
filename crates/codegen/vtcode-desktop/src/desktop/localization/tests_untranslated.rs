@@ -49,6 +49,10 @@ fn computer_use_copy_resolves_in_every_language() {
             "app.settings.computer_use.configure",
             "app.settings.computer_use.status_on",
             "app.settings.computer_use.status_off",
+            "app.settings.computer_use.guide_title",
+            "app.settings.computer_use.guide_setup",
+            "app.settings.computer_use.guide_run",
+            "app.settings.computer_use.guide_safety",
             "app.settings.computer_use.unavailable",
         ] {
             let text = rust_i18n::t!(key, locale = locale).to_string();
