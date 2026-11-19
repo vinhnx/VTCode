@@ -8,6 +8,7 @@ use tokio::time::{Instant, sleep_until};
 use tokio_util::sync::CancellationToken;
 
 pub mod browser;
+pub mod gate;
 
 /// Maximum number of actions admitted per batch.
 pub const MAX_BATCH_ACTIONS: usize = 128;

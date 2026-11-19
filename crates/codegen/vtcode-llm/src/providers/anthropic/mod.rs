@@ -21,6 +21,7 @@ pub mod compat;
 pub mod computer_use;
 mod fallback_retry;
 mod headers;
+mod native;
 mod prompt_cache;
 mod provider;
 pub(crate) mod request_builder;

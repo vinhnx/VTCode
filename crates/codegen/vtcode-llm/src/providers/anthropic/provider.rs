@@ -10,7 +10,9 @@
 //! - Header management (headers)
 
 use crate::client::LLMClient;
-use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, ToolDefinition};
+use crate::provider::{
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, NativeResponse, ToolDefinition,
+};
 use vtcode_config::constants::{models, urls};
 use vtcode_config::core::{AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig};
 use vtcode_config::{AnthropicSpeed, TimeoutsConfig};
@@ -18,6 +20,7 @@ use vtcode_config::{AnthropicSpeed, TimeoutsConfig};
 use super::capabilities;
 use super::fallback_retry::{self, RefusalRetryPlan};
 use super::headers;
+use super::native;
 use super::request_builder::{self, RequestBuilderContext};
 use super::response_parser;
 use super::stream_decoder;
@@ -784,6 +787,37 @@ impl LLMProvider for AnthropicProvider {
             Some(plan) => self.retry_refused_generate(&request, &anthropic_request, &plan, response).await,
             None => Ok(response),
         }
+    }
+
+    fn supports_computer_use(&self) -> bool {
+        true
+    }
+
+    async fn generate_native(&self, request: LLMRequest) -> Result<NativeResponse, LLMError> {
+        let resolved_model = self.resolved_request_model(&request).to_string();
+        if !vtcode_computer_use::gate::verified_target_default(
+            "anthropic",
+            &resolved_model,
+            &self.base_url,
+            super::computer_use::PROTOCOL,
+        ) {
+            return Err(LLMError::Provider {
+                message: format!("Computer use is not verified for model {resolved_model}"),
+                metadata: None,
+            });
+        }
+        // No refusal retry: the fallback plan is LLMResponse-typed, and a refused
+        // native turn surfaces as an error for the run loop to decide on.
+        let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
+        native::declare(&mut anthropic_request);
+
+        let AnthropicHttpResponse { response, request_id, organization_id } =
+            self.send_request(&request, &anthropic_request).await?;
+        let body: Value = response.json().await.map_err(|e| format_parse_error("Anthropic", &e))?;
+        let mut native_response = native::parse_response_native(body, resolved_model)?;
+        native_response.request_id = request_id;
+        native_response.organization_id = organization_id;
+        Ok(native_response)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {

@@ -222,7 +222,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
 /// compaction, paired server-tool blocks, and everything after the boundary
 /// are kept. The API already omits the declined partial from non-streaming
 /// responses, so this only enforces the echo rule if one ever appears.
-fn declined_partial_positions(content: &[Value]) -> Vec<bool> {
+pub(crate) fn declined_partial_positions(content: &[Value]) -> Vec<bool> {
     fn block_type(block: &Value) -> Option<&str> {
         block.get("type").and_then(Value::as_str)
     }

@@ -54,6 +54,7 @@
 mod call;
 mod decisions;
 mod message;
+mod native;
 mod provider_trait;
 mod request;
 mod response;
@@ -68,6 +69,7 @@ pub use decisions::{
     DecisionProbability, is_standard_decisions_endpoint,
 };
 pub use message::{AssistantPhase, ContentPart, ImageDetail, Message, MessageClearAt, MessageContent, MessageRole};
+pub use native::{NativeCall, NativeCallBody, NativeProvider, NativeResponse};
 pub use provider_trait::{
     ContextWindowProvider, LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
 };

@@ -9,8 +9,8 @@ use vtcode_commons::llm::BackendKind;
 use vtcode_commons::tool_types::CompactStr;
 
 use super::{
-    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, ResponsesCompactionOptions,
-    SamplingOverrides,
+    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, NativeResponse,
+    ResponsesCompactionOptions, SamplingOverrides,
 };
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
@@ -186,6 +186,23 @@ pub trait LLMProvider: Send + Sync {
     ) -> Result<super::ChoiceDecisionResponse, LLMError> {
         Err(LLMError::Provider {
             message: "Decisions is unsupported for this provider".to_owned(),
+            metadata: None,
+        })
+    }
+
+    /// Whether this provider implements the bound computer-use route.
+    /// Capability checks must not discover credentials or dispatch requests.
+    fn supports_computer_use(&self) -> bool {
+        false
+    }
+
+    /// Run one request on the bound computer-use route. Only providers that
+    /// declare native tools implement this; the default reports unsupported
+    /// without I/O. Implementations verify the target against the
+    /// computer-use gate before sending anything.
+    async fn generate_native(&self, _request: LLMRequest) -> Result<NativeResponse, LLMError> {
+        Err(LLMError::Provider {
+            message: "Computer use is unsupported for this provider".to_owned(),
             metadata: None,
         })
     }

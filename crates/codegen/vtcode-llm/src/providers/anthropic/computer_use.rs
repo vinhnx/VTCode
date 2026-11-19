@@ -13,6 +13,8 @@ use vtcode_computer_use::{
 };
 
 pub(super) const TOOLSET: &str = "computer";
+/// Native protocol version declared on the wire and checked by the gate.
+pub(crate) const PROTOCOL: &str = "computer_toolset_20260801";
 const NOT_EXECUTED: &str = "Not executed: an earlier computer action in this turn failed.";
 
 pub(super) fn unbound_route_error() -> crate::provider::LLMError {
@@ -23,7 +25,7 @@ pub(super) fn unbound_route_error() -> crate::provider::LLMError {
 }
 
 pub fn declaration() -> Value {
-    json!({"type": "computer_toolset_20260801"})
+    json!({"type": PROTOCOL})
 }
 
 /// An ephemeral native call. A malformed input retains its correlation ID so
