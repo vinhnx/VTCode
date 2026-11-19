@@ -119,6 +119,30 @@ Install the runner with `cargo install cargo-nextest --locked`.
 
 Run the script regressions with `python3 -m unittest discover -s scripts/tests -p 'test_check_dev.py'`.
 
+### Fast path for repeated runs
+
+The script orders stages cheapest-first so a self-verification loop learns about a failure in about a second instead of
+after the slowest cargo stage:
+
+| Stage | Typical cost | Why here |
+| --- | --- | --- |
+| Shell lint (`bash -n`, `nfo` typo) | ~5s | Catches a broken script edit immediately |
+| Governance gates (file length, docs links, placement, sizes, MCP docs) | ~1s | Pure Python, no build |
+| `cargo fmt --all -- --check` | 4-5s warm | Formatting mistakes are the cheapest to fix |
+| `cargo clippy` | dominates (minutes cold) | Slowest stage runs after cheap failures are gone |
+| `cargo check` | feature combos clippy misses | Verifies default-feature builds |
+
+When the tracked Rust sources, manifests, and their working-tree state are unchanged since the last **passing** run, the
+cargo block is skipped and the gate finishes in seconds. The fingerprint covers tracked `.rs`, every `Cargo.toml`,
+`rust-toolchain.toml`, `Cargo.lock`, new untracked `.rs` files, and the selected scope, so an edit, a scope change, or a
+new source always forces a real run. `--no-cache` bypasses it, and `--workspace` always runs the full cargo path.
+
+Only a fully green run seeds the fast path: caching after a failure would let the next run skip the stage that just
+broke. State lives in the real git dir (`git rev-parse --git-dir`), which is correct inside a linked worktree where
+`.git` is a file.
+
+This is a local iteration aid. CI should not rely on it: `./scripts/check.sh` remains the authoritative gate.
+
 ### Opt-in AI Review
 
 `./scripts/check-dev.sh --review` runs a CodeRabbit review of the current diff and fails the run when a finding reaches
