@@ -49,6 +49,7 @@ pub(super) fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab>
         "connections" | "mcp" | "webmcp" => Some(settings::SettingsTab::Connections),
         "notifications" | "notification" | "alerts" | "updates" => Some(settings::SettingsTab::Notifications),
         "storage" | "disk" | "cleanup" => Some(settings::SettingsTab::Storage),
+        "computer-use" | "computer_use" | "computeruse" | "cua" => Some(settings::SettingsTab::ComputerUse),
         "about" | "info" => Some(settings::SettingsTab::About),
         _ => None,
     }
@@ -334,30 +335,14 @@ pub(super) fn quiet_option_suffix(id: &'static str, accessible_label: String, va
 
 pub(super) fn processing_tier_badge(label: &str, cx: &App) -> AnyElement {
     let colors = cx.theme().colors;
-    let ultrafast = label == "Ultrafast";
-    div()
-        .id("composer-model-speed")
-        .test_support()
-        .role(gpui_kit::Role::Label)
-        .aria_label(rust_i18n::t!("app.composer.speed_aria", label = label).to_string())
-        .flex()
-        .flex_shrink_0()
-        .items_center()
-        .gap_1()
-        .px_2()
-        .py(px(2.))
-        .rounded_full()
-        .bg(if ultrafast { colors.primary } else { colors.secondary })
-        .text_color(if ultrafast {
-            colors.primary_foreground
-        } else {
-            colors.foreground
-        })
-        .text_xs()
-        .font_semibold()
-        .child(Icon::new(IconName::Activity).size_3())
-        .child(label.to_string())
-        .into_any_element()
+    status_pill(
+        "composer-model-speed",
+        rust_i18n::t!("app.composer.speed_aria", label = label).to_string(),
+        label.to_string(),
+        label == "Ultrafast",
+        Some(IconName::Activity),
+        &colors,
+    )
 }
 
 fn looks_like_file_reference(reference: &str) -> bool {

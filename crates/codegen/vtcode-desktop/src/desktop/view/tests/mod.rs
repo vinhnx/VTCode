@@ -804,6 +804,7 @@ mod session_poll_coalesce;
 mod sessions_startup;
 mod settings_kit_host;
 mod settings_kit_spike;
+mod settings_navigation;
 mod settings_panes;
 mod settings_spacing;
 mod shortcuts_editor;

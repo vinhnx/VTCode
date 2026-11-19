@@ -11,6 +11,7 @@ use super::appearance::AppearanceSettingsProps;
 use super::configuration_render::{CONFIG_WIDE_VIEWPORT, ConfigPageProps};
 use super::settings::{SettingsPage, SettingsTab};
 use super::settings_accessibility::AccessibilitySettingsProps;
+use super::settings_computer_use::ComputerUseSettingsProps;
 use super::settings_connections::ConnectionsSettingsProps;
 use super::settings_notifications::NotificationSettingsProps;
 use super::settings_vtcode::VtcodeSettingsProps;
@@ -210,6 +211,17 @@ impl DesktopView {
                                     }
                                 });
                                 Self::render_storage_settings_content(props.clone(), page_view.clone(), cx)
+                            },
+                        )
+                    }
+                    SettingsTab::ComputerUse => {
+                        let props = ComputerUseSettingsProps::capture(self);
+                        kit_single_item_page(
+                            tab,
+                            index,
+                            view.clone(),
+                            move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                                Self::render_computer_use_settings_content(props.clone(), page_view.clone(), cx)
                             },
                         )
                     }

@@ -91,6 +91,7 @@ pub(super) enum PaletteAction {
     BrowseThreads,
     ToggleInspector,
     ToggleTheme,
+    ToggleComputerUse,
     SelectFont {
         target: FontTarget,
         family: Option<String>,
@@ -164,6 +165,26 @@ impl DesktopView {
                     },
                     PaletteAction::ToggleTheme,
                 ),
+                {
+                    // English literal until full translations ship (see the
+                    // session-group precedent above).
+                    let mut toggle = command(
+                        if self.computer_use_enabled() {
+                            "Computer use: Turn off"
+                        } else {
+                            "Computer use: Turn on"
+                        }
+                        .to_string(),
+                        PaletteAction::ToggleComputerUse,
+                    );
+                    toggle.keywords = vec![
+                        "computer use".to_string(),
+                        "computer-use".to_string(),
+                        "cua".to_string(),
+                        "browser".to_string(),
+                    ];
+                    toggle
+                },
                 {
                     let mut goto =
                         command(rust_i18n::t!(i18n::PALETTE_COMMAND_GO_TO).to_string(), PaletteAction::OpenGoTo);
@@ -660,6 +681,7 @@ impl DesktopView {
             PaletteAction::ToggleInspector => self.toggle_inspector(cx),
             PaletteAction::ToggleZenMode => self.toggle_zen_mode(window, cx),
             PaletteAction::ToggleTheme => self.toggle_theme(window, cx),
+            PaletteAction::ToggleComputerUse => self.toggle_computer_use(cx),
             PaletteAction::OpenDeepLink(link) => {
                 let _opened = self.open_deeplink(*link, window, cx);
             }
@@ -810,6 +832,7 @@ impl DesktopView {
             | PaletteAction::SelectFont { .. }
             | PaletteAction::SelectSettingsTab(_)
             | PaletteAction::OpenGoTo => true,
+            PaletteAction::ToggleComputerUse => self.can_edit_cli_settings(),
             PaletteAction::OpenDeepLink(link) => match link.as_ref() {
                 deeplinks::DeepLink::Route(_)
                 | deeplinks::DeepLink::SettingsTab(_)

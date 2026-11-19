@@ -8,7 +8,7 @@
 //! settings section headings keep sentence case via [`section_label`] and
 //! [`group_box_title`] one size step above body text. Interactive controls
 //! use the pointing hand
-//! through [`desktop_button`]/[`DesktopButtonExt::desktop_disabled`]; rows
+//! through the button baseline in [`buttons`](self::buttons)/[`DesktopButtonExt::desktop_disabled`]; rows
 //! that act as buttons keep their own cursor. Chain `.lock_scroll_axis()`
 //! before `.test_support()`: the test wrapper hides that method.
 
@@ -317,6 +317,45 @@ pub(super) fn group_box_title(
         .child(title.into())
 }
 
+/// Filled status pill for one short scannable state: primary fill when
+/// highlighted, secondary otherwise. Shared by the composer
+/// processing-tier badge and the Computer Use settings title so the two
+/// cannot drift apart. The leading glyph is optional: the tier badge
+/// carries its own icon, while the settings title already shows the
+/// Computer glyph beside the label.
+pub(super) fn status_pill(
+    id: &'static str,
+    accessible_label: String,
+    label: String,
+    highlighted: bool,
+    icon: Option<IconName>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .role(gpui_kit::Role::Label)
+        .aria_label(accessible_label)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap_1()
+        .px_2()
+        .py(px(2.))
+        .rounded_full()
+        .bg(if highlighted { colors.primary } else { colors.secondary })
+        .text_color(if highlighted {
+            colors.primary_foreground
+        } else {
+            colors.foreground
+        })
+        .text_xs()
+        .font_semibold()
+        .when_some(icon, |pill, icon| pill.child(Icon::new(icon).size_3()))
+        .child(label)
+        .into_any_element()
+}
+
 /// Settings-row title: one step below group headings, semibold at primary
 /// foreground so it reads as the field's label rather than its help text.
 /// Weight and size carry the tier, so the description can keep its bright
@@ -524,8 +563,14 @@ pub(super) fn settings_switch(
         .on_click(on_click)
 }
 
+mod buttons;
 mod route_page;
 
+pub(in crate::desktop) use buttons::desktop_ghost_button;
+pub(super) use buttons::{
+    DesktopButtonExt, desktop_danger_button, desktop_dismiss_button, desktop_primary_button, desktop_secondary_button,
+    zen_mode_toggle,
+};
 pub(super) use route_page::*;
 
 /// Shared scrim behind every inline modal (palette, review, browser, file
@@ -821,59 +866,6 @@ fn scroll_column_inner(
         .child(child)
 }
 
-/// Interactive button baseline: keyboard focus and a pointing-hand cursor.
-fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    Button::new(id).tab_stop(true).cursor_pointer().rounded(ButtonRounded::Large)
-}
-
-/// Quiet inline, toolbar, and navigation actions.
-pub(in crate::desktop) fn desktop_ghost_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id).ghost()
-}
-
-/// Ordinary visible action, or the alternative beside a primary or danger action.
-pub(super) fn desktop_secondary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id).secondary().shadow(themes::button_inset_edges())
-}
-
-fn desktop_filled_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id).rounded(ButtonRounded::Medium).border_0().font_medium()
-}
-
-/// Decision-area default commit: the one emphasized action per view, normally
-/// the Enter action. Paints the brand accent fill; never use for destructive
-/// actions even when destruction is the most likely choice.
-pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_accented_button(id).primary()
-}
-
-/// Destructive commitment: irreversible or data-losing actions only. Pair with
-/// an explicit confirmation for consequential work.
-pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_accented_button(id).danger()
-}
-
-fn desktop_accented_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id)
-        .font_semibold()
-        .shadow(themes::accented_button_shadows())
-}
-
-/// Quiet header dismiss control: ghost X icon with an accessible name and a
-/// matching tooltip. Callers add sizing (usually `.small()`), disabled
-/// state, and the click handler. Icon-only X buttons without a tooltip
-/// (tab/attachment closers) and action-bound tooltips stay manual.
-pub(super) fn desktop_dismiss_button(
-    id: impl Into<gpui_kit::ElementId>,
-    label: impl Into<gpui_kit::SharedString>,
-) -> Button {
-    let label = label.into();
-    desktop_ghost_button(id)
-        .icon(IconName::X)
-        .accessibility_label(label.clone())
-        .tooltip(label)
-}
-
 /// Running-turn marker shared by every thread surface (tab strip, sidebar,
 /// browser, compact header): a muted spinner under a caller-owned stable id.
 /// The owning button already names the running state for assistive tech, so
@@ -888,28 +880,6 @@ pub(super) fn running_indicator(
         .flex_shrink_0()
         .child(Spinner::new().xsmall().color(colors.muted_foreground))
         .into_any_element()
-}
-
-/// The single zen toggle: docked in the title bar normally, floating above
-/// the content in zen mode. Enter and exit share id, size, and variant; only
-/// the icon paint, label, and mount point change.
-pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &FocusHandle) -> Button {
-    let label = if zen_mode {
-        rust_i18n::t!("app.navigation.exit_zen").to_string()
-    } else {
-        rust_i18n::t!("app.navigation.enter_zen").to_string()
-    };
-    let icon = if zen_mode {
-        Icon::new(IconName::Leaf).text_color(faded)
-    } else {
-        Icon::new(IconName::Leaf)
-    };
-    desktop_ghost_button(ZEN_MODE_TOGGLE_ELEMENT_ID)
-        .icon(icon)
-        .small()
-        .accessibility_label(label.clone())
-        .tooltip_with_action(label, &ToggleZenMode, Some(key_context::DESKTOP))
-        .dispatches_desktop_action(ToggleZenMode, focus.clone())
 }
 
 /// Opacity transition for elements that mount through user-driven state —
@@ -941,42 +911,6 @@ pub(super) trait FadeInExt: AnimationExt + Sized {
 }
 
 impl<T: AnimationExt + Sized> FadeInExt for T {}
-
-pub(super) trait DesktopButtonExt {
-    fn desktop_disabled(self, disabled: bool) -> Self;
-    fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
-    /// Selected-option treatment for Ghost buttons: pressed-state metadata plus a stronger
-    /// interaction fill when selected, quiet ghost otherwise. Every call site
-    /// sits on a `secondary`-equivalent surface (settings panel, group-box fill), where
-    /// a `secondary` fill would be pixel-identical to the background, so the
-    /// highlight uses the readable pressed fill. Ghost-base
-    /// (diff layout) and label-only (reduced motion)
-    /// selections keep their bespoke chains.
-    fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self;
-}
-
-impl DesktopButtonExt for Button {
-    fn desktop_disabled(self, disabled: bool) -> Self {
-        self.disabled(disabled)
-            .cursor(if disabled {
-                CursorStyle::Arrow
-            } else {
-                CursorStyle::PointingHand
-            })
-            // Kit replays instance shadows after its own disabled shadow reset.
-            .when(disabled, |button| button.shadow_none())
-    }
-
-    fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self {
-        self.toggled(selected)
-            .selected(selected)
-            .when(selected, |button| button.bg(colors.button_active).text_color(colors.foreground))
-    }
-
-    fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
-        self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
-    }
-}
 
 #[cfg(test)]
 mod tests;

@@ -81,6 +81,9 @@ fn settings_deep_links_cover_every_settings_tab() {
         ("storage", SettingsTab::Storage),
         ("disk", SettingsTab::Storage),
         ("cleanup", SettingsTab::Storage),
+        ("computer-use", SettingsTab::ComputerUse),
+        ("computer_use", SettingsTab::ComputerUse),
+        ("cua", SettingsTab::ComputerUse),
         ("about", SettingsTab::About),
         ("info", SettingsTab::About),
     ] {

@@ -692,6 +692,7 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::ToggleInspector
         | PaletteAction::ToggleZenMode
         | PaletteAction::ToggleTheme
+        | PaletteAction::ToggleComputerUse
         | PaletteAction::AttachFiles
         | PaletteAction::OpenGoTo => {}
     }

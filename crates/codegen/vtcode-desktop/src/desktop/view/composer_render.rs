@@ -702,6 +702,12 @@ impl DesktopView {
                 this.open_attachment_picker(window, cx);
             }))
     }
+
+    // NOTE: no computer-use composer button. The composer rows hold a
+    // pixel-contract single line (see composer_alignment tests); a fifth
+    // labeled button wraps the zen row. Activation lives in Settings →
+    // Computer Use (master Switch) and the ⌘K "Computer use: Turn on/off"
+    // command, which together cover pointer and keyboard entry.
 }
 
 // The run cluster shares `desktop_button`'s Large baseline directly; no

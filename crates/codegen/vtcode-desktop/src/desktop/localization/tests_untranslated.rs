@@ -30,6 +30,42 @@ fn discard_copy_resolves_in_every_language() {
 }
 
 #[test]
+fn computer_use_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.tab.computer_use",
+            "app.settings.computer_use.group",
+            "app.settings.computer_use.enable",
+            "app.settings.computer_use.enable_description",
+            "app.settings.computer_use.decisions",
+            "app.settings.computer_use.decisions_description",
+            "app.settings.computer_use.target",
+            "app.settings.computer_use.image",
+            "app.settings.computer_use.limits",
+            "app.settings.computer_use.not_configured",
+            "app.settings.computer_use.configure",
+            "app.settings.computer_use.status_on",
+            "app.settings.computer_use.status_off",
+            "app.settings.computer_use.unavailable",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(rust_i18n::t!("app.settings.tab.computer_use", locale = "en").to_string(), "Computer use");
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let text = rust_i18n::t!("app.settings.computer_use.status_aria", locale = locale, state = "On").to_string();
+        assert!(!text.is_empty(), "{locale}/status_aria");
+        assert!(text.contains("On"), "{locale}/status_aria keeps its interpolation: {text}");
+    }
+}
+
+#[test]
 fn login_items_copy_resolves_in_every_language() {
     // English literals by design until full translations ship: this pins
     // resolution (no assert_ne).

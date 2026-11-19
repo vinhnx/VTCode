@@ -10,10 +10,11 @@ pub(super) enum SettingsTab {
     Connections,
     Notifications,
     Storage,
+    ComputerUse,
     About,
 }
 
-/// One entry in the unified settings navigation: the eight tabs plus the CLI
+/// One entry in the unified settings navigation: the nine tabs plus the CLI
 /// configuration page. This is the single ordering source for the Kit sidebar,
 /// the legacy nav, keyboard cycling, and index→page dispatch, so a reorder
 /// cannot desync one surface from another. About is deliberately last.
@@ -24,7 +25,7 @@ pub(super) enum SettingsPage {
 }
 
 impl SettingsPage {
-    pub(super) const ALL: [Self; 9] = [
+    pub(super) const ALL: [Self; 10] = [
         Self::Tab(SettingsTab::VtCode),
         Self::Tab(SettingsTab::Appearance),
         Self::Tab(SettingsTab::Accessibility),
@@ -32,17 +33,18 @@ impl SettingsPage {
         Self::Tab(SettingsTab::Connections),
         Self::Tab(SettingsTab::Notifications),
         Self::Tab(SettingsTab::Storage),
+        Self::Tab(SettingsTab::ComputerUse),
         Self::Configuration,
         Self::Tab(SettingsTab::About),
     ];
 
-    pub(super) const CONFIG_INDEX: usize = 7;
+    pub(super) const CONFIG_INDEX: usize = 8;
 }
 
 impl SettingsTab {
     /// Tab-only order for the search palette, canonical deeplink names, and
     /// the icon-coverage test. Navigation ordering lives in [`SettingsPage`].
-    pub(super) const ALL: [Self; 8] = [
+    pub(super) const ALL: [Self; 9] = [
         Self::VtCode,
         Self::Appearance,
         Self::Accessibility,
@@ -50,6 +52,7 @@ impl SettingsTab {
         Self::Connections,
         Self::Notifications,
         Self::Storage,
+        Self::ComputerUse,
         Self::About,
     ];
 
@@ -74,6 +77,7 @@ impl SettingsTab {
             Self::Connections => "app.settings.tab.connections",
             Self::Notifications => "app.settings.tab.notifications",
             Self::Storage => "app.settings.tab.storage",
+            Self::ComputerUse => "app.settings.tab.computer_use",
             Self::About => "app.settings.tab.about",
         }
     }
@@ -93,6 +97,7 @@ impl SettingsTab {
             Self::Connections => Some(IconName::Plug),
             Self::Notifications => Some(IconName::Bell),
             Self::Storage => Some(IconName::HardDrive),
+            Self::ComputerUse => Some(IconName::Computer),
             Self::About => Some(IconName::Info),
         }
     }
@@ -190,6 +195,14 @@ impl SettingsTab {
                 "archive",
                 "delete",
             ],
+            Self::ComputerUse => &[
+                "computer use",
+                "computer-use",
+                "cua",
+                "browser",
+                "automation",
+                "control",
+            ],
             Self::About => &[
                 "about",
                 "version",
@@ -250,7 +263,7 @@ impl DesktopView {
         self.show_palette(PaletteKind::SettingsSearch, groups, window, cx);
     }
 
-    /// Unified full-screen settings: left navigation over the seven tabs
+    /// Unified full-screen settings: left navigation over the nine tabs
     /// plus the CLI configuration entry, right content for the selection.
     /// The dialog identity stays `Settings` in every language so reopening
     /// and assistive technology see one stable surface.
@@ -553,6 +566,7 @@ impl DesktopView {
             SettingsTab::Connections => self.render_connections_settings(cx),
             SettingsTab::Notifications => self.render_notification_settings(cx),
             SettingsTab::Storage => self.render_storage_settings(cx),
+            SettingsTab::ComputerUse => self.render_computer_use_settings(cx),
             SettingsTab::About => self.render_about_settings(cx),
         };
         let content = div()
@@ -762,6 +776,7 @@ mod tests {
         assert_eq!(SettingsTab::Connections.icon(), Some(IconName::Plug));
         assert_eq!(SettingsTab::Notifications.icon(), Some(IconName::Bell));
         assert_eq!(SettingsTab::Storage.icon(), Some(IconName::HardDrive));
+        assert_eq!(SettingsTab::ComputerUse.icon(), Some(IconName::Computer));
         assert_eq!(SettingsTab::About.icon(), Some(IconName::Info));
         let icons = SettingsTab::ALL.map(SettingsTab::icon);
         for (index, icon) in icons.iter().enumerate() {

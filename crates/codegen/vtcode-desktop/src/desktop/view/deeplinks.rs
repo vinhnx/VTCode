@@ -190,6 +190,7 @@ fn tab_name(tab: settings::SettingsTab) -> &'static str {
         settings::SettingsTab::Connections => "connections",
         settings::SettingsTab::Notifications => "notifications",
         settings::SettingsTab::Storage => "storage",
+        settings::SettingsTab::ComputerUse => "computer-use",
         settings::SettingsTab::About => "about",
     }
 }
@@ -215,6 +216,7 @@ fn action_path(action: &PaletteAction) -> Option<String> {
         PaletteAction::ToggleInspector => Some("action/toggle-inspector".to_string()),
         PaletteAction::ToggleZenMode => Some("action/toggle-zen".to_string()),
         PaletteAction::ToggleTheme => Some("action/toggle-theme".to_string()),
+        PaletteAction::ToggleComputerUse => Some("action/toggle-computer-use".to_string()),
         PaletteAction::AttachFiles => Some("action/attach-files".to_string()),
         PaletteAction::OpenConversationSearch { session_id } => {
             Some(format!("action/conversation-search/{session_id}"))
@@ -394,6 +396,7 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
         "toggle-inspector" => exact(rest, PaletteAction::ToggleInspector)?,
         "toggle-zen" => exact(rest, PaletteAction::ToggleZenMode)?,
         "toggle-theme" => exact(rest, PaletteAction::ToggleTheme)?,
+        "toggle-computer-use" => exact(rest, PaletteAction::ToggleComputerUse)?,
         "attach-files" => exact(rest, PaletteAction::AttachFiles)?,
         "conversation-search" => PaletteAction::OpenConversationSearch { session_id: single(rest)? },
         "load-session" => PaletteAction::LoadSession(single(rest)?),
@@ -750,6 +753,8 @@ mod tests {
         }
         // Representative actions, parameterless and parameterized.
         assert_eq!(parse("action/toggle-zen"), Some(DeepLink::Action(PaletteAction::ToggleZenMode)));
+        assert_eq!(parse("action/toggle-computer-use"), Some(DeepLink::Action(PaletteAction::ToggleComputerUse)));
+        assert_eq!(parse("settings/computer-use"), Some(DeepLink::SettingsTab(SettingsTab::ComputerUse)));
         assert_eq!(parse("action/open-in-cli"), Some(DeepLink::Action(PaletteAction::OpenInCli)));
         assert_eq!(parse("action/load-session/abc"), Some(DeepLink::Action(PaletteAction::LoadSession("abc".into()))));
         assert_eq!(

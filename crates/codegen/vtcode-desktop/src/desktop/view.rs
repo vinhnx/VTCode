@@ -171,6 +171,7 @@ mod session_options;
 mod sessions;
 mod settings;
 mod settings_accessibility;
+mod settings_computer_use;
 mod settings_connections;
 mod settings_diff;
 mod settings_kit;

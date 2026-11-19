@@ -329,3 +329,62 @@ fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn computer_use_tab_reflects_snapshot_and_writes_on_toggle(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    // Hold the receiver: dropping it closes the channel and every request
+    // fails. Draining also proves the exact write payload below.
+    let (commands, _requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(PathBuf::from("/work/demo"));
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![
+                    config_page_setting("computer_use.enabled", json!(false), "Computer Use"),
+                    config_page_setting("computer_use.decisions_review", json!(true), "Computer Use"),
+                    config_page_setting("computer_use.browser_build", json!("/tmp/fixture-build"), "Computer Use"),
+                    config_page_setting(
+                        "computer_use.image",
+                        json!("vtcode-computer-use-browser:1.64.1"),
+                        "Computer Use",
+                    ),
+                    config_page_setting("computer_use.max_actions_per_turn", json!(50), "Computer Use"),
+                    config_page_setting("computer_use.turn_timeout_secs", json!(300), "Computer Use"),
+                ],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            }));
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        // Keyboard-navigate to the Computer Use tab (page index 7):
+        // view-driven pushes keep Kit selection in sync.
+        window.press("home", cx);
+        window.render_frame(cx);
+        for _ in 0..7 {
+            window.press("right", cx);
+            window.render_frame(cx);
+        }
+        assert!(window.try_find("computer-use-settings").is_some());
+        assert_eq!(window.find("computer-use-enabled").checked(), Some(false));
+        assert_eq!(window.find("computer-use-decisions").checked(), Some(true));
+        assert_eq!(window.find("computer-use-status").label(), Some("Computer use Off"));
+        assert!(!view.read(cx).computer_use_enabled());
+        assert!(view.read(cx).can_edit_cli_settings(), "fixture must satisfy the edit gate");
+
+        // Toggle on: the write fires; the controlled Switch follows the
+        // snapshot once the service confirms, so it stays off meanwhile.
+        scroll_settings_by(window, px(-3000.), cx);
+        window.render_frame(cx);
+        window.click("computer-use-enabled", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_write_pending);
+        assert_eq!(window.find("computer-use-enabled").checked(), Some(false));
+    })
+    .unwrap();
+}
