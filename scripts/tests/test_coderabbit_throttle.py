@@ -57,8 +57,13 @@ class DiffKeyTests(unittest.TestCase):
     def write(self, name: str, text: str) -> None:
         (self.root / name).write_text(text, encoding="utf-8")
 
-    def key(self, scope: str = "uncommitted", gate: str = "major") -> str:
-        result = run(self.root, f"REVIEW_SCOPE={scope}\nGATE_SEVERITY={gate}\ndiff_key")
+    def key(
+        self, scope: str = "uncommitted", gate: str = "major", dir: str = ""
+    ) -> str:
+        result = run(
+            self.root,
+            f"REVIEW_SCOPE={scope}\nGATE_SEVERITY={gate}\nREVIEW_DIR={shlex.quote(dir)}\ndiff_key",
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout.strip()
 
@@ -78,6 +83,13 @@ class DiffKeyTests(unittest.TestCase):
     def test_stricter_gate_is_a_different_question(self):
         self.write("a.txt", "two\n")
         self.assertNotEqual(self.key(gate="major"), self.key(gate="minor"))
+
+    def test_different_review_dir_is_a_different_key(self):
+        """Two --dir targets can share a caller diff; their verdicts must not."""
+        other = self.root / "sub"
+        other.mkdir()
+        self.write("a.txt", "two\n")
+        self.assertNotEqual(self.key(dir=str(other)), self.key(dir="."))
 
 
 class ThrottleTests(unittest.TestCase):

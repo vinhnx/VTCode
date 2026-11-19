@@ -138,7 +138,10 @@ The wrapper records the last review in `.git/coderabbit-review/` (local and untr
 state) and reuses its verdict when the **same diff** is reviewed again inside the window:
 
 ```bash
-CODERABBIT_THROTTLE_SECONDS=3600   # default; 0 disables the throttle
+# Inline on the command, so the wrapper actually inherits it.
+CODERABBIT_THROTTLE_SECONDS=0 ./scripts/coderabbit-review.sh
+# Or export it for the rest of the shell; 0 disables the throttle.
+export CODERABBIT_THROTTLE_SECONDS=3600   # default
 ./scripts/coderabbit-review.sh --force   # bypass it for one run
 ```
 

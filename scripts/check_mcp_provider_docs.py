@@ -58,11 +58,58 @@ def tracked_provider_docs(root: Path) -> set[str]:
     }
 
 
-def _committed_paths(root: Path) -> list[str]:
-    if not _has_head(root):
+def tracked_provider_docs(root: Path, base: str | None = None) -> set[str]:
+    """Provider guide/example paths that already exist in the comparison base.
+
+    The baseline must come from the *base* revision, not `HEAD`. A provider guide
+    committed on the branch is in `HEAD`, so using HEAD would grandfather the very
+    addition this gate exists to reject, and a clean checkout of that branch would
+    pass. `git ls-tree` is used instead of `git ls-files` for the same reason it
+    replaced it earlier: `ls-files` also lists staged additions.
+    """
+    return {
+        _provider_key(path)
+        for path in _committed_paths(root, base)
+        if _provider_key(path)
+    }
+
+
+def _resolve_base(root: Path, base: str | None) -> str | None:
+    """The revision to compare against, or None when it cannot be determined.
+
+    Order: an explicit base, the merge-base with the upstream default branch, then
+    the root commit. Falling back to the root commit keeps the gate strict: every
+    provider doc present at that point is treated as pre-existing, so a new one is
+    still rejected even in a shallow or detached checkout.
+    """
+    if base:
+        return base
+    for candidate in ("origin/HEAD", "origin/main", "main"):
+        result = subprocess.run(
+            ["git", "merge-base", candidate, "HEAD"],
+            cwd=root,
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            return result.stdout.decode("utf-8", errors="ignore").strip() or None
+    # No usable upstream: use the root commit so additions still stand out.
+    result = subprocess.run(
+        ["git", "rev-list", "--max-parents=0", "HEAD"],
+        cwd=root,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return None
+    roots = result.stdout.decode("utf-8", errors="ignore").split()
+    return roots[-1] if roots else None
+
+
+def _committed_paths(root: Path, base: str | None = None) -> list[str]:
+    revision = _resolve_base(root, base)
+    if revision is None or not _has_head(root):
         return []
     result = subprocess.run(
-        ["git", "ls-tree", "-r", "--name-only", "-z", "HEAD"],
+        ["git", "ls-tree", "-r", "--name-only", "-z", revision],
         cwd=root,
         check=True,
         capture_output=True,
@@ -90,9 +137,11 @@ def _provider_key(relative: str) -> str | None:
     return provider if provider else None
 
 
-def find_violations(root: Path, staged_only: bool = False) -> list[str]:
+def find_violations(
+    root: Path, staged_only: bool = False, base: str | None = None
+) -> list[str]:
     """Provider docs added relative to the comparison point."""
-    existing = tracked_provider_docs(root)
+    existing = tracked_provider_docs(root, base)
 
     if staged_only:
         added = _added_paths_staged(root)
@@ -108,8 +157,19 @@ def find_violations(root: Path, staged_only: bool = False) -> list[str]:
 
 
 def _added_paths_staged(root: Path) -> list[str]:
+    # `--no-renames` matters: with rename detection on, renaming `sem-mcp.md` to
+    # `specstream-mcp.md` is reported as R, not A, so the destination would be
+    # missed and a new provider identity would slip through.
     result = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=A", "-z"],
+        [
+            "git",
+            "diff",
+            "--cached",
+            "--name-only",
+            "--no-renames",
+            "--diff-filter=A",
+            "-z",
+        ],
         cwd=root,
         check=True,
         capture_output=True,
@@ -118,10 +178,11 @@ def _added_paths_staged(root: Path) -> list[str]:
 
 
 def _added_paths_worktree(root: Path) -> list[str]:
-    """Paths added in the working tree, compared against HEAD when it exists."""
-    args = ["git", "diff", "--name-only", "--diff-filter=A", "-z"]
-    if _has_head(root):
-        args.append("HEAD")
+    """Paths added in the working tree, compared against the base when it exists."""
+    args = ["git", "diff", "--name-only", "--no-renames", "--diff-filter=A", "-z"]
+    base = _resolve_base(root, None)
+    if base is not None and _has_head(root):
+        args.append(base)
     result = subprocess.run(args, cwd=root, check=True, capture_output=True)
     added = [p for p in result.stdout.decode("utf-8", errors="ignore").split("\0") if p]
     # `git diff HEAD` omits untracked files; include them so a new untracked
@@ -136,6 +197,22 @@ def _added_paths_worktree(root: Path) -> list[str]:
         p for p in result.stdout.decode("utf-8", errors="ignore").split("\0") if p
     ]
     return added + untracked
+
+
+def _is_git_repository(root: Path) -> bool:
+    """True when `root` is inside a git checkout, including a linked worktree.
+
+    `.git` is a directory in a normal clone but a file in a worktree, so the
+    presence check must accept either.
+    """
+    if not (root / ".git").exists():
+        return False
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=root,
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def _has_head(root: Path) -> bool:
@@ -160,9 +237,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Check staged changes only instead of the working tree.",
     )
+    parser.add_argument(
+        "--base",
+        default=None,
+        help=(
+            "Revision treated as pre-existing (default: merge-base with "
+            "origin/HEAD, origin/main, or main)."
+        ),
+    )
     args = parser.parse_args(argv)
 
-    if not (args.root / ".git").exists():
+    if not _is_git_repository(args.root):
         print(
             f"check_mcp_provider_docs: {args.root} is not a git repository.\n"
             "This gate compares additions against tracked files.",
@@ -170,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    violations = find_violations(args.root, staged_only=args.staged)
+    violations = find_violations(args.root, staged_only=args.staged, base=args.base)
     if not violations:
         return 0
 

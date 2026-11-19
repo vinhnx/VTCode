@@ -116,6 +116,46 @@ class McpProviderDocsGateTests(unittest.TestCase):
         self.assertIn("specstream", stderr.getvalue())
         self.assertNotIn("other-vendor", stderr.getvalue())
 
+    def test_committed_provider_guide_on_branch_fails(self):
+        """The baseline is the base revision, not HEAD, so a branch addition fails."""
+        self.write("docs/guides/sem-mcp.md")
+        self.commit_all("base")
+        self.git("checkout", "-q", "-b", "feature")
+        self.write("docs/guides/specstream-mcp.md")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "add provider")
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            status = module.main(["--root", str(self.root), "--base", "main"])
+        self.assertEqual(
+            status, 1, "a committed branch addition must not grandfather itself"
+        )
+        self.assertIn("specstream", stderr.getvalue())
+
+    def test_rename_to_new_provider_identity_fails(self):
+        """Without --no-renames the destination is reported as R, not A, and is missed."""
+        self.write("docs/guides/sem-mcp.md")
+        self.commit_all("base")
+        self.git("checkout", "-q", "-b", "feature")
+        self.git("mv", "docs/guides/sem-mcp.md", "docs/guides/specstream-mcp.md")
+        self.git("commit", "-qm", "rename")
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            status = module.main(["--root", str(self.root), "--base", "main"])
+        self.assertEqual(status, 1)
+        self.assertIn("specstream", stderr.getvalue())
+
+    def test_editing_an_existing_provider_guide_on_a_branch_passes(self):
+        self.write("docs/guides/sem-mcp.md")
+        self.commit_all("base")
+        self.git("checkout", "-q", "-b", "feature")
+        self.write("docs/guides/sem-mcp.md", "# improved\n")
+        self.git("commit", "-qam", "edit")
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            status = module.main(["--root", str(self.root), "--base", "main"])
+        self.assertEqual((status, stderr.getvalue()), (0, ""))
+
     def test_provider_key_ignores_non_provider_paths(self):
         self.assertIsNone(module._provider_key("docs/guides/mcp-integration.md"))
         self.assertIsNone(module._provider_key("docs/guides/sem-mcp-notes.md"))

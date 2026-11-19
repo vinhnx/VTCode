@@ -407,7 +407,7 @@ call the shared functions in `scripts/common.sh`, so the fast gate and the relea
 | Function | Checks | Runs in |
 | --- | --- | --- |
 | `run_repo_governance_gates` | file length, docs/AGENTS.md links, top-level docs placement, tracked file sizes, out-of-scope MCP provider docs | `check-dev.sh`, `check.sh` |
-| `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Bun: `bun install`) | `check-dev.sh --lints`, `check.sh` |
+| `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Node.js 22+ with `npx`; run `npm install` so the pinned linter resolves locally) | `check-dev.sh --lints`, `check.sh` |
 | `run_check` / `run_clippy` | compilation plus Cargo's built-in `unused_dependencies` manifest lint (warn-level, configured in root `Cargo.toml`) | `check-dev.sh`, `check.sh` |
 
 Unused dependencies are reported by Cargo 1.100's built-in `cargo::unused_dependencies` manifest

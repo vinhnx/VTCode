@@ -124,18 +124,30 @@ GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null || printf '.git')
 RUST_STATE_FILE=${RUST_STATE_FILE:-${GIT_DIR_PATH}/check-dev-rust-state}
 
 rust_state_key() {
-	# One `git hash-object --stdin-paths` call over the whole list is far cheaper
-	# than spawning a process per file, and the trailing gitlink-free paths keep
-	# the fingerprint stable regardless of file order.
+	# Hash pathname/content pairs, not bare content hashes. A bare hash stream does
+	# not encode the path, so staging a rename would leave the fingerprint
+	# unchanged while `Cargo.toml` still points at the old module name.
 	{
-		git ls-files -z -- '*.rs' 'Cargo.toml' '*/Cargo.toml' 'rust-toolchain.toml' 'Cargo.lock' 2>/dev/null |
+		git ls-files -z -- '*.rs' 'Cargo.toml' '*/Cargo.toml' 'rust-toolchain.toml' 'Cargo.lock' \
+			'.cargo/config.toml' '.cargo/config' 2>/dev/null |
 			tr '\0' '\n' |
-			git hash-object --stdin-paths 2>/dev/null
-		# A new untracked Rust source changes what cargo would compile, so include it.
-		git ls-files -z --others --exclude-standard -- '*.rs' 2>/dev/null | tr '\0' '\n' | sort
-		# Flags that change what cargo does, so a scope change never reuses a
-		# verdict produced under different flags.
+			while IFS= read -r path; do
+				[ -n "$path" ] || continue
+				printf '%s %s\n' "$(git hash-object -- "$path" 2>/dev/null)" "$path"
+			done
+		# An untracked Rust source changes what cargo compiles, so include both its
+		# path and its contents: a filename-only entry would miss an edit to it.
+		git ls-files -z --others --exclude-standard -- '*.rs' 2>/dev/null |
+			tr '\0' '\n' |
+			sort |
+			while IFS= read -r path; do
+				[ -n "$path" ] || continue
+				printf '%s %s\n' "$(git hash-object -- "$path" 2>/dev/null)" "$path"
+			done
+		# Flags and environment that change what cargo does, so a scope or compiler
+		# flag change never reuses a verdict produced under different settings.
 		printf 'scope=%s\n' "$SCOPE_LABEL"
+		printf 'rustflags=%s\n' "${RUSTFLAGS:-}"
 	} | git hash-object --stdin 2>/dev/null
 }
 
@@ -455,11 +467,11 @@ run_coderabbit_review() {
 	0) print_success "CodeRabbit review passed." ;;
 	2)
 		print_error "CodeRabbit review blocked: findings at or above the gate severity."
-		((FAILED_CHECKS++))
+		FAILED_CHECKS=$((FAILED_CHECKS + 1))
 		;;
 	*)
 		print_error "CodeRabbit review could not complete."
-		((FAILED_CHECKS++))
+		FAILED_CHECKS=$((FAILED_CHECKS + 1))
 		;;
 	esac
 }
@@ -525,8 +537,8 @@ main() {
 	echo ""
 
 	# Check prerequisites
-	check_rustfmt || ((FAILED_CHECKS++))
-	check_clippy || ((FAILED_CHECKS++))
+	check_rustfmt || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+	check_clippy || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 
 	if [ $FAILED_CHECKS -gt 0 ]; then
 		print_error "Prerequisites not met. Exiting."
@@ -537,8 +549,8 @@ main() {
 	# failure in ~1s instead of after the slowest cargo stage. Sub-second
 	# governance gates and shell lint run before the minutes-long cargo work, and
 	# rustfmt (seconds) runs before clippy (the slowest stage).
-	run_shell_scripts_lint || ((FAILED_CHECKS++))
-	run_repo_governance_gates || ((FAILED_CHECKS++))
+	run_shell_scripts_lint || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+	run_repo_governance_gates || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 
 	# Cargo stages: rustfmt is seconds, clippy dominates, check only verifies
 	# feature combinations clippy does not cover. Keep rustfmt first so a
@@ -550,36 +562,46 @@ main() {
 	# resolution for an unchanged tree, which is the normal self-verification
 	# rerun. --no-cache forces the full path.
 	local cargo_cached=false
-	if [ "$SKIP_CARGO_CACHE" != true ] && [ "$RUN_WORKSPACE" != true ] && rust_inputs_unchanged; then
-		cargo_cached=true
-		print_always "Cargo unchanged since the last passing run; skipping rustfmt/clippy/check."
+	# Capture the fingerprint *before* the cargo decision. Recording it later (after
+	# tests and an optional minutes-long review) would let an edit made during the
+	# run be stored as passing, and the next run would skip checks that would catch
+	# that exact edit.
+	local checked_key=""
+	if [ "$SKIP_CARGO_CACHE" != true ] && [ "$RUN_WORKSPACE" != true ]; then
+		# Failure-tolerant: outside a git checkout the fingerprint cannot be built,
+		# which simply means the fast path is unavailable rather than an error.
+		checked_key=$(rust_state_key 2>/dev/null || true)
+		if [ -n "$checked_key" ] && rust_inputs_unchanged; then
+			cargo_cached=true
+			print_always "Cargo unchanged since the last passing run; skipping rustfmt/clippy/check."
+		fi
 	fi
 
 	if [ "$cargo_cached" = true ]; then
 		:
 	else
-		run_rustfmt || ((FAILED_CHECKS++))
-		run_clippy || ((FAILED_CHECKS++))
-		run_check || ((FAILED_CHECKS++))
+		run_rustfmt || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+		run_clippy || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+		run_check || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 	fi
 
 	# Run extra lints if requested (Markdown lint needs Bun and is slow)
 	if [ "$RUN_EXTRA_LINTS" = true ]; then
-		run_structured_logging_lint || ((FAILED_CHECKS++))
-		run_markdown_lint_gate || ((FAILED_CHECKS++))
-		run_agent_legibility_lint || ((FAILED_CHECKS++))
+		run_structured_logging_lint || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+		run_markdown_lint_gate || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+		run_agent_legibility_lint || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 	fi
 
 	# Run dependency audit if requested (network-bound on first run); the
 	# explicit flag hard-requires the tool rather than skipping.
 	if [ "$RUN_DENY" = true ]; then
-		run_cargo_deny required || ((FAILED_CHECKS++))
-		run_cargo_vet required || ((FAILED_CHECKS++))
+		run_cargo_deny required || FAILED_CHECKS=$((FAILED_CHECKS + 1))
+		run_cargo_vet required || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 	fi
 
 	# Run tests if requested (always last, as they're the slowest)
 	if [ "$RUN_TESTS" = true ]; then
-		run_tests || ((FAILED_CHECKS++))
+		run_tests || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 	fi
 
 	# Opt-in AI review. Deliberately outside the default gate: it needs network
@@ -596,8 +618,12 @@ main() {
 
 	if [ $FAILED_CHECKS -eq 0 ]; then
 		# Only a fully green run may seed the fast path: caching after a failure
-		# would let the next run skip the stage that just broke.
-		record_rust_state
+		# would let the next run skip the stage that just broke. Record the
+		# fingerprint captured before the run, and only when the inputs still match
+		# it, so an edit made during the run is not stored as verified.
+		if [ -n "$checked_key" ] && [ "$(rust_state_key)" = "$checked_key" ]; then
+			printf '%s\n' "$checked_key" >"$RUST_STATE_FILE" 2>/dev/null || true
+		fi
 		print_success "All checks passed! Your code is ready for commit."
 		echo ""
 		if [ "$RUN_TESTS" = false ]; then
