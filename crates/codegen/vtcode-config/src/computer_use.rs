@@ -18,8 +18,11 @@ pub struct ComputerUseConfig {
     /// Opt-in marker. The feature stays inert unless this is true.
     #[serde(default)]
     pub enabled: bool,
-    /// Approved static build served to the browser target. Required when
-    /// enabled; must be absolute. Existence is verified at launch, not here.
+    /// Approved static build served to the browser target. Required before
+    /// turns can run, but not before the switch can persist: Settings
+    /// enables first and guides to the target second, and turns fail
+    /// closed until a target is set. Must be absolute when present.
+    /// Existence is verified at launch, not here.
     #[serde(default)]
     pub browser_build: Option<PathBuf>,
     /// Pinned browser container image (tag or digest, never `latest`).
@@ -67,12 +70,10 @@ impl ComputerUseConfig {
         if !has_image_pin(&self.image) || self.image.ends_with(":latest") {
             bail!("computer_use.image must be pinned with a tag or digest other than latest");
         }
-        if self.enabled {
-            match self.browser_build.as_ref() {
-                Some(build) if build.is_absolute() => {}
-                _ => bail!("computer_use.browser_build must be an absolute directory when computer use is enabled"),
-            }
-        } else if let Some(build) = self.browser_build.as_ref()
+        // Enabled without a target is a legitimate intermediate state (the
+        // Settings switch persists first; turns fail closed until a target
+        // is set), so only the shape of a present value is validated here.
+        if let Some(build) = self.browser_build.as_ref()
             && (!build.is_absolute() || build.as_os_str().is_empty())
         {
             bail!("computer_use.browser_build must be an absolute directory");
@@ -140,21 +141,25 @@ mod tests {
     }
 
     #[test]
-    fn enabled_requires_an_absolute_build_directory() {
+    fn enabled_without_a_target_persists_and_relative_targets_reject() {
+        // The Settings switch persists first; turns fail closed until a
+        // target is set, so validation must not refuse the switch.
         let config = ComputerUseConfig { enabled: true, ..Default::default() };
-        assert!(config.validate().is_err());
-        let config = ComputerUseConfig {
-            enabled: true,
-            browser_build: Some(PathBuf::from("relative/build")),
-            ..Default::default()
-        };
-        assert!(config.validate().is_err());
-        let config = ComputerUseConfig {
-            enabled: true,
-            browser_build: Some(PathBuf::from("/absolute/build")),
-            ..Default::default()
-        };
-        config.validate().expect("absolute build should validate");
+        config.validate().expect("enabled without a target should validate");
+        for enabled in [false, true] {
+            let config = ComputerUseConfig {
+                enabled,
+                browser_build: Some(PathBuf::from("relative/build")),
+                ..Default::default()
+            };
+            assert!(config.validate().is_err(), "enabled={enabled} accepted a relative build");
+            let config = ComputerUseConfig {
+                enabled,
+                browser_build: Some(PathBuf::from("/absolute/build")),
+                ..Default::default()
+            };
+            config.validate().expect("absolute build should validate");
+        }
     }
 
     #[test]

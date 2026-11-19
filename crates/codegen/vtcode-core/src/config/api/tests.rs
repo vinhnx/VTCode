@@ -70,6 +70,40 @@ fn write_reports_override_when_higher_layer_wins() {
 
 #[test]
 #[serial]
+fn write_accepts_computer_use_enabled_without_a_target() {
+    // The desktop master switch persists first and guides to the target
+    // second; validation must accept the intermediate state (turns fail
+    // closed until a target is set). Regression: the writer used to run
+    // full-config validation that rejected enabled-without-target, so the
+    // switch snapped back with no usable error.
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace = temp.path();
+    let home_config = workspace.join("home").join("vtcode.toml");
+    let workspace_config = workspace.join("vtcode.toml");
+    fs::create_dir_all(home_config.parent().expect("home parent")).expect("home dir");
+
+    fs::write(&home_config, "agent.provider = \"openai\"\n").expect("home config");
+    fs::write(&workspace_config, "agent.provider = \"openai\"\n").expect("workspace config");
+
+    let static_paths = StaticWorkspacePaths::new(workspace, workspace.join(".vtcode"));
+    let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![home_config]);
+
+    with_config_defaults_provider_for_test(Arc::new(provider), || {
+        let response = ConfigService::write(ConfigWriteRequest {
+            workspace: workspace.to_path_buf(),
+            target: ConfigWriteTarget::Workspace,
+            path: "computer_use.enabled".to_string(),
+            value: TomlValue::Boolean(true),
+            strategy: ConfigWriteStrategy::Replace,
+            expected_layer_version: None,
+        })
+        .expect("enabling without a target must persist");
+        assert_eq!(response.effective_value, Some(TomlValue::Boolean(true)));
+    });
+}
+
+#[test]
+#[serial]
 fn repository_target_write_does_not_persist_provider_endpoint_or_credentials() {
     let temp = tempfile::tempdir().expect("tempdir");
     let workspace = temp.path();
