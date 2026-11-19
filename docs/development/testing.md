@@ -115,8 +115,37 @@ Install the runner with `cargo install cargo-nextest --locked`.
 | Changed packages         | `./scripts/check-dev.sh --changed`          | Changed packages in the selected scope                                                      |
 | Full workspace           | `./scripts/check-dev.sh --workspace --test` | All workspace packages                                                                      |
 | Dependency audit         | `./scripts/check-dev.sh --deny`             | Tests excluded; runs `cargo deny --locked check` (network-bound on first advisory-DB fetch) |
+| AI review (opt-in)       | `./scripts/check-dev.sh --review`           | Current diff via CodeRabbit CLI; network-bound, minutes-long                                |
 
 Run the script regressions with `python3 -m unittest discover -s scripts/tests -p 'test_check_dev.py'`.
+
+### Opt-in AI Review
+
+`./scripts/check-dev.sh --review` runs a CodeRabbit review of the current diff and fails the run when a finding reaches
+the gate severity (default `major`). It is deliberately outside the default gate: the default gate is a 10-30s
+deterministic, hermetic check, while an AI review is network-bound, takes minutes, and draws on a small hourly allowance
+that varies by CodeRabbit plan.
+
+Use the wrapper directly for scope and severity control:
+
+```bash
+# Review only committed work against a base branch
+./scripts/coderabbit-review.sh --committed --base main
+
+# Block on minor findings, review one directory
+./scripts/coderabbit-review.sh --gate minor --dir crates/codegen
+
+# Exit codes: 0 gate passed (or nothing to review), 1 incomplete, 2 blocked
+```
+
+Gated runs review the whole selected diff rather than an incremental checkpoint, so they cost more allowance than a
+repeat `coderabbit review`. The wrapper skips the call entirely when the selected scope has no changes, and fails closed
+when the CodeRabbit CLI is missing or unauthenticated.
+
+Coderabbit review config lives in `.coderabbit.yaml`. On the Free plan, local CLI reviews honour `profile`, `tone`,
+`path_instructions`, `path_filters`, and code guidelines; hosted pull-request settings and pre-merge checks need a paid
+tier, so a repository policy must not rely on them alone. `scripts/check_mcp_provider_docs.py` is the deterministic gate
+for the out-of-scope MCP provider docs rule for exactly that reason.
 
 ### Agent-Friendly Quiet Mode
 

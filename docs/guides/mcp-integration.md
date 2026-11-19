@@ -186,6 +186,13 @@ registry's `list_changed` refresh instead. Full tool definitions (`get_tool_deta
 > servers must expose Server-Sent Events per the transport spec. If an HTTP provider lacks streaming, fall back to a
 > stdio wrapper until the server adopts the reference implementation.
 
+### Provider-specific guides are closed to new entries
+
+The guides below are maintained for providers that shipped with VT Code. New per-vendor MCP guides and example TOML
+files are not accepted; vendors host their own setup instructions and point here for the generic
+`[[mcp.providers]]` configuration. See
+[Out of scope contributions](../CONTRIBUTING.md#out-of-scope-contributions).
+
 ### Local code discovery with Sem
 
 [Sem MCP](sem-mcp.md) provides optional local entity search, caller inspection, and structural diffs.

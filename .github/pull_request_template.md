@@ -16,6 +16,17 @@ Please delete options that are not relevant.
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] This change requires a documentation update
 
+## Scope Check
+
+New MCP provider documentation and example configurations are **out of scope**: the project no longer accepts
+per-vendor MCP setup guides, `docs/examples/*-mcp.toml` files, or docs-map entries for third-party MCP servers.
+Vendor-authored documentation is treated as promotional and is closed without merge. See the
+[out of scope contributions](https://github.com/vinhnx/VTCode/blob/main/docs/CONTRIBUTING.md#out-of-scope-contributions)
+policy for details and for the existing provider docs that remain maintained.
+
+- [ ] This PR does not add documentation or example config for a new MCP provider
+- [ ] I have read the [contributing guidelines](https://github.com/vinhnx/VTCode/blob/main/docs/CONTRIBUTING.md)
+
 ## How Has This Been Tested?
 
 Please describe the tests that you ran to verify your changes. Provide instructions so others can reproduce. Include any

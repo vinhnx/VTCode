@@ -22,6 +22,7 @@ Entry point for VT Code contributor workflows.
 - [Deep Rust Analysis with Charon](./deep-rust-analysis.md) - Semantic Rust inspection (drops, layout, resolution) via
   Charon, and the design lessons it mirrors.
 - [CI/CD](./ci-cd.md) - Pipeline behavior and verification stages.
+- [CodeRabbit](./coderabbit.md) - Hosted PR review configuration and the opt-in local CLI review.
 - [Markdown Quality](./markdown-quality.md) - Maintained-file selection, pinned linting, and formatting policy.
 - [Cross Compilation](./cross-compilation.md) - Multi-target build workflows.
 - [Fuzzing](./fuzzing.md) - `cargo-fuzz` usage and parser hardening.

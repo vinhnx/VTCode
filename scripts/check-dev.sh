@@ -15,6 +15,8 @@
 #   - Tests (--test)
 #   - Structured logging and Markdown lint (--lints)
 #   - Workspace-wide checks (--workspace)
+#   - CodeRabbit AI review (--review): opt-in, network-bound, minutes-long, and
+#     limited per hour by the CodeRabbit plan, so it stays out of the default gate
 #   - Quiet mode (--quiet): suppress progress banners and cargo noise; keep
 #     errors/warnings and the final summary visible. Useful for agents and CI.
 
@@ -33,6 +35,7 @@ RUN_EXTRA_LINTS=false
 RUN_CHANGED=false
 QUIET=false
 RUN_DENY=false
+RUN_REVIEW=false
 SCOPE_LABEL="default-members"
 
 # Quiet-aware status printer: progress banners are suppressed in quiet mode.
@@ -381,6 +384,9 @@ print_usage() {
 	echo "                      the final summary still print (agent/CI friendly)"
 	echo "  --deny, -d          Also run dependency audit (cargo-deny advisories/licenses/bans/"
 	echo "                      sources + cargo-vet audit provenance; network-bound on first run)"
+	echo "  --review, -r        Also run an opt-in CodeRabbit AI review of the current diff"
+	echo "                      (network-bound, minutes-long, plan-limited; see"
+	echo "                      scripts/coderabbit-review.sh --help)"
 	echo "  --help, -h          Show this help message"
 	echo ""
 	echo "Examples:"
@@ -391,6 +397,25 @@ print_usage() {
 	echo "  $0 -t -w -l         # Full dev check with tests, workspace, and lints"
 	echo ""
 	echo "For release/PR quality gate, run: ./scripts/check.sh"
+}
+
+# Opt-in CodeRabbit review. Exit 2 means "gate blocked by a finding" and is
+# reported distinctly so the summary does not read like a tool failure.
+run_coderabbit_review() {
+	print_status "Running opt-in CodeRabbit review..."
+	local status=0
+	"$(dirname "${BASH_SOURCE[0]}")/coderabbit-review.sh" || status=$?
+	case "$status" in
+	0) print_success "CodeRabbit review passed." ;;
+	2)
+		print_error "CodeRabbit review blocked: findings at or above the gate severity."
+		((FAILED_CHECKS++))
+		;;
+	*)
+		print_error "CodeRabbit review could not complete."
+		((FAILED_CHECKS++))
+		;;
+	esac
 }
 
 main() {
@@ -420,6 +445,10 @@ main() {
 			;;
 		--deny | -d)
 			RUN_DENY=true
+			shift
+			;;
+		--review | -r)
+			RUN_REVIEW=true
 			shift
 			;;
 		--help | -h)
@@ -482,6 +511,13 @@ main() {
 	# Run tests if requested (always last, as they're the slowest)
 	if [ "$RUN_TESTS" = true ]; then
 		run_tests || ((FAILED_CHECKS++))
+	fi
+
+	# Opt-in AI review. Deliberately outside the default gate: it needs network
+	# access and a CodeRabbit login, takes minutes rather than seconds, and its
+	# hourly allowance is small. Runs last so deterministic checks report first.
+	if [ "$RUN_REVIEW" = true ]; then
+		run_coderabbit_review
 	fi
 
 	# Summary (always printed — this is the outcome evidence, even in quiet mode)
