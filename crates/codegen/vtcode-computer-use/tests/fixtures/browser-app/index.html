@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>computer-use fixture</title>
+<style>
+body { margin: 0; background: #ffffff; }
+.marker { position: absolute; width: 120px; height: 120px; background: #888888; }
+#m-local { left: 10px; top: 10px; }
+#m-external { left: 150px; top: 10px; }
+#m-evil { left: 290px; top: 10px; }
+#m-click { left: 500px; top: 400px; }
+#btn { position: absolute; left: 500px; top: 300px; width: 200px; height: 80px; font-size: 24px; }
+.hidden { position: absolute; left: -1000px; top: 0; width: 10px; height: 10px; }
+</style>
+</head>
+<body>
+<div class="marker" id="m-local"></div>
+<div class="marker" id="m-external"></div>
+<div class="marker" id="m-evil"></div>
+<button id="btn" type="button">Run</button>
+<div class="marker" id="m-click"></div>
+<img class="hidden" alt="" src="ok.png"
+  onload="document.getElementById('m-local').style.background='#00ff00'"
+  onerror="document.getElementById('m-local').style.background='#ff0000'">
+<img class="hidden" alt="" src="http://example.invalid/x.png"
+  onload="document.getElementById('m-external').style.background='#00ff00'"
+  onerror="document.getElementById('m-external').style.background='#ff0000'">
+<img class="hidden" alt="" src="evil.png"
+  onload="document.getElementById('m-evil').style.background='#00ff00'"
+  onerror="document.getElementById('m-evil').style.background='#ff0000'">
+<script>
+document.getElementById('btn').onclick = () => {
+  document.getElementById('m-click').style.background = '#00ff00';
+};
+</script>
+</body>
+</html>

@@ -149,6 +149,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Compaction Engine?", "How does Request history and local clearing
     work?", "How does Headless staging and module ownership work?"
 
+- **File**: `docs/development/computer-use-runloop-wiring.md`
+  - **Content**: Computer-use run-loop wiring
+  - **Topics**: Authority split (recap), Inbound: provider response to native calls, Approval, Execution, Outbound:
+    results to the next request
+  - **User Questions**: "What can you tell me about Computer-use run-loop wiring?", "How does Authority split (recap)
+    work?", "How does Inbound: provider response to native calls work?"
+
 - **File**: `docs/development/configuration-reload.md`
   - **Content**: Configuration reset and live reload
   - **Topics**: Loader and persistence ownership, Shared reset service, Runtime reload contract, Settings palette

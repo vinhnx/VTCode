@@ -18,10 +18,13 @@ base64 = { workspace = true }
 compact_str = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "macros", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "time"] }
 tokio-util = { workspace = true, features = ["codec"] }
+uuid = { workspace = true, features = ["v4"] }
+vtcode-commons = { workspace = true }
 
 [dev-dependencies]
+image = { workspace = true }
 tokio = { workspace = true, features = ["rt", "test-util"] }
 
 [lints]

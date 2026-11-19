@@ -1,5 +1,7 @@
 //! Bounded private protocol for the isolated Chromium runner.
 
+pub mod container;
+
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail, ensure};

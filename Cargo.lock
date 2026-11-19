@@ -12234,9 +12234,12 @@ dependencies = [
  "base64 0.23.1",
  "compact_str 0.10.0",
  "futures",
+ "image",
  "serde_json",
  "tokio",
  "tokio-util",
+ "uuid",
+ "vtcode-commons",
 ]
 
 [[package]]

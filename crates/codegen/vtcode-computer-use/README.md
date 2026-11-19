@@ -16,22 +16,26 @@ and browser and macOS drivers are integration responsibilities.
 ## Isolated browser runner
 
 The browser image contains Playwright and Chromium. Build it before the
-session, then start one container for each approved static build. The
-controller exchanges bounded JSON lines with that container over private
-pipes through `browser::BrowserDriver`.
+session, and rebuild it after changing `browser/runner.mjs` (the tests
+assert the runner's current behavior):
 
 ```sh
 docker build --tag vtcode-computer-use-browser:1.64.1 browser
-docker run --rm --interactive --init --pull=never --network=none \
-  --read-only --cap-drop=ALL --security-opt=no-new-privileges \
-  --pids-limit=256 --memory=1g --tmpfs=/tmp:rw,nosuid,nodev,size=512m \
-  --env=HOME=/tmp \
-  --mount "type=bind,src=/absolute/path/to/approved-build,dst=/build,readonly" \
-  vtcode-computer-use-browser:1.64.1
 ```
 
+Start one container per approved static build through
+`browser::container`, which validates the pinned image and build
+directory, launches with a fixed hardening flag set (`--network=none`,
+read-only root filesystem and bind mount, no new privileges, capped
+memory and PIDs), and removes the exact container on `terminate`.
+Attach `browser::BrowserDriver` to the returned pipes to exchange
+bounded JSON lines with that container.
+
 The container opens `index.html` in one 1280 × 800 page and serves build
-assets at a private synthetic origin. Stop must terminate the exact
-container when delivery was interrupted. The runner supports screenshots,
-zoom, pointer and keyboard actions, and waits. Browser-history mouse buttons
-are refused because Playwright does not deliver them through its mouse API.
+assets at a private synthetic origin. The runner exits after any failed
+action or when its input closes, so an ambiguous outcome ends the
+target session even before the caller tears it down. Stop must still
+terminate the exact container when delivery was interrupted. The runner
+supports screenshots, zoom, pointer and keyboard actions, and waits.
+Browser-history mouse buttons are refused because Playwright does not
+deliver them through its mouse API.

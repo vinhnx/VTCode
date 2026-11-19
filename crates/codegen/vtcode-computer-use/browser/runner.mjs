@@ -27,6 +27,15 @@ function validPoint(point) {
   return point;
 }
 
+function writeLine(text) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(`${text}\n`, error => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
 function keyName(key) {
   const aliases = new Map([
     ["ctrl", "Control"], ["control", "Control"], ["alt", "Alt"],
@@ -203,6 +212,7 @@ async function serveAsset(route) {
 
 async function run() {
   const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"], handleSIGINT: false, handleSIGTERM: false });
+  let exitCode = 0;
   try {
     const context = await browser.newContext({ viewport, serviceWorkers: "block", acceptDownloads: false });
     await context.route("**/*", serveAsset);
@@ -214,23 +224,30 @@ async function run() {
     if (!loaded?.ok()) throw new Error("Build entry point is unavailable");
 
     const execute = deliver(page);
-    process.stdout.write('{"kind":"ready"}\n');
+    await writeLine('{"kind":"ready"}');
     for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) {
       try {
         if (Buffer.byteLength(line) > maxRequestBytes) throw new Error("Action is too large");
         const response = await execute(JSON.parse(line));
-        process.stdout.write(`${JSON.stringify(response)}\n`);
+        await writeLine(JSON.stringify(response));
       } catch {
-        process.stdout.write('{"kind":"failed"}\n');
-        return;
+        await writeLine('{"kind":"failed"}');
+        exitCode = 1;
+        break;
       }
     }
+  } catch {
+    try {
+      await writeLine('{"kind":"failed"}');
+    } catch {}
+    exitCode = 1;
   } finally {
-    await browser.close();
+    // Bound the shutdown: a wedged browser must not stall the guaranteed exit.
+    await Promise.race([browser.close(), setTimeout(8000)]).catch(() => {});
   }
+  process.exit(exitCode);
 }
 
 run().catch(() => {
-  process.stdout.write('{"kind":"failed"}\n');
-  process.exitCode = 1;
+  process.exit(1);
 });
