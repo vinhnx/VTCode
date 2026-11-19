@@ -25,6 +25,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 GATE_SEVERITY=${CODERABBIT_GATE_SEVERITY:-major}
 REVIEW_SCOPE=""
 BASE_REF=""
+FORCE=false
+# Hourly throttle: CodeRabbit bills pushes, not commits, and a gated review always
+# covers the full selected diff. One review per hour per diff is enough for a
+# self-verification loop and keeps a 3-8/hour allowance from being burned by
+# repeated local runs on the same tree.
+THROTTLE_SECONDS=${CODERABBIT_THROTTLE_SECONDS:-3600}
+# Grace period: findings are reported but never fail the run until the deadline
+# passes. ISO-8601 UTC (e.g. 2026-12-01T00:00:00Z). Empty means enforce now; set a
+# future date to adopt the review without blocking work.
+GRACE_UNTIL=${CODERABBIT_GRACE_UNTIL:-}
+# Where the throttle and last outcome are recorded. Local and untracked, so it
+# never becomes repository state.
+STATE_DIR=${CODERABBIT_STATE_DIR:-.git/coderabbit-review}
 
 # Bound the call so a stalled network review cannot hang the agent loop. macOS
 # bash 3.2 has no builtin timeout, so fall back to GNU timeout/gtimeout when
@@ -56,18 +69,25 @@ print_usage() {
 	echo "  --gate <severity>   Minimum blocking severity: critical|major|minor|trivial|info"
 	echo "                      (default: ${GATE_SEVERITY}, or CODERABBIT_GATE_SEVERITY)"
 	echo "  --dir <path>        Review only changes inside a directory"
+	echo "  --force             Ignore the hourly throttle and review this diff again"
 	echo "  --help, -h          Show this help message"
 	echo ""
 	echo "Environment:"
 	echo "  CODERABBIT_GATE_SEVERITY   Default gate severity when --gate is absent"
 	echo "  CODERABBIT_REVIEW_TIMEOUT  Seconds to wait before aborting (default: 1800)"
+	echo "  CODERABBIT_THROTTLE_SECONDS  Reuse a verdict for the same diff within this"
+	echo "                               window (default: 3600; 0 disables the throttle)"
+	echo "  CODERABBIT_GRACE_UNTIL     ISO-8601 UTC deadline (e.g. 2026-12-01T00:00:00Z)."
+	echo "                             Findings warn instead of failing until then;"
+	echo "                             unset enforces immediately."
 	echo ""
 	echo "Exit codes:"
-	echo "  0  gate passed (or no changes to review)"
+	echo "  0  gate passed (or no changes to review, or grace period downgraded a block)"
 	echo "  1  review incomplete or unavailable"
 	echo "  2  gate blocked by a finding at or above the threshold"
 	echo ""
-	echo "Note: Free plan allows 3 CLI reviews/hour. Gated runs review the full diff."
+	echo "Note: Free plan allows 3 CLI reviews/hour. Gated runs review the full diff,"
+	echo "so the throttle keys on the diff and reuses a verdict for the same tree."
 }
 
 require_coderabbit() {
@@ -162,6 +182,10 @@ main() {
 			args+=("--dir" "${2:?--dir requires a path}")
 			shift 2
 			;;
+		--force)
+			FORCE=true
+			shift
+			;;
 		--help | -h)
 			print_usage
 			exit 0
@@ -190,36 +214,153 @@ main() {
 		exit 0
 	fi
 
+	# The throttle key must include the diff itself. Keying on time alone would
+	# serve a stale "passed" for code that changed since the last review.
+	local key
+	key=$(diff_key) || {
+		print_warning "Could not fingerprint the diff; running without the throttle."
+		FORCE=true
+		key="nokey"
+	}
+	local last_status=0
+
+	if [ "$FORCE" != true ] && within_throttle_window "$key"; then
+		last_status=$(cached_status "$key")
+		print_status "CodeRabbit already reviewed this exact diff under an hour ago (cached: exit ${last_status})."
+		echo "Re-run with --force to review again, or wait ${THROTTLE_SECONDS}s."
+		apply_grace "$last_status" "cached"
+		exit $?
+	fi
+
 	print_status "Running CodeRabbit review (gate: ${GATE_SEVERITY}, timeout: ${timeout_seconds}s)..."
 	# Findings stream to stdout as NDJSON; keep them visible for the agent loop.
 	local status=0
 	run_with_timeout "$timeout_seconds" coderabbit review --agent --gate "$GATE_SEVERITY" "${args[@]}" || status=$?
 
+	record_review "$key" "$status"
+	apply_grace "$status" "fresh"
+}
+
+# Fingerprint of everything the review will look at, so the throttle can never
+# serve a verdict for a diff that has since changed. Covers the selected scope
+# plus the gate severity, because a stricter gate is a different question.
+diff_key() {
+	local payload=""
+	case "$REVIEW_SCOPE" in
+	uncommitted) payload=$(
+		git status --porcelain 2>/dev/null
+		git diff 2>/dev/null
+	) ;;
+	committed)
+		local base
+		base=$(resolve_base_ref) || return 1
+		payload=$(git diff "${base}...HEAD" 2>/dev/null)
+		;;
+	*) payload=$(
+		git status --porcelain 2>/dev/null
+		git diff 2>/dev/null
+	) ;;
+	esac
+	printf '%s\n%s\n%s\n' "$GATE_SEVERITY" "$REVIEW_SCOPE" "$payload" |
+		git hash-object --stdin 2>/dev/null
+}
+
+state_file() {
+	printf '%s\n' "${STATE_DIR}/${1}"
+}
+
+# True when this exact diff was reviewed inside the throttle window.
+within_throttle_window() {
+	local key=$1
+	local stamp_file
+	stamp_file=$(state_file "last-run")
+	[ -f "$stamp_file" ] || return 1
+	local recorded_key recorded_at now
+	recorded_key=$(sed -n '1p' "$stamp_file" 2>/dev/null)
+	recorded_at=$(sed -n '2p' "$stamp_file" 2>/dev/null)
+	[ "$recorded_key" = "$key" ] || return 1
+	case "$recorded_at" in
+	'' | *[!0-9]*) return 1 ;;
+	esac
+	now=$(date +%s)
+	[ $((now - recorded_at)) -lt "$THROTTLE_SECONDS" ]
+}
+
+cached_status() {
+	local key=$1
+	local stamp_file
+	stamp_file=$(state_file "last-run")
+	local recorded_key recorded_status
+	recorded_key=$(sed -n '1p' "$stamp_file" 2>/dev/null)
+	recorded_status=$(sed -n '3p' "$stamp_file" 2>/dev/null)
+	if [ "$recorded_key" = "$key" ]; then
+		case "$recorded_status" in
+		'' | *[!0-9]*) printf '1\n' ;;
+		*) printf '%s\n' "$recorded_status" ;;
+		esac
+	else
+		printf '1\n'
+	fi
+}
+
+record_review() {
+	local key=$1 status=$2
+	mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+	printf '%s\n%s\n%s\n' "$key" "$(date +%s)" "$status" >"$(state_file "last-run")" 2>/dev/null || true
+}
+
+# True while findings must not fail the run. The deadline is the single source of
+# truth: an empty value means already enforcing, not "warn forever". A grace
+# period that cannot expire would silently disable the gate, which is the failure
+# mode most likely to go unnoticed.
+within_grace_period() {
+	[ -n "$GRACE_UNTIL" ] || return 1
+	local now
+	now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+	[[ "$now" < "$GRACE_UNTIL" ]]
+}
+
+# Translate the review exit status into this script's exit status, downgrading a
+# blocking result to a warning while the grace period is active. "Incomplete"
+# (1) is never downgraded: an unevaluated review is not evidence of cleanliness.
+apply_grace() {
+	local status=$1 origin=$2
+
 	case "$status" in
 	0)
-		print_success "CodeRabbit gate passed."
-		echo ""
-		echo "Findings are advisory. Run 'coderabbit review findings' to revisit them."
-		exit 0
+		if [ "$origin" = "cached" ]; then
+			print_success "Cached CodeRabbit gate passed."
+		else
+			print_success "CodeRabbit gate passed."
+			echo ""
+			echo "Findings are advisory. Run 'coderabbit review findings' to revisit them."
+		fi
+		return 0
 		;;
 	1)
 		print_error "CodeRabbit review was incomplete or could not be evaluated."
 		echo "Retry, or narrow the scope with --dir / --committed / --base."
-		exit 1
+		return 1
 		;;
 	2)
+		if within_grace_period; then
+			print_warning "CodeRabbit found issues at or above '${GATE_SEVERITY}', but the grace period is active."
+			echo "Treating this as a warning. Enforcement begins ${GRACE_UNTIL}."
+			echo "Clear CODERABBIT_GRACE_UNTIL to enforce now."
+			return 0
+		fi
 		print_error "CodeRabbit gate blocked: finding at or above '${GATE_SEVERITY}'."
 		echo "Address the findings above, then run this script again."
-		exit 2
+		return 2
 		;;
 	124)
-		print_error "CodeRabbit review timed out after ${timeout_seconds}s."
+		print_error "CodeRabbit review timed out after ${CODERABBIT_REVIEW_TIMEOUT:-1800}s."
 		echo "Raise CODERABBIT_REVIEW_TIMEOUT or narrow the scope."
-		exit 1
+		return 1
 		;;
 	*)
 		print_error "CodeRabbit review failed with exit code ${status}."
-		exit 1
+		return 1
 		;;
 	esac
 }
