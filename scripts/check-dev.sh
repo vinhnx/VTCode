@@ -35,7 +35,8 @@ RUN_EXTRA_LINTS=false
 RUN_CHANGED=false
 QUIET=false
 RUN_DENY=false
-RUN_REVIEW=false
+RUN_REVIEW=${VTCODE_SELF_VERIFY_REVIEW:-false}
+SKIP_CARGO_CACHE=false
 SCOPE_LABEL="default-members"
 
 # Quiet-aware status printer: progress banners are suppressed in quiet mode.
@@ -111,6 +112,45 @@ cargo_verbosity() {
 	if [ "$QUIET" = true ]; then
 		echo "-q"
 	fi
+}
+
+# Fingerprint of everything that can change cargo's verdict: tracked Rust and
+# manifest sources plus their current working-tree state. Used to skip the
+# minutes-long cargo stages when a repeated run has nothing new to compile,
+# which is the common case in a self-verification loop. Stored in the real git
+# dir so it never appears in `git status` and therefore never perturbs its own
+# key. `--git-dir` resolves correctly in a linked worktree, where `.git` is a file.
+GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null || printf '.git')
+RUST_STATE_FILE=${RUST_STATE_FILE:-${GIT_DIR_PATH}/check-dev-rust-state}
+
+rust_state_key() {
+	# One `git hash-object --stdin-paths` call over the whole list is far cheaper
+	# than spawning a process per file, and the trailing gitlink-free paths keep
+	# the fingerprint stable regardless of file order.
+	{
+		git ls-files -z -- '*.rs' 'Cargo.toml' '*/Cargo.toml' 'rust-toolchain.toml' 'Cargo.lock' 2>/dev/null |
+			tr '\0' '\n' |
+			git hash-object --stdin-paths 2>/dev/null
+		# A new untracked Rust source changes what cargo would compile, so include it.
+		git ls-files -z --others --exclude-standard -- '*.rs' 2>/dev/null | tr '\0' '\n' | sort
+		# Flags that change what cargo does, so a scope change never reuses a
+		# verdict produced under different flags.
+		printf 'scope=%s\n' "$SCOPE_LABEL"
+	} | git hash-object --stdin 2>/dev/null
+}
+
+# True when the last passing run had the same Rust inputs and the same scope.
+rust_inputs_unchanged() {
+	[ -f "$RUST_STATE_FILE" ] || return 1
+	local recorded current
+	recorded=$(cat "$RUST_STATE_FILE" 2>/dev/null)
+	current=$(rust_state_key) || return 1
+	[ -n "$current" ] && [ "$recorded" = "$current" ]
+}
+
+record_rust_state() {
+	mkdir -p "$(dirname "$RUST_STATE_FILE")" 2>/dev/null || return 0
+	rust_state_key >"$RUST_STATE_FILE" 2>/dev/null || true
 }
 
 run_clippy() {
@@ -386,7 +426,12 @@ print_usage() {
 	echo "                      sources + cargo-vet audit provenance; network-bound on first run)"
 	echo "  --review, -r        Also run an opt-in CodeRabbit AI review of the current diff"
 	echo "                      (network-bound, minutes-long, plan-limited; see"
-	echo "                      scripts/coderabbit-review.sh --help)"
+	echo "                      scripts/coderabbit-review.sh --help). Also enabled by"
+	echo "                      VTCODE_SELF_VERIFY_REVIEW=true, which is how the"
+	echo "                      self-verification loop opts in."
+	echo "  --no-cache          Force the cargo stages even when no Rust input changed"
+	echo "                      since the last passing run (the skip is keyed on tracked"
+	echo "                      sources, manifests, and their working-tree state)."
 	echo "  --help, -h          Show this help message"
 	echo ""
 	echo "Examples:"
@@ -400,7 +445,8 @@ print_usage() {
 }
 
 # Opt-in CodeRabbit review. Exit 2 means "gate blocked by a finding" and is
-# reported distinctly so the summary does not read like a tool failure.
+# reported distinctly so the summary does not read like a tool failure. The
+# wrapper owns the throttle and grace period, so this stays a thin delegate.
 run_coderabbit_review() {
 	print_status "Running opt-in CodeRabbit review..."
 	local status=0
@@ -417,7 +463,6 @@ run_coderabbit_review() {
 		;;
 	esac
 }
-
 main() {
 	# Parse arguments
 	while [[ $# -gt 0 ]]; do
@@ -449,6 +494,10 @@ main() {
 			;;
 		--review | -r)
 			RUN_REVIEW=true
+			shift
+			;;
+		--no-cache)
+			SKIP_CARGO_CACHE=true
 			shift
 			;;
 		--help | -h)
@@ -484,22 +533,42 @@ main() {
 		exit 1
 	fi
 
-	# Run essential checks (parallelizable in theory, but sequential for clear error messages)
-	run_rustfmt || ((FAILED_CHECKS++))
-	run_clippy || ((FAILED_CHECKS++))
-	run_check || ((FAILED_CHECKS++))
+	# Order by cost, cheapest first, so a self-verification loop learns about a
+	# failure in ~1s instead of after the slowest cargo stage. Sub-second
+	# governance gates and shell lint run before the minutes-long cargo work, and
+	# rustfmt (seconds) runs before clippy (the slowest stage).
+	run_shell_scripts_lint || ((FAILED_CHECKS++))
 	run_repo_governance_gates || ((FAILED_CHECKS++))
 
-	# Run extra lints if requested
+	# Cargo stages: rustfmt is seconds, clippy dominates, check only verifies
+	# feature combinations clippy does not cover. Keep rustfmt first so a
+	# formatting-only mistake fails before paying for a full clippy pass.
+	#
+	# Skip the cargo block entirely when nothing it consumes has changed since the
+	# last passing run. Cargo's own fingerprint cache still rebuilds on an actual
+	# dependency change; this only avoids re-paying process startup and metadata
+	# resolution for an unchanged tree, which is the normal self-verification
+	# rerun. --no-cache forces the full path.
+	local cargo_cached=false
+	if [ "$SKIP_CARGO_CACHE" != true ] && [ "$RUN_WORKSPACE" != true ] && rust_inputs_unchanged; then
+		cargo_cached=true
+		print_always "Cargo unchanged since the last passing run; skipping rustfmt/clippy/check."
+	fi
+
+	if [ "$cargo_cached" = true ]; then
+		:
+	else
+		run_rustfmt || ((FAILED_CHECKS++))
+		run_clippy || ((FAILED_CHECKS++))
+		run_check || ((FAILED_CHECKS++))
+	fi
+
+	# Run extra lints if requested (Markdown lint needs Bun and is slow)
 	if [ "$RUN_EXTRA_LINTS" = true ]; then
 		run_structured_logging_lint || ((FAILED_CHECKS++))
 		run_markdown_lint_gate || ((FAILED_CHECKS++))
 		run_agent_legibility_lint || ((FAILED_CHECKS++))
-		run_shell_scripts_lint || ((FAILED_CHECKS++))
 	fi
-
-	# Always run shell script syntax check (fast, no extra deps)
-	run_shell_scripts_lint || ((FAILED_CHECKS++))
 
 	# Run dependency audit if requested (network-bound on first run); the
 	# explicit flag hard-requires the tool rather than skipping.
@@ -526,6 +595,9 @@ main() {
 	print_timing
 
 	if [ $FAILED_CHECKS -eq 0 ]; then
+		# Only a fully green run may seed the fast path: caching after a failure
+		# would let the next run skip the stage that just broke.
+		record_rust_state
 		print_success "All checks passed! Your code is ready for commit."
 		echo ""
 		if [ "$RUN_TESTS" = false ]; then
@@ -549,4 +621,8 @@ main() {
 	fi
 }
 
-main "$@"
+# Run only when executed directly: sourcing lets tests exercise the helpers
+# (rust_state_key, gate ordering) without starting a full check run.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	main "$@"
+fi
