@@ -169,10 +169,14 @@ pub fn cron_parameters() -> Value {
 }
 
 /// Model-visible description of the `computer_use` tool: one approved turn
-/// driving an isolated browser. States the task shape, the approval gate,
-/// and the redaction contract so the model invokes it correctly and sets
-/// expectations; turn limits and the browser target stay in configuration.
-pub const COMPUTER_USE_DESCRIPTION: &str = "Run one approved computer-use turn in an isolated browser: describe the task in plain words. The turn screenshots, clicks, types, and scrolls, then reports a redacted summary with per-call verdicts. Needs the master switch on, a configured browser target, and a computer-use model; every turn asks for human approval before any action executes, and screenshots never reach the transcript.";
+/// driving an isolated browser. Trigger-led so task-to-tool matching wins
+/// over shell workarounds at selection time; states the approval gate and
+/// the redaction contract so the model invokes it correctly and sets
+/// expectations. Prerequisites stay out on purpose: the model cannot verify
+/// them, and the fail-closed `Disabled` outcomes (`disabled`, `unsupported
+/// provider`, `no target configured`) guide the off-state instead. Turn
+/// limits and the browser target stay in configuration.
+pub const COMPUTER_USE_DESCRIPTION: &str = "Use when the user asks to see, screenshot, or operate a web page through its UI. The turn screenshots, clicks, types, and scrolls in an isolated browser, then reports a redacted summary. Prefer this over shell commands such as headless browsers or screenshot CLIs. Every turn asks for human approval before acting, and screenshots never reach the transcript.";
 
 #[must_use]
 pub fn computer_use_parameters() -> Value {
@@ -252,7 +256,7 @@ pub fn cron_delete_parameters() -> Value {
 
 /// Model-visible description of the `exec_command` tool. The escalation
 /// justification requirement is stated once, on the `justification` field.
-pub const EXEC_COMMAND_DESCRIPTION: &str = "Run a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running. Inspect current target source before edits, then verify the bounded change. For file edits, use apply_patch instead of shell redirection or in-place editors such as `sed -i`. Expanded sandbox_permissions modes trigger an approval check before the command runs.";
+pub const EXEC_COMMAND_DESCRIPTION: &str = "Run a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running. Inspect current target source before edits, then verify the bounded change. For file edits, use apply_patch instead of shell redirection or in-place editors such as `sed -i`. For web-page screenshots or UI operation, use the computer_use tool instead of headless browsers when available. Expanded sandbox_permissions modes trigger an approval check before the command runs.";
 
 #[must_use]
 pub fn exec_command_parameters() -> Value {
@@ -460,11 +464,21 @@ mod tests {
             task["description"].as_str().is_some_and(|text| text.contains("Plain-words")),
             "task description must steer phrasing"
         );
+        // Prerequisites (master switch, browser target, computer-use model)
+        // stay out of the description on purpose: the model cannot verify
+        // them, unverifiable preconditions route around the tool, and the
+        // fail-closed `Disabled` outcomes guide the off-state instead.
+        for absent in ["master switch", "browser target", "Needs the"] {
+            assert!(
+                !COMPUTER_USE_DESCRIPTION.contains(absent),
+                "description must not state unverifiable prerequisite {absent}"
+            );
+        }
         for needle in [
             "human approval",
             "never reach the transcript",
-            "master switch",
-            "browser target",
+            "screenshot",
+            "Prefer this over shell",
         ] {
             assert!(COMPUTER_USE_DESCRIPTION.contains(needle), "description must state {needle}");
         }
@@ -685,6 +699,7 @@ mod tests {
     fn exec_command_description_states_edit_routing_and_escalation_rules() {
         assert!(EXEC_COMMAND_DESCRIPTION.starts_with("Run a shell command through the active sandbox policy"));
         assert!(EXEC_COMMAND_DESCRIPTION.contains("For file edits, use apply_patch"));
+        assert!(EXEC_COMMAND_DESCRIPTION.contains("use the computer_use tool instead of headless browsers"));
         assert!(EXEC_COMMAND_DESCRIPTION.contains("approval check"));
         // The justification requirement is stated once, on the `justification`
         // field description; the tool description keeps only the approval-check
