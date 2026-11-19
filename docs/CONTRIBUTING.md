@@ -11,6 +11,7 @@ document outlines the guidelines and best practices for contributing to the proj
 - [Code Style](#code-style)
 - [Testing](#testing)
 - [Submitting Changes](#submitting-changes)
+- [Out of scope contributions](#out-of-scope-contributions)
 - [Development Guidelines](#development-guidelines)
 - [Architecture Overview](#architecture-overview)
 - [Community](#community)
@@ -211,6 +212,44 @@ If your change pushes a file over the ceiling, split it instead of extending the
 - Explain the problem you're solving and how you solved it
 - Include any relevant screenshots or examples (if applicable)
 - Ensure all CI checks pass before requesting review
+
+## Out of scope contributions
+
+Some changes are closed without review. Knowing them up front saves you a rejected pull request.
+
+### New MCP provider documentation
+
+The project no longer accepts documentation or example configuration for new third-party MCP providers. This covers:
+
+- Setup guides under `docs/guides/<vendor>-mcp.md`
+- Runnable examples under `docs/examples/<vendor>-mcp.toml`
+- New sections in [MCP Integration Guide](./guides/mcp-integration.md) for a specific provider
+- Docs-map entries in `docs/modules/vtcode_docs_map.md` for the above
+
+Vendor-authored documentation is indistinguishable from promotion, and per-vendor guides rot as endpoints, auth flows,
+and tool catalogs change. We cannot keep verifying them, so we stopped adding them.
+
+This does not affect the MCP protocol support itself. VT Code continues to implement MCP client behavior, and any
+provider that speaks the protocol works through the generic `[[mcp.providers]]` configuration described in the
+[MCP Integration Guide](./guides/mcp-integration.md). You do not need a VT Code docs entry to be usable.
+
+If you maintain an MCP server, publish the setup guide on your own site and point at the generic configuration docs
+here. That keeps the instructions in the hands of whoever can keep them current.
+
+Changes are still welcome when they fix a factual error in the protocol surface, add a generic configuration capability
+that any provider benefits from, or remove a provider guide that has gone stale.
+
+This rule is enforced automatically. `scripts/check_mcp_provider_docs.py` runs in `./scripts/check-dev.sh` and fails when
+a new `docs/guides/<vendor>-mcp.md` or `docs/examples/<vendor>-mcp.toml` appears. Guides that already exist stay
+editable; only new provider identities are rejected. The check is deterministic rather than model-based so its verdict
+does not depend on which tools or review plan a contributor has.
+
+### Other out of scope changes
+
+- New public Rust traits for third-party integrations. Prefer config, manifests, plugins, and MCP; see
+  [Extension Boundaries](./development/extension_boundaries.md).
+- Vendored copies of third-party code without an upstream link and licensing review.
+- Drive-by formatting, dependency bumps unrelated to a fix, and renames with no behavior change.
 
 ## Development Guidelines
 

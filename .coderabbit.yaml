@@ -1,0 +1,172 @@
+# CodeRabbit configuration for vinhnx/VTCode.
+# Schema: https://www.coderabbit.ai/integrations/schema.v2.json
+# Validate with: coderabbit config --agent
+#
+# Design rule taken from docs/harness/architectural_invariants.md#enforcement:
+# code review is the *last line of defense, not the primary enforcement
+# mechanism*. Most VT Code rules already have a deterministic gate (clippy,
+# rustfmt, check-dev.sh, check.sh). This file therefore teaches the reviewer the
+# rules that are NOT mechanized, and tells it not to re-report the ones that are,
+# because duplicate findings are noise on every pull request.
+#
+# Plan note: this repository uses the CodeRabbit Free plan, whose hosted PR
+# access is summary-only. Two consumers read this file:
+#   Local CLI reviews (scripts/coderabbit-review.sh)
+#     Works on Free. Applies: profile, tone, path_instructions, code guidelines.
+#   Hosted PR reviews
+#     Free is summary-only, so walkthrough/slop/label blocks are version-controlled
+#     intent for a later OSS or Essentials tier, not current enforcement.
+# Pre-merge checks need Essentials+ and custom checks need Team+, so no policy
+# lives only there. The out-of-scope MCP docs rule is enforced by
+# scripts/check_mcp_provider_docs.py for exactly that reason.
+
+language: en-US
+tone_instructions: "Cite file and line. State the concrete failure, not a preference. Skip praise and summary padding."
+
+reviews:
+  profile: chill
+
+  # Exclude files where a comment cannot act on anything. CodeRabbit already
+  # skips lock files and binaries; these are the repo-specific extras.
+  # `patches/` is deliberately NOT excluded: those are maintained forks
+  # (patches/crossterm, patches/gpui-component) treated as workspace code that
+  # must still compile under `-D warnings`.
+  path_filters:
+    - "!**/*.snap"
+    - "!**/fixtures/**"
+    - "!docs/modules/vtcode_docs_map.md"
+
+  high_level_summary: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  in_progress_fortune: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+
+  # Vendor-authored MCP provider docs are routinely promotional and out of scope
+  # (docs/CONTRIBUTING.md#out-of-scope-contributions). Slop Detection is an
+  # early-access feature already enabled for this organization through the web
+  # UI; `early_access` is deliberately not set here because it would opt the repo
+  # into every early-access feature. Detection never blocks a merge; the label
+  # exists so these PRs can be filtered without reading the diff.
+  slop_detection:
+    enabled: true
+    include_all_authors: false
+    label: "slop"
+
+  path_instructions:
+    - path: "crates/**/*.rs"
+      instructions: |
+        VT Code Rust. These rules are ALREADY enforced by clippy/rustfmt or by
+        scripts/check.sh. Do not report them as findings; a finding here should be
+        something a machine cannot decide:
+
+        Mechanically gated, do NOT report:
+        - `.unwrap()`/`.expect()`/`panic!` in production code (clippy `unwrap_used`,
+          `expect_used`, `panic`; plus `scripts/check_no_unwrap_expect_prod.py`).
+        - `println!`/`eprintln!` in library crates (structured-logging gate).
+        - `unsafe` without a `SAFETY:` comment (unsafe-docs gate).
+        - File or function length budgets (check_file_length.py,
+          check_rust_file_length.py, clippy `cognitive_complexity`).
+        - Naming/style and formatting (`rustfmt`, workspace lints).
+        - Missing `#[expect]` reasons: rustfmt reformats them.
+
+        Review for, because no gate catches these:
+        - Layer direction (architectural_invariants.md #1): crates form a strict DAG,
+          types/commons -> config -> core -> tools -> agent -> TUI (`src/`). A
+          lower-layer crate importing from a higher-layer crate is a violation; the
+          shared type belongs in `vtcode-commons` or `vtcode-config`. Never allow a
+          reverse dependency.
+        - `vtcode-exec-events::ThreadEvent` is the authoritative runtime event
+          contract. Flag a parallel event type, a shadow enum, or a second source of
+          truth for turn/tool events.
+        - Provider-name comparison must use `Provider::name_matches`, not
+          `eq_ignore_ascii_case("...")` literals. Flag new hand-rolled matchers.
+        - Lint debt suppression: `#[expect(lint, reason = "...")]` is required over
+          `#[allow]` because `expect` self-expires. A new bare `#[allow(...)]` for
+          debt is a finding. The `reason` must stay <= 51 chars or rustfmt expands
+          the attribute to four lines and the file-length ledger fails.
+        - Model registries: adding a model to a native provider is incomplete unless
+          it is also mirrored into Merge Gateway and OpenRouter (see
+          docs/development/adding_models.md). Flag a native-only model addition.
+        - Diagnostics of model output must be bounded and UTF-8 safe
+          (`bounded_failure_sample`); flag logging an unbounded raw model response.
+        - Prefer `compact_str::CompactString` (aliased `CompactStr`) over `String`
+          for small string fields; prefer `Cow<'static, str>` for mostly-static
+          returns.
+        - Tests that mutate the process environment need `vtcode_commons::env_lock`
+          `EnvGuard` plus `#[serial_test::serial]`; flag raw `std::env::set_var`.
+        - Treat the sandbox/exec boundary as adversarial: flag a new command path
+          that skips the sandbox-aware launcher, and any fail-open branch in
+          approval or path validation.
+    - path: "docs/**/*.md"
+      instructions: |
+        Documentation rules. Lines must stay <= 120 characters and relative links
+        resolve from the file's own directory; both are enforced by
+        scripts/check_docs_links.py and markdownlint, so do not report them.
+
+        Review for:
+        - New per-vendor MCP provider setup guides (docs/guides/<vendor>-mcp.md),
+          docs/examples/<vendor>-mcp.toml, or docs-map entries for third-party MCP
+          servers are out of scope. Cite
+          docs/CONTRIBUTING.md#out-of-scope-contributions. Existing provider guides
+          stay editable.
+        - Duplication: guidance that repeats an existing page instead of linking to
+          it. Docs are maintained by hand, not generated.
+        - Agent instruction files (AGENTS.md) share a 16 KiB budget across root plus
+          the largest module file (scripts/check_docs_links.py). New detail belongs
+          in docs/development/maintainer-notes/<crate>.md, not in a module AGENTS.md.
+        - Vendor marketing language or unverified endpoint/auth claims in a guide.
+    - path: ".github/workflows/**"
+      instructions: |
+        Workflows sit on the release and sandbox boundary. Flag new write
+        permissions, an action referenced by a floating tag instead of a pinned
+        SHA, `pull_request_target` combined with checkout of the PR head, and
+        interpolation of event fields into `run:` blocks.
+    - path: "scripts/**"
+      instructions: |
+        Repository gates live here and CI depends on their exit codes. Flag:
+        - Swallowed exit status (piping a verifier into `head`, `|| true` on a check).
+        - A check that passes silently when its tool is missing, unless that
+          fallback is explicit and documented.
+        - Unquoted expansions and non-zero exit assumptions under `set -e`.
+        - Shell edits that reindent a whole file (this repo mixes tabs and spaces
+          per file; shfmt rewrites a 5-line change into a 200-line diff).
+    - path: "scripts/tests/**"
+      instructions: |
+        Test evidence must be independently derived. Flag a test whose fixture is
+        symmetric (both sides identical, palindromic inputs) when the behavior is
+        order- or identity-sensitive, and a test with no oracle (no assertion).
+        Integration tests belong in `tests/`; cases here exercise repo scripts
+        against real `git` fixtures rather than stubs.
+
+  # Needs Essentials+ for the built-ins and Team+ for custom checks; this block
+  # does not run on the Free plan. Kept as intent, never as the sole enforcement.
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: "Conventional Commits `type(scope): subject`, imperative mood, no trailing period."
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+
+knowledge_base:
+  code_guidelines:
+    # `**/AGENTS.md` is auto-discovered; listing it keeps the intent explicit.
+    # Scoping is directory-based, so the root file governs the whole tree and each
+    # crate file governs its own subtree.
+    enabled: true
+    filePatterns:
+      - "**/AGENTS.md"
+      - "docs/CONTRIBUTING.md"
+      - "docs/harness/architectural_invariants.md"
+      - "docs/development/rust-style-guide.md"
