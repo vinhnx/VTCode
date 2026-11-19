@@ -149,6 +149,32 @@ fn matrix_guidance_has_presence_and_budget_in_both_densities() {
     }
 }
 #[test]
+fn computer_use_guidance_has_presence_and_budget_in_both_densities() {
+    for profile in [ToolGuidanceProfile::Default, ToolGuidanceProfile::Minimal] {
+        let enabled = generate_tool_guidelines_with_capabilities(
+            &["computer_use".to_string(), "request_user_input".to_string()],
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+            profile,
+            false,
+        );
+        let disabled = generate_tool_guidelines_with_capabilities(
+            &["request_user_input".to_string()],
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+            profile,
+            false,
+        );
+        assert_eq!(enabled.matches(COMPUTER_USE_GUIDANCE).count(), 1);
+        assert!(enabled.contains("asks the user for approval before acting"));
+        assert!(enabled.contains("local files, shells, or secrets entry"));
+        assert!(enabled.contains("instead of exploring code or shelling around"));
+        assert!(!disabled.contains("screen-sized browser task"));
+        assert!(vtcode_commons::estimate_tokens(&enabled) <= 170, "{profile:?}: {enabled}");
+    }
+}
+
+#[test]
 fn session_messaging_guidance_has_presence_and_budget_in_both_densities() {
     for profile in [ToolGuidanceProfile::Default, ToolGuidanceProfile::Minimal] {
         let enabled = generate_tool_guidelines_with_capabilities(

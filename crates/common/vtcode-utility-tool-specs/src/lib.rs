@@ -168,6 +168,24 @@ pub fn cron_parameters() -> Value {
     })
 }
 
+/// Model-visible description of the `computer_use` tool: one approved turn
+/// driving an isolated browser. States the task shape, the approval gate,
+/// and the redaction contract so the model invokes it correctly and sets
+/// expectations; turn limits and the browser target stay in configuration.
+pub const COMPUTER_USE_DESCRIPTION: &str = "Run one approved computer-use turn in an isolated browser: describe the task in plain words. The turn screenshots, clicks, types, and scrolls, then reports a redacted summary with per-call verdicts. Needs the master switch on, a configured browser target, and a computer-use model; every turn asks for human approval before any action executes, and screenshots never reach the transcript.";
+
+#[must_use]
+pub fn computer_use_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["task"],
+        "properties": {
+            "task": {"type": "string", "description": "Plain-words task for this turn, e.g. 'open the settings page and take a screenshot'. Keep it to one screen-sized goal; the turn budget caps executed actions."}
+        },
+        "additionalProperties": false
+    })
+}
+
 /// Model-visible description of the `mcp` tool. The `action` field description
 /// owns the per-action enumeration; this description keeps only the purpose,
 /// the server-search-vs-catalog-search distinction, and the disconnect guard.
@@ -428,6 +446,28 @@ mod tests {
             .as_str()
             .expect("input description");
         assert!(input_description.contains(SEMANTIC_ANCHOR_GUIDANCE));
+    }
+
+    #[test]
+    fn computer_use_schema_requires_task_and_states_the_contract() {
+        let schema = computer_use_parameters();
+        assert_eq!(schema["type"], json!("object"));
+        assert_eq!(schema["required"], json!(["task"]));
+        assert_eq!(schema["additionalProperties"], json!(false));
+        let task = schema["properties"]["task"].as_object().expect("task property");
+        assert_eq!(task["type"], json!("string"));
+        assert!(
+            task["description"].as_str().is_some_and(|text| text.contains("Plain-words")),
+            "task description must steer phrasing"
+        );
+        for needle in [
+            "human approval",
+            "never reach the transcript",
+            "master switch",
+            "browser target",
+        ] {
+            assert!(COMPUTER_USE_DESCRIPTION.contains(needle), "description must state {needle}");
+        }
     }
 
     #[test]

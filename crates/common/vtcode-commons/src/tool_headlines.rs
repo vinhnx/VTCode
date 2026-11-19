@@ -330,7 +330,9 @@ pub fn exec_session_param_detail(args: &Value) -> Option<String> {
 }
 
 mod descriptors;
-pub use descriptors::{describe_code_search, describe_fetch_action, describe_grep_file, describe_list_files};
+pub use descriptors::{
+    describe_code_search, describe_computer_use, describe_fetch_action, describe_grep_file, describe_list_files,
+};
 
 /// Exact flag tokens that introduce an inline script for a runner.
 /// Token-exact (not substring) so `grep -c` / `--code-review` never match.
@@ -523,6 +525,9 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
         if let Some((title, _)) = describe_grep_file(args, workspace_root) {
             return title;
         }
+    } else if name == "computer_use" {
+        let (title, _) = describe_computer_use(args);
+        return title;
     }
     match name {
         "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "fetch" | "get_errors" | "list_files" => {

@@ -253,6 +253,19 @@ fn exec_session_param_detail_none_without_session_or_wait() {
 }
 
 #[test]
+fn describe_computer_use_phrases_task_gist_with_fallback() {
+    assert_eq!(
+        describe_computer_use(&json!({ "task": "take a screenshot" })),
+        ("Computer use: take a screenshot".to_string(), &["task"][..])
+    );
+    assert_eq!(describe_computer_use(&json!({ "other": 1 })), ("Use computer".to_string(), &[][..]));
+    assert_eq!(
+        verb_callout_headline("computer_use", &json!({ "task": "open settings" }), None),
+        "Computer use: open settings"
+    );
+}
+
+#[test]
 fn describe_list_files_phrases_location_then_patterns() {
     assert_eq!(
         describe_list_files(&json!({ "path": "checkpoints" }), None),

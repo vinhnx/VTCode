@@ -33,11 +33,11 @@ use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_parameter_schema};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool, web_search_parameter_schema};
 use vtcode_utility_tool_specs::{
-    AGENT_DESCRIPTION, ANSWER_SESSION_DESCRIPTION, ASK_SESSION_DESCRIPTION, EXEC_COMMAND_DESCRIPTION,
-    LIST_SESSIONS_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION, agent_parameters,
-    answer_session_parameters, apply_patch_parameters, ask_session_parameters, code_search_parameters, cron_parameters,
-    exec_command_parameters, list_files_parameters, list_sessions_parameters, mcp_parameters, search_tools_parameters,
-    write_stdin_parameters,
+    AGENT_DESCRIPTION, ANSWER_SESSION_DESCRIPTION, ASK_SESSION_DESCRIPTION, COMPUTER_USE_DESCRIPTION,
+    EXEC_COMMAND_DESCRIPTION, LIST_SESSIONS_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION,
+    WRITE_STDIN_DESCRIPTION, agent_parameters, answer_session_parameters, apply_patch_parameters,
+    ask_session_parameters, code_search_parameters, computer_use_parameters, cron_parameters, exec_command_parameters,
+    list_files_parameters, list_sessions_parameters, mcp_parameters, search_tools_parameters, write_stdin_parameters,
 };
 
 // ===========================================================================
@@ -603,4 +603,47 @@ fn internal_pty_pack() -> Box<dyn ToolPack> {
 #[distributed_slice(BUILTIN_PACKS)]
 fn editing_pack() -> Box<dyn ToolPack> {
     Box::new(EditingPack)
+}
+
+// ===========================================================================
+// Computer Use Pack
+// ===========================================================================
+
+#[derive(Default)]
+pub struct ComputerUsePack;
+
+#[async_trait::async_trait]
+impl ToolPack for ComputerUsePack {
+    fn pack_id(&self) -> &'static str {
+        "computer_use"
+    }
+
+    async fn register(
+        &self,
+        inventory: &ToolInventory,
+        _plan_state: &PlanningWorkflowState,
+        _tool_config: &ToolConfigSnapshot,
+    ) {
+        // Prompt (the default) is set explicitly: computer control must
+        // never silently become an auto-approved tool. The turn loop
+        // intercepts the call and runs the dispatcher; the registered
+        // executor below only fires if that interception is bypassed.
+        let registrations = vec![
+            ToolRegistration::new(
+                tools::COMPUTER_USE,
+                CapabilityLevel::CodeSearch,
+                false,
+                ToolRegistry::computer_use_executor,
+            )
+            .with_description(COMPUTER_USE_DESCRIPTION)
+            .with_parameter_schema(computer_use_parameters())
+            .with_permission(ToolPolicy::Prompt),
+        ];
+        batch_register(inventory, registrations);
+    }
+}
+
+#[distributed_slice(BUILTIN_PACKS)]
+fn computer_use_pack() -> Box<dyn ToolPack> {
+    Box::new(ComputerUsePack)
 }

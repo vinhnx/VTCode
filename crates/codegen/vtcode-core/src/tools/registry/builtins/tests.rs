@@ -129,6 +129,27 @@ fn codex_baseline_builtins_are_canonical_public_tools() {
 }
 
 #[test]
+fn computer_use_registers_public_prompt_gated_and_fail_closed() {
+    let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
+    let registrations = shipped_registrations(Some(&plan_state));
+
+    let computer_use = registrations
+        .iter()
+        .find(|registration| registration.name() == tools::COMPUTER_USE)
+        .expect("computer_use registration should exist");
+    assert!(computer_use.expose_in_llm(), "computer_use should be public");
+    assert!(computer_use.metadata().aliases().is_empty(), "computer_use should not rely on aliases");
+    assert_eq!(
+        computer_use.default_permission(),
+        Some(crate::tool_policy::ToolPolicy::Prompt),
+        "computer control must prompt, never auto-approve"
+    );
+    let schema = computer_use.metadata().parameter_schema().expect("computer_use schema");
+    assert_eq!(schema["required"], json!(["task"]));
+    assert!(schema["properties"]["task"].is_object(), "task must be a schema property");
+}
+
+#[test]
 fn web_search_schema_requires_canonical_query() {
     let registrations = shipped_registrations(None);
     let web_search = registrations

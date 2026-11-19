@@ -17,6 +17,7 @@
     "code_search": "allow",
     "start_planning": "prompt",
     "web_fetch": "prompt",
+    "computer_use": "prompt",
     "web_search": "prompt",
     "request_user_input": "allow",
     "task_tracker": "prompt",

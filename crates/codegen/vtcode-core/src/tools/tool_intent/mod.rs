@@ -108,6 +108,13 @@ mod tests {
     }
 
     #[test]
+    fn computer_use_stays_mutating_and_sequential() {
+        let intent = classify_tool_intent(tools::COMPUTER_USE, &json!({"task": "take a screenshot"}));
+        assert!(intent.mutating);
+        assert!(!is_parallel_safe_call(tools::COMPUTER_USE, &json!({"task": "take a screenshot"})));
+    }
+
+    #[test]
     fn command_session_run_is_mutating_and_destructive() {
         let intent =
             classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "rm -rf /tmp/test"}));

@@ -296,6 +296,9 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
             false,
         )),
         tools::LOAD_SKILL => Some(ToolBehavior::function(ToolMutationModel::Mutating, false, true)),
+        // Explicit, never the mutating default: computer turns must stay
+        // sequential and prompt-gated even if the default ever changes.
+        tools::COMPUTER_USE => Some(ToolBehavior::function(ToolMutationModel::Mutating, false, true)),
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
             Some(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false))
         }

@@ -146,6 +146,14 @@ macro_rules! delegate_to_self {
 }
 
 impl ToolRegistry {
+    /// Fail-closed placeholder: `computer_use` turns execute through the
+    /// binary's turn dispatcher (permission approval, review gates, and the
+    /// isolated target all live there), never through the registry. The
+    /// turn loop intercepts the call first; reaching this is a bug.
+    pub(super) fn computer_use_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { bail!("computer_use executes through the turn dispatcher, not the tool registry") })
+    }
+
     pub(super) fn record_decision_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let decision = crate::core::agent::events::validate_decision_input(args)?;

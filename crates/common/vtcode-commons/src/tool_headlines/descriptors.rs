@@ -85,3 +85,13 @@ pub fn describe_fetch_action(args: &Value) -> (String, &'static [&'static str]) 
     }
     ("Use Fetch".to_string(), &[])
 }
+
+/// Headline for `computer_use`: the task gist, truncated. Falls back to a
+/// bare verb when no task is present, consuming no keys.
+#[must_use]
+pub fn describe_computer_use(args: &Value) -> (String, &'static [&'static str]) {
+    if let Some(task) = lookup_string(args, "task") {
+        return (format!("Computer use: {}", truncate_middle(&task, 60)), &["task"]);
+    }
+    ("Use computer".to_string(), &[])
+}

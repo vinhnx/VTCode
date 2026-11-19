@@ -11,6 +11,8 @@ pub const APPLY_PATCH: &str = "apply_patch";
 pub const RECORD_DECISION: &str = "record_decision";
 /// Advanced bounded syntactic code search tool for VTCode-specific profiles.
 pub const CODE_SEARCH: &str = "code_search";
+/// Model-initiated computer-use turn in the isolated browser target.
+pub const COMPUTER_USE: &str = "computer_use";
 
 // ============================================================
 // LEGACY INTERNAL DISPATCHERS

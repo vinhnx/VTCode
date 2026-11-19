@@ -18,10 +18,12 @@ const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
 const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
 const TOOL_ASK_SESSION: &str = tools::ASK_SESSION;
 const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
+const TOOL_COMPUTER_USE: &str = tools::COMPUTER_USE;
 const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for consequential choices, rejected approaches, or recovery changes. Give concise public rationale; ordinary reads and commands need no record.";
 const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
 const SESSION_MESSAGING_GUIDANCE: &str = "- Peer sessions: `list_sessions` discovers live CLI sessions in this workspace; `ask_session` sends one a question and its `answer_session` reply arrives as a notice on a later turn. Delivery needs the peer running.";
 const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fetch needs separate approval. For `antiban_blocked` or `retryable: false`, do not retry; wait `retry_after_ms` for `cooldown`; retry `network_error`/`upstream_error` once. For GitHub queries prefer `gh search`/`gh api` via exec_command when available.";
+const COMPUTER_USE_GUIDANCE: &str = "- `computer_use`: when the user asks to see, screenshot, or operate software through its UI, call it with one screen-sized browser task instead of exploring code or shelling around; each turn asks the user for approval before acting and reports only a redacted summary. Never for local files, shells, or secrets entry.";
 
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
@@ -121,6 +123,7 @@ struct ToolPresence {
     matrix: bool,
     record_decision: bool,
     session_messaging: bool,
+    computer_use: bool,
 }
 
 impl ToolPresence {
@@ -143,6 +146,7 @@ impl ToolPresence {
             matrix: false,
             record_decision: false,
             session_messaging: false,
+            computer_use: false,
         };
         for tool in available_tools {
             match tool.as_str() {
@@ -160,6 +164,7 @@ impl ToolPresence {
                 "matrix" => presence.matrix = true,
                 TOOL_ASK_SESSION => presence.session_messaging = true,
                 "record_decision" => presence.record_decision = true,
+                TOOL_COMPUTER_USE => presence.computer_use = true,
                 _ => {}
             }
         }
@@ -193,6 +198,9 @@ pub(crate) fn generate_tool_guidelines_with_capabilities(
             }
             if presence.record_decision {
                 lines.push(PUBLIC_DECISION_GUIDANCE.to_owned());
+            }
+            if presence.computer_use {
+                lines.push(COMPUTER_USE_GUIDANCE.to_owned());
             }
             lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_owned());
             if let Some(mode) = capability_mode_line(capability_level, presence.exec, presence.apply_patch) {
@@ -256,6 +264,9 @@ pub(crate) fn generate_tool_guidelines_for_profile(
     }
     if presence.web_search {
         lines.push(WEB_SEARCH_GUIDANCE.to_owned());
+    }
+    if presence.computer_use {
+        lines.push(COMPUTER_USE_GUIDANCE.to_owned());
     }
     lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_string());
     if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_apply_patch) {
