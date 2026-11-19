@@ -277,6 +277,7 @@ impl DesktopView {
         }
         self.theme_editor.draft = None;
         self.apply_theme(id, window, cx);
+        self.notify_theme_grids(cx);
         self.focus_settings_selection(window, cx);
     }
 
@@ -333,6 +334,7 @@ impl DesktopView {
             self.save_preferences();
             cx.notify();
         }
+        self.notify_theme_grids(cx);
     }
 
     /// The Appearance section is a disclosure: a header row that stays visible,

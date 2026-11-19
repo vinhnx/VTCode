@@ -22,12 +22,11 @@ const SWATCH_CELL_HEIGHT: f32 = 112.0;
 pub(super) const THEME_SWATCH_STRIDE: f32 = SWATCH_CELL_WIDTH + SWATCH_CELL_GAP;
 
 /// Size table for one mode's row: uniform cells, so only the visible
-/// window builds per frame. Lengths match [`themes::picker_entries_for`]
-/// by construction (same count source), and the item closure still indexes
-/// defensively. Rebuilt per render: uniform math over a static count is
-/// noise next to one swatch build, and `Rc` is not `Sync` for a static.
-fn swatch_sizes(mode: ThemeMode) -> Rc<Vec<Size<Pixels>>> {
-    let count = themes::picker_entries_for(mode).len();
+/// window builds per frame. The count comes from the same grid entries the
+/// item closure indexes, so a saved custom theme extends the scroll range.
+/// Rebuilt per render: uniform math over a short count is noise next to one
+/// swatch build, and `Rc` is not `Sync` for a static.
+fn swatch_sizes(count: usize) -> Rc<Vec<Size<Pixels>>> {
     Rc::new(
         (0..count)
             .map(|ix| {
@@ -91,8 +90,17 @@ impl Render for ThemeGrid {
         } else {
             rust_i18n::t!("app.settings.appearance.dark").to_string()
         };
-        let entries = themes::picker_entries_for(mode);
-        let counts = themes::picker_label_counts();
+        // Saved customs live in preferences, not the static registry. Read
+        // them from the live view each render so a theme saved mid-session (or
+        // loaded on launch) joins the row without a registry rebuild.
+        let customs = self
+            .view
+            .upgrade()
+            .map(|view| view.read(cx).preferences.custom_themes.clone())
+            .unwrap_or_default();
+        let entries = themes::grid_entries_for(mode, &customs);
+        let duplicates = themes::grid_duplicate_labels(&customs);
+        let sizes = swatch_sizes(entries.len());
         let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
         let scroller_id = if light {
             "theme-scroller-light"
@@ -124,15 +132,15 @@ impl Render for ThemeGrid {
                     .h(px(128.))
                     .relative()
                     .child(
-                        h_virtual_list(cx.entity(), scroller_id, swatch_sizes(mode), move |grid, range, _, cx| {
+                        h_virtual_list(cx.entity(), scroller_id, sizes, move |grid, range, _, cx| {
                             let Some(desktop) = grid.view.upgrade() else {
                                 return Vec::new();
                             };
                             let selection = ThemeSelection::capture(desktop.read(cx));
                             range
                                 .filter_map(|ix| {
-                                    let entry = entries.get(ix).copied()?;
-                                    let duplicate = counts.get(entry.label()).copied().unwrap_or_default() > 1;
+                                    let entry = entries.get(ix)?.clone();
+                                    let duplicate = duplicates.contains(entry.label().as_ref());
                                     Some(DesktopView::render_theme_swatch_content(
                                         entry, duplicate, &selection, &desktop, cx,
                                     ))
@@ -153,7 +161,7 @@ impl DesktopView {
     /// the virtualized row's item closure stays a pure function of the
     /// visible index.
     pub(super) fn render_theme_swatch_content(
-        entry: themes::SwatchEntry,
+        entry: themes::ThemeGridEntry,
         duplicate: bool,
         selection: &ThemeSelection,
         view: &Entity<Self>,
@@ -164,7 +172,7 @@ impl DesktopView {
         let label = if duplicate {
             format!("{entry_id} · {}", entry.label())
         } else {
-            entry.label().to_owned()
+            entry.label().into_owned()
         };
         let active = selection.theme_id == entry_id;
         let separate = selection.separate_profiles;
@@ -246,9 +254,10 @@ impl DesktopView {
             .rounded_lg()
             .on_click({
                 let view = view.clone();
+                let theme_id = entry_id.clone();
                 move |_, window: &mut Window, cx: &mut App| {
                     view.update(cx, |view, cx| {
-                        view.apply_theme(entry.id(), window, cx);
+                        view.apply_theme(theme_id.clone(), window, cx);
                     });
                 }
             })
@@ -261,5 +270,12 @@ impl DesktopView {
     /// and tests keep one scroll position per mode.
     pub(super) fn render_theme_group_content(grid: &Entity<ThemeGrid>) -> AnyElement {
         grid.clone().into_any_element()
+    }
+
+    /// Saved-theme mutations change both grids' rows. Each grid is its own
+    /// view, so the parent's notify does not repaint them.
+    pub(super) fn notify_theme_grids(&self, cx: &mut App) {
+        self.theme_grid_light.update(cx, |_, cx| cx.notify());
+        self.theme_grid_dark.update(cx, |_, cx| cx.notify());
     }
 }

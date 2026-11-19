@@ -148,6 +148,10 @@ fn custom_theme_saves_applies_persists_and_reloads(cx: &mut TestAppContext) {
         }
         assert_eq!(window.find("custom-theme-apply-custom-ocean-night").checked(), Some(true));
         assert!(window.try_find("custom-theme-editor").is_none(), "editor closes after save");
+        // The new theme joins the virtualized grid immediately, not only in
+        // the collapsed custom-themes section.
+        scroll_theme_into_view(window, &view, "theme-custom-ocean-night", cx);
+        assert_eq!(window.find("theme-custom-ocean-night").label(), Some("Ocean Night (active)"));
     })
     .unwrap();
 
@@ -161,13 +165,22 @@ fn custom_theme_saves_applies_persists_and_reloads(cx: &mut TestAppContext) {
     assert_eq!(themes[0].get("id").and_then(serde_json::Value::as_str), Some("custom-ocean-night"));
 
     // A relaunch over the same file resolves the custom id instead of falling
-    // back to the palette registry.
+    // back to the palette registry, and the saved theme rejoins the grid.
     let (relaunched_window, relaunched) = open_desktop_with_preferences_path(cx, prefs_path);
     cx.update_window(relaunched_window, |_, window, cx| {
         relaunched.update(cx, |view, cx| view.load_preferences(window, cx));
-        let view = relaunched.read(cx);
-        assert_eq!(view.theme_id, "custom-ocean-night");
-        assert_eq!(view.preferences.custom_themes.len(), 1);
+        {
+            let view = relaunched.read(cx);
+            assert_eq!(view.theme_id, "custom-ocean-night");
+            assert_eq!(view.preferences.custom_themes.len(), 1);
+        }
+        open_appearance(window, &relaunched, cx);
+        scroll_theme_into_view(window, &relaunched, "theme-custom-ocean-night", cx);
+        assert_eq!(
+            window.find("theme-custom-ocean-night").label(),
+            Some("Ocean Night (active)"),
+            "the saved custom theme is in the theme grid after relaunch"
+        );
     })
     .unwrap();
 }

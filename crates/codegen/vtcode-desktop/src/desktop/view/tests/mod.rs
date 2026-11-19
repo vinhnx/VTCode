@@ -476,7 +476,8 @@ fn scroll_settings_by(window: &mut gpui_kit::Window, dy: gpui_kit::Pixels, cx: &
 
 /// Scroll a theme row until `id` sits fully inside its viewport. The rows
 /// virtualize, so an off-screen swatch is not mounted: resolve its index
-/// from the static row order and jump the retained handle there.
+/// from the grid order (built-ins plus saved customs) and jump the retained
+/// handle there.
 fn scroll_theme_into_view(
     window: &mut gpui_kit::Window,
     view: &Entity<DesktopView>,
@@ -484,8 +485,9 @@ fn scroll_theme_into_view(
     cx: &mut gpui_kit::App,
 ) {
     let theme_id = id.trim_prefix("theme-");
-    let light = super::themes::mode_for_id(theme_id) != Some(ThemeMode::Dark);
-    let mode = if light { ThemeMode::Light } else { ThemeMode::Dark };
+    let customs = view.read(cx).preferences.custom_themes.clone();
+    let mode = super::themes::mode_for_selection(theme_id, &customs).unwrap_or(ThemeMode::Light);
+    let light = mode == ThemeMode::Light;
     let viewport_id = if light { "theme-list-light" } else { "theme-list-dark" };
     if let Some(item) = window.try_find(id) {
         let viewport = window.find(viewport_id).bounds();
@@ -494,7 +496,7 @@ fn scroll_theme_into_view(
             return;
         }
     }
-    let entries = super::themes::picker_entries_for(mode);
+    let entries = super::themes::grid_entries_for(mode, &customs);
     let index = entries
         .iter()
         .position(|entry| entry.id() == theme_id)
