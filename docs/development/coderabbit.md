@@ -124,11 +124,44 @@ Run it through the gate when you want it in one command:
 
 ```bash
 ./scripts/check-dev.sh --review
+# or, for the self-verification loop:
+VTCODE_SELF_VERIFY_REVIEW=true ./scripts/check-dev.sh
 ```
 
 It is opt-in because a review is network-bound, takes minutes, and draws on a per-plan hourly allowance. Gated reviews
 always cover the full selected diff, so they cost more than an incremental rerun; a review the server reuses counts as
 *incomplete*, never as a pass.
+
+### Hourly throttle
+
+The wrapper records the last review in `.git/coderabbit-review/` (local and untracked, so it never becomes repository
+state) and reuses its verdict when the **same diff** is reviewed again inside the window:
+
+```bash
+CODERABBIT_THROTTLE_SECONDS=3600   # default; 0 disables the throttle
+./scripts/coderabbit-review.sh --force   # bypass it for one run
+```
+
+The key is a hash of the selected diff plus the gate severity, not the wall clock. A time-only key would serve a
+`passed` verdict for code that has since changed, which is the one failure this must not have. The key also covers
+untracked files and the gate level, so tightening `--gate` or adding a file always triggers a fresh review.
+
+State lives under `.git/` deliberately: a cache file inside the worktree would show up in `git status`, which is part of
+the fingerprint, so the record would invalidate its own key.
+
+### Grace period
+
+Set a deadline to adopt the review without blocking work on day one:
+
+```bash
+CODERABBIT_GRACE_UNTIL=2026-12-01T00:00:00Z ./scripts/coderabbit-review.sh
+```
+
+While the deadline is in the future, findings at or above the gate are reported as a warning and the script exits `0`.
+Once it passes, the same finding exits `2`. **Unset means enforce immediately** — an expiring-only grace period is the
+point, and a grace that never expires would silently disable the gate.
+
+An *incomplete* review (`1`) is never downgraded by grace: an unevaluated review is not evidence of cleanliness.
 
 ## Verifying the setup
 
