@@ -3,6 +3,8 @@
 use std::ops::ControlFlow;
 
 use anyhow::Result;
+use vtcode_commons::RejectedCredentialSource;
+use vtcode_config::api_keys::{CredentialSource, DiscoveredProvider};
 use vtcode_core::core::agent::error_recovery::ErrorType;
 use vtcode_core::llm::provider as uni;
 use vtcode_tui_runtime::utils::ansi::MessageStyle;
@@ -118,6 +120,29 @@ pub(super) async fn handle_response_parse_error(
     Err(err)
 }
 
+/// Map credential discovery to the auth-guidance source label. Env reports
+/// the exact variable read (the alternate name when discovery used it);
+/// OAuth, managed, and local sources name no key, so they stay `None` and
+/// the guidance keeps its source-neutral wording.
+fn rejected_credential_source(
+    provider: &vtcode_core::config::models::Provider,
+    detail: Option<&DiscoveredProvider>,
+) -> Option<RejectedCredentialSource> {
+    let detail = detail?;
+    match detail.source {
+        CredentialSource::Env => {
+            let env_var = detail
+                .env_var
+                .map(str::to_string)
+                .unwrap_or_else(|| provider.default_api_key_env().to_string());
+            Some(RejectedCredentialSource::Environment { env_var })
+        }
+        CredentialSource::Workspace => Some(RejectedCredentialSource::WorkspaceDotEnv),
+        CredentialSource::SecureStorage => Some(RejectedCredentialSource::SecureStorage),
+        CredentialSource::OAuth | CredentialSource::ManagedAuth | CredentialSource::Local => None,
+    }
+}
+
 /// Handle an `execute_llm_request` failure: Ctrl-C stops, unsupported knobs,
 /// planning recovery, post-tool recovery, error display, else abort the turn.
 pub(super) async fn handle_llm_request_error(
@@ -196,8 +221,10 @@ pub(super) async fn handle_llm_request_error(
         let err_cat = vtcode_commons::classify_anyhow_error(err);
         if matches!(err_cat, vtcode_commons::ErrorCategory::Authentication) {
             // For auth errors, show actionable provider-specific guidance
-            // that distinguishes "no key stored" from "stored key rejected".
-            let (provider_label, provider_key, is_managed_auth, has_stored_credential) = turn_processing_ctx
+            // that names the rejected credential's source. Resolution runs
+            // against the turn's workspace so the named source matches the
+            // precedence the turn itself used.
+            let (provider_label, provider_key, is_managed_auth, has_credential, rejected_source) = turn_processing_ctx
                 .config
                 .provider
                 .parse::<vtcode_core::config::models::Provider>()
@@ -206,8 +233,19 @@ pub(super) async fn handle_llm_request_error(
                         .vt_cfg
                         .map(|cfg| cfg.agent.credential_storage_mode)
                         .unwrap_or_default();
-                    let has = vtcode_config::api_keys::provider_credential_detail_with_mode(p, storage_mode).is_some();
-                    (p.label().to_string(), p.as_ref().to_string(), p.uses_managed_auth(), has)
+                    let detail = vtcode_config::api_keys::provider_credential_detail_in_workspace_with_mode(
+                        p,
+                        Some(&turn_processing_ctx.config.workspace),
+                        storage_mode,
+                    );
+                    let rejected_source = rejected_credential_source(&p, detail.as_ref());
+                    (
+                        p.label().to_string(),
+                        p.as_ref().to_string(),
+                        p.uses_managed_auth(),
+                        detail.is_some(),
+                        rejected_source,
+                    )
                 })
                 .unwrap_or_else(|_| {
                     (
@@ -215,10 +253,16 @@ pub(super) async fn handle_llm_request_error(
                         turn_processing_ctx.config.provider.clone(),
                         false,
                         false,
+                        None,
                     )
                 });
-            let guidance =
-                err_cat.auth_recovery_guidance(&provider_label, &provider_key, is_managed_auth, has_stored_credential);
+            let guidance = err_cat.auth_recovery_guidance(
+                &provider_label,
+                &provider_key,
+                is_managed_auth,
+                has_credential,
+                rejected_source,
+            );
             for line in &guidance {
                 turn_processing_ctx.renderer.line(MessageStyle::Info, line)?;
             }
@@ -239,4 +283,54 @@ pub(super) async fn handle_llm_request_error(
     // Do NOT add error message to working_history - this prevents the model
     // from learning spurious error patterns and keeps the conversation clean
     Ok(ControlFlow::Break(TurnLoopResult::Aborted))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn openai() -> vtcode_core::config::models::Provider {
+        "openai".parse().expect("openai provider")
+    }
+
+    fn detail(provider: vtcode_core::config::models::Provider, source: CredentialSource) -> DiscoveredProvider {
+        DiscoveredProvider { provider, source, env_var: None }
+    }
+
+    #[test]
+    fn rejected_source_names_each_credential_origin() {
+        let provider = openai();
+        assert_eq!(
+            rejected_credential_source(&provider, Some(&detail(provider, CredentialSource::SecureStorage))),
+            Some(RejectedCredentialSource::SecureStorage)
+        );
+        assert_eq!(
+            rejected_credential_source(&provider, Some(&detail(provider, CredentialSource::Workspace))),
+            Some(RejectedCredentialSource::WorkspaceDotEnv)
+        );
+        assert_eq!(
+            rejected_credential_source(
+                &provider,
+                Some(&DiscoveredProvider {
+                    provider,
+                    source: CredentialSource::Env,
+                    env_var: Some("OPENAI_API_KEY"),
+                })
+            ),
+            Some(RejectedCredentialSource::Environment { env_var: "OPENAI_API_KEY".to_string() })
+        );
+        // Primary env vars carry no alternate name: fall back to the default.
+        assert_eq!(
+            rejected_credential_source(&provider, Some(&detail(provider, CredentialSource::Env))),
+            Some(RejectedCredentialSource::Environment { env_var: "OPENAI_API_KEY".to_string() })
+        );
+        for source in [
+            CredentialSource::OAuth,
+            CredentialSource::ManagedAuth,
+            CredentialSource::Local,
+        ] {
+            assert_eq!(rejected_credential_source(&provider, Some(&detail(provider, source))), None);
+        }
+        assert_eq!(rejected_credential_source(&provider, None), None);
+    }
 }

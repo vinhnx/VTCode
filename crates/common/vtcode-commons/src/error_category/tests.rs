@@ -378,7 +378,7 @@ fn user_labels_are_non_empty() {
 
 #[test]
 fn auth_recovery_guidance_no_credential_mentions_secret_add() {
-    let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, false);
+    let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, false, None);
     assert_eq!(guidance.len(), 1);
     assert_eq!(
         guidance[0],
@@ -387,18 +387,41 @@ fn auth_recovery_guidance_no_credential_mentions_secret_add() {
 }
 
 #[test]
-fn auth_recovery_guidance_credential_stored_mentions_overwrite() {
-    let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, true);
+fn auth_recovery_guidance_unknown_source_stays_neutral() {
+    let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, true, None);
     assert_eq!(guidance.len(), 1);
     assert_eq!(
         guidance[0],
-        "Authentication failed for StepFun. The stored API key was rejected — run /secret add stepfun to replace it with a valid key."
+        "Authentication failed for StepFun. The configured credential was rejected — verify the value, or run /secret add stepfun to store a fresh key."
     );
 }
 
 #[test]
+fn auth_recovery_guidance_names_each_rejected_source() {
+    for (source, needle) in [
+        (
+            RejectedCredentialSource::SecureStorage,
+            "The stored API key was rejected — run /secret add stepfun to replace it with a valid key.",
+        ),
+        (
+            RejectedCredentialSource::WorkspaceDotEnv,
+            "The rejected key came from the workspace `.env` file — check the value there.",
+        ),
+        (
+            RejectedCredentialSource::Environment { env_var: "STEPFUN_API_KEY".to_string() },
+            "The rejected key came from `STEPFUN_API_KEY` in the process environment, which shadows the workspace `.env` file and secure storage",
+        ),
+    ] {
+        let guidance =
+            ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, true, Some(source));
+        assert_eq!(guidance.len(), 1);
+        assert!(guidance[0].contains(needle), "got: {}", guidance[0]);
+    }
+}
+
+#[test]
 fn auth_recovery_guidance_managed_auth_provider_mentions_login() {
-    let guidance = ErrorCategory::Authentication.auth_recovery_guidance("GitHub Copilot", "copilot", true, false);
+    let guidance = ErrorCategory::Authentication.auth_recovery_guidance("GitHub Copilot", "copilot", true, false, None);
     assert_eq!(guidance.len(), 1);
     assert_eq!(guidance[0], "Authentication failed for GitHub Copilot. Run /login copilot to re-authenticate.");
 }
@@ -407,12 +430,12 @@ fn auth_recovery_guidance_managed_auth_provider_mentions_login() {
 fn auth_recovery_guidance_non_auth_category_returns_empty() {
     assert!(
         ErrorCategory::Network
-            .auth_recovery_guidance("OpenAI", "openai", false, false)
+            .auth_recovery_guidance("OpenAI", "openai", false, false, None)
             .is_empty()
     );
     assert!(
         ErrorCategory::Timeout
-            .auth_recovery_guidance("OpenAI", "openai", false, false)
+            .auth_recovery_guidance("OpenAI", "openai", false, false, None)
             .is_empty()
     );
 }

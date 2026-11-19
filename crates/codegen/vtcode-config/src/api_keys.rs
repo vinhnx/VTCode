@@ -164,6 +164,18 @@ pub fn provider_credential_detail_with_mode(
     provider: Provider,
     storage_mode: crate::auth::AuthCredentialsStoreMode,
 ) -> Option<DiscoveredProvider> {
+    provider_credential_detail_in_workspace_with_mode(provider, None, storage_mode)
+}
+
+/// Workspace-aware [`provider_credential_detail_with_mode`]: pass the turn's
+/// workspace so a workspace `.env` credential wins over secure storage, the
+/// same order the turn's own resolution used. Auth-failure guidance needs
+/// this to name the rejected key's actual source.
+pub fn provider_credential_detail_in_workspace_with_mode(
+    provider: Provider,
+    workspace: Option<&std::path::Path>,
+    storage_mode: crate::auth::AuthCredentialsStoreMode,
+) -> Option<DiscoveredProvider> {
     if provider.is_local() {
         return Some(DiscoveredProvider {
             provider,
@@ -180,7 +192,8 @@ pub fn provider_credential_detail_with_mode(
     }
 
     let resolved =
-        resolve_credential_with_mode(provider.as_ref(), provider.default_api_key_env(), None, storage_mode).ok()??;
+        resolve_credential_with_mode(provider.as_ref(), provider.default_api_key_env(), workspace, storage_mode)
+            .ok()??;
     if matches!(resolved.source, CredentialSource::SecureStorage)
         || matches!(resolved.source, CredentialSource::Env | CredentialSource::Workspace | CredentialSource::OAuth)
     {
@@ -431,6 +444,23 @@ mod tests {
                 get_api_key_in_workspace_with_mode("ollama", None, crate::auth::AuthCredentialsStoreMode::File)
                     .expect("local provider accepts no key"),
                 ""
+            );
+        });
+    }
+
+    #[test]
+    fn workspace_aware_detail_finds_dotenv_credentials() {
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".env"), "OPENAI_API_KEY=workspace-key\n").expect("dotenv");
+        let mode = crate::auth::AuthCredentialsStoreMode::File;
+        with_override("OPENAI_API_KEY", None, || {
+            let detail =
+                provider_credential_detail_in_workspace_with_mode(Provider::OpenAI, Some(workspace.path()), mode)
+                    .expect("workspace credential");
+            assert_eq!(detail.source, CredentialSource::Workspace);
+            assert!(
+                provider_credential_detail_with_mode(Provider::OpenAI, mode).is_none(),
+                "the workspace-blind variant must not see workspace .env"
             );
         });
     }

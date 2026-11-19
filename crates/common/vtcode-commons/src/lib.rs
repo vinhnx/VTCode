@@ -103,8 +103,8 @@ pub use editor::{
     resolve_editor_target,
 };
 pub use error_category::{
-    BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,
-    is_context_capacity_error, is_context_capacity_message, is_retryable_llm_error_message,
+    BackoffStrategy, ErrorCategory, RejectedCredentialSource, Retryability, classify_anyhow_error,
+    classify_error_message, is_context_capacity_error, is_context_capacity_message, is_retryable_llm_error_message,
 };
 pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, MultiErrors, NoopErrorReporter};
 pub(crate) use interjection::{

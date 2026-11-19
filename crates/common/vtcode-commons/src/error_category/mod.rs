@@ -28,6 +28,19 @@ use std::fmt;
 use std::fmt::Write;
 use std::time::Duration;
 
+/// Where a rejected credential came from, for auth-failure guidance.
+/// Mirrors `vtcode_config::api_keys::CredentialSource` without the dependency
+/// (`vtcode-config` depends on this crate).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RejectedCredentialSource {
+    /// Process environment variable; carries the variable name.
+    Environment { env_var: String },
+    /// Workspace `.env` file.
+    WorkspaceDotEnv,
+    /// OS keyring / encrypted file storage.
+    SecureStorage,
+}
+
 /// Canonical error category used throughout VT Code for consistent
 /// retry decisions, user-facing messages, and error handling strategies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -291,36 +304,52 @@ impl ErrorCategory {
     /// Build actionable guidance for authentication errors.
     ///
     /// Returns a single combined line directing the user to `/secret` (API-key
-    /// providers) or `/login` (managed-auth providers). Env-var guidance is
-    /// intentionally omitted — secure storage via `/secret` is the canonical
-    /// path and env vars are a fallback only.
+    /// providers) or `/login` (managed-auth providers). When the rejected
+    /// credential's source is known, the line names it: resolution precedence
+    /// is process environment, then workspace `.env`, then secure storage, so
+    /// a stale export defeats `/secret add` until it is fixed or unset —
+    /// sending the user to secure storage without that note loops forever.
     ///
-    /// `has_stored_credential` distinguishes "no key at all" (needs `/secret add`)
-    /// from "key stored but rejected by the API" (needs verification).
+    /// `has_credential` distinguishes "no key at all" (needs `/secret add`)
+    /// from "a credential exists but the API rejected it" (needs verification
+    /// at its source). `rejected_source` names that source when discovery
+    /// found it; `None` keeps the source-neutral wording.
     #[must_use]
     pub fn auth_recovery_guidance(
         &self,
         provider_label: &str,
         provider_key: &str,
         is_managed_auth: bool,
-        has_stored_credential: bool,
+        has_credential: bool,
+        rejected_source: Option<RejectedCredentialSource>,
     ) -> Vec<String> {
         if !matches!(self, ErrorCategory::Authentication) {
             return vec![];
         }
 
         if is_managed_auth {
-            vec![format!(
+            return vec![format!(
                 "Authentication failed for {provider_label}. Run /login {provider_key} to re-authenticate."
-            )]
-        } else if has_stored_credential {
-            vec![format!(
-                "Authentication failed for {provider_label}. The stored API key was rejected — run /secret add {provider_key} to replace it with a valid key."
-            )]
-        } else {
-            vec![format!(
+            )];
+        }
+        if !has_credential {
+            return vec![format!(
                 "Authentication failed for {provider_label}. Run /secret add {provider_key} to store your API key in secure storage (OS keyring or encrypted file)."
-            )]
+            )];
+        }
+        match rejected_source {
+            Some(RejectedCredentialSource::Environment { env_var }) => vec![format!(
+                "Authentication failed for {provider_label}. The rejected key came from `{env_var}` in the process environment, which shadows the workspace `.env` file and secure storage — check the export, or unset it so the next source applies."
+            )],
+            Some(RejectedCredentialSource::WorkspaceDotEnv) => vec![format!(
+                "Authentication failed for {provider_label}. The rejected key came from the workspace `.env` file — check the value there."
+            )],
+            Some(RejectedCredentialSource::SecureStorage) => vec![format!(
+                "Authentication failed for {provider_label}. The stored API key was rejected — run /secret add {provider_key} to replace it with a valid key."
+            )],
+            None => vec![format!(
+                "Authentication failed for {provider_label}. The configured credential was rejected — verify the value, or run /secret add {provider_key} to store a fresh key."
+            )],
         }
     }
 }
