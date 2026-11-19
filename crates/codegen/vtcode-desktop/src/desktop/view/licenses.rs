@@ -297,7 +297,7 @@ impl DesktopView {
         settings_row(
             title.clone(),
             description,
-            desktop_button(element_id)
+            desktop_secondary_button(element_id)
                 .label(rust_i18n::t!(i18n::LICENSES_VIEW).to_string())
                 .accessibility_label(title)
                 .on_click(move |_, window: &mut Window, cx: &mut App| {
@@ -387,10 +387,9 @@ impl DesktopView {
                 let active = candidate == document;
                 let label = candidate.label();
                 entries.push(
-                    desktop_button(candidate.element_id())
+                    desktop_ghost_button(candidate.element_id())
                         .accessibility_label(label.clone())
                         .child(div().flex_1().min_w_0().truncate().child(label))
-                        .ghost()
                         .small()
                         .w_full()
                         .justify_start()
@@ -495,9 +494,8 @@ impl DesktopView {
                                     .items_center()
                                     .gap_2()
                                     .child(
-                                        desktop_button("copy-license-document")
+                                        desktop_secondary_button("copy-license-document")
                                             .label(rust_i18n::t!("app.licenses.copy").to_string())
-                                            .ghost()
                                             .small()
                                             .on_click(move |_, window, app| {
                                                 app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
@@ -507,18 +505,16 @@ impl DesktopView {
                                             }),
                                     )
                                     .child(
-                                        desktop_button("open-license-in-editor")
+                                        desktop_secondary_button("open-license-in-editor")
                                             .label(rust_i18n::t!("app.licenses.open_in_editor").to_string())
-                                            .ghost()
                                             .small()
                                             .on_click(cx.listener(|view, _, window, cx| {
                                                 view.open_license_in_editor(window, cx)
                                             })),
                                     )
                                     .child(
-                                        desktop_button("close-license-viewer")
+                                        desktop_secondary_button("close-license-viewer")
                                             .label(rust_i18n::t!("app.licenses.close").to_string())
-                                            .ghost()
                                             .small()
                                             .on_click(
                                                 cx.listener(|view, _, window, cx| {

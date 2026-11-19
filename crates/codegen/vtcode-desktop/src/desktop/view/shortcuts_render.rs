@@ -75,7 +75,7 @@ impl DesktopView {
         if props.editing {
             actions = actions
                 .child(
-                    desktop_glass_secondary_primary_button("save-shortcuts", colors, false)
+                    desktop_primary_button("save-shortcuts")
                         .label(rust_i18n::t!("app.shortcuts.save").to_string())
                         .on_click({
                             let view = view.clone();
@@ -85,7 +85,7 @@ impl DesktopView {
                         }),
                 )
                 .child(
-                    desktop_default_button("cancel-shortcuts")
+                    desktop_secondary_button("cancel-shortcuts")
                         .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
                         .on_click({
                             let view = view.clone();
@@ -95,9 +95,14 @@ impl DesktopView {
                         }),
                 );
         }
+        let import = if props.editing {
+            desktop_secondary_button("import-cli-shortcuts")
+        } else {
+            desktop_primary_button("import-cli-shortcuts")
+        };
         actions = actions
             .child(
-                desktop_default_button("reset-shortcuts")
+                desktop_danger_button("reset-shortcuts")
                     .label(rust_i18n::t!("app.shortcuts.reset_all").to_string())
                     .on_click({
                         let view = view.clone();
@@ -107,7 +112,7 @@ impl DesktopView {
                     }),
             )
             .child(
-                desktop_default_button("import-cli-shortcuts")
+                import
                     .label(rust_i18n::t!("app.shortcuts.import_cli").to_string())
                     .desktop_disabled(!cli_shortcuts_available)
                     .on_click({
@@ -458,9 +463,8 @@ fn shortcut_row_content(
         .gap_2()
         .child(value_element)
         .child(
-            desktop_button(format!("shortcut-edit-{}", id.as_str()))
+            desktop_ghost_button(format!("shortcut-edit-{}", id.as_str()))
                 .icon(Icon::new(IconName::Pencil).size_4().text_color(faded))
-                .ghost()
                 .small()
                 .accessibility_label(rust_i18n::t!("app.shortcuts.edit_for", label = command.label()).to_string())
                 .on_click({
@@ -471,9 +475,8 @@ fn shortcut_row_content(
                 }),
         )
         .child(
-            desktop_button(format!("shortcut-remove-{}", id.as_str()))
-                .icon(Icon::new(IconName::Trash).size_4().text_color(faded))
-                .ghost()
+            desktop_danger_button(format!("shortcut-remove-{}", id.as_str()))
+                .icon(Icon::new(IconName::Trash).size_4())
                 .small()
                 .accessibility_label(rust_i18n::t!("app.shortcuts.remove_for", label = command.label()).to_string())
                 .desktop_disabled(staged.is_empty())

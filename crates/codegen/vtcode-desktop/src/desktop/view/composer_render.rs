@@ -36,12 +36,11 @@ impl DesktopView {
                                 .when(is_image, |actions| {
                                     actions.child({
                                         let view_path = path.clone();
-                                        desktop_button(opaque_path_element_id("view-attachment", &path))
+                                        desktop_ghost_button(opaque_path_element_id("view-attachment", &path))
                                             .icon(IconName::Eye)
                                             .accessibility_label(
                                                 rust_i18n::t!("app.composer.view_attachment").to_string(),
                                             )
-                                            .ghost()
                                             .xsmall()
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.open_image_viewer(view_path.clone(), window, cx);
@@ -51,17 +50,16 @@ impl DesktopView {
                                 .child({
                                     let open_path = path.clone();
                                     let editor = self.preferences.file_open_destination().external_editor();
-                                    desktop_button(opaque_path_element_id("open-attachment", &path))
+                                    desktop_ghost_button(opaque_path_element_id("open-attachment", &path))
                                         .icon(IconName::ExternalLink)
                                         .accessibility_label(rust_i18n::t!("app.composer.open_attachment").to_string())
-                                        .ghost()
                                         .xsmall()
                                         .on_click(cx.listener(move |this, _, window, cx| {
                                             this.open_file_in_editor(&open_path, editor, window, cx);
                                         }))
                                 })
                                 .child(
-                                    desktop_button(opaque_path_element_id("remove-attachment", &path))
+                                    desktop_ghost_button(opaque_path_element_id("remove-attachment", &path))
                                         .icon(IconName::X)
                                         .accessibility_label(
                                             rust_i18n::t!(
@@ -70,7 +68,6 @@ impl DesktopView {
                                             )
                                             .to_string(),
                                         )
-                                        .ghost()
                                         .xsmall()
                                         .on_click(
                                             cx.listener(move |this, _, _, cx| this.remove_attachment(path.clone(), cx)),
@@ -105,9 +102,8 @@ impl DesktopView {
                             .child(waiting_label),
                     )
                     .child(
-                        desktop_button("cancel-startup-send")
+                        desktop_ghost_button("cancel-startup-send")
                             .label(rust_i18n::t!("app.session.keep_as_draft").to_string())
-                            .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.retained_submission = view.first_submission.take();
@@ -205,7 +201,7 @@ impl DesktopView {
                             .flex_wrap()
                             .gap_2()
                             .child(
-                                desktop_button("restore-submission")
+                                desktop_primary_button("restore-submission")
                                     .label(rust_i18n::t!("app.composer.restore_draft").to_string())
                                     .desktop_disabled(
                                         !self.composer.read(cx).value().is_empty()
@@ -216,18 +212,16 @@ impl DesktopView {
                                     .on_click(cx.listener(|view, _, window, cx| view.restore_submission(window, cx))),
                             )
                             .child(
-                                desktop_button("copy-retained-prompt")
+                                desktop_ghost_button("copy-retained-prompt")
                                     .label(rust_i18n::t!("app.composer.copy_prompt").to_string())
-                                    .ghost()
                                     .on_click(move |_, window, cx| {
                                         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()));
                                         super::super::notifications::copied_to_clipboard(window, cx);
                                     }),
                             )
                             .child(
-                                desktop_button("dismiss-retained-prompt")
+                                desktop_ghost_button("dismiss-retained-prompt")
                                     .label(rust_i18n::t!("app.composer.dismiss").to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, _, cx| {
                                         view.retained_submission = None;
                                         view.prune_attachment_thumbnails();
@@ -349,8 +343,7 @@ impl DesktopView {
         if self.running {
             model_actions = model_actions.when(self.cancel_requested, |actions| {
                 actions.child(
-                    desktop_button("force-cancel-exec")
-                        .ghost()
+                    desktop_ghost_button("force-cancel-exec")
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
                         .icon(IconName::X)
@@ -360,7 +353,8 @@ impl DesktopView {
             });
             if draft_ready {
                 model_actions = model_actions.child(
-                    desktop_glass_primary_button("queue-prompt", &colors, !can_queue)
+                    desktop_primary_button("queue-prompt")
+                        .desktop_disabled(!can_queue)
                         .rounded(cx.theme().radius_full())
                         .accessibility_label(rust_i18n::t!("app.composer.queue").to_string())
                         .tooltip(rust_i18n::t!("app.composer.queue_tooltip").to_string())
@@ -370,7 +364,7 @@ impl DesktopView {
                 );
             } else {
                 model_actions = model_actions.child(
-                    desktop_glass_primary_button("cancel-turn", &colors, false)
+                    desktop_primary_button("cancel-turn")
                         .rounded(cx.theme().radius_full())
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
@@ -385,7 +379,8 @@ impl DesktopView {
             }
         } else {
             model_actions = model_actions.child(
-                desktop_glass_primary_button("send-prompt", &colors, !can_submit)
+                desktop_primary_button("send-prompt")
+                    .desktop_disabled(!can_submit)
                     .rounded(cx.theme().radius_full())
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
@@ -442,7 +437,7 @@ impl DesktopView {
                         .fade_in("composer-context-fade", cx.theme())
                         .child(self.render_workspace_picker(cx))
                         .child(
-                            desktop_button("composer-cli-webmcp")
+                            desktop_ghost_button("composer-cli-webmcp")
                                 .icon(IconName::Terminal)
                                 .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
                                     rust_i18n::t!("app.composer.webmcp_connected").to_string()
@@ -451,7 +446,6 @@ impl DesktopView {
                                 })
                                 .accessibility_label(rust_i18n::t!("app.composer.webmcp_accessibility").to_string())
                                 .tooltip(rust_i18n::t!("app.composer.webmcp_tooltip").to_string())
-                                .ghost()
                                 .small()
                                 .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
                         ),
@@ -636,7 +630,7 @@ impl DesktopView {
                     row.child(composer_controls::processing_tier_badge(&speed, cx))
                 }
             });
-        desktop_button("pick-model")
+        desktop_ghost_button("pick-model")
             .accessibility_label(model_summary)
             .child(model_label)
             .dropdown_caret(true)
@@ -648,7 +642,6 @@ impl DesktopView {
                 &OpenModelPicker,
                 Some(key_context::DESKTOP),
             )
-            .ghost()
             .desktop_disabled(!self.model_selection_allowed())
             .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone())
     }
@@ -671,7 +664,7 @@ impl DesktopView {
         };
         let (permission_icon, permission_icon_color) =
             composer_controls::permission_indicator(permission_mode, cx.theme().colors);
-        desktop_button("composer-policy")
+        desktop_ghost_button("composer-policy")
             .open(self.palette_open_for(&[PaletteKind::Permissions]))
             .accessibility_label(rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string())
             .tooltip_with_action(
@@ -689,7 +682,6 @@ impl DesktopView {
                     .child(policy_label.to_string()),
             )
             .dropdown_caret(true)
-            .ghost()
             .small()
             .min_w_0()
             .max_w(px(224.))
@@ -700,12 +692,11 @@ impl DesktopView {
     /// Attachments entry point shared by the normal composer and the zen
     /// option cluster: same id, enablement, and picker in both modes.
     pub(super) fn render_attach_button(&self, cx: &Context<Self>) -> Button {
-        desktop_button("attach-files")
+        desktop_ghost_button("attach-files")
             .icon(IconName::Plus)
             .open(self.attachment_picker.is_some())
             .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())
             .tooltip(rust_i18n::t!("app.composer.attach_files").to_string())
-            .ghost()
             .small()
             .desktop_disabled(
                 self.workspace.is_none() || self.attachments_picker_open || self.session_request.is_some(),

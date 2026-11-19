@@ -248,7 +248,7 @@ impl DesktopView {
                     .child(settings_row(
                         rust_i18n::t!("app.menus.help_website").to_string(),
                         HELP_URL,
-                        desktop_button("about-settings-website")
+                        desktop_secondary_button("about-settings-website")
                             .label(rust_i18n::t!("app.menus.help_website").to_string())
                             .on_click(|_, _, cx: &mut App| cx.open_url(HELP_URL)),
                         &colors,
@@ -273,24 +273,24 @@ impl DesktopView {
             rust_i18n::t!("app.settings.about.check_for_updates").to_string()
         };
 
+        let check = if props.can_install_update {
+            desktop_secondary_button("about-settings-check-for-updates")
+        } else {
+            desktop_primary_button("about-settings-check-for-updates")
+        };
         let controls = div()
             .flex()
             .items_center()
             .gap_2()
-            .child(
-                desktop_button("about-settings-check-for-updates")
-                    .label(check_label)
-                    .desktop_disabled(busy)
-                    .on_click({
-                        let view = view.clone();
-                        move |_, _: &mut Window, cx: &mut App| {
-                            view.update(cx, |view, cx| {
-                                let _ = view.request_update_check();
-                                cx.notify();
-                            });
-                        }
-                    }),
-            )
+            .child(check.label(check_label).desktop_disabled(busy).on_click({
+                let view = view.clone();
+                move |_, _: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        let _ = view.request_update_check();
+                        cx.notify();
+                    });
+                }
+            }))
             .when(props.can_install_update, |row| {
                 row.child(
                     desktop_primary_button("about-settings-install-update")
@@ -360,7 +360,7 @@ impl DesktopView {
             return settings_row(
                 title,
                 rust_i18n::t!("app.changelog.unavailable").to_string(),
-                desktop_button("about-settings-changelog")
+                desktop_secondary_button("about-settings-changelog")
                     .label(action_label)
                     .desktop_disabled(true),
                 colors,
@@ -372,7 +372,7 @@ impl DesktopView {
         settings_row(
             title.clone(),
             description,
-            desktop_button("about-settings-changelog")
+            desktop_secondary_button("about-settings-changelog")
                 .label(action_label)
                 .accessibility_label(title)
                 .on_click(move |_, window: &mut Window, cx: &mut App| {
@@ -466,21 +466,21 @@ impl DesktopView {
                             .gap_2()
                             .w_full()
                             .child(
-                                desktop_default_button("about-license")
+                                desktop_secondary_button("about-license")
                                     .label(rust_i18n::t!("app.licenses.about_license").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.open_license(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_default_button("about-acknowledgments")
+                                desktop_secondary_button("about-acknowledgments")
                                     .label(rust_i18n::t!("app.about.acknowledgments").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.open_acknowledgments(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_default_button("about-website")
+                                desktop_secondary_button("about-website")
                                     .label(rust_i18n::t!("app.menus.help_website").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_about(window, cx);
@@ -488,7 +488,7 @@ impl DesktopView {
                                     })),
                             )
                             .child(
-                                desktop_glass_popover_primary_button("about-done", &colors, false)
+                                desktop_primary_button("about-done")
                                     .label(rust_i18n::t!("app.about.done").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_about(window, cx);

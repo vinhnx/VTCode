@@ -4,7 +4,6 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, InteractiveElementExt, StyledExt};
 use gpui_kit::component::Selectable;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::diff::{Diff, DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{Input, InputState};
@@ -18,7 +17,8 @@ use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
     DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
-    Route, command, desktop_button, empty_state, shimmer_label, uuid_like_id, warning_alert,
+    Route, command, desktop_ghost_button, desktop_secondary_button, empty_state, shimmer_label, uuid_like_id,
+    warning_alert,
 };
 use crate::desktop::strings::{i18n, key_context, keys};
 
@@ -310,7 +310,7 @@ impl DesktopView {
                 .px_4()
                 .py_2()
                 .child(
-                    desktop_button("refresh-workspace-review")
+                    desktop_secondary_button("refresh-workspace-review")
                         .tooltip_with_action(
                             rust_i18n::t!("app.workspace_review.refresh_tooltip").to_string(),
                             &RefreshWorkspace,
@@ -337,9 +337,8 @@ impl DesktopView {
                         .items_center()
                         .gap_2()
                         .child(
-                            desktop_button("workspace-review-unified")
+                            desktop_ghost_button("workspace-review-unified")
                                 .label(rust_i18n::t!(i18n::WORKSPACE_REVIEW_UNIFIED).to_string())
-                                .ghost()
                                 .small()
                                 .toggled(review.mode == DiffMode::Unified)
                                 .desktop_disabled(!has_viewer)
@@ -349,9 +348,8 @@ impl DesktopView {
                                 ),
                         )
                         .child(
-                            desktop_button("workspace-review-split")
+                            desktop_ghost_button("workspace-review-split")
                                 .label(rust_i18n::t!(i18n::WORKSPACE_REVIEW_SPLIT).to_string())
-                                .ghost()
                                 .small()
                                 .toggled(review.mode == DiffMode::Split)
                                 .desktop_disabled(!has_viewer)
@@ -363,10 +361,9 @@ impl DesktopView {
                 )
                 .child(div().flex_1())
                 .child(
-                    desktop_button("copy-workspace-review")
+                    desktop_ghost_button("copy-workspace-review")
                         .label(rust_i18n::t!("app.workspace_review.copy_preview").to_string())
                         .icon(IconName::Copy)
-                        .ghost()
                         .small()
                         .desktop_disabled(!can_copy_patch)
                         .on_click(cx.listener(|view, _, window, cx| {
@@ -484,25 +481,23 @@ impl DesktopView {
                     .px_4()
                     .py_2()
                     .child(
-                        desktop_button("workspace-review-previous-file")
+                        desktop_ghost_button("workspace-review-previous-file")
                             .label(rust_i18n::t!("app.workspace_review.previous_file").to_string())
                             .tooltip_with_action(
                                 rust_i18n::t!("app.workspace_review.previous_file").to_string(),
                                 &PreviousReviewFile,
                                 Some(key_context::DIFF_REVIEW),
                             )
-                            .ghost()
                             .small()
                             .desktop_disabled(files.len() < 2)
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_workspace_review_file(false, cx))),
                     )
                     .child(
-                        desktop_button("workspace-review-current-file")
+                        desktop_ghost_button("workspace-review-current-file")
                             .label(label.clone())
                             .open(self.palette_open_for(&[PaletteKind::ReviewFiles]))
                             .icon(IconName::ChevronDown)
                             .tooltip(rust_i18n::t!("app.workspace_review.choose_changed_file").to_string())
-                            .ghost()
                             .small()
                             .flex_1()
                             .on_click(cx.listener(|view, _, window, cx| {
@@ -510,14 +505,13 @@ impl DesktopView {
                             })),
                     )
                     .child(
-                        desktop_button("workspace-review-next-file")
+                        desktop_ghost_button("workspace-review-next-file")
                             .label(rust_i18n::t!("app.workspace_review.next_file").to_string())
                             .tooltip_with_action(
                                 rust_i18n::t!("app.workspace_review.next_file").to_string(),
                                 &NextReviewFile,
                                 Some(key_context::DIFF_REVIEW),
                             )
-                            .ghost()
                             .small()
                             .desktop_disabled(files.len() < 2)
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_workspace_review_file(true, cx))),

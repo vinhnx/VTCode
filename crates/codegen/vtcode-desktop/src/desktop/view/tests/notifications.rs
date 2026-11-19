@@ -360,16 +360,19 @@ fn update_status_error_clears_the_pending_request(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn check_for_updates_button_requests_a_live_check(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (window, view) = open_desktop(cx);
     let (commands, requests) = tokio::sync::mpsc::channel(8);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.apply_theme(crate::desktop::themes::ThemeId::ciapre::BLUE.into(), window, cx);
             view.backend = Some(BackendHandle { commands });
             view.open_settings(window, cx);
             view.settings_tab = super::super::settings::SettingsTab::About;
         });
         window.render_frame(cx);
         assert!(window.try_find("about-settings-check-for-updates").is_some(), "the update check lives on About");
+        assert_button_fill(window, "about-settings-check-for-updates", cx.theme().colors.button_primary);
         window.click("about-settings-check-for-updates", cx);
         window.render_frame(cx);
         assert!(view.read(cx).update_request_pending);
@@ -388,10 +391,12 @@ fn check_for_updates_button_requests_a_live_check(cx: &mut TestAppContext) {
 /// one runs, so a second concurrent install can never be requested.
 #[gpui_kit::test]
 fn offered_update_gains_an_install_action_that_requests_install(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (window, view) = open_desktop(cx);
     let (commands, requests) = tokio::sync::mpsc::channel(8);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.apply_theme(crate::desktop::themes::ThemeId::ciapre::BLUE.into(), window, cx);
             view.backend = Some(BackendHandle { commands });
             view.apply_update_status(update_status_json("0.181.7", Some("0.181.8"), true));
             view.open_settings(window, cx);
@@ -403,6 +408,8 @@ fn offered_update_gains_an_install_action_that_requests_install(cx: &mut TestApp
             window.try_find("about-settings-install-update").is_some(),
             "an offered update must offer the install action"
         );
+        assert_button_fill(window, "about-settings-check-for-updates", cx.theme().colors.button_secondary);
+        assert_button_fill(window, "about-settings-install-update", cx.theme().colors.button_primary);
         window.click("about-settings-install-update", cx);
         window.render_frame(cx);
 

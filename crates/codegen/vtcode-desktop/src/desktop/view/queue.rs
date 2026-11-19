@@ -571,20 +571,18 @@ impl DesktopView {
                                 .flex_1(),
                         )
                         .child(
-                            desktop_button(queued_edit_save_id(row_index, echo_id.as_deref()))
+                            desktop_ghost_button(queued_edit_save_id(row_index, echo_id.as_deref()))
                                 .icon(IconName::Check)
                                 .accessibility_label("Save prompt".to_string())
                                 .tooltip("Save prompt".to_string())
-                                .ghost()
                                 .xsmall()
                                 .on_click(cx.listener(|view, _, window, cx| view.commit_queue_edit(window, cx))),
                         )
                         .child(
-                            desktop_button(queued_edit_cancel_id(row_index, echo_id.as_deref()))
+                            desktop_ghost_button(queued_edit_cancel_id(row_index, echo_id.as_deref()))
                                 .icon(IconName::X)
                                 .accessibility_label("Cancel edit".to_string())
                                 .tooltip("Cancel edit".to_string())
-                                .ghost()
                                 .xsmall()
                                 .on_click(cx.listener(|view, _, window, cx| view.cancel_queue_edit(window, cx))),
                         )
@@ -621,12 +619,11 @@ impl DesktopView {
                                 .items_center()
                                 .gap_1()
                                 .child(
-                                    desktop_button(queued_edit_element_id(row_index, echo_id.as_deref()))
+                                    desktop_ghost_button(queued_edit_element_id(row_index, echo_id.as_deref()))
                                         .icon(IconName::Pencil)
-                                        .disabled(steer_pending)
+                                        .desktop_disabled(steer_pending)
                                         .accessibility_label("Edit prompt".to_string())
                                         .tooltip("Edit prompt".to_string())
-                                        .ghost()
                                         .xsmall()
                                         .on_click({
                                             let echo_id = echo_id.clone();
@@ -639,10 +636,12 @@ impl DesktopView {
                                         }),
                                 )
                                 .child(
-                                    desktop_button(queued_steer_element_id(row_index, echo_id.as_deref()))
+                                    desktop_ghost_button(queued_steer_element_id(row_index, echo_id.as_deref()))
                                         .icon(IconName::ArrowRight)
                                         .loading(steer_pending)
-                                        .disabled(!steer_available || !self.running || !self.steer_pending.is_empty())
+                                        .desktop_disabled(
+                                            !steer_available || !self.running || !self.steer_pending.is_empty(),
+                                        )
                                         .accessibility_label(
                                             if steer_pending {
                                                 "Steering queued prompt"
@@ -652,7 +651,6 @@ impl DesktopView {
                                             .to_string(),
                                         )
                                         .tooltip("Steer into the running turn".to_string())
-                                        .ghost()
                                         .xsmall()
                                         .on_click({
                                             let echo_id = echo_id.clone();
@@ -665,12 +663,11 @@ impl DesktopView {
                                         }),
                                 )
                                 .child(
-                                    desktop_button(queued_remove_element_id(row_index, echo_id.as_deref()))
+                                    desktop_danger_button(queued_remove_element_id(row_index, echo_id.as_deref()))
                                         .icon(IconName::Trash)
-                                        .disabled(steer_pending)
+                                        .desktop_disabled(steer_pending)
                                         .accessibility_label(remove_label.clone())
                                         .tooltip(remove_label)
-                                        .ghost()
                                         .xsmall()
                                         .on_click({
                                             let echo_id = echo_id.clone();

@@ -6,7 +6,7 @@
 //! visible on every palette. Tab tracks and dimmed tab labels derive here
 //! too: they are fills under the same readability contract.
 
-use super::{aa_muted, contrast_ratio, mix};
+use super::{aa_muted, contrast_ratio, filled_button_foreground, mix};
 use gpui_kit::component::theme::ThemeColor;
 use gpui_kit::{BoxShadow, Hsla, black, px, white};
 
@@ -19,13 +19,12 @@ use gpui_kit::{BoxShadow, Hsla, black, px, white};
 /// Press goes one band deeper so the resting -> hover -> press ramp never runs
 /// backwards; it also degrades to the hover step on palettes without headroom.
 /// Primary states scan the accent toward its contrast pole under the same
-/// strongest-readable rule; their caps sit one band above the neutral ones
-/// because equal lightness steps read weaker on saturated fills.
+/// strongest-readable rule, with a small hover step and a clearer press.
 pub(super) const RESTING_FILL_MAX_STEP: u8 = 10;
 pub(super) const RAISED_FILL_MAX_STEP: u8 = 24;
 const HOVER_FILL_MAX_STEP: u8 = 14;
 const ACTIVE_FILL_MAX_STEP: u8 = 24;
-pub(super) const PRIMARY_HOVER_MAX_STEP: u8 = 18;
+pub(super) const PRIMARY_HOVER_MAX_STEP: u8 = 8;
 pub(super) const PRIMARY_ACTIVE_MAX_STEP: u8 = 30;
 
 /// Give panels and controls a visible neutral fill while keeping their text at
@@ -53,6 +52,16 @@ pub(super) fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.button_secondary = surface;
     colors.button_secondary_foreground = colors.foreground;
     colors.button_secondary_active = press;
+    // Ciapre's red is reserved for destructive buttons. Status text and
+    // indicators still use each palette's contrast-adjusted danger color.
+    let danger = gpui_kit::rgb(0xa63333).into();
+    let danger_text = filled_button_foreground(danger);
+    let toward = filled_button_foreground(danger_text);
+    colors.button_danger = danger;
+    colors.button_danger_foreground = danger_text;
+    colors.button_danger_hover = primary_state_surface(danger, toward, danger_text, PRIMARY_HOVER_MAX_STEP);
+    colors.button_danger_active = primary_state_surface(danger, toward, danger_text, PRIMARY_ACTIVE_MAX_STEP);
+
     // Ghost selected/open states (palette triggers while their popup is up)
     // and every other Kit `secondary_active` reader (stepper, title bar,
     // table, and dock active fills) share the pressed depth: the resting

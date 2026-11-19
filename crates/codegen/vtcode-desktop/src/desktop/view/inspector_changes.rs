@@ -214,8 +214,7 @@ impl DesktopView {
         let selected_tab = self.inspector_tab;
         let visible_tabs = self.visible_inspector_tabs();
         let overflow_label = rust_i18n::t!("app.inspector.inspector_tabs").to_string();
-        let overflow = desktop_button("inspector-tabs-menu")
-            .ghost()
+        let overflow = desktop_ghost_button("inspector-tabs-menu")
             .xsmall()
             .dropdown_caret(true)
             .accessibility_label(overflow_label.clone())
@@ -273,9 +272,8 @@ impl DesktopView {
                             .track_scroll(&self.inspector_tabs_scroll)
                             .suffix(
                                 div().flex().items_center().child(overflow).child(
-                                    desktop_button("close-inspector")
+                                    desktop_ghost_button("close-inspector")
                                         .icon(IconName::X)
-                                        .ghost()
                                         .small()
                                         .accessibility_label(rust_i18n::t!("app.navigation.hide_panel").to_string())
                                         .tooltip_with_action(
@@ -336,7 +334,7 @@ impl DesktopView {
             .id("inspector-changes-tab")
             .child(
                 div().px_3().py_2().child(
-                    desktop_button("review-working-tree")
+                    desktop_ghost_button("review-working-tree")
                         .label(rust_i18n::t!("app.workspace_review.review_working_tree").to_string())
                         .icon(IconName::GitCompare)
                         .tooltip_with_action(
@@ -344,7 +342,6 @@ impl DesktopView {
                             &OpenWorkspaceReview,
                             Some(key_context::DESKTOP),
                         )
-                        .ghost()
                         .small()
                         .desktop_disabled(self.backend.is_none() || self.service_info.is_none())
                         .dispatches_desktop_action(OpenWorkspaceReview, self.focus_handle.clone()),
@@ -428,7 +425,7 @@ impl DesktopView {
                 .items_center()
                 .gap_1()
                 .child(
-                    desktop_button("previous-change-file")
+                    desktop_ghost_button("previous-change-file")
                         .icon(IconName::ChevronLeft)
                         .accessibility_label(rust_i18n::t!("app.inspector.previous_file").to_string())
                         .tooltip_with_action(
@@ -436,13 +433,12 @@ impl DesktopView {
                             &PreviousReviewFile,
                             Some(key_context::DIFF_REVIEW),
                         )
-                        .ghost()
                         .small()
                         .desktop_disabled(filtered_preview_count < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
                 )
                 .child(
-                    desktop_button("next-change-file")
+                    desktop_ghost_button("next-change-file")
                         .icon(IconName::ChevronRight)
                         .accessibility_label(rust_i18n::t!("app.inspector.next_file").to_string())
                         .tooltip_with_action(
@@ -450,7 +446,6 @@ impl DesktopView {
                             &NextReviewFile,
                             Some(key_context::DIFF_REVIEW),
                         )
-                        .ghost()
                         .small()
                         .desktop_disabled(filtered_preview_count < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
@@ -533,7 +528,7 @@ impl DesktopView {
                                             .child(file_summary),
                                     )
                                     .child(
-                                        desktop_button(opaque_path_element_id("change-row", &path))
+                                        desktop_ghost_button(opaque_path_element_id("change-row", &path))
                                             .icon(IconName::ChevronRight)
                                             .accessibility_label({
                                                 let suffix = if selected {
@@ -567,7 +562,6 @@ impl DesktopView {
                                                 )
                                                 .to_string()
                                             })
-                                            .ghost()
                                             .small()
                                             .desktop_disabled(!preview_available)
                                             .on_click(
@@ -607,7 +601,7 @@ impl DesktopView {
                         } else {
                             rust_i18n::t!("app.inspector.filter_by_status", status = name.as_str()).to_string()
                         };
-                        desktop_button(format!("change-filter-{}", change_kind_slug(kind)))
+                        desktop_ghost_button(format!("change-filter-{}", change_kind_slug(kind)))
                             .child(
                                 div()
                                     .flex()
@@ -620,7 +614,6 @@ impl DesktopView {
                             .tooltip(tooltip)
                             .toggled(active)
                             .selected(active)
-                            .ghost()
                             .small()
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.toggle_change_kind_filter(kind);
@@ -662,10 +655,9 @@ impl DesktopView {
                     )
                     .to_string();
                     header = header.child(
-                        desktop_button(id)
+                        desktop_ghost_button(id)
                             .label(label)
                             .accessibility_label(accessible_label)
-                            .ghost()
                             .small()
                             .when(mode == target, |button| button.bg(colors.secondary))
                             .on_click(cx.listener(move |view, _, _, cx| view.set_inspector_diff_mode(target, cx))),
@@ -673,7 +665,7 @@ impl DesktopView {
                 }
                 header = header
                     .child(
-                        desktop_button("review-previous-change")
+                        desktop_ghost_button("review-previous-change")
                             .icon(IconName::ArrowUp)
                             .accessibility_label(rust_i18n::t!("app.inspector.previous_change").to_string())
                             .tooltip_with_action(
@@ -681,12 +673,11 @@ impl DesktopView {
                                 &PreviousReviewChange,
                                 Some(key_context::DIFF_REVIEW),
                             )
-                            .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(false, cx))),
                     )
                     .child(
-                        desktop_button("review-next-change")
+                        desktop_ghost_button("review-next-change")
                             .icon(IconName::ArrowDown)
                             .accessibility_label(rust_i18n::t!("app.inspector.next_change").to_string())
                             .tooltip_with_action(
@@ -694,28 +685,25 @@ impl DesktopView {
                                 &NextReviewChange,
                                 Some(key_context::DIFF_REVIEW),
                             )
-                            .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(true, cx))),
                     );
             } else {
                 header = header.child(
-                    desktop_button("expand-change-review")
+                    desktop_ghost_button("expand-change-review")
                         .icon(IconName::Maximize2)
                         .accessibility_label(rust_i18n::t!("app.inspector.expand_review").to_string())
                         .tooltip(rust_i18n::t!("app.inspector.expand_review").to_string())
-                        .ghost()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.open_review(window, cx))),
                 );
             }
             if let Some(patch) = patch {
                 header = header.child(
-                    desktop_button("copy-change-patch")
+                    desktop_ghost_button("copy-change-patch")
                         .icon(IconName::Copy)
                         .accessibility_label(rust_i18n::t!("app.inspector.copy_patch").to_string())
                         .tooltip(rust_i18n::t!("app.inspector.copy_patch").to_string())
-                        .ghost()
                         .small()
                         .on_click(move |_, window, app| {
                             app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string()));
@@ -724,11 +712,10 @@ impl DesktopView {
                 );
             }
             header = header.child(
-                desktop_button("open-change-file")
+                desktop_ghost_button("open-change-file")
                     .icon(IconName::ExternalLink)
                     .accessibility_label(rust_i18n::t!("app.inspector.open_file").to_string())
                     .tooltip(rust_i18n::t!("app.inspector.open_file").to_string())
-                    .ghost()
                     .small()
                     .on_click(
                         cx.listener(move |this, _, window, cx| this.open_file_preview(rel_path.clone(), window, cx)),

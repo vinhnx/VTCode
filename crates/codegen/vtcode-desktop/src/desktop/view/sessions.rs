@@ -928,9 +928,8 @@ impl DesktopView {
             .justify_center()
             .py_1()
             .child(
-                desktop_button(id)
+                desktop_ghost_button(id)
                     .label("Show more threads")
-                    .ghost()
                     .small()
                     .w_full()
                     .on_click(cx.listener(|view, _, _, cx| view.show_more_sessions(cx))),

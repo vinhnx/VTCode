@@ -56,10 +56,9 @@ impl DesktopView {
         } else {
             label.clone()
         };
-        desktop_button(format!("app-icon-{}", preference.id()))
+        desktop_ghost_button(format!("app-icon-{}", preference.id()))
             .accessibility_label(accessibility_label)
             .toggled(active)
-            .ghost()
             .w(px(104.))
             .flex_shrink_0()
             .h(px(112.))

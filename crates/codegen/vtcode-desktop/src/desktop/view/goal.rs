@@ -245,11 +245,10 @@ impl DesktopView {
             .child(div().text_sm().text_color(colors.muted_foreground).child(elapsed));
         row = row.child(
             div().flex().items_center().gap_1().child(
-                desktop_button("goal-clear")
+                desktop_danger_button("goal-clear")
                     .icon(IconName::Trash)
                     .accessibility_label(rust_i18n::t!("app.composer.goal_clear").to_string())
                     .tooltip(rust_i18n::t!("app.composer.goal_clear").to_string())
-                    .ghost()
                     .xsmall()
                     .on_click(cx.listener(|this, _, _, cx| {
                         let _ = this.execute_goal_command("clear".to_string(), cx);
@@ -258,11 +257,10 @@ impl DesktopView {
         );
         if matches!(snapshot.state, GoalState::Active) {
             row = row.child(
-                desktop_button("goal-pause")
+                desktop_ghost_button("goal-pause")
                     .icon(IconName::Pause)
                     .accessibility_label(rust_i18n::t!("app.composer.goal_pause").to_string())
                     .tooltip(rust_i18n::t!("app.composer.goal_pause").to_string())
-                    .ghost()
                     .xsmall()
                     .on_click(cx.listener(|this, _, _, cx| {
                         let _ = this.execute_goal_command("pause".to_string(), cx);
@@ -270,11 +268,10 @@ impl DesktopView {
             );
         } else if matches!(snapshot.state, GoalState::Paused | GoalState::Unknown) {
             row = row.child(
-                desktop_button("goal-resume")
+                desktop_ghost_button("goal-resume")
                     .icon(IconName::Play)
                     .accessibility_label(rust_i18n::t!("app.composer.goal_resume").to_string())
                     .tooltip(rust_i18n::t!("app.composer.goal_resume").to_string())
-                    .ghost()
                     .xsmall()
                     .on_click(cx.listener(|this, _, _, cx| {
                         let _ = this.execute_goal_command("resume".to_string(), cx);
@@ -287,11 +284,10 @@ impl DesktopView {
             (rust_i18n::t!("app.composer.goal_expand").to_string(), IconName::Maximize2)
         };
         row = row.child(
-            desktop_button("goal-expand")
+            desktop_ghost_button("goal-expand")
                 .icon(expand_icon)
                 .accessibility_label(expand_label.clone())
                 .tooltip(expand_label)
-                .ghost()
                 .xsmall()
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_goal_expanded(cx))),
         );
@@ -319,8 +315,7 @@ impl DesktopView {
                 .px_3()
                 .pt_3()
                 .child(
-                    desktop_button("inspector-goal-pin")
-                        .ghost()
+                    desktop_ghost_button("inspector-goal-pin")
                         .w_full()
                         .justify_start()
                         .accessibility_label(summary)

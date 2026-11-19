@@ -38,13 +38,12 @@ impl DesktopView {
             .gap_2()
             .flex_shrink_0()
             .child(
-                desktop_button(format!("diff-{}", item.id))
+                desktop_ghost_button(format!("diff-{}", item.id))
                     .label(if item.expanded {
                         rust_i18n::t!("app.transcript.hide_diff").to_string()
                     } else {
                         rust_i18n::t!("app.transcript.show_diff").to_string()
                     })
-                    .ghost()
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.transcript.toggle_diff(&toggle_id);
                         cx.notify();
@@ -119,10 +118,9 @@ impl DesktopView {
                     .test_support()
                     .context_menu(move |menu, _, _| file_row_menu(menu, &menu_path, false))
                     .child(
-                        desktop_button(format!("diff-file-{}-{path}", item.id))
+                        desktop_ghost_button(format!("diff-file-{}-{path}", item.id))
                             .accessibility_label(path.clone())
                             .tooltip(path.clone())
-                            .ghost()
                             .small()
                             .w_full()
                             .justify_start()
@@ -191,9 +189,8 @@ impl DesktopView {
             let copy_id = id.clone();
             body = body.child(
                 div().flex().justify_end().child(
-                    desktop_button(format!("copy-patch-{}", item.id))
+                    desktop_ghost_button(format!("copy-patch-{}", item.id))
                         .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
-                        .ghost()
                         .xsmall()
                         .on_click(cx.listener(move |view, _, window, cx| {
                             let Some(patch) = view

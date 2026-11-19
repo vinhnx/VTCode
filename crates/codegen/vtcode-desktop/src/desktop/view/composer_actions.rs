@@ -199,10 +199,9 @@ impl DesktopView {
         let disabled =
             !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
         let view = cx.entity().downgrade();
-        let trigger = desktop_button("composer-workspace")
+        let trigger = desktop_ghost_button("composer-workspace")
             .icon(IconName::Folder)
             .label(current_label)
-            .ghost()
             .small()
             .max_w(px(240.))
             .overflow_hidden()
@@ -236,10 +235,9 @@ impl DesktopView {
                     );
                 let open_view = view.clone();
                 content = content.child(
-                    desktop_button("open-workspace-folder")
+                    desktop_ghost_button("open-workspace-folder")
                         .icon(IconName::Folder)
                         .label(rust_i18n::t!("app.workspace.choose_folder").to_string())
-                        .ghost()
                         .w_full()
                         .desktop_disabled(disabled)
                         .on_click(cx.listener(move |popover, _, window, cx| {
@@ -263,14 +261,13 @@ impl DesktopView {
                         let entry_view = view.clone();
                         let entry_path = path.clone();
                         content = content.child(
-                            desktop_button(opaque_path_element_id("recent-workspace-popover", path))
+                            desktop_ghost_button(opaque_path_element_id("recent-workspace-popover", path))
                                 .accessibility_label(if selected {
                                     rust_i18n::t!(i18n::WORKSPACE_CURRENT_LABEL, workspace = label).to_string()
                                 } else {
                                     label.clone()
                                 })
                                 .child(navigation_label(label, IconName::Folder, selected, colors.primary))
-                                .ghost()
                                 .w_full()
                                 .desktop_disabled(disabled)
                                 .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))

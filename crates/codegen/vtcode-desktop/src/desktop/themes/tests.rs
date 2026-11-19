@@ -107,6 +107,7 @@ fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mu
                 assert!(contrast_ratio(foreground, palette.background) >= 4.5, "{}: unreadable tab", palette.id);
             }
             for background in [kit.colors.primary, kit.colors.primary_hover, kit.colors.primary_active] {
+                assert_eq!(background.a, 1.0, "{}: enabled primary fills must stay opaque", palette.id);
                 assert!(
                     contrast_ratio(kit.colors.primary_foreground, background) >= 4.5,
                     "{}: unreadable primary control",

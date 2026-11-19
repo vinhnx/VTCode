@@ -5,8 +5,8 @@
 
 ## Modules
 
-- `src/desktop/view/` screens, overlays and routing; `components.rs` and `glass_buttons.rs` share builders, `transcript_command.rs` renders commands, appearance modules edit and select themes, and `settings_kit.rs` hosts Kit settings.
-- `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` tokens (`custom.rs`, `glass.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
+- `src/desktop/view/` screens, overlays and routing; `components.rs` owns shared builders, `transcript_command.rs` renders commands, appearance modules edit and select themes, and `settings_kit.rs` hosts Kit settings.
+- `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` tokens (`custom.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` projections: row type in `item.rs`, turn grouping in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
 - `src/desktop/terminal_{process,screen,tab}.rs` + `view/terminal_panel.rs` + `preferences/terminal.rs` + `themes/terminal.rs`: embedded user-shell PTY (scrollback, ANSI setting, mouse-drag selection via a zero-size origin-probe element).
@@ -34,4 +34,4 @@
 - Never rebuild rio-vt palettes per frame (uncached regex compiles); tables are statics, rows virtualize, custom buttons fix height.
 - Transcript disclosure rows share one title spine (inset + icon slot + gap): never retier one row alone. Plan rail, themes, dismiss guards, login, handoff, ceilings, submit detours, slash catalog, cli-dry, images-only file preview: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
 
-Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.
+Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the relevant section, including button roles for UI changes.

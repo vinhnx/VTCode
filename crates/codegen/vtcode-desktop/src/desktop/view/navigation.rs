@@ -74,9 +74,8 @@ impl DesktopView {
     fn render_nav_overflow(&self, id: &'static str, label: String, small: bool, items: &[NavMenuAction]) -> AnyElement {
         let items: Vec<NavMenuAction> = items.to_vec();
         let entries: Vec<(String, bool)> = items.iter().map(|item| (item.label(self), item.disabled(self))).collect();
-        desktop_button(id)
+        desktop_ghost_button(id)
             .icon(IconName::Ellipsis)
-            .ghost()
             .when(small, |button| button.small())
             .accessibility_label(label.as_str())
             .tooltip(label)
@@ -95,7 +94,7 @@ impl DesktopView {
     pub(super) fn render_browse_threads_button(&self, cx: &mut Context<Self>) -> Button {
         let colors = cx.theme().colors;
         let label = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
-        desktop_button("nav-browse-threads")
+        desktop_ghost_button("nav-browse-threads")
             .icon(IconName::Clock)
             .rounded_lg()
             .when(self.zen_mode, |button| button.small())
@@ -110,9 +109,8 @@ impl DesktopView {
     /// affordance dispatches the same action.
     pub(super) fn render_go_home_button(&self, small: bool) -> Button {
         let label = rust_i18n::t!("app.navigation.workspace_fallback").to_string();
-        desktop_button("nav-home")
+        desktop_ghost_button("nav-home")
             .icon(IconName::House)
-            .ghost()
             .rounded_lg()
             .when(small, |button| button.small())
             .accessibility_label(label.clone())
@@ -153,9 +151,8 @@ impl DesktopView {
             )
             .when(!expanded, |rail| {
                 rail.child(
-                    desktop_button("nav-new-thread")
+                    desktop_ghost_button("nav-new-thread")
                         .icon(IconName::Plus)
-                        .ghost()
                         .rounded_lg()
                         .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                         .tooltip_with_action(

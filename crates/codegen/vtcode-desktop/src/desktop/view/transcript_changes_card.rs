@@ -24,12 +24,11 @@ pub(super) fn render_turn_files_card(
                 .into_any_element()
         } else {
             let pending = view.turn_undos.contains_key(turn_id.as_str());
-            desktop_button(format!("turn-undo-{turn_id}"))
+            desktop_ghost_button(format!("turn-undo-{turn_id}"))
                 .label(rust_i18n::t!("app.transcript.turn_undo").to_string())
                 .accessibility_label(rust_i18n::t!("app.transcript.turn_undo_action").to_string())
-                .ghost()
                 .small()
-                .disabled(pending)
+                .desktop_disabled(pending)
                 .on_click(cx.listener(move |view, _, _, cx| {
                     let _sent = view.request_turn_undo(&turn_id);
                     cx.notify();
@@ -39,7 +38,7 @@ pub(super) fn render_turn_files_card(
     });
 
     let first_path = item.turn_files.first().map(|entry| entry.file.path.clone());
-    let changes_cta = desktop_default_button(format!("turn-changes-{}", item.id))
+    let changes_cta = desktop_secondary_button(format!("turn-changes-{}", item.id))
         .label(rust_i18n::t!("app.transcript.turn_view_changes").to_string())
         .small()
         .on_click(cx.listener(move |view, _, _, cx| match first_path.clone() {
@@ -130,10 +129,9 @@ pub(super) fn render_turn_files_card(
                 .w_full()
                 .context_menu(move |menu, _, _| file_row_menu(menu, &menu_path, false))
                 .child(
-                    desktop_button(format!("turn-file-{}-{path}", item.id))
+                    desktop_ghost_button(format!("turn-file-{}-{path}", item.id))
                         .accessibility_label(path.clone())
                         .tooltip(path.clone())
-                        .ghost()
                         .small()
                         .w_full()
                         .justify_start()
@@ -184,7 +182,7 @@ pub(super) fn render_turn_files_card(
             rust_i18n::t!("app.configuration.show_more", remaining = item.turn_files.len() - end).to_string()
         };
         card = card.child(
-            desktop_button(format!("turn-files-toggle-{id}"))
+            desktop_ghost_button(format!("turn-files-toggle-{id}"))
                 .accessibility_label(label.clone())
                 .child(
                     div()
@@ -195,7 +193,6 @@ pub(super) fn render_turn_files_card(
                         .child(label)
                         .child(transcript_chevron_lane(expanded).text_color(muted)),
                 )
-                .ghost()
                 .small()
                 .justify_start()
                 .on_click(cx.listener(move |view, _, _, cx| {

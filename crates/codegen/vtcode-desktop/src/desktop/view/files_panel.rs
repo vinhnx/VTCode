@@ -674,26 +674,24 @@ impl DesktopView {
         // removed: images view here, everything else opens externally.
         let mut actions = ToolbarGroup::new("file-preview-actions").label("File preview actions");
         actions = actions.child(
-            desktop_button("open-preview-editor")
+            desktop_ghost_button("open-preview-editor")
                 .label(rust_i18n::t!("app.file_preview.open_in_editor").to_string())
-                .ghost()
                 .small()
                 .on_click(cx.listener(|view, _, window, cx| {
                     view.open_preview_in_editor(files::ExternalEditor::System, window, cx)
                 })),
         );
-        actions = actions.child(desktop_button("open-preview-vscode").label("VS Code").ghost().small().on_click(
+        actions = actions.child(desktop_ghost_button("open-preview-vscode").label("VS Code").small().on_click(
             cx.listener(|view, _, window, cx| view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)),
         ));
         actions = actions.child(
-            desktop_button("close-preview")
+            desktop_ghost_button("close-preview")
                 .tooltip_with_action(
                     rust_i18n::t!("app.file_preview.close_tooltip").to_string(),
                     &DismissOverlay,
                     Some(key_context::DESKTOP),
                 )
                 .label(rust_i18n::t!("app.file_preview.close").to_string())
-                .ghost()
                 .small()
                 .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
         );

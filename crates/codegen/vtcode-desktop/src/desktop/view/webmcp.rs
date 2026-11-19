@@ -1,7 +1,6 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
@@ -12,7 +11,10 @@ use protocol::slash_command::{
 use serde_json::{Value, json};
 use vtcode_desktop_protocol as protocol;
 
-use super::{DesktopButtonExt, DesktopView, accessible_group_box, desktop_button, i18n, settings_group_box};
+use super::{
+    DesktopButtonExt, DesktopView, accessible_group_box, desktop_ghost_button, desktop_primary_button,
+    desktop_secondary_button, i18n, settings_group_box,
+};
 
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
 /// Slash-parse failure: help text goes through the localized notice catalog,
@@ -303,10 +305,9 @@ impl DesktopView {
                                 .child(status_label),
                         )
                         .child(
-                            desktop_button("refresh-webmcp-status")
+                            desktop_ghost_button("refresh-webmcp-status")
                                 .icon(IconName::RefreshCw)
                                 .accessibility_label(rust_i18n::t!("app.webmcp.refresh_status").to_string())
-                                .ghost()
                                 .small()
                                 .desktop_disabled(busy)
                                 .on_click({
@@ -337,12 +338,11 @@ impl DesktopView {
             controls = controls.child(div().flex().flex_wrap().gap_1().children(configured_origins.iter().map(
                 |origin| {
                     let origin_value = origin.clone();
-                    desktop_button(format!(
+                    desktop_ghost_button(format!(
                         "pair-origin-{}",
                         origin.chars().filter(char::is_ascii_alphanumeric).collect::<String>()
                     ))
                     .label(origin.clone())
-                    .ghost()
                     .small()
                     .desktop_disabled(busy)
                     .on_click({
@@ -386,7 +386,7 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .child(
-                    desktop_button("pair-webmcp")
+                    desktop_primary_button("pair-webmcp")
                         .icon(IconName::ExternalLink)
                         .label(rust_i18n::t!("app.webmcp.create_code").to_string())
                         .desktop_disabled(busy || origin.is_empty())
@@ -401,17 +401,15 @@ impl DesktopView {
                         }),
                 )
                 .child(
-                    desktop_button("open-webmcp-app")
+                    desktop_secondary_button("open-webmcp-app")
                         .label(rust_i18n::t!("app.webmcp.open_app").to_string())
-                        .ghost()
                         .on_click(|_, _, cx| cx.open_url(WEBMCP_APP_URL)),
                 )
                 .when(status.is_some_and(|status| status.running), |row| {
                     row.child(
-                        desktop_button("stop-webmcp")
+                        desktop_secondary_button("stop-webmcp")
                             .icon(IconName::X)
                             .label(rust_i18n::t!("app.webmcp.disconnect").to_string())
-                            .ghost()
                             .desktop_disabled(busy)
                             .on_click({
                                 let view = view.clone();
@@ -609,11 +607,10 @@ fn copy_value_row(value_label: String, value: String, id: &'static str, cx: &mut
                 .child(value),
         )
         .child(
-            desktop_button(id)
+            desktop_ghost_button(id)
                 .icon(IconName::Copy)
                 .accessibility_label(rust_i18n::t!("app.webmcp.copy_value", label = value_label.as_str()).to_string())
                 .tooltip(rust_i18n::t!("app.webmcp.copy_value", label = value_label.as_str()).to_string())
-                .ghost()
                 .small()
                 .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy.clone()));

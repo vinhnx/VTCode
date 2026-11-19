@@ -737,13 +737,13 @@ fn rejected_plan_draft_events_render_a_visible_transcript_row(cx: &mut TestAppCo
 
 #[test]
 fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
-    let mut enabled = super::super::desktop_button("native-cursor-enabled");
+    let mut enabled = super::super::desktop_ghost_button("native-cursor-enabled");
     assert_eq!(enabled.style().mouse_cursor, Some(CursorStyle::PointingHand));
 
-    let mut disabled = super::super::desktop_button("native-cursor-disabled").desktop_disabled(true);
+    let mut disabled = super::super::desktop_ghost_button("native-cursor-disabled").desktop_disabled(true);
     assert_eq!(disabled.style().mouse_cursor, Some(CursorStyle::Arrow));
 
-    let mut reenabled = super::super::desktop_button("native-cursor-reenabled").desktop_disabled(false);
+    let mut reenabled = super::super::desktop_ghost_button("native-cursor-reenabled").desktop_disabled(false);
     assert_eq!(reenabled.style().mouse_cursor, Some(CursorStyle::PointingHand));
 }
 

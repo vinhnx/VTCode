@@ -12,9 +12,8 @@ pub(super) fn config_editor_copy_group(path: &str, cx: &mut Context<DesktopView>
         .flex()
         .gap_2()
         .child(
-            desktop_button("copy-config-path")
+            desktop_ghost_button("copy-config-path")
                 .label("Copy setting path".to_string())
-                .ghost()
                 .small()
                 .on_click(cx.listener({
                     let path = path.to_string();
@@ -22,9 +21,8 @@ pub(super) fn config_editor_copy_group(path: &str, cx: &mut Context<DesktopView>
                 })),
         )
         .child(
-            desktop_button("copy-config-value")
+            desktop_ghost_button("copy-config-value")
                 .label("Copy value".to_string())
-                .ghost()
                 .small()
                 .on_click(cx.listener({
                     let path = path.to_string();

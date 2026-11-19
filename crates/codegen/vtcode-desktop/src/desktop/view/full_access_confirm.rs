@@ -182,7 +182,7 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_default_button("full-access-cancel")
+                                desktop_secondary_button("full-access-cancel")
                                     .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.cancel_full_access_confirm(window, cx);

@@ -160,23 +160,21 @@ impl DesktopView {
                     .flex_wrap()
                     .gap_2()
                     .child(
-                        desktop_button("cli-handoff-terminal")
+                        desktop_primary_button("cli-handoff-terminal")
                             .label(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
                             .on_click(cx.listener(|view, _, window, cx| view.open_cli_handoff_terminal(window, cx))),
                     )
                     .child(
-                        desktop_button("cli-handoff-copy")
+                        desktop_secondary_button("cli-handoff-copy")
                             .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
-                            .ghost()
                             .on_click(move |_, window, cx| {
                                 cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_command.clone()));
                                 super::super::notifications::copied_to_clipboard(window, cx);
                             }),
                     )
                     .child(
-                        desktop_button("cli-handoff-dismiss")
+                        desktop_secondary_button("cli-handoff-dismiss")
                             .label(rust_i18n::t!("app.composer.dismiss").to_string())
-                            .ghost()
                             .on_click(cx.listener(|view, _, _, cx| view.dismiss_cli_handoff(cx))),
                     ),
             )

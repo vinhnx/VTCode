@@ -42,8 +42,7 @@ impl DesktopView {
                 workspace.clone(),
                 settings_group_box(workspace, &colors)
                     .child(
-                        desktop_button("utilities-changes")
-                            .ghost()
+                        desktop_ghost_button("utilities-changes")
                             .w_full()
                             .justify_start()
                             .accessibility_label(change_accessibility_label)
@@ -127,8 +126,7 @@ impl DesktopView {
                             .child(eyebrow_label(rust_i18n::t!("app.utilities.recent_activity"), &colors)),
                     )
                     .child(
-                        desktop_button("utilities-activity")
-                            .ghost()
+                        desktop_ghost_button("utilities-activity")
                             .w_full()
                             .justify_start()
                             .accessibility_label(
@@ -155,9 +153,8 @@ impl DesktopView {
                             .justify_between()
                             .child(eyebrow_label(rust_i18n::t!("app.utilities.draft_sources"), &colors))
                             .child(
-                                desktop_button("utilities-add-source")
+                                desktop_ghost_button("utilities-add-source")
                                     .icon(IconName::Plus)
-                                    .ghost()
                                     .small()
                                     .accessibility_label(rust_i18n::t!("app.utilities.attach_sources").to_string())
                                     .tooltip(rust_i18n::t!("app.utilities.attach_tooltip").to_string())
@@ -180,8 +177,7 @@ impl DesktopView {
                     })
                     .children(self.attachments.iter().map(|attachment| {
                         let path = attachment.path.clone();
-                        desktop_button(opaque_path_element_id("utilities-source", &path))
-                            .ghost()
+                        desktop_ghost_button(opaque_path_element_id("utilities-source", &path))
                             .w_full()
                             .justify_start()
                             .accessibility_label(
@@ -204,10 +200,9 @@ impl DesktopView {
                             )
                     }))
                     .child(
-                        desktop_button("utilities-browse-files")
+                        desktop_ghost_button("utilities-browse-files")
                             .label(rust_i18n::t!("app.utilities.browse_files").to_string())
                             .icon(IconName::Folder)
-                            .ghost()
                             .w_full()
                             .justify_start()
                             .desktop_disabled(self.workspace.is_none())
@@ -216,10 +211,9 @@ impl DesktopView {
                             })),
                     )
                     .child(
-                        desktop_button("utilities-terminal")
+                        desktop_ghost_button("utilities-terminal")
                             .label(rust_i18n::t!("app.navigation.terminal").to_string())
                             .icon(IconName::Terminal)
-                            .ghost()
                             .w_full()
                             .justify_start()
                             .accessibility_label(rust_i18n::t!("app.navigation.terminal").to_string())

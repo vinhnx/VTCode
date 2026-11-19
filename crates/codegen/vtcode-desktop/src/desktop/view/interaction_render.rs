@@ -230,12 +230,11 @@ impl DesktopView {
                     .gap_2()
                     .w_full()
                     .child(
-                        desktop_button("interaction-plan-toggle")
+                        desktop_ghost_button("interaction-plan-toggle")
                             .label(toggle_label.clone())
                             .accessibility_label(toggle_label)
                             .toggled(expanded)
                             .child(transcript_chevron_lane(expanded))
-                            .ghost()
                             .small()
                             .desktop_disabled(submitting)
                             .on_click(cx.listener(|view, _, _, cx| {
@@ -244,21 +243,19 @@ impl DesktopView {
                             })),
                     )
                     .child(
-                        desktop_button("interaction-plan-edit")
+                        desktop_ghost_button("interaction-plan-edit")
                             .label(edit_label.clone())
                             .accessibility_label(edit_label)
                             .icon(IconName::Pencil)
-                            .ghost()
                             .small()
                             .desktop_disabled(submitting)
                             .on_click(cx.listener(|view, _, _, cx| view.submit_interaction_hotkey(cx))),
                     )
                     .child(
-                        desktop_button("interaction-plan-open-inspector")
+                        desktop_ghost_button("interaction-plan-open-inspector")
                             .icon(IconName::PanelRight)
                             .accessibility_label(open_label.clone())
                             .tooltip(open_label)
-                            .ghost()
                             .small()
                             .desktop_disabled(submitting)
                             .on_click(cx.listener(|view, _, _, cx| view.open_inspector_tab(InspectorTab::Plan, cx))),
@@ -437,7 +434,7 @@ impl DesktopView {
                 // one extra step over the panel gap lands it on the lg rung.
                 .mt_2()
                 .child(
-                    desktop_default_button("cancel-interaction")
+                    desktop_secondary_button("cancel-interaction")
                         .label(rust_i18n::t!("app.interaction.cancel_request").to_string())
                         .desktop_disabled(submitting)
                         .on_click(
@@ -449,7 +446,8 @@ impl DesktopView {
                     // the checked card is a no-op, so the highlighted row
                     // needs an explicit default commitment next to Cancel.
                     row.child(
-                        desktop_glass_popover_primary_button("confirm-interaction", &colors, submitting)
+                        desktop_primary_button("confirm-interaction")
+                            .desktop_disabled(submitting)
                             .label(rust_i18n::t!("app.interaction.confirm").to_string())
                             .on_click(cx.listener(|this, _, window, cx| this.confirm_immediate_choice(window, cx))),
                     )
@@ -462,7 +460,7 @@ impl DesktopView {
                             .gap_2()
                             .when(self.interaction_step_index > 0, |row| {
                                 row.child(
-                                    desktop_default_button("previous-question")
+                                    desktop_secondary_button("previous-question")
                                         .label(rust_i18n::t!("app.interaction.previous").to_string())
                                         .icon(IconName::ChevronLeft)
                                         .desktop_disabled(submitting)
@@ -476,7 +474,8 @@ impl DesktopView {
                                 )
                             })
                             .child(
-                                desktop_glass_popover_primary_button("continue-question", &colors, submitting)
+                                desktop_primary_button("continue-question")
+                                    .desktop_disabled(submitting)
                                     .label(if self.interaction_step_index + 1 == interaction.steps.len() {
                                         rust_i18n::t!("app.interaction.submit_answers").to_string()
                                     } else {

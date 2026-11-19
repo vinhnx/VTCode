@@ -72,11 +72,10 @@ impl DesktopView {
                     .child(row_description(rust_i18n::t!("app.configuration.tagline").to_string(), colors)),
             )
             .child(
-                desktop_button("open-config-file")
+                desktop_ghost_button("open-config-file")
                     .label(rust_i18n::t!("app.configuration.open_file").to_string())
                     .icon(IconName::ExternalLink)
                     .accessibility_label(rust_i18n::t!("app.configuration.open_file_label").to_string())
-                    .ghost()
                     .small()
                     .desktop_disabled(!can_open)
                     .on_click({
@@ -116,11 +115,10 @@ impl DesktopView {
         match row.kind {
             curated::CuratedRowKind::PermissionPolicy => {
                 let label = curated.approval_label.clone();
-                let control = desktop_button(format!("curated-{}", row.id))
+                let control = desktop_ghost_button(format!("curated-{}", row.id))
                     .label(label.clone())
                     .accessibility_label(format!("{}: {label}", row.title))
                     .dropdown_caret(true)
-                    .ghost()
                     .small()
                     .desktop_disabled(!curated.can_select_session)
                     .on_click({
@@ -149,11 +147,10 @@ impl DesktopView {
                     configuration::config_value_state(setting) == configuration::ConfigValueState::Overridden
                 });
                 let path = path.to_string();
-                let control = desktop_button(format!("curated-{}", row.id))
+                let control = desktop_ghost_button(format!("curated-{}", row.id))
                     .label(value.clone())
                     .accessibility_label(format!("{}: {value}", row.title))
                     .dropdown_caret(true)
-                    .ghost()
                     .small()
                     .when(overridden, |control| control.font_semibold())
                     .desktop_disabled(!editable)

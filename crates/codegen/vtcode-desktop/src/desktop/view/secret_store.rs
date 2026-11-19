@@ -67,7 +67,8 @@ impl DesktopView {
                     ),
             )
             .child(
-                desktop_glass_secondary_primary_button("save-secret", &colors, !sendable)
+                desktop_primary_button("save-secret")
+                    .desktop_disabled(!sendable)
                     .label(if pending {
                         rust_i18n::t!("app.secrets.saving").to_string()
                     } else {

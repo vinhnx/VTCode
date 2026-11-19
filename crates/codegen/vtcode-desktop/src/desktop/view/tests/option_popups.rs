@@ -43,9 +43,11 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
 
 #[gpui_kit::test]
 fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.apply_theme(themes::ThemeId::ciapre::BLUE.into(), window, cx);
             view.configuration = Some(
                 serde_json::from_value(json!({
                     "provider": "ollama", "model": "local", "authenticated": true, "credentialSetupCommand": "",
@@ -59,7 +61,11 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
         });
         window.render_frame(cx);
         select_settings_category(window, 3, cx);
+        assert_button_fill(window, "save-shortcuts", cx.theme().colors.button_primary);
+        assert_button_fill(window, "import-cli-shortcuts", cx.theme().colors.button_secondary);
         window.click("import-cli-shortcuts", cx);
+        window.render_frame(cx);
+        assert_button_fill(window, "import-cli-shortcuts", cx.theme().colors.button_primary);
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.shortcuts.get("cancel").map(String::as_str), Some("ctrl-c"));
         assert_eq!(saved.shortcuts.get("model").map(String::as_str), Some(""));

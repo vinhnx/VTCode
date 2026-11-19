@@ -822,27 +822,22 @@ fn scroll_column_inner(
 }
 
 /// Interactive button baseline: keyboard focus and a pointing-hand cursor.
-pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer().rounded(ButtonRounded::Large)
 }
 
-/// Ordinary visible action: a filled push button for commands that deserve a
-/// control frame (dialog secondaries, Save/Cancel pairs, labeled toolbar
-/// actions). Kit's Default variant supplies the neutral fill; rails, nav rows, and icon-only toolbar actions stay on
-/// [`desktop_button`] + `.ghost()` instead.
-pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id)
+/// Quiet inline, toolbar, and navigation actions.
+pub(in crate::desktop) fn desktop_ghost_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id).ghost()
 }
 
+/// Ordinary visible action, or the alternative beside a primary or danger action.
 pub(super) fn desktop_secondary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id).secondary()
+    desktop_filled_button(id).secondary().shadow(themes::button_inset_edges())
 }
 
 fn desktop_filled_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id)
-        .rounded(ButtonRounded::Medium)
-        .border_0()
-        .shadow(themes::button_inset_edges())
+    desktop_button(id).rounded(ButtonRounded::Medium).border_0().font_medium()
 }
 
 /// Decision-area default commit: the one emphasized action per view, normally
@@ -855,7 +850,7 @@ pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Butt
 /// Destructive commitment: irreversible or data-losing actions only. Pair with
 /// an explicit confirmation for consequential work.
 pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_filled_button(id).danger()
+    desktop_filled_button(id).danger().shadow(themes::button_inset_edges())
 }
 
 /// Quiet header dismiss control: ghost X icon with an accessible name and a
@@ -867,11 +862,10 @@ pub(super) fn desktop_dismiss_button(
     label: impl Into<gpui_kit::SharedString>,
 ) -> Button {
     let label = label.into();
-    desktop_button(id)
+    desktop_ghost_button(id)
         .icon(IconName::X)
         .accessibility_label(label.clone())
         .tooltip(label)
-        .ghost()
 }
 
 /// Running-turn marker shared by every thread surface (tab strip, sidebar,
@@ -904,9 +898,8 @@ pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &Foc
     } else {
         Icon::new(IconName::Leaf)
     };
-    desktop_button(ZEN_MODE_TOGGLE_ELEMENT_ID)
+    desktop_ghost_button(ZEN_MODE_TOGGLE_ELEMENT_ID)
         .icon(icon)
-        .ghost()
         .small()
         .accessibility_label(label.clone())
         .tooltip_with_action(label, &ToggleZenMode, Some(key_context::DESKTOP))
@@ -953,7 +946,7 @@ pub(super) trait DesktopButtonExt {
     /// disabled buttons stay flat: Kit replays the instance style inside its
     /// disabled arm, after its own shadow reset.
     fn desktop_elevated(self) -> Self;
-    /// Selected-option treatment: pressed-state metadata plus a stronger
+    /// Selected-option treatment for Ghost buttons: pressed-state metadata plus a stronger
     /// interaction fill when selected, quiet ghost otherwise. Every call site
     /// sits on a `secondary`-equivalent surface (settings panel, group-box fill), where
     /// a `secondary` fill would be pixel-identical to the background, so the
@@ -965,17 +958,19 @@ pub(super) trait DesktopButtonExt {
 
 impl DesktopButtonExt for Button {
     fn desktop_disabled(self, disabled: bool) -> Self {
-        self.disabled(disabled).cursor(if disabled {
-            CursorStyle::Arrow
-        } else {
-            CursorStyle::PointingHand
-        })
+        self.disabled(disabled)
+            .cursor(if disabled {
+                CursorStyle::Arrow
+            } else {
+                CursorStyle::PointingHand
+            })
+            // Kit replays instance shadows after its own disabled shadow reset.
+            .when(disabled, |button| button.shadow_none())
     }
 
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self {
         self.toggled(selected)
             .selected(selected)
-            .ghost()
             .when(selected, |button| button.bg(colors.button_active).text_color(colors.foreground))
     }
 

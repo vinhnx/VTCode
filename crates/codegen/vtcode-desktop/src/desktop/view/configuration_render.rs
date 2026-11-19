@@ -139,10 +139,9 @@ impl DesktopView {
                             .cleanable(true),
                     )
                     .child(
-                        desktop_button("browse-cli-config")
+                        desktop_secondary_button("browse-cli-config")
                             .label(rust_i18n::t!("app.configuration.browse_all").to_string())
                             .accessibility_label(rust_i18n::t!("app.configuration.browse_all_label").to_string())
-                            .ghost()
                             .small()
                             .desktop_disabled(!props.cli.has_snapshot || !props.cli.can_edit)
                             .on_click({
@@ -153,9 +152,8 @@ impl DesktopView {
                             }),
                     )
                     .child(
-                        desktop_button("reload-cli-config")
+                        desktop_secondary_button("reload-cli-config")
                             .label(rust_i18n::t!("app.configuration.reload").to_string())
-                            .ghost()
                             .small()
                             .tooltip_with_action(
                                 rust_i18n::t!("app.configuration.reload_tooltip").to_string(),
@@ -177,7 +175,7 @@ impl DesktopView {
             let label = config_target_label(target);
             let accessibility = write_target_accessibility_label(&label, selected);
             row.child(
-                desktop_button(id)
+                desktop_ghost_button(id)
                     .label(label)
                     .accessibility_label(accessibility)
                     .desktop_selected(selected, &colors)
@@ -253,9 +251,8 @@ impl DesktopView {
                     )
                     .gap_3()
                     .child(
-                        desktop_button("choose-workspace-from-config")
+                        desktop_primary_button("choose-workspace-from-config")
                             .label(rust_i18n::t!("app.workspace.choose_folder").to_string())
-                            .ghost()
                             .small()
                             .on_click({
                                 let view = view.clone();
@@ -296,9 +293,8 @@ impl DesktopView {
                             )
                             .gap_3()
                             .child(
-                                desktop_button("clear-config-search")
+                                desktop_ghost_button("clear-config-search")
                                     .label(rust_i18n::t!("app.configuration.clear_search").to_string())
-                                    .ghost()
                                     .small()
                                     .on_click({
                                         let view = view.clone();
@@ -351,7 +347,7 @@ impl DesktopView {
                     if row_count > shown {
                         list = list.child(
                             div().pt_2().child(
-                                desktop_button("config-show-more")
+                                desktop_ghost_button("config-show-more")
                                     .label(
                                         rust_i18n::t!("app.configuration.show_more", remaining = row_count - shown)
                                             .to_string(),
@@ -364,7 +360,6 @@ impl DesktopView {
                                         )
                                         .to_string(),
                                     )
-                                    .ghost()
                                     .small()
                                     .on_click({
                                         let view = view.clone();
@@ -476,7 +471,7 @@ impl DesktopView {
             let active = selected == Some(curated::CURATED_GROUP_NAME);
             let label = rust_i18n::t!("app.configuration.page_title").to_string();
             rail = rail.child(
-                desktop_button("config-category-curated")
+                desktop_ghost_button("config-category-curated")
                     .accessibility_label(label.clone())
                     .child(nav_entry_content(
                         "config-category-label-curated",
@@ -512,7 +507,7 @@ impl DesktopView {
                 name.clone()
             };
             rail = rail.child(
-                desktop_button(format!("config-category-{name}"))
+                desktop_ghost_button(format!("config-category-{name}"))
                     .accessibility_label(label.clone())
                     .child(nav_entry_content(
                         format!("config-category-label-{name}"),
@@ -631,12 +626,11 @@ impl DesktopView {
         } else if setting.editable {
             let path = setting.path.clone();
             header = header.child(
-                desktop_button(format!("config-edit-{path}"))
+                desktop_ghost_button(format!("config-edit-{path}"))
                     .label(rust_i18n::t!("app.configuration.edit").to_string())
                     .accessibility_label(
                         rust_i18n::t!("app.configuration.edit_target", target = setting.path.as_str()).to_string(),
                     )
-                    .ghost()
                     .small()
                     .desktop_disabled(!can_edit)
                     .on_click({
@@ -748,7 +742,7 @@ impl DesktopView {
             let label = config_target_label(target);
             let accessibility = write_target_accessibility_label(&label, selected);
             row.child(
-                desktop_button(match target {
+                desktop_ghost_button(match target {
                     protocol::ConfigTarget::User => "config-target-user",
                     protocol::ConfigTarget::Workspace => "config-target-workspace",
                     protocol::ConfigTarget::Project => "config-target-project",
@@ -768,7 +762,7 @@ impl DesktopView {
         });
 
         group = group.child(target_buttons).child(
-            desktop_default_button("browse-cli-config")
+            desktop_secondary_button("browse-cli-config")
                 .label(rust_i18n::t!("app.configuration.browse_all").to_string())
                 .accessibility_label(rust_i18n::t!("app.configuration.browse_all_label").to_string())
                 .desktop_disabled(!props.has_snapshot || !props.can_edit)
@@ -921,26 +915,25 @@ impl DesktopView {
                                     .flex()
                                     .gap_2()
                                     .child(
-                                        desktop_default_button("cancel-cli-config-edit")
+                                        desktop_secondary_button("cancel-cli-config-edit")
                                             .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
                                             .on_click(cx.listener(|view, _, window, cx| {
                                                 view.close_cli_config_editor(window, cx)
                                             })),
                                     )
                                     .child(
-                                        desktop_glass_secondary_primary_button(
-                                            "save-cli-config-edit",
-                                            &colors,
-                                            self.config_write_pending || !self.can_edit_cli_settings(),
-                                        )
-                                        .label(if self.config_write_pending {
-                                            rust_i18n::t!("app.configuration.saving").to_string()
-                                        } else {
-                                            rust_i18n::t!("app.configuration.save_reload").to_string()
-                                        })
-                                        .on_click(
-                                            cx.listener(|view, _, window, cx| view.submit_cli_config_edit(window, cx)),
-                                        ),
+                                        desktop_primary_button("save-cli-config-edit")
+                                            .desktop_disabled(
+                                                self.config_write_pending || !self.can_edit_cli_settings(),
+                                            )
+                                            .label(if self.config_write_pending {
+                                                rust_i18n::t!("app.configuration.saving").to_string()
+                                            } else {
+                                                rust_i18n::t!("app.configuration.save_reload").to_string()
+                                            })
+                                            .on_click(cx.listener(|view, _, window, cx| {
+                                                view.submit_cli_config_edit(window, cx)
+                                            })),
                                     ),
                             ),
                     )

@@ -1,7 +1,6 @@
 //! Installed-font selection reuses the retained Kit command palette.
 
-use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_button, settings_row};
-use gpui_kit::component::button::ButtonVariants;
+use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_ghost_button, settings_row};
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, App, Context, Entity, Window};
@@ -114,13 +113,12 @@ impl DesktopView {
         settings_row(
             label.clone(),
             "",
-            desktop_button(id)
+            desktop_ghost_button(id)
                 .label(display.to_string())
                 .accessibility_label(
                     rust_i18n::t!("app.appearance.choose_current", label = label.as_str(), value = display.as_str())
                         .to_string(),
                 )
-                .ghost()
                 .on_click({
                     let view = view.clone();
                     move |_, window: &mut Window, cx: &mut App| {

@@ -59,7 +59,7 @@ impl DesktopView {
             label.push_str(display::MIDDOT);
             label.push_str(rust_i18n::t!("app.transcript.activity_failed", count = failed).as_ref());
         }
-        let toggle = desktop_button(format!("activity-group-{}", head.id))
+        let toggle = desktop_ghost_button(format!("activity-group-{}", head.id))
             .child(
                 div()
                     .w_full()
@@ -88,7 +88,6 @@ impl DesktopView {
                 }
             ))
             .toggled(head.activity_expanded)
-            .ghost()
             .small()
             .flex_1()
             .min_w_0()
@@ -141,11 +140,10 @@ impl DesktopView {
     /// xsmall icon box centers on the narrower slot lane; the bleed stays
     /// inside the row gaps.
     fn activity_group_cta(head_id: &str, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
-        desktop_button(format!("activity-group-open-activity-{head_id}"))
+        desktop_ghost_button(format!("activity-group-open-activity-{head_id}"))
             .icon(IconName::Activity)
             .accessibility_label(InspectorTab::Activity.label())
             .tooltip(InspectorTab::Activity.label())
-            .ghost()
             .xsmall()
             .when(!revealed, |button| button.invisible())
             .tab_stop(false)
@@ -159,9 +157,8 @@ impl DesktopView {
     pub(super) fn tool_output_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
         let output_id = item.id.clone();
         let output_title = item.title.to_string();
-        desktop_button(format!("tool-open-output-{}", item.id))
+        desktop_ghost_button(format!("tool-open-output-{}", item.id))
             .icon(IconName::Terminal)
-            .ghost()
             .xsmall()
             .accessibility_label(
                 rust_i18n::t!("app.inspector.view_output_for", title = output_title.as_str()).to_string(),
@@ -178,9 +175,8 @@ impl DesktopView {
     /// separate shell. English literal: new strings stay untranslated.
     pub(super) fn tool_terminal_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
         let row_id = item.id.clone();
-        desktop_button(format!("tool-open-terminal-{}", item.id))
+        desktop_ghost_button(format!("tool-open-terminal-{}", item.id))
             .icon(IconName::SquareTerminal)
-            .ghost()
             .xsmall()
             .accessibility_label(TERMINAL_CTA_LABEL.to_string())
             .tooltip(TERMINAL_CTA_LABEL.to_string())
@@ -270,9 +266,8 @@ impl DesktopView {
     /// change view must not hide behind hover.
     pub(super) fn diff_changes_cta(item_id: &str, cx: &mut Context<Self>) -> impl IntoElement {
         let id = item_id.to_string();
-        desktop_button(format!("diff-open-changes-{item_id}"))
+        desktop_ghost_button(format!("diff-open-changes-{item_id}"))
             .label(rust_i18n::t!("app.inspector.tab_changes").to_string())
-            .ghost()
             .xsmall()
             .tab_stop(false)
             .on_click(cx.listener(move |view, _, _, cx| {

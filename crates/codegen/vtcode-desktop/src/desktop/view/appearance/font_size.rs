@@ -36,7 +36,7 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .children([-1i16, 1].into_iter().enumerate().map(|(index, delta)| {
-                    desktop_button(format!("font-{key}-{index}"))
+                    desktop_ghost_button(format!("font-{key}-{index}"))
                         .label(if delta < 0 { "−" } else { "+" })
                         .accessibility_label(format!(
                             "{} {label}",
@@ -46,7 +46,6 @@ impl DesktopView {
                                 rust_i18n::t!("app.appearance.increase")
                             }
                         ))
-                        .ghost()
                         .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
                         .on_click({
                             let view = view.clone();

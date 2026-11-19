@@ -221,7 +221,7 @@ impl DesktopView {
             group = group.child(settings_row(
                 rust_i18n::t!("app.settings.login_items.approval_title").to_string(),
                 rust_i18n::t!("app.settings.login_items.approval_hint").to_string(),
-                desktop_button("open-login-items")
+                desktop_secondary_button("open-login-items")
                     .label(rust_i18n::t!("app.settings.login_items.open_settings").to_string())
                     .on_click(move |_, _: &mut Window, cx: &mut App| open_login_settings(cx)),
                 colors,

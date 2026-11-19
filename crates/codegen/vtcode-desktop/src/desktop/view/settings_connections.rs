@@ -119,9 +119,8 @@ impl DesktopView {
                         .child(settings_row(
                             rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(),
                             command.clone(),
-                            desktop_button("copy-terminal-command")
+                            desktop_ghost_button("copy-terminal-command")
                                 .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
-                                .ghost()
                                 .small()
                                 .on_click({
                                     move |_, window: &mut Window, cx: &mut App| {
@@ -149,11 +148,10 @@ impl DesktopView {
                                 run_command.clone(),
                                 {
                                     let view = view.clone();
-                                    desktop_button("continue-builtin-terminal")
+                                    desktop_primary_button("continue-builtin-terminal")
                                         .label(
                                             rust_i18n::t!("app.settings.connections.terminal_builtin_run").to_string(),
                                         )
-                                        .ghost()
                                         .small()
                                         .on_click(move |_, window: &mut Window, cx: &mut App| {
                                             view.update(cx, |view, cx| {

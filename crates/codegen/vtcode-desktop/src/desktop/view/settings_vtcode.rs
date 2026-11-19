@@ -144,9 +144,8 @@ impl DesktopView {
                             .child(command.clone()),
                     )
                     .child(
-                        desktop_button("copy-credential-command")
+                        desktop_ghost_button("copy-credential-command")
                             .label(rust_i18n::t!("gpui_component.Input.Copy").to_string())
-                            .ghost()
                             .on_click(move |_, window, app| {
                                 app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()));
                                 super::super::notifications::copied_to_clipboard(window, app);

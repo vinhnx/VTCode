@@ -361,10 +361,9 @@ impl DesktopView {
                 "app.transcript.expand"
             })
         );
-        let header = desktop_button("custom-themes-toggle")
+        let header = desktop_ghost_button("custom-themes-toggle")
             .accessibility_label(toggle_label)
             .toggled(expanded)
-            .ghost()
             .w_full()
             .px_0()
             .child(
@@ -418,7 +417,7 @@ impl DesktopView {
             }));
         }
         body.child(
-            desktop_button("custom-theme-new")
+            desktop_secondary_button("custom-theme-new")
                 .icon(IconName::Plus)
                 .label(rust_i18n::t!("app.appearance.custom_theme_new").to_string())
                 .on_click({
@@ -460,7 +459,7 @@ impl DesktopView {
             .gap_1()
             .w_full()
             .child(
-                desktop_button(apply_id)
+                desktop_ghost_button(apply_id)
                     .accessibility_label(apply_label)
                     .desktop_selected(active, colors)
                     .flex_1()
@@ -507,9 +506,8 @@ impl DesktopView {
                     ),
             )
             .child(
-                desktop_button(edit_id)
+                desktop_ghost_button(edit_id)
                     .icon(IconName::Pencil)
-                    .ghost()
                     .small()
                     .accessibility_label(edit_label)
                     .on_click({
@@ -522,9 +520,8 @@ impl DesktopView {
                     }),
             )
             .child(
-                desktop_button(delete_id)
+                desktop_danger_button(delete_id)
                     .icon(IconName::Trash)
-                    .ghost()
                     .small()
                     .accessibility_label(delete_label)
                     .on_click({
@@ -602,7 +599,7 @@ impl DesktopView {
                             ThemeMode::Dark => "app.settings.appearance.dark",
                         })
                         .to_string();
-                        desktop_button(format!(
+                        desktop_ghost_button(format!(
                             "custom-theme-mode-{}",
                             if mode == ThemeMode::Light { "light" } else { "dark" }
                         ))
@@ -674,7 +671,7 @@ impl DesktopView {
                     .justify_end()
                     .gap_2()
                     .child(
-                        desktop_button("custom-theme-cancel")
+                        desktop_secondary_button("custom-theme-cancel")
                             .label(rust_i18n::t!("app.appearance.custom_theme_cancel").to_string())
                             .on_click({
                                 let view = view.clone();
@@ -684,7 +681,7 @@ impl DesktopView {
                             }),
                     )
                     .child(
-                        desktop_default_button("custom-theme-save")
+                        desktop_primary_button("custom-theme-save")
                             .label(rust_i18n::t!("app.appearance.custom_theme_save").to_string())
                             .on_click({
                                 let view = view.clone();

@@ -52,9 +52,8 @@ impl DesktopView {
                 .min_w_0()
                 .gap_1()
                 .child(
-                    desktop_button(format!("tool-{}", item.id))
+                    desktop_ghost_button(format!("tool-{}", item.id))
                         .accessibility_label(details_label())
-                        .ghost()
                         .small()
                         .text_color(themes::muted_text(&colors))
                         .child(transcript_icon_slot(Self::render_transcript_tool_indicator(
@@ -72,9 +71,8 @@ impl DesktopView {
                         })),
                 )
                 .child(
-                    desktop_button(format!("tool-file-{item_id}"))
+                    desktop_ghost_button(format!("tool-file-{item_id}"))
                         .accessibility_label(format!("View changes: {path}"))
-                        .ghost()
                         .small()
                         .text_color(themes::muted_text(&colors))
                         .min_w_0()
@@ -98,9 +96,8 @@ impl DesktopView {
                     row.child(div().text_sm().text_color(themes::muted_text(&colors)).child(status.clone()))
                 })
                 .child(
-                    desktop_button(format!("tool-chevron-{item_id}"))
+                    desktop_ghost_button(format!("tool-chevron-{item_id}"))
                         .accessibility_label(details_label())
-                        .ghost()
                         .small()
                         .text_color(themes::muted_text(&colors))
                         .child(transcript_chevron_lane(item.expanded))
@@ -112,7 +109,7 @@ impl DesktopView {
                 )
                 .into_any_element()
         } else {
-            desktop_button(format!("tool-{}", item.id))
+            desktop_ghost_button(format!("tool-{}", item.id))
                 .accessibility_label(
                     rust_i18n::t!(
                         "app.transcript.details_label",
@@ -127,7 +124,6 @@ impl DesktopView {
                     .to_string(),
                 )
                 .tooltip(format!("{} · {status}", item.title))
-                .ghost()
                 // Small keeps the shared title spine: every transcript
                 // disclosure row (tool, activity, notice, turn header) starts
                 // its title at the same inset + icon slot + gap.
@@ -219,7 +215,7 @@ impl DesktopView {
                             .justify_end()
                             .gap_1()
                             .child(
-                                desktop_button(format!("copy-tool-output-{}", item.id))
+                                desktop_ghost_button(format!("copy-tool-output-{}", item.id))
                                     .icon(IconName::Copy)
                                     .accessibility_label(
                                         rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
@@ -230,7 +226,6 @@ impl DesktopView {
                                     } else {
                                         rust_i18n::t!("app.transcript.copy_full_output").to_string()
                                     })
-                                    .ghost()
                                     .xsmall()
                                     .on_click(move |_, window, app| {
                                         app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(

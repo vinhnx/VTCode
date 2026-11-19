@@ -316,7 +316,7 @@ impl DesktopView {
                 settings_group_box(cleanup_title.clone(), &colors).child(settings_row(
                     cleanup_title,
                     rust_i18n::t!("app.settings.storage.cleanup_description").to_string(),
-                    desktop_button("storage-review")
+                    desktop_secondary_button("storage-review")
                         .label(rust_i18n::t!("app.settings.storage.review").to_string())
                         .accessibility_label(rust_i18n::t!("app.settings.storage.cleanup_title").to_string())
                         .on_click({
@@ -334,7 +334,7 @@ impl DesktopView {
                 settings_group_box(worktrees_title.clone(), &colors).child(settings_row(
                     worktrees_title,
                     rust_i18n::t!("app.settings.storage.worktrees_description").to_string(),
-                    desktop_button("storage-manage-worktrees")
+                    desktop_secondary_button("storage-manage-worktrees")
                         .label(rust_i18n::t!("app.settings.storage.manage").to_string())
                         .accessibility_label(rust_i18n::t!("app.settings.storage.worktrees_title").to_string())
                         .on_click({
@@ -368,10 +368,10 @@ impl DesktopView {
             .gap_2()
             .child(row_title(total, colors))
             .child(
-                desktop_button("storage-refresh")
+                desktop_secondary_button("storage-refresh")
                     .label(rust_i18n::t!("app.settings.storage.refresh").to_string())
                     .small()
-                    .disabled(props.storage.loading)
+                    .desktop_disabled(props.storage.loading)
                     .on_click({
                         let view = view.clone();
                         move |_, _: &mut Window, cx: &mut App| {
@@ -403,7 +403,7 @@ impl DesktopView {
                 .into_any_element();
         }
         if let Some(error) = props.storage.error.as_ref() {
-            let retry = desktop_button("storage-retry")
+            let retry = desktop_secondary_button("storage-retry")
                 .label(rust_i18n::t!("app.settings.storage.retry").to_string())
                 .small()
                 .on_click({
@@ -520,9 +520,8 @@ impl DesktopView {
             .flex_col()
             .gap_4()
             .child(
-                desktop_button("storage-back")
+                desktop_ghost_button("storage-back")
                     .label(rust_i18n::t!("app.settings.storage.back").to_string())
-                    .ghost()
                     .small()
                     .on_click({
                         let view = view.clone();
@@ -547,7 +546,7 @@ impl DesktopView {
                     .gap_2()
                     .child(div().text_sm().text_color(colors.danger).child(error.clone()))
                     .child(
-                        desktop_button("storage-review-retry")
+                        desktop_secondary_button("storage-review-retry")
                             .label(rust_i18n::t!("app.settings.storage.retry").to_string())
                             .small()
                             .on_click({
@@ -628,9 +627,8 @@ impl DesktopView {
             .flex_col()
             .gap_4()
             .child(
-                desktop_button("storage-back")
+                desktop_ghost_button("storage-back")
                     .label(rust_i18n::t!("app.settings.storage.back").to_string())
-                    .ghost()
                     .small()
                     .on_click({
                         let view = view.clone();
@@ -670,7 +668,7 @@ impl DesktopView {
                     .gap_2()
                     .child(div().text_sm().text_color(colors.danger).child(error.clone()))
                     .child(
-                        desktop_button("storage-worktrees-retry")
+                        desktop_secondary_button("storage-worktrees-retry")
                             .label(rust_i18n::t!("app.settings.storage.retry").to_string())
                             .small()
                             .on_click({

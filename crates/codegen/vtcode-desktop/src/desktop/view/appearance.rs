@@ -133,10 +133,9 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let preview = terminal_panel::terminal_scheme_preview(scheme, mode, &colors);
         let label = scheme.label();
-        desktop_button(format!("terminal-scheme-{}", scheme.id()))
+        desktop_ghost_button(format!("terminal-scheme-{}", scheme.id()))
             .accessibility_label(label.clone())
             .toggled(active)
-            .ghost()
             .w(px(88.))
             .flex_shrink_0()
             // Fixed height like the theme swatches: the button's content row
@@ -523,7 +522,7 @@ impl DesktopView {
                     .children(preferences::ReducedMotionPreference::ALL.into_iter().map(|preference| {
                         let label = preference.label();
                         let selected = preference == current;
-                        desktop_button(format!("reduce-motion-{}", preference.id()))
+                        desktop_ghost_button(format!("reduce-motion-{}", preference.id()))
                             .label(label.clone())
                             .accessibility_label(
                                 rust_i18n::t!(
@@ -548,7 +547,6 @@ impl DesktopView {
                                     rust_i18n::t!("app.appearance.allow_animations").to_string()
                                 }
                             })
-                            .ghost()
                             .toggled(selected)
                             .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
                             .on_click({
@@ -652,7 +650,7 @@ impl DesktopView {
                                     } else {
                                         "app.settings.appearance.edit_profile"
                                     };
-                                    desktop_button(format!("edit-{id}-profile"))
+                                    desktop_ghost_button(format!("edit-{id}-profile"))
                                         .label(label.clone())
                                         .accessibility_label(
                                             rust_i18n::t!(profile_action_key, profile = label).to_string(),
@@ -687,7 +685,7 @@ impl DesktopView {
                                 // Both arrays stay `Copy` so the `Fn` listener
                                 // can reuse them on every click.
                                 let visible = [show_light, show_dark];
-                                desktop_button(if forward { "next-themes" } else { "previous-themes" })
+                                desktop_ghost_button(if forward { "next-themes" } else { "previous-themes" })
                                     .icon(if forward {
                                         IconName::ChevronRight
                                     } else {
@@ -701,7 +699,6 @@ impl DesktopView {
                                         })
                                         .to_string(),
                                     )
-                                    .ghost()
                                     .small()
                                     .on_click({
                                         let view = view.clone();
@@ -851,7 +848,7 @@ impl DesktopView {
         ));
 
         content = content.child(
-            desktop_default_button("reset-appearance")
+            desktop_danger_button("reset-appearance")
                 .label(rust_i18n::t!("app.settings.appearance.reset").to_string())
                 .on_click({
                     let view = view.clone();

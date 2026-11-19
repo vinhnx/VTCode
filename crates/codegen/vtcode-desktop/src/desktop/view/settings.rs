@@ -419,7 +419,7 @@ impl DesktopView {
                 ));
                 let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
                 items.push(
-                    desktop_button("settings-nav-configuration")
+                    desktop_ghost_button("settings-nav-configuration")
                         .accessibility_label(config_label.clone())
                         .child(nav_entry_content(
                             "settings-nav-label-configuration",
@@ -446,7 +446,7 @@ impl DesktopView {
                 None => vtcode_nav_mark(),
             };
             items.push(
-                desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
+                desktop_ghost_button(format!("settings-nav-{tab:?}").to_lowercase())
                     .accessibility_label(tab.label())
                     .child(nav_entry_content(
                         format!("settings-nav-label-{tab:?}").to_lowercase(),
@@ -491,7 +491,7 @@ impl DesktopView {
                 view.select_settings_page_from_keyboard(SettingsTab::PAGE_COUNT - 1, window, cx)
             }))
             .child(
-                desktop_button("settings-filter-search")
+                desktop_ghost_button("settings-filter-search")
                     .child(
                         div()
                             .w_full()
@@ -507,7 +507,6 @@ impl DesktopView {
                         &OpenSettingsSearch,
                         Some(key_context::DESKTOP),
                     )
-                    .ghost()
                     .small()
                     .w_full()
                     .justify_start()

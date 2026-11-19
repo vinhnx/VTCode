@@ -212,7 +212,7 @@ impl DesktopView {
                     } else {
                         rust_i18n::t!("app.inspector.filter_by_status", status = entry.label.as_str()).to_string()
                     };
-                    desktop_button(format!("activity-summary-{}", activity_state_slug(state)))
+                    desktop_ghost_button(format!("activity-summary-{}", activity_state_slug(state)))
                         .child(
                             div()
                                 .w_full()
@@ -240,7 +240,6 @@ impl DesktopView {
                         .tooltip(tooltip)
                         .toggled(active)
                         .selected(active)
-                        .ghost()
                         .small()
                         .w_full()
                         .justify_start()
@@ -280,9 +279,8 @@ impl DesktopView {
                             .child(notice),
                     )
                     .child(
-                        desktop_button("activity-search-history")
+                        desktop_ghost_button("activity-search-history")
                             .icon(IconName::Search)
-                            .ghost()
                             .small()
                             .accessibility_label(search_label.clone())
                             .tooltip(search_label)
@@ -354,9 +352,8 @@ impl DesktopView {
                                                     let view = weak_view.clone();
                                                     let change_id = format!("{}:changes", row.id);
                                                     let path = path.to_string();
-                                                    desktop_button(format!("activity-change-{}", row.id))
+                                                    desktop_ghost_button(format!("activity-change-{}", row.id))
                                                         .icon(IconName::Pencil)
-                                                        .ghost()
                                                         .small()
                                                         .accessibility_label(format!("View changes: {path}"))
                                                         .on_click(move |_, _, app| {
@@ -379,9 +376,8 @@ impl DesktopView {
                                                 let view = weak_view.clone();
                                                 let jump_id = row.id.clone();
                                                 let jump_title = row.title.to_string();
-                                                desktop_button(format!("activity-jump-{}", row.id))
+                                                desktop_ghost_button(format!("activity-jump-{}", row.id))
                                                     .icon(IconName::MessageSquare)
-                                                    .ghost()
                                                     .small()
                                                     .accessibility_label(
                                                         rust_i18n::t!(
@@ -408,9 +404,8 @@ impl DesktopView {
                                                 let view = weak_view.clone();
                                                 let output_id = row.id.clone();
                                                 let output_title = row.title.to_string();
-                                                desktop_button(format!("activity-output-{}", row.id))
+                                                desktop_ghost_button(format!("activity-output-{}", row.id))
                                                     .icon(IconName::Terminal)
-                                                    .ghost()
                                                     .small()
                                                     .accessibility_label(
                                                         rust_i18n::t!(

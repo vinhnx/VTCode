@@ -200,12 +200,11 @@ impl DesktopView {
                         .gap_2()
                         .child(div().text_sm().text_color(colors.danger).child(error.clone()))
                         .child(
-                            desktop_button(format!("retry-mcp-app-{}-{index}", item.id))
+                            desktop_ghost_button(format!("retry-mcp-app-{}-{index}", item.id))
                                 .label(rust_i18n::t!("app.preview.retry").to_string())
                                 .accessibility_label(
                                     rust_i18n::t!("app.preview.retry_for", uri = preview.uri.as_str()).to_string(),
                                 )
-                                .ghost()
                                 .xsmall()
                                 .on_click(cx.listener(move |view, _, _, cx| {
                                     view.retry_mcp_app_preview(&retry_id, &retry_uri, cx);

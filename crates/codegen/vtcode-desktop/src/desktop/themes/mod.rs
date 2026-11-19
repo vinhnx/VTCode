@@ -25,10 +25,6 @@ pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
     validate as validate_custom_theme,
 };
-mod glass;
-pub(super) use glass::{
-    glass_disabled_wash, glass_primary_rest, glass_primary_rest_on_popover, glass_primary_rest_on_secondary,
-};
 mod terminal;
 pub(super) use terminal::{ciapre_ansi_slots, latte_ansi_slots, light_ansi_slots};
 mod toolbar;

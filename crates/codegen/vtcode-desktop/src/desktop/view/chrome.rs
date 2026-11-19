@@ -37,7 +37,7 @@ impl DesktopView {
                     .justify_between()
                     .child(eyebrow_label(workspace_section, &theme.colors))
                     .child(
-                        desktop_button("choose-workspace")
+                        desktop_ghost_button("choose-workspace")
                             .tooltip_with_action(
                                 rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string(),
                                 &ChooseWorkspace,
@@ -50,7 +50,6 @@ impl DesktopView {
                             } else {
                                 rust_i18n::t!("app.workspace.open").to_string()
                             })
-                            .ghost()
                             .desktop_disabled(
                                 self.workspace_picker_open
                                     || !self.workspace_switch_idle()
@@ -90,7 +89,7 @@ impl DesktopView {
                 .w_full()
                 .gap_2()
                 .child(
-                    desktop_button("new-session")
+                    desktop_ghost_button("new-session")
                         .tooltip_with_action(
                             rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
                             &NewSession,
@@ -98,13 +97,12 @@ impl DesktopView {
                         )
                         .label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                         .icon(IconName::Plus)
-                        .ghost()
                         .flex_1()
                         .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(
-                    desktop_button("close-session")
+                    desktop_ghost_button("close-session")
                         .tooltip_with_action(
                             rust_i18n::t!("app.navigation.close_session").to_string(),
                             &CloseSession,
@@ -112,7 +110,6 @@ impl DesktopView {
                         )
                         .icon(IconName::X)
                         .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string())
-                        .ghost()
                         .desktop_disabled(self.selected_session_id.is_none() || !self.new_thread_available())
                         .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                 ),
@@ -129,14 +126,13 @@ impl DesktopView {
                     .is_some_and(|selected| selected.display().to_string() == *path);
                 let label = workspace_short_name(path).to_string();
                 div().w_full().child(
-                    desktop_button(opaque_path_element_id("workspace", path))
+                    desktop_ghost_button(opaque_path_element_id("workspace", path))
                         .accessibility_label(if current {
                             rust_i18n::t!(i18n::WORKSPACE_CURRENT_LABEL, workspace = label).to_string()
                         } else {
                             label.clone()
                         })
                         .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
-                        .ghost()
                         .toggled(current)
                         .w_full()
                         .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
@@ -235,7 +231,7 @@ impl DesktopView {
                                                     )
                                                 })
                                                 .child(
-                                                    desktop_button(format!("session-{session_id}"))
+                                                    desktop_ghost_button(format!("session-{session_id}"))
                                                         .accessibility_label(if running {
                                                             rust_i18n::t!(
                                                                 i18n::SESSION_RUNNING_THREAD_LABEL,
@@ -263,7 +259,6 @@ impl DesktopView {
                                                                 &cx.theme().colors,
                                                             ))
                                                         })
-                                                        .ghost()
                                                         .toggled(selected)
                                                         // Single-tab-stop list: arrows drive the shared
                                                         // highlight, so rows stay out of Tab order.
@@ -363,9 +358,8 @@ impl DesktopView {
                         // cluster; the thread header is its pointer home —
                         // beside the marker naming the running state.
                         .child(
-                            desktop_button("background-exec")
+                            desktop_ghost_button("background-exec")
                                 .icon(IconName::ChevronsDown)
-                                .ghost()
                                 .small()
                                 .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
                                 .tooltip(rust_i18n::t!("app.composer.background_operation_tooltip").to_string())
@@ -384,9 +378,8 @@ impl DesktopView {
                         .child(title.to_string()),
                 )
                 .child(
-                    desktop_button("thread-header-new")
+                    desktop_ghost_button("thread-header-new")
                         .icon(IconName::Plus)
-                        .ghost()
                         .small()
                         .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                         .tooltip_with_action(
@@ -398,9 +391,8 @@ impl DesktopView {
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(
-                    desktop_button("thread-header-cli")
+                    desktop_ghost_button("thread-header-cli")
                         .icon(IconName::Terminal)
-                        .ghost()
                         .small()
                         .accessibility_label(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
                         .tooltip(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
@@ -439,14 +431,13 @@ impl DesktopView {
             .items_center()
             .gap_3()
             .child(
-                desktop_button("navigate-back")
+                desktop_ghost_button("navigate-back")
                     .accessibility_label(if pending_back {
                         rust_i18n::t!("app.navigation.back_navigating").to_string()
                     } else {
                         rust_i18n::t!("app.navigation.back").to_string()
                     })
                     .icon(IconName::ArrowLeft)
-                    .ghost()
                     .small()
                     .loading(pending_back)
                     .when(swipe_cue == Some(NavigationDirection::Back), |button| {
@@ -461,14 +452,13 @@ impl DesktopView {
                     .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
             )
             .child(
-                desktop_button("navigate-forward")
+                desktop_ghost_button("navigate-forward")
                     .accessibility_label(if pending_forward {
                         rust_i18n::t!("app.navigation.forward_navigating").to_string()
                     } else {
                         rust_i18n::t!("app.navigation.forward").to_string()
                     })
                     .icon(IconName::ArrowRight)
-                    .ghost()
                     .small()
                     .loading(pending_forward)
                     .when(swipe_cue == Some(NavigationDirection::Forward), |button| {
@@ -673,10 +663,9 @@ impl DesktopView {
             .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
             .gap_1();
         group = group.child(
-            desktop_button("search-commands")
+            desktop_ghost_button("search-commands")
                 .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string())
                 .icon(IconName::Search)
-                .ghost()
                 .tooltip_with_action(
                     rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
                     &OpenCommandPalette,

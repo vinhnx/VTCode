@@ -123,7 +123,7 @@ impl DesktopView {
                 })
                 .when_some(workspace_name, |title, name| {
                     title.child(
-                        desktop_button("welcome-workspace")
+                        desktop_secondary_button("welcome-workspace")
                             .accessibility_label(
                                 rust_i18n::t!("app.transcript.change_workspace", name = name.as_str()).to_string(),
                             )
@@ -196,14 +196,13 @@ impl DesktopView {
                     );
                 } else if self.history_has_earlier {
                     history_bar = history_bar.child(
-                        desktop_button("load-earlier-history")
+                        desktop_ghost_button("load-earlier-history")
                             .label(if self.history_page_loading {
                                 rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string()
                             } else {
                                 rust_i18n::t!(i18n::PALETTE_HISTORY_LOAD).to_string()
                             })
                             .small()
-                            .ghost()
                             .tooltip(rust_i18n::t!("app.transcript.load_earlier_tooltip").to_string())
                             .desktop_disabled(self.history_page_loading || self.running)
                             .on_click(cx.listener(|view, _, _, cx| view.request_earlier_history(cx))),
@@ -413,7 +412,7 @@ impl DesktopView {
                     .gap_2()
                     .child(transcript_icon_slot(div()))
                     .child(
-                        desktop_button(format!("turn-work-{turn_id}"))
+                        desktop_ghost_button(format!("turn-work-{turn_id}"))
                             .accessibility_label(format!(
                                 "{} {}",
                                 if expanded {
@@ -436,7 +435,6 @@ impl DesktopView {
                                     .child(div().min_w_0().flex_1().child(InspectorTab::Activity.label()))
                                     .child(transcript_chevron_lane(expanded)),
                             )
-                            .ghost()
                             .small()
                             .flex_1()
                             .min_w_0()
@@ -702,12 +700,11 @@ impl DesktopView {
                             }))
                             .when(copyable, |slot| {
                                 slot.child(
-                                    desktop_button(format!("copy-message-{}", item.id))
+                                    desktop_ghost_button(format!("copy-message-{}", item.id))
                                         .ml_auto()
                                         .icon(IconName::Copy)
                                         .accessibility_label(rust_i18n::t!("app.transcript.copy_message").to_string())
                                         .tooltip(rust_i18n::t!("app.transcript.copy_message").to_string())
-                                        .ghost()
                                         .xsmall()
                                         .tab_stop(false)
                                         .on_click(move |_, window, app| {

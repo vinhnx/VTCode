@@ -76,21 +76,24 @@ impl DesktopView {
                             // in-app, everything else opens externally.
                             .when(attachment.is_image, |actions| {
                                 actions.child(
-                                    desktop_button(opaque_path_element_id("view-echo-attachment", &attachment.path))
-                                        .icon(IconName::Eye)
-                                        .accessibility_label(rust_i18n::t!("app.composer.view_attachment").to_string())
-                                        .ghost()
-                                        .xsmall()
-                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                    desktop_ghost_button(opaque_path_element_id(
+                                        "view-echo-attachment",
+                                        &attachment.path,
+                                    ))
+                                    .icon(IconName::Eye)
+                                    .accessibility_label(rust_i18n::t!("app.composer.view_attachment").to_string())
+                                    .xsmall()
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
                                             this.open_image_viewer(view_path.clone(), window, cx);
-                                        })),
+                                        },
+                                    )),
                                 )
                             })
                             .child(
-                                desktop_button(opaque_path_element_id("open-echo-attachment", &attachment.path))
+                                desktop_ghost_button(opaque_path_element_id("open-echo-attachment", &attachment.path))
                                     .icon(IconName::ExternalLink)
                                     .accessibility_label(rust_i18n::t!("app.composer.open_attachment").to_string())
-                                    .ghost()
                                     .xsmall()
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.open_file_in_editor(&open_path, editor, window, cx);

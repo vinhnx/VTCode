@@ -2,7 +2,6 @@ use std::{sync::Arc, time::Duration};
 
 use gpui_kit::Styled;
 use gpui_kit::base::{Easing, TextView, TextViewMotion, TextViewStyle};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, ClipboardItem, ImageCacheError, ImageSource, SharedString, TestSupportExt, div, relative};
@@ -367,11 +366,8 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         })
         .code_block_actions(|block, _, _| {
             let code = block.code();
-            Button::new("copy-code")
-                .tab_stop(true)
-                .cursor_pointer()
+            super::view::desktop_ghost_button("copy-code")
                 .label(rust_i18n::t!("app.markdown.copy_code").to_string())
-                .ghost()
                 .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
                     super::notifications::copied_to_clipboard(window, cx);

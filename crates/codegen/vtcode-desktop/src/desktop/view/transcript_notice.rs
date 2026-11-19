@@ -144,7 +144,7 @@ impl DesktopView {
             };
             let stack_id = item.id.clone();
             header = header.child(
-                desktop_button(format!("notice-stack-toggle-{}", item.id))
+                desktop_ghost_button(format!("notice-stack-toggle-{}", item.id))
                     .accessibility_label(
                         rust_i18n::t!(
                             "app.transcript.details_label",
@@ -154,7 +154,6 @@ impl DesktopView {
                         )
                         .to_string(),
                     )
-                    .ghost()
                     .small()
                     .flex_shrink_0()
                     .text_color(chrome.title_color)
@@ -175,7 +174,7 @@ impl DesktopView {
             };
             let details_id = item.id.clone();
             header = header.child(
-                desktop_button(format!("notice-details-{}", item.id))
+                desktop_ghost_button(format!("notice-details-{}", item.id))
                     .accessibility_label(
                         rust_i18n::t!(
                             "app.transcript.details_label",
@@ -185,7 +184,6 @@ impl DesktopView {
                         )
                         .to_string(),
                     )
-                    .ghost()
                     .small()
                     .flex_shrink_0()
                     .text_color(chrome.title_color)

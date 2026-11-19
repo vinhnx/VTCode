@@ -242,10 +242,9 @@ impl DesktopView {
                         lane.role(gpui_kit::Role::Label).aria_label(caption.clone()).child(caption)
                     }),
             );
-        desktop_button(id)
+        desktop_ghost_button(id)
             .accessibility_label(if badged { format!("{label} ({badge})") } else { label })
             .toggled(active)
-            .ghost()
             .w(px(SWATCH_CELL_WIDTH))
             .flex_shrink_0()
             .h(px(SWATCH_CELL_HEIGHT))

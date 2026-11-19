@@ -161,21 +161,21 @@ impl DesktopView {
                     .flex_wrap()
                     .gap_2()
                     .child(
-                        desktop_default_button("sync-cli-theme")
+                        desktop_secondary_button("sync-cli-theme")
                             .label(sync_label.as_str())
                             .tooltip_with_action(sync_label.as_str(), &SyncCliTheme, Some(key_context::DESKTOP))
                             .desktop_disabled(!props.can_sync)
                             .dispatches_desktop_action(SyncCliTheme, props.focus_handle.clone()),
                     )
                     .child(
-                        desktop_default_button("reload-cli-settings")
+                        desktop_secondary_button("reload-cli-settings")
                             .label(reload_label.as_str())
                             .tooltip_with_action(reload_label.as_str(), &ReloadCliSettings, Some(key_context::DESKTOP))
                             .desktop_disabled(!props.can_reload)
                             .dispatches_desktop_action(ReloadCliSettings, props.focus_handle.clone()),
                     )
                     .child(
-                        desktop_default_button("use-cli-theme")
+                        desktop_secondary_button("use-cli-theme")
                             .label(use_theme_label.as_str())
                             .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
                             .on_click({

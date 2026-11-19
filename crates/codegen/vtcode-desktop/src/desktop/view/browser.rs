@@ -281,7 +281,7 @@ impl DesktopView {
                                                     )
                                                 })
                                                 .child(
-                                                    desktop_button(format!("browser-session-{session_id}"))
+                                                    desktop_ghost_button(format!("browser-session-{session_id}"))
                                                         .accessibility_label(accessible_label)
                                                         .child(
                                                             div()
@@ -323,7 +323,6 @@ impl DesktopView {
                                                                     )
                                                                 }),
                                                         )
-                                                        .ghost()
                                                         .toggled(selected)
                                                         // Single-tab-stop list: arrows drive the shared
                                                         // highlight, so rows stay out of Tab order.
@@ -387,7 +386,7 @@ impl DesktopView {
                         .items_center()
                         .gap_1()
                         .child(
-                            desktop_button("browser-new-session")
+                            desktop_ghost_button("browser-new-session")
                                 .tooltip_with_action(
                                     rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
                                     &NewSession,
@@ -395,20 +394,18 @@ impl DesktopView {
                                 )
                                 .label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                                 .icon(IconName::Plus)
-                                .ghost()
                                 .small()
                                 .desktop_disabled(!can_new_thread)
                                 .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                         )
                         .child(
-                            desktop_button("browser-close-session")
+                            desktop_ghost_button("browser-close-session")
                                 .tooltip_with_action(
                                     rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string(),
                                     &CloseSession,
                                     Some(key_context::DESKTOP),
                                 )
                                 .label(rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string())
-                                .ghost()
                                 .small()
                                 .desktop_disabled(!can_close_thread)
                                 .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),

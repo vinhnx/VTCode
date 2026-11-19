@@ -366,9 +366,8 @@ impl DesktopView {
                             .child(Icon::new(IconName::Folder).small())
                             .child(div().text_sm().truncate().min_w_0().child(cwd_label))
                             .child(
-                                desktop_button("terminal-tab-close")
+                                desktop_ghost_button("terminal-tab-close")
                                     .icon(IconName::X)
-                                    .ghost()
                                     .small()
                                     .accessibility_label(hide_label.clone())
                                     .tooltip_with_action(
@@ -380,9 +379,8 @@ impl DesktopView {
                             ),
                     )
                     .child(
-                        desktop_button("terminal-collapse")
+                        desktop_ghost_button("terminal-collapse")
                             .icon(collapse_icon)
-                            .ghost()
                             .small()
                             .accessibility_label(hide_label.clone())
                             .tooltip_with_action(hide_label, &ToggleTerminal, Some(key_context::DESKTOP))

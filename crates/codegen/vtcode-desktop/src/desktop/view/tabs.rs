@@ -243,8 +243,7 @@ impl DesktopView {
             .collect::<Vec<_>>();
         let current = self.selected_session_id.clone();
         let weak_view = cx.entity().downgrade();
-        let overflow = desktop_button("thread-tabs-menu")
-            .ghost()
+        let overflow = desktop_ghost_button("thread-tabs-menu")
             .xsmall()
             .dropdown_caret(true)
             .accessibility_label("Open threads")
@@ -280,9 +279,8 @@ impl DesktopView {
             .track_scroll(&self.tab_strip_scroll)
             .suffix(
                 div().flex().items_center().child(overflow).child(
-                    desktop_button("thread-tab-new")
+                    desktop_ghost_button("thread-tab-new")
                         .icon(IconName::Plus)
-                        .ghost()
                         .small()
                         .accessibility_label("New thread")
                         .tooltip("New thread")
@@ -352,9 +350,8 @@ impl DesktopView {
                         .child(Icon::new(IconName::MessageSquare).small()),
                 )
                 .suffix(
-                    desktop_button(format!("thread-tab-close-{id}"))
+                    desktop_ghost_button(format!("thread-tab-close-{id}"))
                         .icon(IconName::X)
-                        .ghost()
                         .xsmall()
                         .accessibility_label(format!("Close tab {title}"))
                         .on_click(cx.listener(move |this, _, window, cx| {

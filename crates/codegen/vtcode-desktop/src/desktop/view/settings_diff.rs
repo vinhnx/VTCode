@@ -84,7 +84,7 @@ impl DesktopView {
     where
         Select: Fn(&mut Self, &mut Context<Self>) + 'static,
     {
-        desktop_button(id)
+        desktop_ghost_button(id)
             .label(label)
             .small()
             .rounded(ButtonRounded::Medium)

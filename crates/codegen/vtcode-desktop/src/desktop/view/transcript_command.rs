@@ -24,11 +24,10 @@ impl DesktopView {
             .flex_col()
             .child(
                 div().flex().justify_end().child(
-                    desktop_button(format!("copy-tool-command-{}", item.id))
+                    desktop_ghost_button(format!("copy-tool-command-{}", item.id))
                         .icon(IconName::Copy)
                         .accessibility_label(rust_i18n::t!("app.markdown.copy_code").to_string())
                         .tooltip(rust_i18n::t!("app.markdown.copy_code").to_string())
-                        .ghost()
                         .xsmall()
                         .when(!revealed, |button| button.opacity(0.).focus_visible(|style| style.opacity(1.)))
                         .on_click(move |_, window, app| {

@@ -101,10 +101,12 @@ fn shortcut_reset_from_defaults_reports_noop(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.apply_theme(crate::desktop::themes::ThemeId::ciapre::BLUE.into(), window, cx);
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
         select_settings_category(window, 3, cx);
+        assert_button_fill(window, "reset-shortcuts", gpui_kit::rgb(0xa63333).into());
         window.click("reset-shortcuts", cx);
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already match"));

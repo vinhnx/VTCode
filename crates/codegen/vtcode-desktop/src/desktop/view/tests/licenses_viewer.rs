@@ -199,10 +199,18 @@ fn viewer_groups_first_party_and_third_party_documents(cx: &mut TestAppContext) 
 
 #[gpui_kit::test]
 fn copy_copies_the_active_document(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (window, view) = open_desktop(cx);
     open_viewer(window, &view, LicenseDocument::Mit, cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        for id in [
+            "copy-license-document",
+            "open-license-in-editor",
+            "close-license-viewer",
+        ] {
+            assert_button_fill(window, id, cx.theme().colors.button_secondary);
+        }
         window.click("copy-license-document", cx);
     })
     .unwrap();

@@ -432,6 +432,19 @@ fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mu
     }
 }
 
+fn assert_button_fill(window: &gpui_kit::Window, id: &'static str, fill: gpui_kit::Hsla) {
+    let bounds = window.find(id).bounds().scale(window.scale_factor());
+    assert!(
+        window.painted_quads().iter().any(|quad| {
+            quad.background == fill.into()
+                && quad.bounds.contains(&bounds.center())
+                && (quad.bounds.size.width.0 - bounds.size.width.0).abs() <= 1.0
+                && (quad.bounds.size.height.0 - bounds.size.height.0).abs() <= 1.0
+        }),
+        "{id} should paint its expected resting fill {fill:?}"
+    );
+}
+
 /// Center a settings-content target in the panel viewport before clicking it.
 /// Geometry-driven, so a group added above the target cannot silently push the
 /// click out of view (Kit rejects clicks on clipped elements).

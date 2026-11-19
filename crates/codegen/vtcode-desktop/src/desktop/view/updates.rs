@@ -437,7 +437,7 @@ impl DesktopView {
                             .when_some(release_url.as_ref(), |row, url| {
                                 let url = url.clone();
                                 row.child(
-                                    desktop_default_button("open-release-notes")
+                                    desktop_secondary_button("open-release-notes")
                                         .label(rust_i18n::t!("app.changelog.view_full_notes").to_string())
                                         .on_click(move |_, _, cx| {
                                             cx.open_url(&url);
@@ -445,7 +445,7 @@ impl DesktopView {
                                 )
                             })
                             .child(
-                                desktop_glass_popover_primary_button("close-changelog", &colors, false)
+                                desktop_primary_button("close-changelog")
                                     .label(rust_i18n::t!("app.changelog.done").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_changelog(window, cx);
@@ -519,11 +519,14 @@ impl DesktopView {
                             .child(div().flex_shrink_0().font_semibold().child(title))
                             .child(div().min_w_0().truncate().child(message)),
                     )
-                    .child(desktop_button("release-notes-open").label(view_label).ghost().small().on_click(
-                        cx.listener(|view, _, window, cx| {
-                            view.view_release_notes_from_banner(window, cx);
-                        }),
-                    ))
+                    .child(
+                        desktop_ghost_button("release-notes-open")
+                            .label(view_label)
+                            .small()
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.view_release_notes_from_banner(window, cx);
+                            })),
+                    )
                     .child(desktop_dismiss_button("release-notes-dismiss", dismiss_label).small().on_click(
                         cx.listener(|view, _, _, cx| {
                             view.dismiss_release_notes_banner(cx);

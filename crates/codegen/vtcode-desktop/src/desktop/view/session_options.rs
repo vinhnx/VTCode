@@ -213,7 +213,7 @@ impl DesktopView {
             })
             .map(capitalize_agent_label)
             .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_LOADING_VALUE).to_string());
-        desktop_button("composer-mode")
+        desktop_ghost_button("composer-mode")
             .open(self.palette_open_for(&[PaletteKind::Modes]))
             .child(
                 div()
@@ -232,7 +232,6 @@ impl DesktopView {
                 Some(key_context::DESKTOP),
             )
             .dropdown_caret(true)
-            .ghost()
             .small()
             .desktop_disabled(!self.can_select_session_options())
             .dispatches_desktop_action(OpenModePicker, self.focus_handle.clone())

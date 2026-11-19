@@ -236,10 +236,9 @@ impl DesktopView {
                         footer.child(div().text_xs().text_color(colors.danger).child(history_error))
                     })
                     .child(
-                        desktop_button("conversation-search-load-earlier")
+                        desktop_ghost_button("conversation-search-load-earlier")
                             .label(history_label)
                             .icon(IconName::ArrowUp)
-                            .ghost()
                             .small()
                             .desktop_disabled(!can_load_history)
                             .on_click(move |_, _, cx| {
@@ -350,10 +349,9 @@ impl DesktopView {
             command = command.footer(move |_, _, _| {
                 let view = search_all_view.clone();
                 div().id("model-search-all-footer").px_3().py_2().child(
-                    desktop_button("model-search-all")
+                    desktop_ghost_button("model-search-all")
                         .label(rust_i18n::t!("app.composer.search_all_models").to_string())
                         .icon(IconName::Search)
-                        .ghost()
                         .small()
                         .w_full()
                         .on_click(move |_, window, cx| {

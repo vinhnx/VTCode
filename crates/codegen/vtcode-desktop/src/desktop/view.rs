@@ -141,7 +141,6 @@ mod file_rename;
 mod file_tree;
 mod files_panel;
 mod full_access_confirm;
-mod glass_buttons;
 mod goal;
 mod ids;
 mod inspector_changes;
@@ -206,9 +205,9 @@ use backend_events::*;
 pub(crate) use bootstrap::run;
 #[cfg(test)]
 use bootstrap::{dispatch_handoff_links, init_keybindings, open_or_activate_main_window};
+pub(super) use components::desktop_ghost_button;
 use components::*;
 use file_tree::{file_tree_items, find_file_tree_item};
-use glass_buttons::*;
 use inspector_changes::*;
 use launch_bounds::{desktop_window_options, main_screen_visible_bounds, reduced_transparency_requested};
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};

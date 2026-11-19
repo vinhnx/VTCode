@@ -215,7 +215,7 @@ impl DesktopView {
     pub(super) fn render_inspector_files_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let mut body = inspector_tab_body().id("inspector-files-tab").test_support();
         body = body.child(panel_header(
-            desktop_button("focus-files")
+            desktop_ghost_button("focus-files")
                 .label(rust_i18n::t!("app.files.workspace_files").to_string())
                 .accessibility_label(rust_i18n::t!("app.files.focus_tree").to_string())
                 .tooltip_with_action(
@@ -223,9 +223,8 @@ impl DesktopView {
                     &OpenWorkspaceFiles,
                     Some(key_context::DESKTOP),
                 )
-                .ghost()
                 .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
-            desktop_button("refresh-files")
+            desktop_ghost_button("refresh-files")
                 .label(rust_i18n::t!("app.files.refresh").to_string())
                 .accessibility_label(rust_i18n::t!(i18n::FILES_REFRESH_TOOLTIP).to_string())
                 .tooltip_with_action(
@@ -233,7 +232,6 @@ impl DesktopView {
                     &RefreshWorkspace,
                     Some(key_context::DESKTOP),
                 )
-                .ghost()
                 .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
         ));
         let searching = self.file_search_hit_count.is_some();
@@ -531,9 +529,8 @@ impl DesktopView {
                             .child(rust_i18n::t!("app.inspector.history_tag").to_string()),
                     )
                     .child(
-                        desktop_button("output-follow-latest")
+                        desktop_ghost_button("output-follow-latest")
                             .icon(IconName::Activity)
-                            .ghost()
                             .small()
                             .accessibility_label(rust_i18n::t!("app.inspector.follow_latest").to_string())
                             .tooltip(rust_i18n::t!("app.inspector.follow_latest_tooltip").to_string())
@@ -551,7 +548,7 @@ impl DesktopView {
                 )
             })
             .child(
-                desktop_button("copy-output")
+                desktop_ghost_button("copy-output")
                     .icon(IconName::Copy)
                     .accessibility_label(if has_more_output || output.truncated {
                         rust_i18n::t!("app.inspector.copy_loaded").to_string()
@@ -563,7 +560,6 @@ impl DesktopView {
                     } else {
                         rust_i18n::t!("app.inspector.copy_captured").to_string()
                     })
-                    .ghost()
                     .small()
                     .on_click(cx.listener(move |view, _, window, cx| {
                         let text = restored_output_for_copy(
@@ -582,13 +578,12 @@ impl DesktopView {
             let mut recovery = div().w_full().px_3().py_1().flex().items_center().gap_2();
             if has_more_output {
                 recovery = recovery.child(
-                    desktop_button("load-more-output")
+                    desktop_ghost_button("load-more-output")
                         .label(if output_page_loading {
                             rust_i18n::t!("app.inspector.loading_output").to_string()
                         } else {
                             rust_i18n::t!("app.inspector.load_more_output").to_string()
                         })
-                        .ghost()
                         .small()
                         .accessibility_label(if output_page_loading {
                             rust_i18n::t!("app.inspector.loading_more_output").to_string()
