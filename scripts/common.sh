@@ -158,6 +158,10 @@ run_repo_governance_gates() {
     print_status "Checking tracked file sizes..."
     run_python_gate "Tracked file sizes within budget!" "Oversized tracked files found." \
         scripts/check_large_files.py || failed=1
+    print_status "Checking for out-of-scope MCP provider docs..."
+    run_python_gate "No new third-party MCP provider docs." \
+        "New MCP provider guide/example added (out of scope; see docs/CONTRIBUTING.md)." \
+        scripts/check_mcp_provider_docs.py || failed=1
     return "$failed"
 }
 
