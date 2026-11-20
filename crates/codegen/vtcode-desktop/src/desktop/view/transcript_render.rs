@@ -249,7 +249,7 @@ impl DesktopView {
                 .children(self.render_transcript_overlays(cx))
                 .into_any_element();
             transcript_content = transcript_content.child(scroller);
-            if self.turn_awaiting_content() {
+            if self.turn_activity_visible() {
                 transcript_content =
                     transcript_content.child(turn_pending_row(self.status.clone(), self.content_width(), cx));
             }
@@ -349,6 +349,15 @@ impl DesktopView {
     /// Whether the active turn is still waiting for its first content.
     pub(super) fn turn_awaiting_content(&self) -> bool {
         self.running && !self.turn_content_seen
+    }
+
+    /// Whether the turn activity shimmer shows in the thread: any running
+    /// turn keeps its live status label up, and idle hides it. The label
+    /// tracks the newest started item (see `turn_activity_status`), so it
+    /// stays meaningful for the whole turn instead of clearing at the
+    /// first content event.
+    pub(super) fn turn_activity_visible(&self) -> bool {
+        self.running
     }
 
     /// Compact loading status shown above the transcript while a history

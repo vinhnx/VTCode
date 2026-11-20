@@ -112,22 +112,24 @@ fn global_shimmer_covers_thinking_then_follows_the_turn(cx: &mut TestAppContext)
         assert!(window.try_find("turn-pending").is_some());
         assert!(window.try_find("sidebar-status-loading").is_some());
 
-        // First content clears the pending row; the running turn keeps the shimmer.
+        // Content keeps the pending row up: the activity shimmer follows the
+        // whole running turn alongside the global shimmer.
         view.update(cx, |view, cx| {
             view.handle_backend_event(agent_message_update_event("session", "turn-1", "item-1", "hello back"), cx);
             assert!(view.running);
             assert!(view.turn_content_seen);
         });
         window.render_frame(cx);
-        assert!(window.try_find("turn-pending").is_none());
+        assert!(window.try_find("turn-pending").is_some());
         assert!(window.try_find("sidebar-status-loading").is_some());
 
-        // Turn end clears the shimmer with the turn.
+        // Turn end clears both with the turn.
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed_event("session", "turn-1"), cx);
             assert!(!view.running);
         });
         window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_none());
         assert!(window.try_find("sidebar-status-loading").is_none());
     })
     .unwrap();

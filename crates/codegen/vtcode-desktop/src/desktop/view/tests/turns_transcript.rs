@@ -795,7 +795,7 @@ fn palette_entry_ids_follow_action_identity_without_exposing_payloads() {
 }
 
 #[gpui_kit::test]
-fn turn_pending_row_shows_until_first_content_then_clears(cx: &mut TestAppContext) {
+fn turn_activity_row_tracks_running_turn_until_end(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     running_turn_without_content(cx, &view);
     cx.update_window(window, |_, window, cx| {
@@ -815,23 +815,46 @@ fn turn_pending_row_shows_until_first_content_then_clears(cx: &mut TestAppContex
         window.render_frame(cx);
         assert!(window.try_find("turn-pending").is_some());
 
-        // First content clears the row while the turn keeps running.
+        // Content no longer clears the row: the activity shimmer follows the
+        // whole running turn, and a started item refreshes its label.
         view.update(cx, |view, cx| {
-            view.handle_backend_event(agent_message_update_event("session", "turn-1", "item-1", "hello back"), cx);
+            view.handle_backend_event(tool_invocation_started_event("session", "turn-1", "item-1", "read_file"), cx);
             assert!(view.running);
             assert!(view.turn_content_seen);
         });
         window.render_frame(cx);
-        assert!(window.try_find("turn-pending").is_none());
+        assert!(window.try_find("turn-pending").is_some());
         assert!(window.try_find("transcript-row-item-1").is_some());
+        let running = rust_i18n::t!("app.activity.tool", tool = "read_file").to_string();
+        assert_eq!(window.find("turn-pending").label(), Some(running.as_str()));
 
-        // Turn end keeps it cleared.
+        // Turn end clears it: idle hides the shimmer.
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_completed_event("session", "turn-1"), cx);
             assert!(!view.running);
         });
         window.render_frame(cx);
         assert!(window.try_find("turn-pending").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn tool_invocation_started_updates_activity_label(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    running_turn_without_content(cx, &view);
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(tool_invocation_started_event("session", "turn-1", "item-1", "read_file"), cx);
+        let running = rust_i18n::t!("app.activity.tool", tool = "read_file").to_string();
+        assert_eq!(view.status, running);
+        // Non-activity items leave the current label untouched.
+        view.handle_backend_event(agent_message_update_event("session", "turn-1", "item-2", "hello"), cx);
+        assert_eq!(view.status, running);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let running = rust_i18n::t!("app.activity.tool", tool = "read_file").to_string();
+        assert_eq!(window.find("turn-pending").label(), Some(running.as_str()));
     })
     .unwrap();
 }
@@ -870,7 +893,7 @@ fn turn_started_resets_content_seen_for_new_turn(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.try_find("turn-pending").is_none());
 
-        // A new turn starts: the pending row returns until its content arrives.
+        // A new turn starts: the activity shimmer returns with it.
         view.update(cx, |view, cx| {
             view.handle_backend_event(turn_started_event("session", "turn-2"), cx);
             assert!(view.running);

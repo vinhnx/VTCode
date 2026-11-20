@@ -273,6 +273,30 @@ fn agent_message_update_event(session_id: &str, turn_id: &str, item_id: &str, te
     })
 }
 
+fn tool_invocation_started_event(session_id: &str, turn_id: &str, item_id: &str, tool_name: &str) -> BackendEvent {
+    use vtcode_exec_events::{
+        ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem,
+    };
+
+    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: ThreadItem {
+                context: None,
+                id: item_id.into(),
+                details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+                    tool_name: tool_name.into(),
+                    arguments: None,
+                    tool_call_id: None,
+                    status: ToolCallStatus::InProgress,
+                    outcome: None,
+                })),
+            },
+        })),
+    })
+}
+
 fn plan_delta_notification(
     session_id: &str,
     turn_id: &str,

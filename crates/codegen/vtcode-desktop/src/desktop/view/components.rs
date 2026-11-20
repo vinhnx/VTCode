@@ -124,13 +124,15 @@ fn loading_marker_row_inner(
         .into_any_element()
 }
 
-/// Pending assistant row pinned below the transcript scroller while a turn
-/// runs with no content yet. It lives outside the measured list on purpose:
+/// Turn activity shimmer pinned below the transcript scroller while a turn
+/// runs; idle hides it. It lives outside the measured list on purpose:
 /// scroller geometry never churns when the row appears or clears. The label
-/// reuses the owned turn-phase status, so it tracks
-/// submitting/running/cancelling with no extra copy. The edge inset lives on
-/// the outer wrapper (mirroring the scroller's row wrapper), so the label
-/// text starts on the transcript spine instead of one step inside it.
+/// reuses the owned turn status, which tracks the newest started item
+/// (`turn_activity_status`) on top of the submitting/running/cancelling
+/// phases, so the thread names what the turn is doing until it completes.
+/// The edge inset lives on the outer wrapper (mirroring the scroller's row
+/// wrapper), so the label text starts on the transcript spine instead of
+/// one step inside it.
 pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> AnyElement {
     div()
         .id("turn-pending")
@@ -559,7 +561,7 @@ mod segmented;
 pub(in crate::desktop) use buttons::desktop_ghost_button;
 pub(super) use buttons::{
     DesktopButtonExt, desktop_danger_button, desktop_dismiss_button, desktop_primary_button, desktop_secondary_button,
-    zen_mode_toggle,
+    desktop_trigger_pill, zen_mode_toggle,
 };
 pub(super) use route_page::*;
 pub(super) use segmented::*;

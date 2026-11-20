@@ -729,6 +729,29 @@ fn invocation_tool_name(details: &vtcode_exec_events::ThreadItemDetails) -> Opti
     }
 }
 
+/// Short status label for a just-started runtime item, shown by the turn
+/// activity shimmer until a newer event replaces it. `None` leaves the
+/// current status untouched — output rows, messages, plan text, and other
+/// items carry no distinct activity of their own (the transcript shows
+/// their content right above the label, so it stays terse).
+pub(super) fn turn_activity_status(details: &vtcode_exec_events::ThreadItemDetails) -> Option<String> {
+    use vtcode_exec_events::ThreadItemDetails;
+    let status = match details {
+        ThreadItemDetails::Reasoning(_) => rust_i18n::t!("app.activity.thinking").to_string(),
+        ThreadItemDetails::CommandExecution(_) => rust_i18n::t!("app.activity.command").to_string(),
+        ThreadItemDetails::ToolInvocation(tool) => {
+            rust_i18n::t!("app.activity.tool", tool = tool.tool_name.as_str()).to_string()
+        }
+        ThreadItemDetails::McpToolCall(call) => {
+            rust_i18n::t!("app.activity.mcp_tool", tool = call.tool_name.as_str()).to_string()
+        }
+        ThreadItemDetails::WebSearch(_) => rust_i18n::t!("app.activity.web_search").to_string(),
+        ThreadItemDetails::FileChange(_) => rust_i18n::t!("app.activity.file_change").to_string(),
+        _ => return None,
+    };
+    Some(status)
+}
+
 /// Human title and lifecycle summary for a non-message activity item.
 ///
 /// Titles render in a single-line slot, but agent commands, queries, and

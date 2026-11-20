@@ -164,6 +164,16 @@ impl DesktopView {
                 if accepted && matches!(event.item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)) {
                     self.mark_runtime_output_truncated(&row_id, &event.item.id, false);
                 }
+                // The turn activity shimmer names what the turn is doing
+                // right now (thinking, running a command or tool, searching,
+                // editing) instead of a flat "Running"; each started item
+                // replaces the previous label until the turn ends.
+                if self.running
+                    && self.notification_matches(&notification.session_id, notification.turn_id.as_deref())
+                    && let Some(status) = turn_activity_status(&event.item.details)
+                {
+                    self.status = status;
+                }
             }
             ThreadEvent::ItemUpdated(event) => {
                 let mut item = event.item.clone();
