@@ -95,7 +95,7 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let label = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
         desktop_ghost_button("nav-browse-threads")
-            .icon(IconName::Clock)
+            .icon(IconName::ListTree)
             .rounded_lg()
             .when(self.zen_mode, |button| button.small())
             .desktop_selected(self.current_route() == Route::Browser, &colors)

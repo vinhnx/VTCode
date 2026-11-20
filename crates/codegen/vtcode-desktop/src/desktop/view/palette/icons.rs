@@ -18,9 +18,10 @@ pub(in crate::desktop::view) fn palette_action_icon(action: &PaletteAction) -> O
         PaletteAction::CloseOtherTabs => IconName::CopyX,
         PaletteAction::OpenInCli | PaletteAction::ShowActivityOutput { .. } => IconName::Terminal,
         PaletteAction::OpenConversationSearch { .. } | PaletteAction::OpenGoTo => IconName::Search,
-        PaletteAction::JumpToTranscriptItem { .. } | PaletteAction::BrowseThreads | PaletteAction::LoadSession(_) => {
-            IconName::MessageSquare
-        }
+        // Browse Threads owns the tree glyph everywhere (rail, zen chrome,
+        // palette); session rows keep the conversation square.
+        PaletteAction::BrowseThreads => IconName::ListTree,
+        PaletteAction::JumpToTranscriptItem { .. } | PaletteAction::LoadSession(_) => IconName::MessageSquare,
         PaletteAction::ChooseModel | PaletteAction::SelectModel { .. } => IconName::Bot,
         PaletteAction::ChooseWorkspace => IconName::FolderOpen,
         PaletteAction::RefreshSessions | PaletteAction::RefreshFiles => IconName::RefreshCw,
@@ -83,7 +84,7 @@ mod tests {
             (PaletteAction::ChooseWorkspace, Some(IconName::FolderOpen)),
             (PaletteAction::RefreshSessions, Some(IconName::RefreshCw)),
             (PaletteAction::RefreshFiles, Some(IconName::RefreshCw)),
-            (PaletteAction::BrowseThreads, Some(IconName::MessageSquare)),
+            (PaletteAction::BrowseThreads, Some(IconName::ListTree)),
             (PaletteAction::ToggleInspector, Some(IconName::PanelRight)),
             (PaletteAction::ToggleTheme, Some(IconName::SunMoon)),
             (PaletteAction::SelectFont { target: FontTarget::Ui, family: None }, Some(IconName::ALargeSmall)),

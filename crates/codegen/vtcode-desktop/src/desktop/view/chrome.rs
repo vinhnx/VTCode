@@ -647,8 +647,8 @@ impl DesktopView {
             .border_color(themes::soft_edge_color(&colors))
             .shadow_md()
             .fade_in("zen-toggle-float", cx.theme())
-            .child(self.render_browse_threads_button(cx))
             .child(self.render_go_home_button(true))
+            .child(self.render_browse_threads_button(cx))
             .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
             .child(zen_mode_toggle(true, faded, &self.focus_handle))
     }

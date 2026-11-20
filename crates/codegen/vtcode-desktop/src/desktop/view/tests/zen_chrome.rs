@@ -25,8 +25,12 @@ fn zen_floating_chrome_keeps_the_toggle_slot_and_exposes_navigation(cx: &mut Tes
             "toggle keeps its trailing x across the mode switch: docked={docked:?} floating={floating:?}"
         );
 
+        let home = window.find("nav-home").bounds();
+        let browse = window.find("nav-browse-threads").bounds();
         let back = window.find("navigate-back").bounds();
         let forward = window.find("navigate-forward").bounds();
+        assert!(home.right() <= browse.origin.x, "Home leads Browse Threads: {home:?} {browse:?}");
+        assert!(browse.right() <= back.origin.x, "Browse Threads precedes Back: {browse:?} {back:?}");
         assert!(back.right() <= forward.origin.x, "Back precedes Forward left-to-right: {back:?} {forward:?}");
         assert!(
             forward.right() <= floating.origin.x,
