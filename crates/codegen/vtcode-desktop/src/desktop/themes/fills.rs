@@ -75,10 +75,11 @@ pub(super) fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.button_danger_hover = primary_state_surface(danger, toward, danger_text, PRIMARY_HOVER_MAX_STEP);
     colors.button_danger_active = primary_state_surface(danger, toward, danger_text, PRIMARY_ACTIVE_MAX_STEP);
 
-    // Ghost selected/open states (palette triggers while their popup is up)
-    // and every other Kit `secondary_active` reader (stepper, title bar,
-    // table, and dock active fills) share the pressed depth: the resting
-    // fill read as no state change at all.
+    // Ghost selected states and every other Kit `secondary_active` reader
+    // (stepper, title bar, table, and dock active fills) share the pressed
+    // depth: the resting fill read as no state change at all. Dropdown
+    // triggers no longer ride this token while open — the vendored Kit
+    // keeps `open` paint-free, so the popup alone marks the state.
     colors.secondary_active = press;
     colors.popover = raised_surface;
     colors.popover_foreground = colors.foreground;

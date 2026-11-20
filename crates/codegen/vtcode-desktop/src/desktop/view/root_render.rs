@@ -442,7 +442,10 @@ impl Render for DesktopView {
                 view.confirm_delete_file(&action.path, window, cx)
             }))
             .when(self.session_change_allowed(None), |body| {
-                body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
+                body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_palette(window, cx)))
+                    .on_action(
+                        cx.listener(|view, _: &OpenEffortPicker, window, cx| view.open_model_options(window, cx)),
+                    )
             })
             .on_action(cx.listener(|_, _: &CloseWindow, window, cx| menu_bar::close_or_hide(window, cx)))
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))

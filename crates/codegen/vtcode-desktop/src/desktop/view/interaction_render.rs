@@ -204,9 +204,27 @@ impl DesktopView {
                 .child(div().flex_1().min_w_0().child(panel_title(interaction.title.clone(), &colors))),
         );
         // The first detail line carries the decision facts; the rest recede as
-        // supporting metadata.
+        // supporting metadata. Details, plan proposal, live status, stepper,
+        // and choice rows all live in one scroll region capped below the
+        // palette list height: a long interaction scrolls inside its frame
+        // instead of stretching the composer, while the header and the
+        // decision row stay pinned.
+        let mut body = div()
+            .id("interaction-body")
+            .w_full()
+            .min_h_0()
+            .lock_scroll_axis()
+            .test_support()
+            .max_h(px(360.))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .track_scroll(&self.interaction_scroll)
+            .overflow_y_scroll()
+            .vertical_scrollbar(&self.interaction_scroll)
+            .pr_1();
         for (detail_index, detail) in interaction.details.iter().enumerate() {
-            panel = panel.child(render_interaction_detail(detail, detail_index, detail_index == 0, cx));
+            body = body.child(render_interaction_detail(detail, detail_index, detail_index == 0, cx));
         }
         // The details are the collapsed preview; the toggle below reveals the
         // full proposal in the shared viewer before the choice rows, Edit plan
@@ -221,7 +239,7 @@ impl DesktopView {
             };
             let open_label = rust_i18n::t!("app.interaction.open_in_inspector").to_string();
             let edit_label = rust_i18n::t!("app.interaction.edit_plan").to_string();
-            panel = panel.child(
+            body = body.child(
                 div()
                     .id("interaction-plan-row")
                     .test_support()
@@ -262,7 +280,7 @@ impl DesktopView {
                     ),
             );
             if expanded && let Some(markdown) = interaction.plan_markdown.as_deref() {
-                panel = panel.child(render_markdown_view(
+                body = body.child(render_markdown_view(
                     "interaction-plan-proposal".to_string(),
                     markdown.into(),
                     MarkdownViewHeight::Panel,
@@ -282,7 +300,7 @@ impl DesktopView {
                     rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string(),
                 )
             };
-            panel = panel.child(
+            body = body.child(
                 div()
                     .id("interaction-response-status")
                     .test_support()
@@ -357,7 +375,7 @@ impl DesktopView {
                 };
                 StepperItem::new().child(div().min_w_0().max_w_full().truncate().child(title))
             });
-            panel = panel.child(
+            body = body.child(
                 div()
                     .id("interaction-question-progress")
                     .test_support()
@@ -385,7 +403,7 @@ impl DesktopView {
 
         if is_wizard {
             if let Some(step) = interaction.steps.get(step_index) {
-                panel = panel.child(self.render_question_step(step, step_index, window, cx));
+                body = body.child(self.render_question_step(step, step_index, window, cx));
             }
         } else {
             let choices = step_choices;
@@ -408,8 +426,9 @@ impl DesktopView {
             for (choice_index, choice) in choices.iter().enumerate() {
                 options = options.child(self.render_choice(choice, choice_index, total, effective_index, cx));
             }
-            panel = panel.child(options);
+            body = body.child(options);
         }
+        panel = panel.child(body);
 
         // The hint promises digit shortcuts, so it renders only where rows
         // exist to choose and no freeform answer owns the keys.

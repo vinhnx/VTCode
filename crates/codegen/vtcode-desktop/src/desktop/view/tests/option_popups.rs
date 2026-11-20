@@ -149,21 +149,21 @@ fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestApp
             window.click(button, cx);
             window.render_frame(cx);
             let popup = window.find("command-palette").bounds();
-            let composer = window.find("message-composer-frame").bounds();
-            assert!(popup.bottom() <= composer.top(), "{button} popup must stay above the input");
-            if button == "pick-model" {
-                assert!((popup.right() - composer.right()).abs() <= px(1.));
-            } else {
-                assert!((popup.left() - composer.left()).abs() <= px(1.));
-            }
+            // The panel follows its trigger pill: left edges aligned, opening
+            // above the pill row (the popup is the CTA's own dropdown, so it
+            // may cover the input).
+            let pill = window.find(button).bounds();
+            assert!(popup.bottom() <= pill.top() + px(1.), "{button} popup must open above its pill");
+            assert!((popup.left() - pill.left()).abs() <= px(1.), "{button} popup must align to its pill");
             assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
             window.press("escape", cx);
             window.render_frame(cx);
             assert!(view.read(cx).palette.is_none());
             assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "Keep\nthis\ndraft");
         }
-        // The attach button opens the tabbed picker; it aligns above the input
-        // exactly like the palette popups.
+        // The attach button opens the tabbed picker; it docks above the
+        // input aligned to the composer's left spine (the attach pill is the
+        // leftmost control, so the panel reads as anchored to it).
         window.click("attach-files", cx);
         window.render_frame(cx);
         let picker = window.find("attachment-picker-trap").bounds();
@@ -190,23 +190,28 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
             view.configuration = Some(runtime_options_config());
             view.sidebar_open = false;
             view.inspector_open = false;
-            view.open_model_palette(window, cx);
         });
+        // The trigger pill records its bounds on the composer's first frame;
+        // the popup anchors to those bounds from the frame it opens.
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_model_palette(window, cx));
         window.render_frame(cx);
         let initial_popup = window.find("command-palette").bounds();
         assert_eq!(initial_popup.size.width, px(392.));
-        let composer = window.find("message-composer-frame").bounds();
-        assert!(initial_popup.bottom() <= composer.top());
-        assert!((initial_popup.right() - composer.right()).abs() <= px(1.));
+        let pill = window.find("pick-model").bounds();
+        assert!(initial_popup.bottom() <= pill.top() + px(1.));
+        assert!((initial_popup.left() - pill.left()).abs() <= px(1.));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("one\ntwo\nthree\nfour\nfive", window, cx));
         });
         window.render_frame(cx);
         let popup = window.find("command-palette").bounds();
-        let composer = window.find("message-composer-frame").bounds();
-        assert!(popup.bottom() <= composer.top(), "popup must remain above the growing composer");
-        assert!(popup.top() < initial_popup.top());
+        // The panel tracks its pill, not the composer frame: a growing input
+        // pushes the frame top upward while the pill row (and the panel
+        // pinned above it) stay put.
+        assert!(popup.bottom() <= pill.top() + px(1.), "popup must remain above its pill");
+        assert_eq!(popup.origin, initial_popup.origin);
         assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
 
         window.press("escape", cx);
@@ -223,7 +228,7 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
 
         window.press("escape", cx);
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         let quick_popup = window.find("command-palette").bounds();
         assert_eq!(quick_popup.size.width, px(22. * 24.));
@@ -604,7 +609,7 @@ fn compact_model_picker_wraps_long_model_names_and_labels_the_current_effort(cx:
             }];
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
 
         let model_label = window.find("model-selected-name");
@@ -690,7 +695,7 @@ fn quick_model_picker_omits_recommendations_and_keeps_full_search_visible(cx: &m
             view.inspector_open = false;
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
 
         let popup = window.find("command-palette").bounds();
@@ -733,7 +738,7 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
             }];
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         assert_eq!(window.find("command-palette").bounds().size.width, px(352.));
@@ -761,7 +766,7 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
     settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.session_request = None);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         let search_all = window.find("model-search-all");
         let search_all_bounds = search_all.bounds();
@@ -843,7 +848,7 @@ fn compact_model_picker_shows_current_options_and_full_search_selects_the_real_r
             ];
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         let claude_id = palette_action_id(&super::super::PaletteAction::SelectModel {
             provider: "anthropic".into(),
@@ -902,13 +907,13 @@ fn compact_model_picker_shows_current_options_and_full_search_selects_the_real_r
     assert_eq!(params, json!({ "provider": "google", "model": "gemini-3.8-flash" }));
 }
 
-/// A palette trigger stays visibly open while its popup owns the composer.
-/// Kit paints `open` as selected styling but deliberately keeps trigger
-/// presentation out of accessibility metadata (base `Button::selected` sets
-/// paint only — selecting a button never implies `aria_toggled` — so the
-/// snapshot reads `None` either way). Assert the shared predicate through
-/// real open/close transitions instead, plus the predicate-to-Kit handoff
-/// on the helpers that return their `Button`.
+/// A palette trigger keeps its open state while its popup owns the composer:
+/// the state is call-site metadata only (the vendored Kit leaves `open`
+/// paint-free — the popup is the indicator), and base `Button::selected`
+/// never implies `aria_toggled`, so the snapshot reads `None` either way.
+/// Assert the shared predicate through real open/close transitions instead,
+/// plus the predicate-to-Kit handoff on the helpers that return their
+/// `Button`.
 #[gpui_kit::test]
 fn palette_triggers_show_open_state_while_their_popup_is_up(cx: &mut TestAppContext) {
     use super::super::PaletteKind;

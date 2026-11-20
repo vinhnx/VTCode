@@ -1,6 +1,6 @@
 use gpui::{
-    AnyElement, App, ClickEvent, Context, DismissEvent, Edges, ElementId, Entity, EventEmitter,
-    FocusHandle, Focusable, Hsla, InteractiveElement, IntoElement, Length, ParentElement, Render,
+    AnyElement, App, Bounds, ClickEvent, Context, DismissEvent, Edges, ElementId, Entity, EventEmitter,
+    FocusHandle, Focusable, Hsla, InteractiveElement, IntoElement, Length, ParentElement, Pixels, Render,
     RenderOnce, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window,
     deferred, div, prelude::FluentBuilder, px, rems,
 };
@@ -131,6 +131,10 @@ where
     icon: Option<Icon>,
     title_prefix: Option<SharedString>,
     focus_ring_enabled: bool,
+    /// Bounds of the trigger pill itself (`#input`), captured at prepaint.
+    /// The popup anchors and sizes to the pill, not the full-width wrapper
+    /// around it, so a compact trigger never opens a stretched menu.
+    trigger_bounds: Option<Bounds<Pixels>>,
 }
 
 /// A Select element.
@@ -296,6 +300,7 @@ where
             icon: None,
             title_prefix: None,
             focus_ring_enabled: true,
+            trigger_bounds: None,
         }
     }
 
@@ -541,8 +546,12 @@ where
         let is_focused = self.state.focus_handle.is_focused(window);
         let show_clean = self.state.cleanable && self.selected_index(cx).is_some();
         let bounds = self.state.bounds;
+        let trigger_bounds = self.trigger_bounds;
         let allow_open = !(self.state.open || self.state.disabled);
-        let outline_visible = self.state.open || (is_focused && !self.state.disabled);
+        // An open menu is its own state indicator: the trigger keeps its
+        // quiet paint while open and only the keyboard focus ring remains
+        // (when the menu is closed and the trigger is focused).
+        let outline_visible = !self.state.open && is_focused && !self.state.disabled;
 
         let (bg, fg) = input_style(self.state.disabled, cx);
 
@@ -563,6 +572,10 @@ where
                         .id("input")
                         .test_support()
                         .relative()
+                        .on_prepaint({
+                            let state = cx.entity();
+                            move |bounds, _, cx| state.update(cx, |r, _| r.trigger_bounds = Some(bounds))
+                        })
                         .flex()
                         .items_center()
                         .justify_between()
@@ -633,14 +646,20 @@ where
                         ),
                 )
                 .when(self.state.open, |this| {
+                    // Anchor and size to the trigger pill when its bounds are
+                    // known: the menu opens under the pill and, for
+                    // `Length::Auto`, is never narrower than it while letting
+                    // content grow it. The wrapper bounds remain the fallback
+                    // (and the placement anchor before the first prepaint).
+                    let anchor_bounds = trigger_bounds.unwrap_or(bounds);
                     this.child(
                         deferred(crate::popover::dropdown_popup(
                             ("select-popup", cx.entity_id()),
-                            bounds,
+                            anchor_bounds,
                             v_flex()
                                 .occlude()
                                 .map(|this| match self.state.menu_width {
-                                    Length::Auto => this.w(bounds.size.width),
+                                    Length::Auto => this.min_w(anchor_bounds.size.width),
                                     Length::Definite(w) => this.w(w),
                                 })
                                 .popover_style(cx)

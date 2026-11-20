@@ -1,6 +1,50 @@
 //! Composer panel: draft input, attachments, model/policy actions, send/cancel.
 
 use super::*;
+use gpui_kit::base::ElementExt as _;
+
+/// The composer trigger pills whose popups anchor to them. Each pill
+/// records its window-space bounds at prepaint (see
+/// [`DesktopView::composer_trigger_pill`]); the popup renderer reads the
+/// entry for the open palette kind.
+#[derive(Clone, Copy, Default)]
+pub(in crate::desktop::view) struct ComposerPillBounds {
+    model: Option<gpui_kit::Bounds<Pixels>>,
+    effort: Option<gpui_kit::Bounds<Pixels>>,
+    mode: Option<gpui_kit::Bounds<Pixels>>,
+    policy: Option<gpui_kit::Bounds<Pixels>>,
+}
+
+/// Identifies a composer trigger pill for bounds capture.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::desktop::view) enum ComposerPill {
+    Model,
+    Effort,
+    Mode,
+    Policy,
+}
+
+impl ComposerPillBounds {
+    fn set(&mut self, pill: ComposerPill, bounds: gpui_kit::Bounds<Pixels>) {
+        match pill {
+            ComposerPill::Model => self.model = Some(bounds),
+            ComposerPill::Effort => self.effort = Some(bounds),
+            ComposerPill::Mode => self.mode = Some(bounds),
+            ComposerPill::Policy => self.policy = Some(bounds),
+        }
+    }
+
+    /// Bounds for the open palette kind, when that kind is pill-owned.
+    pub(in crate::desktop::view) fn for_kind(&self, kind: &PaletteKind) -> Option<gpui_kit::Bounds<Pixels>> {
+        match kind {
+            PaletteKind::Models => self.model,
+            PaletteKind::ModelOptions => self.effort,
+            PaletteKind::Modes => self.mode,
+            PaletteKind::Permissions => self.policy,
+            _ => None,
+        }
+    }
+}
 
 impl DesktopView {
     pub(super) fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -283,9 +327,14 @@ impl DesktopView {
                         .overflow_hidden()
                         .fade_in("zen-composer-context-fade", cx.theme())
                         .child(self.render_attach_button(cx))
-                        .child(self.render_model_button(cx).max_w(px(224.)))
-                        .child(self.render_mode_button(cx))
-                        .child(self.render_policy_button(cx)),
+                        .child(self.composer_trigger_pill(
+                            ComposerPill::Model,
+                            self.render_model_button(cx).max_w(px(224.)),
+                            cx,
+                        ))
+                        .child(self.composer_trigger_pill(ComposerPill::Effort, self.render_effort_button(cx), cx))
+                        .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx))
+                        .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx)),
                 )
             })
             .when(!self.zen_mode, |buttons| {
@@ -299,8 +348,8 @@ impl DesktopView {
                         .min_w_0()
                         .fade_in("composer-secondary-fade", cx.theme())
                         .child(self.render_attach_button(cx))
-                        .child(self.render_policy_button(cx))
-                        .child(self.render_mode_button(cx)),
+                        .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx))
+                        .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx)),
                 )
             });
         let mut model_actions =
@@ -312,11 +361,17 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .when(!self.zen_mode, |actions| {
-                    actions.child(
-                        self.render_model_button(cx)
-                            .max_w(px(336.))
-                            .fade_in("pick-model-fade", cx.theme()),
-                    )
+                    actions
+                        .child(
+                            self.composer_trigger_pill(
+                                ComposerPill::Model,
+                                self.render_model_button(cx)
+                                    .max_w(px(336.))
+                                    .fade_in("pick-model-fade", cx.theme()),
+                                cx,
+                            ),
+                        )
+                        .child(self.composer_trigger_pill(ComposerPill::Effort, self.render_effort_button(cx), cx))
                 });
         // Running cluster: the frequent stop takes the primary fill (no red
         // anywhere in the cluster) and owns the emphasis alone while the
@@ -387,28 +442,17 @@ impl DesktopView {
             );
         }
         let buttons = buttons.child(model_actions);
+        // Composer popups mount at the panel level (mounting inside a
+        // trigger pill's subtree detaches the popup's focus trap) and anchor
+        // to their trigger pill's recorded bounds — see palette_render's
+        // `attach` placement and `composer_trigger_pill`.
         if self.palette_kind.is_composer_popup()
             && let Some(state) = self.palette.clone()
         {
-            if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
-                // The panel carries no horizontal pad, so the zero-size
-                // anchor docks flush at its trailing edge: the
-                // BottomRight-anchored popup ends on the frame edge.
-                panel = panel.child(
-                    div()
-                        .absolute()
-                        .top(gpui_kit::rems(0.5))
-                        .right_0()
-                        .w_0()
-                        .h_0()
-                        .child(self.render_command_palette(state, window, cx)),
-                );
-            } else {
-                panel = panel.child(self.render_command_palette(state, window, cx));
-            }
+            panel = panel.child(self.render_command_palette(state, window, cx));
         }
-        // The attachment picker is a composer-anchored popover, sibling to the
-        // palette popups so it docks above the input the same way.
+        // The attachment picker is a composer-anchored popover, sibling to
+        // the palette popups so it docks above the input the same way.
         if self.attachment_picker.is_some() {
             panel = panel.child(self.render_attachment_picker(cx));
         }
@@ -567,11 +611,29 @@ impl DesktopView {
         )
     }
 
-    /// Model picker button with the current effort and speed, shared by the
-    /// normal composer and the zen option cluster. Call sites add their own
-    /// width and fade: normal mode animates the button itself, while zen
-    /// fades the whole cluster at once. Zen renders the speed as quiet text
-    /// instead of the filled badge; effort is quiet in both modes.
+    /// Trigger pill wrapper: records the pill's window-space bounds at
+    /// prepaint every frame. The palette popup mounts at the composer panel
+    /// level (mounting inside this subtree detaches its focus trap) and
+    /// anchors to the recorded bounds via `anchored().attach`, so the panel
+    /// follows the CTA that opened it while keyboard navigation keeps
+    /// working.
+    fn composer_trigger_pill(&self, pill: ComposerPill, element: impl IntoElement, cx: &Context<Self>) -> AnyElement {
+        let view = cx.entity().downgrade();
+        div()
+            .min_w_0()
+            .on_prepaint(move |bounds, _, cx| {
+                view.update(cx, |view, _| view.composer_pill_bounds.set(pill, bounds));
+            })
+            .child(element)
+            .into_any_element()
+    }
+
+    /// Model picker button, shared by the normal composer and the zen option
+    /// cluster. Call sites add their own width and fade: normal mode animates
+    /// the button itself, while zen fades the whole cluster at once. Zen
+    /// renders the speed as quiet text instead of the filled badge. Reasoning
+    /// effort has its own pill (`render_effort_button`), so the model pill
+    /// opens the model list, not the effort panel.
     pub(super) fn render_model_button(&self, cx: &Context<Self>) -> Button {
         let colors = cx.theme().colors;
         let current_model = self
@@ -583,19 +645,14 @@ impl DesktopView {
                     .unwrap_or_else(|| configuration.model.clone())
             })
             .unwrap_or_else(|| rust_i18n::t!(i18n::COMPOSER_CHOOSE_MODEL).to_string());
-        let model_options = self.session_options();
-        let selected_effort = model_options
-            .filter(|options| options.supported_efforts.contains(&options.reasoning_effort))
-            .map(|options| composer_controls::runtime_option_label(&options.reasoning_effort));
-        let selected_speed = model_options
+        let selected_speed = self
+            .session_options()
             .and_then(|options| options.speed.as_deref())
             .map(composer_controls::runtime_option_label);
         let model_summary = std::iter::once(current_model.as_str())
-            .chain(selected_effort.as_deref())
             .chain(selected_speed.as_deref())
             .collect::<Vec<_>>()
             .join(display::MIDDOT);
-        // One muted tone for both quiet suffixes: effort always, speed in zen.
         let muted = themes::muted_text(&colors);
         let model_label = div()
             .min_w_0()
@@ -603,14 +660,6 @@ impl DesktopView {
             .items_center()
             .gap_1()
             .child(div().min_w_0().max_w(px(176.)).truncate().font_medium().child(current_model))
-            .when_some(selected_effort, |row, effort| {
-                row.child(composer_controls::quiet_option_suffix(
-                    "composer-model-effort",
-                    rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort).to_string(),
-                    &effort,
-                    muted,
-                ))
-            })
             .when_some(selected_speed, |row, speed| {
                 if self.zen_mode {
                     // Zen reads the tier as quiet text: the filled badge
@@ -627,11 +676,11 @@ impl DesktopView {
                     row.child(composer_controls::processing_tier_badge(&speed, cx))
                 }
             });
-        desktop_ghost_button("pick-model")
+        desktop_trigger_pill("pick-model")
             .accessibility_label(model_summary)
             .child(model_label)
             .dropdown_caret(true)
-            .open(self.palette_open_for(&[PaletteKind::Models, PaletteKind::ModelOptions]))
+            .open(self.palette_open_for(&[PaletteKind::Models]))
             .small()
             .overflow_hidden()
             .tooltip_with_action(
@@ -641,6 +690,41 @@ impl DesktopView {
             )
             .desktop_disabled(!self.model_selection_allowed())
             .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone())
+    }
+
+    /// Reasoning-effort picker button: the model pill's neighbor. Opens the
+    /// effort panel (`PaletteKind::ModelOptions`) without touching the model
+    /// selection, under the same gate the combined model pill used — the
+    /// panel renders its own fallback rows where the route's effort levels
+    /// are missing or unsupported.
+    pub(super) fn render_effort_button(&self, cx: &Context<Self>) -> Button {
+        let effort = self
+            .session_options()
+            .map(|options| composer_controls::runtime_option_label(&options.reasoning_effort))
+            .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_LOADING_VALUE).to_string());
+        desktop_trigger_pill("composer-effort")
+            .accessibility_label(rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort.as_str()).to_string())
+            .child(
+                div()
+                    .id("composer-effort-label")
+                    .test_support()
+                    .truncate()
+                    .font_medium()
+                    .child(effort),
+            )
+            .dropdown_caret(true)
+            .open(self.palette_open_for(&[PaletteKind::ModelOptions]))
+            .small()
+            .min_w_0()
+            .max_w(px(160.))
+            .overflow_hidden()
+            .tooltip_with_action(
+                rust_i18n::t!("app.composer.reasoning_effort_generic").to_string(),
+                &OpenEffortPicker,
+                Some(key_context::DESKTOP),
+            )
+            .desktop_disabled(!self.model_selection_allowed())
+            .dispatches_desktop_action(OpenEffortPicker, self.focus_handle.clone())
     }
 
     /// Execution-policy picker button shared by the normal composer and the
@@ -661,7 +745,7 @@ impl DesktopView {
         };
         let (permission_icon, permission_icon_color) =
             composer_controls::permission_indicator(permission_mode, cx.theme().colors);
-        desktop_ghost_button("composer-policy")
+        desktop_trigger_pill("composer-policy")
             .open(self.palette_open_for(&[PaletteKind::Permissions]))
             .accessibility_label(rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string())
             .tooltip_with_action(
@@ -689,7 +773,7 @@ impl DesktopView {
     /// Attachments entry point shared by the normal composer and the zen
     /// option cluster: same id, enablement, and picker in both modes.
     pub(super) fn render_attach_button(&self, cx: &Context<Self>) -> Button {
-        desktop_ghost_button("attach-files")
+        desktop_trigger_pill("attach-files")
             .icon(IconName::Plus)
             .open(self.attachment_picker.is_some())
             .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())

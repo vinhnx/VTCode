@@ -11,7 +11,7 @@ fn reasoning_effort_rail_labels_every_stop_and_home_end_jump(cx: &mut TestAppCon
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find(("effort-label", 0usize)).label(), Some("Low"));
         assert_eq!(window.find(("effort-label", 1usize)).label(), Some("Medium"));
@@ -71,7 +71,7 @@ fn reasoning_effort_options_accessible_label_tracks_the_cli_level(cx: &mut TestA
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
 
         let options = window.find("effort-options");
@@ -103,7 +103,7 @@ fn reasoning_effort_option_click_commits_the_selected_level(cx: &mut TestAppCont
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         // Levels render highest-first; index 2 is high in the low/medium/high fixture.
         assert_eq!(window.find(("effort-label", 1usize)).selected(), Some(true));
@@ -142,7 +142,7 @@ fn reasoning_effort_option_does_not_submit_at_its_boundary(cx: &mut TestAppConte
             view.configuration = Some(config);
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         assert!(view.read(cx).effort_focus.is_focused(window));
@@ -154,7 +154,7 @@ fn reasoning_effort_option_does_not_submit_at_its_boundary(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn compact_model_panel_disables_effort_rows_with_the_model_button(cx: &mut TestAppContext) {
+fn compact_model_panel_disables_effort_rows_with_the_effort_button(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(1);
     settle_fade_animations(cx);
@@ -164,10 +164,10 @@ fn compact_model_panel_disables_effort_rows_with_the_model_button(cx: &mut TestA
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
 
-        assert_ne!(window.find("pick-model").disabled(), Some(true));
+        assert_ne!(window.find("composer-effort").disabled(), Some(true));
         for index in 0..3usize {
             assert_ne!(
                 window.find(("effort-label", index)).disabled(),
@@ -176,14 +176,14 @@ fn compact_model_panel_disables_effort_rows_with_the_model_button(cx: &mut TestA
             );
         }
 
-        // A pending session request darkens the model button. The compact
+        // A pending session request darkens the effort button. The compact
         // panel must darken with it instead of leaving lit, clickable-looking
-        // effort rows behind a disabled model button.
+        // effort rows behind a disabled effort button.
         view.update(cx, |view, _| {
             view.session_request = Some(vtcode_desktop_protocol::method::CONFIG_OPTIONS);
         });
         window.render_frame(cx);
-        assert_eq!(window.find("pick-model").disabled(), Some(true));
+        assert_eq!(window.find("composer-effort").disabled(), Some(true));
         for index in 0..3usize {
             assert_eq!(
                 window.find(("effort-label", index)).disabled(),
@@ -206,7 +206,7 @@ fn reasoning_effort_slider_subscriptions_follow_palette_lifecycle(cx: &mut TestA
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
 
         view.update(cx, |view, cx| {

@@ -95,7 +95,7 @@ fn ctrl_f_b_move_by_char_and_ctrl_j_alt_enter_insert_newlines(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn ctrl_m_opens_and_toggles_model_options(cx: &mut TestAppContext) {
+fn ctrl_m_opens_and_toggles_the_model_list(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     focus_empty_composer(&window, &view, cx);
     cx.update_window(window, |_, window, cx| {
@@ -105,7 +105,7 @@ fn ctrl_m_opens_and_toggles_model_options(cx: &mut TestAppContext) {
         });
         window.press("ctrl-m", cx);
         window.render_frame(cx);
-        assert!(matches!(view.read(cx).palette_kind, PaletteKind::ModelOptions));
+        assert!(matches!(view.read(cx).palette_kind, PaletteKind::Models));
         window.press("ctrl-m", cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());

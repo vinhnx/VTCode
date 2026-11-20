@@ -606,7 +606,7 @@ fn selecting_a_model_switches_configuration_and_preserves_the_session(cx: &mut T
             ];
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         view.update(cx, |view, cx| view.run_palette_action(super::super::PaletteAction::ChooseModel, window, cx));

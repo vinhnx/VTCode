@@ -129,6 +129,7 @@ mod composer_controls;
 mod composer_highlight;
 mod composer_history;
 mod composer_render;
+use composer_render::{ComposerPill, ComposerPillBounds};
 mod config_editor_copy;
 mod config_search;
 mod configuration;
@@ -343,6 +344,7 @@ actions!(
         OpenConversationSearch,
         OpenSettingsSearch,
         OpenModelPicker,
+        OpenEffortPicker,
         OpenAddContext,
         OpenPermissions,
         OpenModePicker,
@@ -629,6 +631,10 @@ struct DesktopView {
     launch_handshake_pending: bool,
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,
+    /// Scroll region for the interaction body: long choice lists and plan
+    /// proposals scroll inside a capped panel instead of stretching the
+    /// composer (header and decision row stay pinned).
+    interaction_scroll: ScrollHandle,
     pending_interaction_response: Option<String>,
     /// A plan-edit hotkey is in flight: the service owns the editor and will
     /// re-show the approval, so the panel stays locked on the editing copy
@@ -731,6 +737,12 @@ struct DesktopView {
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
+    /// Window-space bounds of each composer trigger pill, captured at
+    /// prepaint every frame so composer popups can anchor to the CTA that
+    /// opened them (`anchored().attach`) while mounting at the composer
+    /// panel level — mounting inside the pill subtree detaches the popup's
+    /// focus trap and breaks keyboard navigation.
+    composer_pill_bounds: ComposerPillBounds,
     /// Tab stop for the prompt-history scope switcher; the Kit tabs inside it
     /// are not focusable on their own.
     history_scope_focus: FocusHandle,

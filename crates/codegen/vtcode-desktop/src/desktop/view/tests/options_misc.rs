@@ -818,7 +818,7 @@ fn effort_commit_dismisses_the_model_options_panel(cx: &mut TestAppContext) {
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         view.update(cx, |view, cx| view.effort_focus.focus(window, cx));

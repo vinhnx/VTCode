@@ -26,7 +26,7 @@ fn composer_labels_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
     // no text of its own; its padding still tracks the base size.
     let base_ids = [
         "pick-model",
-        "composer-model-effort",
+        "composer-effort-label",
         "composer-model-speed",
         "composer-policy-label",
         "composer-mode-label",
@@ -47,7 +47,7 @@ fn composer_labels_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
             store.extend(base_ids.iter().map(|id| window.find(*id).bounds().size.height));
             store.push(window.find(remove_attachment.clone()).bounds().size.height);
             let button_bounds = window.find("pick-model").bounds();
-            for id in ["composer-model-effort", "composer-model-speed"] {
+            for id in ["composer-model-speed"] {
                 let bounds = window.find(id).bounds();
                 assert!(
                     bounds.left() >= button_bounds.left() && bounds.right() <= button_bounds.right(),
@@ -76,7 +76,7 @@ fn composer_labels_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
     settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert!(window.try_find("model-options-summary").is_some());
     })
@@ -163,7 +163,7 @@ fn composer_popup_rows_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
     settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         window.click("model-search-all", cx);
         window.render_frame(cx);

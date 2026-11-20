@@ -14,6 +14,16 @@ pub(in crate::desktop) fn desktop_ghost_button(id: impl Into<gpui_kit::ElementId
     desktop_button(id).ghost()
 }
 
+/// Dropdown trigger pill: a quiet filled body on the button seat (one step
+/// above panels, like every other control fill) so the affordance reads as a
+/// control before the first hover. `open` is state metadata only — the open
+/// popup is the indicator, so the pill never highlights while its popup is
+/// up (vendored Kit keeps `open` paint-free). Callers add `.open(...)`,
+/// labels, sizing, and the dispatching action.
+pub(in crate::desktop::view) fn desktop_trigger_pill(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id).secondary().border_0().font_medium()
+}
+
 /// Ordinary visible action, or the alternative beside a primary or danger action.
 pub(in crate::desktop::view) fn desktop_secondary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     desktop_filled_button(id).secondary().shadow(themes::button_inset_edges())

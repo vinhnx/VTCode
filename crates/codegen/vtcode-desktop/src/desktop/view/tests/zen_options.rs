@@ -13,8 +13,8 @@ fn zen_model_button_opens_options_and_commits_effort(cx: &mut TestAppContext) {
             view.zen_mode = true;
         });
         window.render_frame(cx);
-        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
-        window.click("pick-model", cx);
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Ultrafast"));
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
@@ -96,7 +96,7 @@ fn zen_policy_button_changes_permission_and_blocks_during_active_work(cx: &mut T
         });
         window.render_frame(cx);
         // Active work renders the controls but leaves them inert.
-        for button in ["pick-model", "composer-mode", "composer-policy"] {
+        for button in ["pick-model", "composer-effort", "composer-mode", "composer-policy"] {
             assert!(window.try_find(button).is_some(), "{button} stays visible while running");
             window.click(button, cx);
             window.render_frame(cx);
@@ -153,7 +153,7 @@ fn zen_composer_popups_stay_above_input_in_narrow_window(cx: &mut TestAppContext
             cluster.right() <= send.left(),
             "the narrow option cluster must end before the send action: {cluster:?} vs {send:?}"
         );
-        for button in ["pick-model", "composer-mode", "composer-policy"] {
+        for button in ["pick-model", "composer-effort", "composer-mode", "composer-policy"] {
             let bounds = window.find(button).bounds();
             assert!(
                 bounds.left() >= cluster.left()
@@ -165,8 +165,8 @@ fn zen_composer_popups_stay_above_input_in_narrow_window(cx: &mut TestAppContext
             window.click(button, cx);
             window.render_frame(cx);
             let popup = window.find("command-palette").bounds();
-            let frame = window.find("message-composer-frame").bounds();
-            assert!(popup.bottom() <= frame.top(), "{button} popup must stay above the input");
+            let pill = window.find(button).bounds();
+            assert!(popup.bottom() <= pill.top() + px(1.), "{button} popup must stay above its trigger pill");
             assert!(popup.left() >= px(0.), "{button} popup left={:?}", popup.left());
             assert!(popup.right() <= viewport.width, "{button} popup right={:?}, viewport={viewport:?}", popup.right());
             window.press("escape", cx);
@@ -298,12 +298,12 @@ fn zen_speed_suffix_renders_quiet_text_and_restores_badge_on_exit(cx: &mut TestA
         window.render_frame(cx);
         // The accessible contract is identical in both modes: the model
         // summary and the speed readout keep their names.
-        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Ultrafast"));
+        assert_eq!(window.find("composer-effort").label(), Some("Reasoning effort: Medium"));
         let quiet = window.find("composer-model-speed");
         assert_eq!(quiet.role(), Some(gpui_kit::Role::Label));
         assert_eq!(quiet.label(), Some("Processing speed: Ultrafast"));
         let zen_width = quiet.bounds().size.width;
-        let effort_width = window.find("composer-model-effort").bounds().size.width;
 
         // Exiting zen restores the filled badge: same readout, louder paint.
         // The badge carries pill padding plus an icon around the same word,
@@ -311,7 +311,7 @@ fn zen_speed_suffix_renders_quiet_text_and_restores_badge_on_exit(cx: &mut TestA
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).zen_mode);
-        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Ultrafast"));
         let badge = window.find("composer-model-speed");
         assert_eq!(badge.role(), Some(gpui_kit::Role::Label));
         assert_eq!(badge.label(), Some("Processing speed: Ultrafast"));
@@ -320,14 +320,6 @@ fn zen_speed_suffix_renders_quiet_text_and_restores_badge_on_exit(cx: &mut TestA
             badge_width > zen_width,
             "the filled badge must measure wider than zen quiet text: badge={badge_width:?} quiet={zen_width:?}"
         );
-        // Control: the effort suffix is quiet in both modes, so its width
-        // must not move across the toggle.
-        assert_eq!(
-            window.find("composer-model-effort").bounds().size.width,
-            effort_width,
-            "effort keeps one paint across the toggle"
-        );
-
         // Re-entering zen restores the quiet text exactly.
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
@@ -366,19 +358,33 @@ fn zen_option_cluster_orders_attach_model_mode_policy_before_send(cx: &mut TestA
             window.render_frame(cx);
             let attach = window.find("attach-files").bounds();
             let model = window.find("pick-model").bounds();
+            let effort = window.find("composer-effort").bounds();
             let mode = window.find("composer-mode").bounds();
             let policy = window.find("composer-policy").bounds();
             let send = window.find("send-prompt").bounds();
             assert!(
-                attach.right() <= model.left() && model.right() <= mode.left() && mode.right() <= policy.left(),
-                "cluster reads attach, model, mode, policy left to right at {base_size}px: attach={attach:?} model={model:?} mode={mode:?} policy={policy:?}"
+                attach.right() <= model.left()
+                    && model.right() <= effort.left()
+                    && effort.right() <= mode.left(),
+                "cluster reads attach, model, effort, mode left to right at {base_size}px: attach={attach:?} model={model:?} effort={effort:?} mode={mode:?}"
             );
-            for (name, button) in [("attach", attach), ("mode", mode), ("policy", policy), ("send", send)] {
-                let drift = (button.center().y - model.center().y).abs();
-                assert!(
-                    drift <= px(1.),
-                    "cluster shares one center line at {base_size}px: {name} drifts {drift:?}"
-                );
+            // Policy trails the cluster: beside mode when it fits, else it
+            // wraps to its own row at large font sizes. The wrapped layout
+            // grows the cluster to two rows, so the shared center line only
+            // pins while everything fits on one.
+            let wrapped = policy.top() >= mode.bottom();
+            assert!(
+                (policy.left() >= mode.right() && (policy.center().y - model.center().y).abs() <= px(1.)) || wrapped,
+                "policy stays right of mode or wraps below it at {base_size}px: mode={mode:?} policy={policy:?}"
+            );
+            if !wrapped {
+                for (name, button) in [("attach", attach), ("mode", mode), ("policy", policy), ("send", send)] {
+                    let drift = (button.center().y - model.center().y).abs();
+                    assert!(
+                        drift <= px(1.),
+                        "cluster shares one center line at {base_size}px: {name} drifts {drift:?}"
+                    );
+                }
             }
             let cluster = window.find("zen-composer-context").bounds();
             assert!(
@@ -405,11 +411,19 @@ fn zen_option_cluster_orders_attach_model_mode_policy_before_send(cx: &mut TestA
         assert!(window.try_find("composer-model-speed").is_none());
         let attach = window.find("attach-files").bounds();
         let model = window.find("pick-model").bounds();
+        let effort = window.find("composer-effort").bounds();
         let mode = window.find("composer-mode").bounds();
         let policy = window.find("composer-policy").bounds();
         assert!(
-            attach.right() <= model.left() && model.right() <= mode.left() && mode.right() <= policy.left(),
-            "cluster order holds without a speed suffix: attach={attach:?} model={model:?} mode={mode:?} policy={policy:?}"
+            attach.right() <= model.left() && model.right() <= effort.left() && effort.right() <= mode.left(),
+            "cluster order holds without a speed suffix: attach={attach:?} model={model:?} effort={effort:?} mode={mode:?}"
+        );
+        // Policy trails the cluster: beside mode when it fits at this font
+        // size, else wrapped to its own row.
+        assert!(
+            (policy.left() >= mode.right() && (policy.center().y - model.center().y).abs() <= px(1.))
+                || policy.top() >= mode.bottom(),
+            "policy stays right of mode or wraps below it: mode={mode:?} policy={policy:?}"
         );
     })
     .unwrap();

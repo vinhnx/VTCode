@@ -17,8 +17,8 @@ use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
     DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
-    Route, command, desktop_ghost_button, desktop_secondary_button, empty_state, shimmer_label, uuid_like_id,
-    warning_alert,
+    Route, command, desktop_ghost_button, desktop_secondary_button, desktop_trigger_pill, empty_state, shimmer_label,
+    uuid_like_id, warning_alert,
 };
 use crate::desktop::strings::{i18n, key_context, keys};
 
@@ -493,7 +493,7 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_workspace_review_file(false, cx))),
                     )
                     .child(
-                        desktop_ghost_button("workspace-review-current-file")
+                        desktop_trigger_pill("workspace-review-current-file")
                             .label(label.clone())
                             .open(self.palette_open_for(&[PaletteKind::ReviewFiles]))
                             .icon(IconName::ChevronDown)

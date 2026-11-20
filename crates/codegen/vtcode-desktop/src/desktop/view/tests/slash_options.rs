@@ -17,17 +17,18 @@ fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowl
             view.configuration = Some(configuration);
         });
         window.render_frame(cx);
-        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Ultrafast"));
+        assert_eq!(window.find("composer-effort").label(), Some("Reasoning effort: Medium"));
         assert_eq!(window.find("composer-model-speed").label(), Some("Processing speed: Ultrafast"));
         let button_bounds = window.find("pick-model").bounds();
-        for id in ["composer-model-effort", "composer-model-speed"] {
+        for id in ["composer-model-speed"] {
             let bounds = window.find(id).bounds();
             assert!(
                 bounds.left() >= button_bounds.left() && bounds.right() <= button_bounds.right(),
                 "{id} must remain visible in a narrow composer"
             );
         }
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));
 
@@ -47,8 +48,8 @@ fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowl
             );
         });
         window.render_frame(cx);
-        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · High · Fast"));
-        assert_eq!(window.find("composer-model-effort").label(), Some("Reasoning effort: High"));
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Fast"));
+        assert_eq!(window.find("composer-effort").label(), Some("Reasoning effort: High"));
         assert_eq!(window.find("composer-model-speed").label(), Some("Processing speed: Fast"));
 
         let options = configuration.session_options.as_mut().unwrap();
@@ -65,7 +66,8 @@ fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowl
             );
         });
         window.render_frame(cx);
-        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · High"));
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol"));
+        assert_eq!(window.find("composer-effort").label(), Some("Reasoning effort: High"));
         assert!(window.try_find("composer-model-speed").is_none(), "disabled processing tiers must disappear");
     })
     .unwrap();
@@ -82,7 +84,7 @@ fn fast_mode_toggle_sends_cli_option_and_is_exposed_as_a_toggle(cx: &mut TestApp
             view.configuration = Some(runtime_options_config());
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         let toggle = window.find("fast-mode-toggle");
         assert_eq!(toggle.label(), Some("Disable Ultrafast processing"));

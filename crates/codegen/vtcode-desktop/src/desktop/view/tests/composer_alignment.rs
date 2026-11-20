@@ -62,14 +62,19 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
                 (trailing - leading).abs() <= px(1.),
                 "send keeps a symmetric trailing lane at {base_size}px: leading={leading:?} trailing={trailing:?} frame={frame:?} send={send:?}"
             );
-            for (name, button) in
-                [("mode", mode_button), ("policy", policy_button), ("send", send)]
-            {
-                let drift = (button.center().y - model_button.center().y).abs();
-                assert!(
-                    drift <= px(1.),
-                    "button row shares one center line at {base_size}px: {name} drifts {drift:?} from model: model={model_button:?} other={button:?}"
-                );
+            // The option cluster may wrap to a second row at large font
+            // sizes; the shared center line only pins while it fits on one.
+            let wrapped = policy_button.top() >= mode_button.bottom();
+            if !wrapped {
+                for (name, button) in
+                    [("mode", mode_button), ("policy", policy_button), ("send", send)]
+                {
+                    let drift = (button.center().y - model_button.center().y).abs();
+                    assert!(
+                        drift <= px(1.),
+                        "button row shares one center line at {base_size}px: {name} drifts {drift:?} from model: model={model_button:?} other={button:?}"
+                    );
+                }
             }
             let ghost_pad = policy_label.origin.x - policy_button.origin.x;
             assert!(

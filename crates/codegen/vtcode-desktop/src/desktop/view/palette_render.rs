@@ -571,19 +571,21 @@ impl DesktopView {
             .child(command.navigation_fade(("command-palette-content", state.entity_id()), true, false, cx.theme()))
             .focus_trap(COMMAND_PALETTE_ELEMENT_ID, &self.palette_focus);
         if composer_popup {
-            return deferred(
-                anchored()
-                    .anchor(if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
-                        Anchor::BottomRight
-                    } else {
-                        Anchor::BottomLeft
-                    })
-                    .offset(point(px(0.), ui_font_size * -0.5))
-                    .snap_to_window_with_margin(popup_margin)
-                    .child(panel),
-            )
-            .priority(2)
-            .into_any_element();
+            // Pill-owned kinds anchor to their trigger pill's recorded
+            // window bounds: the panel's bottom-left lands on the pill's
+            // top-left (minus half a line), so the panel opens above the
+            // CTA with left edges aligned. `snap_to_window_with_margin`
+            // adapts to window size and edges; popups without a pill
+            // trigger keep the composer-relative placement.
+            let mut anchor = anchored()
+                .offset(point(px(0.), ui_font_size * -0.5))
+                .snap_to_window_with_margin(popup_margin);
+            anchor = if let Some(pill_bounds) = self.composer_pill_bounds.for_kind(&self.palette_kind) {
+                anchor.attach(pill_bounds, Anchor::TopLeft).anchor(Anchor::BottomLeft)
+            } else {
+                anchor.anchor(Anchor::BottomLeft)
+            };
+            return deferred(anchor.child(panel)).priority(2).into_any_element();
         }
         div()
             .absolute()

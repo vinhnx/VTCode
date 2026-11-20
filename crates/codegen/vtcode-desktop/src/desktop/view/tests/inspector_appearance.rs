@@ -416,7 +416,7 @@ fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mu
                 .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
         });
         window.render_frame(cx);
-        window.click("pick-model", cx);
+        window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         window.click("model-search-all", cx);

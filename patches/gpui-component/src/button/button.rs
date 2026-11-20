@@ -521,11 +521,13 @@ impl Button {
         self
     }
 
-    /// Whether the button paints its selected styling, which is what both a
-    /// caller-set selection and an open popup look like today.
+    /// Whether the button paints its selected styling. Only a caller-set
+    /// selection paints: an open popup is its own state indicator, so a
+    /// dropdown trigger carrying [`Selectable::open`] stays quiet instead
+    /// of lighting up while its menu is up.
     #[inline]
     fn shows_selected_style(&self) -> bool {
-        self.selected || self.open
+        self.selected
     }
 
     /// Whether the button responds to the pointer at all.
@@ -1763,15 +1765,15 @@ mod tests {
         assert!(matches!(button.rounded, ButtonRounded::Medium));
     }
 
-    /// A button paints an open popup the way it paints a selection, but the
-    /// two states are stored apart, so a caller can read back which one it set
-    /// and a later design can tell them apart visually.
+    /// An open popup and a caller-set selection are stored apart, and only
+    /// the selection paints: the open menu is its own state indicator, so a
+    /// trigger carrying `open` stays quiet while its popup is up.
     #[test]
     fn an_open_trigger_is_stored_apart_from_a_selected_one() {
         let open = Button::new("trigger").open(true);
         assert!(open.is_open());
         assert!(!open.is_selected());
-        assert!(open.shows_selected_style());
+        assert!(!open.shows_selected_style(), "open state tracks without painting the selection");
 
         let selected = Button::new("trigger").selected(true);
         assert!(selected.is_selected());

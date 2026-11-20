@@ -27,7 +27,7 @@ fn tool_loop_choices() -> Vec<InteractionChoice> {
 /// Production-faithful tool-loop grant prompt: Approval kind (the Stop row
 /// carries a deny selection), choices mirrored on the first step exactly as
 /// the service pump sends them.
-fn tool_loop_interaction(selected: Option<&str>) -> InteractionRequest {
+pub(super) fn tool_loop_interaction(selected: Option<&str>) -> InteractionRequest {
     let choices = tool_loop_choices();
     InteractionRequest {
         session_id: "session".into(),

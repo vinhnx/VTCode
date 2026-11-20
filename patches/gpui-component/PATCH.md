@@ -13,7 +13,7 @@ Changes are in `src/message_scroller.rs`:
 And in `src/sidebar/menu.rs`:
 
 - `SidebarMenuItem` rows now set a pointing-hand cursor when clickable and
-  keep the default arrow when disabled. Kit's `Settings` sidebar renders
+  keep the default arrow when disabled. Kit's Settings sidebar renders
   its selectable section rows as `SidebarMenuItem`s, which previously
   showed the arrow cursor on hover unlike the app's `Button`-based rows.
 
@@ -23,6 +23,26 @@ And in `src/tab/tab.rs`:
   click handler) and keep the default arrow otherwise. VT Code's thread
   tabs, attachment-picker tabs, and inspector tabs select via `TabBar`'s
   `on_click`, so they previously hovered with the arrow.
+
+And in `src/select.rs` (dropdown trigger contract):
+
+- The popup anchors to the trigger pill itself: `SelectState` captures the
+  `#input` trigger bounds at prepaint (`trigger_bounds`) and uses them for
+  the `dropdown_popup` anchor, falling back to the wrapper bounds. With the
+  default `Length::Auto` menu width the menu is `min_w(trigger_width)` —
+  never narrower than the pill, content-driven beyond — instead of
+  stretching to the wrapper (which filled its parent and rendered a
+  full-window-wide menu).
+- The trigger's outline/ring only shows for keyboard focus while closed:
+  an open menu is its own state indicator, so `outline_visible` excludes
+  the `open` state.
+
+And in `src/button/button.rs` (same contract, Button side):
+
+- `shows_selected_style()` is `self.selected` only: `Selectable::open`
+  keeps storing/reading open state (a11y, call-site tests) but no longer
+  paints the selected/pressed fill, so dropdown trigger pills stay quiet
+  while their popup is up.
 
 VT Code's transcript pauses tail-following when the reader interacts with
 a row (expanding a tool call or diff) while the runloop streams. The
@@ -37,8 +57,10 @@ patch and bump `gpui-kit`.
 
 Re-vendor procedure (per `=0.9.1` bump): copy the new registry source
 over `src/`, drop `Cargo.lock` and `Cargo.toml.orig`, re-apply the
-`pause_following_tail` addition and the `SidebarMenuItem` / `Tab` cursor
-changes, and diff `src/message_scroller.rs`, `src/sidebar/menu.rs`, and
-`src/tab/tab.rs` against the registry copy to confirm the deltas contain
-only these additions (`diff -u` each file). See `.vtcode/memory/gotchas.md`
-for the general re-vendor checklist.
+`pause_following_tail` addition, the `SidebarMenuItem` / `Tab` cursor
+changes, the `Select` trigger anchoring/width/outline contract, and the
+`Button` open/selected paint separation; then diff `src/message_scroller.rs`,
+`src/sidebar/menu.rs`, `src/tab/tab.rs`, `src/select.rs`, and
+`src/button/button.rs` against the registry copy to confirm the deltas
+contain only these additions (`diff -u` each file). See
+`.vtcode/memory/gotchas.md` for the general re-vendor checklist.
