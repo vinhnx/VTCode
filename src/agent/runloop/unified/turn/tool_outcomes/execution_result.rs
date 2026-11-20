@@ -460,6 +460,7 @@ async fn handle_failure<'a>(
                 streak,
                 blocked_total,
                 tool_name,
+                None,
             );
             emit_turn_metric_log(t_ctx.ctx, fuse_trip.metric(), tool_name, streak, fuse_trip.cap());
             if !recovery_active {
@@ -669,6 +670,7 @@ mod blocked_fuse_tests {
             1,
             29,
             "exec_command",
+            None,
         );
         assert!(reason.contains("28 total blocked calls"));
     }

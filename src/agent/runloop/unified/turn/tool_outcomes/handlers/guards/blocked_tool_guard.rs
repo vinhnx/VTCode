@@ -12,10 +12,11 @@
 
 use serde_json::Value;
 use vtcode_core::config::constants::defaults::DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN;
+use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::labels::tool_action_label;
 
+use super::super::super::helpers::find_tool_response_after_last_assistant;
 use super::super::build_failure_error_content;
-use super::common::push_guard_failure_messages;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext};
 
 /// Get the max consecutive blocked tool calls per turn from config.
@@ -167,7 +168,39 @@ pub(crate) fn blocked_tool_call_messages(
     recovery_mode: bool,
     display_tool: &str,
 ) -> (String, String) {
-    blocked_tool_call_messages_detailed(fuse_trip, recovery_mode, display_tool, 0, 0, "")
+    blocked_tool_call_messages_detailed(fuse_trip, recovery_mode, display_tool, 0, 0, "", None)
+}
+
+/// Marker present in every fuse-trip message: the limit "was exceeded for
+/// this turn". A recorded response already containing it carries the
+/// escalation, so the guard must push nothing more for that call.
+const FUSE_ESCALATION_MARKER: &str = "was exceeded for this turn";
+
+/// Read the already-recorded response for a fuse-tripping call: whether it
+/// already carries the escalation, plus the denial reason validation
+/// recorded (if any) so the escalation can preserve it. Prefers the
+/// structured `error` field and falls back to truncated raw text; unparseable
+/// or empty responses preserve nothing rather than garbage.
+fn recorded_escalation_state(history: &[uni::Message], tool_call_id: &str) -> (bool, Option<String>) {
+    let Some(index) = find_tool_response_after_last_assistant(history, tool_call_id) else {
+        return (false, None);
+    };
+    let text = history[index].content.as_text();
+    if text.contains(FUSE_ESCALATION_MARKER) {
+        return (true, None);
+    }
+    if let Ok(value) = serde_json::from_str::<Value>(&text) {
+        if let Some(error) = value
+            .get("error")
+            .and_then(Value::as_str)
+            .filter(|error| !error.trim().is_empty())
+        {
+            return (false, Some(error.to_string()));
+        }
+    }
+    let trimmed = text.trim();
+    let reason = (!trimmed.is_empty()).then(|| vtcode_commons::formatting::truncate_text(trimmed, 500, "…"));
+    (false, reason)
 }
 
 /// Detailed fuse message with streak/total counters, per-tool remedy, and
@@ -179,6 +212,7 @@ pub(crate) fn blocked_tool_call_messages_detailed(
     streak: usize,
     total: usize,
     tool_name: &str,
+    original_report: Option<&str>,
 ) -> (String, String) {
     let remedy = remedy_hint_for_tool(tool_name);
     let counters = if streak > 0 || total > 0 {
@@ -187,7 +221,7 @@ pub(crate) fn blocked_tool_call_messages_detailed(
         String::new()
     };
     let resume_guidance = "History and outputs are retained. Type 'continue' with new guidance, or run `vtcode --resume <session>`; details: .vtcode/tasks/current_blocked.md.";
-    let (block_reason, error_msg, error_label) = match (fuse_trip, recovery_mode) {
+    let (mut block_reason, mut error_msg, error_label) = match (fuse_trip, recovery_mode) {
         (BlockedToolCallFuseTrip::Total { cap }, true) => (
             format!(
                 "Recovery tool-call limit reached after {cap} blocked calls{counters} (last blocked call: '{display_tool}'). {remedy} {resume_guidance}"
@@ -214,6 +248,15 @@ pub(crate) fn blocked_tool_call_messages_detailed(
             "blocked_streak",
         ),
     };
+    // Preserve the tripping denial: without this the escalation replaces the
+    // specific reason validation recorded, and the model loses the evidence
+    // it needs to correct course. The fuse directive keeps precedence (it
+    // overrides the rejection's retry guidance), so the report follows it.
+    if let Some(report) = original_report.filter(|report| !report.trim().is_empty()) {
+        let suffix = format!(" The blocked call reported: {report}");
+        block_reason.push_str(&suffix);
+        error_msg.push_str(&suffix);
+    }
     let error_content = build_failure_error_content(error_msg, error_label);
     (block_reason, error_content)
 }
@@ -278,6 +321,10 @@ fn enforce_blocked_tool_call_guard_with_scope(
         blocked_streak: streak,
         blocked_total,
     };
+    // Validation records the specific denial before the guard runs; preserve
+    // it inside the escalation instead of replacing it. An already-escalated
+    // response is left untouched so repeated trips cannot nest or grow it.
+    let (already_escalated, original_report) = recorded_escalation_state(ctx.working_history, tool_call_id);
     let (block_reason, error_content) = blocked_tool_call_messages_detailed(
         fuse_trip,
         recovery_active,
@@ -285,6 +332,7 @@ fn enforce_blocked_tool_call_guard_with_scope(
         streak,
         blocked_total,
         tool_name,
+        original_report.as_deref(),
     );
 
     // Clear any inline loading placeholder and restore the input status so
@@ -297,12 +345,17 @@ fn enforce_blocked_tool_call_guard_with_scope(
         // Keep the current tool response contiguous with any later responses
         // in the assistant batch. The recovery directive is appended only
         // after the caller drains those remaining calls.
-        ctx.push_tool_response(tool_call_id, Some(tool_name), error_content);
+        if !already_escalated {
+            ctx.push_tool_response(tool_call_id, Some(tool_name), error_content);
+        }
         ctx.harness_state.arm_blocked_tool_recovery(block_reason, telemetry);
         Some(TurnHandlerOutcome::Continue)
     } else {
         ctx.harness_state.record_blocked_tool_recovery_telemetry(telemetry);
-        push_guard_failure_messages(ctx, tool_call_id, tool_name, error_content, &block_reason);
+        if !already_escalated {
+            ctx.push_rejected_tool_response(tool_call_id, Some(tool_name), None, error_content);
+        }
+        ctx.push_system_message(block_reason.clone());
         Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(block_reason) }))
     }
 }
@@ -335,11 +388,80 @@ mod tests {
             4,
             4,
             "exec_command",
+            None,
         );
         assert!(reason.contains("3 consecutive blocked calls"));
         assert!(reason.contains("streak 4"));
         assert!(reason.contains("sandbox/approval"));
         assert!(reason.contains("Type 'continue'"));
         assert!(reason.contains(".vtcode/tasks/current_blocked.md"));
+    }
+
+    #[test]
+    fn detailed_message_embeds_original_report_after_fuse_directive() {
+        let (reason, content) = blocked_tool_call_messages_detailed(
+            BlockedToolCallFuseTrip::Consecutive { cap: 3 },
+            false,
+            "exec_command 'ls'",
+            4,
+            4,
+            "exec_command",
+            Some("denied: destructive"),
+        );
+        for text in [&reason, &content] {
+            assert!(text.contains("3 consecutive blocked calls"), "{text}");
+            assert!(text.contains("The blocked call reported: denied: destructive"), "{text}");
+            assert!(
+                text.find("3 consecutive blocked calls") < text.find("The blocked call reported:"),
+                "fuse directive keeps precedence: {text}"
+            );
+        }
+        let (plain_reason, plain_content) = blocked_tool_call_messages_detailed(
+            BlockedToolCallFuseTrip::Consecutive { cap: 3 },
+            false,
+            "exec_command 'ls'",
+            4,
+            4,
+            "exec_command",
+            None,
+        );
+        assert!(!plain_reason.contains("The blocked call reported:"));
+        assert!(!plain_content.contains("The blocked call reported:"));
+    }
+
+    #[test]
+    fn escalation_state_prefers_structured_error_field() {
+        let history = vec![vtcode_core::llm::provider::Message::tool_response(
+            "call-1".to_string(),
+            r#"{"error":"denied: destructive","failure_kind":"policy"}"#.to_string(),
+        )];
+        assert_eq!(
+            super::recorded_escalation_state(&history, "call-1"),
+            (false, Some("denied: destructive".to_string()))
+        );
+    }
+
+    #[test]
+    fn escalation_state_falls_back_to_raw_text_and_ignores_empties() {
+        let history = vec![vtcode_core::llm::provider::Message::tool_response(
+            "call-1".to_string(),
+            "plain refusal".to_string(),
+        )];
+        assert_eq!(super::recorded_escalation_state(&history, "call-1"), (false, Some("plain refusal".to_string())));
+        let empty = vec![vtcode_core::llm::provider::Message::tool_response(
+            "call-1".to_string(),
+            "  ".to_string(),
+        )];
+        assert_eq!(super::recorded_escalation_state(&empty, "call-1"), (false, None));
+        assert_eq!(super::recorded_escalation_state(&[], "call-1"), (false, None));
+    }
+
+    #[test]
+    fn escalation_state_flags_already_escalated_responses() {
+        let history = vec![vtcode_core::llm::provider::Message::tool_response(
+            "call-1".to_string(),
+            "The tool-call safety limit of 3 consecutive blocked calls was exceeded for this turn.".to_string(),
+        )];
+        assert_eq!(super::recorded_escalation_state(&history, "call-1"), (true, None));
     }
 }

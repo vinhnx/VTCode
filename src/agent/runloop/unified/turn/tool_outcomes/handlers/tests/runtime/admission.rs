@@ -172,3 +172,74 @@ async fn blocked_tool_call_guard_short_circuits_to_recovery_when_active() {
 
     assert!(matches!(outcome, Some(TurnHandlerOutcome::Continue)));
 }
+
+#[tokio::test]
+async fn blocked_tool_call_fuse_trip_preserves_recorded_denial_reason() {
+    // Validation records the specific denial before the guard runs; the
+    // fuse escalation must preserve it, not replace it with generic
+    // text. Fails before the fix: the tripping call's response held
+    // only the fuse message and the denial reason was lost.
+    let mut backing = TestContextBacking::new().await;
+    let mut ctx = backing.turn_processing_context();
+    let max_streak = max_consecutive_blocked_tool_calls_per_turn(&ctx);
+    let args = json!({"path":"src/main.rs"});
+
+    for idx in 0..max_streak {
+        let outcome =
+            enforce_blocked_tool_call_guard(&mut ctx, &format!("blocked_{idx}"), tool_names::READ_FILE, &args);
+        assert!(outcome.is_none(), "blocked call {idx} should stay under cap");
+    }
+
+    ctx.push_rejected_tool_response(
+        "tripping_call",
+        Some(tool_names::READ_FILE),
+        Some(&args),
+        r#"{"error":"denied: path outside workspace","failure_kind":"policy"}"#.to_string(),
+    );
+    let outcome = enforce_blocked_tool_call_guard(&mut ctx, "tripping_call", tool_names::READ_FILE, &args);
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Continue)));
+    let text = ctx
+        .working_history
+        .iter()
+        .rev()
+        .find(|message| message.tool_call_id.as_deref() == Some("tripping_call"))
+        .expect("tripping call response")
+        .content
+        .as_text()
+        .to_string();
+    assert!(text.contains("blocked_streak"), "fuse escalation present: {text}");
+    assert!(text.contains("denied: path outside workspace"), "specific denial preserved: {text}");
+}
+
+#[tokio::test]
+async fn blocked_tool_call_fuse_trip_leaves_escalated_response_untouched() {
+    // A response that already carries the escalation (repeated trip for
+    // the same call) must not be re-escalated: re-embedding would nest
+    // the report on every trip. Fails before the fix, which replaced
+    // the recorded response unconditionally.
+    let mut backing = TestContextBacking::new().await;
+    let mut ctx = backing.turn_processing_context();
+    let max_streak = max_consecutive_blocked_tool_calls_per_turn(&ctx);
+    let args = json!({"path":"src/main.rs"});
+
+    for idx in 0..max_streak {
+        let outcome =
+            enforce_blocked_tool_call_guard(&mut ctx, &format!("blocked_{idx}"), tool_names::READ_FILE, &args);
+        assert!(outcome.is_none(), "blocked call {idx} should stay under cap");
+    }
+
+    let escalated = "The tool-call safety limit of 3 consecutive blocked calls was exceeded for this turn.";
+    ctx.push_tool_response("tripping_call", Some(tool_names::READ_FILE), escalated.to_string());
+    let outcome = enforce_blocked_tool_call_guard(&mut ctx, "tripping_call", tool_names::READ_FILE, &args);
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Continue)));
+    let text = ctx
+        .working_history
+        .iter()
+        .rev()
+        .find(|message| message.tool_call_id.as_deref() == Some("tripping_call"))
+        .expect("tripping call response")
+        .content
+        .as_text()
+        .to_string();
+    assert_eq!(text, escalated, "already-escalated response must be byte-identical");
+}
