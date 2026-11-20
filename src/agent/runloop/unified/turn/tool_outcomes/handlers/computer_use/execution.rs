@@ -120,7 +120,9 @@ pub(crate) struct ComputerTurnOutcome {
 pub(crate) enum ComputerTurnOutcomeKind {
     /// Refused before any I/O: disabled, incapable, or unconfigured.
     Disabled { reason: &'static str },
-    /// The model proposed no native calls; ordinaries return for dispatch.
+    /// The model proposed no native calls; ordinaries are counted in the
+    /// report and dropped, never dispatched — the outer loop only ever
+    /// sees the redacted text and issues its own validated calls.
     NoNativeCalls {
         content: Option<String>,
         ordinaries: Vec<ToolCall>,

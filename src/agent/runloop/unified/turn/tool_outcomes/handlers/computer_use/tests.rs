@@ -88,6 +88,35 @@ fn computer_use_approval_names_every_action_kind_without_payloads() {
 }
 
 #[test]
+fn computer_use_approval_display_neutralizes_control_characters() {
+    // Approval rows render config paths and model labels that a malicious
+    // repo config can fill with ANSI escapes or \r line-spoofing. Display
+    // text maps controls to spaces; the underlying values used for
+    // validation and mounts stay untouched.
+    let request = ApprovalRequest {
+        target: ComputerUseTarget::Browser {
+            build_dir: PathBuf::from("/good\u{1b}[2K\r/evil\nnext"),
+        },
+        recipient: "model\u{7f} (openai)".to_string(),
+        call_ids: vec!["call_1".to_string()],
+        action_kinds: vec!["screenshot".to_string()],
+        action_count: 1,
+    };
+    let justification = approval_justification(&request);
+    assert!(!justification.chars().any(|c| c.is_control()), "{justification}");
+    assert!(justification.contains("/good"), "{justification}");
+    let lines = computer_use_approval_lines("computer_use", Some(&approval_args(&request)));
+    assert_eq!(lines.len(), 3);
+    for line in &lines {
+        assert!(!line.chars().any(|c| c.is_control()), "{line}");
+    }
+    assert!(lines.iter().any(|line| line.contains("/good") && line.contains("/evil")));
+    // Raw values keep their bytes for validation and audit.
+    let args = approval_args(&request);
+    assert!(args.to_string().contains("\\u001b"));
+}
+
+#[test]
 fn computer_use_approval_grants_only_on_explicit_approval() {
     assert!(approval_granted(&ToolPermissionFlow::Approved { updated_args: None }));
     assert!(approval_granted(&ToolPermissionFlow::Approved { updated_args: Some(Value::Null) }));

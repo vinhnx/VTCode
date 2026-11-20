@@ -94,14 +94,23 @@ pub(crate) fn approval_args(request: &ApprovalRequest) -> Value {
     })
 }
 
+/// Display-sanitize untrusted approval text (config paths, model labels).
+/// Control characters enable terminal spoofing in approval rows: ESC starts
+/// ANSI sequences and a lone `\r` hides a suffix at render time. Map them to
+/// spaces like the shell command preview does; the underlying values (used
+/// for validation and mounts) stay untouched.
+fn display_text(raw: &str) -> String {
+    raw.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+}
+
 /// Human justification naming the target, the screenshot recipient, and the
 /// proposed action count.
 pub(crate) fn approval_justification(request: &ApprovalRequest) -> String {
     format!(
         "Computer use requests control of {} ({}) for this turn. Screenshots go to {}. {} actions proposed.",
-        request.target.display(),
+        display_text(&request.target.display()),
         request.target.kind(),
-        request.recipient,
+        display_text(&request.recipient),
         request.action_count,
     )
 }
@@ -128,7 +137,7 @@ pub(crate) fn computer_use_approval_lines(tool_name: &str, tool_args: Option<&Va
     if let (Some(kind), Some(target)) =
         (args.get("target_kind").and_then(Value::as_str), args.get("target").and_then(Value::as_str))
     {
-        lines.push(format!("Target: {kind} ({target})"));
+        lines.push(format!("Target: {kind} ({})", display_text(target)));
     }
     if let (Some(count), Some(kinds)) =
         (args.get("action_count").and_then(Value::as_u64), args.get("action_kinds").and_then(Value::as_array))
@@ -137,7 +146,7 @@ pub(crate) fn computer_use_approval_lines(tool_name: &str, tool_args: Option<&Va
         lines.push(format!("Actions ({count}): {kinds}"));
     }
     if let Some(recipient) = args.get("screenshot_recipient").and_then(Value::as_str) {
-        lines.push(format!("Screenshots to: {recipient}"));
+        lines.push(format!("Screenshots to: {}", display_text(recipient)));
     }
     lines
 }
