@@ -204,7 +204,7 @@ pub fn list_sessions_parameters() -> Value {
 }
 
 pub fn request_user_input_description() -> &'static str {
-    "Request user input for one to three short questions. Blocks the agent loop until the user responds. Returns the user's answers mapped by question id. Canonical HITL tool for the Planning workflow."
+    "Request user input for one to three short questions. Blocks the agent loop until the user responds. Returns the user's answers mapped by question id. Use it (not prose) whenever a user decision blocks progress, then fold the answers into your next actions. Canonical HITL tool for the Planning workflow."
 }
 
 #[must_use]
@@ -404,6 +404,21 @@ mod tests {
         let list = list_sessions_parameters();
         assert!(list.get("required").is_none(), "list takes optional filters only");
         assert_eq!(list["properties"]["include_self"]["type"], json!("boolean"));
+    }
+
+    #[test]
+    fn request_user_input_description_mandates_tool_over_prose_with_aggregation() {
+        // Without this the visible tool sits unguided and the model asks
+        // blocking questions in prose. Threshold (blockers), mandate
+        // (tool, not prose), aggregation contract (fold answers onward).
+        let description = request_user_input_description();
+        for needle in [
+            "whenever a user decision blocks progress",
+            "not prose",
+            "fold the answers into your next actions",
+        ] {
+            assert!(description.contains(needle), "description must state {needle}");
+        }
     }
 
     #[test]
