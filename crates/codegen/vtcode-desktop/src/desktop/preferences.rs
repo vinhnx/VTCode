@@ -111,14 +111,6 @@ impl ReducedMotionPreference {
             Self::Off => rust_i18n::t!("app.appearance.motion_off").to_string(),
         }
     }
-
-    pub(super) const fn id(self) -> &'static str {
-        match self {
-            Self::System => "system",
-            Self::On => "on",
-            Self::Off => "off",
-        }
-    }
 }
 
 #[derive(Clone, Copy)]

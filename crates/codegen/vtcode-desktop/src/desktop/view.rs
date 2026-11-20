@@ -723,10 +723,16 @@ struct DesktopView {
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
+    /// Tab stop for the prompt-history scope switcher; the Kit tabs inside it
+    /// are not focusable on their own.
+    history_scope_focus: FocusHandle,
     palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
     contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
     contrast_focus: FocusHandle,
+    /// Tab stop for the reduced-motion segmented choice (Kit tabs do not own
+    /// focus); arrow/Home/End move the selection through the wrapper.
+    motion_choice_focus: FocusHandle,
     _contrast_slider_subscription: Subscription,
     /// Persists contrast on `Release` and on discrete (non-drag) `Change`s such
     /// as assistive-technology increments; never per pointer-drag tick.
@@ -853,6 +859,9 @@ struct DesktopView {
     attachments_picker_open: bool,
     attachment_picker: Option<attachment_picker::AttachmentPickerState>,
     attachment_picker_focus: FocusHandle,
+    /// Tab stop for the picker's segmented source choice; Kit tabs are not
+    /// focusable, so the wrapper owns focus and arrow-key navigation.
+    picker_tab_focus: FocusHandle,
     /// Mirrors `window.is_fullscreen()` for the native menu labels.
     menus_show_exit_full_screen: bool,
     picker_tree: Entity<TreeState>,

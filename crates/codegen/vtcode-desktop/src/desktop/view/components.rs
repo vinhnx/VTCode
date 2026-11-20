@@ -157,17 +157,6 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
         .into_any_element()
 }
 
-/// Shared folder tab treatment at the ecosystem-default medium size: the
-/// selected tab joins the canvas content below it, so callers on canvas place
-/// the bar flush above that content (the picker keeps its stack gap — its
-/// popover surface never joins anyway). No width cap: Kit truncates labels
-/// only when a `max_width` is set, which this builder never does — overflow
-/// scrolls, and callers with many tabs chain `.menu(true)` for the overflow
-/// dropdown.
-pub(super) fn desktop_folder_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
-    TabBar::new(id).folder().w_full()
-}
-
 /// Label tiers, largest first: page `2xl`, panel `lg`, section/group `base`,
 /// row `sm`, eyebrow/help `xs` (see `docs/development/desktop-workspace.md`).
 pub(super) fn section_label(
@@ -565,6 +554,7 @@ pub(super) fn settings_switch(
 
 mod buttons;
 mod route_page;
+mod segmented;
 
 pub(in crate::desktop) use buttons::desktop_ghost_button;
 pub(super) use buttons::{
@@ -572,6 +562,7 @@ pub(super) use buttons::{
     zen_mode_toggle,
 };
 pub(super) use route_page::*;
+pub(super) use segmented::*;
 
 /// Shared scrim behind every inline modal (palette, review, browser, file
 /// preview, config editor, settings): the canvas at 85% so the background

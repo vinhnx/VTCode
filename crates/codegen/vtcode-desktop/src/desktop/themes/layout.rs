@@ -70,6 +70,15 @@ pub(in crate::desktop) mod typography {
 // The title spine is a derived value, not an independent constant. Pin both
 // relationships so changing one tier fails the build instead of silently
 // moving notice, tool, and assistant rows off the same line. The chosen rem
-// values are exactly representable, so equality is safe here.
+// values are exactly representable, so equality is safe here. The lint cannot
+// see that these particular rem values are exact, so silence it per assertion.
+#[allow(
+    clippy::float_cmp_const,
+    reason = "these rem values are exact binary fractions, so exact equality is the invariant"
+)]
 const _: () = assert!(padding::ROW_INSET.0 + ICON_SLOT.0 + gap::TITLE.0 == padding::TITLE_SPINE.0);
+#[allow(
+    clippy::float_cmp_const,
+    reason = "these rem values are exact binary fractions, so exact equality is the invariant"
+)]
 const _: () = assert!(padding::ROW_INSET.0 + padding::BODY_INSET.0 == padding::TITLE_SPINE.0);

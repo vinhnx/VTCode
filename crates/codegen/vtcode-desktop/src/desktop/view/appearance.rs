@@ -503,10 +503,25 @@ impl DesktopView {
 
     pub(super) fn render_reduced_motion_content(
         current: preferences::ReducedMotionPreference,
+        focus: FocusHandle,
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
         let colors = cx.theme().colors;
+        let selected = preferences::ReducedMotionPreference::ALL
+            .iter()
+            .position(|preference| *preference == current)
+            .unwrap_or_default();
+        let ring = colors.ring;
+        let current_label = current.label();
+        let choice_label = rust_i18n::t!(
+            "app.appearance.motion_aria",
+            label = current_label.as_str(),
+            suffix = rust_i18n::t!("app.appearance.selected_suffix").to_string()
+        )
+        .to_string();
+        let click_view = view.clone();
+        let key_view = view.downgrade();
         div()
             .id("reduced-motion-setting")
             .test_support()
@@ -516,15 +531,29 @@ impl DesktopView {
             .child(settings_row(
                 rust_i18n::t!("app.settings.appearance.reduce_motion").to_string(),
                 rust_i18n::t!("app.settings.appearance.reduce_motion_description").to_string(),
-                div()
-                    .flex()
-                    .gap_1()
-                    .children(preferences::ReducedMotionPreference::ALL.into_iter().map(|preference| {
-                        let label = preference.label();
-                        let selected = preference == current;
-                        desktop_ghost_button(format!("reduce-motion-{}", preference.id()))
-                            .label(label.clone())
-                            .accessibility_label(
+                segmented_choice_wrapper(
+                    "reduced-motion-tabs",
+                    &focus,
+                    selected,
+                    preferences::ReducedMotionPreference::ALL.len(),
+                    move |next, _, cx| {
+                        if let Some(preference) = preferences::ReducedMotionPreference::ALL.get(next) {
+                            let _updated = key_view.update(cx, |view, cx| view.set_reduced_motion(*preference, cx));
+                        }
+                    },
+                    ring,
+                    choice_label.into(),
+                    desktop_segmented_tab_bar("reduced-motion-segmented")
+                        .selected_index(selected)
+                        .on_click(move |index: &usize, _, cx| {
+                            if let Some(preference) = preferences::ReducedMotionPreference::ALL.get(*index) {
+                                click_view.update(cx, |view, cx| view.set_reduced_motion(*preference, cx));
+                            }
+                        })
+                        .children(preferences::ReducedMotionPreference::ALL.map(|preference| {
+                            let label = preference.label();
+                            let selected = preference == current;
+                            Tab::new().label(label.clone()).aria_label(
                                 rust_i18n::t!(
                                     "app.appearance.motion_aria",
                                     label = label.as_str(),
@@ -536,26 +565,8 @@ impl DesktopView {
                                 )
                                 .to_string(),
                             )
-                            .tooltip(match preference {
-                                preferences::ReducedMotionPreference::System => {
-                                    rust_i18n::t!("app.appearance.reread_system").to_string()
-                                }
-                                preferences::ReducedMotionPreference::On => {
-                                    rust_i18n::t!("app.appearance.reduce_animations").to_string()
-                                }
-                                preferences::ReducedMotionPreference::Off => {
-                                    rust_i18n::t!("app.appearance.allow_animations").to_string()
-                                }
-                            })
-                            .toggled(selected)
-                            .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
-                            .on_click({
-                                let view = view.clone();
-                                move |_, _: &mut Window, cx: &mut App| {
-                                    view.update(cx, |view, cx| view.set_reduced_motion(preference, cx));
-                                }
-                            })
-                    })),
+                        })),
+                ),
                 &colors,
             ))
             .into_any_element()

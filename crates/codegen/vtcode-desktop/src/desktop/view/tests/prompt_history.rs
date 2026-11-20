@@ -375,10 +375,29 @@ fn scope_switcher_click_changes_scope_and_fetches(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_history_with_backend(&["thread prompt"], cx);
     expect_recent_prompts_request(&mut requests, HistoryScope::Everywhere);
     cx.update_window(window, |_, window, cx| {
-        assert!(window.try_find("history-scope-project").is_some(), "scope switcher offers the project scope");
-        window.click("history-scope-project", cx);
+        assert!(window.try_find("history-scope-tabs").is_some(), "scope switcher offers the three scopes");
+        window.within("history-scope-tabs").click(1usize, cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).history_scope, HistoryScope::Project);
+    })
+    .unwrap();
+    expect_recent_prompts_request(&mut requests, HistoryScope::Project);
+}
+
+#[gpui_kit::test]
+fn scope_switcher_keyboard_changes_scope_and_fetches(cx: &mut TestAppContext) {
+    use super::super::HistoryScope;
+    let (window, view, mut requests) = open_history_with_backend(&["thread prompt"], cx);
+    expect_recent_prompts_request(&mut requests, HistoryScope::Everywhere);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.read(cx).history_scope_focus.clone().focus(window, cx);
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).history_scope, HistoryScope::Project);
+        window.press("end", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).history_scope, HistoryScope::Session, "End selects the last scope");
     })
     .unwrap();
     expect_recent_prompts_request(&mut requests, HistoryScope::Project);

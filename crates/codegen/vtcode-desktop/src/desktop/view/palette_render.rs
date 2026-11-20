@@ -150,37 +150,52 @@ impl DesktopView {
                 let scope_weak = weak.clone();
                 let palette_id = state.entity_id();
                 let current = self.history_scope;
+                let focus = self.history_scope_focus.clone();
+                let ring = colors.ring;
                 let scopes = [HistoryScope::Everywhere, HistoryScope::Project, HistoryScope::Session];
+                let selected = scopes.iter().position(|scope| *scope == current).unwrap_or_default();
+                let choice_label: gpui_kit::SharedString =
+                    format!("{}: {}", rust_i18n::t!("app.palette.title.prompt_history"), current.title()).into();
                 command.header(move |_, _, _| {
-                    let weak = scope_weak.clone();
-                    div().id("history-scope-header").px_3().py_2().child(
-                        gpui_kit::component::button::ToggleGroup::new("history-scope")
-                            .segmented()
-                            .small()
-                            .children(scopes.map(|scope| {
-                                Toggle::new(format!("history-scope-{}", scope.label()))
-                                    .label(scope.title())
-                                    .checked(scope == current)
-                            }))
-                            .on_click(move |states, _, cx| {
-                                let _updated = weak.update(cx, |view, cx| {
+                    let key_weak = scope_weak.clone();
+                    let click_weak = scope_weak.clone();
+                    let focus = focus.clone();
+                    let choice_label = choice_label.clone();
+                    div().id("history-scope-header").px_3().py_2().child(segmented_choice_wrapper(
+                        "history-scope-tabs",
+                        &focus,
+                        selected,
+                        scopes.len(),
+                        move |next, _, cx| {
+                            let _updated = key_weak.update(cx, |view, cx| {
+                                if view.palette_kind != PaletteKind::PromptHistory
+                                    || !view.palette_is_current(palette_id)
+                                {
+                                    return;
+                                }
+                                if let Some(scope) = scopes.get(next).copied() {
+                                    view.set_history_scope(scope, cx);
+                                }
+                            });
+                        },
+                        ring,
+                        choice_label,
+                        desktop_segmented_tab_bar("history-scope-segmented")
+                            .selected_index(selected)
+                            .on_click(move |index: &usize, _, cx| {
+                                let _updated = click_weak.update(cx, |view, cx| {
                                     if view.palette_kind != PaletteKind::PromptHistory
                                         || !view.palette_is_current(palette_id)
                                     {
                                         return;
                                     }
-                                    // Segmented toggles flip independently: the
-                                    // scope whose state differs from the render
-                                    // is the click target.
-                                    let clicked = states.iter().enumerate().position(|(index, on)| {
-                                        *on != scopes.get(index).is_some_and(|scope| *scope == view.history_scope)
-                                    });
-                                    if let Some(scope) = clicked.and_then(|index| scopes.get(index).copied()) {
+                                    if let Some(scope) = scopes.get(*index).copied() {
                                         view.set_history_scope(scope, cx);
                                     }
                                 });
-                            }),
-                    )
+                            })
+                            .children(scopes.map(|scope| Tab::new().label(scope.title()).aria_label(scope.title()))),
+                    ))
                 })
             })
             .empty(move |_, _, _| {

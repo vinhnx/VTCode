@@ -313,6 +313,60 @@ fn workspace_switch_clears_picker_rows_until_rescan(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn picker_source_tabs_move_with_arrow_and_home_end_keys(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    seed_workspace_files(&view, cx, workspace.path());
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.read(cx).picker_tab_focus.clone().focus(window, cx);
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("picker-choose-files").is_some(), "Right selects This computer");
+        window.press("left", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("picker-file-list").is_some(), "Left returns to the workspace tree");
+        window.press("end", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("picker-choose-files").is_some(), "End selects the last source");
+        window.press("home", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("picker-file-list").is_some(), "Home selects the first source");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn clicking_a_picker_tab_arms_arrow_navigation(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    seed_workspace_files(&view, cx, workspace.path());
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("attachment-picker-tabs").click(1usize, cx);
+        window.render_frame(cx);
+        assert!(
+            view.read(cx).picker_tab_focus.is_focused(window),
+            "clicking a tab must focus the choice wrapper so arrow keys work"
+        );
+        window.press("left", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("picker-file-list").is_some(), "Left returns to the workspace tree after a click");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn attachment_picker_contains_tab_focus_on_both_tabs(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);

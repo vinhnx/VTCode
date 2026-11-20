@@ -130,14 +130,41 @@ impl DesktopView {
         };
         let weak = cx.entity().downgrade();
 
-        // The wrapper owns the lookup id: Kit bars scope their id into child
-        // paths but register nothing observable themselves.
-        let tabs = div().id("attachment-picker-tabs").test_support().child(
-            desktop_folder_tab_bar("attachment-picker-tabs-bar")
-                .selected_index(match state.tab {
-                    AttachmentPickerTab::Workspace => 0,
-                    AttachmentPickerTab::Computer => 1,
-                })
+        // The wrapper owns the lookup id and focus: Kit bars scope their id
+        // into child paths but register nothing observable themselves, and Kit
+        // tabs do not participate in keyboard focus on their own.
+        let selected = match state.tab {
+            AttachmentPickerTab::Workspace => 0,
+            AttachmentPickerTab::Computer => 1,
+        };
+        let tab_weak = cx.entity().downgrade();
+        let ring = colors.ring;
+        let source_label = match state.tab {
+            AttachmentPickerTab::Workspace => app::NAME.to_string(),
+            AttachmentPickerTab::Computer => rust_i18n::t!("app.composer.picker_this_computer").to_string(),
+        };
+        let choice_label = format!("{}: {}", rust_i18n::t!("app.composer.attach_files"), source_label);
+        let tabs = segmented_choice_wrapper(
+            "attachment-picker-tabs",
+            &self.picker_tab_focus,
+            selected,
+            2,
+            move |next, _, cx| {
+                let _updated = tab_weak.update(cx, |view, cx| {
+                    view.set_attachment_picker_tab(
+                        if next == 0 {
+                            AttachmentPickerTab::Workspace
+                        } else {
+                            AttachmentPickerTab::Computer
+                        },
+                        cx,
+                    );
+                });
+            },
+            ring,
+            choice_label.into(),
+            desktop_segmented_tab_bar("attachment-picker-tabs-bar")
+                .selected_index(selected)
                 .on_click(cx.listener(|this, index: &usize, _, cx| {
                     this.set_attachment_picker_tab(
                         if *index == 0 {

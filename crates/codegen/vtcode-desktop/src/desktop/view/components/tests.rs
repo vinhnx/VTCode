@@ -24,6 +24,23 @@ fn vtcode_nav_mark_is_the_stroke_only_v_on_transparency() {
 }
 
 #[test]
+fn segmented_choice_navigation_clamps_at_both_ends() {
+    let step = |key: &'static str, current: usize, count: usize| {
+        let keystroke = gpui_kit::Keystroke::parse(key).unwrap();
+        segmented_choice_index(&keystroke, current, count)
+    };
+    assert_eq!(step("right", 0, 3), Some(1));
+    assert_eq!(step("down", 1, 3), Some(2));
+    assert_eq!(step("right", 2, 3), Some(2), "the last choice must not wrap");
+    assert_eq!(step("left", 2, 3), Some(1));
+    assert_eq!(step("up", 0, 3), Some(0), "the first choice must not wrap");
+    assert_eq!(step("home", 2, 3), Some(0));
+    assert_eq!(step("end", 0, 3), Some(2));
+    assert_eq!(step("enter", 0, 3), None, "activation belongs to the owning scope");
+    assert_eq!(step("right", 0, 0), None, "an empty choice has no target");
+}
+
+#[test]
 fn button_tiers_keep_the_pointing_hand_cursor() {
     for mut button in [
         desktop_ghost_button("tier-cursor-ghost"),

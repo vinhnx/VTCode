@@ -6,6 +6,7 @@ use super::*;
 pub(super) struct AccessibilitySettingsProps {
     pub(super) show_status_bar: bool,
     pub(super) reduced_motion: preferences::ReducedMotionPreference,
+    pub(super) motion_choice_focus: FocusHandle,
     pub(super) contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
     pub(super) contrast_focus: FocusHandle,
     pub(super) contrast: u8,
@@ -18,6 +19,7 @@ impl AccessibilitySettingsProps {
         Self {
             show_status_bar: view.preferences.show_status_bar,
             reduced_motion: view.preferences.reduced_motion,
+            motion_choice_focus: view.motion_choice_focus.clone(),
             contrast_slider: view.contrast_slider.clone(),
             contrast_focus: view.contrast_focus.clone(),
             contrast: view.preferences.contrast,
@@ -143,7 +145,12 @@ impl DesktopView {
                                 }
                             }),
                     )
-                    .child(Self::render_reduced_motion_content(props.reduced_motion, view.clone(), cx)),
+                    .child(Self::render_reduced_motion_content(
+                        props.reduced_motion,
+                        props.motion_choice_focus.clone(),
+                        view.clone(),
+                        cx,
+                    )),
             ))
             .child(Self::render_contrast_settings_content(&props, view, cx))
             .into_any_element()

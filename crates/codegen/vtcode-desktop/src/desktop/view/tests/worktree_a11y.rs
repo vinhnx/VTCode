@@ -630,29 +630,55 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
         select_settings_category(window, 2, cx);
         scroll_settings_by(window, px(-240.), cx);
         window.render_frame(cx);
-        assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
-        assert_eq!(window.find("reduce-motion-system").checked(), Some(true));
-        assert_eq!(window.find("reduce-motion-off").checked(), Some(false));
+        // The wrapper is the only focus stop, so it must name itself and the
+        // current value; the inner Kit tabs expose their own selected state.
+        assert_eq!(window.find("reduced-motion-tabs").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("reduced-motion-tabs").label(), Some("Reduce motion: System (selected)"));
+        assert_eq!(window.within("reduced-motion-tabs").find(0usize).label(), Some("Reduce motion: System (selected)"));
+        assert_eq!(window.within("reduced-motion-tabs").find(0usize).selected(), Some(true));
+        assert_eq!(window.within("reduced-motion-tabs").find(2usize).selected(), Some(false));
 
-        window.click("reduce-motion-off", cx);
+        window.within("reduced-motion-tabs").click(2usize, cx);
         window.render_frame(cx);
         assert!(!cx.reduce_motion());
-        assert_eq!(window.find("reduce-motion-off").label(), Some("Reduce motion: Off (selected)"));
-        assert_eq!(window.find("reduce-motion-off").checked(), Some(true));
-        assert_eq!(window.find("reduce-motion-system").checked(), Some(false));
+        assert_eq!(window.within("reduced-motion-tabs").find(2usize).label(), Some("Reduce motion: Off (selected)"));
+        assert_eq!(window.within("reduced-motion-tabs").find(2usize).selected(), Some(true));
+        assert_eq!(window.within("reduced-motion-tabs").find(0usize).selected(), Some(false));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().reduced_motion,
             crate::desktop::preferences::ReducedMotionPreference::Off
         );
 
-        window.click("reduce-motion-system", cx);
+        window.within("reduced-motion-tabs").click(0usize, cx);
         window.render_frame(cx);
         assert!(cx.reduce_motion(), "System restores the system value captured before overrides");
-        assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
+        assert_eq!(window.within("reduced-motion-tabs").find(0usize).label(), Some("Reduce motion: System (selected)"));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().reduced_motion,
             crate::desktop::preferences::ReducedMotionPreference::System
         );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn reduced_motion_segment_moves_with_keyboard_and_reports_selection(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        select_settings_category(window, 2, cx);
+        scroll_settings_by(window, px(-240.), cx);
+        window.render_frame(cx);
+        view.read(cx).motion_choice_focus.clone().focus(window, cx);
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.reduced_motion, crate::desktop::preferences::ReducedMotionPreference::On);
+        assert_eq!(window.within("reduced-motion-tabs").find(1usize).selected(), Some(true));
+        window.press("end", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.reduced_motion, crate::desktop::preferences::ReducedMotionPreference::Off);
+        assert_eq!(window.within("reduced-motion-tabs").find(2usize).selected(), Some(true));
     })
     .unwrap();
 }
