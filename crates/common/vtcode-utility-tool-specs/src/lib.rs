@@ -176,7 +176,7 @@ pub fn cron_parameters() -> Value {
 /// them, and the fail-closed `Disabled` outcomes (`disabled`, `unsupported
 /// provider`, `no target configured`) guide the off-state instead. Turn
 /// limits and the browser target stay in configuration.
-pub const COMPUTER_USE_DESCRIPTION: &str = "Use when the user asks to see, screenshot, or operate a web page through its UI. The turn screenshots, clicks, types, and scrolls in an isolated browser, then reports a redacted summary. Prefer this over shell commands such as headless browsers or screenshot CLIs. Every turn asks for human approval before acting, and screenshots never reach the transcript.";
+pub const COMPUTER_USE_DESCRIPTION: &str = "Use when the user asks to see, screenshot, or operate the isolated browser preview through its UI. The turn screenshots, clicks, types, and scrolls in an isolated browser with no network access, then reports a redacted summary. Not for the open web or local servers — capture those with a headless browser via exec_command. Every turn asks for human approval before acting, and screenshots never reach the transcript.";
 
 #[must_use]
 pub fn computer_use_parameters() -> Value {
@@ -256,7 +256,7 @@ pub fn cron_delete_parameters() -> Value {
 
 /// Model-visible description of the `exec_command` tool. The escalation
 /// justification requirement is stated once, on the `justification` field.
-pub const EXEC_COMMAND_DESCRIPTION: &str = "Run a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running. Inspect current target source before edits, then verify the bounded change. For file edits, use apply_patch instead of shell redirection or in-place editors such as `sed -i`. For web-page screenshots or UI operation, use the computer_use tool instead of headless browsers when available. Expanded sandbox_permissions modes trigger an approval check before the command runs.";
+pub const EXEC_COMMAND_DESCRIPTION: &str = "Run a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running. Inspect current target source before edits, then verify the bounded change. For file edits, use apply_patch instead of shell redirection or in-place editors such as `sed -i`. Use computer_use for the isolated browser preview when available. Expanded sandbox_permissions modes trigger an approval check before the command runs.";
 
 #[must_use]
 pub fn exec_command_parameters() -> Value {
@@ -478,7 +478,9 @@ mod tests {
             "human approval",
             "never reach the transcript",
             "screenshot",
-            "Prefer this over shell",
+            "isolated browser preview",
+            "no network access",
+            "headless browser via exec_command",
         ] {
             assert!(COMPUTER_USE_DESCRIPTION.contains(needle), "description must state {needle}");
         }
@@ -699,7 +701,7 @@ mod tests {
     fn exec_command_description_states_edit_routing_and_escalation_rules() {
         assert!(EXEC_COMMAND_DESCRIPTION.starts_with("Run a shell command through the active sandbox policy"));
         assert!(EXEC_COMMAND_DESCRIPTION.contains("For file edits, use apply_patch"));
-        assert!(EXEC_COMMAND_DESCRIPTION.contains("use the computer_use tool instead of headless browsers"));
+        assert!(EXEC_COMMAND_DESCRIPTION.contains("Use computer_use for the isolated browser preview when available"));
         assert!(EXEC_COMMAND_DESCRIPTION.contains("approval check"));
         // The justification requirement is stated once, on the `justification`
         // field description; the tool description keeps only the approval-check

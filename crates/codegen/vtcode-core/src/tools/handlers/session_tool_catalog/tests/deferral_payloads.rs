@@ -210,9 +210,9 @@ fn lean_defaults_defer_planner_and_skills_tools_outside_planning() {
         tools::APPLY_PATCH,
         tools::CODE_SEARCH,
         tools::GREP_FILE,
-        // `computer_use` stays eager so the validation redirect guard's
-        // steering target is always callable: a deferred computer_use
-        // plus an eager exec_command biases every screenshot toward shell.
+        // `computer_use` stays eager so the routing text's steering
+        // target is always callable: a deferred computer_use plus an
+        // eager exec_command biases every screenshot toward shell.
         tools::COMPUTER_USE,
         // Workflow-coordination control-plane tools stay directly callable in
         // every mode: full-auto references them in `allowed_tools` and OpenAI

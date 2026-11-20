@@ -891,7 +891,7 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::WRITE_STDIN
         | tools::SEARCH_TOOLS
         | tools::CODE_SEARCH
-        | tools::GREP_FILE | tools::COMPUTER_USE // Eager: guard steers here.
+        | tools::GREP_FILE | tools::COMPUTER_USE // Eager: routing text steers preview tasks here.
         | tools::MATRIX
         // Workflow-coordination control-plane tools stay directly callable in
         // every mode: full-auto lists them in `allowed_tools` (they bypass

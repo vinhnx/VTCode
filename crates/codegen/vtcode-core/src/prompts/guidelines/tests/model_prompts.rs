@@ -166,10 +166,12 @@ fn computer_use_guidance_has_presence_and_budget_in_both_densities() {
             false,
         );
         assert_eq!(enabled.matches(COMPUTER_USE_GUIDANCE).count(), 1);
-        assert!(enabled.contains("asks the user for approval before acting"));
+        assert!(enabled.contains("asks approval before acting"));
         assert!(enabled.contains("local files, shells, or secrets entry"));
         assert!(enabled.contains("instead of exploring code or shelling around"));
-        assert!(enabled.contains("native desktop app rather than a web page"));
+        assert!(enabled.contains("or a desktop app rather than the preview"));
+        assert!(enabled.contains("use the shell (headless browser"));
+        assert!(enabled.contains("no network access"));
         assert!(!disabled.contains("screen-sized browser task"));
         assert!(vtcode_commons::estimate_tokens(&enabled) <= 170, "{profile:?}: {enabled}");
     }

@@ -23,9 +23,87 @@ use super::execution::{
     propose_computer_turn,
 };
 use super::report::turn_report_lines;
-use super::{TOOL_NAME, request_target_approval};
+use super::{NATIVE_SANDBOX_BRIEFING, TOOL_NAME, request_target_approval};
 use crate::agent::runloop::unified::tool_pipeline::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+
+/// Common public suffixes plus RFC-reserved names, for bare-domain
+/// detection. Deliberately small: unknown suffixes escape (documented)
+/// rather than risk false refuses on filenames and versions.
+const EXTERNAL_ADDRESS_SUFFIXES: &[&str] = &[
+    "com",
+    "net",
+    "org",
+    "io",
+    "dev",
+    "app",
+    "ai",
+    "co",
+    "edu",
+    "gov",
+    "info",
+    "biz",
+    "us",
+    "uk",
+    "de",
+    "fr",
+    "jp",
+    "local",
+    "localhost",
+    "invalid",
+    "test",
+    "example",
+];
+
+/// Whether a host part names an external address: IP literal, localhost,
+/// or a dotted name under a known suffix. Strict on shape (valid hostname
+/// characters, no leading/trailing dots or dashes) so versions, filenames,
+/// and times fail open instead of refusing legitimate preview tasks.
+fn host_is_external_address(hostport: &str) -> bool {
+    if let Some(rest) = hostport.strip_prefix('[') {
+        return rest
+            .split_once(']')
+            .is_some_and(|(inner, _)| inner.parse::<std::net::IpAddr>().is_ok());
+    }
+    if hostport.parse::<std::net::IpAddr>().is_ok() {
+        return true;
+    }
+    let host = match hostport.rsplit_once(':') {
+        Some((head, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => head,
+        _ => hostport,
+    };
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    match host.rsplit_once('.') {
+        Some((head, tld)) => {
+            !head.is_empty()
+                && head.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+                && !head.starts_with(['.', '-'])
+                && !head.ends_with(['.', '-'])
+                && EXTERNAL_ADDRESS_SUFFIXES.contains(&tld.to_ascii_lowercase().as_str())
+        }
+        None => false,
+    }
+}
+
+/// Whether the task names an address outside the offline preview: URL
+/// schemes, IP literals, localhost, or bare domains. Guards the
+/// fail-closed refusal above. Known limits, all fail-open: unknown
+/// suffixes, scheme-less brand names ("screenshot google"), and single
+/// labels escape to the system briefing instead; preview tasks that
+/// merely mention a domain ("type example.com into the field") over-match.
+fn task_requests_external_address(task: &str) -> bool {
+    task.split_whitespace().any(|raw| {
+        let token = raw.trim_matches(['\'', '"', '(', ')', ',', ';', '!', '?', '.']);
+        let lower = token.to_ascii_lowercase();
+        if lower.starts_with("http://") || lower.starts_with("https://") {
+            return true;
+        }
+        let hostport = token.split(['/', '?', '#']).next().unwrap_or_default();
+        host_is_external_address(hostport)
+    })
+}
 
 /// Run one model-requested computer turn for `task`, approving through the
 /// permission flow. Borrows never overlap: propose, approve, and execute
@@ -41,6 +119,21 @@ pub(crate) async fn handle_computer_use_tool_call(
     else {
         return Ok(failure_outcome("computer_use needs a non-empty task describing one screen-sized goal."));
     };
+    // Fail closed on tasks the offline sandbox cannot serve: without this,
+    // an external-URL task would boot the placeholder preview, screenshot
+    // it, and report success — a silent wrong answer the redacted outer
+    // transcript cannot catch. Refuse before config, provider, proposal,
+    // and approval; the check needs only the task text.
+    if task_requests_external_address(task) {
+        let outcome = ComputerTurnOutcome {
+            kind: ComputerTurnOutcomeKind::Disabled {
+                reason: "external address outside the offline preview",
+            },
+            model: ctx.config.model.clone(),
+            usage: None,
+        };
+        return Ok(map_computer_outcome(&outcome));
+    }
     let computer_use = match ctx.vt_cfg.as_ref() {
         Some(config) => config.computer_use.clone(),
         None => crate::main_helpers::load_workspace_config(&ctx.config.workspace)
@@ -53,11 +146,18 @@ pub(crate) async fn handle_computer_use_tool_call(
     let provider_name = ctx.provider_client.name().to_string();
     let request = LLMRequest {
         model,
-        messages: Arc::new(vec![Message {
-            role: MessageRole::User,
-            content: MessageContent::Text(task.to_string()),
-            ..Default::default()
-        }]),
+        messages: Arc::new(vec![
+            Message {
+                role: MessageRole::System,
+                content: MessageContent::Text(NATIVE_SANDBOX_BRIEFING.to_string()),
+                ..Default::default()
+            },
+            Message {
+                role: MessageRole::User,
+                content: MessageContent::Text(task.to_string()),
+                ..Default::default()
+            },
+        ]),
         ..Default::default()
     };
     let proposal = propose_computer_turn(
@@ -299,6 +399,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn computer_use_flagged_scope_review_proceeds_to_batch() {
+        // The gateway always flags computer_use (destructive
+        // classification); validation must still proceed so the review
+        // happens once, at the batch approval. Two-part proof: the
+        // premise (gateway flags here) and the reroute itself — without
+        // it the headless prompt resolves to Exit (the test session has
+        // no event sender), so asserting Proceed fails on a reverted
+        // reroute. Single-prompt behavior itself is verified
+        // interactively.
+        use crate::agent::runloop::unified::tool_call_safety::invocation_id_from_call_id;
+        use crate::agent::runloop::unified::tool_pipeline::validation::{
+            SafetyValidationFailure, validate_tool_call_safety,
+        };
+
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.session.set_skip_confirmations(false);
+        let args = serde_json::json!({"task": "take a screenshot"});
+        let safety = validate_tool_call_safety(
+            ctx.safety_validator,
+            "computer_use",
+            &args,
+            invocation_id_from_call_id("reroute-premise"),
+        )
+        .await;
+        assert!(
+            matches!(safety, Err(SafetyValidationFailure::NeedsApproval(_))),
+            "gateway must flag computer_use (destructive classification)"
+        );
+        let result = super::super::super::validation::validate_tool_call(&mut ctx, "reroute-1", "computer_use", &args)
+            .await
+            .expect("validate");
+        assert!(
+            matches!(result, super::super::super::types::ValidationResult::Proceed(_)),
+            "flagged computer_use must proceed past validation so the review reroutes to the batch approval"
+        );
+    }
+
+    #[tokio::test]
     async fn computer_use_cached_denial_still_blocks() {
         let mut backing = super::super::super::tests::TestContextBacking::new().await;
         let mut ctx = backing.turn_processing_context();
@@ -345,6 +484,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn computer_use_prompts_exactly_once_across_validation_and_batch() {
+        // Single-prompt proof: validation must skip the scope prompt
+        // (reroute + skip) while the batch approval still prompts. The
+        // scripted session approves the first prompt; the sender is then
+        // dropped so any second prompt exits fast instead of hanging.
+        // Recorder counts approvals, and counts stay under the learned
+        // auto-approve threshold, so the count equals prompts shown: 0
+        // means the batch review was skipped (unsafe), 2 means the scope
+        // prompt leaked back. The post-approval outcome is intentionally
+        // unasserted beyond not-cancelled (docker presence varies).
+        use vtcode_ui::tui::app::{
+            InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientSubmission,
+        };
+
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+        event_tx
+            .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                InlineListSelection::ToolApproval(true),
+            ))))
+            .expect("queue approval");
+        drop(event_tx);
+        let mut approving = InlineSession {
+            handle: InlineHandle::new_for_tests(command_tx),
+            events: event_rx,
+            worker: None,
+        };
+        let mut ctx = backing.turn_processing_context();
+        ctx.session = &mut approving;
+        ctx.session.set_skip_confirmations(false);
+        let target = tempfile::tempdir().expect("target dir");
+        std::fs::write(target.path().join("index.html"), "<h1>preview</h1>").expect("seed target");
+        let mut vt_cfg = vtcode_core::config::loader::VTCodeConfig::default();
+        vt_cfg.computer_use.enabled = true;
+        vt_cfg.computer_use.browser_build = Some(target.path().to_path_buf());
+        ctx.vt_cfg = Some(&vt_cfg);
+        *ctx.provider_client = Box::new(ScriptedNativeProvider);
+        let args = serde_json::json!({"task": "take a screenshot of the preview"});
+        let validation =
+            super::super::super::validation::validate_tool_call(&mut ctx, "prompt-count-1", "computer_use", &args)
+                .await
+                .expect("validate");
+        assert!(
+            matches!(validation, super::super::super::types::ValidationResult::Proceed(_)),
+            "validation must proceed past the skipped scope prompt"
+        );
+        let outcome = handle_computer_use_tool_call(&mut ctx, &args).await.expect("tool result");
+        assert!(
+            !matches!(outcome.status, ToolExecutionStatus::Cancelled),
+            "consumed approval must proceed past the batch, got {:?}",
+            outcome.status
+        );
+        let prompts = ctx.approval_recorder.get_approval_count("computer_use").await;
+        assert_eq!(prompts, 1, "exactly one prompt must show per computer turn");
+    }
+
+    #[tokio::test]
     async fn tool_call_headless_denial_cancels_before_launch() {
         let mut backing = super::super::super::tests::TestContextBacking::new().await;
         let mut ctx = backing.turn_processing_context();
@@ -364,6 +561,77 @@ mod tests {
             outcome.status
         );
         assert!(!outcome.status.is_failure_like());
+    }
+
+    #[test]
+    fn external_address_matrix_covers_schemes_ips_domains_and_near_misses() {
+        let cases: &[(&str, bool)] = &[
+            ("screenshot https://apple.com", true),
+            ("open HTTP://X.COM/a", true),
+            ("go to https://example.org/a/b?q=1#x", true),
+            ("screenshot apple.com", true),
+            ("'apple.com.'", true),
+            ("(see example.io!)", true),
+            ("www.example.com/x", true),
+            ("ping 192.168.1.5", true),
+            ("open http://[::1]:3000/", true),
+            ("screenshot localhost:3000", true),
+            ("check LOCALHOST", true),
+            ("take a screenshot", false),
+            ("check index.html renders", false),
+            ("runner.mjs threw", false),
+            ("version 1.64.1 broke", false),
+            ("open report.pdf", false),
+            ("check the intranet", false),
+            ("screenshot google", false),
+            // Known over-match, documented on the detector: a preview
+            // task that merely mentions a domain still refuses.
+            ("type example.com into the field", true),
+        ];
+        for (task, expected) in cases {
+            assert_eq!(task_requests_external_address(task), *expected, "task={task:?}");
+        }
+    }
+
+    struct NeverCalledProvider;
+
+    #[async_trait::async_trait]
+    impl LLMProvider for NeverCalledProvider {
+        fn name(&self) -> &str {
+            "never-called"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("refused turn must never reach the provider");
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec![]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            panic!("refused turn must never reach the provider");
+        }
+    }
+
+    #[tokio::test]
+    async fn external_address_task_refuses_before_provider_config_and_approval() {
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        *ctx.provider_client = Box::new(NeverCalledProvider);
+        let outcome =
+            handle_computer_use_tool_call(&mut ctx, &serde_json::json!({"task": "screenshot https://apple.com"}))
+                .await
+                .expect("tool result");
+        assert!(
+            matches!(outcome.status, ToolExecutionStatus::Failure { .. }),
+            "refusal must fail closed, got {:?}",
+            outcome.status
+        );
     }
 
     #[tokio::test]

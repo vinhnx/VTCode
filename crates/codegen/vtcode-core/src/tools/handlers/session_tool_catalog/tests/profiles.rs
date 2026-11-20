@@ -94,6 +94,41 @@ fn default_profile_exposes_only_codex_baseline_tools() {
     }
 }
 #[test]
+fn default_profile_hides_computer_use_advanced_shows_it() {
+    // v1 advanced-only: default inclusion costs ~230 wire tokens per
+    // request for a tool that is Disabled until enabled and configured
+    // (measured 2,709 vs the 2,500-token harness-tax budget). Advanced
+    // sessions keep the full off-state guidance; default users discover
+    // CUA through the Settings pane, not the wire list. Planning hides
+    // it at the catalog layer here; the per-turn harness filter strips
+    // all mutating tools (pinned in features.rs), covering advanced too.
+    let registrations = vec![
+        registration(tools::EXEC_COMMAND)
+            .with_description("Run command")
+            .with_parameter_schema(empty_object_schema()),
+        registration(tools::COMPUTER_USE)
+            .with_description("Drive the preview")
+            .with_parameter_schema(empty_object_schema()),
+    ];
+
+    let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+    let base = || {
+        SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        )
+    };
+    assert_eq!(catalog.public_tool_names(base()), vec![tools::EXEC_COMMAND.to_string()]);
+    assert_eq!(
+        catalog.public_tool_names(base().with_tool_profile(ToolProfile::AdvancedVtCode)),
+        vec![tools::EXEC_COMMAND.to_string(), tools::COMPUTER_USE.to_string()]
+    );
+    assert_eq!(catalog.public_tool_names(base().with_planning_active(true)), vec![tools::EXEC_COMMAND.to_string()]);
+}
+
+#[test]
 fn default_profile_exposes_planning_tools_during_planning() {
     let registrations = vec![
         registration(tools::EXEC_COMMAND)

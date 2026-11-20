@@ -6,12 +6,10 @@
 //! - `read_guard`: Tracks repeated file reads (family cap + per-file-path cap)
 //! - `spool_guard`: Tracks spool chunk reads
 //! - `task_tracker_guard`: Tracks duplicate task tracker creates
-//! - `computer_use_redirect`: Redirects shell screenshots to `computer_use`
 //! - `common`: Shared utilities for all guards
 
 pub(crate) mod blocked_tool_guard;
 pub(crate) mod common;
-pub(crate) mod computer_use_redirect;
 pub(crate) mod read_guard;
 pub(crate) mod shell_run_guard;
 pub(crate) mod spool_guard;
@@ -24,7 +22,6 @@ pub(crate) use blocked_tool_guard::{
     blocked_tool_call_fuse_trip, blocked_tool_call_limits, blocked_tool_call_limits_for_tool,
     blocked_tool_call_messages_detailed, enforce_blocked_tool_call_guard, max_consecutive_blocked_tool_calls_per_turn,
 };
-pub(crate) use computer_use_redirect::enforce_computer_use_redirect_guard;
 pub(crate) use read_guard::{
     enforce_declared_edit_guard, enforce_read_after_write_guard, enforce_repeated_read_only_call_guard,
 };

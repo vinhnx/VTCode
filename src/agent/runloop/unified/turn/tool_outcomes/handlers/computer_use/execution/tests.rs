@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use super::super::NATIVE_SANDBOX_BRIEFING;
 use serde_json::Value;
 use vtcode_computer_use::browser::container::docker_available;
 use vtcode_computer_use::{Action, MouseButton, Observation, Point, Screenshot};
@@ -753,15 +754,24 @@ async fn computer_use_live_turn_executes_over_real_container() {
     let stop = CtrlCState::new();
     let notify = Notify::new();
     let mut stats = SessionStats::default();
+    // Mirror the handler's proposal shape (briefing + user task) so the live
+    // provider validates the exact message layout shipped.
     let request = LLMRequest {
         model: LIVE_MODEL.to_string(),
-        messages: std::sync::Arc::new(vec![vtcode_core::llm::provider::Message {
-            role: vtcode_core::llm::provider::MessageRole::User,
-            content: vtcode_core::llm::provider::MessageContent::Text(
-                "Take a screenshot of the current screen.".to_string(),
-            ),
-            ..Default::default()
-        }]),
+        messages: std::sync::Arc::new(vec![
+            vtcode_core::llm::provider::Message {
+                role: vtcode_core::llm::provider::MessageRole::System,
+                content: vtcode_core::llm::provider::MessageContent::Text(NATIVE_SANDBOX_BRIEFING.to_string()),
+                ..Default::default()
+            },
+            vtcode_core::llm::provider::Message {
+                role: vtcode_core::llm::provider::MessageRole::User,
+                content: vtcode_core::llm::provider::MessageContent::Text(
+                    "Take a screenshot of the preview page.".to_string(),
+                ),
+                ..Default::default()
+            },
+        ]),
         ..Default::default()
     };
     // This test is its own human: the isolated container plus a read-only

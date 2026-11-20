@@ -58,8 +58,6 @@ changing the runloop, update path, allocator, or request assembly.
   approved-plan build.
 - Approved-plan implementation turns receive one internal `+50` loop allowance at initialization, clamped by the
   ordinary hard cap; `0` remains unlimited and manual extensions stay independent of the wall-clock budget.
-- Steering guards (block-toward-another-tool, e.g. the computer-use screenshot redirect) must not activate
-  recovery: recovery forbids the retry the steer exists to produce.
 - Queue model-facing auto-permission probe warnings while a tool batch runs. Flush them after all tool results and
   before recovery directives; keep the UI warning immediate and deduplicated.
 - During tool-free recovery, do not inject `request_user_input`; it violates the recovery contract. Plan-aware fallback

@@ -154,25 +154,28 @@ Decisions review), approve the proposed batch through the permission
 flow (`request_target_approval`), execute, tear down. Single approval
 per turn: validation skips the generic scope prompt for `computer_use`
 (the batch review shows what would actually execute), while every deny
-path (hook, cache, policy, permission, full-auto) and
-safety-gateway-flagged prompts still apply, and the batch prompt is
-never auto-approvable. Fail-closed refusals (disabled, missing target,
-unsupported provider, unverified model) return as tool errors carrying
-guidance the model relays. The registry executor for the tool is a
-fail-closed stub: execution only ever happens through the turn
-dispatcher.
+path (hook, cache, policy, permission, full-auto, gateway Deny and
+rate-limit) still applies. The gateway always flags the tool
+(destructive classification), so the scope review is rerouted to the
+batch approval rather than shown; the batch carries its own safety
+justification and always prompts, never auto-approvable. Fail-closed refusals (disabled, no target
+configured, unsupported provider, external address outside the offline preview) return as tool errors
+carrying the off-state next step the model relays. The tool stays advanced-profile only in v1:
+default inclusion costs ~230 wire tokens per request (measured 2,709 vs the 2,500-token harness-tax
+budget) for a Disabled-by-default tool; default users discover CUA through the Settings pane, not
+the wire list. The registry executor for the tool is a fail-closed stub: execution only ever
+happens through the turn dispatcher.
 
-Shell screenshots route here too: while computer use is runnable
-(advertised, enabled, target configured, provider capable), an
-`exec_command` carrying a headless `--screenshot` flag or an
-open-URL-plus-`screencapture` compound is blocked in validation with a
-steering error, so the model re-issues the task as `computer_use`.
-Bare `open <url>` (viewing) and bare `screencapture` (desktop captures
-v1 cannot replace) pass through, as does everything when computer use
-cannot run. The master switch stays the human-operated escape hatch
-for sessions that need raw headless output. The tool also bypasses the
-auto-agent full-auto allow-list *visibility* filter (like the workflow
-coordination tools) so the guard's steering target is always callable;
+Scope is the isolated preview only: the container runs with no network
+access and boots by serving the build mount, so external pages, local
+servers, and desktop apps are outside v1 — the model is told to capture
+those through the shell instead (headless browser, `screencapture` for
+the desktop), and the external-scope refusal carries that recipe. A
+validation guard that redirected shell screenshots here was removed for
+exactly that reason: no shell-flag shape identifies a task the sandbox
+can serve, so blocking them routed work into silent failures. The tool
+bypasses the auto-agent full-auto allow-list *visibility* filter (like
+the workflow coordination tools) so it stays callable where advertised;
 execution permission, including the full-auto deny, is still enforced
 at call time.
 

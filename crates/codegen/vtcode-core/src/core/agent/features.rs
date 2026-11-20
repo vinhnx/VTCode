@@ -155,6 +155,7 @@ mod tests {
         assert!(features.allows_tool_name(tools::WRITE_STDIN, false, true));
         assert!(features.allows_tool_name(tools::APPLY_PATCH, false, true));
         assert!(!features.allows_tool_name(tools::WRITE_FILE, true, true));
+        assert!(!features.allows_tool_name(tools::COMPUTER_USE, true, true));
         assert!(features.allows_tool_name(tools::UNIFIED_FILE, true, true));
         assert!(features.allows_tool_name(tools::UNIFIED_EXEC, true, true));
         assert!(features.allows_tool_name(tools::TASK_TRACKER, true, true));

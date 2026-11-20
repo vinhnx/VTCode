@@ -7,9 +7,29 @@ use serde_json::Value;
 
 use super::execution::{ComputerTurnOutcome, ComputerTurnOutcomeKind, NativeTurnResults};
 
+/// Off-state guidance for a Disabled reason, relayed by the model. The tool
+/// is advanced-visible while the switch is off, so these lines are the
+/// activation CTA: each names the concrete next step. Unknown reasons
+/// get the generic setup pointer so a new producer degrades to guidance,
+/// never to a bare reason.
+fn disabled_off_state_guidance(reason: &str) -> &'static str {
+    match reason {
+        "disabled" => "Enable it in Settings (Computer Use), configure a preview build target, then retry.",
+        "unsupported provider" => "Switch to an OpenAI or Anthropic model, then retry.",
+        "no target configured" => "Set the browser build target in Settings (Computer Use), then retry.",
+        "external address outside the offline preview" => {
+            "Capture it through the shell instead: run headless Chrome via exec_command (e.g. `chrome --headless --screenshot=/tmp/shot.png --window-size=1280,800 --virtual-time-budget=8000 URL`; macOS app binary at /Applications/Google Chrome.app/Contents/MacOS/Google Chrome), or `screencapture -x /tmp/shot.png` for the desktop."
+        }
+        _ => "Check Settings (Computer Use) for setup, then retry.",
+    }
+}
+
 pub(crate) fn turn_report_lines(outcome: &ComputerTurnOutcome) -> Vec<String> {
     match &outcome.kind {
-        ComputerTurnOutcomeKind::Disabled { reason } => vec![format!("Computer turn did not run: {reason}.")],
+        ComputerTurnOutcomeKind::Disabled { reason } => vec![format!(
+            "Computer turn did not run: {reason}. {}",
+            disabled_off_state_guidance(reason)
+        )],
         ComputerTurnOutcomeKind::NoNativeCalls { content, ordinaries } => {
             let mut lines = vec![format!(
                 "The model made no computer calls ({} ordinary calls ignored).",
@@ -73,6 +93,30 @@ fn result_report_lines(results: &NativeTurnResults) -> Vec<String> {
 mod tests {
     use super::super::execution::{ComputerFailureStage, RedactedTurnSummary, TeardownOutcome};
     use super::*;
+
+    #[test]
+    fn disabled_reports_guide_the_off_state_with_a_next_step() {
+        // The tool is advanced-visible while the switch is off, so every
+        // Disabled outcome must relay activation, not just name the
+        // reason. Unknown reasons degrade to the generic setup pointer.
+        let outcome = |reason| ComputerTurnOutcome {
+            kind: ComputerTurnOutcomeKind::Disabled { reason },
+            model: "test-model".to_string(),
+            usage: None,
+        };
+        for (reason, needle) in [
+            ("disabled", "Enable it in Settings (Computer Use)"),
+            ("unsupported provider", "Switch to an OpenAI or Anthropic model"),
+            ("no target configured", "Set the browser build target in Settings (Computer Use)"),
+            ("external address outside the offline preview", "Capture it through the shell instead"),
+            ("some future reason", "Check Settings (Computer Use) for setup"),
+        ] {
+            let lines = turn_report_lines(&outcome(reason));
+            assert_eq!(lines.len(), 1, "{reason}");
+            assert!(lines[0].contains(&format!("did not run: {reason}.")));
+            assert!(lines[0].contains(needle), "{reason}: {}", lines[0]);
+        }
+    }
 
     #[test]
     fn computer_use_turn_reports_name_every_outcome_without_payloads() {

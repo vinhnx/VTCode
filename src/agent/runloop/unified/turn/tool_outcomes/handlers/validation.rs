@@ -248,12 +248,6 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(outcome);
     }
 
-    if let Some(outcome) =
-        enforce_computer_use_redirect_guard(ctx, tool_call_id, &canonical_tool_name, effective_args).await
-    {
-        return Ok(outcome);
-    }
-
     if let Some(outcome) = enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, effective_args).await
     {
         return Ok(outcome);
@@ -298,9 +292,24 @@ pub(crate) async fn validate_tool_call<'a>(
     if let Some((outcome, justification)) =
         run_safety_validation_loop(ctx, tool_call_id, &canonical_tool_name, effective_args).await?
     {
-        safety_approval_justification = justification;
         if matches!(outcome, ValidationResult::Blocked) {
             return Ok(outcome);
+        }
+        // Single approval per turn: computer_use is always safety-flagged
+        // (destructive classification), but its load-bearing review is the
+        // concrete batch approval, not this vague scope prompt. Reroute the
+        // review there by dropping the scope justification; gateway Deny
+        // and rate-limit outcomes still block above, and the batch approval
+        // carries its own safety justification so it always prompts.
+        if canonical_tool_name == computer_use::TOOL_NAME {
+            if justification.is_some() {
+                tracing::info!(
+                    tool = %canonical_tool_name,
+                    "Rerouting safety review from scope prompt to batch approval"
+                );
+            }
+        } else {
+            safety_approval_justification = justification;
         }
     }
 
@@ -317,8 +326,8 @@ pub(crate) async fn validate_tool_call<'a>(
         // auto-permission Block) still apply at validation; the
         // PermissionRequest-hook and approval-policy prompt decisions are
         // re-evaluated at the batch approval instead (after proposal cost).
-        // Safety-gateway-flagged calls still prompt. Only the unflagged
-        // interactive prompt is skipped.
+        // Safety-flagged calls take the same path: the gateway review is
+        // rerouted to the batch approval above rather than shown here.
         permission_context.skip_confirmations = true;
     }
     let permission_result = ensure_tool_permission_with_call_id(
@@ -423,30 +432,22 @@ pub(crate) async fn validate_tool_call<'a>(
             Ok(ValidationResult::Blocked)
         }
         Ok(ToolPermissionFlow::Blocked { reason }) => {
-            // A terminal permission flow is still a blocked tool call. Keep
-            // its exact denial reason for the first attempts, while routing
-            // accounting and fuse handling through the same dispatch guard as
-            // every other blocked validation result.
-            let guard_response_expected = !ctx.is_recovery_active() || ctx.recovery_pass_used();
+            // A terminal permission flow is still a blocked tool call. Record
+            // its exact denial before the dispatch guard runs: if the fuse
+            // trips, the escalation preserves this reason instead of
+            // replacing it, so the model keeps the evidence it needs to
+            // correct course.
+            ctx.push_rejected_tool_response(
+                tool_call_id,
+                Some(&canonical_tool_name),
+                Some(effective_args),
+                build_failure_error_content(reason.clone(), "policy"),
+            );
             if let Some(outcome) =
                 enforce_blocked_tool_call_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
             {
-                if !guard_response_expected {
-                    ctx.push_rejected_tool_response(
-                        tool_call_id,
-                        Some(&canonical_tool_name),
-                        Some(effective_args),
-                        build_failure_error_content(reason.clone(), "policy"),
-                    );
-                }
                 Ok(ValidationResult::Outcome(outcome))
             } else {
-                ctx.push_rejected_tool_response(
-                    tool_call_id,
-                    Some(&canonical_tool_name),
-                    Some(effective_args),
-                    build_failure_error_content(reason.clone(), "policy"),
-                );
                 Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(reason),
                 })))
