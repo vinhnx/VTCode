@@ -321,6 +321,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn computer_use_full_auto_allowlist_denies_at_validation() {
+        // The tool stays visible under full-auto (allow-list visibility
+        // bypass) so interactive steering keeps working — but execution
+        // must still deny when the allow-list omits it. Fail-closed.
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.tool_registry
+            .enable_full_auto_permission(&["exec_command".to_string()])
+            .await;
+        let result = super::super::super::validation::validate_tool_call(
+            &mut ctx,
+            "deny-2",
+            "computer_use",
+            &serde_json::json!({"task": "take a screenshot"}),
+        )
+        .await
+        .expect("validate");
+        assert!(
+            matches!(result, super::super::super::types::ValidationResult::Blocked),
+            "full-auto allow-list must deny computer_use at validation"
+        );
+    }
+
+    #[tokio::test]
     async fn tool_call_headless_denial_cancels_before_launch() {
         let mut backing = super::super::super::tests::TestContextBacking::new().await;
         let mut ctx = backing.turn_processing_context();
@@ -337,6 +361,32 @@ mod tests {
         assert!(
             matches!(outcome.status, ToolExecutionStatus::Cancelled),
             "headless denial must cancel, got {:?}",
+            outcome.status
+        );
+        assert!(!outcome.status.is_failure_like());
+    }
+
+    #[tokio::test]
+    async fn tool_call_full_auto_denial_cancels_before_launch() {
+        // Full-auto never auto-approves computer turns: with an active
+        // allow-list that omits the tool, the batch approval denies and
+        // the turn cancels without launching anything.
+        let mut backing = super::super::super::tests::TestContextBacking::new().await;
+        let mut ctx = backing.turn_processing_context();
+        let mut vt_cfg = vtcode_core::config::loader::VTCodeConfig::default();
+        vt_cfg.computer_use.enabled = true;
+        vt_cfg.computer_use.browser_build = Some(std::path::PathBuf::from("/tmp/fixture-build"));
+        ctx.vt_cfg = Some(&vt_cfg);
+        *ctx.provider_client = Box::new(ScriptedNativeProvider);
+        ctx.tool_registry
+            .enable_full_auto_permission(&["exec_command".to_string()])
+            .await;
+        let outcome = handle_computer_use_tool_call(&mut ctx, &serde_json::json!({"task": "take a screenshot"}))
+            .await
+            .expect("tool result");
+        assert!(
+            matches!(outcome.status, ToolExecutionStatus::Cancelled),
+            "full-auto denial must cancel, got {:?}",
             outcome.status
         );
         assert!(!outcome.status.is_failure_like());

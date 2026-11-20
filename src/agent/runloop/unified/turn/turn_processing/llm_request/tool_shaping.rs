@@ -115,10 +115,15 @@ fn apply_permission_policy_to_tools(
         // Enforce full-auto allow-list if present. Workflow-coordination
         // tools skip this gate only (they were already subject to the
         // mode/primary-agent filters upstream, so this never injects a
-        // tool — it only keeps an already-visible one).
+        // tool — it only keeps an already-visible one). `computer_use`
+        // skips it too: the validation redirect guard steers shell
+        // screenshots to it, which is only actionable when the tool is
+        // visible, and execution permission (including the full-auto
+        // allow-list deny) is still enforced downstream at call time.
         if let Some(allowlist) = full_auto_allowlist
             && !allowlist.iter().any(|allowed| allowed == name)
             && !tool_names::is_workflow_coordination_tool(name)
+            && name != tool_names::COMPUTER_USE
         {
             return false;
         }
@@ -358,6 +363,23 @@ mod tests {
             Some(&cfg),
         );
         assert_eq!(names(result), vec!["exec_command", "request_user_input", "start_planning", "task_tracker"]);
+    }
+
+    #[test]
+    fn computer_use_survives_allowlist_that_omits_it() {
+        // Regression guard: the validation redirect guard steers shell
+        // screenshots to `computer_use`, so the auto-agent allow-list
+        // filter must not hide it — otherwise the model is steered to a
+        // tool it cannot call and gives up. A non-exempt tool outside
+        // the list must still be filtered.
+        let cfg = cfg_with_full_auto(vec!["exec_command".into()]);
+        let result = apply_permission_policy_to_tools(
+            catalog(&["exec_command", "code_search", "computer_use"]),
+            &auto_agent(),
+            PathBuf::from(WORKSPACE).as_path(),
+            Some(&cfg),
+        );
+        assert_eq!(names(result), vec!["computer_use", "exec_command"]);
     }
 
     #[test]
