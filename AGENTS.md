@@ -50,7 +50,7 @@ Cargo workspace, 27 crates. Rust 1.100.0 MSRV, edition 2024. `default-members`: 
 
 Crate roles live in each crate's `Cargo.toml` `description` and [ARCHITECTURE](docs/architecture.md#workspace-crates). Not obvious from the code: `vtcode-desktop` is a non-publishable GPUI app while `vtcode-desktop-protocol` is published (the `vtcode` binary depends on it); `vtcode-llm`, `vtcode-skills`, and `vtcode-tui-runtime` are partial extractions from `vtcode-core`.
 
-New reusable logic: prefer a small crate; keep it out of `vtcode-core` unless tightly coupled to the runtime.
+New reusable logic: prefer a small crate; ask before adding to `vtcode-core` — dedicated module or crate only.
 
 ## Per-Module Guidance
 
