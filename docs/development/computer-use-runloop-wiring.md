@@ -169,8 +169,9 @@ happens through the turn dispatcher.
 Scope is the isolated preview only: the container runs with no network
 access and boots by serving the build mount, so external pages, local
 servers, and desktop apps are outside v1 — the model is told to capture
-those through the shell instead (headless browser, `screencapture` for
-the desktop), and the external-scope refusal carries that recipe. A
+those through the shell instead (headless browser for pages; native
+tools for desktop), and the external-scope refusal carries a per-OS
+recipe. A
 validation guard that redirected shell screenshots here was removed for
 exactly that reason: no shell-flag shape identifies a task the sandbox
 can serve, so blocking them routed work into silent failures. The tool

@@ -174,9 +174,9 @@ pub fn cron_parameters() -> Value {
 /// the redaction contract so the model invokes it correctly and sets
 /// expectations. Prerequisites stay out on purpose: the model cannot verify
 /// them, and the fail-closed `Disabled` outcomes (`disabled`, `unsupported
-/// provider`, `no target configured`) guide the off-state instead. Turn
-/// limits and the browser target stay in configuration.
-pub const COMPUTER_USE_DESCRIPTION: &str = "Use when the user asks to see, screenshot, or operate the isolated browser preview through its UI. The turn screenshots, clicks, types, and scrolls in an isolated browser with no network access, then reports a redacted summary. Not for the open web or local servers — capture those with a headless browser via exec_command. Every turn asks for human approval before acting, and screenshots never reach the transcript.";
+/// provider`, `no target configured`, external scope) guide the off-state
+/// instead. Turn limits and the browser target stay in configuration.
+pub const COMPUTER_USE_DESCRIPTION: &str = "Use when the user asks to see, screenshot, or operate the isolated browser preview through its UI. The turn screenshots, clicks, types, and scrolls in an isolated browser with no network access, then reports a redacted summary. Not for the open web, local servers, or desktop apps — capture pages with a headless browser and automate native apps through the shell, all via exec_command. Every turn asks for human approval before acting, and screenshots never reach the transcript.";
 
 #[must_use]
 pub fn computer_use_parameters() -> Value {
@@ -480,7 +480,8 @@ mod tests {
             "screenshot",
             "isolated browser preview",
             "no network access",
-            "headless browser via exec_command",
+            "capture pages with a headless browser",
+            "automate native apps through the shell",
         ] {
             assert!(COMPUTER_USE_DESCRIPTION.contains(needle), "description must state {needle}");
         }

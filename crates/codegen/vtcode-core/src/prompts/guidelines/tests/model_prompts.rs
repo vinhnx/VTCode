@@ -169,8 +169,8 @@ fn computer_use_guidance_has_presence_and_budget_in_both_densities() {
         assert!(enabled.contains("asks approval before acting"));
         assert!(enabled.contains("local files, shells, or secrets entry"));
         assert!(enabled.contains("instead of exploring code or shelling around"));
-        assert!(enabled.contains("or a desktop app rather than the preview"));
-        assert!(enabled.contains("use the shell (headless browser"));
+        assert!(enabled.contains("or desktop apps instead, use the shell"));
+        assert!(enabled.contains("headless browser for pages; native tools for desktop"));
         assert!(enabled.contains("no network access"));
         assert!(!disabled.contains("screen-sized browser task"));
         assert!(vtcode_commons::estimate_tokens(&enabled) <= 170, "{profile:?}: {enabled}");

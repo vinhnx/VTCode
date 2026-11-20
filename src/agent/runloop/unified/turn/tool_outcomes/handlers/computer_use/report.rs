@@ -7,6 +7,31 @@ use serde_json::Value;
 
 use super::execution::{ComputerTurnOutcome, ComputerTurnOutcomeKind, NativeTurnResults};
 
+/// Shell-fallback recipe for an external-scope refusal, selected for the OS
+/// the turn runs on. Chrome flags are identical everywhere; only binary
+/// locations and desktop tools differ. Every branch prohibits
+/// `--no-sandbox`: the model cargo-cults it from container lore and the
+/// permission review blocks sandbox-disabling flags. macOS is verified
+/// live; Linux/Windows follow vendor-documented invocations.
+/// `os` takes `std::env::consts::OS` values; unknown systems get the
+/// generic recipe rather than a macOS-only one that cannot run.
+fn external_capture_recipe(os: &str) -> &'static str {
+    match os {
+        "macos" => {
+            "Capture it through the shell instead: run headless Chrome via exec_command (e.g. `'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --screenshot=/tmp/shot.png --window-size=1280,800 --virtual-time-budget=8000 URL`; never pass `--no-sandbox` — permission review blocks sandbox-disabling flags), or `screencapture -x /tmp/shot.png` for the desktop."
+        }
+        "linux" => {
+            "Capture it through the shell instead: run headless Chrome via exec_command (`$(command -v google-chrome || command -v chromium) --headless --screenshot=/tmp/shot.png --window-size=1280,800 --virtual-time-budget=8000 URL`; never pass `--no-sandbox` — permission review blocks sandbox-disabling flags), or the session screenshot tool for the desktop (`gnome-screenshot`, `grim` on Wayland)."
+        }
+        "windows" => {
+            "Capture it through the shell instead: run headless Chrome via exec_command (`& \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --headless --screenshot=$env:TEMP/shot.png --window-size=1280,800 --virtual-time-budget=8000 URL`; never pass `--no-sandbox` — permission review blocks sandbox-disabling flags), a PowerShell System.Drawing snippet for the desktop, or COM automation for Office apps."
+        }
+        _ => {
+            "Capture it through the shell instead: run headless Chrome via exec_command (`chrome --headless --screenshot=<out.png> --window-size=1280,800 --virtual-time-budget=8000 URL`; never pass `--no-sandbox`), or the OS screenshot tool for the desktop."
+        }
+    }
+}
+
 /// Off-state guidance for a Disabled reason, relayed by the model. The tool
 /// is advanced-visible while the switch is off, so these lines are the
 /// activation CTA: each names the concrete next step. Unknown reasons
@@ -17,9 +42,7 @@ fn disabled_off_state_guidance(reason: &str) -> &'static str {
         "disabled" => "Enable it in Settings (Computer Use), configure a preview build target, then retry.",
         "unsupported provider" => "Switch to an OpenAI or Anthropic model, then retry.",
         "no target configured" => "Set the browser build target in Settings (Computer Use), then retry.",
-        "external address outside the offline preview" => {
-            "Capture it through the shell instead: run headless Chrome via exec_command (e.g. `chrome --headless --screenshot=/tmp/shot.png --window-size=1280,800 --virtual-time-budget=8000 URL`; macOS app binary at /Applications/Google Chrome.app/Contents/MacOS/Google Chrome), or `screencapture -x /tmp/shot.png` for the desktop."
-        }
+        "external address outside the offline preview" => external_capture_recipe(std::env::consts::OS),
         _ => "Check Settings (Computer Use) for setup, then retry.",
     }
 }
@@ -115,6 +138,72 @@ mod tests {
             assert_eq!(lines.len(), 1, "{reason}");
             assert!(lines[0].contains(&format!("did not run: {reason}.")));
             assert!(lines[0].contains(needle), "{reason}: {}", lines[0]);
+        }
+        // The model cargo-cults `--no-sandbox` onto headless Chrome from
+        // container lore; the auto permission review correctly blocks it
+        // (rule 5, sandbox-disabling flag) and the model rightly treats
+        // the denial as terminal instead of retrying. Prohibit the flag
+        // in the recipe itself — verified working without it.
+        let external = turn_report_lines(&outcome("external address outside the offline preview"));
+        assert!(
+            external[0].contains("never pass `--no-sandbox`"),
+            "recipe must prohibit the blocked flag: {}",
+            external[0]
+        );
+    }
+
+    #[test]
+    fn external_capture_recipe_covers_each_os_without_leakage() {
+        // Host-independent: every branch is pinned directly, so Linux and
+        // Windows recipes are tested even though this host runs macOS.
+        // Chrome flags stay identical; only locations and desktop tools
+        // vary. Every branch carries the `--no-sandbox` prohibition.
+        for (os, needles, forbidden) in [
+            (
+                "macos",
+                vec![
+                    "Google Chrome.app/Contents/MacOS",
+                    "screencapture -x",
+                    "--virtual-time-budget=8000",
+                ],
+                vec!["C:/Temp", "grim", "COM automation"],
+            ),
+            (
+                "linux",
+                vec![
+                    "command -v google-chrome || command -v chromium",
+                    "grim",
+                    "--virtual-time-budget=8000",
+                ],
+                vec!["Google Chrome.app", "screencapture", "C:/Temp"],
+            ),
+            (
+                // C:/Temp stays forbidden: stock Windows has no such
+                // directory, so the recipe uses $env:TEMP instead.
+                "windows",
+                vec![
+                    "$env:TEMP/shot.png",
+                    "Program Files\\Google\\Chrome",
+                    "System.Drawing",
+                    "COM automation",
+                    "--virtual-time-budget=8000",
+                ],
+                vec!["Google Chrome.app", "screencapture", "grim", "C:/Temp"],
+            ),
+            (
+                "fuchsia",
+                vec!["<out.png>", "OS screenshot tool", "--virtual-time-budget=8000"],
+                vec!["Google Chrome.app", "screencapture", "grim", "C:/Temp"],
+            ),
+        ] {
+            let recipe = external_capture_recipe(os);
+            assert!(recipe.contains("never pass `--no-sandbox`"), "{os}");
+            for needle in needles {
+                assert!(recipe.contains(needle), "{os} missing {needle}: {recipe}");
+            }
+            for banned in forbidden {
+                assert!(!recipe.contains(banned), "{os} leaks {banned}: {recipe}");
+            }
         }
     }
 
