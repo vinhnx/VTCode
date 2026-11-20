@@ -1,5 +1,6 @@
 //! Runtime interaction prompts: question stepper, freeform answers, and choice rows.
 use super::*;
+use gpui_kit::base::ElementExt as _;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::kbd::Kbd;
 
@@ -414,6 +415,7 @@ impl DesktopView {
                 .as_deref()
                 .and_then(|id| choices.iter().position(|choice| choice.id == id));
             let total = choices.len();
+            *self.interaction_choice_bounds.borrow_mut() = vec![None; total];
             let mut options = div()
                 .id("interaction-choice-options")
                 .test_support()
@@ -424,7 +426,10 @@ impl DesktopView {
                 .flex_col()
                 .gap_2();
             for (choice_index, choice) in choices.iter().enumerate() {
-                options = options.child(self.render_choice(choice, choice_index, total, effective_index, cx));
+                options = options.child(self.interaction_choice_row(
+                    choice_index,
+                    self.render_choice(choice, choice_index, total, effective_index, cx),
+                ));
             }
             body = body.child(options);
         }
@@ -509,6 +514,25 @@ impl DesktopView {
         )
     }
 
+    /// Wraps one choice row with paint-time bounds capture, keyed by its
+    /// index in `visible_choices` (render, digit shortcuts, and the Up/Down
+    /// highlight all share that list, so indices always agree). Keyboard
+    /// Up/Down reads the captured bounds to keep the highlighted row inside
+    /// the capped scroll region — see `DesktopView::reveal_interaction_choice`.
+    fn interaction_choice_row(&self, index: usize, row: impl IntoElement) -> AnyElement {
+        let rows = self.interaction_choice_bounds.clone();
+        div()
+            .w_full()
+            .min_w_0()
+            .on_prepaint(move |bounds, _, _| {
+                if let Some(slot) = rows.borrow_mut().get_mut(index) {
+                    *slot = Some(bounds);
+                }
+            })
+            .child(row)
+            .into_any_element()
+    }
+
     fn render_question_step(
         &self,
         step: &InteractionStep,
@@ -520,6 +544,7 @@ impl DesktopView {
         let selected_choice_id = self.interaction_choice_ids.get(index).and_then(Option::as_deref);
         let selected_choice_index =
             selected_choice_id.and_then(|selected| step.choices.iter().position(|choice| choice.id == selected));
+        *self.interaction_choice_bounds.borrow_mut() = vec![None; step.choices.len()];
         let choice_radios = step.choices.iter().enumerate().map(|(choice_index, choice)| {
             if step.multi_select {
                 let id = choice.id.clone();
@@ -543,21 +568,24 @@ impl DesktopView {
                     })
                     .into_any_element();
             }
-            self.render_choice_card(
-                ChoiceCard {
-                    element_id: format!("interaction-question-choice-{choice_index}"),
-                    choice,
-                    position: choice_index + 1,
-                    total: step.choices.len(),
-                    checked: selected_choice_index == Some(choice_index),
-                    digit: if step.allow_freeform {
-                        None
-                    } else {
-                        digit_shortcut(choice_index)
+            self.interaction_choice_row(
+                choice_index,
+                self.render_choice_card(
+                    ChoiceCard {
+                        element_id: format!("interaction-question-choice-{choice_index}"),
+                        choice,
+                        position: choice_index + 1,
+                        total: step.choices.len(),
+                        checked: selected_choice_index == Some(choice_index),
+                        digit: if step.allow_freeform {
+                            None
+                        } else {
+                            digit_shortcut(choice_index)
+                        },
+                        step_index: index,
                     },
-                    step_index: index,
-                },
-                cx,
+                    cx,
+                ),
             )
         });
         let options = div()

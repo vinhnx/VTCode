@@ -167,8 +167,12 @@ impl DesktopView {
                 // The turn activity shimmer names what the turn is doing
                 // right now (thinking, running a command or tool, searching,
                 // editing) instead of a flat "Running"; each started item
-                // replaces the previous label until the turn ends.
+                // replaces the previous label until the turn ends. While an
+                // interaction is pending the turn is parked on the user's
+                // decision, so "Awaiting decision" (or "Editing plan") stays
+                // up instead of being replaced by sibling item activity.
                 if self.running
+                    && self.interaction.is_none()
                     && self.notification_matches(&notification.session_id, notification.turn_id.as_deref())
                     && let Some(status) = turn_activity_status(&event.item.details)
                 {

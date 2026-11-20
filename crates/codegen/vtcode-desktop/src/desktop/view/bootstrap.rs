@@ -553,6 +553,7 @@ impl DesktopView {
             interaction: None,
             interaction_focus: cx.focus_handle(),
             interaction_scroll: ScrollHandle::new(),
+            interaction_choice_bounds: Default::default(),
             pending_interaction_response: None,
             interaction_edit_pending: false,
             interaction_choice_ids: Vec::new(),

@@ -476,8 +476,34 @@ impl DesktopView {
             (current + len - 1) % len
         };
         if let Some(choice) = choices.get(next) {
+            self.reveal_interaction_choice(next, cx);
             self.choose_interaction_option(step_index, choice.id.clone(), window, cx);
         }
+    }
+
+    /// Scroll the interaction body so the choice row at `index` is fully
+    /// visible. The capped scroll region can put a highlighted row off-screen,
+    /// and Confirm submits the highlight, so keyboard Up/Down must reveal the
+    /// row it lands on. Bounds come from the last painted frame
+    /// (`interaction_choice_bounds`); a no-op when the row is already visible
+    /// or has not been painted yet.
+    fn reveal_interaction_choice(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(row) = self.interaction_choice_bounds.borrow().get(index).copied().flatten() else {
+            return;
+        };
+        let viewport = self.interaction_scroll.bounds();
+        let mut offset = self.interaction_scroll.offset();
+        if row.top() < viewport.top() {
+            offset.y += viewport.top() - row.top();
+        } else if row.bottom() > viewport.bottom() {
+            offset.y -= row.bottom() - viewport.bottom();
+        } else {
+            return;
+        }
+        let max = self.interaction_scroll.max_offset().y;
+        offset.y = offset.y.clamp(-max, px(0.));
+        self.interaction_scroll.set_offset(point(offset.x, offset.y));
+        cx.notify();
     }
 
     /// Submit the highlighted immediate choice (mouse selection, else the

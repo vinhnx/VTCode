@@ -4,6 +4,26 @@
 use super::interaction_choices::tool_loop_interaction;
 use super::*;
 
+/// `interaction` with 24 filler rows appended past the tool-loop choices.
+/// The render path reads the first step's choices for non-wizard prompts, so
+/// the rows go there — mirrored onto the top-level list like the service
+/// sends them. Filler rows carry descriptions in one variant to make them
+/// tall enough to overflow the cap.
+fn long_interaction(descriptions: bool) -> vtcode_desktop_protocol::InteractionRequest {
+    let mut interaction = tool_loop_interaction(Some("grant-40"));
+    for index in 0..24 {
+        let choice = vtcode_desktop_protocol::InteractionChoice {
+            id: format!("bulk-{index}"),
+            label: format!("Bulk choice {index}"),
+            description: descriptions.then(|| "Filler row that only exists to push the list past the cap".to_string()),
+            recommended: false,
+        };
+        interaction.choices.push(choice.clone());
+        interaction.steps[0].choices.push(choice);
+    }
+    interaction
+}
+
 #[gpui_kit::test]
 fn escape_cancels_the_interaction_without_panel_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -36,19 +56,9 @@ fn escape_cancels_the_interaction_without_panel_focus(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn long_choice_lists_scroll_inside_a_capped_panel(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let mut interaction = tool_loop_interaction(Some("grant-40"));
     // Far past the cap: the body must scroll instead of stretching the
     // composer into the transcript.
-    for index in 0..24 {
-        let id = format!("bulk-{index}");
-        interaction.choices.push(vtcode_desktop_protocol::InteractionChoice {
-            id: id.clone(),
-            label: format!("Bulk choice {index}"),
-            description: Some("Filler row that only exists to push the list past the cap".into()),
-            recommended: false,
-        });
-    }
-    deliver(&view, interaction, cx);
+    deliver(&view, long_interaction(true), cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let body = window.find("interaction-body").bounds();
@@ -69,16 +79,7 @@ fn long_choice_lists_scroll_inside_a_capped_panel(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn a_new_interaction_opens_the_scrolled_body_at_its_top(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let mut interaction = tool_loop_interaction(Some("grant-40"));
-    for index in 0..24 {
-        interaction.choices.push(vtcode_desktop_protocol::InteractionChoice {
-            id: format!("bulk-{index}"),
-            label: format!("Bulk choice {index}"),
-            description: None,
-            recommended: false,
-        });
-    }
-    deliver(&view, interaction, cx);
+    deliver(&view, long_interaction(false), cx);
     // Simulate the reader having scrolled the long list before responding.
     view.update(cx, |view, _| {
         view.interaction_scroll.set_offset(point(px(0.), px(240.)));
@@ -87,7 +88,7 @@ fn a_new_interaction_opens_the_scrolled_body_at_its_top(cx: &mut TestAppContext)
     // A follow-up prompt renders fresh content: the stale offset must not
     // carry into it. The follow-up needs its own interaction id — the
     // delivery handler dedupes repeats of the same prompt.
-    let mut follow_up = tool_loop_interaction(Some("grant-41"));
+    let mut follow_up = long_interaction(false);
     follow_up.interaction_id = "tool-loop-follow-up".into();
     deliver(&view, follow_up, cx);
     view.update(cx, |view, _| {
@@ -96,6 +97,48 @@ fn a_new_interaction_opens_the_scrolled_body_at_its_top(cx: &mut TestAppContext)
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("runtime-interaction").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn arrow_navigation_keeps_the_highlighted_choice_in_view(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // 27 rows (3 tool-loop + 24 bulk): bulk-9 sits at index 12.
+    deliver(&view, long_interaction(true), cx);
+    focus_panel(&view, window, cx);
+    // Walking the highlight down past the capped body must reveal each
+    // landing row: Confirm commits the highlight, so an off-screen highlight
+    // would submit a choice the reader never saw.
+    cx.update_window(window, |_, window, cx| {
+        for _ in 0..12 {
+            window.press("down", cx);
+            window.render_frame(cx);
+        }
+        let body = window.find("interaction-body").bounds();
+        let highlighted = window.find("choice-bulk-9").bounds();
+        assert!(
+            highlighted.top() >= body.top() - px(1.) && highlighted.bottom() <= body.bottom() + px(1.),
+            "the highlighted row stays inside the capped body: row={highlighted:?} body={body:?}"
+        );
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert!(view.interaction_scroll.offset().y < px(0.), "walking past the cap scrolls the body");
+    });
+    // Walking back up reveals each landing row again (minimal scroll: the
+    // body may rest a little below its top while the highlight stays visible).
+    cx.update_window(window, |_, window, cx| {
+        for _ in 0..12 {
+            window.press("up", cx);
+            window.render_frame(cx);
+        }
+        let body = window.find("interaction-body").bounds();
+        let highlighted = window.find("choice-grant-40").bounds();
+        assert!(
+            highlighted.top() >= body.top() - px(1.) && highlighted.bottom() <= body.bottom() + px(1.),
+            "walking back up keeps the first row visible: row={highlighted:?} body={body:?}"
+        );
     })
     .unwrap();
 }

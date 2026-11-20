@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 // Re-exported through `use super::*`: several view modules hash element IDs
 // and need these traits in scope for method resolution.
@@ -635,6 +636,12 @@ struct DesktopView {
     /// proposals scroll inside a capped panel instead of stretching the
     /// composer (header and decision row stay pinned).
     interaction_scroll: ScrollHandle,
+    /// Window-space bounds of each rendered interaction choice row, captured
+    /// at paint each frame and indexed by `visible_choices` position. Keyboard
+    /// Up/Down reads them to keep the highlighted row inside the capped scroll
+    /// region (`DesktopView::reveal_interaction_choice`): Confirm submits the
+    /// highlight, so an off-screen highlight would commit an unseen choice.
+    interaction_choice_bounds: Rc<RefCell<Vec<Option<gpui_kit::Bounds<Pixels>>>>>,
     pending_interaction_response: Option<String>,
     /// A plan-edit hotkey is in flight: the service owns the editor and will
     /// re-show the approval, so the panel stays locked on the editing copy
