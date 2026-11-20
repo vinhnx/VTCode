@@ -65,6 +65,7 @@ impl DesktopView {
                     self.interrupt_cli_config_write();
                     self.interrupt_armed_running_switch();
                     self.backend = None;
+                    self.launch_handshake_pending = false;
                     self.clear_pending_interaction();
                     self.clear_pending_turn_undos();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));

@@ -672,6 +672,9 @@ impl DesktopView {
             self.backend = Some(backend);
             // Reuse the session transition gate until the handshake is validated.
             self.session_request = Some(protocol::method::INITIALIZE);
+            // The launch splash owns the window until the INITIALIZE response
+            // lands (see `launch_screen`).
+            self.launch_handshake_pending = true;
         } else {
             self.report_service_launch_failure(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }

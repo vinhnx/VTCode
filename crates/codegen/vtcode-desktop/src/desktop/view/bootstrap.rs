@@ -168,6 +168,7 @@ pub(super) fn open_or_activate_main_window(
     }
     view.update(cx, |view, cx| view.start_event_drain(cx));
     view.update(cx, |view, cx| view.start_goal_ticker(cx));
+    view.update(cx, |view, cx| view.start_launch_splash_dwell(cx));
     cx.activate(true);
     Ok(window)
 }
@@ -546,6 +547,9 @@ impl DesktopView {
             release_notes_banner_visible_now: false,
             dismissed_release_notes_version: None,
             service_info: None,
+            launch_splash_expired: false,
+            launch_dwell_task: None,
+            launch_handshake_pending: false,
             interaction: None,
             interaction_focus: cx.focus_handle(),
             pending_interaction_response: None,

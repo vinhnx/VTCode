@@ -200,6 +200,12 @@ fn open_desktop_sized_with_preferences_path(
                         // Suite baseline is normal mode; zen-by-default is pinned
                         // by zen_mode_is_active_on_fresh_launch below.
                         view.zen_mode = false;
+                        // The launch splash never fires in the suite: tests fake
+                        // backend state directly, so the minimum dwell retires
+                        // up front. The splash lifecycle is pinned by
+                        // loading_lifecycle::launch_screen_covers_the_handshake,
+                        // which manages this flag explicitly.
+                        view.launch_splash_expired = true;
                     }
                     view
                 })

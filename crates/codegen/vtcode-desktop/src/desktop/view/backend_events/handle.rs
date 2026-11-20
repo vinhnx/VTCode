@@ -124,6 +124,7 @@ impl DesktopView {
                                 }
                                 self.localize_slash_catalog();
                                 self.service_info = Some(info);
+                                self.launch_handshake_pending = false;
                                 self.status = rust_i18n::t!("app.service.connected_service").to_string();
                                 vtcode_commons::startup_trace::record_milestone("desktop_backend_ready");
                                 let mut discovery_queued = true;
@@ -154,6 +155,7 @@ impl DesktopView {
                             _ => {
                                 self.service_info = None;
                                 self.backend = None;
+                                self.launch_handshake_pending = false;
                                 self.fail_pending_navigation();
                                 self.error = Some(rust_i18n::t!("app.service.invalid_init").to_string());
                                 self.status = rust_i18n::t!("app.service.init_failed").to_string();
@@ -721,6 +723,7 @@ impl DesktopView {
                 }
                 self.recover_pending_submission(true);
                 self.backend = None;
+                self.launch_handshake_pending = false;
                 self.running = false;
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
@@ -781,6 +784,7 @@ impl DesktopView {
                 self.interrupt_cli_config_write();
                 self.interrupt_armed_running_switch();
                 self.backend = None;
+                self.launch_handshake_pending = false;
                 self.running = false;
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;

@@ -1,5 +1,51 @@
 use super::*;
 
+/// The launch splash covers the handshake window: without a transport the
+/// welcome state paints; a live transport without a handshake shows the
+/// splash; a fast handshake still holds the minimum dwell; retiring the
+/// dwell returns the content.
+#[gpui_kit::test]
+fn launch_screen_covers_the_handshake_then_yields_to_content(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("launch-screen").is_none(), "no transport: welcome state paints");
+
+        let (commands, _requests) = tokio::sync::mpsc::channel(8);
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            // Production arms this in `initialize_backend`; the transport is
+            // up but the INITIALIZE response has not landed yet.
+            view.launch_handshake_pending = true;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("launch-screen").is_some(), "live transport without a handshake shows the splash");
+
+        view.update(cx, |view, _| {
+            // The suite baseline retires the dwell up front; rewind it here to
+            // simulate a handshake completing inside the minimum display.
+            view.launch_splash_expired = false;
+            view.launch_handshake_pending = false;
+            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
+                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
+                workspace: "/workspace".into(),
+                server_version: "test".into(),
+                slash_commands: Vec::new(),
+            });
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("launch-screen").is_some(), "a fast handshake still holds the minimum dwell");
+
+        view.update(cx, |view, cx| {
+            view.launch_splash_expired = true;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("launch-screen").is_none(), "content returns once the dwell retires");
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn disconnect_events_clear_transient_loading_state(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);

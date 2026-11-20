@@ -147,6 +147,7 @@ mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
 mod launch_bounds;
+mod launch_screen;
 mod licenses;
 mod login_items;
 mod mcp_app;
@@ -619,6 +620,13 @@ struct DesktopView {
     release_notes_banner_visible_now: bool,
     dismissed_release_notes_version: Option<String>,
     service_info: Option<protocol::InitializeResult>,
+    /// Launch splash state (see `launch_screen`): the dwell timer retires the
+    /// splash after the minimum display even when the handshake finished fast.
+    launch_splash_expired: bool,
+    launch_dwell_task: Option<Task<()>>,
+    /// True from transport launch until the INITIALIZE response lands; the
+    /// launch splash covers exactly this window (plus the minimum dwell).
+    launch_handshake_pending: bool,
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,
     pending_interaction_response: Option<String>,
