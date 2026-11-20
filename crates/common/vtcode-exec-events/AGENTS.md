@@ -12,6 +12,7 @@
 ## Rules
 
 - Do not invent parallel event types; extend `ThreadEvent` and `ThreadItemDetails` instead.
+- Wire `type` names come only from `wire_type::*` / `ThreadEvent::wire_name()` (`event_wire.rs`); the serialize-compare test guards serde tags. Item statuses expose `as_str()`; tracker statuses use `tracker::TrackerItemStatus` as the canonical 4/5-state contract. Catch-all `Unknown` serializes as `"Unknown"` (no serde rename).
 - Bump `EVENT_SCHEMA_VERSION` whenever the serialized contract changes, including `HarnessEventKind` additions.
 - New fields stay optional and omitted when unset so legacy payloads keep decoding, and ATIF output stays stable.
 - `ToolOutputItem.is_delta == Some(true)` marks a chunk; unmarked updates and completion items are snapshots.

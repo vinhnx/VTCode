@@ -262,7 +262,7 @@ impl ToolRiskScorer {
             // Computer use drives real input targets. Keep it out of the
             // low-risk auto-approval path in every workspace: the per-turn
             // human approval must never become an automatic Allow.
-            "computer_use" => 60,
+            tools::COMPUTER_USE => 60,
 
             // PTY/interactive commands (base: 35)
             tools::CREATE_PTY_SESSION | tools::RUN_PTY_CMD | tools::SEND_PTY_INPUT | tools::UNIFIED_EXEC => 35,

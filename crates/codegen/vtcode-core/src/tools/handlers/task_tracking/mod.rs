@@ -183,26 +183,35 @@ impl FromStr for TaskTrackingStatus {
     type Err = anyhow::Error;
 
     fn from_str(value: &str) -> Result<Self> {
-        match value {
-            "pending" => Ok(Self::Pending),
-            "in_progress" => Ok(Self::InProgress),
-            "completed" => Ok(Self::Completed),
-            "blocked" => Ok(Self::Blocked),
-            other => {
-                bail!("Invalid status '{other}'. Use: pending, in_progress, completed, blocked")
+        use vtcode_exec_events::tracker::TrackerItemStatus as Canonical;
+        let canonical = Canonical::from_str(value)
+            .map_err(|()| anyhow::anyhow!("Invalid status '{value}'. Use: pending, in_progress, completed, blocked"))?;
+        match canonical {
+            Canonical::Pending => Ok(Self::Pending),
+            Canonical::InProgress => Ok(Self::InProgress),
+            Canonical::Completed => Ok(Self::Completed),
+            Canonical::Blocked => Ok(Self::Blocked),
+            Canonical::Unknown => {
+                bail!("Invalid status '{value}'. Use: pending, in_progress, completed, blocked")
             }
         }
     }
 }
 
 impl TaskTrackingStatus {
-    pub fn as_str(&self) -> &'static str {
+    /// The canonical durable status this tool-facing subset projects.
+    const fn as_tracker(self) -> vtcode_exec_events::tracker::TrackerItemStatus {
+        use vtcode_exec_events::tracker::TrackerItemStatus as Canonical;
         match self {
-            Self::Pending => "pending",
-            Self::InProgress => "in_progress",
-            Self::Completed => "completed",
-            Self::Blocked => "blocked",
+            Self::Pending => Canonical::Pending,
+            Self::InProgress => Canonical::InProgress,
+            Self::Completed => Canonical::Completed,
+            Self::Blocked => Canonical::Blocked,
         }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        self.as_tracker().as_str()
     }
 
     pub fn flat_checkbox(&self) -> &'static str {

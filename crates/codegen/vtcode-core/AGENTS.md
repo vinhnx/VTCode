@@ -6,13 +6,14 @@
 ## Modules
 
 Paths are under `src/`. `core/agent/` runtime, event recording, runner, request envelopes, completion assessment | `tools/` handlers, registry, policy, execution
-`tools/registry/` admission, dispatch, results, history, completion verification | `tools/exec_session/` unified PTY/pipe registry, background slots, pipe line-monitor subscriptions | `tools/output_spooler/` bounded previews and spool references | `tools/source_inspection/` session-local source ledger
-`llm/` re-export facade over `vtcode-llm` | `exec/events.rs` re-exports canonical `ThreadEvent` | `prompts/` static profiles and compiled runtime guidance | `compaction/` history compaction and memory envelopes | `subagents/matrix/` scheduler-owned workers | `mcp/`, `skills/` plugin MCP servers and skill policy/loading | `exec_policy/`, `command_safety/` separate policy layers | `notifications/` per-domain OS alerts
+`tools/registry/` admission, dispatch, results, history | `tools/exec_session/` PTY/pipe registry, background slots | `tools/output_spooler/` bounded previews | `tools/source_inspection/` source ledger
+`llm/` facade over `vtcode-llm` | `exec/events.rs` re-exports `ThreadEvent` | `prompts/` static + compiled guidance | `compaction/` history/memory | `subagents/matrix/` scheduler workers | `mcp/`, `skills/` plugin policy/loading | `exec_policy/`, `command_safety/` policy layers | `notifications/` OS alerts
 
 ## Rules
 
 - Route every tool through `tools/registry`; `shell` and command aliases resolve to `unified_exec`, so never add a parallel dispatch path that bypasses the registry.
-- Re-export public APIs from `lib.rs`, keep constants in `config::constants`, and keep providers in `vtcode-llm` and WebMCP transport/runtime in `vtcode-webmcp`.
+- Re-export public APIs from `lib.rs`, keep constants in `config::constants`, providers in `vtcode-llm`, WebMCP in `vtcode-webmcp`.
+- Tool names come from `config::constants::tools` (re-export of `vtcode-commons::tool_types::tool_names`); wire `type` values from `vtcode-exec-events::wire_type`/`ThreadEvent::wire_name()`. No raw identity literals.
 - Session event sinks are authoritative: preserve ordering, fail closed on saturation, and write recovery/final messages through the canonical `ThreadEvent` path rather than history-only writes.
 - Pipe, PTY, and MCP stdio children inherit filtered environment policy through the sandbox-aware launch APIs; never bypass them.
 - Workspace-controlled lifecycle hooks gate the whole engine until the exact command-set digest is approved; build with `new_with_session_gated` and never add a bypass.

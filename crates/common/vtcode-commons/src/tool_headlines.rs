@@ -18,6 +18,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::formatting::{collapse_whitespace, truncate_middle, truncate_path_middle};
+use crate::tool_types::tool_names;
 
 /// First non-blank string under a single key, trimmed.
 #[must_use]
@@ -204,7 +205,7 @@ pub fn is_verbose_key(key: &str) -> bool {
 /// unconsumed `text` value shows instead of hiding as verbose content;
 /// everywhere else (edits, unknown tools) `text` stays a hidden body.
 fn text_is_search_query(tool_name: &str, key: &str) -> bool {
-    key == "text" && strip_mcp_prefix(tool_name) == "code_search"
+    key == "text" && strip_mcp_prefix(tool_name) == tool_names::CODE_SEARCH
 }
 
 /// Parameter keys that are infrastructure/plumbing noise, omitted from the
@@ -517,20 +518,26 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
     if let Some(label) = session_followup_title(name, args) {
         return label;
     }
-    if name == "list_files" {
+    if name == tool_names::LIST_FILES {
         if let Some((title, _)) = describe_list_files(args, workspace_root) {
             return title;
         }
-    } else if name == "grep_file" {
+    } else if name == tool_names::GREP_FILE {
         if let Some((title, _)) = describe_grep_file(args, workspace_root) {
             return title;
         }
-    } else if name == "computer_use" {
+    } else if name == tool_names::COMPUTER_USE {
         let (title, _) = describe_computer_use(args);
         return title;
     }
     match name {
-        "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "fetch" | "get_errors" | "list_files" => {
+        tool_names::READ_FILE
+        | tool_names::READ_PTY_SESSION
+        | tool_names::WEB_FETCH
+        | tool_names::FETCH_URL
+        | tool_names::FETCH
+        | tool_names::GET_ERRORS
+        | tool_names::LIST_FILES => {
             if let Some(base) = headline_basename(args) {
                 return format!("Read {base}");
             }
@@ -539,22 +546,31 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
                 return title;
             }
         }
-        "edit_file" | "write_file" | "create_file" | "delete_file" | "apply_patch" | "search_replace" => {
+        tool_names::EDIT_FILE
+        | tool_names::WRITE_FILE
+        | tool_names::CREATE_FILE
+        | tool_names::DELETE_FILE
+        | tool_names::APPLY_PATCH
+        | tool_names::SEARCH_REPLACE => {
             if let Some(base) = headline_basename(args) {
                 return format!("Edited {base}");
             }
         }
-        "exec_command" | "run_pty_cmd" | "create_pty_session" | "shell" | "bash" => {
+        tool_names::EXEC_COMMAND
+        | tool_names::RUN_PTY_CMD
+        | tool_names::CREATE_PTY_SESSION
+        | tool_names::SHELL
+        | tool_names::BASH_ALIAS => {
             if let Some(command) = command_text(args) {
                 return format!("Ran {}", compact_command_headline(&command));
             }
         }
-        "code_search" | "grep" | "grep_file" => {
+        tool_names::CODE_SEARCH | tool_names::GREP | tool_names::GREP_FILE => {
             if let Some((title, _)) = search_headline(name, args) {
                 return title;
             }
         }
-        "command_session_internal" => {
+        tool_names::UNIFIED_EXEC => {
             let action = crate::tool_intent::command_session_action(args).unwrap_or("run");
             if !action.eq_ignore_ascii_case("run") {
                 return unified_exec_action_label(args).to_string();
@@ -563,7 +579,7 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
                 return format!("Ran {}", compact_command_headline(&command));
             }
         }
-        "file_operation_internal" => {
+        tool_names::UNIFIED_FILE => {
             let action = args.get("action").and_then(Value::as_str).unwrap_or("read");
             if action.eq_ignore_ascii_case("read") {
                 if let Some(base) = headline_basename(args) {
@@ -587,10 +603,10 @@ pub fn verb_callout_headline(tool_name: &str, args: &Value, workspace_root: Opti
 #[must_use]
 pub fn session_followup_title(name: &str, args: &Value) -> Option<String> {
     match name {
-        "send_pty_input" => Some("Send command input".to_string()),
-        "read_pty_session" => Some(READ_COMMAND_SESSION.to_string()),
-        "write_stdin" => Some(write_stdin_action_label(args).to_string()),
-        "command_session_internal" => {
+        tool_names::SEND_PTY_INPUT => Some("Send command input".to_string()),
+        tool_names::READ_PTY_SESSION => Some(READ_COMMAND_SESSION.to_string()),
+        tool_names::WRITE_STDIN => Some(write_stdin_action_label(args).to_string()),
+        tool_names::UNIFIED_EXEC => {
             let action = crate::tool_intent::command_session_action(args).unwrap_or("run");
             (!action.eq_ignore_ascii_case("run")).then(|| unified_exec_action_label(args).to_string())
         }
@@ -602,7 +618,7 @@ pub fn session_followup_title(name: &str, args: &Value) -> Option<String> {
 /// anything else phrases a file search over the first of pattern/query.
 #[must_use]
 pub fn search_headline(name: &str, args: &Value) -> Option<(String, &'static [&'static str])> {
-    if name == "code_search" {
+    if name == tool_names::CODE_SEARCH {
         return describe_code_search(args);
     }
     for key in ["pattern", "query"] {

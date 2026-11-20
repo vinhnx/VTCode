@@ -9,6 +9,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
+/// Legacy config provider id for the Codex app-server path.
+///
+/// This is intentionally not a [`Provider`] variant: it selects an auth and
+/// transport route, not a model gateway. Config code that branches on the
+/// string must reference this constant rather than re-spelling it.
+pub const CODEX_PROVIDER_ID: &str = "codex";
+
 /// Error returned when parsing a provider string fails.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ProviderParseError {

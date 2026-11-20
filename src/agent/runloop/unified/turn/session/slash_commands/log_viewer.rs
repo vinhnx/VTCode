@@ -187,31 +187,26 @@ fn item_type_label(details: &vtcode_core::exec::events::ThreadItemDetails) -> &'
 }
 
 fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static str, String) {
+    use vtcode_core::exec::events::ThreadEvent as Event;
     match event {
-        vtcode_core::exec::events::ThreadEvent::ThreadStarted(e) => {
-            ("thread.started", format!("thread_id={}", e.thread_id))
-        }
-        vtcode_core::exec::events::ThreadEvent::ThreadCompleted(e) => (
-            "thread.completed",
+        Event::ThreadStarted(e) => (event.wire_name(), format!("thread_id={}", e.thread_id)),
+        Event::ThreadCompleted(e) => (
+            event.wire_name(),
             format!("subtype={:?}, outcome={}, num_turns={}", e.subtype, e.outcome_code, e.num_turns),
         ),
-        vtcode_core::exec::events::ThreadEvent::ThreadCompactBoundary(e) => {
-            ("thread.compact_boundary", format!("trigger={:?}", e.trigger))
-        }
-        vtcode_core::exec::events::ThreadEvent::ContextReset(e) => (
-            "context.reset",
+        Event::ThreadCompactBoundary(e) => (event.wire_name(), format!("trigger={:?}", e.trigger)),
+        Event::ContextReset(e) => (
+            event.wire_name(),
             format!(
                 "trigger={:?}, plan_preserved={}, previous_context={}%, tool_budget_reset={}",
                 e.trigger, e.plan_preserved, e.previous_context_usage_percent, e.tool_budget_reset
             ),
         ),
-        vtcode_core::exec::events::ThreadEvent::TurnStarted(_) => ("turn.started", String::new()),
-        vtcode_core::exec::events::ThreadEvent::TurnCompleted(_) => ("turn.completed", String::new()),
-        vtcode_core::exec::events::ThreadEvent::TurnFailed(e) => {
-            ("turn.failed", truncate(&e.message, MAX_FIELD_DISPLAY_LEN).to_string())
-        }
-        vtcode_core::exec::events::ThreadEvent::TurnBlocked(e) => (
-            "turn.blocked",
+        Event::TurnStarted(_) => (event.wire_name(), String::new()),
+        Event::TurnCompleted(_) => (event.wire_name(), String::new()),
+        Event::TurnFailed(e) => (event.wire_name(), truncate(&e.message, MAX_FIELD_DISPLAY_LEN).to_string()),
+        Event::TurnBlocked(e) => (
+            event.wire_name(),
             format!(
                 "{} (streak {}, total {})",
                 truncate(&e.message, MAX_FIELD_DISPLAY_LEN),
@@ -219,24 +214,18 @@ fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static s
                 e.blocked_total
             ),
         ),
-        vtcode_core::exec::events::ThreadEvent::ItemStarted(e) => {
-            ("item.started", format!("type={}", item_type_label(&e.item.details)))
-        }
-        vtcode_core::exec::events::ThreadEvent::ItemUpdated(e) => {
-            ("item.updated", format!("type={}", item_type_label(&e.item.details)))
-        }
-        vtcode_core::exec::events::ThreadEvent::ItemCompleted(e) => {
-            ("item.completed", format!("type={}", item_type_label(&e.item.details)))
-        }
-        vtcode_core::exec::events::ThreadEvent::AppSandboxDenied(e) => (
-            "app.sandbox_denied",
+        Event::ItemStarted(e) => (event.wire_name(), format!("type={}", item_type_label(&e.item.details))),
+        Event::ItemUpdated(e) => (event.wire_name(), format!("type={}", item_type_label(&e.item.details))),
+        Event::ItemCompleted(e) => (event.wire_name(), format!("type={}", item_type_label(&e.item.details))),
+        Event::AppSandboxDenied(e) => (
+            event.wire_name(),
             format!("tool={}, tier={}, refused={}", e.tool, e.tier, truncate(&e.uris.join(","), MAX_FIELD_DISPLAY_LEN)),
         ),
-        vtcode_core::exec::events::ThreadEvent::PermissionRequested(e) => {
-            ("permission.requested", format!("tool={}", truncate(&e.tool_name, MAX_FIELD_DISPLAY_LEN)))
+        Event::PermissionRequested(e) => {
+            (event.wire_name(), format!("tool={}", truncate(&e.tool_name, MAX_FIELD_DISPLAY_LEN)))
         }
-        vtcode_core::exec::events::ThreadEvent::PermissionResolved(e) => (
-            "permission.resolved",
+        Event::PermissionResolved(e) => (
+            event.wire_name(),
             format!(
                 "tool={}, decision={:?}, wait_ms={}",
                 truncate(&e.tool_name, MAX_FIELD_DISPLAY_LEN),
@@ -244,39 +233,36 @@ fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static s
                 e.wait_ms
             ),
         ),
-        vtcode_core::exec::events::ThreadEvent::Interjected(e) => {
-            ("interjected", format!("source={:?}, redirect={:?}", e.source, e.redirect_kind))
+        Event::Interjected(e) => (event.wire_name(), format!("source={:?}, redirect={:?}", e.source, e.redirect_kind)),
+        Event::PlanDelta(e) => (
+            event.wire_name(),
+            format!("thread_id={}, turn_id={}, item_id={}", e.thread_id, e.turn_id, e.item_id),
+        ),
+        Event::PlanApprovalRequested(e) => {
+            (event.wire_name(), format!("thread_id={}, turn_id={}", e.thread_id, e.turn_id))
         }
-        vtcode_core::exec::events::ThreadEvent::PlanDelta(e) => {
-            ("plan.delta", format!("thread_id={}, turn_id={}, item_id={}", e.thread_id, e.turn_id, e.item_id))
-        }
-        vtcode_core::exec::events::ThreadEvent::PlanApprovalRequested(e) => {
-            ("plan.approval.requested", format!("thread_id={}, turn_id={}", e.thread_id, e.turn_id))
-        }
-        vtcode_core::exec::events::ThreadEvent::PlanApprovalResolved(e) => (
-            "plan.approval.resolved",
+        Event::PlanApprovalResolved(e) => (
+            event.wire_name(),
             format!(
                 "thread_id={}, turn_id={}, decision={:?}, automatic={}",
                 e.thread_id, e.turn_id, e.decision, e.automatic
             ),
         ),
-        vtcode_core::exec::events::ThreadEvent::Error(e) => {
-            ("error", truncate(&e.message, MAX_FIELD_DISPLAY_LEN).to_string())
+        Event::Error(e) => (event.wire_name(), truncate(&e.message, MAX_FIELD_DISPLAY_LEN).to_string()),
+        Event::MatrixUpdated(snapshot) => {
+            (event.wire_name(), format!("{}: {:?}", snapshot.spec.id, snapshot.lifecycle))
         }
-        vtcode_core::exec::events::ThreadEvent::MatrixUpdated(snapshot) => {
-            ("matrix.updated", format!("{}: {:?}", snapshot.spec.id, snapshot.lifecycle))
+        Event::TrackerUpdated(snapshot) => {
+            (event.wire_name(), format!("{}: {}/{}", snapshot.title, snapshot.completed, snapshot.total))
         }
-        vtcode_core::exec::events::ThreadEvent::TrackerUpdated(snapshot) => {
-            ("tracker.updated", format!("{}: {}/{}", snapshot.title, snapshot.completed, snapshot.total))
-        }
-        vtcode_core::exec::events::ThreadEvent::GoalUpdated(event) => (
-            "goal.updated",
-            match &event.goal {
+        Event::GoalUpdated(goal_event) => (
+            event.wire_name(),
+            match &goal_event.goal {
                 Some(snapshot) => format!("{}: {}", snapshot.state.as_str(), snapshot.objective),
                 None => "cleared".to_string(),
             },
         ),
-        vtcode_core::exec::events::ThreadEvent::Unknown => ("unknown", String::new()),
+        Event::Unknown => (event.wire_name(), String::new()),
     }
 }
 

@@ -130,11 +130,11 @@ impl DesktopView {
                     return;
                 }
                 let vertical = edge == ResizeEdge::Terminal;
-                let direction = match (vertical, event.keystroke.key.as_str()) {
-                    (false, "left") => -1.,
-                    (false, "right") => 1.,
-                    (true, "up") => 1.,
-                    (true, "down") => -1.,
+                let direction = match (vertical, key::Named::parse(event.keystroke.key.as_str())) {
+                    (false, Some(key::Named::Left)) => -1.,
+                    (false, Some(key::Named::Right)) => 1.,
+                    (true, Some(key::Named::Up)) => 1.,
+                    (true, Some(key::Named::Down)) => -1.,
                     _ => return,
                 };
                 let step = if modifiers.shift { 50. } else { 10. };

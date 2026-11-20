@@ -101,11 +101,14 @@ impl DesktopView {
 
         let mut body = div().w_full().flex().flex_col().px_3().py_1().gap_1();
         for file in &diff.files {
-            let (kind_label, kind_color) = match file.kind {
-                DiffFileKind::Add => ("added", colors.success),
-                DiffFileKind::Delete => ("deleted", colors.danger),
-                DiffFileKind::Update => ("modified", colors.muted_foreground),
-            };
+            let (kind_label, kind_color) = (
+                file.kind.as_str(),
+                match file.kind {
+                    DiffFileKind::Add => colors.success,
+                    DiffFileKind::Delete => colors.danger,
+                    DiffFileKind::Update => colors.muted_foreground,
+                },
+            );
             let path = file.path.clone();
             let (directory, basename) = match path.rsplit_once('/') {
                 Some((directory, base)) => (Some(format!("{directory}/")), base.to_string()),

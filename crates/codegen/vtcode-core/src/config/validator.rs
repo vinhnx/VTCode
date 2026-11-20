@@ -13,6 +13,7 @@ use crate::config::constants::models::openai::RESPONSES_API_MODELS;
 use crate::config::loader::VTCodeConfig;
 use crate::config::models::{Provider, model_catalog_entry, supported_models_for_provider};
 use crate::utils::file_utils::read_file_with_context_sync;
+use vtcode_commons::provider::CODEX_PROVIDER_ID;
 use vtcode_config::PromptCacheRetention;
 
 /// Loaded models database from docs/models.json
@@ -117,11 +118,11 @@ impl ConfigValidator {
         let managed_auth_provider = configured_managed_auth_provider(config);
         let custom_provider = config.custom_provider(&config.agent.provider);
         let is_custom_provider = custom_provider.is_some();
-        let is_codex_provider = config.agent.provider.eq_ignore_ascii_case("codex");
+        let is_codex_provider = config.agent.provider.eq_ignore_ascii_case(CODEX_PROVIDER_ID);
         // Built-in OpenAI supports multi-source auth (ChatGPT OAuth, Codex
         // fallback, API key). The static API-key check below is only meaningful
         // for providers that require an API key as their sole credential.
-        let is_openai_provider = config.agent.provider.eq_ignore_ascii_case("openai");
+        let is_openai_provider = Provider::OpenAI.name_matches(&config.agent.provider);
 
         // Check if configured model exists
         if let Some(custom) = custom_provider {
@@ -140,7 +141,7 @@ impl ConfigValidator {
             && !self.models_db.model_exists(&config.agent.provider, &config.agent.default_model)
         {
             // Check for known deprecated OpenAI models and suggest replacements.
-            if config.agent.provider.eq_ignore_ascii_case("openai")
+            if Provider::OpenAI.name_matches(&config.agent.provider)
                 && let Some((replacement, reason)) =
                     vtcode_config::constants::models::openai::deprecated_model_replacement(&config.agent.default_model)
             {
@@ -231,8 +232,8 @@ impl ConfigValidator {
         let managed_auth_provider = configured_managed_auth_provider(config);
         let custom_provider = config.custom_provider(&config.agent.provider);
         let is_custom_provider = custom_provider.is_some();
-        let is_codex_provider = config.agent.provider.eq_ignore_ascii_case("codex");
-        let is_openai_provider = config.agent.provider.eq_ignore_ascii_case("openai");
+        let is_codex_provider = config.agent.provider.eq_ignore_ascii_case(CODEX_PROVIDER_ID);
+        let is_openai_provider = Provider::OpenAI.name_matches(&config.agent.provider);
 
         // Check model exists
         let model_is_valid = custom_provider.is_some_and(|custom| {
@@ -293,7 +294,7 @@ pub struct ValidationResult {
 }
 
 pub fn check_prompt_cache_retention_compat(config: &VTCodeConfig, model: &str, provider: &str) -> Option<String> {
-    if !provider.eq_ignore_ascii_case("openai") {
+    if !Provider::OpenAI.name_matches(provider) {
         return None;
     }
 
@@ -312,7 +313,7 @@ pub fn check_prompt_cache_retention_compat(config: &VTCodeConfig, model: &str, p
 }
 
 pub fn check_openai_hosted_shell_compat(config: &VTCodeConfig, model: &str, provider: &str) -> Option<String> {
-    if !provider.eq_ignore_ascii_case("openai") {
+    if !Provider::OpenAI.name_matches(provider) {
         return None;
     }
 

@@ -76,7 +76,7 @@ pub(in crate::desktop::view) const COMMANDS: [ShortcutCommand; 34] = [
         id: CommandId::Dismiss,
         label_key: "app.shortcuts.dismiss_label",
         description_key: "app.shortcuts.dismiss_description",
-        default_binding: "escape",
+        default_binding: key::ESCAPE,
     },
     ShortcutCommand {
         id: CommandId::Settings,

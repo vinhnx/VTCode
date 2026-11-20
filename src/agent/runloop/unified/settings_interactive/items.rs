@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{Result, anyhow};
 use toml::Value as TomlValue;
+use vtcode_commons::config_keys::ConfigKey;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use super::docs::{FIELD_DOCS, FieldDoc};
@@ -19,7 +20,7 @@ use super::{
 };
 use crate::agent::runloop::unified::config_section_headings::humanize_identifier;
 
-const HIDDEN_SETTINGS_PATHS: &[&str] = &["agent.small_model"];
+const HIDDEN_SETTINGS_PATHS: &[&str] = &[ConfigKey::SMALL_MODEL];
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CuratedSettingsGroup {
@@ -35,8 +36,8 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         title: "Model & Provider",
         description: "Choose the active provider, model, and response behavior.",
         paths: &[
-            "agent.provider",
-            "agent.default_model",
+            ConfigKey::PROVIDER,
+            ConfigKey::DEFAULT_MODEL,
             "agent.reasoning_effort",
             "agent.temperature",
             "agent.verbosity",
@@ -89,7 +90,7 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
             "tools.default_policy",
             "tools.profile",
             "tools.client_tool_search",
-            "tools.editor",
+            ConfigKey::EDITOR,
             "tools.web_fetch.mode",
             "tools.web_fetch.strict_https_only",
             "tools.web_search.provider",
@@ -122,7 +123,7 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         title: "Interface & Terminal",
         description: "Shape the chat surface, transcript, theme, and shell sessions.",
         paths: &[
-            "agent.theme",
+            ConfigKey::THEME,
             "ui.display_mode",
             "ui.tool_display_mode",
             "ui.tool_output_mode",
@@ -610,8 +611,8 @@ fn append_synthetic_model_config_items(
         }
         SETTINGS_MODEL_CONFIG_MAIN_PATH => {
             items.push(section_item("Settings"));
-            append_mapped_setting_item(items, draft_root, "agent.provider");
-            append_mapped_setting_item(items, draft_root, "agent.default_model");
+            append_mapped_setting_item(items, draft_root, ConfigKey::PROVIDER);
+            append_mapped_setting_item(items, draft_root, ConfigKey::DEFAULT_MODEL);
             Ok(true)
         }
         _ => Ok(false),
@@ -724,7 +725,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue, draft_root: &TomlV
     let summary = summarize_value(value);
     let search_value = search_value_with_content(path, label, value, doc);
 
-    if path == "agent.default_model" {
+    if path == ConfigKey::DEFAULT_MODEL {
         return setting_row(
             title,
             summary,
@@ -735,7 +736,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue, draft_root: &TomlV
         );
     }
 
-    if path == "tools.editor" {
+    if path == ConfigKey::EDITOR {
         return setting_row(
             title,
             summary,

@@ -7,6 +7,46 @@ use std::mem::size_of;
 /// does not balloon from alignment/discriminant padding (see
 /// docs/development/rust-performance-principles.md, "Enum footprint").
 #[test]
+fn wire_name_matches_serialized_type_tag() {
+    let item = ThreadItem {
+        context: None,
+        id: "item-1".to_string(),
+        details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "hello".to_string() }),
+    };
+    let events = [
+        ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1".to_string() }),
+        ThreadEvent::ContextReset(ContextResetEvent {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            trigger: ContextResetTrigger::PlanApproval,
+            plan_preserved: true,
+            previous_context_usage_percent: 7,
+            tool_budget_reset: true,
+        }),
+        ThreadEvent::TurnStarted(TurnStartedEvent::default()),
+        ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
+            completed_at: None,
+            usage: Usage {
+                input_tokens: 1,
+                cached_input_tokens: 0,
+                cache_creation_tokens: 0,
+                output_tokens: 1,
+            },
+            in_progress_exec_sessions: Vec::new(),
+        }),
+        ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
+        ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: item.clone() }),
+        ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
+        ThreadEvent::Unknown,
+    ];
+    for event in events {
+        let value = serde_json::to_value(&event).expect("serialize event");
+        assert_eq!(value["type"].as_str(), Some(event.wire_name()), "{event:?}");
+    }
+}
+
+#[test]
 fn thread_event_stays_compact() {
     assert!(
         size_of::<ThreadEvent>() <= 80,

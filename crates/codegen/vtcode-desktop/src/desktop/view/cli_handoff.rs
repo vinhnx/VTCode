@@ -66,10 +66,12 @@ impl DesktopView {
     /// an already-here notice; suggesting it would promise a second window).
     /// Descriptions stay English like the service set.
     pub(super) fn localize_slash_catalog(&mut self) {
-        self.slash_commands.retain(|command| command.name != "desktop");
-        if !self.slash_commands.iter().any(|command| command.name == "cli") {
+        let cli = composer_controls::SlashCommandName::Cli.as_str();
+        let desktop = composer_controls::SlashCommandName::Desktop.as_str();
+        self.slash_commands.retain(|command| command.name != desktop);
+        if !self.slash_commands.iter().any(|command| command.name == cli) {
             self.slash_commands.push(protocol::SlashCommandInfo {
-                name: "cli".to_string(),
+                name: cli.to_string(),
                 description: "Continue the selected thread in the CLI".to_string(),
             });
         }

@@ -54,11 +54,13 @@ pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
 
 pub(super) fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
     match tool_ref {
-        "repo_browser.list_files" | tools::LIST_FILES => tools::LIST_FILES,
-        "repo_browser.read_file" | tools::READ_FILE => tools::READ_FILE,
-        "repo_browser.write_file" | tools::WRITE_FILE => tools::WRITE_FILE,
-        "container.exec" | "exec" | "bash" | "exec_command" => tools::EXEC_COMMAND,
-        "grep" => tools::GREP_FILE,
+        tools::REPO_BROWSER_LIST_FILES | tools::LIST_FILES => tools::LIST_FILES,
+        tools::REPO_BROWSER_READ_FILE | tools::READ_FILE => tools::READ_FILE,
+        tools::REPO_BROWSER_WRITE_FILE | tools::WRITE_FILE => tools::WRITE_FILE,
+        tools::CONTAINER_EXEC_ALIAS | tools::EXEC_ALIAS | tools::BASH_ALIAS | tools::EXEC_COMMAND => {
+            tools::EXEC_COMMAND
+        }
+        tools::GREP => tools::GREP_FILE,
         _ => {
             // Try to extract the function name after the last dot
             if let Some(dot_pos) = tool_ref.rfind('.') {

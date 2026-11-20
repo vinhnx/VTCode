@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use toml::Value as TomlValue;
 use vtcode_commons::VtCodePaths;
+use vtcode_commons::config_keys::ConfigKey;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig, explicit_config_path};
 use vtcode_core::config::{constants::defaults, constants::model_helpers};
 use vtcode_core::llm::{auto_lightweight_model, lightweight_model_choices};
@@ -70,7 +71,7 @@ pub(super) fn add_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
 }
 
 fn default_array_item(path: &str, existing: &[TomlValue]) -> TomlValue {
-    if normalize_config_path(path) == "agent.codex_app_server.args" {
+    if normalize_config_path(path) == ConfigKey::CODEX_APP_SERVER_ARGS {
         return TomlValue::String("app-server".to_string());
     }
 
@@ -228,7 +229,7 @@ fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) 
 
 pub(super) fn resolve_cycle_options(root: Option<&TomlValue>, path: &str, current: &str) -> Vec<String> {
     match normalize_config_path(path).as_str() {
-        "agent.codex_app_server.command" => {
+        ConfigKey::CODEX_APP_SERVER_COMMAND => {
             return codex_sidecar_cycle_options(current, "codex");
         }
         "agent.codex_app_server.args[]" => {
@@ -237,10 +238,10 @@ pub(super) fn resolve_cycle_options(root: Option<&TomlValue>, path: &str, curren
         _ => {}
     }
 
-    if normalize_config_path(path) == "agent.theme" {
+    if normalize_config_path(path) == ConfigKey::THEME {
         return theme::available_themes().into_iter().map(str::to_string).collect();
     }
-    if normalize_config_path(path) == "agent.small_model.model" {
+    if normalize_config_path(path) == ConfigKey::SMALL_MODEL_NAME {
         return lightweight_model_cycle_options(root, current);
     }
 
@@ -268,12 +269,12 @@ fn codex_sidecar_cycle_options(current: &str, default: &str) -> Vec<String> {
 
 fn lightweight_model_cycle_options(root: Option<&TomlValue>, current: &str) -> Vec<String> {
     let provider = root
-        .and_then(|value| get_node(value, "agent.provider"))
+        .and_then(|value| get_node(value, ConfigKey::PROVIDER))
         .and_then(TomlValue::as_str)
         .filter(|value| !value.trim().is_empty())
         .unwrap_or(defaults::DEFAULT_PROVIDER);
     let main_model = root
-        .and_then(|value| get_node(value, "agent.default_model"))
+        .and_then(|value| get_node(value, ConfigKey::DEFAULT_MODEL))
         .and_then(TomlValue::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(str::to_string)

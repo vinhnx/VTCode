@@ -44,6 +44,14 @@ pub(super) mod keys {
     pub const STATUS: &str = "status";
     pub const SCOPE: &str = "scope";
     pub const INCLUDE_UNTRACKED: &str = "includeUntracked";
+    /// Whether a `session/ui_progress` notification marks the run active.
+    pub const ACTIVE: &str = "active";
+    /// Whether a failed turn was recovered by a service restart.
+    pub const RESTARTED: &str = "restarted";
+    /// Authoritative queue snapshot key on `turn/status`.
+    pub const QUEUE_STATUS: &str = "queueStatus";
+    /// Positional args key on `goal/execute`.
+    pub const ARGS: &str = "args";
 }
 
 /// App identity strings shown in menus, window chrome, notifications, and
@@ -64,6 +72,118 @@ pub(super) mod key_context {
     pub const SESSIONS: &str = "VTCodeSessions";
     pub const THREAD_TABS: &str = "VTCodeThreadTabs";
     pub const ACTIVITY: &str = "VTCodeActivity";
+}
+
+/// GPUI `Keystroke::key` spellings inspected or bound from more than one site.
+///
+/// GPUI models a pressed key as a plain `String`, so every branch, `matches!`
+/// guard and binding must agree on one spelling. [`Named`] gives the closed set
+/// we inspect a typed form; the `&str` constants below are derived aliases so
+/// `match` arms and `Keystroke::key == …` reference the same source of truth.
+pub(super) mod key {
+    /// Named keys the desktop client branches on. GPUI delivers every key as a
+    /// string; this enum keeps that closed set typed at parse sites.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Named {
+        Escape,
+        Tab,
+        Enter,
+        Backspace,
+        Delete,
+        Space,
+        Left,
+        Right,
+        Up,
+        Down,
+        Home,
+        End,
+        PageUp,
+        PageDown,
+        C,
+        A,
+        V,
+    }
+
+    impl Named {
+        pub const ALL: [Self; 17] = [
+            Self::Escape,
+            Self::Tab,
+            Self::Enter,
+            Self::Backspace,
+            Self::Delete,
+            Self::Space,
+            Self::Left,
+            Self::Right,
+            Self::Up,
+            Self::Down,
+            Self::Home,
+            Self::End,
+            Self::PageUp,
+            Self::PageDown,
+            Self::C,
+            Self::A,
+            Self::V,
+        ];
+
+        pub const fn as_str(self) -> &'static str {
+            match self {
+                Self::Escape => "escape",
+                Self::Tab => "tab",
+                Self::Enter => "enter",
+                Self::Backspace => "backspace",
+                Self::Delete => "delete",
+                Self::Space => "space",
+                Self::Left => "left",
+                Self::Right => "right",
+                Self::Up => "up",
+                Self::Down => "down",
+                Self::Home => "home",
+                Self::End => "end",
+                Self::PageUp => "pageup",
+                Self::PageDown => "pagedown",
+                Self::C => "c",
+                Self::A => "a",
+                Self::V => "v",
+            }
+        }
+
+        pub fn parse(value: &str) -> Option<Self> {
+            Self::ALL.into_iter().find(|named| named.as_str() == value)
+        }
+
+        /// Whether this key moves a caret or list selection (arrows + Home/End).
+        pub const fn is_navigation(self) -> bool {
+            self.is_arrow() || matches!(self, Self::Home | Self::End)
+        }
+
+        /// Whether this key is one of the four arrow keys.
+        pub const fn is_arrow(self) -> bool {
+            matches!(self, Self::Left | Self::Right | Self::Up | Self::Down)
+        }
+    }
+
+    pub const ESCAPE: &str = Named::Escape.as_str();
+    pub const TAB: &str = Named::Tab.as_str();
+    pub const ENTER: &str = Named::Enter.as_str();
+    pub const BACKSPACE: &str = Named::Backspace.as_str();
+    pub const DELETE: &str = Named::Delete.as_str();
+    pub const SPACE: &str = Named::Space.as_str();
+    pub const LEFT: &str = Named::Left.as_str();
+    pub const RIGHT: &str = Named::Right.as_str();
+    pub const UP: &str = Named::Up.as_str();
+    pub const DOWN: &str = Named::Down.as_str();
+    pub const HOME: &str = Named::Home.as_str();
+    pub const END: &str = Named::End.as_str();
+    pub const PAGE_UP: &str = Named::PageUp.as_str();
+    pub const PAGE_DOWN: &str = Named::PageDown.as_str();
+    pub const C: &str = Named::C.as_str();
+    pub const A: &str = Named::A.as_str();
+    pub const V: &str = Named::V.as_str();
+
+    /// Whether a raw GPUI key name is a caret/list navigation key.
+    pub fn is_navigation(value: &str) -> bool {
+        Named::parse(value).is_some_and(Named::is_navigation)
+    }
 }
 
 /// macOS app-bundle layout fragments shared by backend resolution and
@@ -163,7 +283,17 @@ pub(super) mod display {
 
 #[cfg(test)]
 mod tests {
-    use super::i18n;
+    use super::{i18n, key};
+
+    #[test]
+    fn keystroke_key_spellings_round_trip() {
+        for named in key::Named::ALL {
+            assert_eq!(key::Named::parse(named.as_str()), Some(named), "{named:?}");
+        }
+        assert_eq!(key::Named::parse("F1"), None);
+        assert!(key::Named::parse(key::LEFT).is_some_and(key::Named::is_navigation));
+        assert!(!key::Named::parse(key::PAGE_UP).is_some_and(key::Named::is_navigation));
+    }
 
     #[test]
     fn permission_wording_matches_shared_cli_contract() {

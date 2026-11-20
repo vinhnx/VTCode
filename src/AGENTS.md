@@ -5,13 +5,14 @@
 
 ## Modules
 
-`main.rs` entry | `cli/` command handlers, WebMCP serving, companion exec supervision | `startup/` onboarding and `StartupPolicy` | `updater/` downloads, self-replacement, release-notes policy | `main_helpers/` tracing and runtime init | `codex_app_server/` bridge | `allocator.rs`, `process_hardening.rs` process setup
-`agent/runloop/` single-agent loop: `unified/turn/session_loop_runner/` facade with `orchestration/` owning the loop body, setup, and teardown; `unified/turn/turn_loop/` request-boundary compaction and ordered finalization; `unified/session_setup/hook_approval.rs` workspace hook approval overlay
-`agent/runloop/tool_output/` tracker rows, dispatch, and ANSI diff rendering | `agent/runloop/unified/turn/compaction/` delegates to `vtcode-core::compaction` | `agent/runloop/unified/webmcp.rs` active WebMCP bridge | `agent/runloop/unified/instruction_audit.rs` read-only `/doctor prompt-audit`
+`main.rs` entry | `cli/` commands, WebMCP, companion exec | `startup/` onboarding, `StartupPolicy` | `updater/` self-replacement, release notes | `main_helpers/` tracing/init | `codex_app_server/` bridge | `allocator.rs`, `process_hardening.rs`
+`agent/runloop/` single-agent loop: `session_loop_runner/` facade, `orchestration/` loop body/setup/teardown, `turn_loop/` request-boundary compaction + ordered finalization, `session_setup/hook_approval.rs` hook overlay
+`agent/runloop/tool_output/` tracker/diff | `unified/turn/compaction/` delegates to core | `unified/webmcp.rs` bridge | `unified/instruction_audit.rs` `/doctor prompt-audit`
 
 ## Rules
 
-- Keep the binary thin; runtime logic, spool preview generation, and shell activity classification belong in `vtcode-core`, and the binary only serializes typed references. Rendering: `vtcode-tui-runtime`.
+- Keep the binary thin; runtime logic, spool previews, and shell classification belong in `vtcode-core`; binary serializes typed references. Rendering: `vtcode-tui-runtime`.
+- Compare identity strings via canonical consts: `ThreadEvent::wire_name()`/`wire_type` for wire types, `config::constants::tools` for tool names, `vtcode_commons::provider` for providers. No raw identity literals.
 - Use the shared `ThreadEvent` contract for telemetry; unexpected exits must emit terminal lifecycle events before draining, and `take_active_turn` is the single take point for terminal emission.
 - Build `LifecycleHookEngine` with `new_with_session_gated` so workspace-controlled hooks stay gated behind the approval overlay.
 - Verification gates completion only, never editing; verifier responses require a terminal exit code before clearing the gate, and verification credit is never derived from request-only projections.

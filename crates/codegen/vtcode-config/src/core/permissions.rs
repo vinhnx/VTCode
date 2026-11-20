@@ -1,3 +1,4 @@
+use crate::constants::tools;
 use crate::env_helpers::default_enabled;
 use anyhow::{Result, bail};
 use serde::Deserializer;
@@ -73,8 +74,8 @@ impl AgentPermissionsConfig {
 /// Reject allow rules matching the computer-use tool exactly as the rule
 /// compiler normalizes them, so no spelling smuggles it past validation.
 fn reject_computer_use_allow(rules: &[String], owner: &str) -> Result<()> {
-    if rules.iter().any(|rule| normalize_permission_rule(rule) == "computer_use") {
-        bail!("{owner} must not allowlist 'computer_use': computer-use approval is always per-turn");
+    if rules.iter().any(|rule| normalize_permission_rule(rule) == tools::COMPUTER_USE) {
+        bail!("{owner} must not allowlist '{}': computer-use approval is always per-turn", tools::COMPUTER_USE);
     }
     Ok(())
 }
@@ -83,13 +84,90 @@ fn reject_computer_use_allow(rules: &[String], owner: &str) -> Result<()> {
 // Permission rule normalization
 // ---------------------------------------------------------------------------
 
-/// Check whether a rule string is already a recognized semantic rule.
+/// Semantic permission categories that tool names normalize into.
 ///
 /// Semantic rules operate on `PermissionRequestKind` rather than exact tool
-/// names, which means they work correctly across current and internal helper
-/// routes.
+/// names, so they work across current and internal helper routes. Keeping the
+/// closed set typed means the rule check and the normalizer cannot drift on
+/// their five spellings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SemanticRule {
+    Read,
+    Write,
+    Edit,
+    Bash,
+    WebFetch,
+}
+
+impl SemanticRule {
+    const ALL: [Self; 5] = [Self::Read, Self::Write, Self::Edit, Self::Bash, Self::WebFetch];
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::Write => "write",
+            Self::Edit => "edit",
+            Self::Bash => "bash",
+            Self::WebFetch => "webfetch",
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|rule| rule.as_str() == value)
+    }
+
+    /// Map a lowercased tool name (or one of its config aliases) to its
+    /// semantic category. Unknown names stay `None` so they become ExactTool.
+    fn from_tool_name(tool_name: &str) -> Option<Self> {
+        match tool_name {
+            tools::READ_FILE
+            | "read"
+            | tools::GREP_FILE
+            | tools::GREP
+            | tools::LIST_FILES
+            | tools::LIST
+            | "glob"
+            | "listfiles"
+            | "grepfile"
+            | tools::CODE_SEARCH
+            | "codesearch" => Some(Self::Read),
+            tools::WRITE_FILE
+            | "write"
+            | tools::CREATE_FILE
+            | "createfile"
+            | tools::DELETE_FILE
+            | "deletefile"
+            | tools::MOVE_FILE
+            | "movefile"
+            | tools::COPY_FILE
+            | "copyfile" => Some(Self::Write),
+            tools::EDIT_FILE
+            | "edit"
+            | tools::APPLY_PATCH
+            | "applypatch"
+            | tools::SEARCH_REPLACE
+            | "searchreplace"
+            | tools::FILE_OP
+            | "fileop"
+            | "patch" => Some(Self::Edit),
+            "bash"
+            | tools::SHELL
+            | "command"
+            | tools::EXEC_COMMAND
+            | "execcommand"
+            | tools::RUN_PTY_CMD
+            | "runptycmd"
+            | tools::EXECUTE_CODE
+            | "executecode" => Some(Self::Bash),
+            "webfetch" | tools::WEB_FETCH | tools::FETCH => Some(Self::WebFetch),
+            _ => None,
+        }
+    }
+}
+
+/// Check whether a rule string is already a recognized semantic rule.
 fn is_semantic_rule(rule: &str) -> bool {
-    matches!(rule.to_ascii_lowercase().as_str(), "read" | "write" | "edit" | "bash" | "webfetch")
+    SemanticRule::parse(&rule.to_ascii_lowercase()).is_some()
 }
 
 /// Normalize a tool-name permission rule to its semantic category.
@@ -97,29 +175,8 @@ fn is_semantic_rule(rule: &str) -> bool {
 /// Raw helper names like `"read_file"` are mapped to semantic rules so they
 /// correctly match the underlying operation.
 fn normalize_tool_name_to_semantic(tool_name: &str) -> String {
-    match tool_name.to_ascii_lowercase().as_str() {
-        // Read operations
-        "read_file" | "read" | "grep_file" | "grep" | "list_files" | "list" | "glob" | "listfiles" | "grepfile"
-        | "code_search" | "codesearch" => "read".to_string(),
-
-        // Write operations
-        "write_file" | "write" | "create_file" | "createfile" | "delete_file" | "deletefile" | "move_file"
-        | "movefile" | "copy_file" | "copyfile" => "write".to_string(),
-
-        // Edit operations
-        "edit_file" | "edit" | "apply_patch" | "applypatch" | "search_replace" | "searchreplace" | "file_op"
-        | "fileop" | "patch" => "edit".to_string(),
-
-        // Bash operations
-        "bash" | "shell" | "command" | "exec_command" | "execcommand" | "run_pty_cmd" | "runptycmd"
-        | "execute_code" | "executecode" => "bash".to_string(),
-
-        // Web fetch operations
-        "webfetch" | "web_fetch" | "fetch" => "webfetch".to_string(),
-
-        // Pass through unknown rules as-is (will become ExactTool)
-        other => other.to_string(),
-    }
+    let tool_name = tool_name.to_ascii_lowercase();
+    SemanticRule::from_tool_name(&tool_name).map_or(tool_name, |rule| rule.as_str().to_string())
 }
 
 /// Parse a rule string into its tool name and optional path specifier.

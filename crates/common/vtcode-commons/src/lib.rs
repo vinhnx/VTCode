@@ -27,6 +27,7 @@ pub mod clipboard_5522;
 pub mod color256_theme;
 pub mod color_policy;
 pub mod colors;
+pub mod config_keys;
 pub mod content_search;
 pub mod diff;
 pub mod diff_paths;

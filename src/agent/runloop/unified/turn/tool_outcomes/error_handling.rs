@@ -74,7 +74,7 @@ pub(crate) fn tool_denial_diagnostic(tool_name: &str) -> Option<serde_json::Valu
         // explicitly refused this task (or headless fail-closed denied it),
         // so re-calling burns another approval prompt for the same answer.
         // Tell the model to stop and report instead.
-        "computer_use" => Some(serde_json::json!({
+        tool_names::COMPUTER_USE => Some(serde_json::json!({
             "cause": "The computer_use turn was not approved for this task.",
             "impact": "No browser actions executed; nothing launched.",
             "directive": "Do not retry the same computer_use task unchanged. Report what was refused and continue with work that does not need computer control, or ask the user in plain text whether to adjust the task."

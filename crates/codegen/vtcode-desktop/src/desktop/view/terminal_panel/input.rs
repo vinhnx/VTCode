@@ -2,6 +2,8 @@
 //! recognizers, scroll targets, wheel deltas, and copy guards. Split from
 //! `terminal_panel.rs` to hold the 1000-line ceiling.
 
+use crate::desktop::strings::key;
+
 /// Wheel pixels to whole history lines. Sign follows GPUI lists
 /// (`scroll_top - delta.y`): wheel-up is positive `delta.y`, which is also
 /// Rio's `Delta` direction into history, so no flip is needed. Returns the
@@ -32,10 +34,10 @@ pub(super) fn scroll_target(keystroke: &gpui_kit::Keystroke) -> Option<rio_vt::c
         return None;
     }
     match keystroke.key.as_str() {
-        "pageup" => Some(Scroll::PageUp),
-        "pagedown" => Some(Scroll::PageDown),
-        "home" => Some(Scroll::Top),
-        "end" => Some(Scroll::Bottom),
+        key::PAGE_UP => Some(Scroll::PageUp),
+        key::PAGE_DOWN => Some(Scroll::PageDown),
+        key::HOME => Some(Scroll::Top),
+        key::END => Some(Scroll::Bottom),
         _ => None,
     }
 }
@@ -43,13 +45,13 @@ pub(super) fn scroll_target(keystroke: &gpui_kit::Keystroke) -> Option<rio_vt::c
 /// Copy chord: plain `cmd-c` only.
 pub(super) fn is_copy(keystroke: &gpui_kit::Keystroke) -> bool {
     let modifiers = &keystroke.modifiers;
-    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == "c"
+    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == key::C
 }
 
 /// Select-all chord: plain `cmd-a` only.
 pub(super) fn is_select_all(keystroke: &gpui_kit::Keystroke) -> bool {
     let modifiers = &keystroke.modifiers;
-    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == "a"
+    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == key::A
 }
 
 /// Clipboard-bound selection text: blank selections never clobber the clipboard.
@@ -60,13 +62,13 @@ pub(super) fn copyable_text(text: Option<String>) -> Option<String> {
 /// Bare `escape` clears a selection instead of reaching the shell.
 pub(super) fn is_bare_escape(keystroke: &gpui_kit::Keystroke) -> bool {
     let modifiers = &keystroke.modifiers;
-    !modifiers.platform && !modifiers.control && !modifiers.alt && !modifiers.function && keystroke.key == "escape"
+    !modifiers.platform && !modifiers.control && !modifiers.alt && !modifiers.function && keystroke.key == key::ESCAPE
 }
 
 /// Paste chord: plain `cmd-v` only, so modified variants keep bubbling.
 pub(super) fn is_paste(keystroke: &gpui_kit::Keystroke) -> bool {
     let modifiers = &keystroke.modifiers;
-    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == "v"
+    modifiers.platform && !modifiers.control && !modifiers.alt && keystroke.key == key::V
 }
 
 /// Translate one keystroke to terminal input bytes, or `None` to let it
@@ -81,20 +83,20 @@ pub(super) fn key_bytes(keystroke: &gpui_kit::Keystroke, app_cursor: bool) -> Op
         return control_bytes(&keystroke.key);
     }
     match keystroke.key.as_str() {
-        "enter" => Some(b"\r".to_vec()),
-        "backspace" => Some(vec![0x7f]),
-        "delete" => Some(b"\x1b[3~".to_vec()),
-        "tab" => Some(b"\t".to_vec()),
-        "escape" => Some(b"\x1b".to_vec()),
-        "space" => Some(b" ".to_vec()),
-        "left" => Some(cursor_bytes(app_cursor, b'D')),
-        "right" => Some(cursor_bytes(app_cursor, b'C')),
-        "up" => Some(cursor_bytes(app_cursor, b'A')),
-        "down" => Some(cursor_bytes(app_cursor, b'B')),
-        "home" => Some(b"\x1b[H".to_vec()),
-        "end" => Some(b"\x1b[F".to_vec()),
-        "pageup" => Some(b"\x1b[5~".to_vec()),
-        "pagedown" => Some(b"\x1b[6~".to_vec()),
+        key::ENTER => Some(b"\r".to_vec()),
+        key::BACKSPACE => Some(vec![0x7f]),
+        key::DELETE => Some(b"\x1b[3~".to_vec()),
+        key::TAB => Some(b"\t".to_vec()),
+        key::ESCAPE => Some(b"\x1b".to_vec()),
+        key::SPACE => Some(b" ".to_vec()),
+        key::LEFT => Some(cursor_bytes(app_cursor, b'D')),
+        key::RIGHT => Some(cursor_bytes(app_cursor, b'C')),
+        key::UP => Some(cursor_bytes(app_cursor, b'A')),
+        key::DOWN => Some(cursor_bytes(app_cursor, b'B')),
+        key::HOME => Some(b"\x1b[H".to_vec()),
+        key::END => Some(b"\x1b[F".to_vec()),
+        key::PAGE_UP => Some(b"\x1b[5~".to_vec()),
+        key::PAGE_DOWN => Some(b"\x1b[6~".to_vec()),
         "f1" => Some(b"\x1bOP".to_vec()),
         "f2" => Some(b"\x1bOQ".to_vec()),
         "f3" => Some(b"\x1bOR".to_vec()),
@@ -131,7 +133,7 @@ pub(super) fn cursor_bytes(app_cursor: bool, final_byte: u8) -> Vec<u8> {
 /// Control codes for the allowlisted keys only; anything else bubbles rather
 /// than risk a wrong byte (a wrong control code can kill foreground jobs).
 pub(super) fn control_bytes(key: &str) -> Option<Vec<u8>> {
-    let key = if key == "space" { " " } else { key };
+    let key = if key == key::SPACE { " " } else { key };
     let mut chars = key.chars();
     let key = chars.next().filter(|_| chars.next().is_none())?;
     if key == '?' {

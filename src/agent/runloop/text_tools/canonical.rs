@@ -30,11 +30,11 @@ pub(crate) fn canonicalize_shell_tool_alias(raw: &str) -> Option<String> {
             | "terminalcmd"
             | "terminalcommand"
             | "command"
-            | "shell"
-            | "bash"
+            | tools::SHELL
+            | tools::BASH_ALIAS
             | "container_exec"
-            | "exec"
-            | "exec_command"
+            | tools::EXEC_ALIAS
+            | tools::EXEC_COMMAND
     )
     .then(|| tools::EXEC_COMMAND.to_string())
 }
@@ -147,15 +147,25 @@ pub(super) fn apply_exec_command_defaults(payload: &mut serde_json::Map<String, 
 
 fn exec_command_defaults_from_normalized_name(normalized: &str) -> Option<ExecCommandDefaults> {
     match normalized {
-        "run" | "runcmd" | "runcommand" | "terminalrun" | "terminalcmd" | "terminalcommand" | "command" | "shell"
-        | "bash" | "container_exec" | "exec" | "exec_command" => {
-            Some(ExecCommandDefaults { action: "run", force_tty: None })
+        "run"
+        | "runcmd"
+        | "runcommand"
+        | "terminalrun"
+        | "terminalcmd"
+        | "terminalcommand"
+        | "command"
+        | tools::SHELL
+        | tools::BASH_ALIAS
+        | "container_exec"
+        | tools::EXEC_ALIAS
+        | tools::EXEC_COMMAND => Some(ExecCommandDefaults { action: "run", force_tty: None }),
+        tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION => {
+            Some(ExecCommandDefaults { action: "run", force_tty: Some(true) })
         }
-        "run_pty_cmd" | "create_pty_session" => Some(ExecCommandDefaults { action: "run", force_tty: Some(true) }),
-        "send_pty_input" => Some(ExecCommandDefaults { action: "write", force_tty: None }),
-        "read_pty_session" => Some(ExecCommandDefaults { action: "poll", force_tty: None }),
-        "list_pty_sessions" => Some(ExecCommandDefaults { action: "list", force_tty: None }),
-        "close_pty_session" => Some(ExecCommandDefaults { action: "close", force_tty: None }),
+        tools::SEND_PTY_INPUT => Some(ExecCommandDefaults { action: "write", force_tty: None }),
+        tools::READ_PTY_SESSION => Some(ExecCommandDefaults { action: "poll", force_tty: None }),
+        tools::LIST_PTY_SESSIONS => Some(ExecCommandDefaults { action: "list", force_tty: None }),
+        tools::CLOSE_PTY_SESSION => Some(ExecCommandDefaults { action: "close", force_tty: None }),
         _ => None,
     }
 }

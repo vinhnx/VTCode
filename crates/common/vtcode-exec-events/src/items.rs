@@ -99,6 +99,17 @@ pub enum CommandExecutionStatus {
     InProgress,
 }
 
+impl CommandExecutionStatus {
+    /// Wire spelling (`snake_case`, matching `serde(rename_all)`).
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::InProgress => "in_progress",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct CommandExecutionItem {
@@ -128,6 +139,17 @@ pub enum ToolCallStatus {
     Failed,
     /// Tool is still running and may emit additional output.
     InProgress,
+}
+
+impl ToolCallStatus {
+    /// Wire spelling (`snake_case`, matching `serde(rename_all)`).
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::InProgress => "in_progress",
+        }
+    }
 }
 
 /// Fine-grained outcome of a tool invocation lifecycle.
@@ -329,6 +351,16 @@ pub enum PatchApplyStatus {
     Failed,
 }
 
+impl PatchApplyStatus {
+    /// Wire spelling (`snake_case`, matching `serde(rename_all)`).
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
@@ -367,6 +399,17 @@ pub enum McpToolCallStatus {
     Completed,
     /// Tool invocation failed.
     Failed,
+}
+
+impl McpToolCallStatus {
+    /// Wire spelling (`snake_case`, matching `serde(rename_all)`).
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

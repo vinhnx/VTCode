@@ -527,7 +527,7 @@ impl DesktopView {
                         }
                     }))
                     .on_key_up(cx.listener(|view, event: &KeyUpEvent, window, cx| {
-                        if matches!(event.keystroke.key.as_str(), "left" | "right" | "up" | "down" | "home" | "end") {
+                        if key::is_navigation(event.keystroke.key.as_str()) {
                             view.refresh_composer_suggestions_after_input_navigation(window, cx);
                         }
                     }))

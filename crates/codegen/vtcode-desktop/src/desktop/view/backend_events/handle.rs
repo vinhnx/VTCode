@@ -543,7 +543,7 @@ impl DesktopView {
                         cx.notify();
                     }
                     protocol::method::TURN_CANCEL => {
-                        if let Some(status) = result.get("queueStatus")
+                        if let Some(status) = result.get(keys::QUEUE_STATUS)
                             && let Ok(status) = serde_json::from_value::<protocol::TurnQueueStatus>(status.clone())
                         {
                             self.apply_queue_status(status);

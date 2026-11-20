@@ -81,9 +81,9 @@ impl DesktopView {
                                 {
                                     return;
                                 }
-                                let delta = match event.keystroke.key.as_str() {
-                                    "left" | "down" => -1.0,
-                                    "right" | "up" => 1.0,
+                                let delta = match key::Named::parse(event.keystroke.key.as_str()) {
+                                    Some(key::Named::Left | key::Named::Down) => -1.0,
+                                    Some(key::Named::Right | key::Named::Up) => 1.0,
                                     _ => return,
                                 };
                                 cx.stop_propagation();

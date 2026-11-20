@@ -591,7 +591,9 @@ pub(crate) fn resolve_settings_view_path(path: &str) -> String {
     match path.trim() {
         "model" => SETTINGS_MODEL_CONFIG_PATH.to_string(),
         "model.main" => SETTINGS_MODEL_CONFIG_MAIN_PATH.to_string(),
-        "codex" | "codex_app_server" | "codex.app_server" | "app_server" => "agent.codex_app_server".to_string(),
+        "codex" | "codex_app_server" | "codex.app_server" | "app_server" => {
+            vtcode_commons::config_keys::ConfigKey::CODEX_APP_SERVER.to_string()
+        }
         "advanced" => SETTINGS_ADVANCED_VIEW_PATH.to_string(),
         path if path.starts_with("advanced.") => path.to_string(),
         other if items::curated_group(other).is_some() => format!("{SETTINGS_GROUP_PREFIX}{other}"),

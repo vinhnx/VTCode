@@ -359,7 +359,7 @@ async fn handle_codex_exec_command_impl(
     );
     let canonical = SessionStoreSink::open(&run_config.workspace, &session_id).await?;
     let thread_started = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: session_id.clone() });
-    emit_canonical_event(&canonical, &thread_started, "thread.started").await?;
+    emit_canonical_event(&canonical, &thread_started, thread_started.wire_name()).await?;
     event_processor.process_event(&thread_started);
     let mut execution_context = vtcode_core::core::agent::events::ExecutionContextTracker::default();
     execution_context.begin(
@@ -370,7 +370,7 @@ async fn handle_codex_exec_command_impl(
     );
     let mut turn_started = ThreadEvent::TurnStarted(TurnStartedEvent::default());
     execution_context.annotate(&mut turn_started);
-    emit_canonical_event(&canonical, &turn_started, "turn.started").await?;
+    emit_canonical_event(&canonical, &turn_started, turn_started.wire_name()).await?;
     event_processor.process_event(&turn_started);
 
     let codex_result = run_codex_noninteractive_with_instructions(
@@ -398,7 +398,7 @@ async fn handle_codex_exec_command_impl(
                 in_progress_exec_sessions: Vec::new(),
             });
             execution_context.annotate(&mut turn_completed);
-            emit_canonical_event(&canonical, &turn_completed, "turn.completed").await?;
+            emit_canonical_event(&canonical, &turn_completed, turn_completed.wire_name()).await?;
             event_processor.process_event(&turn_completed);
             let thread_completed = ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
                 thread_id: completed.thread_id.clone(),
@@ -412,7 +412,7 @@ async fn handle_codex_exec_command_impl(
                 total_cost_usd: None,
                 num_turns: 1,
             }));
-            emit_canonical_event(&canonical, &thread_completed, "thread.completed").await?;
+            emit_canonical_event(&canonical, &thread_completed, thread_completed.wire_name()).await?;
             event_processor.process_event(&thread_completed);
             let persistence_result = canonical.close().await.context("failed to finalize Codex session events");
             event_processor.finish_events_output();

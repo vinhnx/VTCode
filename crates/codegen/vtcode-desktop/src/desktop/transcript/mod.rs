@@ -124,6 +124,31 @@ impl TranscriptRole {
     }
 }
 
+/// Service-supplied phase of an archived assistant row.
+///
+/// `TranscriptItem::archived_phase` keeps the raw value from history so an
+/// unknown future phase still renders; these are the two phases the desktop
+/// grouping needs to distinguish. Parse once here instead of repeating the
+/// wire spellings at each grouping site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ArchivedPhase {
+    Commentary,
+    FinalAnswer,
+}
+
+impl ArchivedPhase {
+    const COMMENTARY: &str = "commentary";
+    const FINAL_ANSWER: &str = "final_answer";
+
+    pub(super) fn from_phase(phase: Option<&str>) -> Option<Self> {
+        match phase {
+            Some(Self::COMMENTARY) => Some(Self::Commentary),
+            Some(Self::FINAL_ANSWER) => Some(Self::FinalAnswer),
+            _ => None,
+        }
+    }
+}
+
 /// Lifecycle classification of a tool-row status line.
 ///
 /// [`from_status`](Self::from_status) is the single parser shared by the
@@ -233,6 +258,17 @@ pub(super) enum DiffFileKind {
     Add,
     Delete,
     Update,
+}
+
+impl DiffFileKind {
+    /// Stable kind slug shared by change-filter ids and diff cards.
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Add => "added",
+            Self::Delete => "deleted",
+            Self::Update => "modified",
+        }
+    }
 }
 
 /// Owns transcript rows and queues the minimal layout changes for the view.

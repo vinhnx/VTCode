@@ -4,7 +4,7 @@ use gpui_kit::assets::IconName;
 use super::settings::SettingsTab;
 use super::{
     ComposerTriggerKind, DesktopSlashAction, capitalize_agent_label, composer_trigger, desktop_slash_action, effort_at,
-    effort_row_highlighted, file_mention_token, permission_indicator, settings_tab_for_name,
+    effort_row_highlighted, file_mention_token, permission_indicator,
 };
 
 #[test]
@@ -87,15 +87,15 @@ fn settings_deep_links_cover_every_settings_tab() {
         ("about", SettingsTab::About),
         ("info", SettingsTab::About),
     ] {
-        assert_eq!(settings_tab_for_name(name), Some(expected), "alias {name:?}");
+        assert_eq!(SettingsTab::from_name(name), Some(expected), "alias {name:?}");
     }
     // Every tab is reachable from `/settings`, so a new tab cannot ship with
     // only a canonical name that this alias table never exercises.
     for tab in SettingsTab::ALL {
         let canonical = format!("{tab:?}").to_lowercase();
-        assert_eq!(settings_tab_for_name(&canonical), Some(tab), "canonical name for {tab:?}");
+        assert_eq!(SettingsTab::from_name(&canonical), Some(tab), "canonical name for {tab:?}");
     }
-    assert_eq!(settings_tab_for_name("unknown"), None);
+    assert_eq!(SettingsTab::from_name("unknown"), None);
 }
 
 #[test]

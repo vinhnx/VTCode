@@ -494,6 +494,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Source inspection before editing?", "How does Workflow and quick
     reference work?", "How does Shell commands and host integrations work?"
 
+- **File**: `docs/development/string-conventions.md`
+  - **Content**: String conventions: typed identity over raw literals
+  - **Topics**: When to centralize, Canonical homes (as of 2026-11-20), Rust mechanics that bite when centralizing,
+    Verification
+  - **User Questions**: "What can you tell me about String conventions: typed identity over raw literals?", "How does
+    When to centralize work?", "How does Canonical homes (as of 2026-11-20) work?"
+
 - **File**: `docs/development/tui-design-system.md`
   - **Content**: TUI design system
   - **Topics**: Modules, Row contract, Code surface, Interaction contract, Accessibility

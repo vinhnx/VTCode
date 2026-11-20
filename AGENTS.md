@@ -2,23 +2,24 @@
 
 # AGENTS.md
 
-Keep this file under 12 KiB (enforced: root plus the largest module `AGENTS.md` must fit VT Code's 16 KiB instruction budget, `scripts/check_docs_links.py`). Details belong in `docs/`, skills, `.vtcode/memory/`, or crate `AGENTS.md` files; universal model behavior is compiled in `crates/codegen/vtcode-core/src/prompts/runtime_guidance.rs`. Instruction files are user-controlled context, not a security boundary. Repo-only: do not copy into other projects or shipped prompts.
+Keep this file under 12 KiB; root plus the largest module `AGENTS.md` must fit the 16 KiB instruction budget (`scripts/check_docs_links.py`). Details belong in `docs/`, skills, `.vtcode/memory/`, or crate `AGENTS.md`; universal model behavior lives in `vtcode-core/src/prompts/runtime_guidance.rs`. Instruction files are user-controlled context, not a security boundary. Repo-only: never copy into other projects or shipped prompts.
 
 ## Core Workflow (repo-only)
 
 - Orient: repository instructions, relevant source/tests, and task-relevant entries in `.vtcode/memory/` (search, do not concatenate). For self-bugs, read `.vtcode/logs/trajectory.jsonl`, `.vtcode/checkpoints`, `.vtcode/sessions`.
 - Research hard problems only: DeepWiki MCP for `vinhnx/vtcode` (baseline) and `openai/codex` (upstream); verify claims against the checkout or pinned upstream source, attribute sources, stay within the original authorization. See the [reference workflow](docs/development/codex-reference-workflow.md).
-- Read and apply: use `read-and-apply`, `rust-skills`/`agentic-testing`, and `verification-discipline`; implement the smallest complete DRY/KISS improvement for CLI and desktop when related; preserve `ThreadEvent`, the harness config split, sandbox/approval boundaries, rollback, durable history, and unrelated work. Adapted upstream code keeps Apache-2.0 attribution ([root notes](docs/development/maintainer-notes/root.md)).
+- Read and apply: use `read-and-apply`, `rust-skills`/`agentic-testing`, `verification-discipline`; implement the smallest complete DRY/KISS improvement for CLI and desktop; preserve `ThreadEvent`, harness split, sandbox/approval boundaries, rollback, durable history, unrelated work. Adapted upstream code keeps Apache-2.0 attribution ([root notes](docs/development/maintainer-notes/root.md)).
 - Verify with `./scripts/check-dev.sh` + `cargo nextest run`; record durable learnings in `.vtcode/memory/` (local-only, gitignored). Interview the user on plan open questions via the interactive question tool (one at a time, recommended answer first) instead of assuming defaults.
 
 ## Rules
 
 - Conventional Commits (`type(scope): subject`).
-- 4-space indentation, `snake_case` fns, `PascalCase` types, `anyhow::Result<T>` + `.with_context()`. Follow the [Rust style adoption matrix](docs/development/rust-style-guide.md) for flexible borrows, targeted `must_use`, API conventions, and exceptions.
-- CI sets `RUSTFLAGS: "-D warnings"` and uses `--locked`. Match locally with `cargo check --locked` when relevant.
-- Keep changes surgical: know which files the increment owns, preserve APIs and unrelated work, stage explicit reviewed paths, and check each scoped commit's staged diff.
-- Hard ceiling: no tracked text file over 1000 lines (`python3 scripts/check_file_length.py --mode enforce`). Generated/vendored outliers: `scripts/file_length_allowlist.txt` (never first-party without a split plan). Rust tiered: src warn 500 / enforce 800, tests 1000; caps ratchet down only (`check.sh rust-length`).
-- Prefer direct single-agent execution. Do not impose orchestrator/worker or other multi-agent topologies: forced delegation burns usage limits and yields worse results. Delegate only when independent/parallel work or context isolation clearly helps.
+- 4-space indentation, `snake_case` fns, `PascalCase` types, `anyhow::Result<T>` + `.with_context()`. See [Rust style adoption matrix](docs/development/rust-style-guide.md) for borrows, `must_use`, API conventions.
+- CI sets `RUSTFLAGS: "-D warnings"` and uses `--locked`. Match locally with `cargo check --locked`.
+- Keep changes surgical: know which files the increment owns, preserve APIs/unrelated work, stage reviewed paths, check each scoped commit's staged diff.
+- Hard ceiling: no tracked text file over 1000 lines (`python3 scripts/check_file_length.py --mode enforce`); generated/vendored outliers go in `scripts/file_length_allowlist.txt` (never first-party without a split plan). Rust: src warn 500/enforce 800, tests 1000; caps ratchet down only.
+- Prefer direct single-agent execution; no orchestrator/worker topologies (forced delegation burns usage limits). Delegate only for independent/parallel work or context isolation.
+- **Typed identity strings**: closed sets and two-way contracts (tool names, wire types, statuses, keystrokes, deeplink verbs, config keys) use the owning enum/const table; single-use grammars stay inline. See [string conventions](docs/development/string-conventions.md).
 - `vtcode-exec-events::ThreadEvent` is the authoritative runtime event contract — do not invent parallel types.
 - Harness config is split across `agent.harness`, `automation.full_auto`, `context.dynamic` — do not add a new top-level harness subsystem.
 - Prefer `compact_str::CompactString` (aliased as `CompactStr` in `vtcode_core::types`) over `String` for small string fields. Use `Cow<'static, str>` for mostly-static return strings.

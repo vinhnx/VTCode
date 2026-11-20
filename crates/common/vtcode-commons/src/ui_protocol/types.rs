@@ -3,7 +3,10 @@
     reason = "Progress percentages are clamped to the documented byte-sized display range."
 )]
 
-//! Pure data types with no dependencies beyond `std`.
+//! Pure data types with no dependencies beyond `std` and the canonical event
+//! contract for shared status spellings.
+
+use std::str::FromStr as _;
 
 /// Message kind tag for inline transcript lines.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -239,15 +242,20 @@ pub enum TaskItemStatus {
 }
 
 impl TaskItemStatus {
-    /// Canonical wire string, matching `TaskTrackingStatus::as_str`.
+    /// The canonical durable status this UI-facing subset projects.
+    const fn as_tracker(self) -> vtcode_exec_events::tracker::TrackerItemStatus {
+        match self {
+            Self::Pending => vtcode_exec_events::tracker::TrackerItemStatus::Pending,
+            Self::InProgress => vtcode_exec_events::tracker::TrackerItemStatus::InProgress,
+            Self::Completed => vtcode_exec_events::tracker::TrackerItemStatus::Completed,
+            Self::Blocked => vtcode_exec_events::tracker::TrackerItemStatus::Blocked,
+        }
+    }
+
+    /// Canonical wire string, sourced from the durable tracker contract.
     #[must_use]
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::InProgress => "in_progress",
-            Self::Completed => "completed",
-            Self::Blocked => "blocked",
-        }
+        self.as_tracker().as_str()
     }
 }
 
@@ -256,12 +264,13 @@ impl std::str::FromStr for TaskItemStatus {
 
     /// Parse a canonical status string; unknown shapes fail closed to `Err`.
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        match raw {
-            "pending" => Ok(Self::Pending),
-            "in_progress" => Ok(Self::InProgress),
-            "completed" => Ok(Self::Completed),
-            "blocked" => Ok(Self::Blocked),
-            _ => Err(()),
+        use vtcode_exec_events::tracker::TrackerItemStatus as Canonical;
+        match Canonical::from_str(raw)? {
+            Canonical::Pending => Ok(Self::Pending),
+            Canonical::InProgress => Ok(Self::InProgress),
+            Canonical::Completed => Ok(Self::Completed),
+            Canonical::Blocked => Ok(Self::Blocked),
+            Canonical::Unknown => Err(()),
         }
     }
 }

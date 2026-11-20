@@ -5,6 +5,7 @@
 use anyhow::{Result, bail};
 use std::path::Path;
 use vtcode_commons::MultiErrors;
+use vtcode_commons::provider::{CODEX_PROVIDER_ID, Provider};
 
 use crate::config::FullAutoConfig;
 use crate::config::loader::VTCodeConfig;
@@ -56,7 +57,7 @@ pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
     if let Some(models) = supported_models_for_provider(provider) {
         if !models.contains(&model) {
             // Check for known deprecated OpenAI models and suggest replacements.
-            if provider.eq_ignore_ascii_case("openai")
+            if Provider::OpenAI.name_matches(provider)
                 && let Some((replacement, reason)) =
                     vtcode_config::constants::models::openai::deprecated_model_replacement(model)
             {
@@ -83,7 +84,7 @@ fn catalog_model_context_window(provider: &str, model: &str) -> Result<Option<us
 
 /// Resolve the effective context window size for a model.
 pub fn effective_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
-    if provider.eq_ignore_ascii_case("anthropic") {
+    if Provider::Anthropic.name_matches(provider) {
         return Ok(Some(crate::llm::providers::anthropic::capabilities::effective_context_size(model)));
     }
 
@@ -168,7 +169,7 @@ pub fn validate_config(config: &VTCodeConfig, workspace: &Path) -> Result<Valida
 fn validate_agent_model(config: &VTCodeConfig, result: &mut ValidationResult) {
     let provider = &config.agent.provider;
     let model = &config.agent.default_model;
-    if provider.eq_ignore_ascii_case("codex") {
+    if provider.eq_ignore_ascii_case(CODEX_PROVIDER_ID) {
         return;
     }
 
@@ -212,7 +213,7 @@ fn validate_agent_model(config: &VTCodeConfig, result: &mut ValidationResult) {
 }
 
 fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult) {
-    if config.agent.provider.eq_ignore_ascii_case("codex") {
+    if config.agent.provider.eq_ignore_ascii_case(CODEX_PROVIDER_ID) {
         return;
     }
 

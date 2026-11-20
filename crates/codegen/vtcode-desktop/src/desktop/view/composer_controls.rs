@@ -16,6 +16,85 @@ pub(super) struct ComposerTrigger {
     pub(super) query: String,
 }
 
+/// Native slash-command names the desktop client intercepts.
+///
+/// The service owns the wider CLI grammar; these are exactly the tokens we
+/// either handle ourselves or deliberately swallow so they never fall through
+/// to the headless dispatcher (see [`desktop_slash_action`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SlashCommandName {
+    New,
+    Exit,
+    Stop,
+    Model,
+    Models,
+    Cli,
+    Desktop,
+    Goal,
+    History,
+    Splash,
+    Help,
+    Mode,
+    Files,
+    Fast,
+    Theme,
+    Config,
+    Settings,
+    Go,
+}
+
+impl SlashCommandName {
+    const ALL: [Self; 18] = [
+        Self::New,
+        Self::Exit,
+        Self::Stop,
+        Self::Model,
+        Self::Models,
+        Self::Cli,
+        Self::Desktop,
+        Self::Goal,
+        Self::History,
+        Self::Splash,
+        Self::Help,
+        Self::Mode,
+        Self::Files,
+        Self::Fast,
+        Self::Theme,
+        Self::Config,
+        Self::Settings,
+        Self::Go,
+    ];
+
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::New => "new",
+            Self::Exit => "exit",
+            Self::Stop => "stop",
+            Self::Model => "model",
+            Self::Models => "models",
+            Self::Cli => "cli",
+            Self::Desktop => "desktop",
+            Self::Goal => "goal",
+            Self::History => "history",
+            Self::Splash => "splash",
+            Self::Help => "help",
+            Self::Mode => "mode",
+            Self::Files => "files",
+            Self::Fast => "fast",
+            Self::Theme => "theme",
+            Self::Config => "config",
+            Self::Settings => "settings",
+            Self::Go => "go",
+        }
+    }
+
+    /// Parse a lowercased command token. Unknown CLI-owned commands stay `None`
+    /// so they keep falling through to the service.
+    pub(super) fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|known| known.as_str() == name)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum DesktopSlashAction {
     NewSession,
@@ -36,23 +115,6 @@ pub(super) enum DesktopSlashAction {
     Cli,
     Desktop,
     Goal(String),
-}
-
-/// Settings-tab aliases shared by the `/config` and `/settings` deep-links
-/// and the [`deeplinks`] system.
-pub(super) fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
-    match name {
-        "appearance" | "theme" => Some(settings::SettingsTab::Appearance),
-        "accessibility" | "a11y" => Some(settings::SettingsTab::Accessibility),
-        "shortcuts" | "keybindings" => Some(settings::SettingsTab::Shortcuts),
-        "vtcode" | "general" => Some(settings::SettingsTab::VtCode),
-        "connections" | "mcp" | "webmcp" => Some(settings::SettingsTab::Connections),
-        "notifications" | "notification" | "alerts" | "updates" => Some(settings::SettingsTab::Notifications),
-        "storage" | "disk" | "cleanup" => Some(settings::SettingsTab::Storage),
-        "computer-use" | "computer_use" | "computeruse" | "cua" => Some(settings::SettingsTab::ComputerUse),
-        "about" | "info" => Some(settings::SettingsTab::About),
-        _ => None,
-    }
 }
 
 /// Native routes for bare `model`/`permissions` keywords shared by the
@@ -93,23 +155,23 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
     // (pure text, usage errors, or text-driven selection).
     let command = name.to_ascii_lowercase();
     let keyword = args.to_ascii_lowercase();
-    match command.as_str() {
-        "new" => Some(DesktopSlashAction::NewSession),
-        "exit" => Some(DesktopSlashAction::CloseSession),
-        "stop" => Some(DesktopSlashAction::StopTurn),
-        "model" | "models" => Some(DesktopSlashAction::ModelPicker),
-        "cli" => Some(DesktopSlashAction::Cli),
-        "desktop" => Some(DesktopSlashAction::Desktop),
+    match SlashCommandName::parse(&command) {
+        Some(SlashCommandName::New) => Some(DesktopSlashAction::NewSession),
+        Some(SlashCommandName::Exit) => Some(DesktopSlashAction::CloseSession),
+        Some(SlashCommandName::Stop) => Some(DesktopSlashAction::StopTurn),
+        Some(SlashCommandName::Model | SlashCommandName::Models) => Some(DesktopSlashAction::ModelPicker),
+        Some(SlashCommandName::Cli) => Some(DesktopSlashAction::Cli),
+        Some(SlashCommandName::Desktop) => Some(DesktopSlashAction::Desktop),
         // Native quiet route: a non-turn slash submitted as turn text would
         // wedge waiting for a terminal turn event, so `/goal` executes
         // through `goal/execute` instead of the shared turn pipeline.
-        "goal" => Some(DesktopSlashAction::Goal(args.to_string())),
-        "history" if args.is_empty() => Some(DesktopSlashAction::History),
-        "splash" if args.is_empty() => Some(DesktopSlashAction::Splash),
-        "help" if args.is_empty() => Some(DesktopSlashAction::Help),
-        "mode" if args.is_empty() => Some(DesktopSlashAction::Modes),
-        "files" => Some(DesktopSlashAction::Files(args.to_string())),
-        "fast" => match keyword.as_str() {
+        Some(SlashCommandName::Goal) => Some(DesktopSlashAction::Goal(args.to_string())),
+        Some(SlashCommandName::History) if args.is_empty() => Some(DesktopSlashAction::History),
+        Some(SlashCommandName::Splash) if args.is_empty() => Some(DesktopSlashAction::Splash),
+        Some(SlashCommandName::Help) if args.is_empty() => Some(DesktopSlashAction::Help),
+        Some(SlashCommandName::Mode) if args.is_empty() => Some(DesktopSlashAction::Modes),
+        Some(SlashCommandName::Files) => Some(DesktopSlashAction::Files(args.to_string())),
+        Some(SlashCommandName::Fast) => match keyword.as_str() {
             "" => Some(DesktopSlashAction::FastMode(None)),
             "on" => Some(DesktopSlashAction::FastMode(Some(true))),
             "off" => Some(DesktopSlashAction::FastMode(Some(false))),
@@ -120,7 +182,7 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
         // (headless-safe, same as before). Reading two tokens off the
         // iterator keeps that rule without materializing a Vec just to match
         // on its slice.
-        "theme" => {
+        Some(SlashCommandName::Theme) => {
             let mut words = args.split_whitespace();
             match (words.next(), words.next()) {
                 (None, _) => Some(DesktopSlashAction::Theme(None)),
@@ -128,10 +190,10 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
                 (Some(_), Some(_)) => None,
             }
         }
-        "config" if args.is_empty() => Some(DesktopSlashAction::Configuration(None)),
-        "settings" if args.is_empty() => Some(DesktopSlashAction::Settings(None)),
-        "go" => Some(DesktopSlashAction::Go(args.to_string())),
-        "config" => {
+        Some(SlashCommandName::Config) if args.is_empty() => Some(DesktopSlashAction::Configuration(None)),
+        Some(SlashCommandName::Settings) if args.is_empty() => Some(DesktopSlashAction::Settings(None)),
+        Some(SlashCommandName::Go) => Some(DesktopSlashAction::Go(args.to_string())),
+        Some(SlashCommandName::Config) => {
             // Runtime-owned sections keep their CLI behavior: reset/clear show
             // the target layer and ask for confirmation, checkup/doctor run
             // diagnostics, and memory/tasks/jobs/log/subprocess/notify render
@@ -160,7 +222,7 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             {
                 return None;
             }
-            if let Some(tab) = settings_tab_for_name(&keyword) {
+            if let Some(tab) = settings::SettingsTab::from_name(&keyword) {
                 return Some(DesktopSlashAction::Settings(Some(tab)));
             }
             if let Some(action) = keyword_slash_action(&keyword) {
@@ -168,8 +230,8 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             }
             Some(DesktopSlashAction::Configuration(Some(args.to_string())))
         }
-        "settings" => {
-            if let Some(tab) = settings_tab_for_name(&keyword) {
+        Some(SlashCommandName::Settings) => {
+            if let Some(tab) = settings::SettingsTab::from_name(&keyword) {
                 return Some(DesktopSlashAction::Settings(Some(tab)));
             }
             keyword_slash_action(&keyword)
@@ -533,19 +595,21 @@ fn effort_options(
             {
                 return;
             }
-            let key = event.keystroke.key.as_str();
-            if !matches!(key, "left" | "down" | "right" | "up" | "home" | "end") {
+            let Some(pressed) = key::Named::parse(event.keystroke.key.as_str()) else {
+                return;
+            };
+            if !pressed.is_navigation() {
                 return;
             }
             cx.stop_propagation();
             if !enabled {
                 return;
             }
-            match key {
-                "left" | "down" => step_effort(&keyboard, -1., window, cx),
-                "right" | "up" => step_effort(&keyboard, 1., window, cx),
-                "home" => jump_effort(&keyboard, false, window, cx),
-                "end" => jump_effort(&keyboard, true, window, cx),
+            match pressed {
+                key::Named::Left | key::Named::Down => step_effort(&keyboard, -1., window, cx),
+                key::Named::Right | key::Named::Up => step_effort(&keyboard, 1., window, cx),
+                key::Named::Home => jump_effort(&keyboard, false, window, cx),
+                key::Named::End => jump_effort(&keyboard, true, window, cx),
                 _ => {}
             }
         })

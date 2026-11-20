@@ -27,9 +27,9 @@ impl Transcript {
                 start = Some(index);
                 ambiguous = false;
             } else if is_assistant {
-                match phases.get(index).and_then(|phase| phase.as_deref()) {
-                    Some("commentary") => {}
-                    Some("final_answer") if start.is_some() && !ambiguous => {
+                match ArchivedPhase::from_phase(phases.get(index).and_then(|phase| phase.as_deref())) {
+                    Some(ArchivedPhase::Commentary) => {}
+                    Some(ArchivedPhase::FinalAnswer) if start.is_some() && !ambiguous => {
                         if let Some(start_index) = start.take() {
                             close_archive_turn(&mut rows, start_index, index.saturating_add(1), Some(index));
                         }
@@ -56,7 +56,7 @@ impl Transcript {
         };
         if !self.items.get(index).is_some_and(|item| {
             item.is_assistant()
-                && item.archived_phase.as_deref() == Some("final_answer")
+                && ArchivedPhase::from_phase(item.archived_phase.as_deref()) == Some(ArchivedPhase::FinalAnswer)
                 && item.canonical_item_id.as_deref() == Some(canonical_item_id)
         }) {
             return;
@@ -87,7 +87,7 @@ impl Transcript {
         let Some(index) = self.position_by_id(id) else { return };
         let Some(item) = self.items.get_mut(index).filter(|item| {
             item.is_assistant()
-                && item.archived_phase.as_deref() == Some("final_answer")
+                && ArchivedPhase::from_phase(item.archived_phase.as_deref()) == Some(ArchivedPhase::FinalAnswer)
                 && item.canonical_item_id.as_deref() == Some(canonical_id)
         }) else {
             return;
@@ -111,9 +111,9 @@ impl Transcript {
                 return;
             }
             if item.is_assistant() {
-                match item.archived_phase.as_deref() {
-                    Some("commentary") => {}
-                    Some("final_answer") if index >= inserted => {
+                match ArchivedPhase::from_phase(item.archived_phase.as_deref()) {
+                    Some(ArchivedPhase::Commentary) => {}
+                    Some(ArchivedPhase::FinalAnswer) if index >= inserted => {
                         final_index = Some(index);
                         break;
                     }

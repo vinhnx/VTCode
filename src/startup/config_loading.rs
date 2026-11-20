@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use vtcode_commons::config_keys::ConfigKey;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::loader::{ConfigBuilder, VTCodeConfig, set_explicit_config_path};
 use vtcode_core::utils::validation::validate_path_exists;
@@ -56,7 +57,7 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     }
 
     if let Some(ref model) = args.model {
-        builder = builder.cli_override("agent.default_model".to_owned(), toml::Value::String(model.clone()));
+        builder = builder.cli_override(ConfigKey::DEFAULT_MODEL.to_owned(), toml::Value::String(model.clone()));
     }
 
     let config_phase = std::time::Instant::now();

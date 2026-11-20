@@ -165,35 +165,25 @@ pub(super) fn redact_timeline_export(export: &TimelineExport) -> TimelineExport 
 }
 
 pub(super) fn command_status_label(status: &CommandExecutionStatus) -> &'static str {
-    match status {
-        CommandExecutionStatus::Completed => "completed",
-        CommandExecutionStatus::Failed => "failed",
-        CommandExecutionStatus::InProgress => "in_progress",
-    }
+    status.as_str()
 }
 
 pub(super) fn tool_status_label(status: &ToolCallStatus) -> &'static str {
-    match status {
-        ToolCallStatus::Completed => "completed",
-        ToolCallStatus::Failed => "failed",
-        ToolCallStatus::InProgress => "in_progress",
-    }
+    status.as_str()
 }
 
 pub(super) fn mcp_status_label(status: Option<&McpToolCallStatus>) -> Option<&'static str> {
+    // `started` is a wire value but the timeline shares the coarse
+    // in-progress label used by the other tool statuses.
     match status {
         Some(McpToolCallStatus::Started) => Some("in_progress"),
-        Some(McpToolCallStatus::Completed) => Some("completed"),
-        Some(McpToolCallStatus::Failed) => Some("failed"),
+        Some(status) => Some(status.as_str()),
         None => None,
     }
 }
 
 pub(super) fn patch_status_label(status: &PatchApplyStatus) -> &'static str {
-    match status {
-        PatchApplyStatus::Completed => "completed",
-        PatchApplyStatus::Failed => "failed",
-    }
+    status.as_str()
 }
 
 pub(super) fn thread_completion_status(subtype: &ThreadCompletionSubtype) -> &'static str {

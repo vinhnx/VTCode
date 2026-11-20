@@ -143,9 +143,11 @@ pub fn is_command_run_tool(tool_name: &str) -> bool {
 
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
-        tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
+        tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | tools::BASH_ALIAS => true,
         tools::EXEC_COMMAND => crate::tools::command_args::command_text(args).ok().flatten().is_some(),
-        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | "exec" | "container.exec" => command_session_action_is(args, "run"),
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | tools::EXEC_ALIAS | tools::CONTAINER_EXEC_ALIAS => {
+            command_session_action_is(args, "run")
+        }
         _ => false,
     }
 }

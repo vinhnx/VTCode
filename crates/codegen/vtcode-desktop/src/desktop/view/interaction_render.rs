@@ -304,29 +304,29 @@ impl DesktopView {
                 if this.pending_interaction_response.as_deref() == Some(interaction.interaction_id.as_str()) {
                     return;
                 }
-                if event.keystroke.key.as_str() == "escape" {
+                let pressed = event.keystroke.key.as_str();
+                if pressed == key::ESCAPE {
                     cx.stop_propagation();
                     this.submit_interaction(Vec::new(), true, window, cx);
                     return;
                 }
-                let key = event.keystroke.key.as_str();
                 // Up/Down move the highlight over the visible choices. They
                 // reuse the pointer-selection state, so the checked row and
                 // the Confirm button always agree; digits still commit at once.
-                if (key == "up" || key == "down")
+                if matches!(key::Named::parse(pressed), Some(key::Named::Up | key::Named::Down))
                     && !interaction
                         .steps
                         .get(this.interaction_step_index)
                         .is_some_and(|step| step.multi_select)
                 {
                     cx.stop_propagation();
-                    this.move_interaction_choice(key == "down", window, cx);
+                    this.move_interaction_choice(pressed == key::DOWN, window, cx);
                     return;
                 }
-                if key.len() != 1 {
+                if pressed.len() != 1 {
                     return;
                 }
-                let Some(digit @ b'1'..=b'9') = key.as_bytes().first().copied() else {
+                let Some(digit @ b'1'..=b'9') = pressed.as_bytes().first().copied() else {
                     return;
                 };
                 let choice_index = (digit - b'1') as usize;

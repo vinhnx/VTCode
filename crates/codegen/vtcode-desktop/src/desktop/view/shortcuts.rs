@@ -257,7 +257,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result
             {
                 return Err(rust_i18n::t!("app.shortcuts.reserved_shortcut", label = label.as_str()).to_string());
             }
-            if !(command.id == CommandId::Dismiss && source == "escape")
+            if !(command.id == CommandId::Dismiss && source == key::ESCAPE)
                 && !source.contains("cmd-")
                 && !source.contains("ctrl-")
                 && !source.contains("alt-")

@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 pub mod atif;
 pub mod diagnostic;
 pub use diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity};
+mod event_wire;
+pub use event_wire::wire_type;
 pub mod goal;
 pub mod items;
 pub use items::{

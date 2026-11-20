@@ -22,11 +22,7 @@ impl FixedRowSizeCache {
 
 /// Stable per-kind slug for change-filter element ids.
 pub(in crate::desktop::view) fn change_kind_slug(kind: DiffFileKind) -> &'static str {
-    match kind {
-        DiffFileKind::Add => "added",
-        DiffFileKind::Delete => "deleted",
-        DiffFileKind::Update => "modified",
-    }
+    kind.as_str()
 }
 
 /// Localized name for a change kind, shared by rows and the kind filter.

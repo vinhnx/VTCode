@@ -27,6 +27,72 @@ use gpui_kit::{ClickEvent, WeakEntity};
 /// stripped so typed, pasted, and future external links parse identically.
 const EXTERNAL_SCHEME: &str = "vtcode://";
 
+/// Canonical link segments shared by the writers (`path`, `verb`,
+/// `action_path`) and the parsers (`parse`, `parse_palette`, `parse_action`).
+/// Both directions reference one table: a typo in either side would silently
+/// break a `/go` link while still compiling.
+struct Verb;
+
+impl Verb {
+    // Top-level heads (and fixed shortcut/config payload kinds).
+    const WORKSPACE: &'static str = "workspace";
+    const SETTINGS: &'static str = "settings";
+    const BROWSER: &'static str = "browser";
+    const REVIEW: &'static str = "review";
+    const CHANGELOG: &'static str = "changelog";
+    const CONFIG: &'static str = "config";
+    const PALETTE: &'static str = "palette";
+    const COMMAND: &'static str = "command";
+    const ACTION: &'static str = "action";
+
+    // Palette kinds.
+    const COMMANDS: &'static str = "commands";
+    const CONVERSATION_SEARCH: &'static str = "conversation-search";
+    const MODELS: &'static str = "models";
+    const MODEL_OPTIONS: &'static str = "model-options";
+    const ADD_CONTEXT: &'static str = "add-context";
+    const PERMISSIONS: &'static str = "permissions";
+    const MODES: &'static str = "modes";
+    const FONTS: &'static str = "fonts";
+    const FONTS_UI: &'static str = "fonts/ui";
+    const FONTS_CODE: &'static str = "fonts/code";
+    const UI: &'static str = "ui";
+    const CODE: &'static str = "code";
+    const SETTINGS_SEARCH: &'static str = "settings-search";
+    const CONFIG_SETTINGS: &'static str = "config-settings";
+    const PROMPT_HISTORY: &'static str = "prompt-history";
+
+    // Addressable palette actions.
+    const NEW_SESSION: &'static str = "new-session";
+    const CLOSE_SESSION: &'static str = "close-session";
+    const COPY_THREAD_TITLE: &'static str = "copy-thread-title";
+    const COPY_FILE_PATH: &'static str = "copy-file-path";
+    const CLOSE_OTHER_TABS: &'static str = "close-other-tabs";
+    const OPEN_IN_CLI: &'static str = "open-in-cli";
+    const COPY_LATEST: &'static str = "copy-latest";
+    const CHOOSE_MODEL: &'static str = "choose-model";
+    const CHOOSE_WORKSPACE: &'static str = "choose-workspace";
+    const REFRESH_SESSIONS: &'static str = "refresh-sessions";
+    const REFRESH_FILES: &'static str = "refresh-files";
+    const BROWSE_THREADS: &'static str = "browse-threads";
+    const TOGGLE_INSPECTOR: &'static str = "toggle-inspector";
+    const TOGGLE_ZEN: &'static str = "toggle-zen";
+    const TOGGLE_THEME: &'static str = "toggle-theme";
+    const TOGGLE_COMPUTER_USE: &'static str = "toggle-computer-use";
+    const ATTACH_FILES: &'static str = "attach-files";
+    const LOAD_SESSION: &'static str = "load-session";
+    const PREVIEW_FILE: &'static str = "preview-file";
+    const ATTACH_FILE: &'static str = "attach-file";
+    const MENTION_FILE: &'static str = "mention-file";
+    const REVIEW_FILE: &'static str = "review-file";
+    const EDIT_CONFIG: &'static str = "edit-config";
+    const SLASH: &'static str = "slash";
+    const SELECT_MODEL: &'static str = "select-model";
+    const JUMP: &'static str = "jump";
+    const OUTPUT: &'static str = "output";
+    const FONT: &'static str = "font";
+}
+
 /// Palette kinds with a standalone opener. The composer-anchored `@`-file and
 /// `/`-slash popups are excluded: they need live trigger state to position.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,18 +128,18 @@ impl PaletteLink {
 
     fn verb(self) -> &'static str {
         match self {
-            Self::Commands => "commands",
-            Self::ConversationSearch => "conversation-search",
-            Self::Models => "models",
-            Self::ModelOptions => "model-options",
-            Self::AddContext => "add-context",
-            Self::Permissions => "permissions",
-            Self::Modes => "modes",
-            Self::Fonts(FontTarget::Ui) => "fonts/ui",
-            Self::Fonts(FontTarget::Code) => "fonts/code",
-            Self::SettingsSearch => "settings-search",
-            Self::ConfigSettings => "config-settings",
-            Self::PromptHistory => "prompt-history",
+            Self::Commands => Verb::COMMANDS,
+            Self::ConversationSearch => Verb::CONVERSATION_SEARCH,
+            Self::Models => Verb::MODELS,
+            Self::ModelOptions => Verb::MODEL_OPTIONS,
+            Self::AddContext => Verb::ADD_CONTEXT,
+            Self::Permissions => Verb::PERMISSIONS,
+            Self::Modes => Verb::MODES,
+            Self::Fonts(FontTarget::Ui) => Verb::FONTS_UI,
+            Self::Fonts(FontTarget::Code) => Verb::FONTS_CODE,
+            Self::SettingsSearch => Verb::SETTINGS_SEARCH,
+            Self::ConfigSettings => Verb::CONFIG_SETTINGS,
+            Self::PromptHistory => Verb::PROMPT_HISTORY,
         }
     }
 }
@@ -162,36 +228,21 @@ impl DeepLink {
         match self {
             Self::Route(route) => Some(
                 match route {
-                    Route::Workspace => "workspace",
-                    Route::Settings => "settings",
-                    Route::Browser => "browser",
-                    Route::Review => "review",
+                    Route::Workspace => Verb::WORKSPACE,
+                    Route::Settings => Verb::SETTINGS,
+                    Route::Browser => Verb::BROWSER,
+                    Route::Review => Verb::REVIEW,
                 }
                 .to_string(),
             ),
-            Self::SettingsTab(tab) => Some(format!("settings/{}", tab_name(*tab))),
-            Self::ConfigPage => Some("config".to_string()),
-            Self::ConfigPath(path) => Some(format!("config/{path}")),
-            Self::Palette(kind) => Some(format!("palette/{}", kind.verb())),
-            Self::Command(id) => Some(format!("command/{}", id.as_str())),
+            Self::SettingsTab(tab) => Some(format!("{}/{}", Verb::SETTINGS, tab.as_str())),
+            Self::ConfigPage => Some(Verb::CONFIG.to_string()),
+            Self::ConfigPath(path) => Some(format!("{}/{}", Verb::CONFIG, path)),
+            Self::Palette(kind) => Some(format!("{}/{}", Verb::PALETTE, kind.verb())),
+            Self::Command(id) => Some(format!("{}/{}", Verb::COMMAND, id.as_str())),
             Self::Action(action) => action_path(action),
-            Self::Changelog => Some("changelog".to_string()),
+            Self::Changelog => Some(Verb::CHANGELOG.to_string()),
         }
-    }
-}
-
-/// Canonical tab segment: the primary name, not the slash aliases.
-fn tab_name(tab: settings::SettingsTab) -> &'static str {
-    match tab {
-        settings::SettingsTab::Appearance => "appearance",
-        settings::SettingsTab::Accessibility => "accessibility",
-        settings::SettingsTab::Shortcuts => "shortcuts",
-        settings::SettingsTab::VtCode => "vtcode",
-        settings::SettingsTab::Connections => "connections",
-        settings::SettingsTab::Notifications => "notifications",
-        settings::SettingsTab::Storage => "storage",
-        settings::SettingsTab::ComputerUse => "computer-use",
-        settings::SettingsTab::About => "about",
     }
 }
 
@@ -201,51 +252,53 @@ fn tab_name(tab: settings::SettingsTab) -> &'static str {
 /// deeplink openers themselves have no link form.
 fn action_path(action: &PaletteAction) -> Option<String> {
     match action {
-        PaletteAction::NewSession => Some("action/new-session".to_string()),
-        PaletteAction::CloseSession => Some("action/close-session".to_string()),
-        PaletteAction::CopyThreadTitle => Some("action/copy-thread-title".to_string()),
-        PaletteAction::CopyFilePath => Some("action/copy-file-path".to_string()),
-        PaletteAction::CloseOtherTabs => Some("action/close-other-tabs".to_string()),
-        PaletteAction::OpenInCli => Some("action/open-in-cli".to_string()),
-        PaletteAction::CopyLatestMessage => Some("action/copy-latest".to_string()),
-        PaletteAction::ChooseModel => Some("action/choose-model".to_string()),
-        PaletteAction::ChooseWorkspace => Some("action/choose-workspace".to_string()),
-        PaletteAction::RefreshSessions => Some("action/refresh-sessions".to_string()),
-        PaletteAction::RefreshFiles => Some("action/refresh-files".to_string()),
-        PaletteAction::BrowseThreads => Some("action/browse-threads".to_string()),
-        PaletteAction::ToggleInspector => Some("action/toggle-inspector".to_string()),
-        PaletteAction::ToggleZenMode => Some("action/toggle-zen".to_string()),
-        PaletteAction::ToggleTheme => Some("action/toggle-theme".to_string()),
-        PaletteAction::ToggleComputerUse => Some("action/toggle-computer-use".to_string()),
-        PaletteAction::AttachFiles => Some("action/attach-files".to_string()),
+        PaletteAction::NewSession => Some(format!("action/{}", Verb::NEW_SESSION)),
+        PaletteAction::CloseSession => Some(format!("action/{}", Verb::CLOSE_SESSION)),
+        PaletteAction::CopyThreadTitle => Some(format!("action/{}", Verb::COPY_THREAD_TITLE)),
+        PaletteAction::CopyFilePath => Some(format!("action/{}", Verb::COPY_FILE_PATH)),
+        PaletteAction::CloseOtherTabs => Some(format!("action/{}", Verb::CLOSE_OTHER_TABS)),
+        PaletteAction::OpenInCli => Some(format!("action/{}", Verb::OPEN_IN_CLI)),
+        PaletteAction::CopyLatestMessage => Some(format!("action/{}", Verb::COPY_LATEST)),
+        PaletteAction::ChooseModel => Some(format!("action/{}", Verb::CHOOSE_MODEL)),
+        PaletteAction::ChooseWorkspace => Some(format!("action/{}", Verb::CHOOSE_WORKSPACE)),
+        PaletteAction::RefreshSessions => Some(format!("action/{}", Verb::REFRESH_SESSIONS)),
+        PaletteAction::RefreshFiles => Some(format!("action/{}", Verb::REFRESH_FILES)),
+        PaletteAction::BrowseThreads => Some(format!("action/{}", Verb::BROWSE_THREADS)),
+        PaletteAction::ToggleInspector => Some(format!("action/{}", Verb::TOGGLE_INSPECTOR)),
+        PaletteAction::ToggleZenMode => Some(format!("action/{}", Verb::TOGGLE_ZEN)),
+        PaletteAction::ToggleTheme => Some(format!("action/{}", Verb::TOGGLE_THEME)),
+        PaletteAction::ToggleComputerUse => Some(format!("action/{}", Verb::TOGGLE_COMPUTER_USE)),
+        PaletteAction::AttachFiles => Some(format!("action/{}", Verb::ATTACH_FILES)),
         PaletteAction::OpenConversationSearch { session_id } => {
-            Some(format!("action/conversation-search/{session_id}"))
+            Some(format!("action/{}/{session_id}", Verb::CONVERSATION_SEARCH))
         }
         PaletteAction::JumpToTranscriptItem { session_id, item_id, .. } => {
-            Some(format!("action/jump/{session_id}/{item_id}"))
+            Some(format!("action/{}/{session_id}/{item_id}", Verb::JUMP))
         }
         PaletteAction::ShowActivityOutput { session_id, item_id } => {
-            Some(format!("action/output/{session_id}/{item_id}"))
+            Some(format!("action/{}/{session_id}/{item_id}", Verb::OUTPUT))
         }
         PaletteAction::SelectFont { target, family } => {
             let target = match target {
-                FontTarget::Ui => "ui",
-                FontTarget::Code => "code",
+                FontTarget::Ui => Verb::UI,
+                FontTarget::Code => Verb::CODE,
             };
             match family {
-                Some(family) => Some(format!("action/font/{target}/{family}")),
-                None => Some(format!("action/font/{target}")),
+                Some(family) => Some(format!("action/{}/{target}/{family}", Verb::FONT)),
+                None => Some(format!("action/{}/{target}", Verb::FONT)),
             }
         }
-        PaletteAction::SelectSettingsTab(tab) => Some(format!("settings/{}", tab_name(*tab))),
-        PaletteAction::EditConfigSetting(path) => Some(format!("config/{path}")),
-        PaletteAction::LoadSession(session_id) => Some(format!("action/load-session/{session_id}")),
-        PaletteAction::PreviewFile(path) => Some(format!("action/preview-file/{path}")),
-        PaletteAction::SelectModel { provider, model } => Some(format!("action/select-model/{provider}/{model}")),
-        PaletteAction::AttachFile(path) => Some(format!("action/attach-file/{path}")),
-        PaletteAction::InsertFileMention(path) => Some(format!("action/mention-file/{path}")),
-        PaletteAction::CompleteSlashCommand(name) => Some(format!("action/slash/{name}")),
-        PaletteAction::SelectWorkspaceReviewFile(path) => Some(format!("action/review-file/{path}")),
+        PaletteAction::SelectSettingsTab(tab) => Some(format!("{}/{}", Verb::SETTINGS, tab.as_str())),
+        PaletteAction::EditConfigSetting(path) => Some(format!("{}/{}", Verb::CONFIG, path)),
+        PaletteAction::LoadSession(session_id) => Some(format!("action/{}/{session_id}", Verb::LOAD_SESSION)),
+        PaletteAction::PreviewFile(path) => Some(format!("action/{}/{path}", Verb::PREVIEW_FILE)),
+        PaletteAction::SelectModel { provider, model } => {
+            Some(format!("action/{}/{provider}/{model}", Verb::SELECT_MODEL))
+        }
+        PaletteAction::AttachFile(path) => Some(format!("action/{}/{path}", Verb::ATTACH_FILE)),
+        PaletteAction::InsertFileMention(path) => Some(format!("action/{}/{path}", Verb::MENTION_FILE)),
+        PaletteAction::CompleteSlashCommand(name) => Some(format!("action/{}/{name}", Verb::SLASH)),
+        PaletteAction::SelectWorkspaceReviewFile(path) => Some(format!("action/{}/{path}", Verb::REVIEW_FILE)),
         PaletteAction::SelectSessionOptions(_)
         | PaletteAction::InsertDraft(_)
         | PaletteAction::InsertHistoryPrompt(_)
@@ -270,15 +323,15 @@ pub(super) fn parse(input: &str) -> Option<DeepLink> {
         None => (text, ""),
     };
     match head.to_ascii_lowercase().as_str() {
-        "workspace" => exact(tail, DeepLink::Route(Route::Workspace)),
-        "browser" => exact(tail, DeepLink::Route(Route::Browser)),
-        "review" => exact(tail, DeepLink::Route(Route::Review)),
-        "changelog" => exact(tail, DeepLink::Changelog),
-        "settings" => parse_settings(tail),
-        "config" => parse_config(tail),
-        "palette" => parse_palette(tail),
-        "command" => parse_command(tail),
-        "action" => parse_action(tail),
+        Verb::WORKSPACE => exact(tail, DeepLink::Route(Route::Workspace)),
+        Verb::BROWSER => exact(tail, DeepLink::Route(Route::Browser)),
+        Verb::REVIEW => exact(tail, DeepLink::Route(Route::Review)),
+        Verb::CHANGELOG => exact(tail, DeepLink::Changelog),
+        Verb::SETTINGS => parse_settings(tail),
+        Verb::CONFIG => parse_config(tail),
+        Verb::PALETTE => parse_palette(tail),
+        Verb::COMMAND => parse_command(tail),
+        Verb::ACTION => parse_action(tail),
         _ => None,
     }
 }
@@ -333,7 +386,7 @@ fn parse_settings(tail: &str) -> Option<DeepLink> {
     if tail.contains('/') {
         return None;
     }
-    composer_controls::settings_tab_for_name(&tail.to_ascii_lowercase()).map(DeepLink::SettingsTab)
+    settings::SettingsTab::from_name(&tail.to_ascii_lowercase()).map(DeepLink::SettingsTab)
 }
 
 fn parse_config(tail: &str) -> Option<DeepLink> {
@@ -349,19 +402,19 @@ fn parse_palette(tail: &str) -> Option<DeepLink> {
         None => (tail, ""),
     };
     match verb.to_ascii_lowercase().as_str() {
-        "commands" => exact(rest, DeepLink::Palette(PaletteLink::Commands)),
-        "conversation-search" => exact(rest, DeepLink::Palette(PaletteLink::ConversationSearch)),
-        "models" => exact(rest, DeepLink::Palette(PaletteLink::Models)),
-        "model-options" => exact(rest, DeepLink::Palette(PaletteLink::ModelOptions)),
-        "add-context" => exact(rest, DeepLink::Palette(PaletteLink::AddContext)),
-        "permissions" => exact(rest, DeepLink::Palette(PaletteLink::Permissions)),
-        "modes" => exact(rest, DeepLink::Palette(PaletteLink::Modes)),
-        "settings-search" => exact(rest, DeepLink::Palette(PaletteLink::SettingsSearch)),
-        "config-settings" => exact(rest, DeepLink::Palette(PaletteLink::ConfigSettings)),
-        "prompt-history" => exact(rest, DeepLink::Palette(PaletteLink::PromptHistory)),
-        "fonts" => match rest.to_ascii_lowercase().as_str() {
-            "ui" => Some(DeepLink::Palette(PaletteLink::Fonts(FontTarget::Ui))),
-            "code" => Some(DeepLink::Palette(PaletteLink::Fonts(FontTarget::Code))),
+        Verb::COMMANDS => exact(rest, DeepLink::Palette(PaletteLink::Commands)),
+        Verb::CONVERSATION_SEARCH => exact(rest, DeepLink::Palette(PaletteLink::ConversationSearch)),
+        Verb::MODELS => exact(rest, DeepLink::Palette(PaletteLink::Models)),
+        Verb::MODEL_OPTIONS => exact(rest, DeepLink::Palette(PaletteLink::ModelOptions)),
+        Verb::ADD_CONTEXT => exact(rest, DeepLink::Palette(PaletteLink::AddContext)),
+        Verb::PERMISSIONS => exact(rest, DeepLink::Palette(PaletteLink::Permissions)),
+        Verb::MODES => exact(rest, DeepLink::Palette(PaletteLink::Modes)),
+        Verb::SETTINGS_SEARCH => exact(rest, DeepLink::Palette(PaletteLink::SettingsSearch)),
+        Verb::CONFIG_SETTINGS => exact(rest, DeepLink::Palette(PaletteLink::ConfigSettings)),
+        Verb::PROMPT_HISTORY => exact(rest, DeepLink::Palette(PaletteLink::PromptHistory)),
+        Verb::FONTS => match rest.to_ascii_lowercase().as_str() {
+            Verb::UI => Some(DeepLink::Palette(PaletteLink::Fonts(FontTarget::Ui))),
+            Verb::CODE => Some(DeepLink::Palette(PaletteLink::Fonts(FontTarget::Code))),
             _ => None,
         },
         _ => None,
@@ -381,51 +434,51 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
         None => (tail, ""),
     };
     let action = match verb.to_ascii_lowercase().as_str() {
-        "new-session" => exact(rest, PaletteAction::NewSession)?,
-        "close-session" => exact(rest, PaletteAction::CloseSession)?,
-        "copy-thread-title" => exact(rest, PaletteAction::CopyThreadTitle)?,
-        "copy-file-path" => exact(rest, PaletteAction::CopyFilePath)?,
-        "close-other-tabs" => exact(rest, PaletteAction::CloseOtherTabs)?,
-        "open-in-cli" => exact(rest, PaletteAction::OpenInCli)?,
-        "copy-latest" => exact(rest, PaletteAction::CopyLatestMessage)?,
-        "choose-model" => exact(rest, PaletteAction::ChooseModel)?,
-        "choose-workspace" => exact(rest, PaletteAction::ChooseWorkspace)?,
-        "refresh-sessions" => exact(rest, PaletteAction::RefreshSessions)?,
-        "refresh-files" => exact(rest, PaletteAction::RefreshFiles)?,
-        "browse-threads" => exact(rest, PaletteAction::BrowseThreads)?,
-        "toggle-inspector" => exact(rest, PaletteAction::ToggleInspector)?,
-        "toggle-zen" => exact(rest, PaletteAction::ToggleZenMode)?,
-        "toggle-theme" => exact(rest, PaletteAction::ToggleTheme)?,
-        "toggle-computer-use" => exact(rest, PaletteAction::ToggleComputerUse)?,
-        "attach-files" => exact(rest, PaletteAction::AttachFiles)?,
-        "conversation-search" => PaletteAction::OpenConversationSearch { session_id: single(rest)? },
-        "load-session" => PaletteAction::LoadSession(single(rest)?),
-        "preview-file" => PaletteAction::PreviewFile(path_payload(rest)?),
-        "attach-file" => PaletteAction::AttachFile(path_payload(rest)?),
-        "mention-file" => PaletteAction::InsertFileMention(path_payload(rest)?),
-        "review-file" => PaletteAction::SelectWorkspaceReviewFile(path_payload(rest)?),
-        "edit-config" => PaletteAction::EditConfigSetting(path_payload(rest)?),
-        "slash" => PaletteAction::CompleteSlashCommand(single(rest)?),
-        "select-model" => {
+        Verb::NEW_SESSION => exact(rest, PaletteAction::NewSession)?,
+        Verb::CLOSE_SESSION => exact(rest, PaletteAction::CloseSession)?,
+        Verb::COPY_THREAD_TITLE => exact(rest, PaletteAction::CopyThreadTitle)?,
+        Verb::COPY_FILE_PATH => exact(rest, PaletteAction::CopyFilePath)?,
+        Verb::CLOSE_OTHER_TABS => exact(rest, PaletteAction::CloseOtherTabs)?,
+        Verb::OPEN_IN_CLI => exact(rest, PaletteAction::OpenInCli)?,
+        Verb::COPY_LATEST => exact(rest, PaletteAction::CopyLatestMessage)?,
+        Verb::CHOOSE_MODEL => exact(rest, PaletteAction::ChooseModel)?,
+        Verb::CHOOSE_WORKSPACE => exact(rest, PaletteAction::ChooseWorkspace)?,
+        Verb::REFRESH_SESSIONS => exact(rest, PaletteAction::RefreshSessions)?,
+        Verb::REFRESH_FILES => exact(rest, PaletteAction::RefreshFiles)?,
+        Verb::BROWSE_THREADS => exact(rest, PaletteAction::BrowseThreads)?,
+        Verb::TOGGLE_INSPECTOR => exact(rest, PaletteAction::ToggleInspector)?,
+        Verb::TOGGLE_ZEN => exact(rest, PaletteAction::ToggleZenMode)?,
+        Verb::TOGGLE_THEME => exact(rest, PaletteAction::ToggleTheme)?,
+        Verb::TOGGLE_COMPUTER_USE => exact(rest, PaletteAction::ToggleComputerUse)?,
+        Verb::ATTACH_FILES => exact(rest, PaletteAction::AttachFiles)?,
+        Verb::CONVERSATION_SEARCH => PaletteAction::OpenConversationSearch { session_id: single(rest)? },
+        Verb::LOAD_SESSION => PaletteAction::LoadSession(single(rest)?),
+        Verb::PREVIEW_FILE => PaletteAction::PreviewFile(path_payload(rest)?),
+        Verb::ATTACH_FILE => PaletteAction::AttachFile(path_payload(rest)?),
+        Verb::MENTION_FILE => PaletteAction::InsertFileMention(path_payload(rest)?),
+        Verb::REVIEW_FILE => PaletteAction::SelectWorkspaceReviewFile(path_payload(rest)?),
+        Verb::EDIT_CONFIG => PaletteAction::EditConfigSetting(path_payload(rest)?),
+        Verb::SLASH => PaletteAction::CompleteSlashCommand(single(rest)?),
+        Verb::SELECT_MODEL => {
             let (provider, model) = pair(rest)?;
             PaletteAction::SelectModel { provider, model }
         }
-        "jump" => {
+        Verb::JUMP => {
             let (session_id, item_id) = pair(rest)?;
             PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search: false }
         }
-        "output" => {
+        Verb::OUTPUT => {
             let (session_id, item_id) = pair(rest)?;
             PaletteAction::ShowActivityOutput { session_id, item_id }
         }
-        "font" => {
+        Verb::FONT => {
             let (target, family) = match rest.split_once('/') {
                 Some((target, family)) => (target, Some(family)),
                 None => (rest, None),
             };
             let target = match target.to_ascii_lowercase().as_str() {
-                "ui" => FontTarget::Ui,
-                "code" => FontTarget::Code,
+                Verb::UI => FontTarget::Ui,
+                Verb::CODE => FontTarget::Code,
                 _ => return None,
             };
             let family = match family {

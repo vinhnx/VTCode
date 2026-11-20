@@ -147,7 +147,7 @@ impl DesktopView {
         let Some(session_id) = self.selected_session_id.clone() else {
             return false;
         };
-        if !self.request(protocol::method::GOAL_EXECUTE, json!({ "sessionId": session_id, "args": args })) {
+        if !self.request(protocol::method::GOAL_EXECUTE, json!({ keys::SESSION_ID: session_id, keys::ARGS: args })) {
             self.error = Some(rust_i18n::t!(i18n::QUEUE_FULL).to_string());
             cx.notify();
             return false;

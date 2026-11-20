@@ -86,7 +86,7 @@ use super::markdown::{
     render_markdown, render_markdown_view, render_markdown_with_style, render_output_text,
 };
 use super::preferences;
-use super::strings::{app, bundle, display, i18n, key_context, keys};
+use super::strings::{app, bundle, display, i18n, key, key_context, keys};
 use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, EditTotals, NoticePayload, NoticeSeverity, SessionPollKey, SessionPollRun,

@@ -32,6 +32,9 @@ pub enum TrackerItemStatus {
 }
 
 impl TrackerItemStatus {
+    /// Statuses with a canonical wire spelling (`Unknown` is a decode catch-all).
+    const KNOWN: [Self; 4] = [Self::Pending, Self::InProgress, Self::Completed, Self::Blocked];
+
     /// Canonical wire string for this status.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -51,13 +54,7 @@ impl FromStr for TrackerItemStatus {
     /// Parse a canonical status string; unknown shapes fail closed to `Err`
     /// so producers skip unparseable items instead of mislabeling them.
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        match raw {
-            "pending" => Ok(Self::Pending),
-            "in_progress" => Ok(Self::InProgress),
-            "completed" => Ok(Self::Completed),
-            "blocked" => Ok(Self::Blocked),
-            _ => Err(()),
-        }
+        Self::KNOWN.into_iter().find(|status| status.as_str() == raw).ok_or(())
     }
 }
 

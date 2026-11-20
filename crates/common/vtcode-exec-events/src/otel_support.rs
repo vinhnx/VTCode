@@ -30,21 +30,7 @@ impl<T: Tracer> OtelEmitter<T> {
 
 impl<T: Tracer> EventEmitter for OtelEmitter<T> {
     fn emit(&mut self, event: &ThreadEvent) {
-        let span_name = match event {
-            ThreadEvent::ThreadStarted(_) => "thread.started",
-            ThreadEvent::ThreadCompleted(_) => "thread.completed",
-            ThreadEvent::ContextReset(_) => "context.reset",
-            ThreadEvent::TurnStarted(_) => "turn.started",
-            ThreadEvent::TurnCompleted(_) => "turn.completed",
-            ThreadEvent::TurnFailed(_) => "turn.failed",
-            ThreadEvent::ItemStarted(_) => "item.started",
-            ThreadEvent::ItemUpdated(_) => "item.updated",
-            ThreadEvent::ItemCompleted(_) => "item.completed",
-            ThreadEvent::Error(_) => "error",
-            _ => "event",
-        };
-
-        let mut span = self.tracer.start(span_name);
+        let mut span = self.tracer.start(event.wire_name());
 
         match event {
             ThreadEvent::ThreadStarted(e) => {

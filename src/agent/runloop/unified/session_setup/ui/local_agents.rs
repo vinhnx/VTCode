@@ -410,17 +410,15 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
 
 fn tool_status_label(status: ToolCallStatus) -> &'static str {
     match status {
-        ToolCallStatus::Completed => "completed",
-        ToolCallStatus::Failed => "failed",
         ToolCallStatus::InProgress => "running",
+        status => status.as_str(),
     }
 }
 
 fn command_status_label(status: CommandExecutionStatus) -> &'static str {
     match status {
-        CommandExecutionStatus::Completed => "completed",
-        CommandExecutionStatus::Failed => "failed",
         CommandExecutionStatus::InProgress => "running",
+        status => status.as_str(),
     }
 }
 

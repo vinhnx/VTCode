@@ -10,11 +10,11 @@ impl DesktopView {
 
     pub(super) fn handle_ui_progress(&mut self, progress: Value, cx: &mut Context<Self>) {
         if progress
-            .get("sessionId")
+            .get(keys::SESSION_ID)
             .and_then(Value::as_str)
             .is_some_and(|session_id| self.selected_session_id.as_deref() == Some(session_id))
         {
-            self.ui_progress_active = progress.get("active").and_then(Value::as_bool).unwrap_or(false);
+            self.ui_progress_active = progress.get(keys::ACTIVE).and_then(Value::as_bool).unwrap_or(false);
             cx.notify();
         }
     }
@@ -26,10 +26,10 @@ impl DesktopView {
             return;
         }
         if let Some(label) = status.get(keys::STATUS).and_then(Value::as_str) {
-            self.status = if label.eq_ignore_ascii_case("running") {
+            self.status = if label.eq_ignore_ascii_case(tool_status::RUNNING) {
                 rust_i18n::t!("app.service.running").to_string()
-            } else if label.eq_ignore_ascii_case("failed")
-                && status.get("restarted").and_then(Value::as_bool).unwrap_or(false)
+            } else if label.eq_ignore_ascii_case(tool_status::FAILED)
+                && status.get(keys::RESTARTED).and_then(Value::as_bool).unwrap_or(false)
             {
                 rust_i18n::t!("app.service.turn_recovered").to_string()
             } else {
@@ -40,9 +40,9 @@ impl DesktopView {
             // runloop left the approval wait (stop, error) without a
             // re-show. Blocked turns still hold the wait, and a
             // recovered turn may still re-show, so both keep the lock.
-            let terminal = label.eq_ignore_ascii_case("completed")
-                || (label.eq_ignore_ascii_case("failed")
-                    && !status.get("restarted").and_then(Value::as_bool).unwrap_or(false));
+            let terminal = label.eq_ignore_ascii_case(tool_status::COMPLETED)
+                || (label.eq_ignore_ascii_case(tool_status::FAILED)
+                    && !status.get(keys::RESTARTED).and_then(Value::as_bool).unwrap_or(false));
             let turn_matches = status.get(keys::TURN_ID).and_then(Value::as_str).is_some_and(|turn_id| {
                 self.interaction
                     .as_ref()

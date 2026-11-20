@@ -14,7 +14,7 @@ use super::{
 use anyhow::{Context, Result};
 use serde_json::Value;
 use vtcode_core::core::threads::ThreadEventRecord;
-use vtcode_core::exec::events::{ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolOutcome};
+use vtcode_core::exec::events::{ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolOutcome, wire_type};
 
 pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) -> Vec<TimelineRow> {
     records
@@ -177,7 +177,7 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
             ThreadEvent::ContextReset(event) => timeline_row(
                 record.sequence,
                 TIMELINE_SOURCE_THREAD_EVENTS,
-                "context.reset",
+                record.event.wire_name(),
                 Some("context_reset"),
                 "context",
                 Some("completed"),
@@ -192,7 +192,7 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
             ThreadEvent::TurnStarted(_) => timeline_row(
                 record.sequence,
                 TIMELINE_SOURCE_THREAD_EVENTS,
-                "turn.started",
+                record.event.wire_name(),
                 None,
                 "turn",
                 Some("in_progress"),
@@ -207,7 +207,7 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
             ThreadEvent::TurnCompleted(event) => timeline_row(
                 record.sequence,
                 TIMELINE_SOURCE_THREAD_EVENTS,
-                "turn.completed",
+                record.event.wire_name(),
                 None,
                 "turn",
                 Some("completed"),
@@ -288,13 +288,13 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                 )
             }
             ThreadEvent::ItemStarted(event) => {
-                timeline_row_from_item(record, "item.started", "in_progress", &event.item)
+                timeline_row_from_item(record, record.event.wire_name(), "in_progress", &event.item)
             }
             ThreadEvent::ItemUpdated(event) => {
-                timeline_row_from_item(record, "item.updated", "in_progress", &event.item)
+                timeline_row_from_item(record, record.event.wire_name(), "in_progress", &event.item)
             }
             ThreadEvent::ItemCompleted(event) => {
-                timeline_row_from_item(record, "item.completed", "completed", &event.item)
+                timeline_row_from_item(record, record.event.wire_name(), "completed", &event.item)
             }
             ThreadEvent::PlanDelta(event) => timeline_row(
                 record.sequence,
@@ -515,7 +515,7 @@ pub(super) fn timeline_row_from_item(
                 summarize_status_with_exit(status, command.exit_code),
                 body,
                 detail_json,
-                event_type == "item.updated",
+                event_type == wire_type::ITEM_UPDATED,
             )
         }
         ThreadItemDetails::ToolInvocation(tool) => {
@@ -545,7 +545,7 @@ pub(super) fn timeline_row_from_item(
                 summarize_status_with_label(status, tool.tool_call_id.as_deref()),
                 body,
                 detail_json,
-                event_type == "item.updated",
+                event_type == wire_type::ITEM_UPDATED,
             )
         }
         ThreadItemDetails::ToolOutput(tool_output) => {
@@ -583,7 +583,7 @@ pub(super) fn timeline_row_from_item(
                 summarize_status_with_exit(status, tool_output.exit_code),
                 body,
                 detail_json,
-                event_type == "item.updated",
+                event_type == wire_type::ITEM_UPDATED,
             )
         }
         ThreadItemDetails::FileChange(file_change) => timeline_row(
@@ -628,7 +628,7 @@ pub(super) fn timeline_row_from_item(
                 summarize_status_with_label(status, None),
                 body,
                 detail_json,
-                event_type == "item.updated",
+                event_type == wire_type::ITEM_UPDATED,
             )
         }
         ThreadItemDetails::WebSearch(search) => {

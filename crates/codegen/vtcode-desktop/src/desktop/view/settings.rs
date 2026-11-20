@@ -67,6 +67,39 @@ impl SettingsTab {
     /// Tabs plus the configuration entry.
     pub(super) const PAGE_COUNT: usize = SettingsPage::ALL.len();
 
+    /// Canonical deeplink segment for the tab. Shared by every `settings/<tab>`
+    /// writer and parser so the two directions cannot drift.
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::VtCode => "vtcode",
+            Self::Appearance => "appearance",
+            Self::Accessibility => "accessibility",
+            Self::Shortcuts => "shortcuts",
+            Self::Connections => "connections",
+            Self::Notifications => "notifications",
+            Self::Storage => "storage",
+            Self::ComputerUse => "computer-use",
+            Self::About => "about",
+        }
+    }
+
+    /// Parse a deeplink tab segment or `/config`/`/settings` keyword. Every
+    /// alias maps back to the canonical [`Self::as_str`] spelling.
+    pub(super) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "appearance" | "theme" => Some(Self::Appearance),
+            "accessibility" | "a11y" => Some(Self::Accessibility),
+            "shortcuts" | "keybindings" => Some(Self::Shortcuts),
+            "vtcode" | "general" => Some(Self::VtCode),
+            "connections" | "mcp" | "webmcp" => Some(Self::Connections),
+            "notifications" | "notification" | "alerts" | "updates" => Some(Self::Notifications),
+            "storage" | "disk" | "cleanup" => Some(Self::Storage),
+            "computer-use" | "computer_use" | "computeruse" | "cua" => Some(Self::ComputerUse),
+            "about" | "info" => Some(Self::About),
+            _ => None,
+        }
+    }
+
     /// i18n key for the tab label, resolved once in [`SettingsTab::label`].
     const fn label_key(self) -> &'static str {
         match self {

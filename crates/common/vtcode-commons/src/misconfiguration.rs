@@ -13,6 +13,7 @@
 
 use std::borrow::Cow;
 
+use crate::config_keys::ConfigKey;
 use crate::error_category::ErrorCategory;
 
 /// Kind of user misconfiguration detected.
@@ -176,12 +177,12 @@ pub fn detect_misconfiguration(category: ErrorCategory, message: &str) -> Option
             "provider not found",
             "provider_not_found",
         ],
-    ) || (contains_any(&msg, &["agent.provider", "custom_providers", "provider_overrides"])
+    ) || (contains_any(&msg, &[ConfigKey::PROVIDER, "custom_providers", "provider_overrides"])
         && contains_any(&msg, &["invalid", "unknown", "unsupported", "not found", "missing", "empty"]))
     {
         return Some(ConfigGuidance {
             kind: MisconfigurationKind::Provider,
-            setting: "agent.provider",
+            setting: ConfigKey::PROVIDER,
             location: "vtcode.toml",
             fix: Cow::Borrowed(
                 "Unknown/invalid provider. Check `agent.provider` and `custom_providers` in vtcode.toml, then retry.",
@@ -213,7 +214,7 @@ pub fn detect_misconfiguration(category: ErrorCategory, message: &str) -> Option
         ],
     ) || (msg.contains("model ")
         && contains_any(&msg, &[" is not supported", " not supported by", " not supported with"]))
-        || (contains_any(&msg, &["model id", "model_id", "agent.model", "agent.default_model"])
+        || (contains_any(&msg, &["model id", "model_id", "agent.model", ConfigKey::DEFAULT_MODEL])
             && contains_any(
                 &msg,
                 &[
@@ -229,7 +230,7 @@ pub fn detect_misconfiguration(category: ErrorCategory, message: &str) -> Option
     {
         return Some(ConfigGuidance {
             kind: MisconfigurationKind::Model,
-            setting: "agent.default_model",
+            setting: ConfigKey::DEFAULT_MODEL,
             location: "vtcode.toml / `/model` picker",
             fix: Cow::Borrowed(
                 "Unknown/invalid model. Check `agent.default_model` in vtcode.toml or run `/model` to pick a supported ModelId, then retry.",

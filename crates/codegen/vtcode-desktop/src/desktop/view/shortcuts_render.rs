@@ -302,7 +302,7 @@ impl DesktopView {
         // pill's own Cancel action stays as a fallback. Stopping here keeps
         // the keystroke from reaching ancestor key handlers and text input.
         cx.stop_propagation();
-        if event.keystroke.key.as_str() == "escape" {
+        if event.keystroke.key.as_str() == key::ESCAPE {
             self.cancel_shortcut_capture(window, cx);
             return;
         }
@@ -311,7 +311,7 @@ impl DesktopView {
         }
         // Tab and Shift-Tab move focus natively before this stale path runs; they are never
         // committable chords, so skip validation instead of flashing a misleading error.
-        if event.keystroke.key.as_str() == "tab" {
+        if event.keystroke.key.as_str() == key::TAB {
             return;
         }
         let mut candidate = self.shortcut_draft.clone();
