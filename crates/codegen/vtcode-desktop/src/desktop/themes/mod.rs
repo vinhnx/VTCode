@@ -361,7 +361,11 @@ pub(super) fn apply_selection_with_contrast(
         apply_filled_surfaces(colors);
         apply_surface_borders(colors);
         apply_unified_hover_surface(colors, hover_surface(colors.background, colors.foreground));
-        colors.ring = accessible_focus_color(colors.primary, colors);
+        // Focus policy: the app draws no focus-ring border highlight anywhere,
+        // so the ring token stays fully transparent (kit inputs, buttons, and
+        // sliders all read it). Keyboard focus stays legible through the text
+        // caret, which keeps its own accent/foreground treatment.
+        colors.ring = colors.ring.opacity(0.);
         colors.caret = accessible_focus_color(colors.primary, colors);
     });
     // No explicit `cx.refresh_windows()`: both `apply_selection` (via
@@ -392,31 +396,41 @@ fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App)
             [colors.chart_1, colors.chart_3, colors.chart_4],
             seeds.secondary,
         );
-        colors.sidebar_primary = seeds.accent;
-        colors.sidebar_primary_foreground = filled_button_foreground(seeds.accent);
+        // Filled labels come from `filled_button_foreground`, which rescues
+        // mid-luminance seeds whose luminance falls between the softened
+        // labels' AA floors; the accent seed itself stays untouched so the
+        // registry palette remains the single brand source.
+        let accent = seeds.accent;
+        colors.sidebar_primary = accent;
+        colors.sidebar_primary_foreground = filled_button_foreground(accent);
         colors.list = seeds.background;
-        colors.list_active_border = seeds.accent;
+        colors.list_active_border = accent;
         colors.success = seeds.success;
         colors.success_foreground = filled_button_foreground(seeds.success);
         colors.danger = seeds.danger;
         colors.danger_foreground = filled_button_foreground(seeds.danger);
         colors.warning = seeds.warning;
-        colors.primary = seeds.accent;
-        colors.primary_foreground = filled_button_foreground(seeds.accent);
-        let contrast_end = filled_button_foreground(colors.primary_foreground);
+        colors.primary = accent;
+        colors.primary_foreground = filled_button_foreground(accent);
+        // State surfaces blend toward the pure lightness pole, not the label:
+        // the softened label can share the accent's lightness, which would
+        // collapse the rest -> hover ramp onto the resting fill.
+        let contrast_end = filled_state_pole(colors.primary_foreground);
         colors.primary_hover =
-            primary_state_surface(seeds.accent, contrast_end, colors.primary_foreground, PRIMARY_HOVER_MAX_STEP);
+            primary_state_surface(accent, contrast_end, colors.primary_foreground, PRIMARY_HOVER_MAX_STEP);
         colors.primary_active =
-            primary_state_surface(seeds.accent, contrast_end, colors.primary_foreground, PRIMARY_ACTIVE_MAX_STEP);
+            primary_state_surface(accent, contrast_end, colors.primary_foreground, PRIMARY_ACTIVE_MAX_STEP);
         colors.button_primary = colors.primary;
         colors.button_primary_foreground = colors.primary_foreground;
         colors.button_primary_hover = colors.primary_hover;
         colors.button_primary_active = colors.primary_active;
         apply_unified_hover_surface(colors, hover_surface(seeds.background, seeds.foreground));
-        colors.ring = accessible_focus_color(seeds.accent, colors);
+        // Focus policy (see `apply_selection_with_contrast`): no focus-ring
+        // border highlight anywhere; the caret keeps its visibility rule.
+        colors.ring = colors.ring.opacity(0.);
         // The text caret shares the focus-visibility rule: brand accent when
         // it holds 3:1 on interactive surfaces, else the foreground.
-        colors.caret = accessible_focus_color(seeds.accent, colors);
+        colors.caret = accessible_focus_color(accent, colors);
     });
     seeds.mode
 }
@@ -445,7 +459,9 @@ fn normalize_system_interaction_colors(cx: &mut App) {
         colors.warning = readable_semantic_color(colors.background, colors.foreground, colors.warning);
         colors.success_foreground = filled_button_foreground(colors.success);
         colors.danger_foreground = filled_button_foreground(colors.danger);
-        colors.ring = accessible_focus_color(colors.primary, colors);
+        // Focus policy (see `apply_selection_with_contrast`): no focus-ring
+        // border highlight anywhere; the caret keeps its visibility rule.
+        colors.ring = colors.ring.opacity(0.);
         colors.caret = accessible_focus_color(colors.primary, colors);
     });
 }
@@ -620,16 +636,48 @@ fn composite_status_surface(background: Hsla, status: Hsla, opacity: f32) -> Hsl
     .into()
 }
 
-/// Foreground for a filled control: the standard white/black choice at the
-/// WCAG equal-contrast crossover (both give the same ratio at luminance
-/// 0.179), which stays readable on every saturated accent.
+/// Foreground for a filled control: the softened label pair — dark ink
+/// `#171C26`, light ink `#CCCCCC` — chosen at the luminance crossover. A seed
+/// whose luminance falls between the two labels' AA floors (the ~0.095–0.227
+/// band) cannot reach 4.5:1 with either constant; there the label walks
+/// toward its pure pole just until AA holds, so `#CCCCCC` stays the light
+/// label everywhere it can possibly work.
 pub(super) fn filled_button_foreground(color: Hsla) -> Hsla {
-    const WHITE: Hsla = Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
-    const BLACK: Hsla = Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
-    if relative_luminance(color) > 0.179 {
-        BLACK
+    const LIGHT: Hsla = Hsla { h: 0.0, s: 0.0, l: 0.8, a: 1.0 };
+    let label = if relative_luminance(color) > 0.179 {
+        rgb(0x171C26).into()
     } else {
-        WHITE
+        LIGHT
+    };
+    if contrast_ratio(label, color) >= 4.5 {
+        return label;
+    }
+    // Dead-band rescue: the label moves toward the pole that grows contrast
+    // against this fill — white under a dark-ish fill, black under a light one.
+    let pole: Hsla = if relative_luminance(color) > 0.179 {
+        rgb(0).into()
+    } else {
+        rgb(0xffffff).into()
+    };
+    for step in 1_u8..=50 {
+        let candidate = mix(label, pole, f32::from(step) / 100.0);
+        if contrast_ratio(candidate, color) >= 4.5 {
+            return candidate;
+        }
+    }
+    pole
+}
+
+/// Pure lightness pole a filled control's state ramp blends toward: white
+/// under dark ink, black under light ink. The softened label can share the
+/// accent's lightness (e.g. `#CCCCCC` over a very light accent), so the ramp
+/// targets the pole itself to keep hover and press moving off the resting
+/// fill.
+pub(super) fn filled_state_pole(label: Hsla) -> Hsla {
+    if relative_luminance(label) > 0.179 {
+        rgb(0).into()
+    } else {
+        rgb(0xffffff).into()
     }
 }
 

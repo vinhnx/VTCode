@@ -42,21 +42,34 @@ pub(super) fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.sidebar_foreground = colors.foreground;
     colors.muted_foreground = aa_muted(raised_surface, colors.foreground);
     colors.list_active = surface;
-    colors.button = surface;
+    // Buttons must read as controls on every surface they sit on. Panel fills
+    // share this resting tone, so a button body painted with it vanishes on
+    // settings pages and group boxes and the pair reads as two shapes; seat
+    // the button fill one step above the panel tone so quiet buttons keep a
+    // visible body next to filled siblings everywhere. The button hover and
+    // press derive from this same seat (see `apply_unified_hover_surface` and
+    // the secondary active below) so each state stays a visible step above
+    // the resting fill instead of collapsing onto it.
+    let button_surface = filled_surface(surface, colors.foreground, RESTING_FILL_MAX_STEP, None);
+    colors.button = button_surface;
     colors.button_foreground = colors.foreground;
     // Press states sit deeper than resting so Default, Secondary, and Ghost
     // buttons all show a visible press; Kit keeps border and text identical
-    // across states, so the fill carries the whole signal.
+    // across states, so the fill carries the whole signal. `button_active`
+    // doubles as the Ghost pressed/selected seat (transparent rest), so it
+    // measures from the canvas; the Secondary press owns the button seat.
     let press = active_surface(colors.background, colors.foreground);
     colors.button_active = press;
-    colors.button_secondary = surface;
+    colors.button_secondary = button_surface;
     colors.button_secondary_foreground = colors.foreground;
-    colors.button_secondary_active = press;
+    colors.button_secondary_active = active_surface(button_surface, colors.foreground);
     // Ciapre's red is reserved for destructive buttons. Status text and
     // indicators still use each palette's contrast-adjusted danger color.
-    let danger = gpui_kit::rgb(0xa63333).into();
+    // The fill sits dark enough that the softened `#CCCCCC` filled-button
+    // label holds WCAG AA 4.5:1 (pure `#a63333` measured 4.16:1).
+    let danger = gpui_kit::rgb(0x9B2C2C).into();
     let danger_text = filled_button_foreground(danger);
-    let toward = filled_button_foreground(danger_text);
+    let toward = super::filled_state_pole(danger_text);
     colors.button_danger = danger;
     colors.button_danger_foreground = danger_text;
     colors.button_danger_hover = primary_state_surface(danger, toward, danger_text, PRIMARY_HOVER_MAX_STEP);
@@ -226,8 +239,14 @@ pub(super) fn apply_unified_hover_surface(colors: &mut ThemeColor, surface: Hsla
     // command items; the brand accent remains reserved for primary actions.
     colors.accent = surface;
     colors.accent_foreground = colors.foreground;
-    colors.button_hover = surface;
-    colors.button_secondary_hover = surface;
+    // Button hovers measure from the resting button fill, not the canvas: the
+    // fill seats one step above the panel surface, so the canvas hover step
+    // would sit beneath it and hover would not read on settings pages. The
+    // callers run `apply_filled_surfaces` first, so `colors.button` is the
+    // current resting seat. Default and Secondary share the seat.
+    let button_hover = hover_surface(colors.button, colors.foreground);
+    colors.button_hover = button_hover;
+    colors.button_secondary_hover = button_hover;
     colors.secondary_hover = surface;
     colors.list_hover = surface;
     colors.sidebar_accent = surface;

@@ -30,7 +30,7 @@ fn contrast_setting_increases_foreground_contrast_for_every_theme(cx: &mut gpui_
                         "{id} at {amount}: unreadable primary button text"
                     );
                 }
-                assert_eq!(colors.button_danger, rgb(0xa63333).into(), "{id} at {amount}");
+                assert_eq!(colors.button_danger, rgb(0x9B2C2C).into(), "{id} at {amount}");
                 for fill in [
                     colors.button_danger,
                     colors.button_danger_hover,
@@ -131,11 +131,10 @@ fn custom_theme_seeds_hold_the_same_contrast_floors(cx: &mut gpui_kit::TestAppCo
                 let ratio = contrast_ratio(status, colors.background);
                 assert!(ratio >= 4.5, "{}: {name} is {ratio:.2}", custom.id);
             }
-            // Focus visibility is checked separately at 3:1.
-            for surface in [colors.background, colors.secondary, colors.popover] {
-                let ratio = contrast_ratio(colors.ring, surface);
-                assert!(ratio >= 3.0, "{}: focus ring is {ratio:.2} against {surface:?}", custom.id);
-            }
+            // Focus policy: the app draws no focus-ring border highlight, so
+            // the ring token must stay fully transparent on every theme; the
+            // text caret carries keyboard focus visibility instead.
+            assert_eq!(colors.ring.a, 0.0, "{}: focus ring must stay unpainted", custom.id);
         }
     });
 }

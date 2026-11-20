@@ -549,8 +549,10 @@ mod tests {
                 let style = super::markdown_style(cx);
                 assert_eq!(style.foreground(), cx.theme().colors.foreground);
                 assert_eq!(style.inline_code().background_color, Some(gpui_kit::rgb(accent).into()));
-                let header_foreground = if mode == ThemeMode::Dark { 0xffffff } else { 0x000000 };
-                assert_eq!(style.table_head().text.color, Some(gpui_kit::rgb(header_foreground).into()));
+                // Table headers share the filled-button label rule: softened
+                // ink (`#171C26`/`#CCCCCC`) at the luminance crossover.
+                let header_foreground = crate::desktop::themes::filled_button_foreground(cx.theme().colors.table_head);
+                assert_eq!(style.table_head().text.color, Some(header_foreground));
                 window.render_frame(cx);
                 let quads = window.painted_quads();
                 for color in [accent, header] {

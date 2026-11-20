@@ -73,24 +73,47 @@ fn hover_surfaces_are_unified_and_contrast_safe_in_every_theme(cx: &mut gpui_kit
             let hover = hover_surface(colors.background, colors.foreground);
             for (name, actual) in [
                 ("accent", colors.accent),
-                ("button", colors.button_hover),
-                ("secondary button", colors.button_secondary_hover),
                 ("secondary", colors.secondary_hover),
                 ("list", colors.list_hover),
                 ("sidebar", colors.sidebar_accent),
             ] {
                 assert_eq!(actual, hover, "{id}: {name} hover uses the shared surface");
             }
+            // Button hovers measure from the resting button fill (one step
+            // above the panel surface), not the canvas: the canvas hover step
+            // would sit beneath the lifted fill and hover would not read on
+            // settings pages.
+            for (name, seat, button_hover) in [
+                ("default", colors.button, colors.button_hover),
+                ("secondary", colors.button_secondary, colors.button_secondary_hover),
+            ] {
+                assert_eq!(
+                    button_hover,
+                    hover_surface(seat, colors.foreground),
+                    "{id}: {name} hover derives from the button seat"
+                );
+                let text_ratio = contrast_ratio(colors.foreground, button_hover);
+                assert!(text_ratio >= 4.5, "{id}: {name} hover text contrast {text_ratio:.2}");
+                assert!(
+                    contrast_ratio(button_hover, seat) >= 1.02,
+                    "{id}: {name} hover collapses onto the resting fill it highlights"
+                );
+                assert_eq!(
+                    (button_hover.l - seat.l).signum(),
+                    (colors.foreground.l - colors.background.l).signum(),
+                    "{id}: {name} hover should move gently toward the foreground"
+                );
+            }
+            assert_eq!(
+                (hover.l - colors.background.l).signum(),
+                (colors.foreground.l - colors.background.l).signum(),
+                "{id}: hover should move gently toward the foreground"
+            );
             let text_ratio = contrast_ratio(colors.foreground, hover);
             assert!(text_ratio >= 4.5, "{id}: hover text contrast {text_ratio:.2}");
             assert!(
                 contrast_ratio(colors.background, hover) >= 1.01,
                 "{id}: hover surface is too close to the surrounding background"
-            );
-            assert_eq!(
-                (hover.l - colors.background.l).signum(),
-                (colors.foreground.l - colors.background.l).signum(),
-                "{id}: hover should move gently toward the foreground"
             );
             // Zen's floating chrome is a popover surface whose armed-swipe cue
             // uses the hover fill; it must not collapse onto the pill itself.
@@ -142,7 +165,11 @@ fn button_press_states_stay_visible_in_every_theme(cx: &mut gpui_kit::TestAppCon
             let colors = cx.theme().colors;
             let press = active_surface(colors.background, colors.foreground);
             assert_eq!(colors.button_active, press, "{id}: Default press uses the shared press fill");
-            assert_eq!(colors.button_secondary_active, press, "{id}: Secondary press uses the shared press fill");
+            // The Secondary press owns the button seat: the fill sits one step
+            // above the panel surface, so the canvas press would land beneath
+            // the seat-derived hover and read as a lighter state than hover.
+            let button_seat_press = active_surface(colors.button, colors.foreground);
+            assert_eq!(colors.button_secondary_active, button_seat_press, "{id}: Secondary press uses the button seat");
             assert_eq!(colors.secondary_active, press, "{id}: Ghost selected/open uses the shared press fill");
             let text_ratio = contrast_ratio(colors.foreground, press);
             assert!(text_ratio >= 4.5, "{id}: press text contrast {text_ratio:.2}");
@@ -159,6 +186,23 @@ fn button_press_states_stay_visible_in_every_theme(cx: &mut gpui_kit::TestAppCon
             if hover != colors.button {
                 assert_ne!(press, colors.button, "{id}: press is invisible where hover is visible");
             }
+            // The secondary ramp runs rest -> hover -> press on the button
+            // seat, each state a distinct visible step toward the foreground.
+            let seat_hover = colors.button_secondary_hover;
+            assert_ne!(
+                colors.button_secondary_active, seat_hover,
+                "{id}: secondary press is invisible where hover is visible"
+            );
+            assert!(
+                contrast_ratio(colors.button_secondary_active, colors.button)
+                    >= contrast_ratio(seat_hover, colors.button),
+                "{id}: secondary press must read at least as deep as its hover"
+            );
+            assert_eq!(
+                (colors.button_secondary_active.l - seat_hover.l).signum(),
+                (colors.foreground.l - colors.background.l).signum(),
+                "{id}: secondary press should move past hover toward the foreground"
+            );
         }
     });
 }
@@ -215,7 +259,10 @@ fn primary_states_take_strongest_readable_step_in_every_theme(cx: &mut gpui_kit:
             let id = palette.id;
             let _mode = apply_by_id(id, None, cx);
             let colors = cx.theme().colors;
-            let toward = filled_button_foreground(colors.primary_foreground);
+            // Mirror the production ramp pole: the state surfaces blend toward
+            // the pure lightness pole of the label (see `filled_state_pole`),
+            // not through the label derivation.
+            let toward = filled_state_pole(colors.primary_foreground);
             for (name, fill, cap) in [
                 ("hover", colors.primary_hover, PRIMARY_HOVER_MAX_STEP),
                 ("press", colors.primary_active, PRIMARY_ACTIVE_MAX_STEP),
