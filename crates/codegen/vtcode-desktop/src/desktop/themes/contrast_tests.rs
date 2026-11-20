@@ -44,39 +44,11 @@ fn contrast_setting_increases_foreground_contrast_for_every_theme(cx: &mut gpui_
     });
 }
 
-/// Transcript severity chips wash the severity tone over the card fill; the
-/// paired title/icon tone must stay AA against that wash in every theme, not
-/// only against the bare canvas it was tuned for.
+/// Severity announcements have no card surface: their tone-resolved marker
+/// and title, plus the muted body, must stay AA against the transcript
+/// background in every theme and contrast setting.
 #[gpui_kit::test]
-fn severity_chip_tones_stay_readable_on_the_wash_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        gpui_kit::init(cx);
-        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
-            .into_iter()
-            .chain(all_themes().iter().map(|theme| theme.id))
-        {
-            let _mode = apply_with_contrast(id, 0, None, cx);
-            let colors = cx.theme().colors;
-            for (name, tone) in [
-                ("danger", colors.danger),
-                ("warning", colors.warning),
-                ("success", colors.success),
-                ("info", muted_text(&colors)),
-            ] {
-                let (surface, _) = tone_chip_surface(tone, &colors);
-                let title = readable_indicator_color(surface, colors.foreground, tone);
-                let ratio = contrast_ratio(title, surface);
-                assert!(ratio >= 4.5, "{id} {name}: chip title is {ratio:.2}");
-            }
-        }
-    });
-}
-
-/// Full-width severity announcements use a quieter wash than chips because
-/// the surface is much larger. Both the tone-resolved title and the muted body
-/// must stay AA against that wash in every theme and contrast setting.
-#[gpui_kit::test]
-fn severity_callout_text_stays_readable_on_the_wash_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
+fn severity_announcement_text_stays_readable_on_the_transcript(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
@@ -91,12 +63,11 @@ fn severity_callout_text_stays_readable_on_the_wash_for_every_theme(cx: &mut gpu
                     ("warning", colors.warning),
                     ("info", muted_text(&colors)),
                 ] {
-                    let (surface, _) = tone_callout_surface(tone, &colors);
-                    let title = readable_indicator_color(surface, colors.foreground, tone);
-                    let title_ratio = contrast_ratio(title, surface);
-                    assert!(title_ratio >= 4.5, "{id} at {amount} {name}: callout title is {title_ratio:.2}");
-                    let body_ratio = contrast_ratio(muted_text(&colors), surface);
-                    assert!(body_ratio >= 4.5, "{id} at {amount} {name}: callout body is {body_ratio:.2}");
+                    let title = readable_indicator_color(colors.background, colors.foreground, tone);
+                    let title_ratio = contrast_ratio(title, colors.background);
+                    assert!(title_ratio >= 4.5, "{id} at {amount} {name}: announcement title is {title_ratio:.2}");
+                    let body_ratio = contrast_ratio(muted_text(&colors), colors.background);
+                    assert!(body_ratio >= 4.5, "{id} at {amount} {name}: announcement body is {body_ratio:.2}");
                 }
             }
         }

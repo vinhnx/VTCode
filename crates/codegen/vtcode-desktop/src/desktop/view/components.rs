@@ -688,46 +688,44 @@ pub(super) fn error_alert(
     status_alert(id, message, colors, colors.danger)
 }
 
-/// Severity-resolved presentation for a status marker row: icon, tone,
-/// title weight, accessibility role, and the stable status token used in
-/// the details toggle label. Single dispatch for every severity-driven
-/// choice, so callers resolve once and render from the result.
+/// Severity-resolved presentation for a status marker row: tone, marker shape,
+/// accessibility role, and the stable status token used in the details toggle
+/// label. Single dispatch for every severity-driven choice, so callers resolve
+/// once and render from the result. The callout has no icon; a solid/outlined
+/// marker keeps severity distinct for color-blind readers alongside the title
+/// text and role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SeverityMarkerStyle {
-    pub(super) icon: IconName,
     pub(super) tone: gpui_kit::Hsla,
-    pub(super) semibold_title: bool,
+    pub(super) marker_outlined: bool,
     pub(super) role: gpui_kit::Role,
     pub(super) status_label: &'static str,
 }
 
-/// Desktop severity mapping for status rows: errors announce as alerts in
-/// the danger tone, warnings keep their own warning tone and status role,
-/// info stays quiet muted text. Typography is identical across levels —
-/// icon + tone carry severity, so weight is never the differentiator.
+/// Desktop severity mapping for status rows: errors announce as alerts with a
+/// solid danger marker, warnings keep their warning tone with an outlined
+/// marker, info stays quiet muted text. The two marker shapes mean severity is
+/// never carried by hue alone when a diagnostic title does not name it.
 pub(super) fn severity_marker_style(
     severity: NoticeSeverity,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> SeverityMarkerStyle {
     match severity {
         NoticeSeverity::Error => SeverityMarkerStyle {
-            icon: IconName::CircleAlert,
             tone: colors.danger,
-            semibold_title: true,
+            marker_outlined: false,
             role: gpui_kit::Role::Alert,
             status_label: "error",
         },
         NoticeSeverity::Warning => SeverityMarkerStyle {
-            icon: IconName::TriangleAlert,
             tone: colors.warning,
-            semibold_title: true,
+            marker_outlined: true,
             role: gpui_kit::Role::Status,
             status_label: "warning",
         },
         NoticeSeverity::Info => SeverityMarkerStyle {
-            icon: IconName::Info,
             tone: themes::muted_text(colors),
-            semibold_title: true,
+            marker_outlined: false,
             role: gpui_kit::Role::Status,
             status_label: "info",
         },
@@ -739,7 +737,13 @@ pub(super) fn severity_marker_style(
 /// the notice spine. Always rendered, even when empty, so optional
 /// content (the running spinner) never shifts the title.
 pub(super) fn transcript_icon_slot(child: impl IntoElement) -> gpui_kit::Div {
-    div().size_4().flex_none().flex().items_center().justify_center().child(child)
+    div()
+        .size(themes::layout::ICON_SLOT)
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(child)
 }
 
 /// Fixed trailing lane for transcript disclosure chevrons: the same slot

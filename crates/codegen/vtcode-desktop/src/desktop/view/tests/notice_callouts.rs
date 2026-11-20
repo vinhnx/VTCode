@@ -145,6 +145,52 @@ fn long_single_line_notice_offers_a_cta_with_a_truncated_lead(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
+fn notice_title_shares_the_transcript_title_spine(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "spine-tool".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "completed".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "spine-answer".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Sharing the spine.".into(),
+            ));
+            view.transcript.push(TranscriptItem::notice(
+                "spine-notice".into(),
+                "run status".into(),
+                "turn blocked".into(),
+                NoticeSeverity::Warning,
+            ));
+        });
+        window.render_frame(cx);
+
+        let tool_title = window.find("tool-title-spine-tool").bounds();
+        let answer_body = window.find("message-body-spine-answer").bounds();
+        let notice_title = window.find("notice-title-spine-notice").bounds();
+        assert!(
+            (notice_title.origin.x - tool_title.origin.x).abs() <= px(1.),
+            "notice title shares the tool title spine: notice={notice_title:?} tool={tool_title:?}"
+        );
+        assert!(
+            (notice_title.origin.x - answer_body.origin.x).abs() <= px(1.),
+            "notice title shares the assistant prose spine: notice={notice_title:?} answer={answer_body:?}"
+        );
+        let notice_body = window.find("notice-text-spine-notice").bounds();
+        assert!(
+            (notice_body.origin.x - notice_title.origin.x).abs() <= px(1.),
+            "notice body starts on its own title spine: body={notice_body:?} title={notice_title:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn notice_stack_cta_reveals_folded_announcements(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

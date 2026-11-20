@@ -50,7 +50,7 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .min_w_0()
-                .gap_1()
+                .gap(themes::layout::gap::COMPACT)
                 .child(
                     desktop_ghost_button(format!("tool-{}", item.id))
                         .accessibility_label(details_label())
@@ -93,7 +93,12 @@ impl DesktopView {
                 .child(div().text_color(themes::muted_text(&colors)).child(suffix))
                 .child(div().flex_1())
                 .when(state != ActivityState::Completed, |row| {
-                    row.child(div().text_sm().text_color(themes::muted_text(&colors)).child(status.clone()))
+                    row.child(
+                        div()
+                            .text_size(themes::layout::typography::ROW)
+                            .text_color(themes::muted_text(&colors))
+                            .child(status.clone()),
+                    )
                 })
                 .child(
                     desktop_ghost_button(format!("tool-chevron-{item_id}"))
@@ -134,7 +139,7 @@ impl DesktopView {
                     div()
                         .flex()
                         .items_center()
-                        .gap_2()
+                        .gap(themes::layout::gap::TITLE)
                         .min_w_0()
                         .w_full()
                         .child(transcript_icon_slot(Self::render_transcript_tool_indicator(
@@ -162,7 +167,7 @@ impl DesktopView {
                                     // pushing the title and chevron out of the row.
                                     .max_w(px(320.))
                                     .truncate()
-                                    .text_sm()
+                                    .text_size(themes::layout::typography::ROW)
                                     .text_color(themes::muted_text(&colors))
                                     .child(status.to_string()),
                             )
@@ -183,7 +188,7 @@ impl DesktopView {
             .max_w(px(self.content_width()))
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(themes::layout::gap::COMPACT)
             .child(header);
         // Grouped rows nest under their shared header; single tool rows stay flush.
         panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
@@ -205,7 +210,7 @@ impl DesktopView {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .gap_1()
+                    .gap(themes::layout::gap::COMPACT)
                     .when_some(item.command.as_ref(), |panel, command| {
                         panel.child(self.render_tool_command(item, command, cx))
                     })
@@ -213,7 +218,7 @@ impl DesktopView {
                         div()
                             .flex()
                             .justify_end()
-                            .gap_1()
+                            .gap(themes::layout::gap::COMPACT)
                             .child(
                                 desktop_ghost_button(format!("copy-tool-output-{}", item.id))
                                     .icon(IconName::Copy)

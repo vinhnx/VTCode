@@ -21,6 +21,7 @@ mod custom;
 mod fills;
 pub(super) use fills::{accented_button_shadows, button_inset_edges};
 mod hairline;
+pub(super) mod layout;
 pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
     validate as validate_custom_theme,
@@ -505,27 +506,6 @@ pub(super) fn readable_indicator_color(background: Hsla, foreground: Hsla, color
     adjust_color_until_readable(background, foreground, color, |candidate| {
         contrast_ratio(candidate, background) >= AA_RATIO
     })
-}
-
-/// Tone-tinted pill surface for transcript severity chips: a light wash of
-/// the severity tone over the quiet card fill plus a slightly stronger
-/// border share, so the pill reads as a filled badge without raw hex.
-/// Returns `(surface, border)` for kit `Tag::custom`; pair the title with
-/// [`readable_indicator_color`] so tone text keeps AA against the wash.
-pub(super) fn tone_chip_surface(tone: Hsla, colors: &ThemeColor) -> (Hsla, Hsla) {
-    const WASH: f32 = 0.14;
-    const BORDER: f32 = 0.32;
-    (mix(colors.secondary, tone, WASH), mix(colors.secondary, tone, BORDER))
-}
-
-/// Surface for a full-width severity announcement (notice callout): a quieter
-/// wash than [`tone_chip_surface`] because the card is much larger, plus a
-/// softened edge so the boundary reads as a hairline rather than a badge.
-/// Returns `(surface, border)`, both derived from theme tokens only.
-pub(super) fn tone_callout_surface(tone: Hsla, colors: &ThemeColor) -> (Hsla, Hsla) {
-    const WASH: f32 = 0.08;
-    const BORDER: f32 = 0.24;
-    (mix(colors.secondary, tone, WASH), mix(colors.secondary, tone, BORDER))
 }
 
 /// Minimum contrast between chart data colors (and against the canvas).

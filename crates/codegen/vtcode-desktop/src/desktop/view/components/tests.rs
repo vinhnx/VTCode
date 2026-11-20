@@ -118,19 +118,16 @@ fn severity_marker_style_maps_each_level_to_its_own_tone() {
     let warning = severity_marker_style(NoticeSeverity::Warning, &colors);
     let info = severity_marker_style(NoticeSeverity::Info, &colors);
 
-    assert!(matches!(error.icon, IconName::CircleAlert), "errors keep the alert icon");
-    assert!(matches!(warning.icon, IconName::TriangleAlert), "warnings keep the triangle icon");
-    assert!(matches!(info.icon, IconName::Info), "info keeps the info icon");
     assert_eq!(error.tone, colors.danger, "errors read the danger token");
     assert_eq!(warning.tone, colors.warning, "warnings keep their own tone, not danger");
+    assert!(
+        warning.marker_outlined && !error.marker_outlined && !info.marker_outlined,
+        "warnings are outlined so severity is not carried by hue alone"
+    );
     assert_eq!(info.tone, themes::muted_text(&colors), "info delegates to the muted text derivation");
     assert!(
         themes::contrast_ratio(info.tone, colors.popover) >= 4.5,
         "info tone holds AA against its surface, unlike a raw token pick"
-    );
-    assert!(
-        error.semibold_title && warning.semibold_title && info.semibold_title,
-        "all severities share one callout typography; icon + tone carry severity"
     );
     assert_eq!(error.role, gpui_kit::Role::Alert, "errors announce as alerts");
     assert_eq!(warning.role, gpui_kit::Role::Status, "warnings announce as status");

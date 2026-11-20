@@ -67,7 +67,7 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .justify_start()
-                    .gap_2()
+                    .gap(themes::layout::gap::TITLE)
                     .child(
                         div()
                             .id(format!("activity-group-label-{}", head.id))
@@ -125,7 +125,7 @@ impl DesktopView {
             .w_full()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(themes::layout::gap::TITLE)
             .child(leading)
             .child(toggle)
             .into_any_element()

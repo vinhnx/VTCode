@@ -1,10 +1,15 @@
 //! Severity announcements: one shared callout for runtime errors,
 //! compaction/reset notices, run status, and ThreadEvent diagnostic notices.
 //!
-//! Every severity uses the same card geometry, typography, icon slot, and CTA
-//! placement; only the tone-resolved color and icon differ. The body always
-//! sits on its own row below a constant-height title row; a Show/Hide details
-//! CTA appears only when the body holds more than the visible lead, so short
+//! Every severity is one transcript row with the same lane geometry as tool
+//! and activity rows: the shared icon slot, title gap, small semibold title,
+//! and trailing ghost CTA. There is no card chrome — no surface, border, or icon.
+//! A short tone marker sits in the leading slot (the lane the focus rail never
+//! touches), so the notice blends into the transcript flow yet reads as a
+//! system row rather than a message. Severity comes from the marker, the title
+//! text, and the accessibility role, never from color alone. The body sits on
+//! its own row below a constant-height title row; a Show/Hide details CTA
+//! appears only when the body holds more than the visible lead, so short
 //! notices never offer a redundant expanded state. Consecutive ephemeral
 //! notices fold into one callout whose count CTA reveals the rest.
 
@@ -45,50 +50,46 @@ fn notice_has_hidden_details(text: &str) -> bool {
 }
 
 /// Shared callout shell, used by both the head notice and each folded entry.
-/// Keeps the surface, border, padding, icon tile, and title spine identical
-/// across severities so the three levels read as one announcement family.
+/// Keeps the marker, lane geometry, and title spine identical across severities
+/// so the three levels read as one announcement family. No surface or border:
+/// the notice inherits the transcript background and stays legible by tone and
+/// typography alone.
 struct CalloutChrome {
-    surface: gpui_kit::Hsla,
-    border: gpui_kit::Hsla,
-    icon_surface: gpui_kit::Hsla,
-    title_color: gpui_kit::Hsla,
+    accent: gpui_kit::Hsla,
+    marker_outlined: bool,
     body_color: gpui_kit::Hsla,
-    icon: IconName,
 }
 
 fn callout_chrome(severity: NoticeSeverity, colors: &gpui_kit::component::theme::ThemeColor) -> CalloutChrome {
     let style = severity_marker_style(severity, colors);
-    let (surface, border) = themes::tone_callout_surface(style.tone, colors);
-    let (icon_surface, _) = themes::tone_chip_surface(style.tone, colors);
     CalloutChrome {
-        surface,
-        border,
-        icon_surface,
-        title_color: themes::readable_indicator_color(surface, colors.foreground, style.tone),
+        // Contrast resolves against the transcript's own background, not a
+        // tinted card. One readable tone drives the marker, title, and CTA.
+        accent: themes::readable_indicator_color(colors.background, colors.foreground, style.tone),
+        // Solid vs outlined keeps error and warning distinct without an icon,
+        // so a diagnostic whose title omits the severity is not color-only.
+        marker_outlined: style.marker_outlined,
         body_color: themes::muted_text(colors),
-        icon: style.icon,
     }
 }
 
-fn callout_icon_tile(chrome: &CalloutChrome) -> gpui_kit::Div {
-    // The 16px slot is `transcript_icon_slot`'s geometry, so a callout title
-    // lands on the same 32px spine as tool, group, and assistant rows.
-    transcript_icon_slot(
-        div()
-            .size_4()
-            .rounded_md()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(chrome.icon_surface)
-            .child(Icon::new(chrome.icon).small().text_color(chrome.title_color)),
-    )
+/// Tone marker centered in the 16px leading slot. Tool rows place their kind
+/// icon here; notices use a solid or outlined pill so the row shares that lane
+/// without borrowing an icon. Staying inside the slot keeps the focus rail at
+/// the row's leading edge clear and the title spine unchanged.
+fn callout_marker(chrome: &CalloutChrome) -> gpui_kit::Div {
+    let marker = div().w_1_5().h_4().rounded_full();
+    if chrome.marker_outlined {
+        marker.border_1().border_color(chrome.accent)
+    } else {
+        marker.bg(chrome.accent)
+    }
 }
 
 impl DesktopView {
     /// Severity rows for runtime errors, compaction/reset notices, run status,
     /// and collapsible diagnostic notices. The wrapper keeps test identity,
-    /// roles, and aria labels; the card is the shared announcement treatment.
+    /// roles, and aria labels; the row is the shared announcement treatment.
     pub(super) fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let chrome = callout_chrome(item.notice_severity, &colors);
@@ -110,14 +111,18 @@ impl DesktopView {
         }
 
         // Title owns the whole header row; the body lives in its own row below
-        // so the icon and trailing CTA never shift between collapsed/expanded.
+        // so the title and trailing CTA never shift between collapsed/expanded.
+        // ROW_INSET + ICON_SLOT + TITLE_GAP is the shared title spine, the same
+        // one tool rows and assistant prose use.
         let heading = div()
+            .id(format!("notice-title-{}", item.id))
+            .test_support()
             .min_w_0()
             .flex_1()
             .truncate()
-            .text_sm()
+            .text_size(themes::layout::typography::ROW)
             .font_semibold()
-            .text_color(chrome.title_color)
+            .text_color(chrome.accent)
             .child(title.clone());
 
         let mut header = div()
@@ -126,8 +131,8 @@ impl DesktopView {
             .w_full()
             .flex()
             .items_center()
-            .gap_2()
-            .child(callout_icon_tile(&chrome))
+            .gap(themes::layout::gap::TITLE)
+            .child(transcript_icon_slot(callout_marker(&chrome)))
             .child(heading);
 
         if has_stack {
@@ -156,7 +161,7 @@ impl DesktopView {
                     )
                     .small()
                     .flex_shrink_0()
-                    .text_color(chrome.title_color)
+                    .text_color(chrome.accent)
                     .child(label)
                     .child(transcript_chevron_lane(item.notice_stack_expanded))
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -186,13 +191,13 @@ impl DesktopView {
                     )
                     .small()
                     .flex_shrink_0()
-                    .text_color(chrome.title_color)
+                    .text_color(chrome.accent)
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap_1()
-                            .text_xs()
+                            .gap(themes::layout::gap::COMPACT)
+                            .text_size(themes::layout::typography::ACTION)
                             .child(toggle)
                             .child(transcript_chevron_lane(item.expanded)),
                     )
@@ -210,19 +215,15 @@ impl DesktopView {
             .aria_label(aria)
             .w_full()
             .max_w(px(self.content_width()))
-            .rounded_md()
-            .border_1()
-            .border_color(chrome.border)
-            .bg(chrome.surface)
-            // Leading inset + icon slot + gap reproduce the 32px transcript
-            // title spine; no right padding so the trailing CTA docks on the
-            // same edge as group and tool disclosure rows.
-            .py_3()
-            .pl_2()
+            // No surface or border: the notice sits in the transcript flow as
+            // one more row. ROW_INSET matches the small-button inset that tool
+            // and activity headers carry; the row wrapper owns vertical rhythm.
+            // No right padding so the CTA docks on the shared disclosure edge.
+            .pl(themes::layout::padding::ROW_INSET)
             .pr_0()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap(themes::layout::gap::COMPACT)
             .child(header);
 
         if has_body {
@@ -259,11 +260,13 @@ impl DesktopView {
         chrome: &CalloutChrome,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        // BODY_INSET completes ROW_INSET + ICON_SLOT + TITLE_GAP, so the body
+        // starts on the shared title spine and expanding never re-indents it.
         let mut body = div()
             .id(format!("notice-details-body-{id}"))
             .test_support()
-            .pl_6()
-            .text_sm()
+            .pl(themes::layout::padding::BODY_INSET)
+            .text_size(themes::layout::typography::ROW)
             .text_color(chrome.body_color);
         if markdown && show_full_body {
             body = body.child(render_markdown_with_style(
@@ -307,40 +310,42 @@ impl DesktopView {
             })
             .aria_label(format!("{}: {}", title, entry.text))
             .w_full()
-            .rounded_md()
-            .border_1()
-            .border_color(entry_chrome.border)
-            .bg(entry_chrome.surface)
-            .py_2()
-            .px_2()
+            .pl(themes::layout::padding::ROW_INSET)
+            .pr_0()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap(themes::layout::gap::COMPACT)
             .child(
                 div()
                     .w_full()
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .child(callout_icon_tile(&entry_chrome))
+                    .gap(themes::layout::gap::TITLE)
+                    .child(transcript_icon_slot(callout_marker(&entry_chrome)))
                     .child(
                         div()
+                            .id(format!("notice-stack-title-{}", entry.id))
+                            .test_support()
                             .min_w_0()
                             .flex_1()
-                            .text_sm()
+                            .text_size(themes::layout::typography::ROW)
                             .font_semibold()
-                            .text_color(entry_chrome.title_color)
+                            .text_color(entry_chrome.accent)
                             .child(title),
                     ),
             );
         if has_body {
             body = body.child(
-                div().pl_6().text_sm().text_color(entry_chrome.body_color).child(
-                    div()
-                        .id(format!("notice-text-{}", entry.id))
-                        .test_support()
-                        .child(capitalize_first(entry.text.as_str())),
-                ),
+                div()
+                    .pl(themes::layout::padding::BODY_INSET)
+                    .text_size(themes::layout::typography::ROW)
+                    .text_color(entry_chrome.body_color)
+                    .child(
+                        div()
+                            .id(format!("notice-text-{}", entry.id))
+                            .test_support()
+                            .child(capitalize_first(entry.text.as_str())),
+                    ),
             );
         }
         body.into_any_element()

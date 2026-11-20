@@ -615,8 +615,8 @@ fn transcript_header_rows_share_one_trailing_edge(cx: &mut TestAppContext) {
         let notice = window.find("notice-header-notice").bounds();
         let group = window.find("activity-group-read").bounds();
         let single = window.find("tool-retry").bounds();
-        // The callout's 1px hairline border sits inside its content box, so
-        // its header docks one physical pixel before the flat rows' edge.
+        // The notice is now a flat row with no card edge, so its header docks
+        // on the same trailing edge as the disclosure rows.
         assert!(
             (notice.right() - group.right()).abs() <= px(1.),
             "notice and group share the trailing edge: notice={notice:?} group={group:?}"
