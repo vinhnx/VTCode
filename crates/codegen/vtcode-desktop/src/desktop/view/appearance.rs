@@ -553,18 +553,34 @@ impl DesktopView {
                         .children(preferences::ReducedMotionPreference::ALL.map(|preference| {
                             let label = preference.label();
                             let selected = preference == current;
-                            Tab::new().label(label.clone()).aria_label(
-                                rust_i18n::t!(
-                                    "app.appearance.motion_aria",
-                                    label = label.as_str(),
-                                    suffix = if selected {
-                                        rust_i18n::t!("app.appearance.selected_suffix").to_string()
-                                    } else {
-                                        String::new()
-                                    }
+                            let tooltip = match preference {
+                                preferences::ReducedMotionPreference::System => {
+                                    rust_i18n::t!("app.appearance.reread_system").to_string()
+                                }
+                                preferences::ReducedMotionPreference::On => {
+                                    rust_i18n::t!("app.appearance.reduce_animations").to_string()
+                                }
+                                preferences::ReducedMotionPreference::Off => {
+                                    rust_i18n::t!("app.appearance.allow_animations").to_string()
+                                }
+                            };
+                            Tab::new()
+                                .label(label.clone())
+                                .aria_label(
+                                    rust_i18n::t!(
+                                        "app.appearance.motion_aria",
+                                        label = label.as_str(),
+                                        suffix = if selected {
+                                            rust_i18n::t!("app.appearance.selected_suffix").to_string()
+                                        } else {
+                                            String::new()
+                                        }
+                                    )
+                                    .to_string(),
                                 )
-                                .to_string(),
-                            )
+                                .tooltip(move |window, cx| {
+                                    gpui_kit::component::tooltip::Tooltip::new(tooltip.clone()).build(window, cx)
+                                })
                         })),
                 ),
                 &colors,
