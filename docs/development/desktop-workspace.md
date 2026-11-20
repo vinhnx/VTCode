@@ -157,6 +157,10 @@ The app owns one selected workspace, one local service process, and at most one 
 wait for active work to cancel and its runloop to clean up. Closing the app or disconnecting the protocol also cancels
 owned work and pending interactions.
 
+At launch, the window paints a launch screen while the service transport starts and the handshake has not completed:
+the monochrome V brand mark over a shimmer status line, held at least 400ms so a fast handshake never flashes the
+placeholder away. With no service starting or on launch failure, the normal surfaces return.
+
 Session history is discovered from VT Code's existing durable stores. The recent-thread sidebar virtualizes its bounded
 session list and retains a themed scrollbar as history grows. The sidebar and Activity tab reuse their fixed-row geometry
 until row count or height changes; row content still renders only in the visible range. Selecting a previous session
@@ -320,8 +324,7 @@ plugin; this does not grant new access or install anything. Commands reuse the e
 inspector, file-refresh, and CLI slash-command actions. Typing `@` or a leading `/` also opens inline completion
 without moving focus from the composer; file selection inserts a workspace-relative `@path`, while slash-command
 selection follows the CLI's Tab-complete and Enter-run behavior. No prompt is submitted automatically by the Add
-popup. File selection reuses workspace
-containment, UTF-8, 64 KiB, and five-file limits. Images in the
+popup. File selection reuses workspace containment, UTF-8, 64 KiB, and five-file limits. Images in the
 provider-supported set (png, jpeg, webp, gif) attach by path instead of inline text: composer chips show a
 cached thumbnail, the image viewer renders the picture itself (read bound 16 MiB), and drag-out carries them
 to other apps. Binary formats no vision provider accepts (bmp, tiff) reject with a clear notice instead of
@@ -358,8 +361,7 @@ next session, and stale updates from another session are ignored.
 The status bar starts hidden. Settings → **Accessibility → Show status bar**, the header menu, or
 ⌘⇧S toggles it and saves the choice. The header keeps one overflow control for thread/window actions.
 The former duplicate thread ellipsis is removed. Settings → **Connections** opens the connection controls and
-refreshes live status on selection.
-Pair a browser origin there or run
+refreshes live status on selection. Pair a browser origin there or run
 `/webmcp connect <origin>` in the desktop composer. The CLI TUI supports the same command; `/webmcp pair` remains
 an alias.
 
@@ -396,8 +398,7 @@ The header uses Kit’s `TitleBar` over a transparent macOS title bar, with the 
 reserved at the left. Kit owns window dragging and delegates double clicks to the system title-bar behavior.
 The header and navigation rail share a subtle theme-derived surface; each track pins at most three
 icons and funnels the rest into its own `...` overflow (Zen stays pinned), exposing thread,
-navigation, inspector, search, terminal, utilities, and Settings actions while unavailable actions
-stay disabled.
+navigation, inspector, search, terminal, utilities, and Settings actions while unavailable actions stay disabled.
 Menus preserve the draft and retain Kit keyboard navigation and dismissal. Toolbar, sidebar, and status bar persist
 while the settings, browser, or review panel owns the content slot. The panel Back/Forward history sits in front of
 session history: toolbar Back pops panel layers before walking threads, Forward reopens a backed-out panel, and each
@@ -560,10 +561,12 @@ Catppuccin, Nord, Vitesse, Tomorrow, and the rest of the registry — is selecta
 System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/color_guidelines.md)
 for the registry list and the desktop↔CLI sync rules. A theme sets background,
 foreground, accent, danger, and warning; border, muted text, and panel colors are derived from the palette.
-Muted text is binary-searched to the WCAG AA 4.5:1 threshold and filled controls pick white/black text at the
-equal-contrast crossover; both are enforced by tests. The choice persists in preferences.
-Palette changes use the kit's theme update path so Component and Base tokens stay synchronized. Tabs, focus rings,
-primary controls, and the text caret inherit VT Code's accent; primary hover and pressed states retain readable text.
+Muted text is binary-searched to the WCAG AA 4.5:1 threshold and filled controls pick softened label ink (`#171C26`
+dark, `#CCCCCC` light) at the equal-contrast crossover; the destructive fill sits dark enough (`#9B2C2C`) for the
+light label to hold the floor — both enforced by tests. The choice persists in preferences.
+Palette changes use the kit's theme update path so Component and Base tokens stay synchronized. Tabs, primary
+controls, and the text caret inherit VT Code's accent; no focus-ring border highlight paints anywhere (the ring
+token stays transparent), so keyboard focus reads through the caret instead; hover and pressed states stay readable.
 
 Toolbar and command-palette mode switches share the theme-picker application
 path and persist the selected System Light/Dark theme. They preserve typography
@@ -767,8 +770,7 @@ Turning the option off keeps the active profile's typography as the shared setti
 When no UI size is set, VT Code follows the macOS accessibility text setting
 (System Settings → Accessibility → Display → Text): the base scales with the
 system preference (clamped to the supported bounds) and re-applies at launch
-and whenever typography settings change. Choosing a size in Appearance pins
-that override.
+and whenever typography settings change. Choosing a size in Appearance pins that override.
 
 Existing preference files retain defaults for missing typography fields. Saved
 sizes survive theme selection and are clamped to the supported bounds when loaded.
@@ -801,8 +803,7 @@ each with fixed-width previews, a scrollbar, and trackpad/mouse-wheel support;
 one shared Previous/Next pair pages both rows for keyboard or pointer paging.
 Their scrolling does not move the settings below them.
 Separate theme profiles retain independent themes, font families, and sizes for
-light and dark modes. Custom colors and native font-smoothing overrides
-are not implemented in this increment.
+light and dark modes. Custom colors and native font-smoothing overrides are not implemented in this increment.
 
 ### Component composition and visual hierarchy
 

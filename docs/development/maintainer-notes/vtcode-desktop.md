@@ -33,7 +33,7 @@ Use the shared builders in `view/components.rs` for push buttons.
 | --- | --- | --- |
 | Primary | `desktop_primary_button` | Main action in a decision area, such as Save, Send, Import from CLI, or Check for updates. Uses the opaque theme accent at rest. |
 | Secondary | `desktop_secondary_button` | Ordinary visible action or a companion to Primary or Danger, such as View release notes, Browse, Cancel, or Retry. |
-| Danger | `desktop_danger_button` | Destructive commitment or explicit risk acceptance, such as reset, deletion, or Full access. Uses Ciapre red (`#A63333`). Keep the owning confirmation flow. |
+| Danger | `desktop_danger_button` | Destructive commitment or explicit risk acceptance, such as reset, deletion, or Full access. Uses the fixed deepened Ciapre red (`#9B2C2C`, dark enough for the `#CCCCCC` label to hold AA). Keep the owning confirmation flow. |
 | Ghost | `desktop_ghost_button` | Quiet toolbar, inline, and navigation actions, such as transcript copy, expand, and tab close. Use `desktop_dismiss_button` for an X with a shared accessible name and tooltip. |
 
 - Use semibold for Primary and Danger labels, medium for Secondary, and regular weight for quiet Ghost actions.
@@ -41,6 +41,7 @@ Use the shared builders in `view/components.rs` for push buttons.
 - Apply `desktop_disabled` to push buttons to set the disabled cursor and clear instance shadows. Kit supplies hover, press, disabled, and focus paint.
 - Use `desktop_ghost_button` with `desktop_selected` for persistent choices with selected-state paint. Keep Kit tabs, toggles, switches, and native dialogs in their own components.
 - Primary and Danger share a soft neutral shadow and subtle inset edges. Preserve each surface’s button size, accessible name, tooltip, focus behavior, and action wiring when changing roles.
+- Filled labels come from `themes::filled_button_foreground`: softened ink (`#171C26` dark / `#CCCCCC` light) at the luminance crossover, with a dead-band rescue toward the pure pole when a seed falls between the two AA floors. State ramps blend toward `filled_state_pole(label)` — `mix()` moves lightness only, so deriving the pole through the label derivation collapses hover onto rest (pinned by `primary_state_ramps_*`). Default/secondary fills seat one step above the panel surface (`apply_filled_surfaces`) so quiet buttons keep a visible body on settings pages, and the hover plus Secondary press derive from that same seat (`apply_unified_hover_surface`); the canvas hover/press steps would otherwise sit beneath the lifted fill. The ring token stays transparent (no focus-ring borders) and the caret carries keyboard focus.
 
 ## Typography & accessibility
 
