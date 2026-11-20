@@ -885,13 +885,18 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
     // but has no builtin registration, so it is never eager in practice.) Session
     // data showed deferred structured search is worse for cost than the extra
     // schema tokens — models shell out via `rg`/`git` and feed huge outputs
-    // into the prompt.
+    // into the prompt. `computer_use` is eager for the same reason, and for
+    // correctness: the validation redirect guard steers shell screenshots
+    // to it, which is only actionable when the tool is on the wire. A
+    // deferred `computer_use` plus an eager `exec_command` structurally
+    // biases every screenshot decision toward shelling around.
     match entry.public_name.as_str() {
         tools::EXEC_COMMAND
         | tools::WRITE_STDIN
         | tools::SEARCH_TOOLS
         | tools::CODE_SEARCH
         | tools::GREP_FILE
+        | tools::COMPUTER_USE
         | tools::MATRIX
         // Workflow-coordination control-plane tools stay directly callable in
         // every mode: full-auto lists them in `allowed_tools` (they bypass

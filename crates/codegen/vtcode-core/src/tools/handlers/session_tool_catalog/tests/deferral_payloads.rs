@@ -210,6 +210,10 @@ fn lean_defaults_defer_planner_and_skills_tools_outside_planning() {
         tools::APPLY_PATCH,
         tools::CODE_SEARCH,
         tools::GREP_FILE,
+        // `computer_use` stays eager so the validation redirect guard's
+        // steering target is always callable: a deferred computer_use
+        // plus an eager exec_command biases every screenshot toward shell.
+        tools::COMPUTER_USE,
         // Workflow-coordination control-plane tools stay directly callable in
         // every mode: full-auto references them in `allowed_tools` and OpenAI
         // rejects deferred references with 400 "not found in 'tools'".
@@ -278,6 +282,57 @@ fn lean_defaults_defer_planner_and_skills_tools_outside_planning() {
             "{name} must stay eager while planning is active"
         );
     }
+}
+
+/// Wire-level regression for the 2026-11-19 session where the model
+/// truthfully reported computer_use as unavailable: under client-local
+/// deferral (ChatGPT backend has no hosted tool search, MCP tools force
+/// engagement), deferred definitions are OMITTED from the wire payload.
+/// `computer_use` must stay on the wire so the validation redirect
+/// guard's steering target is callable; a deferrable control must not.
+#[test]
+fn computer_use_stays_on_wire_under_client_local_mcp_deferral() {
+    let registrations = [tools::EXEC_COMMAND, tools::COMPUTER_USE, tools::AGENT]
+        .into_iter()
+        .map(|name| {
+            registration(name)
+                .with_description("tool")
+                .with_parameter_schema(empty_object_schema())
+        })
+        .chain(std::iter::once(
+            registration("mcp::context7::search")
+                .with_catalog_source(ToolCatalogSource::Mcp)
+                .with_description("search docs")
+                .with_parameter_schema(empty_object_schema())
+                .with_aliases(["mcp__context7__search"]),
+        ))
+        .collect::<Vec<_>>();
+    let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+    let config = SessionToolsConfig::full_public(
+        SessionSurface::Interactive,
+        CapabilityLevel::CodeSearch,
+        ToolDocumentationMode::Full,
+        ToolModelCapabilities::default(),
+    )
+    .with_tool_profile(ToolProfile::AdvancedVtCode)
+    .with_deferred_tool_policy(DeferredToolPolicy::client_local(Vec::new()));
+    let definitions = catalog.model_tools(config);
+    for tool in [tools::EXEC_COMMAND, tools::COMPUTER_USE] {
+        let definition = definitions
+            .iter()
+            .find(|definition| definition.function_name() == tool)
+            .unwrap_or_else(|| panic!("missing wire definition for {tool}"));
+        assert_eq!(definition.defer_loading, None, "{tool} must stay on the wire under client-local MCP deferral");
+    }
+    let control = definitions
+        .iter()
+        .find(|definition| definition.function_name() == tools::AGENT)
+        .expect("missing wire definition for control");
+    assert_eq!(
+        control.defer_loading,
+        Some(true),
+        "deferrable control must still defer (test would pass vacuously otherwise)"
+    );
 }
 #[test]
 fn workflow_coordination_tools_stay_eager_under_hosted_deferral_outside_planning() {
