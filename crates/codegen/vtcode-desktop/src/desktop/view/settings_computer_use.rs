@@ -92,8 +92,9 @@ fn computer_use_group_title(status: Option<bool>, colors: &gpui_kit::component::
         })
 }
 
-/// User guide block: title plus the three facts a first-time user needs
-/// (where the target lives, where turns run, what the requirements are).
+/// User guide block: title plus the four facts a first-time user needs
+/// (where the target lives, where turns run, what the requirements are,
+/// which models are verified).
 /// Muted help-text styling shared with row descriptions; shown only while
 /// the snapshot is available, since the steps assume a live service.
 fn computer_use_guide(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
@@ -116,6 +117,7 @@ fn computer_use_guide(colors: &gpui_kit::component::theme::ThemeColor) -> impl I
         .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_setup").to_string(), colors))
         .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_run").to_string(), colors))
         .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_safety").to_string(), colors))
+        .child(row_description(rust_i18n::t!("app.settings.computer_use.guide_models").to_string(), colors))
 }
 
 impl DesktopView {

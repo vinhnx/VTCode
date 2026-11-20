@@ -15,7 +15,7 @@ const DEFAULT_MAX_ACTIONS_PER_TURN: usize = 50;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ComputerUseConfig {
-    /// Opt-in marker. The feature stays inert unless this is true.
+    /// Opt-in marker. Needs a verified computer-use model. The feature stays inert unless this is true.
     #[serde(default)]
     pub enabled: bool,
     /// Approved static build served to the browser target. Required before

@@ -167,3 +167,27 @@ fn extract_comma_options(value: &str) -> Vec<String> {
         .map(str::to_string)
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FIELD_DOCS;
+
+    #[test]
+    fn computer_use_enabled_doc_names_every_verified_model() {
+        // The settings note is static prose; the verified matrix is the
+        // source of truth. Pin them together so accepting a new probe
+        // (VERIFIED_MATRIX growth) fails here until the note names it.
+        let matrix = vtcode_computer_use::gate::VERIFIED_MATRIX;
+        assert!(!matrix.is_empty(), "a supported-list note needs a non-empty matrix");
+        let doc = FIELD_DOCS
+            .lookup("computer_use.enabled")
+            .expect("computer_use.enabled doc")
+            .description
+            .clone();
+        let lowered = doc.to_lowercase();
+        for target in matrix {
+            assert!(doc.contains(target.model), "settings note must name verified model {}: {doc}", target.model);
+            assert!(lowered.contains(target.provider), "settings note must name provider {}: {doc}", target.provider);
+        }
+    }
+}

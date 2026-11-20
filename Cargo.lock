@@ -12404,6 +12404,7 @@ dependencies = [
  "url",
  "vtcode-bash-runner",
  "vtcode-commons",
+ "vtcode-computer-use",
  "vtcode-config",
  "vtcode-desktop-protocol",
  "vtcode-exec-events",

@@ -54,5 +54,6 @@ vtcode-ui = { workspace = true }
 gpui-kit = { version = "=0.9.1", features = ["test-support"] }
 image = { workspace = true }
 tempfile = { workspace = true }
+vtcode-computer-use = { workspace = true }
 vtcode-config = { workspace = true }
 
