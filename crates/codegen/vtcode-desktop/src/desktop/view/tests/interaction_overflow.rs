@@ -65,3 +65,37 @@ fn long_choice_lists_scroll_inside_a_capped_panel(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn a_new_interaction_opens_the_scrolled_body_at_its_top(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let mut interaction = tool_loop_interaction(Some("grant-40"));
+    for index in 0..24 {
+        interaction.choices.push(vtcode_desktop_protocol::InteractionChoice {
+            id: format!("bulk-{index}"),
+            label: format!("Bulk choice {index}"),
+            description: None,
+            recommended: false,
+        });
+    }
+    deliver(&view, interaction, cx);
+    // Simulate the reader having scrolled the long list before responding.
+    view.update(cx, |view, _| {
+        view.interaction_scroll.set_offset(point(px(0.), px(240.)));
+        assert_eq!(view.interaction_scroll.offset().y, px(240.));
+    });
+    // A follow-up prompt renders fresh content: the stale offset must not
+    // carry into it. The follow-up needs its own interaction id — the
+    // delivery handler dedupes repeats of the same prompt.
+    let mut follow_up = tool_loop_interaction(Some("grant-41"));
+    follow_up.interaction_id = "tool-loop-follow-up".into();
+    deliver(&view, follow_up, cx);
+    view.update(cx, |view, _| {
+        assert_eq!(view.interaction_scroll.offset().y, px(0.), "a new interaction opens its body at the top");
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("runtime-interaction").is_some());
+    })
+    .unwrap();
+}

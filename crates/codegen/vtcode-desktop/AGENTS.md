@@ -28,7 +28,7 @@
 ## Gotchas
 
 - Icons outside Kit's default bundle must join `ExtraIcons`/`DESKTOP_ICONS` in `assets.rs` or they render blank with no headless failure.
-- Button labels: `themes::filled_button_foreground` (softened pair, dead-band rescue); ramp poles: `filled_state_pole` (`mix()` moves lightness only); danger fill fixed `#9B2C2C`; button fills one step above panels.
+- Composer popups mount at the composer panel, never inside a trigger pill subtree (focus traps detach); they anchor to `composer_trigger_pill` bounds via `anchored().attach` (Kit `open` is paint-free).
 - Launch splash (`view/launch_screen.rs`) gates on `launch_handshake_pending || !launch_splash_expired`; tests fake backend state without arming it.
 - `app_owns_titlebar_drag` disables all native drag (zen needs its own drag strip); headless `start_window_move` is unimplemented (guard `#[cfg(not(test))]`).
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics; `on_next_frame` never runs headless.

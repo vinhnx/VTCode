@@ -1,15 +1,23 @@
 # String conventions: typed identity over raw literals
 
-Applies to every Rust crate. This complements the localization rule: user-facing copy goes through `rust_i18n::t!`, while **identity/data strings must not be re-spelled at call sites**. A raw literal is fine only at a single producer with no two-way contract; once a spelling is written by one surface and matched by another, it needs one typed home.
+Applies to every Rust crate. This complements the localization rule: user-facing copy goes through `rust_i18n::t!`,
+while **identity/data strings must not be re-spelled at call sites**. A raw literal is fine only at a single
+producer with no two-way contract; once a spelling is written by one surface and matched by another, it needs one
+typed home.
 
 ## When to centralize
 
 Centralize a literal when it is:
-- a **closed-set discriminator** (status, role, mode, reason code) compared with `==`, `matches!`, `eq_ignore_ascii_case`, or used as a map key;
-- a **two-way contract** whose writer and parser can drift silently (wire names, deeplink verbs, config keys, tool names, keystroke names, setting paths);
+
+- a **closed-set discriminator** (status, role, mode, reason code) compared with `==`, `matches!`,
+  `eq_ignore_ascii_case`, or used as a map key;
+- a **two-way contract** whose writer and parser can drift silently (wire names, deeplink verbs, config
+  keys, tool names, keystroke names, setting paths);
 - **repeated across 2+ production files** as an identity string.
 
-Leave inline: single-use data grammars, parser alias lists owned by one function, display copy with a locale key, and unrelated identities that merely share a spelling (e.g. `TerminalPosition::id()` returning `"left"` is a settings id, not the keystroke key).
+Leave inline: single-use data grammars, parser alias lists owned by one function, display copy with a locale
+key, and unrelated identities that merely share a spelling (e.g. `TerminalPosition::id()` returning `"left"`
+is a settings id, not the keystroke key).
 
 ## Canonical homes (as of 2026-11-20)
 
@@ -32,13 +40,17 @@ Leave inline: single-use data grammars, parser alias lists owned by one function
 
 ## Rust mechanics that bite when centralizing
 
-- `match` arms need a named or associated `const`, not a `const fn` call: derive `const X: &str = E::A.as_str();` and match on `X`.
+- `match` arms need a named or associated `const`, not a `const fn` call: derive
+  `const X: &str = E::A.as_str();` and match on `X`.
 - `format!` implicit capture accepts only bare identifiers: use `format!("{}/{}", Verb::CONFIG, path)`, not `format!("{Verb::CONFIG}/{path}")`.
 - Guarded arms do not count toward exhaustiveness: keep a trailing `_ => ...`.
 - `json!({ CONST_KEY: value })` accepts const-path keys directly.
-- `#[serde(other)]` catch-all variants have **no** rename — they serialize as the variant name (`"Unknown"`, not `"unknown"`). Verify with a serialize-and-compare test.
+- `#[serde(other)]` catch-all variants have **no** rename — they serialize as the variant name
+  (`"Unknown"`, not `"unknown"`). Verify with a serialize-and-compare test.
 - A local variable named `key` does not shadow a module named `key` (different namespaces), but rename it for readability.
 
 ## Verification
 
-After touching a vocabulary: `./scripts/check-dev.sh`, focused `cargo nextest run` for the owning crate, and `python3 scripts/check_file_length.py --mode enforce`. Extract a const group into its own module file if `lib.rs` approaches 1000 lines.
+After touching a vocabulary: `./scripts/check-dev.sh`, focused `cargo nextest run` for the owning crate, and
+`python3 scripts/check_file_length.py --mode enforce`. Extract a const group into its own module file if `lib.rs`
+approaches 1000 lines.

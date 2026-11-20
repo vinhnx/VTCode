@@ -316,8 +316,8 @@ to host this highlighter; borderless with the UI font, it grows up to six lines 
 switch: the **VT Code** choice shows the workspace hierarchy with a fuzzy filter field (file-only ranked hits
 with a shown/total count), and clicking a file row toggles its attachment, showing an attached check; **This
 computer** hands off to the native file picker. The segmented switch is a focus stop — Left/Right or Home/End
-change source; Enter attaches the keyboard-selected row; Escape closes the picker and restores composer focus. **Add files and more @**
-(⌘⇧A) opens a filtered Kit Command popup above the composer. It includes the bounded
+change source; Enter attaches the keyboard-selected row; Escape closes the picker and restores composer focus.
+**Add files and more @** (⌘⇧A) opens a filtered Kit Command popup above the composer. It includes the bounded
 workspace file list, the existing native file picker, CLI skills, installed Agent Plugins, and native commands.
 Skills insert their explicit `$skill-name` mention. Plugins insert a plain-language request to use the installed
 plugin; this does not grant new access or install anything. Commands reuse the existing model, workspace,

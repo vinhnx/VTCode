@@ -21,13 +21,11 @@ fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowl
         assert_eq!(window.find("composer-effort").label(), Some("Reasoning effort: Medium"));
         assert_eq!(window.find("composer-model-speed").label(), Some("Processing speed: Ultrafast"));
         let button_bounds = window.find("pick-model").bounds();
-        for id in ["composer-model-speed"] {
-            let bounds = window.find(id).bounds();
-            assert!(
-                bounds.left() >= button_bounds.left() && bounds.right() <= button_bounds.right(),
-                "{id} must remain visible in a narrow composer"
-            );
-        }
+        let bounds = window.find("composer-model-speed").bounds();
+        assert!(
+            bounds.left() >= button_bounds.left() && bounds.right() <= button_bounds.right(),
+            "the speed suffix must remain visible in a narrow composer"
+        );
         window.click("composer-effort", cx);
         window.render_frame(cx);
         assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));

@@ -622,7 +622,7 @@ impl DesktopView {
         div()
             .min_w_0()
             .on_prepaint(move |bounds, _, cx| {
-                view.update(cx, |view, _| view.composer_pill_bounds.set(pill, bounds));
+                let _updated = view.update(cx, |view, _| view.composer_pill_bounds.set(pill, bounds));
             })
             .child(element)
             .into_any_element()
@@ -697,7 +697,7 @@ impl DesktopView {
     /// selection, under the same gate the combined model pill used — the
     /// panel renders its own fallback rows where the route's effort levels
     /// are missing or unsupported.
-    pub(super) fn render_effort_button(&self, cx: &Context<Self>) -> Button {
+    pub(super) fn render_effort_button(&self, _cx: &Context<Self>) -> Button {
         let effort = self
             .session_options()
             .map(|options| composer_controls::runtime_option_label(&options.reasoning_effort))

@@ -129,7 +129,7 @@ mod composer_controls;
 mod composer_highlight;
 mod composer_history;
 mod composer_render;
-use composer_render::{ComposerPill, ComposerPillBounds};
+use composer_render::ComposerPillBounds;
 mod config_editor_copy;
 mod config_search;
 mod configuration;

@@ -107,7 +107,7 @@ mod tests {
         use super::report_outcome;
         let schema = matrix_parameters();
         let values = schema["properties"]["outcome"]["enum"].as_array().expect("outcome enum");
-        let expected: Vec<serde_json::Value> = report_outcome::ALL.iter().map(|value| json!(value)).collect();
+        let expected: Vec<Value> = report_outcome::ALL.iter().map(|value| json!(value)).collect();
         assert_eq!(*values, expected);
     }
 

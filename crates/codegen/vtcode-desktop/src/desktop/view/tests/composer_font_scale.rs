@@ -47,13 +47,11 @@ fn composer_labels_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
             store.extend(base_ids.iter().map(|id| window.find(*id).bounds().size.height));
             store.push(window.find(remove_attachment.clone()).bounds().size.height);
             let button_bounds = window.find("pick-model").bounds();
-            for id in ["composer-model-speed"] {
-                let bounds = window.find(id).bounds();
-                assert!(
-                    bounds.left() >= button_bounds.left() && bounds.right() <= button_bounds.right(),
-                    "{id} must stay inside the model button at {size}px"
-                );
-            }
+            let bounds = window.find("composer-model-speed").bounds();
+            assert!(
+                bounds.left() >= button_bounds.left() && bounds.right() <= button_bounds.right(),
+                "the speed suffix must stay inside the model button at {size}px"
+            );
         })
         .unwrap();
     }

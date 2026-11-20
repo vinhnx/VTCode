@@ -540,6 +540,9 @@ impl DesktopView {
         }
         self.store_current_interaction_answer(cx);
         self.interaction_step_index = index;
+        // Each step is its own page: land at its top, not at the previous
+        // step's scroll offset.
+        self.interaction_scroll.set_offset(point(px(0.), px(0.)));
         let answer = self
             .interaction_answer_texts
             .get(index)

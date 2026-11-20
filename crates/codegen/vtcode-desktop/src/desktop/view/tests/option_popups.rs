@@ -185,7 +185,7 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
     settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
+        view.update(cx, |view, _cx| {
             view.backend = Some(BackendHandle { commands });
             view.configuration = Some(runtime_options_config());
             view.sidebar_open = false;

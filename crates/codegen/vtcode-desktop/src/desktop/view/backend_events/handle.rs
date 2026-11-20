@@ -682,6 +682,10 @@ impl DesktopView {
                 self.interaction_step_index = 0;
                 self.interaction_immediate_choice_id = None;
                 self.interaction_plan_expanded = false;
+                // A new interaction renders fresh content in the shared scroll
+                // region; a stale offset from the previous prompt would open
+                // it mid-list.
+                self.interaction_scroll.set_offset(point(px(0.), px(0.)));
                 self.pending_interaction_response = None;
                 self.interaction_edit_pending = false;
                 self.interaction = Some(interaction);
