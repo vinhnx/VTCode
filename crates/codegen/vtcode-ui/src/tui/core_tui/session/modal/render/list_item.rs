@@ -25,7 +25,7 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
     let mut current_width = 0usize;
 
     for ch in line.chars() {
-        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0).max(1);
+        let ch_width = crate::tui::core_tui::session::text_utils::char_display_width(ch).max(1);
         if current_width + ch_width > width && !current.is_empty() {
             rows.push(mem::take(&mut current));
             current_width = 0;

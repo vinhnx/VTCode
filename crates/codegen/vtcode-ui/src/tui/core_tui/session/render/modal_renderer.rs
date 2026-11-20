@@ -59,7 +59,7 @@ fn estimated_modal_instruction_rows(lines: &[String], content_width: usize) -> u
         let mut current_width = 0usize;
         let mut line_rows = 1usize;
         for word in trimmed.split_whitespace() {
-            let word_width = unicode_width::UnicodeWidthStr::width(word);
+            let word_width = text_utils::display_width(word);
             if current_width == 0 {
                 current_width = word_width;
             } else if current_width.saturating_add(1).saturating_add(word_width) > width {

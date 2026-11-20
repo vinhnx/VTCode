@@ -122,6 +122,36 @@ fn transcript_copy_drops_markdown_table_rule_rows() {
 }
 
 #[test]
+fn transcript_copy_keeps_box_drawing_diagram_rows() {
+    // Language-less code blocks and prose can hold box-drawing diagrams. The
+    // rule-drop only claims the two glyphs transcript chrome actually draws
+    // rules with (`─`/`━`); rows that mix other box glyphs are content, and
+    // a row-edge `│` stays (fenced trees and ASCII tables start with it).
+    let buf = buffer_with_rows(&["┌──┬──┐", "│  │  │", "├──┼──┤"], 20);
+
+    let mut selection = MouseSelectionState::new();
+    selection.start_selection(0, 0);
+    selection.finish_selection(8, 2);
+
+    let text = selection.extract_text(&buf, buf.area);
+    assert_eq!(text, "┌──┬──┐\n│  │  │\n├──┼──┤");
+}
+
+#[test]
+fn transcript_copy_keeps_row_edge_pipe_for_quotes_and_fenced_content() {
+    // `│ ` at the row edge is a blockquote bar or fenced content, not the
+    // tool frame; only the two-space `  │ ` form is unambiguous chrome.
+    let buf = buffer_with_rows(&["│ quoted prose", "│   pasted/tree"], 20);
+
+    let mut selection = MouseSelectionState::new();
+    selection.start_selection(0, 0);
+    selection.finish_selection(16, 1);
+
+    let text = selection.extract_text(&buf, buf.area);
+    assert_eq!(text, "│ quoted prose\n│   pasted/tree");
+}
+
+#[test]
 fn transcript_copy_keeps_a_selection_cursor_that_is_part_of_the_content() {
     // A transcript row may legitimately contain the cursor glyph; the
     // transcript surface never treats it as chrome.

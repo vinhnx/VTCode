@@ -291,7 +291,7 @@ pub(crate) fn wrap_output_line(line: &str, width: usize) -> Vec<String> {
     let mut current = String::new();
     let mut current_width: usize = 0;
     for ch in line.chars() {
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        let char_width = crate::tui::core_tui::session::text_utils::char_display_width(ch);
         if !current.is_empty() && current_width.saturating_add(char_width) > width {
             wrapped.push(std::mem::take(&mut current));
             current_width = 0;

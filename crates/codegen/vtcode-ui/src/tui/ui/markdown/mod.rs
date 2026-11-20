@@ -5,6 +5,7 @@ mod links;
 mod parsing;
 mod tables;
 
+use crate::tui::core_tui::session::text_utils::display_width;
 use crate::tui::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use code_blocks::{CodeBlockRenderEnv, CodeBlockState, finalize_unclosed_code_block, handle_code_block_event};
@@ -88,7 +89,7 @@ impl MarkdownLine {
     }
 
     fn width(&self) -> usize {
-        self.segments.iter().map(|seg| UnicodeWidthStr::width(seg.text.as_str())).sum()
+        self.segments.iter().map(|seg| display_width(seg.text.as_str())).sum()
     }
 }
 

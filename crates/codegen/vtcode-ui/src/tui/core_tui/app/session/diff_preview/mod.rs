@@ -602,7 +602,7 @@ fn build_side_pane_spans(
     // Gutter width grows with large line numbers (`{n:>3}` widens past 3
     // digits), so measure it instead of assuming 5 cells.
     let used = 1usize
-        .saturating_add(unicode_width::UnicodeWidthStr::width(line_num_str.as_str()))
+        .saturating_add(crate::tui::core_tui::session::text_utils::display_width(line_num_str.as_str()))
         .saturating_add(1);
 
     if used < width {
@@ -702,7 +702,7 @@ fn truncate_to_width(text: &str, max_width: usize) -> String {
     let mut out = String::with_capacity(text.len());
     let mut used = 0usize;
     for ch in text.chars() {
-        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+        let w = crate::tui::core_tui::session::text_utils::char_display_width_or(ch, 1);
         if used + w > max_width {
             break;
         }
@@ -726,7 +726,7 @@ fn pad_line_to_width(mut line: Line<'static>, width: usize, bg_style: Style) -> 
         .map(|span| {
             span.content
                 .chars()
-                .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1))
+                .map(|ch| crate::tui::core_tui::session::text_utils::char_display_width_or(ch, 1))
                 .sum::<usize>()
         })
         .sum();

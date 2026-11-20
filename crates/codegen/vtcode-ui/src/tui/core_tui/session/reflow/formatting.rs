@@ -141,7 +141,7 @@ impl Session {
         if trimmed.contains("```") {
             return false;
         }
-        let width = UnicodeWidthStr::width(trimmed);
+        let width = text_utils::display_width(trimmed);
         if width >= max_width || width < max_width / 2 {
             return false;
         }
@@ -184,7 +184,7 @@ impl Session {
             .map(|s| {
                 s.content
                     .chars()
-                    .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1))
+                    .map(|ch| text_utils::char_display_width_or(ch, 1))
                     .sum::<usize>()
             })
             .sum();
@@ -221,7 +221,7 @@ mod tests {
 
     fn line_width(line: &Line<'static>) -> usize {
         use unicode_width::UnicodeWidthStr;
-        line.spans.iter().map(|s| UnicodeWidthStr::width(s.content.as_ref())).sum()
+        line.spans.iter().map(|s| text_utils::display_width(s.content.as_ref())).sum()
     }
 
     fn words_of(line: &Line<'static>) -> Vec<String> {

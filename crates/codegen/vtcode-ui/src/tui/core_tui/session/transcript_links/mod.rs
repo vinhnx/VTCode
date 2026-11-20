@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use super::text_utils::display_width;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -442,8 +443,8 @@ fn decorate_transcript_line(
                 continue;
             }
 
-            let start_col = UnicodeWidthStr::width(&text[..start]);
-            let width = UnicodeWidthStr::width(&text[start..end]);
+            let start_col = display_width(&text[..start]);
+            let width = display_width(&text[start..end]);
             if width == 0 {
                 continue;
             }
@@ -667,7 +668,7 @@ fn each_projected_row_link(
         else {
             continue;
         };
-        if UnicodeWidthStr::width(&wrapped_text[relative_start..relative_end]) == 0 {
+        if display_width(&wrapped_text[relative_start..relative_end]) == 0 {
             continue;
         }
         emit(relative_start, relative_end, link_match);
@@ -777,7 +778,7 @@ pub(crate) fn decorate_detected_link_lines(
 
         let original_text = transcript_line_text(&line).into_owned();
         let matches = detect_transcript_link_matches(&original_text, workspace_root);
-        let line_width: usize = UnicodeWidthStr::width(original_text.as_str());
+        let line_width: usize = display_width(original_text.as_str());
         let wrapped_lines = if line_width <= usize::from(area.width).max(1) {
             vec![line]
         } else {
@@ -802,8 +803,8 @@ pub(crate) fn decorate_detected_link_lines(
                     &located,
                     &wrapped_text,
                     |relative_start, relative_end, link_match| {
-                        let start_col = UnicodeWidthStr::width(&wrapped_text[..relative_start]);
-                        let width = UnicodeWidthStr::width(&wrapped_text[relative_start..relative_end]);
+                        let start_col = display_width(&wrapped_text[..relative_start]);
+                        let width = display_width(&wrapped_text[relative_start..relative_end]);
 
                         let target_area = Rect::new(
                             area.x.saturating_add(start_col as u16),
@@ -862,8 +863,8 @@ pub(crate) fn project_detected_links_onto_wrapped_lines(
         if let Some(located) = locate_wrapped_row(original_text, cursor, &wrapped_text) {
             cursor = located.end;
             each_projected_row_link(&matches, &located, &wrapped_text, |relative_start, relative_end, link_match| {
-                let start_col = UnicodeWidthStr::width(&wrapped_text[..relative_start]);
-                let width = UnicodeWidthStr::width(&wrapped_text[relative_start..relative_end]);
+                let start_col = display_width(&wrapped_text[..relative_start]);
+                let width = display_width(&wrapped_text[relative_start..relative_end]);
 
                 line_links.push(RenderedTranscriptLink {
                     start: relative_start,

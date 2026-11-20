@@ -1,3 +1,4 @@
+use super::text_utils::display_width;
 use super::{Session, message::TranscriptLine};
 use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
@@ -58,7 +59,7 @@ impl Session {
         let message_style = self.styles.default_style();
 
         let prefix = "↳ ";
-        let prefix_width = UnicodeWidthStr::width(prefix);
+        let prefix_width = display_width(prefix);
         let available = max_width.saturating_sub(prefix_width);
 
         // The queue is strict FIFO (first queued = first dispatched), so the

@@ -57,10 +57,17 @@ pub(crate) fn display_width(text: &str) -> usize {
 /// Terminal display width of one character under the resolved
 /// ambiguous-width verdict, for char-by-char column mapping.
 pub(crate) fn char_display_width(ch: char) -> usize {
+    char_display_width_or(ch, 0)
+}
+
+/// Terminal display width of one character, with `fallback` for characters
+/// the width tables do not classify (control characters), matching call
+/// sites that treat unknown widths as one cell.
+pub(crate) fn char_display_width_or(ch: char, fallback: usize) -> usize {
     if vtcode_commons::terminal_capabilities::ambiguous_width_wide() {
-        UnicodeWidthChar::width_cjk(ch).unwrap_or(0)
+        UnicodeWidthChar::width_cjk(ch).unwrap_or(fallback)
     } else {
-        UnicodeWidthChar::width(ch).unwrap_or(0)
+        UnicodeWidthChar::width(ch).unwrap_or(fallback)
     }
 }
 
@@ -226,7 +233,7 @@ fn wrap_line_internal(
         spans.push(Span::styled(text.to_owned(), *style));
     }
 
-    let continuation_width = UnicodeWidthStr::width(continuation_prefix);
+    let continuation_width = display_width(continuation_prefix);
     let use_continuation_prefix =
         !continuation_prefix.is_empty() && continuation_width > 0 && continuation_width < max_width;
     // Diff rows carry a tinted bg on every span; paint the hanging-indent

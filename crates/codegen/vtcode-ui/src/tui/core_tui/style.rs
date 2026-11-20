@@ -1,3 +1,4 @@
+use crate::tui::core_tui::session::text_utils::display_width;
 use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
@@ -24,7 +25,7 @@ pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
 }
 
 pub(crate) fn measure_text_width(text: &str) -> u16 {
-    UnicodeWidthStr::width(text) as u16
+    display_width(text) as u16
 }
 
 /// Convert anstyle Color to ratatui Color.

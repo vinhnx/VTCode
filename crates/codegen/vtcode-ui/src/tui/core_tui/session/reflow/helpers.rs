@@ -174,7 +174,7 @@ fn numbered_code_gutter_prefix(text: &str) -> Option<String> {
         return None;
     }
 
-    Some(" ".repeat(UnicodeWidthStr::width(&text[..prefix_end])))
+    Some(" ".repeat(super::super::text_utils::display_width(&text[..prefix_end])))
 }
 
 /// Background of a diff content row, if it carries a tinted band.

@@ -4,6 +4,7 @@
 //and take only plain data, so they can be unit-tested and reused without a
 //live `Session`.
 
+use crate::tui::core_tui::session::text_utils::char_display_width;
 use ratatui::{
     buffer::Buffer,
     style::{Modifier, Style},
@@ -486,7 +487,7 @@ pub(super) fn display_width_for_char_range(content: &str, char_count: usize) -> 
     content
         .chars()
         .take(char_count)
-        .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0) as u16)
+        .map(|ch| char_display_width(ch) as u16)
         .fold(0_u16, u16::saturating_add)
 }
 

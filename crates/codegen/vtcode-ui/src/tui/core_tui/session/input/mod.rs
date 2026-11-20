@@ -55,6 +55,7 @@ fn paint_pre_wrapped_line(line: &Line<'static>, area: Rect, buf: &mut Buffer, ba
         x = end_x;
     }
 }
+use super::text_utils::{char_display_width, display_width};
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -271,7 +272,7 @@ impl Session {
             return 1;
         }
 
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_width = display_width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(inner_width);
         let layout = self.input_layout(inner_width, prompt_display_width);
         let line_count = layout.buffers.len().max(1);
@@ -337,7 +338,7 @@ impl Session {
             }
 
             let display_ch = if secure_prompt_active { '•' } else { ch };
-            let char_width = UnicodeWidthChar::width(display_ch).unwrap_or(0) as u16;
+            let char_width = char_display_width(display_ch) as u16;
 
             if let Some(current) = buffers.last_mut() {
                 let capacity = width.saturating_sub(current.prefix_width);
@@ -373,7 +374,7 @@ impl Session {
     }
 
     pub(super) fn visible_input_window(&self, width: u16, height: u16) -> (InputLayout, usize, usize) {
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_width = display_width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
         let layout = self.input_layout(width, prompt_display_width);
         let total_lines = layout.buffers.len();
@@ -397,7 +398,7 @@ impl Session {
         if area.width == 0 {
             return None;
         }
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_width = display_width(self.prompt_prefix.as_str()) as u16;
         let layout = self.input_layout(area.width, prompt_width.min(area.width));
         Some(InputVisualGeometry {
             total_rows: layout.buffers.len().max(1),
@@ -436,7 +437,7 @@ impl Session {
             Some(area) if area.width > 0 => area,
             _ => return false,
         };
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_width = display_width(self.prompt_prefix.as_str()) as u16;
         let layout = self.input_layout(area.width, prompt_width.min(area.width));
         let total = layout.buffers.len();
         if total == 0 {
@@ -457,7 +458,7 @@ impl Session {
             if acc >= desired {
                 break;
             }
-            acc = acc.saturating_add(UnicodeWidthChar::width(ch).unwrap_or(0) as u16);
+            acc = acc.saturating_add(char_display_width(ch) as u16);
             offset += 1;
         }
         let char_index = target.char_start.saturating_add(offset);
@@ -552,7 +553,7 @@ impl Session {
         let mut consumed_width = 0u16;
         let mut char_offset = 0usize;
         for ch in buffer.text.chars() {
-            let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0) as u16;
+            let ch_width = char_display_width(ch) as u16;
             let next_width = consumed_width.saturating_add(ch_width);
             if target_width < next_width {
                 break;

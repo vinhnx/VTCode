@@ -15,15 +15,11 @@ use crate::tui::core_tui::session::inline_list;
 /// The modal list's selection cursor.
 ///
 /// `┃` is the only glyph VT Code paints as a selection indicator, which makes
-/// it unambiguous chrome. Transcript framing `│`/`├`/`└` prefixes are chrome
-/// too and `extract_text` strips them on copy, but the transcript can still
-/// hold `┃` as literal content (PTY output), so the cursor gutter is only
-/// stripped on the overlay surface.
+/// it unambiguous chrome. Transcript framing prefixes are chrome too and
+/// `extract_text` strips them on copy, but the transcript can still hold `┃`
+/// as literal content (PTY output), so the cursor gutter is only stripped on
+/// the overlay surface.
 const LIST_SELECTION_CURSOR: &str = ui::MODAL_LIST_HIGHLIGHT_SYMBOL;
-
-/// Light tree glyphs transcript chrome is framed with (`reflow/blocks.rs`).
-/// Heavy variants (`┃`) are content or the modal cursor, never framing.
-const TRANSCRIPT_FRAME_GLYPHS: [&str; 3] = ["│", "├", "└"];
 
 const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(450);
 
@@ -651,35 +647,45 @@ pub(crate) fn clipboard_command_override() -> Option<PathBuf> {
 /// row edge and PTY command-header continuations use the exact `  │ ` prefix.
 /// PTY program output is indented four spaces, so content that starts with
 /// the same glyphs keeps them; `tree` output like `├── src` survives because
-/// the glyph is followed by `─`, not the prefix's separating space.
+/// the glyph is followed by `─`, not the prefix's separating space. A
+/// selection that starts mid-row applies the same forms to the glyphs it
+/// starts on — the overlay gutter already works this way (selecting from
+/// chrome drops chrome), and it collapses diff dividers to their content.
 fn strip_transcript_chrome(cells: Vec<(u16, &str)>) -> Option<Vec<(u16, &str)>> {
-    let is_box_drawing = |symbol: &str| {
-        let mut chars = symbol.chars();
-        match (chars.next(), chars.next()) {
-            (Some(c), None) => ('\u{2500}'..='\u{257F}').contains(&c),
-            _ => false,
-        }
-    };
     let leading_spaces = cells.iter().take_while(|(_, symbol)| *symbol == " ").count();
     let chrome_indented = leading_spaces <= 2;
 
-    // A rule row (markdown-table separator): box-drawing glyphs plus padding
-    // only, with at least one glyph.
-    let has_glyph = cells.iter().any(|(_, symbol)| is_box_drawing(symbol));
+    // A rule row (markdown-table separator, message divider): every
+    // non-padding cell is one of the two glyphs the transcript actually
+    // draws rules with (`INLINE_USER_MESSAGE_DIVIDER_SYMBOL`, table rules).
+    // Restricting to those keeps box-drawing diagrams in language-less code
+    // blocks (`┌──┬──┐`) and any other box art intact.
+    let is_rule_glyph = |symbol: &str| matches!(symbol, "─" | "━");
+    let has_glyph = cells.iter().any(|(_, symbol)| is_rule_glyph(symbol));
     if chrome_indented
         && has_glyph
         && cells
             .iter()
-            .all(|(_, symbol)| is_box_drawing(symbol) || symbol.trim().is_empty())
+            .all(|(_, symbol)| is_rule_glyph(symbol) || symbol.trim().is_empty())
     {
         return None;
     }
 
     // A framing prefix: the glyph plus its separating space; the indent stays.
+    // `└ `/`├ ` with a space after are task-tree markers (tree output uses
+    // `├──`, without the space). `│ ` at the row edge is left alone: fenced
+    // content (pasted trees, ASCII tables) and blockquotes both start with
+    // it, and the quote bar is the only signal a quote was quoted. The
+    // indented `  │ ` form is unambiguous tool chrome.
     if chrome_indented {
         if let Some((_, glyph)) = cells.get(leading_spaces) {
+            let is_frame = match *glyph {
+                "└" | "├" => true,
+                "│" => leading_spaces == 2,
+                _ => false,
+            };
             let following_space = cells.get(leading_spaces + 1).is_some_and(|(_, symbol)| *symbol == " ");
-            if TRANSCRIPT_FRAME_GLYPHS.contains(glyph) && following_space {
+            if is_frame && following_space {
                 let mut kept: Vec<(u16, &str)> = cells[..leading_spaces].to_vec();
                 kept.extend_from_slice(&cells[leading_spaces + 2..]);
                 return Some(kept);

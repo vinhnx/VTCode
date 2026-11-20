@@ -1,3 +1,4 @@
+use super::text_utils::display_width;
 use super::*;
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::style::{Color, Modifier, Style};
@@ -99,7 +100,7 @@ impl Session {
             prompt_style.effects |= Effects::BOLD;
         }
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_width = display_width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
         let accent_style = ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
@@ -153,11 +154,11 @@ impl Session {
                     .spans
                     .iter()
                     .skip(1)
-                    .map(|span| UnicodeWidthStr::width(span.content.as_ref()) as u16)
+                    .map(|span| display_width(span.content.as_ref()) as u16)
                     .fold(prompt_display_width, u16::saturating_add)
             } else {
                 let last_line = preview.after_lines.last().map(String::as_str).unwrap_or_default();
-                prompt_display_width.saturating_add(UnicodeWidthStr::width(last_line) as u16)
+                prompt_display_width.saturating_add(display_width(last_line) as u16)
             };
             return InputRender { text: Text::from(lines), cursor_x, cursor_y };
         }

@@ -221,9 +221,9 @@ pub(crate) fn render_tool_output_viewer(
     let mode_x = area
         .x
         .saturating_add(1)
-        .saturating_add(UnicodeWidthStr::width(title_prefix) as u16)
-        .saturating_add(UnicodeWidthStr::width(status.as_str()) as u16);
-    let mode_width = UnicodeWidthStr::width(mode_label.as_str()) as u16;
+        .saturating_add(crate::tui::core_tui::session::text_utils::display_width(title_prefix) as u16)
+        .saturating_add(crate::tui::core_tui::session::text_utils::display_width(status.as_str()) as u16);
+    let mode_width = crate::tui::core_tui::session::text_utils::display_width(mode_label.as_str()) as u16;
     state.title_mode_hit_region = (mode_width > 0 && mode_x < area.right())
         .then(|| Rect::new(mode_x, area.y, mode_width.min(area.right().saturating_sub(mode_x)), 1));
     let close_label = if session.core.transcript_review_close_button_visible() {
@@ -232,7 +232,7 @@ pub(crate) fn render_tool_output_viewer(
         ""
     };
     let close_x = mode_x.saturating_add(mode_width);
-    let close_width = UnicodeWidthStr::width(close_label) as u16;
+    let close_width = crate::tui::core_tui::session::text_utils::display_width(close_label) as u16;
     state.title_close_hit_region = (close_width > 0 && close_x < area.right())
         .then(|| Rect::new(close_x, area.y, close_width.min(area.right().saturating_sub(close_x)), 1));
     state.set_viewer_area(area);

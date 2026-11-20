@@ -441,7 +441,7 @@ impl Session {
         let mut prefix_spans = render::agent_prefix_spans(self, message);
         let left_padding = ui::INLINE_AGENT_MESSAGE_LEFT_PADDING;
         let prefix_width =
-            prefix_spans.iter().map(|span| span.width()).sum::<usize>() + UnicodeWidthStr::width(left_padding);
+            prefix_spans.iter().map(|span| span.width()).sum::<usize>() + text_utils::display_width(left_padding);
 
         let content_width = max_width.saturating_sub(prefix_width);
         let fallback = self.text_fallback(message.kind).or(self.theme.foreground);
@@ -553,7 +553,7 @@ impl Session {
             text.push_str(left_padding);
             text
         };
-        let first_line_prefix_width = UnicodeWidthStr::width(first_line_prefix_text.as_str());
+        let first_line_prefix_width = text_utils::display_width(first_line_prefix_text.as_str());
         let continuation_prefix = " ".repeat(first_line_prefix_width);
         // Slow path (label/prefix configured): ensure link Vecs align for zip.
         if !content_may_link {

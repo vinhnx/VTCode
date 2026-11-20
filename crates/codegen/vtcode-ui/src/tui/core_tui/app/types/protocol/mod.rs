@@ -574,7 +574,7 @@ impl InlineHandle {
         let agent_label_frame_width = agent
             .as_deref()
             .filter(|label| !label.is_empty())
-            .map(|label| UnicodeWidthStr::width(label) + 1)
+            .map(|label| crate::tui::core_tui::session::text_utils::display_width(label) + 1)
             .unwrap_or_default();
         self.message_layout
             .agent_label_frame_width

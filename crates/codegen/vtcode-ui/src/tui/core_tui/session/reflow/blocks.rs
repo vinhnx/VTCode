@@ -148,7 +148,7 @@ impl Session {
         }
         offset += after_marker.chars().take(space_after_marker).map(char::len_utf8).sum::<usize>();
 
-        let prefix_width = UnicodeWidthStr::width(line_text.get(..offset)?);
+        let prefix_width = text_utils::display_width(line_text.get(..offset)?);
         Some(" ".repeat(prefix_width))
     }
 
@@ -169,8 +169,8 @@ impl Session {
             return vec![Line::from(first_prefix.to_string()).style(border_style)];
         }
 
-        let first_prefix_width = UnicodeWidthStr::width(first_prefix);
-        let continuation_prefix_width = UnicodeWidthStr::width(continuation_prefix);
+        let first_prefix_width = text_utils::display_width(first_prefix);
+        let continuation_prefix_width = text_utils::display_width(continuation_prefix);
         let prefix_width = first_prefix_width.max(continuation_prefix_width);
         let content_width = max_width.saturating_sub(prefix_width);
 
@@ -692,8 +692,8 @@ fn build_pty_transcript_lines(
 
             let local_start = start - combined_offset;
             let local_end = end - combined_offset;
-            let start_col = UnicodeWidthStr::width(prefix) + UnicodeWidthStr::width(&body_text[..local_start]);
-            let width = UnicodeWidthStr::width(&body_text[local_start..local_end]);
+            let start_col = text_utils::display_width(prefix) + text_utils::display_width(&body_text[..local_start]);
+            let width = text_utils::display_width(&body_text[local_start..local_end]);
             if width == 0 {
                 continue;
             }

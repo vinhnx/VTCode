@@ -102,13 +102,13 @@ pub(super) fn modal_instruction_lines(
         let mut current = String::new();
 
         for word in text.split_whitespace() {
-            let word_width = UnicodeWidthStr::width(word);
+            let word_width = crate::tui::core_tui::session::text_utils::display_width(word);
             if current.is_empty() {
                 current.push_str(word);
                 continue;
             }
 
-            let current_width = UnicodeWidthStr::width(current.as_str());
+            let current_width = crate::tui::core_tui::session::text_utils::display_width(current.as_str());
             let candidate_width = current_width.saturating_add(1).saturating_add(word_width);
             if candidate_width > width {
                 lines.push(current);
@@ -135,7 +135,7 @@ pub(super) fn modal_instruction_lines(
     let mut first_code_row_seen = false;
     let content_width = area.width.saturating_sub(2) as usize;
     let bullet_prefix = format!("{} ", ui::MODAL_INSTRUCTIONS_BULLET);
-    let bullet_indent = " ".repeat(UnicodeWidthStr::width(bullet_prefix.as_str()));
+    let bullet_indent = " ".repeat(crate::tui::core_tui::session::text_utils::display_width(bullet_prefix.as_str()));
     let shell_styles = ShellLineStyles::new();
     // Full syntax highlighting for the approval command block: command,
     // options, strings, variables, and separators keep distinct token

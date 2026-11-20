@@ -60,7 +60,7 @@ fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> Line<'static
             let mut chars_width = 0usize;
             let mut byte_end = 0usize;
             for ch in span.content.chars() {
-                let cw = UnicodeWidthStr::width(ch.encode_utf8(&mut [0u8; 4]) as &str);
+                let cw = super::super::text_utils::char_display_width(ch);
                 if chars_width + cw > remaining {
                     break;
                 }

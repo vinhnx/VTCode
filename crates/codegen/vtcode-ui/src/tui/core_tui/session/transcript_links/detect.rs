@@ -13,7 +13,7 @@ pub(crate) fn detect_rendered_transcript_links(
     detect_transcript_link_matches(&text, workspace_root)
         .into_iter()
         .filter_map(|DetectedLinkMatch { start, end, target }| {
-            let width = UnicodeWidthStr::width(&text[start..end]);
+            let width = display_width(&text[start..end]);
             if width == 0 {
                 return None;
             }
@@ -21,7 +21,7 @@ pub(crate) fn detect_rendered_transcript_links(
             Some(RenderedTranscriptLink {
                 start,
                 end,
-                start_col: UnicodeWidthStr::width(&text[..start]),
+                start_col: display_width(&text[..start]),
                 width,
                 target: InlineLinkTarget::Url(transcript_link_target_string(&target)),
             })

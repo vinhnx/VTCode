@@ -110,7 +110,7 @@ impl Session {
         }
         let collapsed = vtcode_commons::formatting::collapse_whitespace(&text);
         let max_width = usize::from(width);
-        if UnicodeWidthStr::width(collapsed.as_str()) <= max_width {
+        if super::text_utils::display_width(collapsed.as_str()) <= max_width {
             return Line::from(collapsed);
         }
         // Keep wide and joined graphemes intact while reserving one cell for
@@ -118,7 +118,7 @@ impl Session {
         let mut preview = String::new();
         let mut used_width = 0;
         for grapheme in collapsed.graphemes(true) {
-            let grapheme_width = UnicodeWidthStr::width(grapheme);
+            let grapheme_width = super::text_utils::display_width(grapheme);
             if used_width + grapheme_width > max_width.saturating_sub(1) {
                 break;
             }
