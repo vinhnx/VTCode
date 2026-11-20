@@ -779,6 +779,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         approval_recorder,
         hitl_notification_bell,
         active_thread_label.filter(|label| *label != "main"),
+        safety_requires_prompt,
     )
     .await
     {
@@ -852,6 +853,7 @@ pub(crate) async fn prompt_external_tool_permission<S: UiSession + ?Sized>(
         approval_recorder,
         hitl_notification_bell,
         active_thread_label.filter(|label| *label != "main"),
+        false,
     )
     .await
 }

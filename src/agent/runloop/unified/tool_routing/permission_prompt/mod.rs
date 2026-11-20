@@ -17,10 +17,12 @@ use vtcode_ui::tui::app::{
 };
 
 use super::HitlDecision;
+use super::decisions::learned_auto_approval_decision;
 use super::shell_approval::{ApprovalLearningTarget, PersistentApprovalTarget};
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::computer_use_approval_lines;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -627,6 +629,7 @@ fn build_permission_context_lines(
 fn build_tool_permission_options(
     prompt_kind: ToolPermissionPromptKind,
     persistent_approval_target: Option<&PersistentApprovalTarget>,
+    safety_requires_prompt: bool,
 ) -> Vec<vtcode_ui::tui::app::InlineListItem> {
     use vtcode_ui::tui::app::InlineListSelection;
 
@@ -639,26 +642,35 @@ fn build_tool_permission_options(
             Some(InlineListSelection::ToolApproval(true)),
         )
         .with_search_value("approve yes allow once y 1".to_string()),
-        // Scope badge is load-bearing: "Always" rows persist, "Session" does not.
-        ui_list::action(
-            if prompt_kind == ToolPermissionPromptKind::Mcp {
-                "Approve this session"
-            } else {
-                "Allow for Session"
-            },
-            if prompt_kind == ToolPermissionPromptKind::Mcp {
-                "Remember for this session"
-            } else {
-                "For the current session"
-            },
-            Some("Session".to_string()),
-            Tone::Neutral,
-            Some(InlineListSelection::ToolApprovalSession),
-        )
-        .with_search_value("session temporary temp 2".to_string()),
     ];
+    // Inert under a safety flag: saved approvals can never satisfy that
+    // review, so session/permanent ALLOW rows are hidden. Deny rows stay:
+    // denials apply regardless of the flag.
+    if !safety_requires_prompt {
+        // Scope badge is load-bearing: "Always" rows persist, "Session" does not.
+        options.push(
+            ui_list::action(
+                if prompt_kind == ToolPermissionPromptKind::Mcp {
+                    "Approve this session"
+                } else {
+                    "Allow for Session"
+                },
+                if prompt_kind == ToolPermissionPromptKind::Mcp {
+                    "Remember for this session"
+                } else {
+                    "For the current session"
+                },
+                Some("Session".to_string()),
+                Tone::Neutral,
+                Some(InlineListSelection::ToolApprovalSession),
+            )
+            .with_search_value("session temporary temp 2".to_string()),
+        );
+    }
 
-    if let Some(target) = persistent_approval_target {
+    if let Some(target) = persistent_approval_target
+        && !safety_requires_prompt
+    {
         let short_label = match target {
             PersistentApprovalTarget::ToolLevel => "this tool".to_string(),
             PersistentApprovalTarget::ExactInvocation { display_label }
@@ -744,21 +756,15 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
     source_thread_label: Option<&str>,
+    safety_requires_prompt: bool,
 ) -> Result<HitlDecision> {
     // Auto-approve if the approval recorder indicates high-frequency approval
     // history (≥3 approvals with >80% approval rate) for the exact invocation
     // OR any broader learned pattern (e.g. safe `find <subdir>` family).
-    if let Some(recorder) = approval_recorder {
-        for (key, _label) in learning_target.iter_keys() {
-            if recorder.should_auto_approve(key).await {
-                tracing::info!(
-                    tool = %tool_name,
-                    key = %key,
-                    "Auto-approved based on learned approval pattern"
-                );
-                return Ok(HitlDecision::Approved);
-            }
-        }
+    // Safety-flagged prompts always show: learned patterns must never
+    // silently satisfy a review the safety gateway demanded.
+    if learned_auto_approval_decision(approval_recorder, learning_target, tool_name, safety_requires_prompt).await {
+        return Ok(HitlDecision::Approved);
     }
     let prompt_kind = tool_permission_prompt_kind(tool_name);
     let command_preview = shell_command_preview_lines(tool_name, tool_args);
@@ -780,6 +786,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             description_lines.push(url_line);
         }
     }
+    description_lines.extend(computer_use_approval_lines(tool_name, tool_args));
 
     if let Some(command_lines) = command_preview {
         description_lines.extend(format_command_preview_lines(command_lines));
@@ -806,7 +813,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         navigation_hint.push_str(" • o inspect source thread");
     }
 
-    let options = build_tool_permission_options(prompt_kind, persistent_approval_target);
+    let options = build_tool_permission_options(prompt_kind, persistent_approval_target, safety_requires_prompt);
     let hotkeys = source_thread_label
         .map(|_| {
             vec![TransientHotkey {

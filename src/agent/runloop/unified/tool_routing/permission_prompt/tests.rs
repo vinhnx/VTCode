@@ -277,7 +277,7 @@ fn non_mcp_tools_keep_standard_prompt_kind() {
 #[test]
 fn mcp_prompt_uses_cancel_without_persistent_deny() {
     let titles =
-        build_tool_permission_options(ToolPermissionPromptKind::Mcp, Some(&PersistentApprovalTarget::ToolLevel))
+        build_tool_permission_options(ToolPermissionPromptKind::Mcp, Some(&PersistentApprovalTarget::ToolLevel), false)
             .into_iter()
             .map(|item| item.title)
             .collect::<Vec<_>>();
@@ -287,19 +287,25 @@ fn mcp_prompt_uses_cancel_without_persistent_deny() {
 
 #[test]
 fn standard_prompt_keeps_persistent_deny() {
-    let titles =
-        build_tool_permission_options(ToolPermissionPromptKind::Standard, Some(&PersistentApprovalTarget::ToolLevel))
-            .into_iter()
-            .map(|item| item.title)
-            .collect::<Vec<_>>();
+    let titles = build_tool_permission_options(
+        ToolPermissionPromptKind::Standard,
+        Some(&PersistentApprovalTarget::ToolLevel),
+        false,
+    )
+    .into_iter()
+    .map(|item| item.title)
+    .collect::<Vec<_>>();
     assert!(titles.iter().any(|title| title == "Deny Once"));
     assert!(titles.iter().any(|title| title == "Always Deny"));
 }
 
 #[test]
 fn always_rows_carry_permanence_badges() {
-    let items =
-        build_tool_permission_options(ToolPermissionPromptKind::Standard, Some(&PersistentApprovalTarget::ToolLevel));
+    let items = build_tool_permission_options(
+        ToolPermissionPromptKind::Standard,
+        Some(&PersistentApprovalTarget::ToolLevel),
+        false,
+    );
     let badge_for = |title: &str| {
         items
             .iter()
@@ -322,6 +328,7 @@ fn shell_prompt_offers_policy_cache_option_for_exact_invocation() {
         Some(&PersistentApprovalTarget::ExactInvocation {
             display_label: "command `cargo clippy`".to_string(),
         }),
+        false,
     )
     .into_iter()
     .map(|item| item.title)
@@ -339,6 +346,7 @@ fn shell_prompt_labels_learned_family_permanent_option() {
                 .to_string(),
             display_label: "safe `awk` reads under `README.md`".to_string(),
         }),
+        false,
     );
     let permanent = items
         .iter()
@@ -502,6 +510,7 @@ fn permanent_option_subtitle_truncates_long_command_label() {
     let items = build_tool_permission_options(
         ToolPermissionPromptKind::Standard,
         Some(&PersistentApprovalTarget::ExactInvocation { display_label: long_label }),
+        false,
     );
     let permanent = items
         .iter()
@@ -636,5 +645,112 @@ fn shell_command_preview_uses_canonical_extractor_for_aliases() {
     assert!(
         shell_command_preview_lines(tools::UNIFIED_EXEC, Some(&json!({"action": "poll", "session_id": "run-1"})))
             .is_none()
+    );
+}
+
+#[test]
+fn computer_use_approval_lines_render_target_actions_and_recipient() {
+    let args = json!({
+        "target_kind": "browser",
+        "target": "/tmp/vtcode-cua-demo",
+        "call_ids": ["call_1"],
+        "screenshot_recipient": "gpt-6-luna (openai)",
+        "action_kinds": ["screenshot"],
+        "action_count": 1,
+    });
+    assert_eq!(
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::computer_use_approval_lines(
+            tools::COMPUTER_USE,
+            Some(&args)
+        ),
+        vec![
+            "Target: browser (/tmp/vtcode-cua-demo)".to_string(),
+            "Actions (1): screenshot".to_string(),
+            "Screenshots to: gpt-6-luna (openai)".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn computer_use_approval_lines_stay_empty_off_tool_or_off_shape() {
+    let args = json!({"target_kind": "browser", "target": "/tmp/x"});
+    assert!(
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::computer_use_approval_lines(
+            tools::EXEC_COMMAND,
+            Some(&args)
+        )
+        .is_empty()
+    );
+    assert!(
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::computer_use_approval_lines(
+            tools::COMPUTER_USE,
+            None
+        )
+        .is_empty()
+    );
+    assert!(
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::computer_use_approval_lines(
+            tools::COMPUTER_USE,
+            Some(&json!({"task": "x"}))
+        )
+        .is_empty()
+    );
+    // Partial args degrade to fewer rows, never to a panic.
+    assert_eq!(
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::computer_use_approval_lines(
+            tools::COMPUTER_USE,
+            Some(&json!({"target_kind": "browser", "target": "/tmp/x"}))
+        ),
+        vec!["Target: browser (/tmp/x)".to_string()]
+    );
+}
+
+#[test]
+fn safety_flagged_prompts_drop_inert_persistent_allow_rows() {
+    // Saved approvals can never satisfy a safety review, so offering
+    // session/permanent allows would promise memory the flow cannot
+    // honor. Deny rows stay: denials apply regardless of the flag.
+    let titles = build_tool_permission_options(
+        ToolPermissionPromptKind::Standard,
+        Some(&PersistentApprovalTarget::ToolLevel),
+        true,
+    )
+    .into_iter()
+    .map(|item| item.title)
+    .collect::<Vec<_>>();
+    assert!(titles.iter().any(|title| title == "Approve Once"));
+    assert!(!titles.iter().any(|title| title == "Allow for Session"));
+    assert!(!titles.iter().any(|title| title == "Always approve"));
+    assert!(titles.iter().any(|title| title == "Deny Once"));
+    assert!(titles.iter().any(|title| title == "Always Deny"));
+}
+
+#[tokio::test]
+async fn learned_auto_approve_never_fires_for_safety_flagged_prompts() {
+    use crate::agent::runloop::unified::tool_routing::shell_approval::ApprovalLearningTarget;
+
+    let temp = tempfile::TempDir::new().expect("temp approval cache");
+    let recorder = vtcode_core::tools::ApprovalRecorder::new(temp.path().to_path_buf());
+    let target = ApprovalLearningTarget::new("computer_use".to_string(), "Computer Use".to_string());
+    for _ in 0..3 {
+        recorder
+            .record_approval("computer_use", Some("Computer Use"), true, None)
+            .await
+            .expect("record");
+    }
+    assert!(recorder.should_auto_approve("computer_use").await, "primed recorder must qualify without the flag");
+    assert!(
+        super::super::decisions::learned_auto_approval_decision(Some(&recorder), &target, tools::COMPUTER_USE, false)
+            .await,
+        "unflagged prompts keep learned auto-approve"
+    );
+    assert!(
+        !super::super::decisions::learned_auto_approval_decision(Some(&recorder), &target, tools::COMPUTER_USE, true)
+            .await,
+        "safety flag must force the prompt to show"
+    );
+    assert!(
+        !super::super::decisions::learned_auto_approval_decision(None, &target, tools::COMPUTER_USE, false).await,
+        "missing recorder never auto-approves"
     );
 }

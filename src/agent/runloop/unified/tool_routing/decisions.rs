@@ -1,5 +1,34 @@
 use super::*;
 
+/// Whether a learned approval pattern may satisfy this prompt without
+/// showing it. Safety-flagged prompts always return false: the safety
+/// gateway demanded explicit human review, and saved approvals (learned
+/// or granted) can never satisfy it.
+pub(super) async fn learned_auto_approval_decision(
+    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
+    learning_target: &shell_approval::ApprovalLearningTarget,
+    tool_name: &str,
+    safety_requires_prompt: bool,
+) -> bool {
+    if safety_requires_prompt {
+        return false;
+    }
+    let Some(recorder) = approval_recorder else {
+        return false;
+    };
+    for (key, _label) in learning_target.iter_keys() {
+        if recorder.should_auto_approve(key).await {
+            tracing::info!(
+                tool = %tool_name,
+                key = %key,
+                "Auto-approved based on learned approval pattern"
+            );
+            return true;
+        }
+    }
+    false
+}
+
 pub(super) fn resolve_permission_decision(
     permissions: &PermissionsConfig,
     active_agent_permissions: Option<&vtcode_config::core::permissions::AgentPermissionsConfig>,

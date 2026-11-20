@@ -107,6 +107,36 @@ pub(crate) fn approval_granted(flow: &ToolPermissionFlow) -> bool {
     matches!(flow, ToolPermissionFlow::Approved { .. })
 }
 
+/// Permission-prompt detail rows for a computer-use batch approval: target,
+/// proposed actions, and screenshot recipient, rendered from the redacted
+/// approval args above. Renders only the keys present so partial args
+/// degrade to fewer rows, never to a panic; empty for any other tool.
+pub(crate) fn computer_use_approval_lines(tool_name: &str, tool_args: Option<&Value>) -> Vec<String> {
+    let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
+    if canonical != TOOL_NAME {
+        return Vec::new();
+    }
+    let Some(args) = tool_args.and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    if let (Some(kind), Some(target)) =
+        (args.get("target_kind").and_then(Value::as_str), args.get("target").and_then(Value::as_str))
+    {
+        lines.push(format!("Target: {kind} ({target})"));
+    }
+    if let (Some(count), Some(kinds)) =
+        (args.get("action_count").and_then(Value::as_u64), args.get("action_kinds").and_then(Value::as_array))
+    {
+        let kinds = kinds.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ");
+        lines.push(format!("Actions ({count}): {kinds}"));
+    }
+    if let Some(recipient) = args.get("screenshot_recipient").and_then(Value::as_str) {
+        lines.push(format!("Screenshots to: {recipient}"));
+    }
+    lines
+}
+
 /// Request per-turn target approval through the permission flow.
 ///
 /// Hook rewrites of the descriptive arguments do not affect execution: the
