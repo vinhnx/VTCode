@@ -72,16 +72,16 @@ async fn container_launch_argv_locks_the_hardening_flags() {
     let argv = docker_run_argv(&spec, "vtcode-cua-test");
     let flags: Vec<_> = argv.iter().map(|arg| arg.to_string_lossy()).collect();
     assert_eq!(
-        flags[..13].join(" "),
+        flags[..14].join(" "),
         "run --rm --interactive --init --pull=never --network=none --read-only \
-         --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=256 --memory=1g \
-         --tmpfs=/tmp:rw,nosuid,nodev,size=512m --env=HOME=/tmp"
+         --cap-drop=ALL --user=65534 --security-opt=no-new-privileges --pids-limit=256 --memory=1g \
+         --tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m --env=HOME=/tmp"
     );
-    assert_eq!(flags[13], "--name=vtcode-cua-test");
-    assert!(flags[14].starts_with("--mount=type=bind,src="));
-    assert!(flags[14].ends_with(",dst=/build,readonly"));
-    assert_eq!(flags[15], "registry.invalid/runner:1.64.1");
-    assert_eq!(flags.len(), 16);
+    assert_eq!(flags[14], "--name=vtcode-cua-test");
+    assert!(flags[15].starts_with("--mount=type=bind,src="));
+    assert!(flags[15].ends_with(",dst=/build,readonly"));
+    assert_eq!(flags[16], "registry.invalid/runner:1.64.1");
+    assert_eq!(flags.len(), 17);
     assert!(argv.iter().all(|arg| arg.to_str().is_some()));
     assert_ne!(OsStr::new(&spec.build_dir), OsStr::new(""));
 }

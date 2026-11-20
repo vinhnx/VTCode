@@ -231,10 +231,11 @@ fn docker_run_argv(spec: &ContainerSpec, name: &str) -> Vec<OsString> {
         "--network=none",
         "--read-only",
         "--cap-drop=ALL",
+        "--user=65534",
         "--security-opt=no-new-privileges",
         "--pids-limit=256",
         "--memory=1g",
-        "--tmpfs=/tmp:rw,nosuid,nodev,size=512m",
+        "--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m",
         "--env=HOME=/tmp",
     ]
     .into_iter()
