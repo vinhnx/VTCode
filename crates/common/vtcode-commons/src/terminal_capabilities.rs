@@ -21,6 +21,7 @@
 //! signal that identifies them.
 
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::utils::env_flag_value_enabled;
 
@@ -139,8 +140,15 @@ impl TerminalEnv {
 }
 
 /// Whether the environment advertises Unicode box-drawing support.
+///
+/// Also consults the ambiguous-width override: on a terminal that renders
+/// East-Asian-ambiguous glyphs as double width, every Unicode box-drawing
+/// glyph breaks layout, so ASCII is the only safe chrome.
 #[must_use]
 pub fn box_glyph_tier() -> BoxGlyphTier {
+    if ambiguous_width_wide() {
+        return BoxGlyphTier::Ascii;
+    }
     *BOX_GLYPH_TIER
 }
 
@@ -160,6 +168,40 @@ pub fn box_glyph_tier_for(env: &TerminalEnv) -> BoxGlyphTier {
         return BoxGlyphTier::RichUnicode;
     }
     BoxGlyphTier::Unicode
+}
+
+/// One-time runtime override for the ambiguous-width verdict.
+///
+/// The env-derived ladder cannot see `ui.ambiguous_width` (config loads after
+/// process start), so the session shell applies the resolved config value
+/// here before first render. First setter wins: the verdict is captured once
+/// per process because a mid-session flip would re-wrap already-rendered
+/// transcript geometry. Callers that never set it (headless mode, host
+/// examples) keep the narrow default.
+static AMBIGUOUS_WIDTH: AtomicU8 = AtomicU8::new(AMBIGUOUS_WIDTH_UNSET);
+
+const AMBIGUOUS_WIDTH_UNSET: u8 = 0;
+const AMBIGUOUS_WIDTH_NARROW: u8 = 1;
+const AMBIGUOUS_WIDTH_WIDE: u8 = 2;
+
+/// Apply the resolved `ui.ambiguous_width` verdict.
+///
+/// No-op when a verdict was already applied this process: first setter wins,
+/// so a config reload cannot flip already-rendered geometry mid-session.
+pub fn set_ambiguous_width(mode: crate::ui_protocol::AmbiguousWidthMode) {
+    let value = match mode {
+        crate::ui_protocol::AmbiguousWidthMode::Narrow => AMBIGUOUS_WIDTH_NARROW,
+        crate::ui_protocol::AmbiguousWidthMode::Wide => AMBIGUOUS_WIDTH_WIDE,
+    };
+    // The Err arm carries the current verdict and is deliberately ignored.
+    let _applied = AMBIGUOUS_WIDTH.compare_exchange(AMBIGUOUS_WIDTH_UNSET, value, Ordering::Relaxed, Ordering::Relaxed);
+}
+
+/// Whether the terminal renders East-Asian-ambiguous glyphs (UAX #11) as two
+/// cells. Width math and chrome selection must agree with this verdict.
+#[must_use]
+pub fn ambiguous_width_wide() -> bool {
+    AMBIGUOUS_WIDTH.load(Ordering::Relaxed) == AMBIGUOUS_WIDTH_WIDE
 }
 
 /// The cached verdict; the environment does not change while VT Code runs.

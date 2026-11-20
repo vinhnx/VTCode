@@ -225,6 +225,25 @@ pub enum DiffPreviewMode {
     SideBySide,
 }
 
+/// How the terminal renders East-Asian-ambiguous-width glyphs (UAX #11).
+///
+/// Every box-drawing character (U+2500–257F) is "Ambiguous": terminals
+/// configured to render the set as double width (xterm `cjkWidth`, iTerm2's
+/// ambiguous-width checkbox, some CJK-locale defaults) draw each glyph as two
+/// cells, which breaks frames and tables built from them. Not detectable at
+/// runtime, so this is a user decision (`ui.ambiguous_width`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum AmbiguousWidthMode {
+    /// Ambiguous glyphs occupy one cell (the common default).
+    #[default]
+    Narrow,
+    /// Ambiguous glyphs occupy two cells; chrome degrades to ASCII and width
+    /// math counts the glyphs as wide.
+    Wide,
+}
+
 // ---------------------------------------------------------------------------
 // Task tracker row status
 // ---------------------------------------------------------------------------

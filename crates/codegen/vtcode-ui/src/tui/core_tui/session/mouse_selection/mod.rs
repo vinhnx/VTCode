@@ -1,4 +1,4 @@
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use super::text_utils::{char_display_width, display_width};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::{Command, clipboard::CopyToClipboard};
 use ratatui::layout::Rect;
@@ -700,7 +700,7 @@ pub(crate) fn word_selection_range(text: &str, column: u16) -> Option<(u16, u16)
         return None;
     }
 
-    let line_width = UnicodeWidthStr::width(text);
+    let line_width = display_width(text);
     if usize::from(column) >= line_width {
         return None;
     }
@@ -708,7 +708,7 @@ pub(crate) fn word_selection_range(text: &str, column: u16) -> Option<(u16, u16)
     let mut consumed = 0usize;
     let mut char_index = 0usize;
     for ch in &chars {
-        let width = UnicodeWidthChar::width(*ch).unwrap_or(0);
+        let width = char_display_width(*ch);
         if consumed.saturating_add(width) > usize::from(column) {
             break;
         }
@@ -737,7 +737,7 @@ fn display_width_for_char_count(chars: &[char], char_count: usize) -> u16 {
     chars
         .iter()
         .take(char_count)
-        .map(|ch| UnicodeWidthChar::width(*ch).unwrap_or(0) as u16)
+        .map(|&ch| char_display_width(ch) as u16)
         .fold(0_u16, u16::saturating_add)
 }
 

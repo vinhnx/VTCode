@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::accessibility::reduce_motion_preference;
 use crate::status_line::StatusLineConfig;
 use crate::terminal_title::TerminalTitleConfig;
+use vtcode_commons::ui_protocol::AmbiguousWidthMode;
 use vtcode_commons::ui_protocol::AppIconPreference;
 use vtcode_commons::ui_protocol::BusyEnterBehavior;
 use vtcode_commons::ui_protocol::DiffPreviewMode;
@@ -16,103 +17,9 @@ pub use modes::{
     ToolOutputMode, UiDisplayMode,
 };
 
-/// Notification preferences for terminal and desktop alerts.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct UiNotificationsConfig {
-    /// Master toggle for all runtime notifications.
-    #[serde(default = "default_notifications_enabled")]
-    pub enabled: bool,
+mod notifications;
 
-    /// Notification transport strategy.
-    #[serde(default)]
-    pub delivery_mode: NotificationDeliveryMode,
-
-    /// Preferred backend for desktop notification delivery.
-    #[serde(default)]
-    pub backend: NotificationBackend,
-
-    /// Suppress notifications while terminal focus is active.
-    #[serde(default = "default_notifications_suppress_when_focused")]
-    pub suppress_when_focused: bool,
-
-    /// Notify when a shell/command execution fails.
-    /// If omitted, falls back to `tool_failure` for backward compatibility.
-    #[serde(default)]
-    pub command_failure: Option<bool>,
-
-    /// Notify when a tool call fails.
-    #[serde(default = "default_notifications_tool_failure")]
-    pub tool_failure: bool,
-
-    /// Notify on runtime/system errors.
-    #[serde(default = "default_notifications_error")]
-    pub error: bool,
-
-    /// Legacy master toggle for completion notifications.
-    /// New installs should prefer `completion_success` and `completion_failure`.
-    #[serde(default = "default_notifications_completion")]
-    pub completion: bool,
-
-    /// Notify when a turn/session completes successfully.
-    /// If omitted, falls back to `completion`.
-    #[serde(default)]
-    pub completion_success: Option<bool>,
-
-    /// Notify when a turn/session is partial, failed, or cancelled.
-    /// If omitted, falls back to `completion`.
-    #[serde(default)]
-    pub completion_failure: Option<bool>,
-
-    /// Notify when human input/approval is required.
-    #[serde(default = "default_notifications_hitl")]
-    pub hitl: bool,
-
-    /// Notify when policy approval is required.
-    /// If omitted, falls back to `hitl` for backward compatibility.
-    #[serde(default)]
-    pub policy_approval: Option<bool>,
-
-    /// Notify on generic request events.
-    /// If omitted, falls back to `hitl` for backward compatibility.
-    #[serde(default)]
-    pub request: Option<bool>,
-
-    /// Notify on successful tool calls.
-    #[serde(default = "default_notifications_tool_success")]
-    pub tool_success: bool,
-
-    /// Suppression window for repeated identical notifications.
-    #[serde(default = "default_notifications_repeat_window_seconds")]
-    pub repeat_window_seconds: u64,
-
-    /// Maximum identical notifications allowed within the suppression window.
-    #[serde(default = "default_notifications_max_identical_in_window")]
-    pub max_identical_in_window: u32,
-}
-
-impl Default for UiNotificationsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_notifications_enabled(),
-            delivery_mode: NotificationDeliveryMode::default(),
-            backend: NotificationBackend::default(),
-            suppress_when_focused: default_notifications_suppress_when_focused(),
-            command_failure: Some(default_notifications_command_failure()),
-            tool_failure: default_notifications_tool_failure(),
-            error: default_notifications_error(),
-            completion: default_notifications_completion(),
-            completion_success: Some(default_notifications_completion_success()),
-            completion_failure: Some(default_notifications_completion_failure()),
-            hitl: default_notifications_hitl(),
-            policy_approval: Some(default_notifications_policy_approval()),
-            request: Some(default_notifications_request()),
-            tool_success: default_notifications_tool_success(),
-            repeat_window_seconds: default_notifications_repeat_window_seconds(),
-            max_identical_in_window: default_notifications_max_identical_in_window(),
-        }
-    }
-}
+pub use notifications::UiNotificationsConfig;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -318,6 +225,18 @@ pub struct UiConfig {
     #[serde(default = "default_bold_is_bright")]
     pub bold_is_bright: bool,
 
+    /// How the terminal renders East-Asian-ambiguous-width glyphs (UAX #11),
+    /// which include every box-drawing character. Terminals set to render the
+    /// set as double width (xterm `cjkWidth`, iTerm2's ambiguous-width
+    /// checkbox, some CJK-locale defaults) draw each glyph as two cells, so
+    /// box-drawing frames and table rules break. Not detectable at runtime.
+    /// Can also be controlled via VTCODE_AMBIGUOUS_WIDTH=wide.
+    /// - "narrow": ambiguous glyphs occupy one cell (default)
+    /// - "wide": ambiguous glyphs occupy two cells; chrome degrades to ASCII
+    ///   and width math counts the glyphs as wide
+    #[serde(default = "default_ambiguous_width")]
+    pub ambiguous_width: AmbiguousWidthMode,
+
     /// Restrict color palette to the 11 "safe" ANSI colors portable across common themes.
     /// Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan
     /// Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes),
@@ -459,62 +378,6 @@ fn default_busy_enter_behavior() -> BusyEnterBehavior {
     BusyEnterBehavior::Queue
 }
 
-fn default_notifications_enabled() -> bool {
-    true
-}
-
-fn default_notifications_suppress_when_focused() -> bool {
-    true
-}
-
-fn default_notifications_command_failure() -> bool {
-    false
-}
-
-fn default_notifications_tool_failure() -> bool {
-    false
-}
-
-fn default_notifications_error() -> bool {
-    true
-}
-
-fn default_notifications_completion() -> bool {
-    true
-}
-
-fn default_notifications_completion_success() -> bool {
-    false
-}
-
-fn default_notifications_completion_failure() -> bool {
-    true
-}
-
-fn default_notifications_hitl() -> bool {
-    true
-}
-
-fn default_notifications_policy_approval() -> bool {
-    true
-}
-
-fn default_notifications_request() -> bool {
-    false
-}
-
-fn default_notifications_tool_success() -> bool {
-    false
-}
-
-fn default_notifications_repeat_window_seconds() -> u64 {
-    30
-}
-
-fn default_notifications_max_identical_in_window() -> u32 {
-    1
-}
-
 fn env_bool_var(name: &str) -> Option<bool> {
     crate::env_helpers::read_env_var(name).and_then(|v| vtcode_commons::utils::parse_bool_env_value(&v))
 }
@@ -543,6 +406,17 @@ fn default_fullscreen_scroll_speed() -> u8 {
 
 fn default_screen_reader_mode() -> bool {
     env_bool_var("VTCODE_SCREEN_READER").unwrap_or(false)
+}
+
+fn default_ambiguous_width() -> AmbiguousWidthMode {
+    match crate::env_helpers::read_env_var("VTCODE_AMBIGUOUS_WIDTH")
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("wide") => AmbiguousWidthMode::Wide,
+        Some("narrow") => AmbiguousWidthMode::Narrow,
+        _ => AmbiguousWidthMode::default(),
+    }
 }
 
 fn default_reduce_motion_mode() -> bool {
@@ -608,6 +482,7 @@ impl Default for UiConfig {
             // Color accessibility defaults
             minimum_contrast: default_minimum_contrast(),
             bold_is_bright: default_bold_is_bright(),
+            ambiguous_width: default_ambiguous_width(),
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
             app_icon: default_app_icon(),

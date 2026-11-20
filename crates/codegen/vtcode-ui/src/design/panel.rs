@@ -304,6 +304,20 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_wide_terminal_degrades_to_ascii_chrome() {
+        // Every Unicode box-drawing glyph is UAX #11 ambiguous, so a terminal
+        // that renders the set double-width breaks all of them; ASCII is the
+        // only safe chrome (nextest isolates the one-time verdict override).
+        vtcode_commons::terminal_capabilities::set_ambiguous_width(
+            vtcode_commons::ui_protocol::AmbiguousWidthMode::Wide,
+        );
+        assert_eq!(vtcode_commons::terminal_capabilities::box_glyph_tier(), BoxGlyphTier::Ascii);
+        let preferred = ratatui::widgets::BorderType::Rounded.to_border_set();
+        assert_eq!(border_set_with_fallback(preferred), ASCII_BORDER_SET);
+        assert_eq!(canonical_border_set(), ASCII_BORDER_SET);
+    }
+
+    #[test]
     fn active_panel_uses_accent_style() {
         let styles = MockStyles::new();
         let area = Rect::new(0, 0, 80, 24);

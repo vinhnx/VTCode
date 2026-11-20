@@ -6,16 +6,33 @@
 //! [DeepWiki](https://deepwiki.com/openai/codex/4.1.2-chatwidget-and-conversation-display).
 
 use super::MarkdownLine;
+use crate::tui::core_tui::session::text_utils::{char_display_width, display_width};
 use anstyle::Style;
 use pulldown_cmark::Alignment;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
+use vtcode_commons::terminal_capabilities::ambiguous_width_wide;
 
 const TABLE_COLUMN_GAP: usize = 2;
 const TABLE_CELL_PADDING: usize = 1;
 const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
 const MIN_TABLE_CELL_WIDTH: usize = 3;
+
+/// Separator glyph for a table rule.
+///
+/// Box-drawing characters are East-Asian-ambiguous in UAX #11, so a terminal
+/// that renders the set as double width breaks every rule row; ASCII glyphs
+/// (`=`, `-`) are the only safe chrome there.
+fn rule_separator_char(header: bool) -> char {
+    if ambiguous_width_wide() {
+        return if header { '=' } else { '-' };
+    }
+    if header {
+        TABLE_HEADER_SEPARATOR_CHAR
+    } else {
+        TABLE_BODY_SEPARATOR_CHAR
+    }
+}
 
 const RECORD_FIELD_LEADING_PADDING: usize = 1;
 const RECORD_FIELD_GAP: usize = 2;
@@ -187,7 +204,7 @@ fn collect_table_column_metrics(
                 let text = line_text(cell);
                 let mut word_count = 0;
                 for token in text.split_whitespace() {
-                    let token_width = UnicodeWidthStr::width(token);
+                    let token_width = display_width(token);
                     body_token_width = body_token_width.max(token_width);
                     long_body_token_count += usize::from(token_width >= 20);
                     body_token_count += 1;
@@ -196,7 +213,7 @@ fn collect_table_column_metrics(
                 if word_count > 0 {
                     total_words += word_count;
                     total_cells += 1;
-                    total_cell_width += UnicodeWidthStr::width(text.as_str());
+                    total_cell_width += display_width(text.as_str());
                 }
             }
 
@@ -206,7 +223,7 @@ fn collect_table_column_metrics(
                 total_words as f64 / total_cells as f64
             };
             let average_width = if total_cells == 0 {
-                UnicodeWidthStr::width(header_text.as_str()) as f64
+                display_width(header_text.as_str()) as f64
             } else {
                 total_cell_width as f64 / total_cells as f64
             };
@@ -395,13 +412,13 @@ fn render_table_grid(
 
     if has_header {
         lines.extend(render_table_row(headers, column_widths, alignments, base_style, true));
-        lines.push(render_table_separator(column_widths, TABLE_HEADER_SEPARATOR_CHAR, separator_style));
+        lines.push(render_table_separator(column_widths, rule_separator_char(true), separator_style));
     }
 
     for (row_index, row) in rows.iter().enumerate() {
         lines.extend(render_table_row(row, column_widths, alignments, base_style, false));
         if row_index + 1 < rows.len() {
-            lines.push(render_table_separator(column_widths, TABLE_BODY_SEPARATOR_CHAR, separator_style));
+            lines.push(render_table_separator(column_widths, rule_separator_char(false), separator_style));
         }
     }
 
@@ -521,7 +538,8 @@ fn render_table_records(
             lines.extend(field_lines);
         }
         if row_index + 1 < rows.len() {
-            lines.push(single_style_line(separator_style, &"─".repeat(record_width)));
+            lines
+                .push(single_style_line(separator_style, &rule_separator_char(false).to_string().repeat(record_width)));
         }
     }
     lines
@@ -609,7 +627,10 @@ fn render_unlabelled_fallback(rows: &[Vec<MarkdownLine>], max_width: usize, base
             lines.extend(wrap_markdown_line(cell, wrap_width));
         }
         if row_index + 1 < rows.len() {
-            lines.push(single_style_line(base_style.dimmed(), &"─".repeat(wrap_width)));
+            lines.push(single_style_line(
+                base_style.dimmed(),
+                &rule_separator_char(false).to_string().repeat(wrap_width),
+            ));
         }
     }
     lines
@@ -639,7 +660,7 @@ fn line_text(line: &MarkdownLine) -> String {
 }
 
 fn longest_token_width(text: &str) -> usize {
-    text.split_whitespace().map(UnicodeWidthStr::width).max().unwrap_or(0)
+    text.split_whitespace().map(display_width).max().unwrap_or(0)
 }
 
 fn trim_trailing_whitespace(line: &mut MarkdownLine) {
@@ -683,7 +704,7 @@ fn wrap_markdown_line(line: &MarkdownLine, max_width: usize) -> Vec<MarkdownLine
                 continue;
             }
 
-            let token_width = UnicodeWidthStr::width(token);
+            let token_width = display_width(token);
             if token_width == 0 {
                 current.push_segment_with_link(style, token, link_target.clone());
                 continue;
@@ -718,7 +739,7 @@ fn wrap_markdown_line(line: &MarkdownLine, max_width: usize) -> Vec<MarkdownLine
                 if grapheme.is_empty() {
                     continue;
                 }
-                let grapheme_width = UnicodeWidthStr::width(grapheme);
+                let grapheme_width = display_width(grapheme);
                 if grapheme_width == 0 {
                     current.push_segment_with_link(style, grapheme, link_target.clone());
                     continue;
@@ -783,6 +804,26 @@ mod tests {
         assert!(text[2].contains("core"));
         assert!(text[3].contains('─'));
         assert!(!text.iter().any(|line| line.contains('│')));
+    }
+
+    #[test]
+    fn ambiguous_wide_terminal_renders_ascii_table_rules() {
+        // Box-drawing rules break on terminals that render the
+        // East-Asian-ambiguous set double-width; ASCII glyphs are the only
+        // safe chrome there (nextest isolates the one-time verdict override).
+        vtcode_commons::terminal_capabilities::set_ambiguous_width(
+            vtcode_commons::ui_protocol::AmbiguousWidthMode::Wide,
+        );
+        let lines = render_table(
+            &table(&["Name", "Status"], &[&["core", "active"], &["ui", "paused"]]),
+            Style::default(),
+            None,
+        );
+        let text = text_lines(&lines);
+
+        assert!(text[1].contains('='));
+        assert!(text[3].contains('-'));
+        assert!(!text.iter().any(|line| line.contains('━') || line.contains('─')));
     }
 
     #[test]

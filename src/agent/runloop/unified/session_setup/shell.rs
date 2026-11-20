@@ -195,6 +195,14 @@ pub(crate) async fn initialize_session_shell(
     crate::agent::probe::await_terminal_palette_probe().await;
     vtcode_core::utils::terminal_color_probe::note_crossterm_raw_mode();
 
+    // Apply the ambiguous-width verdict before the TUI renders: chrome
+    // selection and wrap math must agree with what the terminal actually
+    // shows for East-Asian-ambiguous glyphs (UAX #11), and the capability
+    // probe cannot see config at process start.
+    if let Some(cfg) = vt_cfg {
+        vtcode_commons::terminal_capabilities::set_ambiguous_width(cfg.ui.ambiguous_width);
+    }
+
     let mut session = spawn_session_with_options(
         theme_spec.clone(),
         SessionOptions {

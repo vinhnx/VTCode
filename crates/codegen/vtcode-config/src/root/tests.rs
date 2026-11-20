@@ -1,5 +1,6 @@
 use super::*;
 use serial_test::serial;
+use vtcode_commons::ui_protocol::AmbiguousWidthMode;
 use vtcode_commons::ui_protocol::ThinkingBlockState;
 
 #[test]
@@ -12,6 +13,29 @@ fn program_status_defaults_on_and_round_trip() {
     let serialized = toml::to_string(&disabled).unwrap();
     assert!(!toml::from_str::<UiConfig>(&serialized).unwrap().program_status.enabled);
     assert!(toml::from_str::<UiConfig>("[program_status]\nenabled = 'true'").is_err());
+}
+
+#[test]
+fn ui_ambiguous_width_defaults_narrow_and_round_trips() {
+    assert_eq!(UiConfig::default().ambiguous_width, AmbiguousWidthMode::Narrow);
+    assert_eq!(toml::from_str::<UiConfig>("").unwrap().ambiguous_width, AmbiguousWidthMode::Narrow);
+    let wide: UiConfig = toml::from_str("ambiguous_width = 'wide'").unwrap();
+    assert_eq!(wide.ambiguous_width, AmbiguousWidthMode::Wide);
+    let serialized = toml::to_string(&wide).unwrap();
+    assert_eq!(toml::from_str::<UiConfig>(&serialized).unwrap().ambiguous_width, AmbiguousWidthMode::Wide);
+    assert!(toml::from_str::<UiConfig>("ambiguous_width = 'double'").is_err());
+}
+
+#[test]
+#[serial]
+fn ambiguous_width_env_var_overrides_the_default() {
+    let guard = vtcode_commons::env_lock::lock();
+    guard.set_var("VTCODE_AMBIGUOUS_WIDTH", "wide");
+    assert_eq!(default_ambiguous_width(), AmbiguousWidthMode::Wide);
+    guard.set_var("VTCODE_AMBIGUOUS_WIDTH", "NARROW");
+    assert_eq!(default_ambiguous_width(), AmbiguousWidthMode::Narrow);
+    guard.set_var("VTCODE_AMBIGUOUS_WIDTH", "bogus");
+    assert_eq!(default_ambiguous_width(), AmbiguousWidthMode::Narrow);
 }
 
 #[test]
