@@ -532,7 +532,7 @@ async fn run_guarded_execution(
         Ok((handle, driver))
     }
     .await
-    .map_err(|error: anyhow::Error| (ComputerFailureStage::Launch, error.to_string()));
+    .map_err(|error: anyhow::Error| (ComputerFailureStage::Launch, format!("{error:#}")));
     let (handle, driver) = match launched {
         Ok(launched) => launched,
         Err((stage, message)) => {
@@ -581,7 +581,7 @@ async fn run_guarded_execution(
             } else {
                 GuardedOutcome::Failed {
                     stage: ComputerFailureStage::Execute,
-                    message: error.to_string(),
+                    message: format!("{error:#}"),
                 }
             }
         }
@@ -613,7 +613,7 @@ async fn terminate_for_audit(handle: &ContainerHandle) -> TeardownOutcome {
             TerminateOutcome::Removed => TeardownOutcome::Removed,
             TerminateOutcome::AlreadyGone => TeardownOutcome::AlreadyGone,
         },
-        Err(error) => TeardownOutcome::Failed(error.to_string()),
+        Err(error) => TeardownOutcome::Failed(format!("{error:#}")),
     }
 }
 

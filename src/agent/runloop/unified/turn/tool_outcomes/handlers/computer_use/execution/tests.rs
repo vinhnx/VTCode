@@ -928,3 +928,35 @@ async fn computer_use_turn_cancel_tears_down_launched_target() {
         "cancel must still tear the target down: {output}"
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn launch_failure_message_preserves_error_chain() {
+    // Regression: a missing browser build must report WHY (the os error),
+    // not just the outer context — the model and user diagnose from this
+    // text, and Display-only rendering once hid the ENOENT behind
+    // "could not be canonicalized".
+    use tokio_util::sync::CancellationToken;
+
+    let target = ComputerUseTarget::Browser {
+        build_dir: PathBuf::from("/nonexistent-cua-build-dir-xyz"),
+    };
+    let summary = NativeCallSummary {
+        call_ids: vec!["call_1".to_string()],
+        kinds: vec!["screenshot".to_string()],
+        valid_actions: 1,
+        provider: NativeProvider::OpenAi,
+    };
+    let stop = CtrlCState::new();
+    let notify = Notify::new();
+    let mut stats = SessionStats::default();
+    let mut runtime = runtime(&stop, &notify, &mut stats);
+    let turn = CancellationToken::new();
+    let execution = run_guarded_execution(&summary, Vec::new(), "img:1", &target, &config(), &mut runtime, &turn).await;
+    let GuardedOutcome::Failed { stage, message } = execution.outcome else {
+        panic!("expected launch failure for missing build dir");
+    };
+    assert_eq!(stage, ComputerFailureStage::Launch);
+    assert!(message.contains("Failed to canonicalize"), "{message}");
+    assert!(message.contains("No such file or directory"), "{message}");
+}
