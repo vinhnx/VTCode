@@ -2,6 +2,30 @@
 
 use serde_json::{Value, json};
 
+/// Worker-report outcome spellings.
+///
+/// This is deliberately a separate vocabulary from the snapshot
+/// `MatrixOutcome` enum: `"executed"` means the worker finished its
+/// instructions, not that final verification succeeded. The schema, report
+/// validation, and outcome parser all reference one table so they cannot drift.
+pub mod report_outcome {
+    pub const EXECUTED: &str = "executed";
+    pub const FAILED: &str = "failed";
+    pub const INTERRUPTED: &str = "interrupted";
+    pub const TIMED_OUT: &str = "timed_out";
+    pub const PERMISSION_DENIED: &str = "permission_denied";
+    pub const BUDGET_EXHAUSTED: &str = "budget_exhausted";
+
+    pub const ALL: [&str; 6] = [
+        EXECUTED,
+        FAILED,
+        INTERRUPTED,
+        TIMED_OUT,
+        PERMISSION_DENIED,
+        BUDGET_EXHAUSTED,
+    ];
+}
+
 /// Model-visible description of deterministic matrix orchestration.
 pub const MATRIX_DESCRIPTION: &str = "Manage a durable local task matrix. create persists an explicit specification without launching workers; start freezes it and begins scheduler-owned execution. status shows task/resource/verification progress; pause stops new dispatch, resume reconciles durable state before dispatch, retry requests a coordinator decision for a task, and cancel is terminal. report is worker-only: runtime supplies task and attempt identity and validates durable command evidence. Final success requires every declared check against the final workspace generation; worker summaries are insufficient.";
 
@@ -17,7 +41,7 @@ pub fn matrix_parameters() -> Value {
             "matrix_id": {"type": "string", "minLength": 1, "description": "Coordinator controls: matrix to inspect or control."},
             "task_id": {"type": "string", "minLength": 1, "description": "Coordinator retry only: task requiring another attempt. Reports cannot select a task."},
             "spec": matrix_spec_schema(),
-            "outcome": {"type": "string", "enum": ["executed", "failed", "interrupted", "timed_out", "permission_denied", "budget_exhausted"], "description": "Worker report only; runtime authenticates the current assignment. executed means instructions finished, not final verification success."},
+            "outcome": {"type": "string", "enum": report_outcome::ALL, "description": "Worker report only; runtime authenticates the current assignment. executed means instructions finished, not final verification success."},
             "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Worker report only: canonical durable evidence references; unrelated, stale, or cancelled commands cannot verify success."}
         }
     })
@@ -76,6 +100,15 @@ mod tests {
             schema["properties"]["spec"]["properties"]["tasks"]["items"]["properties"]["replay_safe"]["default"],
             false
         );
+    }
+
+    #[test]
+    fn report_outcome_enum_matches_canonical_table() {
+        use super::report_outcome;
+        let schema = matrix_parameters();
+        let values = schema["properties"]["outcome"]["enum"].as_array().expect("outcome enum");
+        let expected: Vec<serde_json::Value> = report_outcome::ALL.iter().map(|value| json!(value)).collect();
+        assert_eq!(*values, expected);
     }
 
     #[test]

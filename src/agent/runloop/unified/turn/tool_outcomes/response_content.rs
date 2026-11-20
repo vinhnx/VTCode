@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::agent::result_reducers::{project_model_tool_result, reduce_tool_result};
+use vtcode_core::exec::events::ToolOutcome;
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
 use vtcode_core::llm::{LightweightFeature, create_provider_for_model_route, resolve_lightweight_route};
 use vtcode_core::tools::SpooledOutputReference;
@@ -64,7 +65,7 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             "message" | "metadata" | "no_spool" | "follow_up_prompt" | "next_poll_args" | "rows" | "cols"
             | "wall_time" | "modified_files" => true,
             "success" => value.as_bool().unwrap_or(false),
-            "status" => value.as_str().is_some_and(|status| status == "success"),
+            "status" => value.as_str().is_some_and(|status| status == ToolOutcome::Success.as_str()),
             "spool_hint" | "spooled_bytes" | "spooled_to_file" => true,
             "id" => session_id.is_some_and(|sid| value == sid),
             "working_directory" => is_exec_like || value.is_null(),

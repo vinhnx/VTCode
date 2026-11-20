@@ -17,7 +17,9 @@ Leave inline: single-use data grammars, parser alias lists owned by one function
 | --- | --- |
 | Tool names (grouped + flat re-exports + `groups::*` slices) | `vtcode-commons::tool_types::tool_names`; re-exported as `vtcode-config::constants::tools` |
 | Runtime wire `type` values | `vtcode-exec-events::wire_type::*` + `ThreadEvent::wire_name()` (guarded by `wire_name_matches_serialized_type_tag`) |
-| Item status (`completed`/`failed`/`in_progress`/…) | `vtcode-exec-events` enum `as_str()` methods; tracker statuses via `tracker::TrackerItemStatus` |
+| Item status (`completed`/`failed`/`in_progress`/…) | `vtcode-exec-events` enum `as_str()` methods (guarded by `status_as_str_matches_serde_snake_case`); tracker statuses via `tracker::TrackerItemStatus` |
+| Matrix worker-report outcomes (`executed`/`failed`/…) | `vtcode-utility-tool-specs::report_outcome` — deliberately **not** the snapshot `MatrixOutcome` enum (`Success` serializes as `"success"` there) |
+| Agent type names | `AgentType` associated consts shared by `Display`/`FromStr` |
 | Provider ids | `vtcode-commons::provider::{Provider, CODEX_PROVIDER_ID}`; match via `Provider::name_matches()` |
 | Keystroke names | `vtcode-desktop::strings::key::{KeyName, *}` |
 | Deeplink verbs / route segments | `vtcode-desktop::view::deeplinks::Verb`; tab names via `SettingsTab::{as_str, from_name}` |

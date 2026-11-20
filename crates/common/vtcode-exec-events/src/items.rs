@@ -187,6 +187,21 @@ impl ToolOutcome {
     pub const fn is_terminal(self) -> bool {
         !matches!(self, Self::Followup)
     }
+
+    /// Wire spelling (`snake_case`, matching `serde(rename_all)`).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::Error => "error",
+            Self::PermissionRejected => "permission_rejected",
+            Self::PermissionCancelled => "permission_cancelled",
+            Self::Followup => "followup",
+            Self::HookDenied => "hook_denied",
+            Self::InvalidTool => "invalid_tool",
+            Self::Cancelled => "cancelled",
+        }
+    }
 }
 
 /// Map a terminal [`ToolCallStatus`] to its corresponding [`ToolOutcome`].

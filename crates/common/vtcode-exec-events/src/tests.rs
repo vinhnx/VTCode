@@ -47,6 +47,51 @@ fn wire_name_matches_serialized_type_tag() {
 }
 
 #[test]
+fn status_as_str_matches_serde_snake_case() {
+    use crate::{CommandExecutionStatus, McpToolCallStatus, PatchApplyStatus, ToolCallStatus, ToolOutcome};
+    fn check<T: Serialize>(value: &T, spelled: &str, label: &str) {
+        let wire = serde_json::to_value(value).expect("serialize status");
+        assert_eq!(wire.as_str(), Some(spelled), "{label}");
+    }
+    for status in [
+        CommandExecutionStatus::Completed,
+        CommandExecutionStatus::Failed,
+        CommandExecutionStatus::InProgress,
+    ] {
+        check(&status, status.as_str(), "CommandExecutionStatus");
+    }
+    for status in [
+        ToolCallStatus::Completed,
+        ToolCallStatus::Failed,
+        ToolCallStatus::InProgress,
+    ] {
+        check(&status, status.as_str(), "ToolCallStatus");
+    }
+    for status in [PatchApplyStatus::Completed, PatchApplyStatus::Failed] {
+        check(&status, status.as_str(), "PatchApplyStatus");
+    }
+    for status in [
+        McpToolCallStatus::Started,
+        McpToolCallStatus::Completed,
+        McpToolCallStatus::Failed,
+    ] {
+        check(&status, status.as_str(), "McpToolCallStatus");
+    }
+    for outcome in [
+        ToolOutcome::Success,
+        ToolOutcome::Error,
+        ToolOutcome::PermissionRejected,
+        ToolOutcome::PermissionCancelled,
+        ToolOutcome::Followup,
+        ToolOutcome::HookDenied,
+        ToolOutcome::InvalidTool,
+        ToolOutcome::Cancelled,
+    ] {
+        check(&outcome, outcome.as_str(), "ToolOutcome");
+    }
+}
+
+#[test]
 fn thread_event_stays_compact() {
     assert!(
         size_of::<ThreadEvent>() <= 80,

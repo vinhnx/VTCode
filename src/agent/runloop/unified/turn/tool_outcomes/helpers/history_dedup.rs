@@ -1,6 +1,7 @@
 //! History replayability, duplicate detection, and conversation push invariants.
 
 use super::*;
+use vtcode_core::exec::events::ToolOutcome;
 
 /// Check if an identical tool call (same name + same args) was already executed
 /// recently in the working history. Returns the output of the most recent
@@ -229,7 +230,10 @@ pub(super) fn tool_response_is_success(message: &uni::Message) -> bool {
     if output.contains_key("error") || output.contains_key("error_type") || output.contains_key("failure_kind") {
         return false;
     }
-    if output.get("status").is_some_and(|status| status.as_str() != Some("success")) {
+    if output
+        .get("status")
+        .is_some_and(|status| status.as_str() != Some(ToolOutcome::Success.as_str()))
+    {
         return false;
     }
 
@@ -239,7 +243,7 @@ pub(super) fn tool_response_is_success(message: &uni::Message) -> bool {
         None => output
             .get("status")
             .and_then(serde_json::Value::as_str)
-            .is_some_and(|status| status == "success"),
+            .is_some_and(|status| status == ToolOutcome::Success.as_str()),
     }
 }
 

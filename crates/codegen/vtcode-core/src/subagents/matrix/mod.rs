@@ -19,6 +19,7 @@ use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use vtcode_memory::matrix::MatrixState;
+use vtcode_utility_tool_specs::report_outcome;
 
 /// Access to the existing authoritative drain, not a second persisted store.
 #[derive(Clone)]
@@ -68,12 +69,12 @@ impl MatrixWorkerContext {
             .as_ref()
             .and_then(|report| report.get("outcome").and_then(Value::as_str))
             .and_then(|outcome| match outcome {
-                "executed" => Some(MatrixOutcome::Success),
-                "failed" => Some(MatrixOutcome::Failed),
-                "permission_denied" => Some(MatrixOutcome::PermissionDenied),
-                "budget_exhausted" => Some(MatrixOutcome::BudgetExhausted),
-                "interrupted" => Some(MatrixOutcome::Interrupted),
-                "timed_out" => Some(MatrixOutcome::TimedOut),
+                report_outcome::EXECUTED => Some(MatrixOutcome::Success),
+                report_outcome::FAILED => Some(MatrixOutcome::Failed),
+                report_outcome::PERMISSION_DENIED => Some(MatrixOutcome::PermissionDenied),
+                report_outcome::BUDGET_EXHAUSTED => Some(MatrixOutcome::BudgetExhausted),
+                report_outcome::INTERRUPTED => Some(MatrixOutcome::Interrupted),
+                report_outcome::TIMED_OUT => Some(MatrixOutcome::TimedOut),
                 _ => None,
             })
     }
@@ -90,18 +91,7 @@ impl MatrixWorkerContext {
             .get("outcome")
             .and_then(Value::as_str)
             .context("matrix report requires outcome")?;
-        ensure!(
-            [
-                "executed",
-                "failed",
-                "interrupted",
-                "timed_out",
-                "permission_denied",
-                "budget_exhausted"
-            ]
-            .contains(&outcome),
-            "invalid matrix report outcome"
-        );
+        ensure!(report_outcome::ALL.contains(&outcome), "invalid matrix report outcome");
         let mut report = self.report.lock();
         ensure!(report.is_none(), "duplicate matrix report");
         *report = Some(args);

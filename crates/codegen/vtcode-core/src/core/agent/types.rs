@@ -42,6 +42,14 @@ pub enum AgentType {
 }
 
 impl AgentType {
+    /// Canonical built-in names, shared by `Display` and `FromStr`.
+    const SINGLE: &'static str = "single";
+    const ORCHESTRATOR: &'static str = "orchestrator";
+    const EXPLORE: &'static str = "explore";
+    const PLAN: &'static str = "plan";
+    const GENERAL: &'static str = "general";
+    const CUSTOM_PREFIX: &'static str = "custom:";
+
     /// Check if this is a specialized profile type.
     pub fn is_specialized(&self) -> bool {
         matches!(self, Self::Explore | Self::Plan | Self::General | Self::Custom(_))
@@ -75,12 +83,12 @@ impl AgentType {
 impl fmt::Display for AgentType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Single => f.write_str("single"),
-            Self::Orchestrator => f.write_str("orchestrator"),
-            Self::Explore => f.write_str("explore"),
-            Self::Plan => f.write_str("plan"),
-            Self::General => f.write_str("general"),
-            Self::Custom(name) => write!(f, "custom:{name}"),
+            Self::Single => f.write_str(Self::SINGLE),
+            Self::Orchestrator => f.write_str(Self::ORCHESTRATOR),
+            Self::Explore => f.write_str(Self::EXPLORE),
+            Self::Plan => f.write_str(Self::PLAN),
+            Self::General => f.write_str(Self::GENERAL),
+            Self::Custom(name) => write!(f, "{}{name}", Self::CUSTOM_PREFIX),
         }
     }
 }
@@ -90,12 +98,12 @@ impl std::str::FromStr for AgentType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "single" => Ok(Self::Single),
-            "orchestrator" => Ok(Self::Orchestrator),
-            "explore" => Ok(Self::Explore),
-            "plan" => Ok(Self::Plan),
-            "general" => Ok(Self::General),
-            _ if s.starts_with("custom:") => Ok(Self::Custom(s[7..].to_string())),
+            Self::SINGLE => Ok(Self::Single),
+            Self::ORCHESTRATOR => Ok(Self::Orchestrator),
+            Self::EXPLORE => Ok(Self::Explore),
+            Self::PLAN => Ok(Self::Plan),
+            Self::GENERAL => Ok(Self::General),
+            _ if s.starts_with(Self::CUSTOM_PREFIX) => Ok(Self::Custom(s[Self::CUSTOM_PREFIX.len()..].to_string())),
             _ => Err(format!("Unknown agent type: {s}")),
         }
     }

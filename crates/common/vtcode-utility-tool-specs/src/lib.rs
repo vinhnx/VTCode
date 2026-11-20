@@ -28,7 +28,7 @@ pub use collaboration::{
 };
 pub use goal::{get_goal_description, get_goal_parameters, update_goal_description, update_goal_parameters};
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
-pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters};
+pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters, report_outcome};
 #[cfg(feature = "mcp")]
 pub use mcp_tool::{
     MCP_UI_EXTENSION_ID, MCP_UI_RESOURCE_MIME_TYPE, MCP_UI_RESOURCE_SCHEME, McpToolVisibility, McpUiResourceMeta,
