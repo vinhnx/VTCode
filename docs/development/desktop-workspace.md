@@ -90,7 +90,9 @@ cargo run --locked -p vtcode-desktop
 The workspace dev profile compiles dependencies (including GPUI rendering, layout,
 and text crates) with light optimization for a responsive desktop preview while
 keeping application code debuggable. The first build of those dependencies can
-take longer.
+take longer. Always re-run the `cargo build` line before relaunching: `cargo run`
+rebuilds only the GUI, so a restarted app otherwise respawns the previous backend
+binary, and a still-running backend keeps serving old code until the app quits.
 
 Choose a workspace folder in the app. The desktop client starts `vtcode desktop-server` with an absolute workspace path
 and uses the existing VT Code configuration, provider credentials, workspace trust, and sandbox policy. If startup

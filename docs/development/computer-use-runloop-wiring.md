@@ -170,7 +170,11 @@ steering error, so the model re-issues the task as `computer_use`.
 Bare `open <url>` (viewing) and bare `screencapture` (desktop captures
 v1 cannot replace) pass through, as does everything when computer use
 cannot run. The master switch stays the human-operated escape hatch
-for sessions that need raw headless output.
+for sessions that need raw headless output. The tool also bypasses the
+auto-agent full-auto allow-list *visibility* filter (like the workflow
+coordination tools) so the guard's steering target is always callable;
+execution permission, including the full-auto deny, is still enforced
+at call time.
 
 ## Then
 

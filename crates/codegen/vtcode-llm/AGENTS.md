@@ -28,5 +28,6 @@
 - The runloop's stream-timeout fallback keys on `supports_non_streaming`, so providers that support non-streaming must override it explicitly.
 - Model normalization happens in `core.prepare()`, not `convert_request()`, so compat payload tests must call `prepare` first.
 - Gemini rejects `systemInstruction`/`tools`/`toolConfig` beside `cachedContent`, so requests with a non-default tool config must skip the explicit cache.
+- Responses stream parsers tolerate unknown event types (warn + skip): providers add events without coordination, so strictness turns deploys into outages. Strictness covers malformed shapes of known types only.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-llm.md) — read the section for the subsystem you change before editing it.
