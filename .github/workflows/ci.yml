@@ -250,8 +250,9 @@ jobs:
         id: nextest
         shell: bash
         run: |
-          version=$(sed -n 's/^nextest-version *= *"//p' .config/nextest.toml | head -1)
-          version=${version%\"}
+          # Windows checkouts default to CRLF; normalize before parsing so the pin
+          # never carries a stray quote or carriage return into install-action.
+          version=$(tr -d '\r' < .config/nextest.toml | sed -n 's/^nextest-version *= *"\([^"]*\)".*/\1/p' | head -1)
           if [[ -z "$version" ]]; then
             echo "Could not read nextest-version from .config/nextest.toml" >&2
             exit 1
