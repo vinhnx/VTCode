@@ -182,9 +182,12 @@ at call time.
 
 ## Then
 
-Multi-turn chaining/continuation, streaming native accumulation, and
-more verified model/action matrix entries. After that: `ThreadEvent`
-contract updates if turn-specific events prove necessary, and the user
-guide plus quick reference — per the repo's major-feature docs rule.
-macOS driver isolation stays a separate release gate behind signed-app
-acceptance.
+Landed since this doc was pinned: the streaming bound route (`stream_native` plus native
+accumulation in the OpenAI and Anthropic SSE paths, parity-tested against the
+non-streaming parsers), and the resume contract (provider history replays from redacted
+summaries; interrupted turns synthesize aborted results — see the
+[quick reference](computer-use-quick-reference.md)). Still open: multi-turn
+chaining/continuation, more verified model/action matrix entries (the Anthropic probe
+script is ready; add its matrix entry only after a live run), possible `ThreadEvent`
+contract updates if turn-specific events prove necessary. macOS driver isolation stays a
+separate release gate behind signed-app acceptance.

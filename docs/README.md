@@ -149,6 +149,8 @@ New to VT Code? Start with installation and basic usage:
   [Keyboard Shortcuts](./user-guide/keyboard-shortcuts.md))
 - **[WebMCP Browser Bridge User Guide](./user-guide/webmcp.md)** - Connect a browser editor to an active VT Code session
   or a bounded standalone workspace bridge
+- **[Computer Use](./user-guide/computer-use.md)** - Drive an isolated, offline browser preview with per-turn approval
+  and redacted summaries
 - **[Scheduled Tasks](./user-guide/scheduled-tasks.md)** - Reminders and durable `vtcode schedule` automations
 - [Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking) - How decisions are
   tracked and injected
@@ -169,6 +171,8 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Rust Toolchain and MSRV](./development/toolchain-updates.md)** - Pinned compiler, bump checklist, and gate fixes
 - **[Tool Reference](./tools/tool_specs.md)** - Technical reference for built-in tools
+- **[Computer Use Quick Reference](./development/computer-use-quick-reference.md)** - Config keys, verified matrix, route
+  anatomy, resume contract, and release gates for the computer-use surface
 - **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the
   Codex-style default tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails

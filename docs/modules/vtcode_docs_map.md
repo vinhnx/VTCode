@@ -156,6 +156,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Compaction Engine?", "How does Request history and local clearing
     work?", "How does Headless staging and module ownership work?"
 
+- **File**: `docs/development/computer-use-quick-reference.md`
+  - **Content**: Computer Use Quick Reference
+  - **Topics**: Config keys (`[computer_use]`), Verified matrix, Route anatomy, Resume contract, Events and redaction
+  - **User Questions**: "What can you tell me about Computer Use Quick Reference?", "How does Config keys
+    (`[computer_use]`) work?", "How does Verified matrix work?"
+
 - **File**: `docs/development/computer-use-runloop-wiring.md`
   - **Content**: Computer-use run-loop wiring
   - **Topics**: Authority split (recap), Inbound: provider response to native calls, Approval, Execution, Outbound:
@@ -635,6 +641,12 @@ below based on the topic area.
     vtcode-plugins
   - **User Questions**: "What can you tell me about Agent Plugins?", "How does What a plugin gives you work?", "How does
     Install a plugin work?"
+
+- **File**: `docs/user-guide/computer-use.md`
+  - **Content**: Computer Use
+  - **Topics**: What it is, Enabling it, Privacy properties, Limits and troubleshooting
+  - **User Questions**: "What can you tell me about Computer Use?", "How does What it is work?", "How does Enabling it
+    work?"
 
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
