@@ -13,8 +13,8 @@ resolves to, where values are dropped, what layout a type is given, which generi
 For those, use [Charon](https://github.com/AeneasVerif/charon), which extracts a whole crate (and its
 dependencies) into a stable, uniform JSON representation of what rustc sees, including simplified MIR.
 
-The operational workflow lives in the dedicated skill at
-[`charon-rust-analysis`](../../.agents/skills/charon-rust-analysis/SKILL.md). This guide records *why*
+The operational workflow lives in the dedicated `charon-rust-analysis` skill
+(`.agents/skills/charon-rust-analysis/SKILL.md`, a local untracked skill). This guide records *why*
 the integration is shaped the way it is and where its boundaries are.
 
 ## What Charon gives you
