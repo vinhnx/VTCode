@@ -51,9 +51,10 @@ mod path_environment_tests {
 
     #[test]
     fn home_is_present_and_absolute() {
-        let home = env::var_os("HOME").expect("HOME must be set for user-local tool paths");
-        let home_path = PathBuf::from(home);
-        assert!(home_path.is_absolute(), "HOME must be absolute: {}", home_path.display());
+        // Use the repo's canonical home resolver: Windows uses USERPROFILE,
+        // not HOME, and both must yield an absolute path for user-local tools.
+        let home = dirs::home_dir().expect("a resolvable home directory is required for user-local tool paths");
+        assert!(home.is_absolute(), "home directory must be absolute: {}", home.display());
     }
 
     #[test]
