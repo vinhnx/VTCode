@@ -1,9 +1,12 @@
-//! Persisted desktop preferences in `~/.vtcode/desktop/preferences.json`.
+//! Persisted desktop preferences in the resolved config directory's
+//! `desktop/preferences.json`. The pre-XDG `~/.vtcode/desktop/preferences.json`
+//! stays readable so existing installations keep their settings; the next save
+//! writes to the canonical location.
 //!
 //! A missing or corrupt file falls back to defaults. Permission choices are
 //! explicit per-workspace overrides of the CLI confirmation flag.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(not(test))]
 use objc2_app_kit::{NSFont, NSFontTextStyleBody};
@@ -923,25 +926,54 @@ impl Preferences {
         if let Some(path) = TEST_PREFERENCES_PATH.with(|path| path.borrow().clone()) {
             return Some(path);
         }
+        Self::canonical_preferences_path()
+    }
+
+    /// Canonical preference file under the resolved config home.
+    fn canonical_preferences_path() -> Option<PathBuf> {
+        vtcode_commons::VtCodePaths::resolve()
+            .ok()
+            .map(|paths| paths.config_dir().join("desktop").join("preferences.json"))
+    }
+
+    /// Pre-XDG preference file, read only when the canonical file is absent.
+    fn legacy_preferences_path() -> Option<PathBuf> {
         dirs::home_dir().map(|home| home.join(".vtcode").join("desktop").join("preferences.json"))
     }
 
     /// Load preferences, returning defaults for a missing file. A corrupt
-    /// file is quarantined beside the original before falling back, so the
-    /// next save cannot silently overwrite the evidence with defaults.
+    /// canonical file is quarantined beside the original before falling back,
+    /// so the next save cannot silently overwrite the evidence with defaults.
     pub(super) fn load() -> Self {
-        let Some(path) = Self::preferences_path() else {
+        #[cfg(test)]
+        if let Some(path) = TEST_PREFERENCES_PATH.with(|path| path.borrow().clone()) {
+            return Self::load_from(&path, None);
+        }
+        let Some(canonical) = Self::canonical_preferences_path() else {
             return Self::default();
         };
-        let content = match std::fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(_) => return Self::default(),
-        };
+        let legacy = Self::legacy_preferences_path();
+        Self::load_from(&canonical, legacy.as_deref())
+    }
+
+    /// Pure core of [`Self::load`]: the legacy file is used only when the
+    /// canonical one is missing, and is never renamed or overwritten here.
+    fn load_from(canonical: &Path, legacy: Option<&Path>) -> Self {
+        if let Ok(content) = std::fs::read_to_string(canonical) {
+            return Self::parse_or_quarantine(canonical, content);
+        }
+        legacy
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .and_then(|content| serde_json::from_str(&content).ok())
+            .unwrap_or_default()
+    }
+
+    fn parse_or_quarantine(path: &Path, content: String) -> Self {
         match serde_json::from_str(&content) {
             Ok(preferences) => preferences,
             Err(error) => {
                 let quarantined = path.with_extension("json.corrupt");
-                if let Err(rename_error) = std::fs::rename(&path, &quarantined) {
+                if let Err(rename_error) = std::fs::rename(path, &quarantined) {
                     vtcode_commons::diagnostics::stderr(format_args!(
                         "failed to quarantine corrupt desktop preferences ({}): {rename_error}",
                         quarantined.display()

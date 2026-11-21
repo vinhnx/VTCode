@@ -78,6 +78,16 @@ mod tests {
         environment.iter().filter_map(|(key, _)| key.to_str()).collect()
     }
 
+    fn configured_value(command: &Command, key: &str) -> Option<String> {
+        command.as_std().get_envs().find_map(|(name, value)| {
+            if name.to_str()? == key {
+                value.map(|value| value.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+    }
+
     #[test]
     fn filters_credentials_and_loader_overrides_but_preserves_runtime_values() {
         let environment = [
@@ -151,22 +161,18 @@ mod tests {
         // provides GITHUB_TOKEN. nextest runs each test in its own process and
         // the guard serializes env access, restoring originals on drop.
         let guard = vtcode_commons::env_lock::lock();
-        guard.set_var("GITHUB_TOKEN", "github-secret");
-        guard.set_var("OPENAI_API_KEY", "openai-secret");
+        guard.set_var("GITHUB_TOKEN", "github-from-process-a73");
+        guard.set_var("OPENAI_API_KEY", "openai-from-process-b29");
 
         let mut command = Command::new("copilot");
-        let _ = command.env("GITHUB_TOKEN", "github-secret");
-        let _ = command.env("OPENAI_API_KEY", "openai-secret");
+        // Distinct command overrides prove the sanitizer re-reads allowed
+        // values from the process snapshot instead of keeping the override.
+        let _ = command.env("GITHUB_TOKEN", "github-from-command-override");
+        let _ = command.env("OPENAI_API_KEY", "openai-from-command-override");
 
         sanitize_tokio_command_environment(&mut command, COPILOT_AUTH_ENV_VARS);
 
-        let configured_names: Vec<String> = command
-            .as_std()
-            .get_envs()
-            .filter_map(|(key, value)| value.map(|_| key.to_string_lossy().into_owned()))
-            .collect();
-
-        assert!(configured_names.iter().any(|name| name == "GITHUB_TOKEN"));
-        assert!(!configured_names.iter().any(|name| name == "OPENAI_API_KEY"));
+        assert_eq!(configured_value(&command, "GITHUB_TOKEN").as_deref(), Some("github-from-process-a73"));
+        assert_eq!(configured_value(&command, "OPENAI_API_KEY"), None);
     }
 }

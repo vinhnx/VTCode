@@ -387,10 +387,11 @@ exercises the real binary on Linux and needs a Landlock-capable kernel (in conta
 ### Rule-file layers
 
 Rule files (`.rules`, TOML/JSON/simple formats — see `exec_policy::PolicyParser`) can declare prefix rules with
-`allow`/`prompt`/`forbidden` decisions. VT Code discovers them in two layers, highest precedence first:
+`allow`/`prompt`/`forbidden` decisions. VT Code discovers them in three layers, highest precedence first:
 
 1. `<workspace>/.vtcode/rules/*.rules` — project rules
-2. `~/.vtcode/rules/*.rules` — user rules
+2. the canonical config directory's `rules/*.rules` (native/XDG location) — user rules
+3. `~/.vtcode/rules/*.rules` — legacy user rules, kept for installations that have not migrated
 
 `exec_policy::rules_layers` enumerates the layers (sorted within each directory) and
 `ExecPolicyManager::load_policy_layers` merges them so a pattern defined in a higher-precedence layer wins.

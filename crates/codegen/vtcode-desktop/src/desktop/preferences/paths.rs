@@ -14,7 +14,7 @@ std::thread_local! {
 /// Drop any leftover file from a dead process so the new test starts from
 /// defaults. Test paths embed pid+sequence, which collide after pid reuse.
 #[cfg(test)]
-pub(in crate::desktop) fn remove_stale_test_file(path: &std::path::Path) {
+pub(in crate::desktop) fn remove_stale_test_file(path: &Path) {
     drop(std::fs::remove_file(path));
 }
 

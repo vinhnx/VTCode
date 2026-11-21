@@ -852,6 +852,57 @@ fn valid_preferences_file_loads_values_without_quarantine() {
 }
 
 #[test]
+fn canonical_preferences_win_over_legacy_when_both_exist() {
+    let dir = tempfile::tempdir().expect("isolated canonical/legacy probe");
+    let canonical_dir = dir.path().join("canonical");
+    let legacy_dir = dir.path().join("legacy");
+    std::fs::create_dir_all(&canonical_dir).expect("create canonical dir");
+    std::fs::create_dir_all(&legacy_dir).expect("create legacy dir");
+    let canonical = canonical_dir.join("preferences.json");
+    let legacy = legacy_dir.join("preferences.json");
+    std::fs::write(&canonical, r#"{"theme":"ciapre","contrast":42}"#).expect("seed canonical preferences");
+    std::fs::write(&legacy, r#"{"contrast":99}"#).expect("seed legacy preferences");
+
+    let loaded = Preferences::load_from(&canonical, Some(&legacy));
+
+    assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
+    assert_eq!(loaded.contrast(), 42);
+    assert_eq!(std::fs::read_to_string(&legacy).expect("legacy file survives"), r#"{"contrast":99}"#);
+}
+
+#[test]
+fn legacy_preferences_are_read_only_when_canonical_is_absent() {
+    let dir = tempfile::tempdir().expect("isolated legacy fallback probe");
+    let canonical = dir.path().join("canonical/preferences.json");
+    let legacy = dir.path().join("legacy/preferences.json");
+    std::fs::create_dir_all(legacy.parent().unwrap()).expect("create legacy dir");
+    std::fs::write(&legacy, r#"{"theme":"ciapre","contrast":17}"#).expect("seed legacy preferences");
+
+    let loaded = Preferences::load_from(&canonical, Some(&legacy));
+
+    assert_eq!(loaded.theme.as_deref(), Some(ThemeId::ciapre::BASE));
+    assert_eq!(loaded.contrast(), 17);
+    assert!(legacy.exists(), "fallback must not quarantine the legacy file");
+    assert!(!canonical.with_extension("json.corrupt").exists());
+}
+
+#[test]
+fn corrupt_canonical_does_not_fall_back_to_legacy() {
+    let dir = tempfile::tempdir().expect("isolated corrupt canonical probe");
+    let canonical = dir.path().join("preferences.json");
+    let legacy = dir.path().join("legacy/preferences.json");
+    std::fs::create_dir_all(legacy.parent().unwrap()).expect("create legacy dir");
+    std::fs::write(&canonical, r#"{"theme":"ciapre","contrast":oops"#).expect("seed corrupt canonical");
+    std::fs::write(&legacy, r#"{"contrast":55}"#).expect("seed legacy preferences");
+
+    let loaded = Preferences::load_from(&canonical, Some(&legacy));
+
+    assert!(loaded.theme.is_none(), "corrupt canonical must not partially load");
+    assert!(canonical.with_extension("json.corrupt").exists(), "canonical evidence is quarantined");
+    assert_eq!(std::fs::read_to_string(&legacy).expect("legacy file survives"), r#"{"contrast":55}"#);
+}
+
+#[test]
 fn zen_mode_defaults_to_zen_and_round_trips_both_choices() {
     let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
     assert!(legacy.zen_mode(), "missing values keep fresh installs in zen");

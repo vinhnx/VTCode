@@ -16,6 +16,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::RwLock;
+use vtcode_commons::VtCodePaths;
 
 const PROMPT_CONFLICT_REASON: &str = "approval required by policy, but AskForApproval is set to Never";
 const REJECT_SANDBOX_APPROVAL_REASON: &str =
@@ -331,10 +332,31 @@ impl ExecPolicyManager {
 pub type SharedExecPolicyManager = Arc<ExecPolicyManager>;
 
 /// Canonical rule-file layers for `workspace_root`, highest precedence first:
-/// `<workspace>/.vtcode/rules/*.rules` (project rules) over
-/// `~/.vtcode/rules/*.rules` (user rules). Files within a directory load in
-/// sorted order; missing directories yield no layers.
+/// `<workspace>/.vtcode/rules/*.rules` (project rules), then user rules from
+/// the canonical config directory's `rules/`, then legacy `~/.vtcode/rules/`.
+/// Files within a directory load in sorted order; missing directories yield no
+/// layers. Both user roots stay in the list so installations that have not
+/// migrated to the native/XDG layout keep loading their personal rules.
 pub fn rules_layers(workspace_root: &Path) -> Vec<PathBuf> {
+    let mut user_roots = Vec::with_capacity(2);
+    match VtCodePaths::resolve() {
+        Ok(paths) => {
+            user_roots.push(paths.config_dir().join("rules"));
+            user_roots.push(paths.legacy_dir().join("rules"));
+        }
+        Err(_) => {
+            // Path resolution failure must not silently drop user rules.
+            if let Some(home) = dirs::home_dir() {
+                user_roots.push(home.join(".vtcode").join("rules"));
+            }
+        }
+    }
+    rules_layers_from(workspace_root, &user_roots)
+}
+
+/// Pure core of [`rules_layers`]: enumerate layers from explicit roots so the
+/// precedence contract is testable without mutating process-global environment.
+fn rules_layers_from(workspace_root: &Path, user_roots: &[PathBuf]) -> Vec<PathBuf> {
     fn dir_layers(dir: PathBuf) -> Vec<PathBuf> {
         let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
             .into_iter()
@@ -348,9 +370,12 @@ pub fn rules_layers(workspace_root: &Path) -> Vec<PathBuf> {
     }
 
     let mut layers = dir_layers(workspace_root.join(".vtcode").join("rules"));
-    if let Some(home) = dirs::home_dir() {
-        layers.extend(dir_layers(home.join(".vtcode").join("rules")));
+    for root in user_roots {
+        layers.extend(dir_layers(root.clone()));
     }
+    // A canonical root can coincide with the legacy root via overrides; keep
+    // the first occurrence so precedence and order stay stable.
+    layers.dedup();
     layers
 }
 
@@ -480,6 +505,40 @@ mod tests {
         assert_eq!(layers[0].file_name().unwrap(), "a.rules");
         assert_eq!(layers[1].file_name().unwrap(), "b.rules");
         assert!(layers.iter().all(|p| p.extension().and_then(|e| e.to_str()) == Some("rules")));
+    }
+
+    #[test]
+    fn rules_layers_load_canonical_user_rules_and_keep_legacy_fallback() {
+        let workspace = tempdir().unwrap();
+        let ws_rules = workspace.path().join(".vtcode").join("rules");
+        let canonical = tempdir().unwrap();
+        let canonical_rules = canonical.path().join("rules");
+        let legacy = tempdir().unwrap();
+        let legacy_rules = legacy.path().join("rules");
+
+        for (dir, file) in [
+            (&ws_rules, "project.rules"),
+            (&canonical_rules, "canonical.rules"),
+            (&legacy_rules, "legacy.rules"),
+        ] {
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join(file), "").unwrap();
+        }
+
+        let layers = rules_layers_from(workspace.path(), &[canonical_rules.clone(), legacy_rules.clone()]);
+        let names: Vec<_> = layers
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["project.rules", "canonical.rules", "legacy.rules"]);
+
+        // Identical roots (possible through overrides) must not load twice.
+        let deduped = rules_layers_from(workspace.path(), &[canonical_rules.clone(), canonical_rules]);
+        let deduped_names: Vec<_> = deduped
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(deduped_names, vec!["project.rules", "canonical.rules"]);
     }
 
     #[tokio::test]

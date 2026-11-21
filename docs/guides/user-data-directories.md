@@ -35,6 +35,12 @@ On macOS and Windows, VT Code uses native application-data and cache roots. The 
 platform supports them, but the exact native root is intentionally delegated to the operating system. Use
 `vtcode --version` rather than hard-coding a platform path.
 
+### Desktop preferences
+
+The desktop app stores UI preferences (theme, pane widths, recent workspaces, comfort settings) in the config category
+as `desktop/preferences.json`. Installations that used the pre-XDG `~/.vtcode/desktop/preferences.json` keep reading
+that file until the next save writes to the canonical location, so existing settings are not lost.
+
 ## Environment variables
 
 The following variables control resolution:

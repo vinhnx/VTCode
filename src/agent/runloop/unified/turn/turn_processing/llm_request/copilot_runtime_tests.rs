@@ -451,7 +451,16 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
+    // The assertion must prove the terminal request forwarded this value.
+    // If the test process already had the variable, an inherited value could
+    // satisfy it even when forwarding is broken, so clear it first.
+    let env = vtcode_commons::env_lock::lock();
+    let previous_token = std::env::var_os("ACP_TEST_TOKEN");
+    env.remove_var("ACP_TEST_TOKEN");
+    drop(env);
+
     let temp = TempDir::new().expect("temp workspace");
     let workspace = temp.path().to_path_buf();
     let harness_path = workspace.join("harness-terminal.jsonl");
@@ -514,7 +523,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
             args: vec!["ACP_TEST_TOKEN".to_string()],
             env: vec![CopilotTerminalEnvVar {
                 name: "ACP_TEST_TOKEN".to_string(),
-                value: "vtcode-terminal".to_string(),
+                value: "vtcode-terminal-forwarded-a73".to_string(),
             }],
             cwd: None,
             output_byte_limit: Some(1024),
@@ -532,7 +541,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         .handle_terminal_output(&response.terminal_id)
         .await
         .expect("read local terminal output");
-    assert_eq!(output.output.trim(), "vtcode-terminal");
+    assert_eq!(output.output.trim(), "vtcode-terminal-forwarded-a73");
     assert!(!output.truncated);
     assert_eq!(output.exit_status, Some(exit_status.clone()));
 
@@ -562,7 +571,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
             && entry["event"]["item"]["type"] == "tool_output"
             && entry["event"]["item"]["output"]
                 .as_str()
-                .is_some_and(|output| output.trim() == "vtcode-terminal")
+                .is_some_and(|output| output.trim() == "vtcode-terminal-forwarded-a73")
     }));
     assert!(events.iter().any(|entry| {
         entry["event"]["type"] == "item.completed"
@@ -570,7 +579,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
             && entry["event"]["item"]["status"] == "completed"
             && entry["event"]["item"]["output"]
                 .as_str()
-                .is_some_and(|output| output.trim() == "vtcode-terminal")
+                .is_some_and(|output| output.trim() == "vtcode-terminal-forwarded-a73")
     }));
 
     runtime_host
@@ -578,6 +587,9 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         .await
         .expect("release local terminal");
     runtime_host.handle_terminal_output(&response.terminal_id).await.unwrap_err();
+
+    let env = vtcode_commons::env_lock::lock();
+    env.restore_var("ACP_TEST_TOKEN", previous_token);
 }
 
 #[tokio::test]

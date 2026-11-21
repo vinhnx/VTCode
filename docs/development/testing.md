@@ -652,6 +652,11 @@ tutorial skills.
 | Oracle required | Every test needs `assert*` / `prop_assert*` / `insta::*`; panic-only tests are a smell                                                                                 |
 | Avoid           | Red-green TDD encoding current output, fully random bytes for structured parsers, identical/palindromic fixtures                                                       |
 
+Inherited-state oracle: when a test asserts that code forwards a value to a child process, clear that variable in the
+test process first and use asymmetric values for the resolution input versus any command override. Otherwise the child
+can simply inherit the expected value and the test passes even after forwarding is removed. Use `EnvGuard` plus
+`#[serial]` whenever a test mutates the process environment.
+
 Triage with `vtcode_eval::analyze_test_source` (`TestQualitySummary::meets_agentic_testing_bar`: panic-only <=50%,
 asymmetric >=20%). Lazy skill: `.agents/skills/agentic-testing/SKILL.md`.
 
