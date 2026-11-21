@@ -28,13 +28,18 @@ fn high_contrast_switch_drives_the_slider_and_restores_a_custom_value(cx: &mut T
         assert!(crate::desktop::preferences::Preferences::load().high_contrast);
         assert_eq!(window.find("high-contrast").checked(), Some(true));
 
-        // Manual slider control ends the overlay and keeps the chosen value.
-        // The real slider persists once on Release; do that explicitly here.
-        view.update(cx, |view, cx| {
-            view.set_contrast(80.0, window, cx);
-            view.save_preferences();
-        });
+        // Keyboard control is the path assistive technology uses. Driving it
+        // through the real handler must end the overlay and persist the value
+        // without a slider Release event.
+        let slider_focus = view.read(cx).contrast_focus.clone();
+        window.focus(&slider_focus, cx);
+        window.press("left", cx);
+        window.press("left", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.contrast(), 98);
+        assert_eq!(view.read(cx).contrast_slider.read(cx).value().start(), 98.0);
         assert!(!view.read(cx).preferences.high_contrast);
+        assert_eq!(crate::desktop::preferences::Preferences::load().contrast(), 98);
         assert!(!crate::desktop::preferences::Preferences::load().high_contrast);
     })
     .unwrap();

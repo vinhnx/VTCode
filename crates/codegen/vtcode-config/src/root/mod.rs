@@ -219,9 +219,11 @@ pub struct UiConfig {
     #[serde(default = "default_minimum_contrast")]
     pub minimum_contrast: f32,
 
-    /// Raise the effective text contrast floor to WCAG AAA (7.0:1) on both the
-    /// TUI and desktop. Can also be enabled with VTCODE_HIGH_CONTRAST=1. It
-    /// wins over `minimum_contrast` without rewriting the saved value.
+    /// Raise the effective text contrast floor to WCAG AAA (7.0:1) in the TUI.
+    /// Can also be enabled with VTCODE_HIGH_CONTRAST=1. It wins over
+    /// `minimum_contrast` without rewriting the saved value. The desktop app
+    /// does not read this setting; it has its own independent Accessibility →
+    /// High contrast switch.
     #[serde(default = "default_high_contrast_mode")]
     pub high_contrast_mode: bool,
 

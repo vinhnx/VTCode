@@ -62,7 +62,8 @@ use_memories = true
 atif_enabled = true
 
 [ui]
-# Raise the text contrast floor to WCAG AAA (7.0:1) across the TUI and desktop.
+# Raise the text contrast floor to WCAG AAA (7.0:1) in the TUI. The desktop app
+# has its own Accessibility → High contrast switch instead.
 # An explicit minimum_contrast above 7.0 is preserved. Overridable per run with
 # VTCODE_HIGH_CONTRAST=1.
 # high_contrast_mode = true

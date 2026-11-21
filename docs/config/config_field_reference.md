@@ -504,7 +504,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.184.0"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.185.0"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -867,7 +867,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.fullscreen.mouse_capture` | `boolean` | no | `true` | Capture mouse events inside the fullscreen UI. Can also be controlled via VTCODE_FULLSCREEN_MOUSE_CAPTURE=0/1. |
 | `ui.fullscreen.scroll_speed` | `integer` | no | `3` | Multiplier applied to mouse wheel transcript scrolling in fullscreen mode. Values are clamped to the range 1..=20. Can also be controlled via VTCODE_FULLSCREEN_SCROLL_SPEED. |
 | `ui.hide_header` | `boolean` | no | `true` | Hide the full TUI header, showing only version info in a compact line. |
-| `ui.high_contrast_mode` | `boolean` | no | `false` | Raise the effective text contrast floor to WCAG AAA (7.0:1) on both the TUI and desktop. Can also be enabled with VTCODE_HIGH_CONTRAST=1. It wins over `minimum_contrast` without rewriting the saved value. |
+| `ui.high_contrast_mode` | `boolean` | no | `false` | Raise the effective text contrast floor to WCAG AAA (7.0:1) in the TUI. Can also be enabled with VTCODE_HIGH_CONTRAST=1. It wins over `minimum_contrast` without rewriting the saved value. The desktop app does not read this setting; it has its own independent Accessibility → High contrast switch. |
 | `ui.inline_viewport_rows` | `integer` | no | `16` | Number of rows to allocate for inline UI viewport |
 | `ui.keybindings` | `object` | no | `{}` | Session action bindings. Each action maps to one or more key specs; an empty list explicitly unbinds the built-in action. |
 | `ui.keybindings.*` | `array` | no | `-` | - |

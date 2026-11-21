@@ -163,7 +163,19 @@ impl Session {
             ..Default::default()
         };
 
-        let mut summary = payload.summary.clone();
+        // Screen-reader mode forces the inline surface, where severity is
+        // otherwise carried by the row kind and color. Spell it out in the
+        // rendered text, matching the headless diagnostic path.
+        let severity_label = if self.appearance.screen_reader_mode {
+            match payload.severity {
+                DiagnosticSeverity::Info => "[Info] ",
+                DiagnosticSeverity::Warning => "[Warning] ",
+                DiagnosticSeverity::Error => "[Error] ",
+            }
+        } else {
+            ""
+        };
+        let mut summary = format!("{severity_label}{}", payload.summary);
         if !payload.actions.is_empty() {
             summary.push_str("\n\nAvailable actions: ");
             summary.push_str(
@@ -733,6 +745,28 @@ mod tests {
         assert_eq!(session.lines.len(), 1);
         assert!(text(session.reflow_message_lines_for_review(0, 100)).contains("attempts=4"));
     }
+    #[test]
+    fn screen_reader_mode_labels_inline_diagnostic_severity() {
+        for (severity, label) in [
+            (DiagnosticSeverity::Info, "[Info]"),
+            (DiagnosticSeverity::Warning, "[Warning]"),
+            (DiagnosticSeverity::Error, "[Error]"),
+        ] {
+            let mut session = Session::new(InlineTheme::default(), None, 100);
+            session.appearance.screen_reader_mode = true;
+            let mut item = diagnostic();
+            item.severity = severity;
+            session.upsert_diagnostic(item);
+            let rendered = text(session.reflow_message_lines(0, 100, true));
+            assert!(rendered.contains(label), "screen reader mode must spell out severity: {rendered}");
+        }
+
+        let mut plain = Session::new(InlineTheme::default(), None, 100);
+        plain.upsert_diagnostic(diagnostic());
+        let rendered = text(plain.reflow_message_lines(0, 100, true));
+        assert!(!rendered.contains("[Error]"), "severity label is screen-reader-only");
+    }
+
     #[test]
     fn diagnostic_mouse_render_resize_and_screen_reader_keep_summary_visible() {
         use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
