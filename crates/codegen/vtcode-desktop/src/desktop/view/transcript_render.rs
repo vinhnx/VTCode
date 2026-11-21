@@ -1,7 +1,6 @@
 //! Transcript state and conversation rendering: rows, items, tool and diff cards.
 
 use super::*;
-use welcome::{WelcomeHeader, greeting_empty_state, welcome_header};
 
 mod rows;
 mod welcome;
@@ -96,84 +95,8 @@ impl DesktopView {
                 .text_color(colors.foreground)
                 .child(shimmer_label("new-thread-pending-label", label, colors.foreground, cx))
                 .into_any_element()
-        } else if (empty_conversation || connecting) && !self.zen_mode {
-            let colors = cx.theme().colors;
-            let WelcomeHeader {
-                copy: welcome_copy,
-                greeting,
-                workspace_name,
-                prompt,
-            } = welcome_header(self);
-            let title = div()
-                .id(if connecting {
-                    "welcome-title-layout"
-                } else {
-                    "welcome-prompt"
-                })
-                .test_support()
-                .when(!connecting, |title| title.role(gpui_kit::Role::Heading).aria_label(prompt.clone()))
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_center()
-                .gap_2()
-                .child(if workspace_name.is_some() {
-                    format!("{greeting}. {}", welcome_copy.workspace_action)
-                } else {
-                    prompt
-                })
-                .when_some(workspace_name, |title, name| {
-                    let name_text = div()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(gpui_kit::rems(1.75))
-                        .font_weight(gpui_kit::FontWeight::NORMAL)
-                        .border_b_1()
-                        .border_dashed()
-                        .border_color(colors.muted_foreground)
-                        .child(format!("{name}?"));
-                    let workspace = desktop_secondary_button(if connecting {
-                        "welcome-workspace-layout"
-                    } else {
-                        "welcome-workspace"
-                    })
-                    .text()
-                    .text_color(colors.foreground)
-                    .h_auto()
-                    .p_0()
-                    .min_w_0()
-                    .max_w_full()
-                    .child(name_text);
-                    title.child(if connecting {
-                        workspace.role(None::<gpui_kit::Role>).tab_stop(false).desktop_disabled(true)
-                    } else {
-                        workspace
-                            .accessibility_label(
-                                rust_i18n::t!("app.transcript.change_workspace", name = name.as_str()).to_string(),
-                            )
-                            .tooltip_with_action(
-                                rust_i18n::t!("app.transcript.choose_workspace").to_string(),
-                                &ChooseWorkspace,
-                                Some(key_context::DESKTOP),
-                            )
-                            .desktop_disabled(
-                                !self.workspace_switch_idle()
-                                    || self.workspace_picker_open
-                                    || self.retained_submission.is_some(),
-                            )
-                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone())
-                    })
-                });
-            div()
-                .id("welcome")
-                .test_support()
-                .role(gpui_kit::Role::Group)
-                .aria_label(rust_i18n::t!("app.transcript.welcome_label").to_string())
-                .size_full()
-                .child(greeting_empty_state(self, title, connecting, colors, cx))
-                .into_any_element()
         } else if empty_conversation || connecting {
-            self.render_zen_empty_state(connecting, cx)
+            self.render_welcome(connecting, window, cx).into_any_element()
         } else {
             let remaining_history_capacity = self.transcript.remaining_capacity();
             let colors = cx.theme().colors;
@@ -321,39 +244,6 @@ impl DesktopView {
             .w_full()
             .overflow_hidden()
             .child(content)
-    }
-
-    /// Minimal centered empty state for Zen mode. The brand mark is the single
-    /// focal point, followed by one greeting line; the workspace name renders
-    /// as plain text because Zen hides the title-bar identity. The workspace
-    /// picker stays reachable through the composer context row when none is set.
-    /// Mark, title, and gap come from the shared greeting scaffold, so
-    /// toggling modes never resizes the greeting.
-    fn render_zen_empty_state(&self, connecting: bool, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let WelcomeHeader { prompt, .. } = welcome_header(self);
-        div()
-            .id("zen-welcome")
-            .test_support()
-            .role(gpui_kit::Role::Group)
-            .aria_label(rust_i18n::t!("app.transcript.zen_start_label").to_string())
-            .size_full()
-            .child(greeting_empty_state(
-                self,
-                div()
-                    .id(if connecting {
-                        "welcome-title-layout"
-                    } else {
-                        "zen-welcome-prompt"
-                    })
-                    .test_support()
-                    .when(!connecting, |title| title.role(gpui_kit::Role::Heading).aria_label(prompt.clone()))
-                    .child(prompt),
-                connecting,
-                colors,
-                cx,
-            ))
-            .into_any_element()
     }
 
     pub(super) fn pending_blank_transition(&self) -> bool {

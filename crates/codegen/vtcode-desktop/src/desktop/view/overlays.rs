@@ -323,16 +323,6 @@ impl DesktopView {
         }
     }
 
-    /// Recompute the day-period greeting so a window left open across a
-    /// morning/afternoon/evening boundary greets correctly when reactivated.
-    pub(super) fn refresh_welcome_period(&mut self, cx: &mut Context<Self>) {
-        let period = welcome_period_for_hour(chrono::Local::now().hour());
-        if period != self.welcome_period {
-            self.welcome_period = period;
-            cx.notify();
-        }
-    }
-
     pub(super) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.current_route() == Route::Settings {
             return;

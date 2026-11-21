@@ -862,7 +862,7 @@ fn sidebar_shows_running_for_background_work_after_turn_completion(cx: &mut Test
 }
 
 #[gpui_kit::test]
-fn zen_empty_state_centers_brand_mark_with_greeting(cx: &mut TestAppContext) {
+fn zen_empty_state_shows_workspace_identity_below_the_greeting(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -875,16 +875,12 @@ fn zen_empty_state_centers_brand_mark_with_greeting(cx: &mut TestAppContext) {
         assert!(window.try_find("welcome").is_none());
         assert_eq!(window.find("zen-welcome").label(), Some("VT Code zen start"));
         assert!(window.try_find("send-prompt").is_some());
-        let mark = window.find("welcome-brand-mark").bounds();
         let prompt = window.find("zen-welcome-prompt");
         assert_eq!(prompt.role(), Some(gpui_kit::Role::Heading));
-        assert_eq!(mark.center().x, prompt.bounds().center().x, "mark and greeting share one centered spine");
-        let name = workspace.path().file_name().unwrap().to_string_lossy().into_owned();
-        assert!(
-            prompt.label().unwrap().contains(&name),
-            "zen names the workspace in plain text: {:?}",
-            prompt.label()
-        );
+        let identity = window.find("welcome-workspace-name");
+        assert_eq!(identity.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(identity.label(), workspace.path().file_name().unwrap().to_str());
+        assert!(identity.bounds().top() >= prompt.bounds().bottom());
         assert!(window.try_find("welcome-workspace").is_none(), "zen keeps no inline workspace link");
         assert!(window.try_find("open-first-workspace").is_none());
     })
@@ -892,7 +888,7 @@ fn zen_empty_state_centers_brand_mark_with_greeting(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_empty_state_stays_greeting_only_with_picker_in_composer_context(cx: &mut TestAppContext) {
+fn zen_empty_state_without_workspace_keeps_picker_in_composer_context(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = None;

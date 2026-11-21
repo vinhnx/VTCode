@@ -19,12 +19,12 @@ if [ -s "$snapshot_dir/paths" ]; then
 	git ls-files --cached -z -- ':(glob)**/rustfmt.toml' ':(glob)**/.rustfmt.toml' > "$snapshot_dir/configs"
 	while IFS= read -r -d '' config; do
 		mkdir -p -- "$config_root/$(dirname -- "$config")"
-		git show ":$config" > "$config_root/$config"
+		git cat-file blob ":0:$config" > "$config_root/$config"
 	done < "$snapshot_dir/configs"
 	while IFS= read -r -d '' file; do
 		config_directory="$config_root/$(dirname -- "$file")"
 		mkdir -p -- "$config_directory"
-		git show ":$file" > "$snapshot_dir/source"
+		git cat-file blob ":0:$file" > "$snapshot_dir/source"
 		rustfmt --edition 2024 --config-path "$config_directory" --emit stdout \
 			< "$snapshot_dir/source" > "$snapshot_dir/formatted"
 		if ! cmp -s "$snapshot_dir/source" "$snapshot_dir/formatted"; then

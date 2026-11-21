@@ -479,30 +479,31 @@ fn zen_toggle_round_trips_through_command_palette(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_empty_state_matches_welcome_title_size(cx: &mut TestAppContext) {
+fn welcome_greeting_stays_aligned_with_the_composer_when_toggling_zen(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
-        // No workspace: both empty states render the identical greeting text,
-        // so any height difference is the title size, not the copy.
         view.workspace = None;
-        view.welcome_period = WelcomePeriod::Morning;
-        view.welcome_copy_index = 0;
+        view.welcome_period = WelcomePeriod::Evening;
     });
 
     cx.update_window(window, |_, window, cx| {
-        // Suite baseline is normal mode: record the welcome title height.
-        window.render_frame(cx);
-        assert!(window.try_find("welcome").is_some());
-        let normal_title = window.find("welcome-prompt").bounds();
-
-        window.press("ctrl-cmd-z", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).zen_mode);
-        let zen_title = window.find("zen-welcome-prompt").bounds();
-        assert!(
-            (zen_title.size.height - normal_title.size.height).abs() <= px(1.),
-            "zen greeting keeps the welcome title size: zen={zen_title:?} normal={normal_title:?}"
-        );
+        for (zen, title_id) in [(false, "welcome-prompt"), (true, "zen-welcome-prompt")] {
+            if zen {
+                window.press("ctrl-cmd-z", cx);
+            }
+            window.render_frame(cx);
+            assert_eq!(view.read(cx).zen_mode, zen);
+            let title = window.find(title_id);
+            let composer = window.find("message-composer-frame").bounds();
+            let transcript = window.find("transcript-scroll").bounds();
+            let mark = window.find("welcome-brand-mark").bounds();
+            assert_eq!(title.label(), Some("Good evening"));
+            assert!((title.bounds().left() - composer.left()).abs() <= px(1.));
+            assert!((mark.left() - composer.left()).abs() <= px(1.));
+            assert!(mark.bottom() <= title.bounds().top());
+            assert!(title.bounds().top() > transcript.center().y);
+            assert!(title.bounds().bottom() < composer.top());
+        }
     })
     .unwrap();
 }

@@ -1,10 +1,5 @@
 //! Best-effort process-group cleanup for spawned lifecycle hooks.
 //!
-//! Split from `engine.rs` so the engine focuses on hook orchestration while
-//! the platform-specific abort safety lives on its own. The guard is imported
-//! back into the parent under `#[cfg(unix)]`, so every original call site is
-//! unchanged.
-
 /// Best-effort cleanup for a hook's process group on abort.
 ///
 /// `kill_on_drop(true)` only kills the direct `sh` child, which leaves shell

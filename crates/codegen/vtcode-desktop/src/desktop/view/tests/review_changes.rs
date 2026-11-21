@@ -19,7 +19,6 @@ fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_sess
         view.update(cx, |view, _| {
             view.workspace = None;
             view.inspector_open = false;
-            view.welcome_copy_index = 0;
         });
         window.render_frame(cx);
         assert!(window.find_all("open-first-workspace").is_empty());

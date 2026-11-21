@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
-use chrono::Timelike;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{
     Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, ResizeHandleContext, ResizeHandleRenderer,
@@ -222,7 +221,6 @@ use runtime_items::*;
 use sessions::*;
 use transcript_nav::*;
 use typography::FontTarget;
-use welcome_copy::*;
 mod view_extras;
 pub(super) use view_extras::*;
 use workspace_review::WorkspaceReviewState;
@@ -432,8 +430,7 @@ struct DesktopView {
     _focus_lost_subscription: Subscription,
     _window_bounds_subscription: Subscription,
     _welcome_activation_subscription: Subscription,
-    welcome_period: WelcomePeriod,
-    welcome_copy_index: usize,
+    welcome_period: welcome_copy::WelcomePeriod,
     workspace: Option<PathBuf>,
     terminal: Option<super::terminal_tab::TerminalTab>,
     terminal_visible: bool,

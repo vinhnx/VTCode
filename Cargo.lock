@@ -12393,7 +12393,6 @@ dependencies = [
  "plist",
  "portable-pty",
  "pulldown-cmark",
- "rand 0.10.3",
  "rio-vt",
  "rust-i18n",
  "serde",

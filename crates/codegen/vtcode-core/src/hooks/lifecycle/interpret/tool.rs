@@ -4,8 +4,8 @@ use serde_json::Value;
 use crate::hooks::lifecycle::types::{HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome};
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
-    looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, looks_like_json,
+    matches_hook_event, parse_json_output, report_capture_failure, trimmed_non_empty,
 };
 
 /// Human-readable JSON value kind used in diagnostics for rejected
@@ -27,28 +27,32 @@ pub(crate) fn interpret_pre_tool(
     outcome: &mut PreToolHookOutcome,
     quiet_success_output: bool,
 ) {
-    handle_timeout(command, result, &mut outcome.messages);
-    if result.timed_out {
+    let capture_failed = report_capture_failure(command, result, &mut outcome.messages);
+    if result.exit_code == Some(2)
+        && let Some(reason) = trimmed_non_empty(&result.stderr)
+    {
+        outcome.decision = PreToolHookDecision::Deny;
+        outcome.messages.push(HookMessage::error(reason));
+        return;
+    }
+
+    if capture_failed {
         if matches!(outcome.decision, PreToolHookDecision::Continue) {
             outcome.decision = PreToolHookDecision::Deny;
-            outcome
-                .messages
-                .push(HookMessage::error(format!("Tool call blocked because hook `{}` timed out", command.command)));
+            outcome.messages.push(HookMessage::error(format!(
+                "Tool call blocked because hook `{}` did not complete",
+                command.command
+            )));
         }
         return;
     }
 
     if let Some(code) = result.exit_code {
         if code == 2 {
-            if let Some(reason) = trimmed_non_empty(&result.stderr) {
-                outcome.decision = PreToolHookDecision::Deny;
-                outcome.messages.push(HookMessage::error(reason));
-            } else {
-                outcome.messages.push(HookMessage::error(format!(
-                    "PreToolUse hook `{}` exited with code 2 without stderr feedback",
-                    command.command
-                )));
-            }
+            outcome.messages.push(HookMessage::error(format!(
+                "PreToolUse hook `{}` exited with code 2 without stderr feedback",
+                command.command
+            )));
             return;
         } else if code != 0 {
             // A failing process is not a trusted source for input rewrites or
@@ -134,10 +138,7 @@ pub(crate) fn interpret_post_tool(
     outcome: &mut PostToolHookOutcome,
     quiet_success_output: bool,
 ) {
-    handle_timeout(command, result, &mut outcome.messages);
-    if result.timed_out {
-        return;
-    }
+    let capture_failed = report_capture_failure(command, result, &mut outcome.messages);
 
     if let Some(code) = result.exit_code
         && code != 0
@@ -151,6 +152,10 @@ pub(crate) fn interpret_post_tool(
             command.command,
             result.stderr.trim()
         )));
+    }
+
+    if capture_failed {
+        return;
     }
 
     if let Some(json) = parse_json_output(&result.stdout) {

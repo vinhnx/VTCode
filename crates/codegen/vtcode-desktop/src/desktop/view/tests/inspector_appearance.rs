@@ -682,46 +682,31 @@ fn settings_escape_restores_the_previous_focus(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: &mut TestAppContext) {
+fn welcome_keeps_a_long_workspace_name_action_within_the_composer_column(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
-    let workspace_name = "A workspace with a deliberately long name for responsive welcome typography";
+    let workspace_name = "A workspace with a deliberately long name for responsive welcome typography".repeat(3);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.sidebar_open = false;
             view.inspector_open = false;
-            view.welcome_period = WelcomePeriod::Morning;
-            view.welcome_copy_index = 0;
-            view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
+            view.welcome_period = WelcomePeriod::Afternoon;
+            view.workspace = Some(PathBuf::from("/projects").join(&workspace_name));
         });
         window.render_frame(cx);
-        let welcome = window.find("welcome").bounds();
+        let composer = window.find("message-composer-frame").bounds();
         let link = window.find("welcome-workspace");
         assert_eq!(link.role(), Some(gpui_kit::Role::Button));
         assert_eq!(link.label(), Some(format!("Change workspace, current: {workspace_name}").as_str()));
-        assert!(link.bounds().left() >= welcome.left() && link.bounds().right() <= welcome.right());
-        assert!(link.bounds().size.height >= px(28.), "workspace link must retain headline-sized text");
-        assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
-        assert_eq!(
-            window.find("welcome-prompt").label(),
-            Some(format!("Good morning. What should we build in {workspace_name}?").as_str())
-        );
-        view.update(cx, |view, _| view.workspace_picker_open = true);
+        assert!(link.bounds().left() >= composer.left() && link.bounds().right() <= composer.right());
+        let heading = window.find("welcome-prompt");
+        assert_eq!(heading.role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(heading.label(), Some("Good afternoon"));
+        assert!(heading.bounds().bottom() <= link.bounds().top());
+
+        window.click("welcome-workspace", cx);
+        assert!(view.read(cx).workspace_picker_open);
         window.render_frame(cx);
         assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
-        view.update(cx, |view, _| {
-            view.workspace_picker_open = false;
-            view.welcome_period = WelcomePeriod::Evening;
-            view.welcome_copy_index = 2;
-            view.workspace = None;
-        });
-        window.render_frame(cx);
-        assert!(window.find_all("welcome-workspace").is_empty());
-        assert_eq!(window.find("welcome-prompt").label(), Some("Good evening. What are we exploring?"));
-        assert!(window.find_all("open-first-workspace").is_empty());
-        // The rail-collapsed sidebar hides its opener here, so drive the
-        // picker directly; the sidebar button dispatches the same action.
-        view.update(cx, |view, cx| view.choose_workspace(window, cx));
-        assert!(view.read(cx).workspace_picker_open, "choosing a workspace opens the native picker");
     })
     .unwrap();
 
@@ -731,43 +716,19 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         None
     });
     cx.run_until_parked();
-    cx.update_window(window, |_, _, cx| {
-        assert!(!view.read(cx).workspace_picker_open, "canceling the picker restores the welcome state");
+    cx.update_window(window, |_, window, cx| {
+        assert!(!view.read(cx).workspace_picker_open);
+        view.update(cx, |view, _| view.workspace = None);
+        window.render_frame(cx);
+        assert!(window.try_find("welcome-workspace").is_none());
+        assert_eq!(window.find("welcome-prompt").label(), Some("Good afternoon"));
+        // With the sidebar collapsed, the window shortcut still opens the picker.
+        window.press("cmd-o", cx);
+        assert!(view.read(cx).workspace_picker_open);
     })
     .unwrap();
-}
-
-#[test]
-fn welcome_greeting_uses_local_day_period_boundaries() {
-    use super::super::WelcomePeriod::{Afternoon, Evening, Morning};
-
-    assert_eq!(super::super::welcome_period_for_hour(5), Morning);
-    assert_eq!(super::super::welcome_period_for_hour(11), Morning);
-    assert_eq!(super::super::welcome_period_for_hour(12), Afternoon);
-    assert_eq!(super::super::welcome_period_for_hour(16), Afternoon);
-    assert_eq!(super::super::welcome_period_for_hour(17), Evening);
-    assert_eq!(super::super::welcome_period_for_hour(4), Evening);
-}
-
-#[gpui_kit::test]
-fn welcome_greeting_refreshes_to_the_current_day_period(cx: &mut TestAppContext) {
-    use chrono::Timelike;
-
-    let (_window, view) = open_desktop(cx);
-    let expected = super::super::welcome_period_for_hour(chrono::Local::now().hour());
-    // Force a stale period that differs from now so the refresh is observable.
-    let stale = match expected {
-        WelcomePeriod::Morning => WelcomePeriod::Evening,
-        _ => WelcomePeriod::Morning,
-    };
-    view.update(cx, |view, cx| {
-        view.welcome_period = stale;
-        view.refresh_welcome_period(cx);
-        assert_eq!(view.welcome_period, expected);
-        // A second refresh without a boundary crossing leaves the period alone.
-        view.refresh_welcome_period(cx);
-        assert_eq!(view.welcome_period, expected);
-    });
+    cx.simulate_path_prompt_response(|_| None);
+    cx.run_until_parked();
 }
 
 #[gpui_kit::test]

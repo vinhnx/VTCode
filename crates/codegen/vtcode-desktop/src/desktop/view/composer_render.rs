@@ -54,9 +54,6 @@ impl DesktopView {
         // text starts. The outer centering wrapper below owns the narrow-
         // window edge inset (mirroring the scroller's row wrapper).
         let mut panel = div()
-            .w_full()
-            .max_w(px(self.content_width()))
-            .min_w_0()
             .flex()
             .flex_col()
             .gap_2()
@@ -462,7 +459,7 @@ impl DesktopView {
         // choose one (the zen empty state has no workspace link). The frame
         // carries no horizontal inset, so the row needs none either: its
         // button frames start on the input spine directly.
-        if self.zen_mode && self.workspace.is_none() {
+        if self.zen_mode && self.workspace.is_none() && !self.workspace_selection_pending {
             panel = panel.child(
                 div().w_full().child(
                     div()
@@ -496,7 +493,7 @@ impl DesktopView {
         if let Some(goal_bar) = self.render_goal_bar(cx) {
             panel = panel.child(goal_bar);
         }
-        div().w_full().flex().justify_center().px_3().child(
+        self.conversation_content_column(
             panel.child(
                 div()
                     .w_full()

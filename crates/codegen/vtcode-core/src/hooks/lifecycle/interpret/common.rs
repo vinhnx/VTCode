@@ -8,8 +8,13 @@ pub(crate) struct HookCommandResult {
     pub(crate) exit_code: Option<i32>,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
-    pub(crate) timed_out: bool,
-    pub(crate) timeout_seconds: u64,
+    pub(crate) capture_failure: Option<HookCaptureFailure>,
+}
+
+pub(crate) enum HookCaptureFailure {
+    ExecutionTimeout(u64),
+    StdoutTimeout,
+    StdoutRead(std::io::Error),
 }
 
 pub(crate) fn parse_json_output(stdout: &str) -> Option<Value> {
@@ -37,10 +42,6 @@ pub(crate) fn trimmed_non_empty(text: &str) -> Option<String> {
 
 pub(crate) fn allow_plain_success_stdout(result: &HookCommandResult, quiet_success_output: bool) -> bool {
     if !quiet_success_output {
-        return true;
-    }
-
-    if result.timed_out {
         return true;
     }
 
@@ -92,13 +93,21 @@ pub(crate) fn matches_hook_event(spec: &serde_json::Map<String, Value>, event_na
     }
 }
 
-pub(crate) fn handle_timeout(command: &HookCommandConfig, result: &HookCommandResult, messages: &mut Vec<HookMessage>) {
-    if result.timed_out {
-        messages.push(HookMessage::error(format!(
-            "Hook `{}` timed out after {}s",
-            command.command, result.timeout_seconds
-        )));
-    }
+pub(crate) fn report_capture_failure(
+    command: &HookCommandConfig,
+    result: &HookCommandResult,
+    messages: &mut Vec<HookMessage>,
+) -> bool {
+    let Some(failure) = &result.capture_failure else {
+        return false;
+    };
+    let reason = match failure {
+        HookCaptureFailure::ExecutionTimeout(seconds) => format!("timed out after {seconds}s"),
+        HookCaptureFailure::StdoutTimeout => "timed out waiting for complete stdout after exit".to_owned(),
+        HookCaptureFailure::StdoutRead(error) => format!("could not read complete stdout: {error}"),
+    };
+    messages.push(HookMessage::error(format!("Hook `{}` {reason}", command.command)));
+    true
 }
 
 pub(crate) fn handle_non_zero_exit(

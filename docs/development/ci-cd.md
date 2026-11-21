@@ -520,10 +520,10 @@ AGENTS.md, because agents skip steps):
 ./scripts/install-hooks.sh
 ```
 
-| Hook | Runs | Budget |
-| --- | --- | --- |
-| `scripts/hooks/pre-commit` | `rustfmt --edition 2024 --check` on staged `.rs` files + `run_repo_governance_gates` + docs-map regeneration for staged docs | ~2s |
-| `scripts/hooks/pre-push` | `./scripts/check-dev.sh --quiet --workspace` (the CI fast gate, workspace scope) | ~10-30s warm |
+| Hook                       | Runs                                                                                                                                            | Budget       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `scripts/hooks/pre-commit` | Compare staged `.rs` blobs against rustfmt output using the staged config + `run_repo_governance_gates` + docs-map regeneration for staged docs | ~2s          |
+| `scripts/hooks/pre-push`   | `./scripts/check-dev.sh --quiet --workspace` (the CI fast gate, workspace scope)                                                                | ~10-30s warm |
 
 Tests are deliberately not repeated in hooks: CI runs the full suite on `main`
 and the diff-reachable selection on PRs, so a local re-run would only add the

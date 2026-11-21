@@ -7,8 +7,8 @@ use crate::hooks::lifecycle::types::{
 };
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
-    looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, looks_like_json,
+    matches_hook_event, parse_json_output, report_capture_failure, trimmed_non_empty,
 };
 
 pub(crate) fn interpret_permission_request(
@@ -17,10 +17,7 @@ pub(crate) fn interpret_permission_request(
     outcome: &mut PermissionRequestHookOutcome,
     quiet_success_output: bool,
 ) {
-    handle_timeout(command, result, &mut outcome.messages);
-    if result.timed_out {
-        return;
-    }
+    let capture_failed = report_capture_failure(command, result, &mut outcome.messages);
 
     if let Some(code) = result.exit_code
         && code != 0
@@ -32,6 +29,10 @@ pub(crate) fn interpret_permission_request(
         outcome
             .messages
             .push(HookMessage::warning(format!("PermissionRequest hook `{}` stderr: {}", command.command, stderr)));
+    }
+
+    if capture_failed {
+        return;
     }
 
     let Some(json) = parse_json_output(&result.stdout) else {

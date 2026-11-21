@@ -186,6 +186,9 @@ pub(crate) fn parse_bash_tree(script: &str) -> Result<(tree_sitter::Tree, bool),
     }
 
     let (tree, has_error) = {
+        if scanner_crash_shape(script) {
+            return Err("shell script rejected by the Bash scanner compatibility guard".to_string());
+        }
         let parser_guard = get_bash_parser()?;
         let mut parser = parser_guard.lock().map_err(|e| format!("Failed to lock parser: {e}"))?;
         let tree = parser.parse(script, None).ok_or_else(|| "Failed to parse script".to_string())?;
@@ -196,6 +199,20 @@ pub(crate) fn parse_bash_tree(script: &str) -> Result<(tree_sitter::Tree, bool),
     let mut cache = shell_tree_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     drop(cache.put(script.to_string(), tree.clone()));
     Ok((tree, has_error))
+}
+
+// Avoid a known upstream Bash external scanner crash (tree-sitter-bash #337).
+// Check at the parser boundary so every AST consumer gets an ordinary error.
+fn scanner_crash_shape(script: &str) -> bool {
+    let mut saw_open_brace = false;
+    for byte in script.as_bytes() {
+        match byte {
+            b'{' => saw_open_brace = true,
+            0xF0..=0xF7 if saw_open_brace => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Lazy-initialized tree-sitter bash parser (wrapped in Mutex for mutation)
@@ -220,4 +237,22 @@ fn get_bash_parser() -> Result<&'static Mutex<tree_sitter::Parser>, String> {
 pub fn prewarm_bash_parser() -> Result<(), String> {
     let _ = get_bash_parser()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::scanner_crash_shape;
+
+    #[test]
+    fn scanner_crash_shape_matches_issue_337_shape() {
+        assert!(scanner_crash_shape("{\u{2FA8E}"));
+        assert!(scanner_crash_shape("echo {a}\u{1F574}"));
+        assert!(scanner_crash_shape("{x} \u{1F847}"));
+        // No brace before the 4-byte lead: safe for the scanner.
+        assert!(!scanner_crash_shape("\u{2FA8E}{"));
+        // No 4-byte lead at all.
+        assert!(!scanner_crash_shape("{hello}"));
+        // 3-byte and 2-byte leads do not trigger the upstream crash.
+        assert!(!scanner_crash_shape("{\u{CAF}\u{9bf}"));
+    }
 }

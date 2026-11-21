@@ -23,6 +23,8 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-core/`, moved verbatim
 
 ## Gotchas
 
+- Lifecycle hook I/O belongs in `hooks/lifecycle/engine/process_io.rs`. Bound pipe reads on exit, require complete stdout for structured decisions, and preserve independent exit-code and stderr feedback.
+
 - Keep steering targets eager: client-local deferral omits deferred definitions from the wire payload, so
   steering (routing text, guards) to a deferred tool aims the model at an uncallable tool. The
   always-eager core set in `is_core_tool_entry` is the fix point; `computer_use` stays eager for exactly this reason.

@@ -33,16 +33,19 @@ async fn proposal_apply_check_and_revert_validate_current_digests() {
         .expect("propose");
     let applied = adapter.apply_proposal(&proposal.proposal_id).await.expect("apply");
     let result = adapter.run_checks("printf ok").await.expect("check");
-    // A host without Landlock and transiently missing rule paths can cause a
-    // launcher refusal before the command executes. Other launcher failures
-    // should fail the test with their diagnostic.
+    // Accept only known fail-closed host refusals before the command runs.
+    // Other launcher failures must surface their diagnostic.
     let landlock_host_refusal = cfg!(target_os = "linux")
         && result.exit_code == Some(125)
+        && result.stdout.is_empty()
         && result
             .stderr
-            .strip_prefix("vtcode sandbox-exec: applying Linux sandbox restrictions: ")
-            .is_some_and(|reason| {
+            .lines()
+            .filter_map(|line| line.strip_prefix("vtcode sandbox-exec: applying Linux sandbox restrictions: "))
+            .any(|reason| {
                 reason.starts_with("Landlock is not supported by this kernel")
+                    || reason
+                        == "Landlock restrictions were only partially enforced (PartiallyEnforced); refusing to exec"
                     || (reason.starts_with("Landlock cannot open rule path ")
                         && reason.contains("No such file or directory"))
             });

@@ -2,27 +2,38 @@ use super::*;
 use vtcode_desktop_protocol as protocol;
 
 #[gpui_kit::test]
-fn connecting_greeting_keeps_the_ready_geometry(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized_with_preferences_path(cx, 680., 650., isolate_preferences(), true);
+fn connecting_status_keeps_the_welcome_greeting_in_place(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized_with_preferences_path(cx, 680., 650., isolate_preferences(), false);
     cx.update_window(window, |_, window, cx| {
         let (commands, _requests) = tokio::sync::mpsc::channel(16);
-        view.update(cx, |view, _| {
-            view.workspace = Some(PathBuf::from("/work/A workspace with a long name"));
-            view.welcome_period = WelcomePeriod::Morning;
-            view.welcome_copy_index = 0;
-            view.initialize_backend(BackendHandle { commands });
-        });
+        view.update(cx, |view, _| view.initialize_backend(BackendHandle { commands }));
         for (zen, prompt_id) in [(false, "welcome-prompt"), (true, "zen-welcome-prompt")] {
             view.update(cx, |view, cx| {
                 view.zen_mode = zen;
+                view.workspace = None;
+                view.workspace_selection_pending = true;
+                view.session_request = None;
+                cx.notify();
+            });
+            window.render_frame(cx);
+            let validating_title = window.find(prompt_id).bounds();
+            let validating_mark = window.find("welcome-brand-mark").bounds();
+            assert!(window.try_find("workspace-connecting").is_none());
+
+            view.update(cx, |view, cx| {
+                view.workspace = Some(PathBuf::from("/work/A workspace with a long name"));
+                view.workspace_selection_pending = false;
                 view.session_request = Some(protocol::method::INITIALIZE);
                 cx.notify();
             });
             window.render_frame(cx);
             let mark = window.find("welcome-brand-mark").bounds();
-            let loading_title = window.find("workspace-connecting-title").bounds();
+            let title = window.find(prompt_id).bounds();
+            assert_eq!(title, validating_title);
+            assert_eq!(mark, validating_mark);
             assert_eq!(window.find("workspace-connecting").role(), Some(gpui_kit::Role::Status));
-            assert!(window.try_find(prompt_id).is_none(), "only the loading title is exposed");
+            assert!(window.try_find("welcome-workspace").is_none());
+            assert!(window.try_find("welcome-workspace-name").is_none());
 
             view.update(cx, |view, cx| {
                 view.session_request = None;
@@ -30,12 +41,17 @@ fn connecting_greeting_keeps_the_ready_geometry(cx: &mut TestAppContext) {
             });
             window.render_frame(cx);
             assert_eq!(window.find("welcome-brand-mark").bounds(), mark, "logo stays fixed in Zen={zen}");
-            let ready_title = window.find(prompt_id).bounds();
+            assert_eq!(window.find(prompt_id).bounds(), title);
+            assert!(window.try_find("workspace-connecting").is_none());
             assert!(
-                (loading_title.center().y - ready_title.center().y).abs() <= px(0.5),
-                "title stays centered in its slot"
+                window
+                    .try_find(if zen {
+                        "welcome-workspace-name"
+                    } else {
+                        "welcome-workspace"
+                    })
+                    .is_some()
             );
-            assert!((loading_title.center().x - ready_title.center().x).abs() <= px(0.5));
         }
     })
     .unwrap();

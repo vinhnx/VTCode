@@ -54,6 +54,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      - name: Test repository hooks and package selection
+        run: |
+          bash scripts/tests/test_repo_hooks.sh
+          python3 -m unittest discover -s scripts/tests -p test_select_tests.py
+
       # Governance gates call scripts/common.sh — the same functions the local
       # check-dev.sh/check.sh gates use — so CI and local gates cannot drift.
       - name: Repo governance gates (file length, docs links, placement, sizes)

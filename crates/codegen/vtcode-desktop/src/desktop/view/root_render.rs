@@ -1,5 +1,6 @@
 //! Root layout: navigation sidebar, conversation workspace, inspector, and overlays.
 use super::*;
+use gpui_kit::Div;
 
 impl DesktopView {
     /// Native window title: the selected thread title, or the app name when
@@ -9,6 +10,16 @@ impl DesktopView {
             .as_deref()
             .and_then(|id| self.session_title(id))
             .unwrap_or(app::NAME)
+    }
+
+    /// Use one horizontal inset and width cap for the composer and its empty state.
+    pub(super) fn conversation_content_column(&self, content: Div) -> Div {
+        div()
+            .w_full()
+            .flex()
+            .justify_center()
+            .px_3()
+            .child(content.w_full().min_w_0().max_w(px(self.content_width())))
     }
 
     fn render_workspace_route(

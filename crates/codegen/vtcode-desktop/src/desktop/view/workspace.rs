@@ -23,8 +23,8 @@ impl DesktopView {
     }
 
     /// Short display name for the active workspace: the final path component
-    /// (lossy), or `None` when no workspace is set. Shared by the welcome,
-    /// composer, and utilities call sites; the sidebar, title bar, and status
+    /// (lossy), or `None` when there is no final component. Shared by the
+    /// composer and utilities; the sidebar, title bar, and status
     /// bar keep their own `to_str` chains, which fall back to placeholders on
     /// non-UTF8 paths instead of showing a lossy name.
     pub(super) fn workspace_file_name(&self) -> Option<String> {

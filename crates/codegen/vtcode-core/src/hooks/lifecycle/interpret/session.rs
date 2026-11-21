@@ -4,8 +4,8 @@ use serde_json::Value;
 use crate::hooks::lifecycle::types::HookMessage;
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
-    looks_like_json, matches_hook_event, parse_json_output,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, looks_like_json,
+    matches_hook_event, parse_json_output, report_capture_failure,
 };
 
 fn push_additional_context_value(additional_context: &mut Vec<String>, value: &Value) {
@@ -32,10 +32,7 @@ pub(crate) fn interpret_session_start(
     additional_context: &mut Vec<String>,
     quiet_success_output: bool,
 ) {
-    handle_timeout(command, result, messages);
-    if result.timed_out {
-        return;
-    }
+    let capture_failed = report_capture_failure(command, result, messages);
 
     if let Some(code) = result.exit_code
         && code != 0
@@ -49,6 +46,10 @@ pub(crate) fn interpret_session_start(
             command.command,
             result.stderr.trim()
         )));
+    }
+
+    if capture_failed {
+        return;
     }
 
     if let Some(json) = parse_json_output(&result.stdout) {
@@ -83,10 +84,7 @@ pub(crate) fn interpret_session_end(
     messages: &mut Vec<HookMessage>,
     quiet_success_output: bool,
 ) {
-    handle_timeout(command, result, messages);
-    if result.timed_out {
-        return;
-    }
+    let capture_failed = report_capture_failure(command, result, messages);
 
     if let Some(code) = result.exit_code
         && code != 0
@@ -100,6 +98,10 @@ pub(crate) fn interpret_session_end(
             command.command,
             result.stderr.trim()
         )));
+    }
+
+    if capture_failed {
+        return;
     }
 
     if let Some(json) = parse_json_output(&result.stdout) {

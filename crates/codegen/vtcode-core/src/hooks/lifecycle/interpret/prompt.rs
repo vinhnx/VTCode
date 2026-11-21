@@ -4,8 +4,8 @@ use serde_json::Value;
 use crate::hooks::lifecycle::types::{HookMessage, UserPromptHookOutcome};
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
-    looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, looks_like_json,
+    matches_hook_event, parse_json_output, report_capture_failure, trimmed_non_empty,
 };
 
 pub(crate) fn interpret_user_prompt(
@@ -14,10 +14,7 @@ pub(crate) fn interpret_user_prompt(
     outcome: &mut UserPromptHookOutcome,
     quiet_success_output: bool,
 ) {
-    handle_timeout(command, result, &mut outcome.messages);
-    if result.timed_out {
-        return;
-    }
+    let capture_failed = report_capture_failure(command, result, &mut outcome.messages);
 
     let mut blocked_by_exit_code_two = false;
     if let Some(code) = result.exit_code {
@@ -45,6 +42,10 @@ pub(crate) fn interpret_user_prompt(
             command.command,
             result.stderr.trim()
         )));
+    }
+
+    if capture_failed {
+        return;
     }
 
     if let Some(json) = parse_json_output(&result.stdout) {
@@ -110,5 +111,39 @@ pub(crate) fn interpret_user_prompt(
         } else if allow_plain_success_stdout(result, quiet_success_output) {
             outcome.additional_context.push(result.stdout.trim().to_owned());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hooks::lifecycle::interpret::{HookCaptureFailure, interpret_pre_tool};
+    use crate::hooks::lifecycle::types::{PreToolHookDecision, PreToolHookOutcome};
+
+    #[test]
+    fn incomplete_stdout_does_not_override_exit_two_and_stderr() {
+        let command = HookCommandConfig {
+            kind: Default::default(),
+            command: "fixture".into(),
+            timeout_seconds: None,
+        };
+        let result = HookCommandResult {
+            exit_code: Some(2),
+            capture_failure: Some(HookCaptureFailure::StdoutTimeout),
+            stdout: "incomplete".into(),
+            stderr: "Denied by the hook".into(),
+        };
+        let mut prompt = UserPromptHookOutcome::default();
+        interpret_user_prompt(&command, &result, &mut prompt, false);
+        assert!(!prompt.allow_prompt);
+        assert_eq!(prompt.block_reason.as_deref(), Some("Denied by the hook"));
+
+        let mut pre_tool = PreToolHookOutcome {
+            decision: PreToolHookDecision::Ask,
+            ..Default::default()
+        };
+        interpret_pre_tool(&command, &result, &mut pre_tool, false);
+        assert!(matches!(pre_tool.decision, PreToolHookDecision::Deny));
+        assert!(pre_tool.messages.iter().any(|message| message.text == "Denied by the hook"));
     }
 }

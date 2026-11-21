@@ -1,11 +1,8 @@
-//! Welcome-column greeting copy: day-period greeting plus rotating prompts.
+//! Local day-period greeting shared by normal and Zen mode.
 
-pub(super) const WELCOME_COPY_COUNT: usize = 3;
+use chrono::Timelike;
 
-pub(super) struct WelcomeCopy {
-    pub(super) action: String,
-    pub(super) workspace_action: String,
-}
+use super::{Context, DesktopView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum WelcomePeriod {
@@ -14,48 +11,56 @@ pub(super) enum WelcomePeriod {
     Evening,
 }
 
-pub(super) fn welcome_period_for_hour(hour: u32) -> WelcomePeriod {
-    match hour % 24 {
-        5..=11 => WelcomePeriod::Morning,
-        12..=16 => WelcomePeriod::Afternoon,
-        _ => WelcomePeriod::Evening,
+impl WelcomePeriod {
+    pub(super) fn current() -> Self {
+        Self::for_hour(chrono::Local::now().hour())
+    }
+
+    fn for_hour(hour: u32) -> Self {
+        match hour {
+            5..=11 => Self::Morning,
+            12..=16 => Self::Afternoon,
+            _ => Self::Evening,
+        }
+    }
+
+    pub(super) fn label(self) -> String {
+        match self {
+            Self::Morning => rust_i18n::t!("app.welcome.greeting.morning"),
+            Self::Afternoon => rust_i18n::t!("app.welcome.greeting.afternoon"),
+            Self::Evening => rust_i18n::t!("app.welcome.greeting.evening"),
+        }
+        .into_owned()
     }
 }
 
-pub(super) fn welcome_greeting(period: WelcomePeriod) -> String {
-    match period {
-        WelcomePeriod::Morning => rust_i18n::t!("app.welcome.greeting.morning"),
-        WelcomePeriod::Afternoon => rust_i18n::t!("app.welcome.greeting.afternoon"),
-        WelcomePeriod::Evening => rust_i18n::t!("app.welcome.greeting.evening"),
-    }
-    .to_string()
-}
-
-pub(super) fn welcome_copy(index: usize) -> WelcomeCopy {
-    match index {
-        1 => WelcomeCopy {
-            action: rust_i18n::t!("app.welcome.action.improve").to_string(),
-            workspace_action: rust_i18n::t!("app.welcome.action.improve_in_workspace").to_string(),
-        },
-        2 => WelcomeCopy {
-            action: rust_i18n::t!("app.welcome.action.explore").to_string(),
-            workspace_action: rust_i18n::t!("app.welcome.action.explore_in_workspace").to_string(),
-        },
-        _ => WelcomeCopy {
-            action: rust_i18n::t!("app.welcome.action.build").to_string(),
-            workspace_action: rust_i18n::t!("app.welcome.action.build_in_workspace").to_string(),
-        },
+impl DesktopView {
+    pub(super) fn refresh_welcome_period(&mut self, cx: &mut Context<Self>) {
+        let period = WelcomePeriod::current();
+        if period != self.welcome_period {
+            self.welcome_period = period;
+            cx.notify();
+        }
     }
 }
 
-pub(super) fn welcome_prompt(
-    greeting: &str,
-    action: &str,
-    workspace_action: &str,
-    workspace_name: Option<&str>,
-) -> String {
-    match workspace_name {
-        Some(name) => format!("{greeting}. {workspace_action} {name}?"),
-        None => format!("{greeting}. {action}?"),
+#[cfg(test)]
+mod tests {
+    use super::WelcomePeriod::{self, Afternoon, Evening, Morning};
+
+    #[test]
+    fn welcome_greeting_changes_at_local_day_period_boundaries() {
+        for (hour, expected) in [
+            (0, Evening),
+            (4, Evening),
+            (5, Morning),
+            (11, Morning),
+            (12, Afternoon),
+            (16, Afternoon),
+            (17, Evening),
+            (23, Evening),
+        ] {
+            assert_eq!(WelcomePeriod::for_hour(hour), expected, "hour {hour}");
+        }
     }
 }

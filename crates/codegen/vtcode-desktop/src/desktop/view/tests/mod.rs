@@ -18,12 +18,13 @@ pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation
 pub(super) use super::terminal_panel::{
     terminal_cols_for_width, terminal_content_rows, terminal_row_height, terminal_rows_for_height,
 };
+pub(super) use super::welcome_copy::WelcomePeriod;
 pub(super) use super::{
     ActivityState, DesktopButtonExt, DesktopView, DiscardIntent, ExternalLaunchCall, FixedRowSizeCache,
     HandoffScriptCall, MAX_UI_EVENTS_PER_TICK, Route, SESSION_LIST_PAGE_SIZE, TestLaunchIntercept, ThemeMode,
-    WelcomePeriod, append_restored_output_page, content_page_title, eyebrow_label, group_box_title,
-    opaque_path_element_id, panel_title, restored_output_for_copy, row_description, row_title,
-    scale_row_height_for_ui_font, section_label, workspace_picker_options,
+    append_restored_output_page, content_page_title, eyebrow_label, group_box_title, opaque_path_element_id,
+    panel_title, restored_output_for_copy, row_description, row_title, scale_row_height_for_ui_font, section_label,
+    workspace_picker_options,
 };
 pub(super) use crate::desktop::files::{ExternalEditor, FileEntry};
 pub(super) use crate::desktop::preferences::{CliTerminal, FileOpenDestination};

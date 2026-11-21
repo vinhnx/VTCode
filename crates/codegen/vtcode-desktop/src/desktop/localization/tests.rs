@@ -843,42 +843,16 @@ fn file_destination_copy_is_translated_for_every_language() {
 }
 
 #[test]
-fn welcome_copy_is_translated_and_actions_remain_distinct() {
-    for (locale, morning, afternoon, evening) in [
-        ("en", "Good morning", "Good afternoon", "Good evening"),
-        ("vi", "Chào buổi sáng", "Chào buổi chiều", "Chào buổi tối"),
-        ("es", "Buenos días", "Buenas tardes", "Buenas noches"),
-        ("fr", "Bonjour", "Bon après-midi", "Bonsoir"),
-        ("ja", "おはようございます", "こんにちは", "こんばんは"),
-        ("de", "Guten Morgen", "Guten Tag", "Guten Abend"),
-        ("it", "Buongiorno", "Buon pomeriggio", "Buonasera"),
-        ("zh-CN", "早上好", "下午好", "晚上好"),
-        ("pt-BR", "Bom dia", "Boa tarde", "Boa noite"),
-        ("ko", "좋은 아침입니다", "안녕하세요", "좋은 저녁입니다"),
-        ("nl", "Goedemorgen", "Goedemiddag", "Goedenavond"),
-        ("ru", "Доброе утро", "Добрый день", "Добрый вечер"),
-        ("id", "Selamat pagi", "Selamat siang", "Selamat malam"),
-        ("uk", "Доброго ранку", "Добрий день", "Добрий вечір"),
-    ] {
-        assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
-        assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);
-        assert_eq!(rust_i18n::t!("app.welcome.greeting.evening", locale = locale).to_string(), evening);
+fn welcome_day_periods_are_translated_in_every_language() {
+    const KEYS: [&str; 3] = [
+        "app.welcome.greeting.morning",
+        "app.welcome.greeting.afternoon",
+        "app.welcome.greeting.evening",
+    ];
+    assert_localized(&KEYS, &[]);
 
-        let actions = [
-            rust_i18n::t!("app.welcome.action.build", locale = locale).to_string(),
-            rust_i18n::t!("app.welcome.action.improve", locale = locale).to_string(),
-            rust_i18n::t!("app.welcome.action.explore", locale = locale).to_string(),
-        ];
-        let workspace_actions = [
-            rust_i18n::t!("app.welcome.action.build_in_workspace", locale = locale).to_string(),
-            rust_i18n::t!("app.welcome.action.improve_in_workspace", locale = locale).to_string(),
-            rust_i18n::t!("app.welcome.action.explore_in_workspace", locale = locale).to_string(),
-        ];
-        for first in 0..actions.len() {
-            for second in first + 1..actions.len() {
-                assert_ne!(actions[first], actions[second]);
-                assert_ne!(workspace_actions[first], workspace_actions[second]);
-            }
-        }
-    }
+    assert_eq!(
+        KEYS.map(|key| rust_i18n::t!(key, locale = "en").into_owned()),
+        ["Good morning", "Good afternoon", "Good evening"]
+    );
 }

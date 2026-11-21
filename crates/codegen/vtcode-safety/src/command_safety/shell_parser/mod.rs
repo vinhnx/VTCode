@@ -739,19 +739,6 @@ mod crash_regression {
         let result = parse_shell_commands_tree_sitter("{\u{2FA8E}");
         assert!(result.is_err(), "strict path must reject, not crash: {result:?}");
     }
-
-    #[test]
-    fn scanner_crash_shape_matches_issue_337_shape() {
-        assert!(scanner_crash_shape("{\u{2FA8E}"));
-        assert!(scanner_crash_shape("echo {a}\u{1F574}"));
-        assert!(scanner_crash_shape("{x} \u{1F847}"));
-        // No brace before the 4-byte lead: safe for the scanner.
-        assert!(!scanner_crash_shape("\u{2FA8E}{"));
-        // No 4-byte lead at all.
-        assert!(!scanner_crash_shape("{hello}"));
-        // 3-byte and 2-byte leads do not trigger the upstream crash.
-        assert!(!scanner_crash_shape("{\u{CAF}\u{9bf}"));
-    }
 }
 
 #[cfg(test)]
