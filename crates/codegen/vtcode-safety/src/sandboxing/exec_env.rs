@@ -207,7 +207,7 @@ impl LinuxSandboxLauncher {
     #[cfg(target_os = "linux")]
     pub fn resolve() -> Option<Self> {
         if let Some(helper) = std::env::var_os("VTCODE_LINUX_SANDBOX_EXECUTABLE") {
-            let helper = std::path::PathBuf::from(helper);
+            let helper = PathBuf::from(helper);
             // A helper named `vtcode` speaks the busybox protocol (dispatch to
             // the hidden sandbox-exec subcommand); anything else is an
             // external helper with its own invocation contract.
