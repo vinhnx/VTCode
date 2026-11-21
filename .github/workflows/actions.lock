@@ -10,6 +10,12 @@ workflows:
         - 'mozilla-actions/sccache-action@v0.0.11'
         - 'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31'
         - 'taiki-e/install-action@v2.90.5'
+    '.github/workflows/ci.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'dtolnay/rust-toolchain@stable'
+        - 'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31'
+        - 'taiki-e/install-action@v2.90.5'
     '.github/workflows/deny.yml':
         - 'actions/checkout@v7.0.1'
         - 'dtolnay/rust-toolchain@stable'
