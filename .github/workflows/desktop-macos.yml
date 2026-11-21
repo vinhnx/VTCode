@@ -5,7 +5,6 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
-      - "AGENTS.md"
       - "crates/codegen/vtcode-desktop/**"
       - "crates/codegen/vtcode-core/src/cli/**"
       - "crates/codegen/vtcode-ui/src/tui/**"
