@@ -10,7 +10,8 @@
 use crate::error_display;
 use crate::provider::{LLMError, NativeStream, NativeStreamEvent};
 use crate::providers::shared::{
-    ResponsesStreamAdapter, ResponsesStreamEvent, Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes,
+    ResponsesStreamAdapter, ResponsesStreamEvent, Utf8StreamDecoder, check_sse_tail_bound, extract_data_payload,
+    find_sse_boundary_bytes,
 };
 use async_stream::try_stream;
 use futures::{StreamExt, pin_mut};
@@ -123,6 +124,13 @@ where
             if offset > 0 {
                 buf.drain(..offset);
                 offset = 0;
+            }
+
+            // Fail closed: a peer that never emits an event boundary must
+            // not grow the retained tail without bound. Measured after the
+            // drain so one large-but-complete event still parses.
+            if let Err(overflow) = check_sse_tail_bound(buf.len()) {
+                Err::<(), _>(stream_error(overflow))?;
             }
 
             if processor.is_done() {

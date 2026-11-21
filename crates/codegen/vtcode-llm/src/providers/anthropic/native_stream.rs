@@ -14,13 +14,15 @@ use crate::provider::{LLMError, NativeResponse, NativeStream, NativeStreamEvent,
 use crate::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent, AnthropicToolUseBlock,
 };
-use crate::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes};
+use crate::providers::shared::{
+    Utf8StreamDecoder, check_sse_tail_bound, extract_data_payload, find_sse_boundary_bytes,
+};
 use async_stream::try_stream;
 use futures::{StreamExt, pin_mut};
 use serde_json::{Map, Value};
 
 use super::native::parse_response_native;
-use super::response_parser::{merge_message_delta_usage, parse_usage};
+use super::response_parser::{declined_partial_positions, merge_message_delta_usage, parse_usage};
 
 /// One in-flight content block of the bound response.
 enum BlockState {
@@ -196,6 +198,16 @@ impl NativeResponsesStreamProcessor {
                     .map_err(|error| stream_error(format!("failed to serialize content block: {error}")))?,
             });
         }
+        // Mirror the non-streaming parser: a mid-output fallback boundary
+        // declines the refused model's thinking and tool calls before it.
+        // Reuse the same predicate so streamed decode cannot keep a block —
+        // or execute a native call — the non-streaming route would drop.
+        let declined = declined_partial_positions(&content);
+        let content: Vec<Value> = content
+            .into_iter()
+            .zip(declined)
+            .filter_map(|(block, declined)| (!declined).then_some(block))
+            .collect();
         let response_json = serde_json::json!({
             "content": content,
             "stop_reason": self.stop_reason.clone().unwrap_or_else(|| "end_turn".to_string()),
@@ -280,6 +292,13 @@ where
             if offset > 0 {
                 buf.drain(..offset);
                 offset = 0;
+            }
+
+            // Fail closed: a peer that never emits an event boundary must
+            // not grow the retained tail without bound. Measured after the
+            // drain so one large-but-complete event still parses.
+            if let Err(overflow) = check_sse_tail_bound(buf.len()) {
+                Err::<(), _>(stream_error(overflow))?;
             }
 
             if processor.is_done() {

@@ -185,3 +185,14 @@ async fn stream_without_completion_fails() {
         .expect_err("a stream without response.completed must fail");
     assert!(error.to_string().contains("without a completed response"), "{error}");
 }
+
+#[tokio::test]
+async fn unterminated_frame_fails_the_tail_bound() {
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+    let payload = vec![b'a'; MAX_SSE_TAIL_BYTES + 1];
+    let error = pump_chunks(vec![payload])
+        .await
+        .expect_err("a peer that never emits a boundary must fail closed");
+    assert!(error.to_string().contains("without an event boundary"), "{error}");
+}

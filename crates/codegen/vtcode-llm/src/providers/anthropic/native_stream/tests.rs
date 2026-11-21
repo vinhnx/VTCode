@@ -172,3 +172,64 @@ async fn stream_without_message_stop_fails() {
         .expect_err("a stream without message_stop must fail");
     assert!(error.to_string().contains("without message_stop"), "{error}");
 }
+
+#[tokio::test]
+async fn unterminated_frame_fails_the_tail_bound() {
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+    let payload = vec![b'a'; MAX_SSE_TAIL_BYTES + 1];
+    let error = pump_chunks(vec![payload])
+        .await
+        .expect_err("a peer that never emits a boundary must fail closed");
+    assert!(error.to_string().contains("without an event boundary"), "{error}");
+}
+
+#[tokio::test]
+async fn fallback_boundary_declines_prior_native_calls_like_non_streaming() {
+    let frames = [
+        json!({"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "content": [],
+               "model": MODEL, "stop_reason": null, "stop_sequence": null, "stop_details": null,
+               "usage": {"input_tokens": 11, "output_tokens": 1}}})
+        .to_string(),
+        json!({"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use",
+               "toolset_name": "computer", "id": "cu_declined", "name": "screenshot", "input": {}}})
+        .to_string(),
+        json!({"type": "content_block_start", "index": 1, "content_block": {"type": "fallback",
+               "from": {"model": "a"}, "to": {"model": "b"}}})
+        .to_string(),
+        json!({"type": "content_block_start", "index": 2, "content_block": {"type": "text", "text": ""}}).to_string(),
+        json!({"type": "content_block_delta", "index": 2, "delta": {"type": "text_delta", "text": "continued"}})
+            .to_string(),
+        json!({"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence": null}}).to_string(),
+        json!({"type": "message_stop"}).to_string(),
+    ];
+    let events = pump_chunks(frames.iter().map(|payload| frame(payload).into_bytes()).collect())
+        .await
+        .expect("stream decodes");
+
+    assert!(matches!(&events[0], NativeStreamEvent::TextDelta { delta } if delta == "continued"));
+    let NativeStreamEvent::Completed(native) = &events[1] else {
+        panic!("expected a completed response");
+    };
+    // Parity by construction: the same declined-partials rule the
+    // non-streaming parser applies must drop the refused model's native
+    // call from both the calls and the replay blocks.
+    let direct = parse_response_native(
+        json!({
+            "content": [
+                {"type": "tool_use", "toolset_name": "computer", "id": "cu_declined", "name": "screenshot", "input": {}},
+                {"type": "fallback", "from": {"model": "a"}, "to": {"model": "b"}},
+                {"type": "text", "text": "continued"},
+            ],
+            "stop_reason": "end_turn",
+        }),
+        MODEL.to_string(),
+    )
+    .expect("fixture parses");
+    assert_eq!(native.content.as_deref(), direct.content.as_deref());
+    assert_eq!(native.assistant_blocks, direct.assistant_blocks);
+    assert!(native.native_calls.is_empty(), "a declined native call must not execute");
+    assert_eq!(native.content.as_deref(), Some("continued"));
+    assert_eq!(native.assistant_blocks.len(), 2);
+    assert_eq!(events.len(), 2, "the declined blocks emit no deltas after the boundary");
+}
