@@ -14,7 +14,7 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-eval/`, moved verbatim
 | Suite config | `suite` — `EvalSuite` (tasks + attempts + id) |
 | Metrics | `metric` — `pass@k`/`pass^k`; `test_quality` — asymmetric/panic-only triage |
 | Orchestration | `executor` — `EvalExecutor` trait + bounded `run_suite_with_options` (pure, I/O-free) |
-| Environment | `environment` — `EnvironmentProbe` + `CommandProbe`, `FileExistsProbe`, `GitCleanProbe` |
+| Environment | `environment` — `EnvironmentProbe` enum (command, file-exists, git-clean variants) |
 | Reporting | `report` — `EvalReport`, `SuiteReport`, `TaskReport`, `to_markdown`, `build_task_report` |
 | Trace analysis | `trace_analyzer` — privacy-preserving JSONL aggregate summaries |
 

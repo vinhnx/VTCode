@@ -11,7 +11,7 @@ evals, environment-based outcome verification.
 | Suite config | `suite` — `EvalSuite` (tasks + attempts + id) |
 | Metrics | `metric` — `pass@k`/`pass^k`; `test_quality` — asymmetric triage |
 | Orchestration | `executor` — `EvalExecutor` + bounded `run_suite_with_options` (I/O-free) |
-| Environment | `environment` — `EnvironmentProbe` and its probes |
+| Environment | `environment` — `EnvironmentProbe` enum (command, file-exists, git-clean variants) |
 | Reporting | `report` — `EvalReport`, `SuiteReport`, `TaskReport`, `to_markdown` |
 | Trace | `trace_analyzer` — privacy-preserving JSONL aggregate summaries |
 

@@ -7,7 +7,7 @@ pub mod task;
 pub mod test_quality;
 pub mod trace_analyzer;
 
-pub use environment::{CommandProbe, EnvironmentProbe, FileExistsProbe, GitCleanProbe};
+pub use environment::EnvironmentProbe;
 pub use executor::{EvalExecutor, EvalRunOptions, run_suite, run_suite_with_options};
 pub use metric::{
     EvalMetric, aggregate_metrics, compute_metric, compute_metric_with_k, pass_all_k, pass_at_k, pass_at_k_with_k,

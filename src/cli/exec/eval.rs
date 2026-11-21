@@ -23,8 +23,7 @@ use vtcode_core::core::threads::ThreadBootstrap;
 use vtcode_core::exec::events::ThreadEvent;
 use vtcode_eval::{
     EvalRunOptions, EvalRunResult, EvalSuite, EvalTask, HarnessTraceSummary, RunOutcome, analyze_jsonl,
-    environment::{CommandProbe, EnvironmentProbe},
-    run_suite_with_options,
+    environment::EnvironmentProbe, run_suite_with_options,
 };
 
 use super::ExecCommandKind;
@@ -393,7 +392,7 @@ async fn persist_eval_trace(
 }
 
 /// Build environment probes from an eval task's verify commands.
-fn build_probes(eval_task: &EvalTask) -> Vec<Box<dyn EnvironmentProbe>> {
+fn build_probes(eval_task: &EvalTask) -> Vec<EnvironmentProbe> {
     eval_task
         .verify_commands
         .iter()
@@ -404,7 +403,7 @@ fn build_probes(eval_task: &EvalTask) -> Vec<Box<dyn EnvironmentProbe>> {
             }
             let command = parts[0].to_string();
             let args: Vec<String> = parts[1..].iter().copied().map(str::to_string).collect();
-            Some(Box::new(CommandProbe::new(command, args)) as Box<dyn EnvironmentProbe>)
+            Some(EnvironmentProbe::command(command, args))
         })
         .collect()
 }
@@ -446,8 +445,15 @@ mod tests {
             timeout_secs: None,
         };
         let probes = build_probes(&task);
-        // Empty command is filtered out -> 2 probes.
-        assert_eq!(probes.len(), 2);
+        // Empty command is filtered out; the remaining argv must be split
+        // exactly into command + args (the enum makes this observable).
+        assert_eq!(
+            probes,
+            vec![
+                EnvironmentProbe::command("cargo".into(), vec!["test".into(), "--all".into()]),
+                EnvironmentProbe::command("git".into(), vec!["status".into()]),
+            ]
+        );
     }
 
     #[test]
