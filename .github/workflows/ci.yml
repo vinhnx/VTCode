@@ -1,0 +1,200 @@
+# Pull-request and main-branch quality gate: formatting, workspace lint, and
+# the full nextest suite, as three parallel jobs with no `needs:` edges.
+#
+# Design contract (docs/development/ci-cd.md):
+# - Same gates as the local scripts: `cargo fmt --all -- --check`,
+#   `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and
+#   `cargo nextest run --locked --workspace --profile ci-partition` (retries = 0:
+#   a test that passes only on retry is a bug, not a flake to absorb).
+# - Pushes to main run the full suite and seed the rust-cache lineage that PR
+#   jobs restore, so cache hits stay high without a separate seeding workflow.
+# - PRs run only the packages the diff can reach (scripts/select_tests.py):
+#   changed packages plus every package that transitively depends on them via
+#   normal/dev/build edges. The inputs that rerun everything are listed in
+#   scripts/select_tests.py (`--explain-rerun-all`).
+# - Every check in a job runs even after another fails, so one red run lists
+#   every failure instead of the first.
+
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fast-gates:
+    name: Fast gates (fmt + governance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Rust (rustfmt)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      # Governance gates call scripts/common.sh — the same functions the local
+      # check-dev.sh/check.sh gates use — so CI and local gates cannot drift.
+      - name: Repo governance gates (file length, docs links, placement, sizes)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          # shellcheck disable=SC1091
+          source scripts/common.sh
+          run_repo_governance_gates
+
+      - name: Structured logging lint
+        if: ${{ !cancelled() }}
+        run: ./scripts/lint_structured_logging.sh
+
+      - name: Agent legibility lint
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_agent_legibility.py --mode warn
+
+  clippy:
+    name: Clippy (workspace, -D warnings)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Rust (clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        with:
+          key: clippy
+
+      - name: Run clippy
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+  tests:
+    name: Tests (nextest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # PR checkout is the merge commit; the selection diff needs the base
+      # snapshot. Shallow fetch keeps the checkout fast, and a moved main only
+      # widens the selection (never hides a test).
+      - name: Fetch base for diff selection
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        with:
+          key: tests
+
+      - name: Resolve nextest version
+        id: nextest
+        run: |
+          version=$(sed -n 's/^nextest-version *= *"//p' .config/nextest.toml | head -1)
+          version=${version%\"}
+          if [[ -z "$version" ]]; then
+            echo "Could not read nextest-version from .config/nextest.toml" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2.90.5
+        with:
+          # Pinned to the repo requirement: unpinned `nextest` resolves via the
+          # action's own (stale) manifest — 0.9.132 — below nextest.toml's floor.
+          tool: nextest@${{ steps.nextest.outputs.version }}
+
+      # The ubuntu-26.04 runner image does not ship ripgrep; agent-loop tests
+      # shell out to `rg` and assert on its exit codes.
+      - name: Install ripgrep
+        uses: taiki-e/install-action@v2.90.5
+        with:
+          tool: ripgrep
+
+      # PRs run only the packages the diff can reach; main and manual runs
+      # execute the full workspace suite and record test times for shard
+      # balancing (docs/development/ci-cd.md#test-sharding).
+      - name: Select packages reachable from the diff
+        id: select
+        if: github.event_name == 'pull_request'
+        run: |
+          set -o pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          echo "Diff selection base: $base"
+          packages=$(python3 scripts/select_tests.py --base "$base")
+          echo "Reachable packages: ${packages:-<none>}"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        env:
+          # Package names come from cargo metadata (cargo's package-name
+          # grammar), never from PR-controlled free text.
+          SELECTED_PACKAGES: ${{ steps.select.outputs.packages }}
+          # Sandbox-dependent tests (WebMCP check adapter, lifecycle hooks) on
+          # Linux need the real CLI as the sandbox launcher: the workspace test
+          # build always compiles it (the root package depends on every crate
+          # the diff can reach, so selection never excludes it while selecting
+          # those tests). Without it the launcher would resolve to the libtest
+          # harness, which cannot parse the sandbox-exec protocol.
+          VTCODE_LINUX_SANDBOX_EXECUTABLE: ${{ github.workspace }}/target/debug/vtcode
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ -z "$SELECTED_PACKAGES" ]; then
+              echo "No package is reachable from this diff (docs/scripts-only change); no tests to run."
+              exit 0
+            fi
+            # shellcheck disable=SC2086
+            cargo nextest run --locked --profile ci-partition $SELECTED_PACKAGES
+          else
+            cargo nextest run --locked --workspace --profile ci-partition
+          fi
+
+      # Full runs on main record per-test times; future shard balancing reads
+      # this junit (docs/development/ci-cd.md#test-sharding).
+      - name: Upload test-time junit (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: nextest-junit-${{ github.sha }}
+          path: target/nextest/ci-partition-junit.xml
+          if-no-files-found: error
+          retention-days: 7

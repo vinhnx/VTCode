@@ -462,9 +462,11 @@ mod tests {
         // Just verify it doesn't panic
         #[cfg(target_os = "linux")]
         {
-            let parent_pid = unistd::getpid().as_raw();
-            // Note: This will likely fail in tests since we're not in pre_exec
-            // but it should not panic
+            // Pass the real parent pid. A mismatched snapshot makes the race
+            // guard kill the caller, which is correct production behavior but
+            // here SIGTERMs the test process itself; delivery races the
+            // harness, so the abort only surfaces under load.
+            let parent_pid = unistd::getppid().as_raw();
             let _ = set_parent_death_signal(parent_pid);
         }
         #[cfg(not(target_os = "linux"))]

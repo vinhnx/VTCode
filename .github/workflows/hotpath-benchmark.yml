@@ -1,9 +1,23 @@
 name: Benchmark
 
+# Selection narrows PR feedback: instruction counts of the tui_hotpath example
+# can only move when vtcode-ui, its workspace dependency surface
+# (vtcode-commons, vtcode-config, vtcode-diff — hence crates/common/**), the
+# manifest graph, the hotpath policy, or this workflow changes. Other PRs skip
+# a multi-minute build they cannot affect; the push-to-main run stays
+# unfiltered so the main baseline is always current.
 on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/codegen/vtcode-ui/**"
+      - "crates/codegen/vtcode-config/**"
+      - "crates/common/**"
+      - "hotpath/**"
+      - ".github/workflows/hotpath-benchmark.yml"
 
 # Merged hotpath Cloud benchmark of the `tui_hotpath` example: native timing
 # plus Callgrind instruction counts in one report. Built with the `x-prod`

@@ -52,7 +52,8 @@ which both VT Code and Claude Code load directly.
 
 ## Compare and apply
 
-Use the [read-and-apply skill](../../.agents/skills/read-and-apply/SKILL.md) for
+Use the `read-and-apply` skill (`.agents/skills/read-and-apply/SKILL.md`, a local
+untracked skill; see AGENTS.md) for
 external resources. Aggregate returned answers by claim, keeping each source,
 path, and revision attached. Deduplicate agreements, resolve conflicts using
 source evidence, and distinguish verified facts from inference. Compare each
