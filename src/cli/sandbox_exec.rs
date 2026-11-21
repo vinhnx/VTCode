@@ -37,7 +37,7 @@ pub fn try_run_sandbox_exec_mode() -> bool {
     let mut argv = std::env::args_os();
     let _binary = argv.next();
     match argv.next() {
-        Some(arg) if arg == OsString::from("sandbox-exec") => {}
+        Some(arg) if arg == "sandbox-exec" => {}
         _ => return false,
     }
 
@@ -46,7 +46,9 @@ pub fn try_run_sandbox_exec_mode() -> bool {
         vtcode_commons::diagnostics::stderr(format_args!("vtcode sandbox-exec: {error:#}"));
         std::process::exit(EXIT_LAUNCHER_ERROR);
     }
-    unreachable!("sandbox launcher exec replaced the process");
+    // `launch` exec-replaces the process and never returns Ok; reaching this
+    // point would mean running on as a normal CLI invocation, so fail closed.
+    std::process::exit(EXIT_LAUNCHER_ERROR);
 }
 
 /// The parsed helper-protocol invocation.
@@ -67,7 +69,7 @@ fn parse_protocol_args(args: Vec<OsString>) -> Result<SandboxProtocolArgs> {
 
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
-        if arg == OsString::from("--") {
+        if arg == "--" {
             command = iter.collect();
             break;
         }
@@ -150,7 +152,10 @@ fn launch(args: Vec<OsString>) -> Result<()> {
 /// failure the launcher exits with a conventional exec status.
 fn exec_wrapped_command(command: Vec<OsString>) -> ! {
     let mut parts = command.into_iter();
-    let program = parts.next().unwrap_or_else(|| unreachable!("parser rejects empty commands"));
+    // The parser rejects empty command vectors; fail closed if that changes.
+    let Some(program) = parts.next() else {
+        std::process::exit(EXIT_LAUNCHER_ERROR);
+    };
     let mut cmd = std::process::Command::new(&program);
     cmd.args(parts);
     // `CommandExt::exec` replaces the process on success and returns the
