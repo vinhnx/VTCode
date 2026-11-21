@@ -9,8 +9,9 @@
 //!
 //! These tests launch the real hardened container, drive it through
 //! [`BrowserDriver`], and assert page pixels, daemon-applied isolation, and
-//! exact teardown. They skip loudly when Docker is unavailable and fail with
-//! a build hint when the image is missing.
+//! exact teardown. They are opt-in via `VTCODE_CUA_CONTAINER=1` (the image must
+//! be built first), skip when Docker is unavailable, and fail with a build
+//! hint when the image is missing.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -32,6 +33,15 @@ fn fixture_app() -> PathBuf {
 }
 
 async fn require_docker() -> bool {
+    // These are container-backed proof tests: Docker alone is not enough, the
+    // pinned image must be built locally. CI has Docker but not the image, so
+    // the tests are opt-in (see the crate README).
+    if std::env::var("VTCODE_CUA_CONTAINER").as_deref() != Ok("1") {
+        eprintln!(
+            "skipping browser container test: set VTCODE_CUA_CONTAINER=1 to run (requires the built browser image)"
+        );
+        return false;
+    }
     if docker_available().await {
         return true;
     }

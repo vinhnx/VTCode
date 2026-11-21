@@ -23,6 +23,10 @@ assert the runner's current behavior):
 docker build --tag vtcode-computer-use-browser:1.65.1 browser
 ```
 
+The container-backed tests are opt-in because CI runners have Docker but not
+the image. After building it, run them with `VTCODE_CUA_CONTAINER=1`, e.g.
+`VTCODE_CUA_CONTAINER=1 cargo nextest run -p vtcode-computer-use`.
+
 The base image and Bun installer are pinned by digest. Bun installs the
 JavaScript dependencies from the checked-in lockfile with scripts disabled.
 The image applies distro updates at build time, and Node runs the helper.

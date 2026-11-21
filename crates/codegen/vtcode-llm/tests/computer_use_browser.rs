@@ -7,9 +7,10 @@
 )]
 //! Full-stack computer-use proof: the provider adapters drive the real turn
 //! controller, browser driver, and container. Each test builds a hermetic
-//! fixture app in a temp dir, so no cross-crate fixtures are shared. They
-//! skip loudly when Docker is unavailable and fail with a build hint when
-//! the image is missing.
+//! fixture app in a temp dir, so no cross-crate fixtures are shared. They are
+//! opt-in via `VTCODE_CUA_CONTAINER=1` (the image must be built first), skip
+//! when Docker is unavailable, and fail with a build hint when the image is
+//! missing.
 
 use std::time::Duration;
 
@@ -36,6 +37,14 @@ const FIXTURE_APP: &str = r#"<!doctype html>
 "#;
 
 async fn require_docker() -> bool {
+    // Full-stack proof tests need the locally built browser image, which CI
+    // does not provide even though its runner has Docker. Opt in explicitly.
+    if std::env::var("VTCODE_CUA_CONTAINER").as_deref() != Ok("1") {
+        eprintln!(
+            "skipping computer-use browser test: set VTCODE_CUA_CONTAINER=1 to run (requires the built browser image)"
+        );
+        return false;
+    }
     if docker_available().await {
         return true;
     }

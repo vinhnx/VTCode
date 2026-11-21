@@ -622,10 +622,23 @@ fn e2e_config() -> ComputerUseConfig {
     e2e
 }
 
+/// Container-backed E2E tests need the locally built browser image; CI has
+/// Docker but not the image, so they stay opt-in like the crate-level proofs.
+async fn require_container_test() -> bool {
+    if std::env::var("VTCODE_CUA_CONTAINER").as_deref() != Ok("1") {
+        eprintln!("skipping container-backed computer-use E2E: set VTCODE_CUA_CONTAINER=1 to run");
+        return false;
+    }
+    if !docker_available().await {
+        eprintln!("skipping container-backed computer-use E2E: docker is unavailable");
+        return false;
+    }
+    true
+}
+
 #[tokio::test]
 async fn computer_use_turn_executes_over_real_container() {
-    if !docker_available().await {
-        eprintln!("skipping computer-use E2E: docker is unavailable");
+    if !require_container_test().await {
         return;
     }
     fn shot_and_click() -> Result<NativeResponse, LLMError> {
@@ -813,8 +826,7 @@ const TYPED_SENTINEL: &str = "SENTINEL-TYPED-vtcode-7f3a";
 
 #[tokio::test]
 async fn computer_use_turn_redacts_sentinels_from_durable_outputs() {
-    if !docker_available().await {
-        eprintln!("skipping computer-use sentinel E2E: docker is unavailable");
+    if !require_container_test().await {
         return;
     }
     fn type_and_shot() -> Result<NativeResponse, LLMError> {
@@ -879,8 +891,7 @@ async fn computer_use_turn_redacts_sentinels_from_durable_outputs() {
 
 #[tokio::test]
 async fn computer_use_turn_cancel_tears_down_launched_target() {
-    if !docker_available().await {
-        eprintln!("skipping computer-use cancel E2E: docker is unavailable");
+    if !require_container_test().await {
         return;
     }
     fn one_shot() -> Result<NativeResponse, LLMError> {

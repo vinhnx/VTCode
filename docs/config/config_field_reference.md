@@ -235,7 +235,7 @@ python3 scripts/generate_config_field_reference.py
 | `commands.extra_path_entries[]` | `string` | no | `-` | - |
 | `computer_use.browser_build` | `null \| string` | no | `null` | Approved static build served to the browser target. Required before turns can run, but not before the switch can persist: Settings enables first and guides to the target second, and turns fail closed until a target is set. Must be absolute when present. Existence is verified at launch, not here. |
 | `computer_use.decisions_review` | `boolean` | no | `false` | Ask OpenAI Decisions to review each proposed batch for prompt injection and task drift before execution. Only OpenAI providers whose route supports Decisions are reviewed; anything else proceeds on the human turn approval alone. Uses OpenAI API billing. |
-| `computer_use.enabled` | `boolean` | no | `false` | Opt-in marker. Needs a verified computer-use model. The feature stays inert unless this is true. |
+| `computer_use.enabled` | `boolean` | no | `false` | Opt-in marker. Needs a verified computer-use model (OpenAI `gpt-6-luna`). The feature stays inert unless this is true. |
 | `computer_use.image` | `string` | no | `"vtcode-computer-use-browser:1.65.1"` | Pinned browser container image (tag or digest, never `latest`). |
 | `computer_use.max_actions_per_turn` | `integer` | no | `50` | Maximum actions executed in one approved turn. |
 | `computer_use.turn_timeout_secs` | `integer` | no | `300` | Wall-clock budget for one approved turn, in seconds. |

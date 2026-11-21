@@ -42,7 +42,10 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: 1
+          # test_select_tests.py::test_git_paths_are_repo_root_relative_regardless_of_cwd
+          # diffs HEAD~1..HEAD against the real checkout, so the parent commit
+          # must be present; a depth-1 clone makes that git diff exit 128.
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Install Rust (rustfmt)
