@@ -14,6 +14,8 @@ on:
       - "Cargo.toml"
       - "**/Cargo.toml"
       - "Cargo.lock"
+      - "**/package.json"
+      - "**/bun.lock"
       - "deny.toml"
       - "supply-chain/**"
       - ".github/workflows/deny.yml"
@@ -23,6 +25,8 @@ on:
       - "Cargo.toml"
       - "**/Cargo.toml"
       - "Cargo.lock"
+      - "**/package.json"
+      - "**/bun.lock"
       - "deny.toml"
       - "supply-chain/**"
       - ".github/workflows/deny.yml"
@@ -79,9 +83,45 @@ jobs:
         with:
           tool: cargo-vet
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2.90.5
+        with:
+          tool: cargo-audit
+
       # --locked reuses the committed imports.lock without fetching new upstream
       # audits, so the check is deterministic. Refresh imports explicitly with
       # plain `cargo vet` and commit the updated lock.
       - name: Run cargo-vet
         run: cargo vet --locked
         shell: bash
+
+      # Graph-based checks can omit optional packages recorded in Cargo.lock.
+      # cargo-deny already checks yanks on the configured release targets.
+      - name: Audit the complete Cargo lockfile
+        run: cargo audit --no-yanked
+
+  bun-audit:
+    name: Bun lockfile advisories
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - name: Audit repository tooling
+        run: bun audit
+
+      - name: Audit WebMCP
+        working-directory: apps/webmcp
+        run: bun audit
+
+      - name: Audit the computer-use browser helper
+        working-directory: crates/codegen/vtcode-computer-use/browser
+        run: bun audit

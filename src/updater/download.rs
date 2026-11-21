@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,6 +8,8 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use vtcode_commons::http::send_with_retry;
 
 use super::github::{self, ReleaseAsset};
+
+const MAX_CHECKSUM_BYTES: usize = 64 * 1024;
 
 pub(super) async fn download_asset<F>(
     asset: &ReleaseAsset,
@@ -68,16 +70,31 @@ where
     Ok(())
 }
 
-pub(super) async fn download_checksum(asset: &ReleaseAsset, timeout: Duration) -> Result<String> {
+async fn download_checksum(asset: &ReleaseAsset, timeout: Duration) -> Result<String> {
     let response = response_for_url(&asset.download_url, timeout)
         .await
         .with_context(|| format!("failed to download checksum asset {}", asset.name))?;
-    response
+    let mut response = response
         .error_for_status()
-        .with_context(|| format!("checksum download returned an error for {}", asset.name))?
-        .text()
+        .with_context(|| format!("checksum download returned an error for {}", asset.name))?;
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_CHECKSUM_BYTES as u64)
+    {
+        bail!("checksum metadata {} exceeds {MAX_CHECKSUM_BYTES} bytes", asset.name);
+    }
+    let mut metadata = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .with_context(|| format!("failed to read checksum metadata {}", asset.name))
+        .with_context(|| format!("failed to read checksum metadata {}", asset.name))?
+    {
+        if chunk.len() > MAX_CHECKSUM_BYTES - metadata.len() {
+            bail!("checksum metadata {} exceeds {MAX_CHECKSUM_BYTES} bytes", asset.name);
+        }
+        metadata.extend_from_slice(&chunk);
+    }
+    String::from_utf8(metadata).with_context(|| format!("checksum metadata {} is not UTF-8", asset.name))
 }
 
 /// Every checksum source the release publishes for `archive_name`, in
@@ -121,7 +138,7 @@ pub(super) async fn download_expected_checksum(
     for asset in &candidates {
         match download_checksum(asset, timeout).await {
             Ok(metadata) => {
-                if let Some(expected) = parse_checksum_metadata(&metadata, archive_name) {
+                if let Some(expected) = parse_checksum_metadata(&metadata, archive_name, &asset.name) {
                     return Ok(expected);
                 }
             }
@@ -167,46 +184,64 @@ fn legacy_checksum_name(archive_name: &str) -> Option<String> {
         .map(|stem| format!("{stem}.sha256"))
 }
 
-pub(super) fn parse_checksum_metadata(metadata: &str, archive_name: &str) -> Option<String> {
-    let archive_name = archive_name.to_ascii_lowercase();
-    metadata.lines().find_map(|line| {
-        let tokens: Vec<_> = line.split_whitespace().collect();
-        let digest = tokens.iter().find(|token| is_sha256(token))?;
-        let matches_archive = tokens.iter().any(|token| {
-            let filename = token.trim_start_matches('*').rsplit(['/', '\\']).next().unwrap_or_default();
-            filename.eq_ignore_ascii_case(&archive_name)
-        });
-        if tokens.len() == 1 || matches_archive {
-            Some(digest.to_ascii_lowercase())
-        } else {
-            None
+fn parse_checksum_metadata(metadata: &str, archive_name: &str, checksum_name: &str) -> Option<String> {
+    let sidecar = checksum_name.to_ascii_lowercase().ends_with(".sha256");
+    let mut expected: Option<String> = None;
+    for line in metadata.lines() {
+        let mut tokens = line.split_whitespace();
+        let Some(digest) = tokens.next().filter(|token| is_sha256(token)) else {
+            continue;
+        };
+        let matches_archive = match tokens.next() {
+            Some(filename) => {
+                let basename = filename
+                    .strip_prefix('*')
+                    .unwrap_or(filename)
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap_or_default();
+                basename.eq_ignore_ascii_case(archive_name) && tokens.next().is_none()
+            }
+            None => sidecar && metadata.trim() == digest,
+        };
+        if matches_archive {
+            if let Some(prior) = &expected {
+                if !prior.eq_ignore_ascii_case(digest) {
+                    return None;
+                }
+            } else {
+                expected = Some(digest.to_ascii_lowercase());
+            }
         }
-    })
+    }
+    expected
 }
 
-fn verify_checksum(contents: &[u8], expected: &str) -> Result<()> {
+pub(super) fn verify_file_checksum(path: &Path, expected: &str) -> Result<()> {
     if !is_sha256(expected) {
         bail!("invalid SHA-256 checksum metadata");
     }
-    let actual = digest_hex(contents);
-    if actual != expected.to_ascii_lowercase() {
+    let read_error = || format!("failed to read {} for checksum verification", path.display());
+    let mut file = BufReader::new(std::fs::File::open(path).with_context(read_error)?);
+    let mut hasher = Sha256::new();
+    loop {
+        let buffer = file.fill_buf().with_context(read_error)?;
+        if buffer.is_empty() {
+            break;
+        }
+        hasher.update(buffer);
+        let count = buffer.len();
+        file.consume(count);
+    }
+    let actual: String = hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect();
+    if !actual.eq_ignore_ascii_case(expected) {
         bail!("checksum mismatch: expected {expected}, got {actual}");
     }
     Ok(())
 }
 
-pub(super) fn verify_file_checksum(path: &Path, expected: &str) -> Result<()> {
-    let contents =
-        std::fs::read(path).with_context(|| format!("failed to read {} for checksum verification", path.display()))?;
-    verify_checksum(&contents, expected)
-}
-
 fn is_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-fn digest_hex(contents: &[u8]) -> String {
-    Sha256::digest(contents).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn print_progress(name: &str, downloaded: u64, total: Option<u64>) {
@@ -266,11 +301,14 @@ fn should_report_download(
 mod tests {
     use super::*;
 
+    const AGGREGATE: &str = "checksums.txt";
+    const SIDECAR: &str = "vtcode.tar.gz.sha256";
+
     #[test]
     fn parses_checksum_for_named_archive() {
         let checksum = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  vtcode-1.0.0.tar.gz\n";
         assert_eq!(
-            parse_checksum_metadata(checksum, "vtcode-1.0.0.tar.gz"),
+            parse_checksum_metadata(checksum, "vtcode-1.0.0.tar.gz", AGGREGATE),
             Some("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string())
         );
     }
@@ -278,7 +316,7 @@ mod tests {
     #[test]
     fn ignores_checksum_for_another_archive() {
         let checksum = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  other.tar.gz\n";
-        assert!(parse_checksum_metadata(checksum, "vtcode.tar.gz").is_none());
+        assert!(parse_checksum_metadata(checksum, "vtcode.tar.gz", AGGREGATE).is_none());
     }
 
     #[test]
@@ -289,22 +327,55 @@ b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e  vtcode-0.141.7
 ";
 
         assert_eq!(
-            parse_checksum_metadata(checksum, "vtcode-0.141.7-aarch64-apple-darwin.tar.gz"),
+            parse_checksum_metadata(checksum, "vtcode-0.141.7-aarch64-apple-darwin.tar.gz", AGGREGATE),
             Some("b9362df9124a6180c5cf0787d6159ff525e7caee6ceb51a0987fb827205df91e".to_string())
         );
     }
 
     #[test]
-    fn verifies_checksum_and_rejects_mismatch() {
-        let expected = digest_hex(b"archive");
-        verify_checksum(b"archive", &expected).expect("checksum");
-        let error = verify_checksum(b"tampered", &expected).expect_err("mismatch");
+    fn verifies_checksum_of_file_across_multiple_reads() {
+        let file = tempfile::NamedTempFile::new().expect("temp file");
+        let mut contents = vec![b'a'; 32 * 1024];
+        std::fs::write(file.path(), &contents).expect("write archive");
+        let expected = "b217b65e6f205f41b3fb8ef90cf7c44da93f630ca03965273485bbb21a5cccf5";
+        verify_file_checksum(file.path(), expected).expect("checksum");
+
+        contents.push(b'b');
+        std::fs::write(file.path(), &contents).expect("write changed archive");
+        let error = verify_file_checksum(file.path(), expected).expect_err("mismatch");
         assert!(error.to_string().contains("checksum mismatch"));
     }
 
     #[test]
     fn parse_checksum_metadata_returns_none_for_missing_archive() {
-        assert!(parse_checksum_metadata("signature only", "vtcode.tar.gz").is_none());
+        assert!(parse_checksum_metadata("signature only", "vtcode.tar.gz", AGGREGATE).is_none());
+    }
+
+    #[test]
+    fn bare_digest_is_accepted_only_from_a_single_digest_sidecar() {
+        let digest = "a".repeat(64);
+        let metadata = format!("{digest}\n");
+        assert_eq!(parse_checksum_metadata(&metadata, "vtcode.tar.gz", SIDECAR), Some(digest.clone()));
+        assert!(parse_checksum_metadata(&metadata, "vtcode.tar.gz", AGGREGATE).is_none());
+
+        let multiple = format!("{digest}\n{digest}  other.tar.gz\n");
+        assert!(parse_checksum_metadata(&multiple, "vtcode.tar.gz", SIDECAR).is_none());
+    }
+
+    #[test]
+    fn named_checksums_reject_ambiguous_or_malformed_records() {
+        let first = "a".repeat(64);
+        let second = "b".repeat(64);
+        let named = format!("{first} *vtcode.tar.gz\n");
+        let unrelated = format!("{named}{second}  other.tar.gz\n");
+        assert_eq!(parse_checksum_metadata(&unrelated, "vtcode.tar.gz", AGGREGATE), Some(first.clone()));
+        assert!(
+            parse_checksum_metadata(&format!("{named}{second}  vtcode.tar.gz\n"), "vtcode.tar.gz", AGGREGATE).is_none()
+        );
+        assert!(
+            parse_checksum_metadata(&format!("{first}  other.tar.gz  vtcode.tar.gz\n"), "vtcode.tar.gz", AGGREGATE)
+                .is_none()
+        );
     }
 
     /// Real `checksums.txt` body from release 0.181.7 (digests included so the
@@ -324,14 +395,16 @@ e070e9e47c8a50bd5984926d2799a05352281c131716df09c52468ce0eabdcd7  vtcode-0.181.7
 ";
 
         assert_eq!(
-            parse_checksum_metadata(aggregate, "vtcode-0.181.7-aarch64-apple-darwin.tar.gz").as_deref(),
+            parse_checksum_metadata(aggregate, "vtcode-0.181.7-aarch64-apple-darwin.tar.gz", AGGREGATE).as_deref(),
             Some("2643377532a0e1667998ecbf66ba9e027c2dc2e54123aa89c7d48a6f0f45be73")
         );
         assert_eq!(
-            parse_checksum_metadata(aggregate, "vtcode-desktop-0.181.7-aarch64-apple-darwin.zip").as_deref(),
+            parse_checksum_metadata(aggregate, "vtcode-desktop-0.181.7-aarch64-apple-darwin.zip", AGGREGATE).as_deref(),
             Some("41cbc573cbe7d803f76adc8f894bf42af5510c45a6309d9ba6c9dbc47ef6e0a5")
         );
-        assert!(parse_checksum_metadata(aggregate, "vtcode-0.181.7-riscv64-unknown-linux-gnu.tar.gz").is_none());
+        assert!(
+            parse_checksum_metadata(aggregate, "vtcode-0.181.7-riscv64-unknown-linux-gnu.tar.gz", AGGREGATE).is_none()
+        );
     }
 
     #[test]

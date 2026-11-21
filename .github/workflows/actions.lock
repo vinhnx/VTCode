@@ -14,6 +14,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'dtolnay/rust-toolchain@stable'
         - 'embarkstudios/cargo-deny-action@v2.1.1'
+        - 'oven-sh/setup-bun@v2.2.0'
         - 'taiki-e/install-action@v2.90.5'
     '.github/workflows/desktop-macos.yml':
         - 'actions/checkout@v7.0.1'

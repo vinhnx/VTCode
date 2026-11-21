@@ -20,15 +20,15 @@ session, and rebuild it after changing `browser/runner.mjs` (the tests
 assert the runner's current behavior):
 
 ```sh
-docker build --tag vtcode-computer-use-browser:1.64.1 browser
+docker build --tag vtcode-computer-use-browser:1.65.1 browser
 ```
 
-The base image and the bun installer are pinned by digest, and the
-install runs from the checked-in lockfile (`bun install
---frozen-lockfile --ignore-scripts`), so builds are reproducible and
-tamper-evident. The container still executes the runner on node; bun
-is only the installer. When bumping Playwright, update the tag,
-digest, and lockfile together and rerun the container tests.
+The base image and Bun installer are pinned by digest. Bun installs the
+JavaScript dependencies from the checked-in lockfile with scripts disabled.
+The image applies distro updates at build time, and Node runs the helper.
+When bumping Playwright, update the tag, digest, and lockfile together and
+rerun the container tests. If you set `computer_use.image` explicitly, point
+it at the rebuilt tag before starting a new browser session.
 
 Start one container per approved static build through
 `browser::container`, which validates the pinned image and build

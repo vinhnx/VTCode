@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_IMAGE: &str = "vtcode-computer-use-browser:1.64.1";
+const DEFAULT_IMAGE: &str = "vtcode-computer-use-browser:1.65.1";
 const DEFAULT_TURN_TIMEOUT_SECS: u64 = 300;
 const DEFAULT_MAX_ACTIONS_PER_TURN: usize = 50;
 
@@ -123,7 +123,7 @@ mod tests {
         let config = ComputerUseConfig::default();
         assert!(!config.enabled);
         assert_eq!(config.browser_build, None);
-        assert_eq!(config.image, "vtcode-computer-use-browser:1.64.1");
+        assert_eq!(config.image, "vtcode-computer-use-browser:1.65.1");
         assert_eq!(config.turn_timeout_secs, 300);
         assert_eq!(config.max_actions_per_turn, 50);
         assert!(!config.decisions_review);

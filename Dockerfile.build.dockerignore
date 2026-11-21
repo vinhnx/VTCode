@@ -1,0 +1,20 @@
+# Keep the contributor build context independent of a local .dockerignore.
+.git
+.github
+.agents
+.aws
+.cargo
+.codex
+.harbor-cache
+.vtcode
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+jobs
+dist
+coverage
+tmp
+target
+**/target
+**/.DS_Store

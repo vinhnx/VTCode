@@ -92,6 +92,10 @@ VT Code enforces the following CI/CD security controls for GitHub Actions:
   gate), rather than broad repository-level credential exposure.
 - **No release-path cache**: release workflows do not use dependency/build cache restore to reduce cache-poisoning
   exposure on publish paths.
+- **Container build inputs**: the contributor build uses `Cargo.lock` and excludes local environment files and credential
+  directories from its Docker build context. The contributor and browser images apply distro package updates at build
+  time. Use `docker build --no-cache` to refresh distro packages when the base digest is unchanged. The browser image
+  uses Bun to install its lockfile and removes the bundled npm toolchain.
 
 ## Security Architecture
 
@@ -109,9 +113,9 @@ For information about VT Code's security architecture, please see our documentat
 ## Version Updates
 
 We regularly update dependencies and monitor for security vulnerabilities in our dependencies. CI runs the
-[cargo-deny](https://embarkstudios.github.io/cargo-deny/) policy (`deny.toml`) on every pull request and weekly via
-`.github/workflows/deny.yml`: RustSec advisories and yanked crates fail the build, licenses/duplicates/sources are
-policy-checked. To run the same policy locally:
+[cargo-deny](https://embarkstudios.github.io/cargo-deny/) policy (`deny.toml`) when dependency files change and on a
+weekly schedule via `.github/workflows/deny.yml`. It checks RustSec advisories and yanked crates across the release
+target graphs, along with license, duplicate, and source policy. To run the same policy locally:
 
 ```bash
 # Install cargo-deny if you haven't already
@@ -125,12 +129,22 @@ cargo deny --locked check
 ./scripts/check-dev.sh --deny  # opt-in from the fast gate
 ```
 
-cargo-audit remains available as a secondary lockfile-wide cross-check:
+CI also runs `cargo audit` against the entire Rust lockfile, including optional dependencies outside the checked
+graphs. Bun audits the root tooling, WebMCP, and computer-use browser helper lockfiles without installing dependencies.
 
 ```bash
-cargo install cargo-audit
-cargo audit
+cargo audit --no-yanked
+bun audit
+(cd apps/webmcp && bun audit)
+(cd crates/codegen/vtcode-computer-use/browser && bun audit)
 ```
+
+### Self-update verification
+
+CLI and desktop updates require a verified SHA-256 for the selected archive before installation. Aggregate checksum
+files must name the archive explicitly. A matching per-archive sidecar may contain a single bare digest. Conflicting
+digests in one checksum file make that file unusable. Checksum downloads are capped at 64 KiB, and archive hashing
+streams from the staged file.
 
 ### Audit Provenance (cargo-vet)
 

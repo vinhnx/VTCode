@@ -1638,8 +1638,9 @@ version = "0.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.heapless]]
-version = "0.9.3"
+version = "0.9.4"
 criteria = "safe-to-deploy"
+notes = "Security update for RUSTSEC-2026-0574 through RUSTSEC-2026-0582; upstream audit coverage pending."
 
 [[exemptions.heck]]
 version = "0.5.0"
@@ -2826,8 +2827,9 @@ version = "0.11.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.quinn-udp]]
-version = "0.5.15"
+version = "0.5.16"
 criteria = "safe-to-deploy"
+notes = "Security update for RUSTSEC-2026-0538; upstream audit coverage pending."
 
 [[exemptions.r-efi]]
 version = "5.3.0"

@@ -236,7 +236,7 @@ python3 scripts/generate_config_field_reference.py
 | `computer_use.browser_build` | `string \| null` | no | `null` | Approved static build served to the browser target; absolute directory, required before turns can run. |
 | `computer_use.decisions_review` | `boolean` | no | `false` | Ask OpenAI Decisions to review each proposed batch for prompt injection and task drift. OpenAI routes only; uses API billing. |
 | `computer_use.enabled` | `boolean` | no | `false` | Opt-in marker for the computer-use runtime. Needs a verified computer-use model (currently OpenAI gpt-6-luna). Approval stays per turn and per target. |
-| `computer_use.image` | `string` | no | `"vtcode-computer-use-browser:1.64.1"` | Pinned browser container image (tag or digest, never `latest`). |
+| `computer_use.image` | `string` | no | `"vtcode-computer-use-browser:1.65.1"` | Pinned browser container image (tag or digest, never `latest`). |
 | `computer_use.max_actions_per_turn` | `integer` | no | `50` | Maximum actions executed in one approved turn (1-1000). |
 | `computer_use.turn_timeout_secs` | `integer` | no | `300` | Wall-clock budget for one approved turn, in seconds (1-3600). |
 | `context.dynamic.enabled` | `boolean` | no | `true` | Enable dynamic context discovery features |

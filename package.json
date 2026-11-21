@@ -3,6 +3,10 @@
     "@openai/codex-security": "^0.8.1"
   },
   "devDependencies": {
-    "markdownlint-cli2": "0.23.3"
+    "markdownlint-cli2": "0.24.2"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.9",
+    "katex": "^0.18.11"
   }
 }

@@ -4,10 +4,9 @@
 // toolchain pin moves (manual step in docs/development/toolchain-updates.md).
 {
 	"name": "VT Code",
-	"image": "rust:1.100.0-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
-	// System deps mirror the builder stage in Dockerfile.build (plus git,
-	// which dev iterations need for the test suite and hooks).
-	"postCreateCommand": "apt-get update && apt-get install -y pkg-config libssl-dev build-essential git && rm -rf /var/lib/apt/lists/*",
+	"image": "rust:1.100.0-slim-bookworm@sha256:7c7d4eb4d05b7781187a327809466cfddf29753f6defdc3d19a0e291951b7a37",
+	// System dependencies mirror the builder stage in Dockerfile.build.
+	"postCreateCommand": "apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends build-essential git libssl-dev pkg-config && rm -rf /var/lib/apt/lists/*",
 	"customizations": {
 		"vscode": {
 			"extensions": [

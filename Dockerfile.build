@@ -4,13 +4,11 @@
 # pinned by digest for reproducible builds; refresh with `docker buildx
 # imagetools inspect <tag>` when the toolchain pin moves (checked by
 # scripts/check_compatibility.sh, which reads the tag, not the digest).
-FROM rust:1.100.0-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea AS builder
+FROM rust:1.100.0-slim-bookworm@sha256:7c7d4eb4d05b7781187a327809466cfddf29753f6defdc3d19a0e291951b7a37 AS builder
 
-# Install required system dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    build-essential \
+# Install required build tools and apply available distro security fixes.
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends build-essential git libssl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -27,24 +25,22 @@ ENV RUSTC_WRAPPER=
 ENV SCCACHE_DIR=
 ENV SCCACHE_CACHE_SIZE=
 
-# Build the project with release profile (more memory efficient than dev with LTO)
-# Use --release to get optimized binary without the aggressive dev LTO settings
-RUN cargo build --release
+# Use the same thin-LTO profile as Linux release CI to keep link memory bounded.
+RUN cargo build --locked --profile release-fast
 
 # Verify the binary was created
-RUN test -f /build/target/release/vtcode
+RUN test -f /build/target/release-fast/vtcode
 
 # Optional: Create a minimal runtime image
-FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS runtime
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS runtime
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libssl3 \
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary from builder stage
-COPY --from=builder --chmod=755 /build/target/release/vtcode /usr/local/bin/vtcode
+COPY --from=builder --chmod=755 /build/target/release-fast/vtcode /usr/local/bin/vtcode
 
 # Run as an unprivileged user: nothing in this image needs root. The home
 # directory is created (not /nonexistent) because interactive vtcode sessions

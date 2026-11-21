@@ -20,7 +20,7 @@ use vtcode_computer_use::browser::BrowserDriver;
 use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, TerminateOutcome, docker_available};
 use vtcode_computer_use::{Action, Driver, MouseButton, Observation, Point, TurnControl};
 
-const IMAGE: &str = "vtcode-computer-use-browser:1.64.1";
+const IMAGE: &str = "vtcode-computer-use-browser:1.65.1";
 const FLOW_TIMEOUT: Duration = Duration::from_secs(240);
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(20);
 const TEARDOWN_TIMEOUT: Duration = Duration::from_secs(30);

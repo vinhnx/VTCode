@@ -140,8 +140,7 @@ where
     .context("failed to download desktop app archive")?;
 
     on_progress(UpdateProgress::VerifyingChecksum);
-    // `verify_file_checksum` does blocking `std::fs::read` + hashing; run it
-    // on the blocking pool so the async runtime is not stalled.
+    // Stream and hash the staged file on the blocking pool.
     let archive_path_for_checksum = archive_path.clone();
     tokio::task::spawn_blocking(move || download::verify_file_checksum(&archive_path_for_checksum, &expected))
         .await

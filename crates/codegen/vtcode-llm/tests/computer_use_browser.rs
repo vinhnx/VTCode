@@ -22,7 +22,7 @@ use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, Te
 use vtcode_llm::providers::anthropic::computer_use as anthropic_use;
 use vtcode_llm::providers::openai::computer_use as openai_use;
 
-const IMAGE: &str = "vtcode-computer-use-browser:1.64.1";
+const IMAGE: &str = "vtcode-computer-use-browser:1.65.1";
 const FLOW_TIMEOUT: Duration = Duration::from_secs(240);
 const BATCH_TIMEOUT: Duration = Duration::from_secs(30);
 const PNG_MAGIC: &[u8] = b"\x89PNG\r\n\x1a\n";
