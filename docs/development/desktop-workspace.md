@@ -406,14 +406,14 @@ panel header carries an explicit Close control that dismisses without a Forward 
 
 ### Startup and desktop shortcuts
 
-Ciapre remains the CLI default; the desktop defaults to **Noir**, a neutral high-headroom
-palette whose near-white foreground gives the muted-text ramp room to read as a distinct tier. The CLI-resolved
-theme from `config/discover` still wins for new desktop profiles when present, so a user who already picked a
-CLI theme keeps it. Existing explicit desktop theme choices are preserved during preference migration.
-Choosing a swatch creates a desktop override; **CLI preferences → Use CLI theme** restores inheritance.
-**Sync current theme to CLI** persists a built-in swatch to the active CLI config layer via the shared `ConfigManager`
-writer, then starts the next session with that theme. System appearance swatches and custom themes cannot be written
-as CLI themes; a failed write leaves Desktop's current appearance unchanged.
+Ciapre remains the CLI default; with no saved desktop preference the starting theme follows the OS appearance:
+**Vitesse Light** on light, **Noir** (a neutral high-headroom palette that keeps the muted-text ramp readable) on
+dark. The CLI-resolved theme from `config/discover` still wins for new desktop profiles, so a picked CLI theme is
+kept, and explicit desktop choices survive preference migration. Choosing a swatch creates a desktop override;
+**CLI preferences → Use CLI theme** restores inheritance. **Sync current theme to CLI** persists a built-in swatch
+to the active CLI config layer via the shared `ConfigManager` writer, then starts the next session with that theme.
+System appearance swatches and custom themes cannot be written as CLI themes; a failed write leaves Desktop's
+current appearance unchanged.
 Font families and sizes remain independent of theme inheritance, and theme updates preserve the draft; unsupported
 CLI themes produce an explicit error rather than silently substituting a palette.
 
@@ -764,7 +764,7 @@ Turning the option off keeps the active profile's typography as the shared setti
 | UI font size                  | Base size for controls and conversation text                                                          |
 | Code font size                | Monospace code surfaces; independent saved preference                                                 |
 | Separate light and dark modes | Stores independent themes and typography for each appearance                                          |
-| Reset appearance to defaults  | Restores the default theme, font families, and sizes; preserves workspaces, sessions, and pane widths |
+| Reset appearance to defaults  | Restores the default theme (Noir), font families, sizes; preserves workspaces, sessions, pane widths  |
 
 When no UI size is set, VT Code follows the macOS accessibility text setting
 (System Settings → Accessibility → Display → Text): the base scales with the

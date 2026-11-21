@@ -73,6 +73,10 @@ atif_enabled = true
 # each message for the next turn; "steer" injects plain-text input into the
 # live turn. Slash commands and attachments always queue.
 # busy_enter_behavior = "queue"
+# How East-Asian-ambiguous-width glyphs (UAX #11, including every box-drawing
+# character) render: "narrow" (default) keeps one cell; "wide" counts two and
+# degrades box-drawing chrome to ASCII. Also settable via VTCODE_AMBIGUOUS_WIDTH=wide.
+# ambiguous_width = "narrow"
 
 [ui.terminal_title]
 items = ["project", "spinner", "app-name", "git-branch"]

@@ -28,6 +28,10 @@ moment in the lifecycle of an execution thread:
   `auto_accept`, `revise`, `cancel`, `switch_build`, or `switch_auto`) and whether policy resolved it automatically. A
   `context.reset` event records the successful fresh-thread handoff and its preserved-plan, context-usage, and
   tool-budget status.
+- **Progress and goal checkpoints** – `matrix.updated`, `tracker.updated`, and `goal.updated` broadcast compact state
+  snapshots for dashboards; ATIF trajectory replay skips them like other checkpoints. `goal.updated` (schema
+  `0.29.0`) carries `GoalUpdatedEvent.goal` — `Some(GoalSnapshot)` with the objective, lifecycle state, elapsed
+  time, and token usage after a mutation, and `None` when the goal is cleared.
 - **Harness lifecycle** – continuation, verification, snapshot, blocked-handoff, and same-turn limit-grant events expose
   recovery state; `session_tool_limit_increased` and `tool_loop_limit_increased` are recognized for replaying older
   session logs but are no longer emitted (the tool-call count and tool-loop budgets were removed), while

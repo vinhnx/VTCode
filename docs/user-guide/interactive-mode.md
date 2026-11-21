@@ -203,6 +203,10 @@ scrollback with `[` always uses the complete ANSI-free conversation text.
 - `ui.fullscreen.copy_on_select = false` (or `/config` → **Interface & Terminal** → Copy On Select) disables automatic
   clipboard copy when an in-app text selection ends. Manual copy still works: `Ctrl+C` copies a transcript or composer
   selection, and `Ctrl+O` copies the last agent response.
+- Live-transcript copies (copy-on-select, `Ctrl+C` selections) strip decorative chrome: leading block-framing
+  prefixes (a two-space-indented `│` bar, or `└`/`├` followed by a space) and pure rule rows disappear, while
+  program output (indented four spaces) and `tree` glyphs (`├── src`) keep their form. Review and export copies
+  (`Ctrl+O`, `v`, `[`) stay verbatim.
 - A selection is dismissed by clicking any UI target — a file link, an overlay control, or the bottom panel — and by
   pressing `Esc` while no turn is running. Dismissing through `Esc` does not arm the rewind double-press, and `Esc`
   still interrupts a running turn first, so a selection never shadows turn control.
