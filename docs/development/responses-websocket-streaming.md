@@ -66,7 +66,9 @@ tool calls are not resent.
 Changed model, instructions, tools, edited or compacted history, and uncertain output matching start a
 full-input chain. Empty authoritative output, opaque output, or phase metadata that cannot be recovered
 through the response contract disable continuation for that response. Reconnecting always drops
-connection-local response IDs.
+connection-local response IDs. Request-only tool-result clearing also invalidates reasoning items at or
+after the first rewritten message before the request is built, so a full-input chain never replays state
+whose prefix changed.
 
 This follows the incremental-input and warmup contracts in the official
 [OpenAI WebSocket guide](https://developers.openai.com/api/docs/guides/websocket-mode).

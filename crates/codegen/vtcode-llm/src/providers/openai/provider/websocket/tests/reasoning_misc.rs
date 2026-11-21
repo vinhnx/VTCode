@@ -77,12 +77,26 @@ async fn websocket_gpt_reasoning_replay_chains_using_the_returned_history() {
             "legacy" => final_legacy(provider.stream_request(request.clone()).await.unwrap()).await,
             _ => final_normalized(provider.stream_normalized_request(request.clone()).await.unwrap()).await,
         };
-        assert!(first.reasoning_details.is_none());
-        Arc::make_mut(&mut request.messages).push(ProviderMessage::assistant_with_tools_and_reasoning(
-            first.content.unwrap(),
-            first.tool_calls.unwrap_or_default(),
-            None,
-        ));
+        let details = first
+            .reasoning_details
+            .clone()
+            .expect("encrypted reasoning must survive the model policy");
+        assert_eq!(details.len(), 1, "{entrypoint}");
+        assert_eq!(
+            serde_json::from_str::<Value>(&details[0]).expect("detail is JSON")["encrypted_content"],
+            "opaque",
+            "{entrypoint}"
+        );
+        // The runloop persists returned reasoning details on the assistant
+        // message. Replay them here so the next turn extends the same prefix.
+        Arc::make_mut(&mut request.messages).push(
+            ProviderMessage::assistant_with_tools_and_reasoning(
+                first.content.unwrap(),
+                first.tool_calls.unwrap_or_default(),
+                None,
+            )
+            .with_reasoning_details(Some(details.into_iter().map(Value::String).collect())),
+        );
         Arc::make_mut(&mut request.messages).push(ProviderMessage::user("new turn".to_string()));
         let second = match entrypoint {
             "generate" => provider.generate_request(request).await.unwrap(),

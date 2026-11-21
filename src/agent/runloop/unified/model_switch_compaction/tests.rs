@@ -657,3 +657,115 @@ async fn failed_compaction_preserves_history_and_still_resumes() {
     let resume = history.last().expect("resume injected").content.as_text().to_string();
     assert!(resume.contains("Model switched mid-turn: openai/gpt-x -> anthropic/claude-x"));
 }
+
+#[tokio::test]
+async fn real_switch_clears_reasoning_details_even_without_compaction() {
+    let temp = tempdir().unwrap();
+    let provider = StubProvider;
+    let detail = serde_json::json!({"type":"reasoning","encrypted_content":"opaque"});
+    let mut history = vec![
+        Message::assistant("reply".to_string()).with_reasoning_details(Some(vec![detail])),
+        Message::user("next".to_string()),
+    ];
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+
+    let outcome = compact_on_model_switch(ModelSwitchCompactionRequest {
+        prev_provider: "openai".to_string(),
+        prev_model: "gpt-x".to_string(),
+        new_provider: "anthropic".to_string(),
+        new_model: "claude-x".to_string(),
+        client_installed: true,
+        enabled: false,
+        provider: &provider,
+        workspace: temp.path(),
+        vt_cfg: None,
+        targets: ModelSwitchCompactionTargets {
+            history: &mut history,
+            session_stats: &mut session_stats,
+            context_manager: &mut context_manager,
+            session_id: "s",
+            thread_id: "t",
+            lifecycle_hooks: None,
+            harness_emitter: None,
+        },
+    })
+    .await
+    .unwrap();
+
+    assert!(matches!(outcome, ModelSwitchCompactionOutcome::Disabled));
+    assert!(history.iter().all(|message| message.reasoning_details.is_none()));
+    assert_eq!(history[0].content.as_text(), "reply", "only continuation metadata is dropped");
+}
+
+#[tokio::test]
+async fn same_model_keeps_reasoning_details() {
+    let temp = tempdir().unwrap();
+    let provider = StubProvider;
+    let detail = serde_json::json!({"type":"reasoning","encrypted_content":"opaque"});
+    let mut history = vec![Message::assistant("reply".to_string()).with_reasoning_details(Some(vec![detail]))];
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+
+    let outcome = compact_on_model_switch(ModelSwitchCompactionRequest {
+        prev_provider: "openai".to_string(),
+        prev_model: "gpt-x".to_string(),
+        new_provider: "openai".to_string(),
+        new_model: "gpt-x".to_string(),
+        client_installed: true,
+        enabled: true,
+        provider: &provider,
+        workspace: temp.path(),
+        vt_cfg: None,
+        targets: ModelSwitchCompactionTargets {
+            history: &mut history,
+            session_stats: &mut session_stats,
+            context_manager: &mut context_manager,
+            session_id: "s",
+            thread_id: "t",
+            lifecycle_hooks: None,
+            harness_emitter: None,
+        },
+    })
+    .await
+    .unwrap();
+
+    assert!(matches!(outcome, ModelSwitchCompactionOutcome::Unchanged));
+    assert_eq!(history[0].reasoning_details.as_ref().map_or(0, Vec::len), 1);
+}
+
+#[tokio::test]
+async fn skipped_no_client_keeps_reasoning_details_for_the_still_active_provider() {
+    let temp = tempdir().unwrap();
+    let provider = StubProvider;
+    let detail = serde_json::json!({"type":"reasoning","encrypted_content":"opaque"});
+    let mut history = vec![Message::assistant("reply".to_string()).with_reasoning_details(Some(vec![detail]))];
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+
+    let outcome = compact_on_model_switch(ModelSwitchCompactionRequest {
+        prev_provider: "openai".to_string(),
+        prev_model: "gpt-x".to_string(),
+        new_provider: "anthropic".to_string(),
+        new_model: "claude-x".to_string(),
+        client_installed: false,
+        enabled: true,
+        provider: &provider,
+        workspace: temp.path(),
+        vt_cfg: None,
+        targets: ModelSwitchCompactionTargets {
+            history: &mut history,
+            session_stats: &mut session_stats,
+            context_manager: &mut context_manager,
+            session_id: "s",
+            thread_id: "t",
+            lifecycle_hooks: None,
+            harness_emitter: None,
+        },
+    })
+    .await
+    .unwrap();
+
+    assert!(matches!(outcome, ModelSwitchCompactionOutcome::SkippedNoClient));
+    assert_eq!(history[0].reasoning_details.as_ref().map_or(0, Vec::len), 1);
+}

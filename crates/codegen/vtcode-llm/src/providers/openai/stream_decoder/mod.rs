@@ -28,11 +28,7 @@ use super::responses_api::parse_responses_completion;
 use super::streaming::OpenAIStreamTelemetry;
 
 fn strip_reasoning_for_model(model: &str, mut response: provider::LLMResponse) -> provider::LLMResponse {
-    if !find_family_for_model(model).supports_reasoning_summaries {
-        response.reasoning = None;
-        response.reasoning_details = None;
-    }
-
+    crate::providers::common::suppress_unsupported_reasoning_output(model, &mut response);
     response
 }
 

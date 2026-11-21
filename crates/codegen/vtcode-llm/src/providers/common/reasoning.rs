@@ -1,8 +1,64 @@
 //! Reasoning normalization and interleaved assistant history replay.
 
-use crate::provider::{ContentPart, Message, MessageContent, MessageRole};
+use crate::provider::{ContentPart, LLMResponse, Message, MessageContent, MessageRole};
 use serde_json::{Value, json};
 use vtcode_commons::formatting::contains_ignore_ascii_case;
+use vtcode_commons::model_family::find_family_for_model;
+
+/// Responses item types that carry continuation state across turns.
+const CONTINUATION_ITEM_TYPES: [&str; 2] = ["reasoning", "compaction"];
+
+/// Normalize a structured continuation detail into the single-encoded object
+/// form the Responses replay builder consumes.
+///
+/// Keep every provider replay item, not just encrypted ones: reasoning items
+/// around function calls must be passed back even when they carry only a
+/// summary. Plain text and unrelated objects are display-only and may be
+/// suppressed for families without summary support. Some providers wrap the
+/// object in one extra JSON string layer; unwrap it here so the preserved item
+/// is actually replayable.
+fn normalize_continuation_detail(detail: &str) -> Option<String> {
+    let parsed = serde_json::from_str::<Value>(detail).ok()?;
+    let item = match parsed {
+        Value::Object(item) => item,
+        Value::String(inner) => match serde_json::from_str::<Value>(&inner) {
+            Ok(Value::Object(item)) => item,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let replayable = item.contains_key("encrypted_content")
+        || item
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|kind| CONTINUATION_ITEM_TYPES.contains(&kind));
+    replayable.then(|| Value::Object(item).to_string())
+}
+
+/// Suppress visible reasoning for families that cannot render summaries while
+/// preserving structured continuation items in `reasoning_details`.
+///
+/// Responses models that do not advertise summary support still emit reasoning
+/// items. Dropping the whole `reasoning_details` field would silently break
+/// stateless replay (`store = false`) and discard function-call reasoning
+/// context and opaque compaction items.
+pub(crate) fn suppress_unsupported_reasoning_output(model: &str, response: &mut LLMResponse) {
+    if find_family_for_model(model).supports_reasoning_summaries {
+        return;
+    }
+
+    response.reasoning = None;
+    response.reasoning_details = response
+        .reasoning_details
+        .take()
+        .map(|details| {
+            details
+                .into_iter()
+                .filter_map(|detail| normalize_continuation_detail(&detail))
+                .collect::<Vec<_>>()
+        })
+        .filter(|details| !details.is_empty());
+}
 
 /// Returns true when the model identifier points to MiniMax M2 family models.
 /// Works across direct model ids and provider-qualified ids.

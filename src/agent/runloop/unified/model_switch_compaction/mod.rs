@@ -83,6 +83,23 @@ pub(crate) fn is_real_model_switch(prev_provider: &str, prev_model: &str, new_pr
     !prev_provider.eq_ignore_ascii_case(new_provider) || prev_model != new_model
 }
 
+/// Drop continuation items recorded under a different model or provider.
+///
+/// Responses APIs remove reasoning items when the model family or organization
+/// changes, so replaying old items relies on server-side removal. Clearing them
+/// here keeps every installed-client switch safe, including disabled, failed,
+/// and already-compact outcomes where no summary rewrites the history. The
+/// skipped path leaves the old client active and keeps its items.
+fn clear_cross_model_reasoning_items(history: &mut [Message]) -> usize {
+    let mut cleared = 0usize;
+    for message in history {
+        if message.reasoning_details.take().is_some() {
+            cleared = cleared.saturating_add(1);
+        }
+    }
+    cleared
+}
+
 /// Marker prefix for the autonomous mid-turn resume directive injected after a
 /// real model/provider switch. Used for idempotency: a repeated switch must not
 /// stack duplicate resume notes.
@@ -241,11 +258,22 @@ fn start_model_segment_and_resume(
 pub(crate) async fn compact_on_model_switch(
     req: ModelSwitchCompactionRequest<'_>,
 ) -> Result<ModelSwitchCompactionOutcome> {
+    let real_switch = is_real_model_switch(&req.prev_provider, &req.prev_model, &req.new_provider, &req.new_model);
+    // Without a usable client the old provider stays active, so its reasoning
+    // items are still valid. Only clear them when the runtime route actually
+    // changes, before any early return that keeps the rest of the history.
+    if real_switch && req.client_installed {
+        let cleared_reasoning_items = clear_cross_model_reasoning_items(req.targets.history);
+        if cleared_reasoning_items > 0 {
+            tracing::debug!(cleared_reasoning_items, "dropped reasoning items from the previous model route");
+        }
+    }
+
     if !req.enabled {
         return Ok(ModelSwitchCompactionOutcome::Disabled);
     }
 
-    if !is_real_model_switch(&req.prev_provider, &req.prev_model, &req.new_provider, &req.new_model) {
+    if !real_switch {
         return Ok(ModelSwitchCompactionOutcome::Unchanged);
     }
 

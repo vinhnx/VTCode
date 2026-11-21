@@ -865,7 +865,8 @@ below based on the topic area.
 
 - **File**: `docs/guides/responses-api-reasoning.md`
   - **Content**: Responses API & Reasoning Models
-  - **Topics**: Key Concepts, VT Code configuration guidance, Example workflow, Taking it further
+  - **Topics**: Key Concepts, VT Code configuration guidance, Reasoning item removal across requests, Example workflow,
+    Taking it further
   - **User Questions**: "What can you tell me about Responses API & Reasoning Models?", "How does Key Concepts work?",
     "How does VT Code configuration guidance work?"
 

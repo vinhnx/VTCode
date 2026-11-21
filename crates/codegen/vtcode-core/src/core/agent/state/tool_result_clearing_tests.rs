@@ -340,3 +340,27 @@ fn recent_batches_preserve_reused_ids_and_small_old_outputs() {
         .content = crate::llm::provider::MessageContent::Text("ok".into());
     assert_eq!(clear_old_tool_results_with_recent_batches(&messages, 1, 2, 2, 1, true), messages);
 }
+
+#[test]
+fn request_edit_invalidation_drops_only_reasoning_items_after_the_edit() {
+    let detail = serde_json::json!({"type":"reasoning","encrypted_content":"opaque"});
+    let original = vec![
+        Message::assistant("before".to_string()).with_reasoning_details(Some(vec![detail.clone()])),
+        Message::tool_response("call_1".to_string(), "old output".to_string()),
+        Message::assistant("after".to_string()).with_reasoning_details(Some(vec![detail.clone()])),
+    ];
+    let mut projected = original.clone();
+    projected[1] = Message::tool_response("call_1".to_string(), "stub".to_string());
+
+    let invalidated = invalidate_reasoning_details_after_request_edits(&mut projected, &original);
+
+    assert_eq!(invalidated, 1);
+    assert_eq!(projected[0].reasoning_details.as_ref().map_or(0, Vec::len), 1, "items before the edit still match");
+    assert_eq!(projected[1].reasoning_details, None);
+    assert_eq!(projected[2].reasoning_details, None);
+    assert_eq!(original[2].reasoning_details.as_ref().map_or(0, Vec::len), 1, "durable request input is unchanged");
+
+    let mut unchanged = original.clone();
+    assert_eq!(invalidate_reasoning_details_after_request_edits(&mut unchanged, &original), 0);
+    assert_eq!(unchanged, original);
+}

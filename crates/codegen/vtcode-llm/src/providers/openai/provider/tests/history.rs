@@ -432,3 +432,43 @@ fn responses_payload_phase_behavior() {
         .expect("should succeed");
     assert!(get_input_array(&payload2)[1].get("phase").is_none());
 }
+
+#[test]
+fn parsed_gpt6_responses_retain_encrypted_reasoning_for_replay() {
+    let provider = native_openai_provider(models::openai::GPT_6_2_ASTRA);
+    let response = provider
+        .parse_openai_responses_response(
+            json!({
+                "output": [
+                    {
+                        "type": "reasoning",
+                        "id": "rs_1",
+                        "summary": [{"type": "summary_text", "text": "planning"}],
+                        "encrypted_content": "opaque_reasoning"
+                    },
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [{"type": "output_text", "text": "done"}]
+                    }
+                ]
+            }),
+            models::openai::GPT_6_2_ASTRA.to_string(),
+        )
+        .expect("responses payload should parse");
+
+    assert_eq!(response.content.as_deref(), Some("done"));
+    assert_eq!(response.reasoning, None, "summary display stays suppressed for this family");
+    let details = response
+        .reasoning_details
+        .expect("opaque continuity state must survive parsing");
+    assert_eq!(details.len(), 1);
+    assert!(
+        serde_json::from_str::<Value>(&details[0])
+            .expect("detail is JSON")
+            .get("encrypted_content")
+            .and_then(Value::as_str)
+            == Some("opaque_reasoning")
+    );
+}

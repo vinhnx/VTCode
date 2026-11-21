@@ -266,6 +266,38 @@ fn reasoning_entry_needs_replay_preservation(entry: &Value) -> bool {
         || entry_obj.keys().any(|key| key != "type" && key != "text" && key != "summary")
 }
 
+/// Removal reasons reported in the Responses `input_transformations` field.
+const INPUT_TRANSFORMATION_REASONS: [&str; 5] = [
+    "prefix_mismatch",
+    "end_user_mismatch",
+    "model_mismatch",
+    "organization_mismatch",
+    "turn_boundary",
+];
+
+/// Count why the API reported removing input items. The diagnostic shape may
+/// gain fields without notice, so only known reasons are named and unknown
+/// entries are counted as `other`; item ids and content are never logged.
+fn summarize_input_transformations(response_json: &Value) -> HashMap<&'static str, usize> {
+    let Some(entries) = response_json.get("input_transformations").and_then(Value::as_array) else {
+        return HashMap::new();
+    };
+
+    let mut summary: HashMap<&'static str, usize> = HashMap::new();
+    for entry in entries {
+        let reason = entry
+            .as_object()
+            .and_then(|item| item.get("reason").and_then(Value::as_str))
+            .and_then(|reason| INPUT_TRANSFORMATION_REASONS.iter().find(|known| **known == reason).copied())
+            .unwrap_or("other");
+        summary
+            .entry(reason)
+            .and_modify(|count| *count = count.saturating_add(1))
+            .or_insert(1);
+    }
+    summary
+}
+
 fn tool_result_history_text(message_content: &MessageContent) -> String {
     let tool_content = tool_result_content_from_message_content(message_content);
     if tool_content.is_empty() {
@@ -355,6 +387,11 @@ pub(crate) fn parse_responses_payload(
     model: String,
     include_cached_prompt_metrics: bool,
 ) -> Result<LLMResponse, LLMError> {
+    let transformations = summarize_input_transformations(&response_json);
+    if !transformations.is_empty() {
+        tracing::debug!(?transformations, "Responses API reported input transformations");
+    }
+
     let output = response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
         let formatted_error =
             error_display::format_llm_error("OpenAI", "Invalid Responses API format: missing output array");

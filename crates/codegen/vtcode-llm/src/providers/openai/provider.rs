@@ -110,11 +110,7 @@ impl OpenAIProvider {
     }
 
     fn normalize_reasoning_output(model: &str, mut response: provider::LLMResponse) -> provider::LLMResponse {
-        if !Self::model_supports_reasoning_summaries(model) {
-            response.reasoning = None;
-            response.reasoning_details = None;
-        }
-
+        crate::providers::common::suppress_unsupported_reasoning_output(model, &mut response);
         response
     }
 

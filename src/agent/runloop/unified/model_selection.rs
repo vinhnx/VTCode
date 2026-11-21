@@ -204,6 +204,12 @@ pub(crate) async fn finalize_model_selection(
         .map(|cfg| cfg.agent.harness.compact_on_model_switch)
         .unwrap_or(true);
 
+    let reasoning_dropped = client_installed
+        && is_real_model_switch(&prev_provider, &prev_model, &selection.provider, &selection.model)
+        && compaction.history.iter().any(|message| message.reasoning_details.is_some());
+    let reasoning_note =
+        reasoning_dropped.then_some(" Reasoning continuation metadata from the previous model was dropped.");
+
     let compaction_progress = (compact_on_model_switch_enabled
         && client_installed
         && is_real_model_switch(&prev_provider, &prev_model, &selection.provider, &selection.model)
@@ -245,7 +251,10 @@ pub(crate) async fn finalize_model_selection(
         ModelSwitchCompactionOutcome::Disabled => {
             renderer.line(
                 MessageStyle::Info,
-                "Model switch context compaction is disabled; conversation history preserved.",
+                &format!(
+                    "Model switch context compaction is disabled; conversation history preserved.{}",
+                    reasoning_note.unwrap_or_default()
+                ),
             )?;
         }
         ModelSwitchCompactionOutcome::SkippedNoClient => {
@@ -273,7 +282,10 @@ pub(crate) async fn finalize_model_selection(
             let label = crate::agent::runloop::unified::turn::compaction::format_already_compact(compact_elapsed);
             renderer.line(
                 MessageStyle::Info,
-                &format!("Model switched; {label} History preserved and resume note added."),
+                &format!(
+                    "Model switched; {label} History preserved and resume note added.{}",
+                    reasoning_note.unwrap_or_default()
+                ),
             )?;
         }
         ModelSwitchCompactionOutcome::Failed(err) => {
@@ -282,7 +294,10 @@ pub(crate) async fn finalize_model_selection(
                 crate::agent::runloop::unified::turn::compaction::format_compaction_failed(compact_elapsed, &err);
             renderer.line(
                 MessageStyle::Error,
-                &format!("Model switched. {label} Continuing with full history and a resume note."),
+                &format!(
+                    "Model switched. {label} Continuing with full history and a resume note.{}",
+                    reasoning_note.unwrap_or_default()
+                ),
             )?;
         }
     }

@@ -24,6 +24,7 @@ pub(crate) use reasoning::{
     append_normalized_reasoning_detail_items, assistant_interleaved_history_text, is_interleaved_thinking_model,
     is_minimax_m2_model, normalize_reasoning_detail_object, normalize_reasoning_detail_objects,
     preserve_interleaved_content_in_reasoning_details, serialize_reasoning_detail_values,
+    suppress_unsupported_reasoning_output,
 };
 pub use reasoning::{
     extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,

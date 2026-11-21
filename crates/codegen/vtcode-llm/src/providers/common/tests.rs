@@ -3,13 +3,14 @@
     reason = "test fixtures talk to a local mock server; the shared timeout budget does not apply"
 )]
 use super::{
-    PROVIDER_ERROR_BODY_MAX_BYTES, assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
-    extract_reasoning_text_from_serialized_details, float_to_json_number, is_interleaved_thinking_model,
-    is_minimax_m2_model, normalize_reasoning_detail_object, parse_chat_request_openai_format,
-    parse_response_openai_format, parse_usage_openai_format, read_provider_error_body, sampling_param_f64,
-    serialize_message_content_openai,
+    PROVIDER_ERROR_BODY_MAX_BYTES, append_normalized_reasoning_detail_items, assistant_interleaved_history_text,
+    extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details, float_to_json_number,
+    is_interleaved_thinking_model, is_minimax_m2_model, normalize_reasoning_detail_object,
+    parse_chat_request_openai_format, parse_response_openai_format, parse_usage_openai_format,
+    read_provider_error_body, sampling_param_f64, serialize_message_content_openai,
+    suppress_unsupported_reasoning_output,
 };
-use crate::provider::{AssistantPhase, Message};
+use crate::provider::{AssistantPhase, LLMResponse, Message};
 use serde_json::{Value, json};
 
 #[tokio::test]
@@ -336,4 +337,72 @@ fn float_to_json_number_rejects_non_finite() {
     assert!(float_to_json_number(f32::NAN).is_err());
     assert!(float_to_json_number(f32::INFINITY).is_err());
     assert_eq!(sampling_param_f64(0.7_f32).to_bits(), 0.7_f64.to_bits(), "widened value must equal the f64 literal");
+}
+
+#[test]
+fn unsupported_summary_family_keeps_structured_reasoning_details() {
+    let encrypted = json!({"type":"reasoning","id":"rs_1","encrypted_content":"opaque"}).to_string();
+    let compaction = json!({"type":"compaction","id":"cmp_1","encrypted_content":"state"}).to_string();
+    let summary = json!({"type":"reasoning","summary":[{"type":"summary_text","text":"visible"}]}).to_string();
+    let raw = "<think>private</think>".to_string();
+    let unrelated = json!({"type":"message","text":"plain"}).to_string();
+    let double_encoded = serde_json::to_string(&json!(encrypted.clone())).expect("detail string serializes");
+    let all_details = vec![
+        summary.clone(),
+        encrypted.clone(),
+        double_encoded.clone(),
+        raw.clone(),
+        compaction.clone(),
+    ];
+
+    let mut unsupported = LLMResponse::new("gpt-6.2-astra", "answer");
+    unsupported.reasoning = Some("visible".to_string());
+    unsupported.reasoning_details = Some(all_details.clone());
+    suppress_unsupported_reasoning_output("gpt-6.2-astra", &mut unsupported);
+    assert_eq!(unsupported.reasoning, None);
+    // Summary-only reasoning items are replay context too; the double-encoded
+    // item is unwrapped to the replayable single form.
+    assert_eq!(
+        unsupported.reasoning_details,
+        Some(vec![
+            summary.clone(),
+            encrypted.clone(),
+            encrypted.clone(),
+            compaction.clone()
+        ])
+    );
+
+    // A family that renders summaries keeps both visible text and every detail.
+    let mut supported = LLMResponse::new("o3", "answer");
+    supported.reasoning = Some("visible".to_string());
+    supported.reasoning_details = Some(all_details);
+    suppress_unsupported_reasoning_output("o3", &mut supported);
+    assert_eq!(supported.reasoning.as_deref(), Some("visible"));
+    assert_eq!(supported.reasoning_details.as_ref().map_or(0, Vec::len), 5);
+
+    // Plain text and non-replay items produce no continuation state at all.
+    let mut display_only = LLMResponse::new("gpt-6.2-astra", "answer");
+    display_only.reasoning_details = Some(vec![raw, unrelated]);
+    suppress_unsupported_reasoning_output("gpt-6.2-astra", &mut display_only);
+    assert_eq!(display_only.reasoning_details, None);
+}
+
+#[test]
+fn preserved_continuation_details_replay_as_responses_input_items() {
+    let summary_only = json!({"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"context"}]});
+    let opaque = json!({"type":"reasoning","id":"rs_2","encrypted_content":"opaque"});
+    let double_encoded = serde_json::to_string(&json!(opaque.to_string())).expect("detail string serializes");
+    let mut response = LLMResponse::new("gpt-6.2-astra", "answer");
+    response.reasoning_details = Some(vec![summary_only.to_string(), double_encoded]);
+
+    suppress_unsupported_reasoning_output("gpt-6.2-astra", &mut response);
+    let details = response.reasoning_details.expect("structured details retained");
+    let replayable: Vec<Value> = details
+        .iter()
+        .map(|detail| serde_json::from_str(detail).expect("normalized detail is a JSON object"))
+        .collect();
+    let mut input = Vec::new();
+    append_normalized_reasoning_detail_items(&mut input, &replayable);
+
+    assert_eq!(input, vec![summary_only, opaque]);
 }

@@ -1,4 +1,4 @@
-use super::{build_standard_responses_payload, parse_responses_payload};
+use super::{build_standard_responses_payload, parse_responses_payload, summarize_input_transformations};
 use crate::provider::{LLMRequest, Message, ToolCall};
 use crate::providers::shared::{parse_cache_write_tokens_from_usage, parse_cached_prompt_tokens_from_usage};
 use serde_json::{Value, json};
@@ -826,4 +826,26 @@ fn parse_cache_write_tokens_supports_chat_fallback_shape_and_metrics_gate() {
         None
     );
     assert_eq!(parse_cache_write_tokens_from_usage(&json!({"input_tokens_details": {}}), true), None);
+}
+
+#[test]
+fn input_transformations_are_counted_by_known_reason_only() {
+    let response = json!({
+        "input_transformations": [
+            {"type":"reasoning_item_removed","reason":"prefix_mismatch","item_id":"rs_1"},
+            {"reason":"prefix_mismatch"},
+            {"reason":"model_mismatch"},
+            {"reason":"future_reason"},
+            {"type":"other"}
+        ]
+    });
+
+    let summary = summarize_input_transformations(&response);
+    assert_eq!(summary.get("prefix_mismatch"), Some(&2));
+    assert_eq!(summary.get("model_mismatch"), Some(&1));
+    assert_eq!(summary.get("other"), Some(&2));
+    assert_eq!(summary.len(), 3, "unknown reasons must not create unbounded log keys");
+
+    assert!(summarize_input_transformations(&json!({})).is_empty());
+    assert!(summarize_input_transformations(&json!({"input_transformations": "nope"})).is_empty());
 }

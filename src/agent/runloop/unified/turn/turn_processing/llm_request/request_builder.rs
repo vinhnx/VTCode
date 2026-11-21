@@ -381,7 +381,7 @@ pub(super) async fn build_turn_request(
                 tokens as usize
             }),
         );
-        let cleared_history = vtcode_core::core::agent::state::clear_old_tool_results_with_recent_batches(
+        let mut cleared_history = vtcode_core::core::agent::state::clear_old_tool_results_with_recent_batches(
             &normalized_history,
             trigger_tokens,
             clearing.keep_tool_uses,
@@ -389,6 +389,23 @@ pub(super) async fn build_turn_request(
             clearing.clear_at_least_tokens,
             clearing.clear_tool_inputs,
         );
+        // Responses routes drop reasoning items whose preceding prefix changed.
+        // Rewriting an old tool result is exactly such an edit, so remove the
+        // now-invalid continuation items from this request view only.
+        let invalidated_details = if vtcode_core::llm::provider::supports_responses_chaining(
+            &turn_snapshot.provider_name,
+            turn_snapshot.capabilities.responses_compaction,
+        ) {
+            vtcode_core::core::agent::state::invalidate_reasoning_details_after_request_edits(
+                &mut cleared_history,
+                &normalized_history,
+            )
+        } else {
+            0
+        };
+        if invalidated_details > 0 {
+            tracing::debug!(invalidated_details, "dropped reasoning items after request prefix edit");
+        }
         emit_history_projection_metrics(
             ctx,
             step_count,

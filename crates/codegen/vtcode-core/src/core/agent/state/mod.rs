@@ -678,6 +678,35 @@ pub fn clear_old_tool_results_with_recent_batches(
     out
 }
 
+/// Invalidate Responses continuation items after a request-only prefix edit.
+///
+/// Responses APIs drop reasoning items when content before them changes. The
+/// caller passes the projected request messages next to the unmodified request
+/// history; reasoning items at or after the first edited message are removed
+/// from the request view so VT Code never replays state the provider will
+/// discard. Durable session history and `ThreadEvent`s remain untouched.
+pub fn invalidate_reasoning_details_after_request_edits(
+    request_messages: &mut [Message],
+    original_messages: &[Message],
+) -> usize {
+    debug_assert_eq!(request_messages.len(), original_messages.len());
+    let Some(first_edited) = request_messages
+        .iter()
+        .zip(original_messages)
+        .position(|(projected, original)| projected != original)
+    else {
+        return 0;
+    };
+
+    let mut invalidated = 0usize;
+    for message in &mut request_messages[first_edited..] {
+        if message.reasoning_details.take().is_some() {
+            invalidated = invalidated.saturating_add(1);
+        }
+    }
+    invalidated
+}
+
 /// JSON placeholder for cleared tool-call inputs (must stay valid JSON).
 const CLEARED_TOOL_INPUT_PLACEHOLDER: &str = "{\"cleared\":\"tool_input\"}";
 // Keep ordinary command/path arguments intact instead of teaching providers
