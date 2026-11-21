@@ -88,6 +88,9 @@ impl DesktopView {
         let visible = self.visible_inspector_tabs();
         if let Some(tab) = visible.get(index) {
             self.inspector_tab = *tab;
+            if self.inspector_tab == InspectorTab::Files {
+                self.ensure_file_tree(cx);
+            }
             if reveal {
                 self.inspector_tabs_scroll.scroll_to_item(index);
             }

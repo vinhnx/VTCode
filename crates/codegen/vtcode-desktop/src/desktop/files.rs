@@ -261,7 +261,7 @@ impl ExternalEditor {
 const MAX_APP_SCAN_ENTRIES: usize = 512;
 
 /// Application directories scanned for installed editors.
-fn app_roots() -> Vec<PathBuf> {
+pub(super) fn app_roots() -> Vec<PathBuf> {
     // Test hook: GUI tests redirect detection at deterministic fake roots.
     #[cfg(test)]
     if let Some(roots) = TEST_APP_ROOTS.with(|roots| roots.borrow().clone()) {
@@ -272,13 +272,6 @@ fn app_roots() -> Vec<PathBuf> {
         roots.push(home.join("Applications"));
     }
     roots
-}
-
-/// Detect installed editors by the bundle identifier registered in each
-/// application's `Info.plist`. Bounded per root with early exit once every
-/// known editor is found; unreadable or unparseable bundles are skipped.
-pub(super) fn detect_installed_editors() -> Vec<ExternalEditor> {
-    scan_app_roots(&app_roots())
 }
 
 /// Maximum `Info.plist` bytes read per bundle during detection.
@@ -292,7 +285,8 @@ fn bundle_id_of(app_dir: &Path) -> Option<String> {
     value.into_dictionary()?.remove("CFBundleIdentifier")?.into_string()
 }
 
-fn scan_app_roots(roots: &[PathBuf]) -> Vec<ExternalEditor> {
+/// Find supported apps by bundle identifier, with bounded work per root.
+pub(super) fn scan_app_roots(roots: &[PathBuf]) -> Vec<ExternalEditor> {
     let mut found = Vec::new();
     for root in roots {
         let Ok(entries) = fs::read_dir(root) else {

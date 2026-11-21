@@ -1,47 +1,85 @@
 use super::*;
+use vtcode_desktop_protocol as protocol;
 
-/// The launch splash covers the handshake window: without a transport the
-/// welcome state paints; a live transport without a handshake shows the
-/// splash; a fast handshake still holds the minimum dwell; retiring the
-/// dwell returns the content.
 #[gpui_kit::test]
-fn launch_screen_covers_the_handshake_then_yields_to_content(cx: &mut TestAppContext) {
+fn connecting_greeting_keeps_the_ready_geometry(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized_with_preferences_path(cx, 680., 650., isolate_preferences(), true);
+    cx.update_window(window, |_, window, cx| {
+        let (commands, _requests) = tokio::sync::mpsc::channel(16);
+        view.update(cx, |view, _| {
+            view.workspace = Some(PathBuf::from("/work/A workspace with a long name"));
+            view.welcome_period = WelcomePeriod::Morning;
+            view.welcome_copy_index = 0;
+            view.initialize_backend(BackendHandle { commands });
+        });
+        for (zen, prompt_id) in [(false, "welcome-prompt"), (true, "zen-welcome-prompt")] {
+            view.update(cx, |view, cx| {
+                view.zen_mode = zen;
+                view.session_request = Some(protocol::method::INITIALIZE);
+                cx.notify();
+            });
+            window.render_frame(cx);
+            let mark = window.find("welcome-brand-mark").bounds();
+            let loading_title = window.find("workspace-connecting-title").bounds();
+            assert_eq!(window.find("workspace-connecting").role(), Some(gpui_kit::Role::Status));
+            assert!(window.try_find(prompt_id).is_none(), "only the loading title is exposed");
+
+            view.update(cx, |view, cx| {
+                view.session_request = None;
+                cx.notify();
+            });
+            window.render_frame(cx);
+            assert_eq!(window.find("welcome-brand-mark").bounds(), mark, "logo stays fixed in Zen={zen}");
+            let ready_title = window.find(prompt_id).bounds();
+            assert!(
+                (loading_title.center().y - ready_title.center().y).abs() <= px(0.5),
+                "title stays centered in its slot"
+            );
+            assert!((loading_title.center().x - ready_title.center().x).abs() <= px(0.5));
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn workspace_shell_and_settings_are_available_during_backend_initialize(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert!(window.try_find("launch-screen").is_none(), "no transport: welcome state paints");
+        let (commands, mut requests) = tokio::sync::mpsc::channel(16);
+        view.update(cx, |view, _| view.initialize_backend(BackendHandle { commands }));
+        assert!(requests.try_recv().is_ok(), "initialize was sent");
 
-        let (commands, _requests) = tokio::sync::mpsc::channel(8);
-        view.update(cx, |view, _| {
-            view.backend = Some(BackendHandle { commands });
-            // Production arms this in `initialize_backend`; the transport is
-            // up but the INITIALIZE response has not landed yet.
-            view.launch_handshake_pending = true;
-        });
         window.render_frame(cx);
-        assert!(window.try_find("launch-screen").is_some(), "live transport without a handshake shows the splash");
+        assert!(window.try_find("workspace-surface").is_some());
+        assert!(window.try_find("workspace-connecting").is_some());
+        assert!(!view.read(cx).new_thread_available(), "the handshake still gates backend actions");
 
-        view.update(cx, |view, _| {
-            // The suite baseline retires the dwell up front; rewind it here to
-            // simulate a handshake completing inside the minimum display.
-            view.launch_splash_expired = false;
-            view.launch_handshake_pending = false;
-            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
-                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
-                workspace: "/workspace".into(),
-                server_version: "test".into(),
-                slash_commands: Vec::new(),
-            });
-        });
+        view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("launch-screen").is_some(), "a fast handshake still holds the minimum dwell");
+        assert_eq!(view.read(cx).current_route(), Route::Settings);
+        assert!(window.try_find("workspace-connecting").is_none());
 
+        let workspace = view.read(cx).workspace.as_ref().unwrap().display().to_string();
         view.update(cx, |view, cx| {
-            view.launch_splash_expired = true;
-            cx.notify();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: protocol::method::INITIALIZE.into(),
+                    result: Some(json!(protocol::InitializeResult {
+                        protocol: protocol::PROTOCOL_VERSION,
+                        workspace,
+                        server_version: "test".into(),
+                        slash_commands: Vec::new(),
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+            assert!(view.new_thread_available(), "the response frees the gate immediately");
+            view.close_settings(window, cx);
         });
         window.render_frame(cx);
-        assert!(window.try_find("launch-screen").is_none(), "content returns once the dwell retires");
+        assert!(window.try_find("workspace-surface").is_some());
+        assert!(window.try_find("workspace-connecting").is_none(), "there is no minimum dwell");
     })
     .unwrap();
 }

@@ -204,12 +204,18 @@ pub(super) fn request_fits_frame(method: &str, params: &Value) -> bool {
 }
 
 pub(crate) fn launch_backend(workspace: PathBuf, ui_events: BackendEventSender) -> Result<BackendHandle, String> {
-    let executable = resolve_backend_executable()?;
     let (commands, command_rx) = mpsc::channel(CLIENT_QUEUE_CAPACITY);
 
     let _transport_thread = std::thread::Builder::new()
         .name("vtcode-desktop-transport".to_string())
         .spawn(move || {
+            let executable = match resolve_backend_executable() {
+                Ok(executable) => executable,
+                Err(error) => {
+                    let _ = send_ui_event(&ui_events, BackendEvent::LaunchFailed(error));
+                    return;
+                }
+            };
             // The transport pumps one framed stdio conversation plus a stderr
             // drain: purely sequential I/O with no blocking or CPU work, so a
             // single-threaded runtime on this dedicated thread is sufficient

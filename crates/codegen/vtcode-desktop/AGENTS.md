@@ -29,7 +29,7 @@
 
 - Icons outside Kit's default bundle must join `ExtraIcons`/`DESKTOP_ICONS` in `assets.rs` or they render blank with no headless failure.
 - Composer popups mount at the composer panel, never inside a trigger pill subtree (focus traps detach); they anchor to `composer_trigger_pill` bounds via `anchored().attach` (Kit `open` is paint-free).
-- Launch splash (`view/launch_screen.rs`) gates on `launch_handshake_pending || !launch_splash_expired`; tests fake backend state without arming it.
+- Keep the window interactive during startup. The `INITIALIZE` request gates backend actions and drives inline connection status.
 - `app_owns_titlebar_drag` disables all native drag (zen needs its own drag strip); headless `start_window_move` is unimplemented (guard `#[cfg(not(test))]`).
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics; `on_next_frame` never runs headless.
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; hooks read state the handler clears, so never reorder them.

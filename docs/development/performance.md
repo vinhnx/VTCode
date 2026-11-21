@@ -492,6 +492,13 @@ phase) since welcome-screen launches may never reach them:
 VTCODE_STARTUP_TRACE=1 ./target/release/vtcode-desktop
 ```
 
+Desktop shows the regular window while the backend connects. Measure window open, backend handshake, and restored
+session readiness independently. Installed-app discovery runs once per window, in the background when Settings
+first opens. Restoring the first recent workspace only writes preferences if the saved list or permissions need repair.
+The workspace file scan feeds composer suggestions without allocating inspector tree rows until the Files tab opens.
+Launch reconciles the macOS login item in the background so ServiceManagement IPC stays off the window-open path.
+Cold CLI handoffs validate the workspace once in the existing background selection task.
+
 ### Patterns that pay off on the startup path
 
 - **Join independent disk I/O.** `initialize_dot_folder`, `init_global_guardian`, `determine_theme`, and

@@ -198,6 +198,12 @@ fn cli_terminal_dropdown_offers_detected_and_retains_saved(cx: &mut TestAppConte
 
     let (window, view) = open_desktop_with_preferences_path(cx, prefs_path);
     cx.update_window(window, |_, window, cx| {
+        assert!(view.read(cx).destination_discovery_task.is_none(), "startup skips the app scan");
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
         let select = view.read(cx).cli_terminal_select.clone();
         // The saved choice stays selected even though its app is missing.
         assert_eq!(select.read(cx).selected_value().copied(), Some(CliTerminal::Ghostty));

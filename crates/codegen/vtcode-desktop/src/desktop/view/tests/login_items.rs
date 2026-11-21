@@ -23,14 +23,14 @@ fn launch_at_login_toggle_applies_and_persists_intent(cx: &mut TestAppContext) {
         assert_eq!(window.find("launch-at-login").checked(), Some(true));
         assert_eq!(view.read(cx).preferences.launch_at_login, Some(true));
         assert_eq!(login_items::status(cx), LoginItemStatus::Enabled);
-        assert_eq!(view.read(cx).login_item_status, LoginItemStatus::Enabled);
+        assert_eq!(view.read(cx).login_item_status, Some(LoginItemStatus::Enabled));
         // Off: the reverse.
         window.click("launch-at-login", cx);
         window.render_frame(cx);
         assert_eq!(window.find("launch-at-login").checked(), Some(false));
         assert_eq!(view.read(cx).preferences.launch_at_login, Some(false));
         assert_eq!(login_items::status(cx), LoginItemStatus::Disabled);
-        assert_eq!(view.read(cx).login_item_status, LoginItemStatus::Disabled);
+        assert_eq!(view.read(cx).login_item_status, Some(LoginItemStatus::Disabled));
     })
     .unwrap();
     // The file round-trips the new key.
@@ -45,21 +45,38 @@ fn reconcile_adopts_os_truth_but_keeps_approval_pending_intent(cx: &mut TestAppC
     cx.update(|cx| login_items::test_override(Some(LoginItemStatus::Enabled), cx));
     view.update(cx, |view, cx| {
         assert!(view.preferences.launch_at_login.is_none());
-        login_items::reconcile_launch_preference(&mut view.preferences, cx);
-        assert_eq!(view.preferences.launch_at_login, Some(true));
+        view.start_login_item_reconciliation(cx);
     });
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(view.read(cx).preferences.launch_at_login, Some(true)));
     // OS disabled, stale on: adopts off.
     cx.update(|cx| login_items::test_override(Some(LoginItemStatus::Disabled), cx));
     view.update(cx, |view, cx| {
-        login_items::reconcile_launch_preference(&mut view.preferences, cx);
+        view.refresh_login_item_status(cx);
         assert_eq!(view.preferences.launch_at_login, Some(false));
     });
     // Approval pending: keeps the on intent for the settings hint.
     cx.update(|cx| login_items::test_override(Some(LoginItemStatus::RequiresApproval), cx));
     view.update(cx, |view, cx| {
         view.preferences.launch_at_login = Some(true);
-        login_items::reconcile_launch_preference(&mut view.preferences, cx);
+        view.refresh_login_item_status(cx);
         assert_eq!(view.preferences.launch_at_login, Some(true));
+    });
+}
+
+#[gpui_kit::test]
+fn late_launch_login_check_preserves_newer_settings_status(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        login_items::test_override(Some(LoginItemStatus::Enabled), cx);
+        view.start_login_item_reconciliation(cx);
+        login_items::test_override(Some(LoginItemStatus::Disabled), cx);
+        view.refresh_login_item_status(cx);
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).login_item_status, Some(LoginItemStatus::Disabled));
+        assert!(view.read(cx).preferences.launch_at_login.is_none());
     });
 }
 

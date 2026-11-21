@@ -80,6 +80,7 @@ impl DesktopView {
             && !self.history_has_earlier
             && !self.history_page_loading
             && self.history_page_error.is_none();
+        let connecting = self.backend.is_some() && self.session_request == Some(protocol::method::INITIALIZE);
         let content = if self.pending_blank_transition() {
             let label = rust_i18n::t!(i18n::SESSION_PREPARING_NEW_THREAD).to_string();
             let colors = cx.theme().colors;
@@ -95,7 +96,7 @@ impl DesktopView {
                 .text_color(colors.foreground)
                 .child(shimmer_label("new-thread-pending-label", label, colors.foreground, cx))
                 .into_any_element()
-        } else if empty_conversation && !self.zen_mode {
+        } else if (empty_conversation || connecting) && !self.zen_mode {
             let colors = cx.theme().colors;
             let WelcomeHeader {
                 copy: welcome_copy,
@@ -104,10 +105,13 @@ impl DesktopView {
                 prompt,
             } = welcome_header(self);
             let title = div()
-                .id("welcome-prompt")
+                .id(if connecting {
+                    "welcome-title-layout"
+                } else {
+                    "welcome-prompt"
+                })
                 .test_support()
-                .role(gpui_kit::Role::Heading)
-                .aria_label(prompt.clone())
+                .when(!connecting, |title| title.role(gpui_kit::Role::Heading).aria_label(prompt.clone()))
                 .flex()
                 .flex_wrap()
                 .items_center()
@@ -119,8 +123,31 @@ impl DesktopView {
                     prompt
                 })
                 .when_some(workspace_name, |title, name| {
-                    title.child(
-                        desktop_secondary_button("welcome-workspace")
+                    let name_text = div()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(gpui_kit::rems(1.75))
+                        .font_weight(gpui_kit::FontWeight::NORMAL)
+                        .border_b_1()
+                        .border_dashed()
+                        .border_color(colors.muted_foreground)
+                        .child(format!("{name}?"));
+                    let workspace = desktop_secondary_button(if connecting {
+                        "welcome-workspace-layout"
+                    } else {
+                        "welcome-workspace"
+                    })
+                    .text()
+                    .text_color(colors.foreground)
+                    .h_auto()
+                    .p_0()
+                    .min_w_0()
+                    .max_w_full()
+                    .child(name_text);
+                    title.child(if connecting {
+                        workspace.role(None::<gpui_kit::Role>).tab_stop(false).desktop_disabled(true)
+                    } else {
+                        workspace
                             .accessibility_label(
                                 rust_i18n::t!("app.transcript.change_workspace", name = name.as_str()).to_string(),
                             )
@@ -129,30 +156,13 @@ impl DesktopView {
                                 &ChooseWorkspace,
                                 Some(key_context::DESKTOP),
                             )
-                            .text()
-                            .text_color(colors.foreground)
-                            .h_auto()
-                            .p_0()
-                            .min_w_0()
-                            .max_w_full()
                             .desktop_disabled(
                                 !self.workspace_switch_idle()
                                     || self.workspace_picker_open
                                     || self.retained_submission.is_some(),
                             )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(gpui_kit::rems(1.75))
-                                    .font_weight(gpui_kit::FontWeight::NORMAL)
-                                    .border_b_1()
-                                    .border_dashed()
-                                    .border_color(colors.muted_foreground)
-                                    .child(format!("{name}?")),
-                            )
-                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
-                    )
+                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone())
+                    })
                 });
             div()
                 .id("welcome")
@@ -160,10 +170,10 @@ impl DesktopView {
                 .role(gpui_kit::Role::Group)
                 .aria_label(rust_i18n::t!("app.transcript.welcome_label").to_string())
                 .size_full()
-                .child(greeting_empty_state(self, title, colors))
+                .child(greeting_empty_state(self, title, connecting, colors, cx))
                 .into_any_element()
-        } else if empty_conversation {
-            self.render_zen_empty_state(cx)
+        } else if empty_conversation || connecting {
+            self.render_zen_empty_state(connecting, cx)
         } else {
             let remaining_history_capacity = self.transcript.remaining_capacity();
             let colors = cx.theme().colors;
@@ -319,7 +329,7 @@ impl DesktopView {
     /// picker stays reachable through the composer context row when none is set.
     /// Mark, title, and gap come from the shared greeting scaffold, so
     /// toggling modes never resizes the greeting.
-    fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_zen_empty_state(&self, connecting: bool, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let WelcomeHeader { prompt, .. } = welcome_header(self);
         div()
@@ -331,12 +341,17 @@ impl DesktopView {
             .child(greeting_empty_state(
                 self,
                 div()
-                    .id("zen-welcome-prompt")
+                    .id(if connecting {
+                        "welcome-title-layout"
+                    } else {
+                        "zen-welcome-prompt"
+                    })
                     .test_support()
-                    .role(gpui_kit::Role::Heading)
-                    .aria_label(prompt.clone())
+                    .when(!connecting, |title| title.role(gpui_kit::Role::Heading).aria_label(prompt.clone()))
                     .child(prompt),
+                connecting,
                 colors,
+                cx,
             ))
             .into_any_element()
     }

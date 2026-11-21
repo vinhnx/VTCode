@@ -871,13 +871,22 @@ impl Preferences {
         }
     }
 
-    /// Record a workspace as most-recently-used.
-    pub(super) fn touch_workspace(&mut self, path: &str) {
-        self.recent_workspaces.retain(|existing| existing != path);
-        self.recent_workspaces.insert(0, path.to_string());
-        self.recent_workspaces.truncate(MAX_RECENT_WORKSPACES);
+    /// Record a workspace as most-recently-used. Returns whether persistence is needed.
+    pub(super) fn touch_workspace(&mut self, path: &str) -> bool {
+        let already_current = self
+            .recent_workspaces
+            .split_first()
+            .is_some_and(|(first, rest)| first == path && rest.iter().all(|other| other != path))
+            && self.recent_workspaces.len() <= MAX_RECENT_WORKSPACES;
+        if !already_current {
+            self.recent_workspaces.retain(|existing| existing != path);
+            self.recent_workspaces.insert(0, path.to_string());
+            self.recent_workspaces.truncate(MAX_RECENT_WORKSPACES);
+        }
+        let permission_count = self.workspace_permissions.len();
         self.workspace_permissions
             .retain(|path, _| self.recent_workspaces.contains(path));
+        !already_current || self.workspace_permissions.len() != permission_count
     }
 
     /// The saved pane widths, applied without clamping surprises.

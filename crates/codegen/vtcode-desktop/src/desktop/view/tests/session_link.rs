@@ -1,6 +1,66 @@
 use super::*;
 
 #[gpui_kit::test]
+fn startup_handoff_records_the_validated_workspace(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let workspace = tempfile::tempdir().unwrap();
+    let alias_root = tempfile::tempdir().unwrap();
+    let alias = alias_root.path().join("workspace-link");
+    std::os::unix::fs::symlink(workspace.path(), &alias).unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).unwrap();
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.select_startup_handoff(HandoffLink { workspace: alias, session_id: "linked".into() }, cx);
+        assert!(view.workspace_selection_pending);
+        assert!(view.pending_navigation.is_none(), "unvalidated paths stay out of history");
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert_eq!(view.pending_workspace.as_deref(), Some(canonical.as_path()));
+        let pending = view.pending_navigation.expect("validated link arms navigation");
+        let target = view.navigation_history.location(pending.target_index).unwrap();
+        assert_eq!(target.workspace, canonical);
+        assert_eq!(target.session_id.as_deref(), Some("linked"));
+    });
+    assert!(matches!(requests.try_recv(), Ok(BackendCommand::Stop)));
+}
+
+#[gpui_kit::test]
+fn invalid_startup_handoff_does_not_restore_a_recent_workspace(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let recent = tempfile::tempdir().unwrap();
+    let (window, _view) = open_desktop(cx);
+    cx.update_window(window, |_, window, _| window.remove_window()).unwrap();
+    let reopened = cx.update(|cx| {
+        let mut preferences = crate::desktop::preferences::Preferences::default();
+        preferences.recent_workspaces.push(recent.path().display().to_string());
+        super::super::open_or_activate_main_window(
+            cx,
+            Some(preferences),
+            Some(HandoffLink {
+                workspace: recent.path().join("missing"),
+                session_id: "linked".into(),
+            }),
+        )
+        .unwrap()
+    });
+    cx.run_until_parked();
+    cx.update_window(reopened, |_, window, cx| {
+        let root = window.root::<gpui_kit::base::Root>().flatten().unwrap();
+        let view = root.read(cx).view().clone().downcast::<DesktopView>().ok().unwrap();
+        let view = view.read(cx);
+        assert!(view.workspace.is_none());
+        assert!(view.pending_navigation.is_none());
+        assert_eq!(view.error.as_deref(), Some("Choose an existing workspace folder."));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn session_link_arms_navigation_and_loads_on_discovery(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().unwrap();
     let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");

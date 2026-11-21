@@ -33,13 +33,6 @@ struct LoginItemStub {
 impl Global for LoginItemStub {}
 
 /// Current OS status.
-#[cfg_attr(
-    not(test),
-    expect(
-        unsafe_code,
-        reason = "SMAppService calls have no preconditions; unsafe by binding convention"
-    )
-)]
 pub(super) fn status(cx: &App) -> LoginItemStatus {
     #[cfg(test)]
     {
@@ -50,16 +43,24 @@ pub(super) fn status(cx: &App) -> LoginItemStatus {
     #[cfg(not(test))]
     {
         let _ = cx;
-        // SAFETY: `mainAppService` has no preconditions; the binding takes
-        // no main-thread marker because ServiceManagement calls are
-        // thread-safe.
-        let service = unsafe { SMAppService::mainAppService() };
-        // SAFETY: `status` reads immutable registration state.
-        match unsafe { service.status() } {
-            SMAppServiceStatus::Enabled => LoginItemStatus::Enabled,
-            SMAppServiceStatus::RequiresApproval => LoginItemStatus::RequiresApproval,
-            _ => LoginItemStatus::Disabled,
-        }
+        native_status()
+    }
+}
+
+#[cfg(not(test))]
+#[expect(
+    unsafe_code,
+    reason = "SMAppService calls have no preconditions; unsafe by binding convention"
+)]
+fn native_status() -> LoginItemStatus {
+    // SAFETY: `mainAppService` has no preconditions. The binding has no
+    // main-thread requirement.
+    let service = unsafe { SMAppService::mainAppService() };
+    // SAFETY: `status` reads registration state.
+    match unsafe { service.status() } {
+        SMAppServiceStatus::Enabled => LoginItemStatus::Enabled,
+        SMAppServiceStatus::RequiresApproval => LoginItemStatus::RequiresApproval,
+        _ => LoginItemStatus::Disabled,
     }
 }
 
@@ -119,8 +120,8 @@ pub(super) fn open_login_settings(cx: &mut App) {
 
 /// Sync the saved intent with the OS at launch. Approval-pending keeps the
 /// intent: the settings row shows the approval hint until macOS confirms.
-pub(super) fn reconcile_launch_preference(preferences: &mut preferences::Preferences, cx: &mut App) {
-    match status(cx) {
+fn reconcile_launch_preference(preferences: &mut preferences::Preferences, status: LoginItemStatus) {
+    match status {
         LoginItemStatus::Enabled => {
             if !preferences.launch_at_login_enabled() {
                 preferences.launch_at_login = Some(true);
@@ -163,11 +164,32 @@ pub(super) fn test_settings_opened(cx: &App) -> bool {
 }
 
 impl DesktopView {
-    /// Refresh the cached login-item status from the OS. Call on explicit
-    /// gestures only (settings open, VT Code tab select); render reads the
-    /// cache so scrolling never pays for synchronous ServiceManagement IPC.
+    /// Query ServiceManagement off the launch path. A Settings refresh or
+    /// toggle that completes first supplies the authoritative value.
+    pub(super) fn start_login_item_reconciliation(&self, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        let pending = std::future::ready(status(cx));
+        #[cfg(not(test))]
+        let pending = cx.background_spawn(async { objc2::rc::autoreleasepool(|_| native_status()) });
+        cx.spawn(async move |view, cx| {
+            let status = pending.await;
+            let _updated = view.update(cx, |view, _| {
+                if view.login_item_status.is_none() {
+                    view.apply_login_item_status(status);
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Refresh on explicit Settings gestures. Render reads the cache.
     pub(super) fn refresh_login_item_status(&mut self, cx: &mut App) {
-        self.login_item_status = status(cx);
+        self.apply_login_item_status(status(cx));
+    }
+
+    fn apply_login_item_status(&mut self, status: LoginItemStatus) {
+        self.login_item_status = Some(status);
+        reconcile_launch_preference(&mut self.preferences, status);
     }
 
     /// App-context content builder, hostable inside a Kit `SettingItem`
@@ -194,7 +216,7 @@ impl DesktopView {
                             // context derefs to it.
                             match apply_launch_at_login(*checked, &mut view.preferences, cx) {
                                 Ok(status) => {
-                                    view.login_item_status = status;
+                                    view.login_item_status = Some(status);
                                     view.save_preferences();
                                     cx.notify();
                                     Ok(status)

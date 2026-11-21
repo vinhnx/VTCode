@@ -19,7 +19,7 @@ mod prefs;
 
 pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
     let prefs_phase = vtcode_commons::startup_trace::phase_started();
-    let mut preferences = preferences::Preferences::load();
+    let preferences = preferences::Preferences::load();
     super::super::localization::initialize(preferences.ui_language());
     vtcode_commons::startup_trace::record_phase("desktop_preferences_and_localization", prefs_phase);
     let inbox: SharedUrlInbox = Rc::new(RefCell::new(UrlInbox::default()));
@@ -51,7 +51,6 @@ pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
         if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
         }
-        login_items::reconcile_launch_preference(&mut preferences, cx);
         vtcode_commons::startup_trace::record_phase("desktop_chrome", chrome_phase);
         inbox.borrow_mut().set_app(cx.to_async());
         let window_phase = vtcode_commons::startup_trace::phase_started();
@@ -93,7 +92,6 @@ pub(super) fn open_or_activate_main_window(
         .theme
         .clone()
         .unwrap_or_else(|| themes::default_id(start_mode).to_string());
-    let start_customs = preferences.custom_themes.clone();
     let start_maximized = preferences.window_maximized();
     let translucent = preferences.translucent_sidebar && !reduced_transparency_requested();
     let mut options = desktop_window_options(translucent);
@@ -113,9 +111,9 @@ pub(super) fn open_or_activate_main_window(
     }
     let (window, view) = gpui_kit::open_window(options, cx, move |window, cx| {
         window.set_window_title(app::NAME);
-        let theme_mode = themes::apply_selection(&start_theme, &start_customs, Some(window), cx);
+        let (theme_mode, start_theme) = prefs::apply_initial_theme(&preferences, &start_theme, window, cx);
         let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, start_theme, preferences));
-        view.update(cx, |view, cx| view.load_preferences(window, cx));
+        view.update(cx, |view, cx| view.apply_loaded_preferences(cx));
         view
     })?;
     window.update(cx, |_, window, cx| {
@@ -143,32 +141,19 @@ pub(super) fn open_or_activate_main_window(
     // An unreadable handoff workspace stays on welcome with the standard
     // notice instead of falling back: opening a different directory than the
     // requested one would silently land the user in the wrong workspace.
-    let mut handoff = None;
-    let mut handoff_invalid = false;
     if let Some(link) = startup_link {
-        match files::canonicalize_workspace_folder(&link.workspace) {
-            Some(workspace) => handoff = Some((workspace, link.session_id)),
-            None => handoff_invalid = true,
-        }
-    }
-    if let Some((workspace, session_id)) = handoff {
-        window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.arm_session_link(workspace, session_id, cx)))?;
-    } else if handoff_invalid {
-        window.update(cx, |_, _, cx| {
-            view.update(cx, |view, cx| {
-                view.error = Some(rust_i18n::t!("app.workspace.invalid_folder").to_string());
-                cx.notify();
-            })
-        })?;
+        view.update(cx, |view, cx| view.select_startup_handoff(link, cx));
     } else {
         let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
         if let Some(path) = last_workspace {
-            window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx)))?;
+            view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx));
         }
     }
-    view.update(cx, |view, cx| view.start_event_drain(cx));
-    view.update(cx, |view, cx| view.start_goal_ticker(cx));
-    view.update(cx, |view, cx| view.start_launch_splash_dwell(cx));
+    view.update(cx, |view, cx| {
+        view.start_event_drain(cx);
+        view.start_goal_ticker(cx);
+        view.start_login_item_reconciliation(cx);
+    });
     cx.activate(true);
     Ok(window)
 }
@@ -378,11 +363,7 @@ impl DesktopView {
             Self::build_terminal_position_select(&preferences, window, cx);
         let (chat_width_select, chat_width_subscription) = Self::build_chat_width_select(&preferences, window, cx);
         let destination = preferences.file_open_destination();
-        // Bounded Info.plist scan; fast enough to run inline so the
-        // dropdowns are correct on their first render. One scan feeds both
-        // the file destination and the CLI terminal pickers.
-        let detected = files::detect_installed_editors();
-        let offered = preferences::FileOpenDestination::offered(destination, &detected);
+        let offered = preferences::FileOpenDestination::offered(destination, &[]);
         let file_destination_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
                 preferences::FileDestinationOption::for_destinations(&offered),
@@ -399,7 +380,7 @@ impl DesktopView {
                 }
             });
         let terminal = preferences.cli_terminal();
-        let offered_terminals = preferences::CliTerminal::offered(terminal, &detected);
+        let offered_terminals = preferences::CliTerminal::offered(terminal, &[]);
         let cli_terminal_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
                 preferences::CliTerminalOption::for_terminals(&offered_terminals),
@@ -439,8 +420,6 @@ impl DesktopView {
         });
         // Read before `preferences` moves into the struct below.
         let zen_mode = preferences.zen_mode();
-        // One native read at construction; render and scroll never touch the OS.
-        let login_item_status = login_items::status(cx);
         Self {
             shortcut_draft,
             shortcut_search_input,
@@ -547,9 +526,6 @@ impl DesktopView {
             release_notes_banner_visible_now: false,
             dismissed_release_notes_version: None,
             service_info: None,
-            launch_splash_expired: false,
-            launch_dwell_task: None,
-            launch_handshake_pending: false,
             interaction: None,
             interaction_focus: cx.focus_handle(),
             interaction_scroll: ScrollHandle::new(),
@@ -574,6 +550,7 @@ impl DesktopView {
             file_destination_select,
             _file_destination_subscription: file_destination_subscription,
             cli_terminal_select,
+            destination_discovery_task: None,
             _cli_terminal_subscription: cli_terminal_subscription,
             turn_completion_select,
             _turn_completion_subscription: turn_completion_subscription,
@@ -583,6 +560,7 @@ impl DesktopView {
             files_truncated: false,
             file_directory_paths: Arc::new(HashSet::new()),
             file_tree,
+            file_tree_requested: false,
             pending_tree_select: None,
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
@@ -789,7 +767,7 @@ impl DesktopView {
             last_usage: None,
             theme_id: themes::canonical_selection(&start_theme, theme_mode, &preferences.custom_themes),
             preferences,
-            login_item_status,
+            login_item_status: None,
             system_motion_baseline,
             sidebar_open: false,
             navigation_peek: false,

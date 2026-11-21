@@ -416,30 +416,6 @@ impl DesktopView {
         self.apply_theme_state(id, Some(window), cx);
     }
 
-    /// Restore the saved selection at startup. The current id is the fallback
-    /// when only the contrast setting changed; custom ids resolve through the
-    /// same path as palette rows. Loading never re-saves, so this stops short
-    /// of [`Self::apply_theme_state`].
-    pub(super) fn restore_saved_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let preferences = self.preferences.clone();
-        if preferences.theme.is_none() && preferences.contrast() == 0 {
-            return;
-        }
-        let id = preferences.theme.clone().unwrap_or_else(|| self.theme_id.clone());
-        let mode = themes::apply_selection_with_contrast(
-            &id,
-            preferences.contrast(),
-            &preferences.custom_themes,
-            Some(window),
-            cx,
-        );
-        self.theme_mode = mode;
-        // A deleted custom theme (or a stale preference) must not survive as a
-        // dangling id: resolve to the applied mode's default exactly as a live
-        // selection does.
-        self.theme_id = themes::canonical_selection(&id, mode, &preferences.custom_themes);
-    }
-
     pub(super) fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
         let mode = themes::apply_selection_with_contrast(
             &id,
@@ -487,7 +463,11 @@ impl DesktopView {
         let typography = self.preferences.typography_for(self.theme_mode);
         let ui = typography.ui_font_size;
         let code = typography.code_font_size;
-        let installed = typography::installed_fonts(cx);
+        let installed = if typography.ui_font_family.is_some() || typography.code_font_family.is_some() {
+            typography::installed_fonts(cx)
+        } else {
+            Vec::new()
+        };
         let ui_family = typography::resolve_font(typography.ui_font_family, ".SystemUIFont", &installed);
         let code_family =
             typography::resolve_font(typography.code_font_family, self.default_code_font.as_str(), &installed);

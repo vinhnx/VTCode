@@ -576,7 +576,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!((saved.typography_for(ThemeMode::Light).ui_font_size, saved.code_font_size()), (17, 13),);
         view.update(cx, |view, cx| {
-            view.preferences.touch_workspace("/preserve-workspace");
+            assert!(view.preferences.touch_workspace("/preserve-workspace"));
             view.apply_theme(themes::ThemeId::ciapre::BASE.into(), window, cx);
         });
         assert_eq!(cx.theme().font_size, px(17.));

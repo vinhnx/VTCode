@@ -28,8 +28,32 @@ pub(super) fn welcome_header(view: &DesktopView) -> WelcomeHeader {
 pub(super) fn greeting_empty_state(
     view: &DesktopView,
     title: impl IntoElement,
+    connecting: bool,
     colors: gpui_kit::component::theme::ThemeColor,
+    cx: &App,
 ) -> impl IntoElement {
+    let title = div()
+        .relative()
+        .w_full()
+        // Let the final greeting determine the slot height, even if it wraps.
+        // The hidden greeting does not paint or expose its workspace action.
+        .child(div().when(connecting, |title| title.invisible()).child(title))
+        .when(connecting, |title| {
+            let label = rust_i18n::t!("app.workspace.starting_service").to_string();
+            title.child(
+                div()
+                    .id("workspace-connecting")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(label.clone())
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(shimmer_label("workspace-connecting-title", label, colors.foreground, cx)),
+            )
+        });
     EmptyState::new()
         .header(
             EmptyHeader::new()
@@ -42,6 +66,7 @@ pub(super) fn greeting_empty_state(
                 )
                 .title(
                     EmptyTitle::new()
+                        .w_full()
                         .text_size(gpui_kit::rems(1.75))
                         .font_weight(gpui_kit::FontWeight::NORMAL)
                         .text_color(colors.foreground)

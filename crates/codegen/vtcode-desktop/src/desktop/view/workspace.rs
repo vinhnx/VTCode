@@ -3,11 +3,18 @@
 use super::*;
 use gpui_kit::TouchPhase;
 
+enum WorkspaceSelection {
+    Explicit,
+    Recent,
+    Handoff { session_id: String },
+}
+
 impl DesktopView {
     /// Remember a workspace as recently used.
     fn remember_workspace(&mut self, workspace: &Path) {
-        self.preferences.touch_workspace(&workspace.display().to_string());
-        self.preferences.save();
+        if self.preferences.touch_workspace(&workspace.to_string_lossy()) {
+            self.preferences.save();
+        }
     }
 
     /// The saved recent workspaces for the sidebar.
@@ -345,18 +352,7 @@ impl DesktopView {
     /// session-list continuation load the thread — the same path as
     /// back/forward workspace navigation.
     pub(super) fn arm_session_link(&mut self, workspace: PathBuf, session_id: String, cx: &mut Context<Self>) {
-        // Handoff links rewrite history like any other record: retire an armed
-        // swipe first, or a fast-failing select would leave it advertising a
-        // target the rewritten cursor no longer points at.
-        self.cancel_pending_swipe(cx);
-        self.navigation_history.record(NavigationLocation {
-            workspace: workspace.clone(),
-            session_id: Some(session_id),
-        });
-        let Some(index) = self.navigation_history.current_index() else {
-            return;
-        };
-        self.pending_navigation = Some(PendingNavigation { target_index: index, workspace_switch: true });
+        self.record_handoff_target(&workspace, session_id, cx);
         self.select_workspace(workspace.clone(), cx);
         if self.workspace.as_ref() != Some(&workspace)
             && self.pending_workspace.as_ref() != Some(&workspace)
@@ -364,6 +360,19 @@ impl DesktopView {
         {
             self.pending_navigation = None;
         }
+    }
+
+    fn record_handoff_target(&mut self, workspace: &Path, session_id: String, cx: &mut Context<Self>) {
+        // A handoff rewrites history, so any armed swipe must retire first.
+        self.cancel_pending_swipe(cx);
+        self.navigation_history.record(NavigationLocation {
+            workspace: workspace.to_path_buf(),
+            session_id: Some(session_id),
+        });
+        self.pending_navigation = self
+            .navigation_history
+            .current_index()
+            .map(|target_index| PendingNavigation { target_index, workspace_switch: true });
     }
 
     /// Drive the cursor or session load toward `index`. Returns whether a
@@ -480,24 +489,27 @@ impl DesktopView {
 
     pub(super) fn select_workspace_from_ui(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         self.close_active_route(window, cx);
-        self.select_workspace_with_invalid_path_feedback(path, true, cx);
+        self.select_workspace(path, cx);
         self.restore_focus_after_review_close(window, cx);
     }
 
     pub(super) fn select_workspace(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        self.select_workspace_with_invalid_path_feedback(path, true, cx);
+        self.validate_workspace_selection(path, WorkspaceSelection::Explicit, cx);
     }
 
     pub(super) fn select_workspace_on_startup(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        self.select_workspace_with_invalid_path_feedback(path, false, cx);
+        self.validate_workspace_selection(path, WorkspaceSelection::Recent, cx);
     }
 
-    fn select_workspace_with_invalid_path_feedback(
-        &mut self,
-        path: PathBuf,
-        show_invalid_path_error: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn select_startup_handoff(&mut self, link: protocol::handoff_url::HandoffLink, cx: &mut Context<Self>) {
+        self.validate_workspace_selection(
+            link.workspace,
+            WorkspaceSelection::Handoff { session_id: link.session_id },
+            cx,
+        );
+    }
+
+    fn validate_workspace_selection(&mut self, path: PathBuf, selection: WorkspaceSelection, cx: &mut Context<Self>) {
         // A turn may have started while the asynchronous picker was open.
         if self.retained_submission.is_some() {
             self.error = Some(rust_i18n::t!("app.workspace.unsent_guard").to_string());
@@ -518,10 +530,15 @@ impl DesktopView {
             let _updated = view.update(cx, |view, cx| {
                 view.workspace_selection_pending = false;
                 match canonical {
-                    Some(canonical) => view.select_canonical_workspace(canonical, cx),
+                    Some(canonical) => {
+                        if let WorkspaceSelection::Handoff { session_id } = selection {
+                            view.record_handoff_target(&canonical, session_id, cx);
+                        }
+                        view.select_canonical_workspace(canonical, cx);
+                    }
                     None => {
                         view.fail_pending_navigation();
-                        if show_invalid_path_error {
+                        if !matches!(selection, WorkspaceSelection::Recent) {
                             view.error = Some(rust_i18n::t!("app.workspace.invalid_folder").to_string());
                         }
                     }
@@ -672,9 +689,6 @@ impl DesktopView {
             self.backend = Some(backend);
             // Reuse the session transition gate until the handshake is validated.
             self.session_request = Some(protocol::method::INITIALIZE);
-            // The launch splash owns the window until the INITIALIZE response
-            // lands (see `launch_screen`).
-            self.launch_handshake_pending = true;
         } else {
             self.report_service_launch_failure(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }

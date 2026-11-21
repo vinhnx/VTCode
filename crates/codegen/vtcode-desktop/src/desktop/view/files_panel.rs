@@ -304,14 +304,24 @@ impl DesktopView {
         self.expanded_file_directories.retain(|path| directory_paths.contains(path));
         self.files = entries;
         self.file_directory_paths = Arc::new(directory_paths);
-        self.rebuild_file_tree(cx);
+        if self.file_tree_requested {
+            self.rebuild_file_tree(cx);
+        }
+    }
+
+    /// The snapshot also powers composer suggestions. Allocate inspector rows
+    /// only when the inspector is used, then keep its selection across scans.
+    pub(super) fn ensure_file_tree(&mut self, cx: &mut Context<Self>) {
+        if !self.file_tree_requested {
+            self.rebuild_file_tree(cx);
+        }
     }
 
     /// Rebuild tree rows from the current scan and filter query. Browse mode
-    /// shows the hierarchy; a filter query shows flat ranked hits. Runs on
-    /// every scan and on every filter keystroke; selection follows its path
-    /// across rebuilds while the row still exists.
+    /// shows the hierarchy; a filter query shows flat ranked hits. Selection
+    /// follows its path across rebuilds while the row still exists.
     pub(super) fn rebuild_file_tree(&mut self, cx: &mut Context<Self>) {
+        self.file_tree_requested = true;
         let selected_path = self
             .pending_tree_select
             .take()

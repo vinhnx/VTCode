@@ -110,6 +110,7 @@ fn workspace_files_open_images_and_launch_text_externally(cx: &mut TestAppContex
             assert!(!view.files.iter().any(|entry| entry.rel_path.starts_with("target")));
             assert!(view.files.iter().any(|entry| entry.rel_path == "README.md"));
         };
+        assert!(file_tree_paths(&view, cx).is_empty(), "the scan does not build rows before Files opens");
         window.render_frame(cx);
         window.within("inspector-tabs").click(1usize, cx);
         window.render_frame(cx);
@@ -259,9 +260,9 @@ fn workspace_files_show_loading_and_empty_states(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _cx| {
+        view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
-            view.inspector_tab = super::super::InspectorTab::Files;
+            view.set_inspector_tab(super::super::InspectorTab::Files, cx);
             view.files_scan_cancel = Some(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
         });
         window.render_frame(cx);
@@ -478,7 +479,10 @@ fn file_rename_round_trip_refreshes_tree_repoints_preview_and_remaps_attachments
     // Preview the file first: a rename must repoint the open preview instead
     // of leaving it on a path that no longer exists.
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.open_image_viewer("shot.png".to_string(), window, cx));
+        view.update(cx, |view, cx| {
+            view.set_inspector_tab(super::super::InspectorTab::Files, cx);
+            view.open_image_viewer("shot.png".to_string(), window, cx);
+        });
     })
     .unwrap();
     cx.run_until_parked();
@@ -726,6 +730,7 @@ fn file_delete_stays_confirm_gated_and_trashes_after_confirm(cx: &mut TestAppCon
     assert_eq!(std::fs::read(sink.path().join("doomed.png")).unwrap(), TINY_PNG);
     assert_eq!(std::fs::read_to_string(workspace.path().join("spared.md")).unwrap(), "spared");
     cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.set_inspector_tab(super::super::InspectorTab::Files, cx));
         window.render_frame(cx);
         assert!(!file_tree_paths(&view, cx).contains(&"doomed.png".to_string()));
         assert!(file_tree_paths(&view, cx).contains(&"spared.md".to_string()));

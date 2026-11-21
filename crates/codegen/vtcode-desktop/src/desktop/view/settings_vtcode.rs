@@ -45,7 +45,7 @@ impl VtcodeSettingsProps {
             cli: configuration::CliConfigurationProps::capture(view),
             show_in_menu_bar: view.preferences.show_in_menu_bar,
             launch_at_login_enabled: view.preferences.launch_at_login_enabled(),
-            login_item_status: view.login_item_status,
+            login_item_status: view.login_item_status.unwrap_or(login_items::LoginItemStatus::Disabled),
             secret: secret_store::SecretStoreProps::capture(view),
         }
     }

@@ -149,7 +149,6 @@ mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
 mod launch_bounds;
-mod launch_screen;
 mod licenses;
 mod login_items;
 mod mcp_app;
@@ -623,13 +622,6 @@ struct DesktopView {
     release_notes_banner_visible_now: bool,
     dismissed_release_notes_version: Option<String>,
     service_info: Option<protocol::InitializeResult>,
-    /// Launch splash state (see `launch_screen`): the dwell timer retires the
-    /// splash after the minimum display even when the handshake finished fast.
-    launch_splash_expired: bool,
-    launch_dwell_task: Option<Task<()>>,
-    /// True from transport launch until the INITIALIZE response lands; the
-    /// launch splash covers exactly this window (plus the minimum dwell).
-    launch_handshake_pending: bool,
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,
     /// Scroll region for the interaction body: long choice lists and plan
@@ -674,6 +666,7 @@ struct DesktopView {
     file_destination_select: Entity<preferences::FileDestinationSelectState>,
     _file_destination_subscription: Subscription,
     cli_terminal_select: Entity<preferences::CliTerminalSelectState>,
+    destination_discovery_task: Option<Task<()>>,
     _cli_terminal_subscription: Subscription,
     turn_completion_select: Entity<preferences::TurnCompletionModeSelectState>,
     _turn_completion_subscription: Subscription,
@@ -685,6 +678,7 @@ struct DesktopView {
     files_truncated: bool,
     file_directory_paths: Arc<HashSet<String>>,
     file_tree: Entity<TreeState>,
+    file_tree_requested: bool,
     /// One-shot selection for the next tree rebuild (rename repoints the
     /// selection at the new path, since the old one no longer exists).
     /// Consumed by `rebuild_file_tree`.
@@ -957,9 +951,8 @@ struct DesktopView {
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
     preferences: preferences::Preferences,
-    /// Cached login-item status; refreshed on gestures, never per render
-    /// (the native ServiceManagement read is synchronous XPC).
-    login_item_status: login_items::LoginItemStatus,
+    /// Cached login-item status. None means the launch query can still apply.
+    login_item_status: Option<login_items::LoginItemStatus>,
     system_motion_baseline: bool,
     default_code_font: gpui_kit::SharedString,
     sidebar_open: bool,

@@ -147,12 +147,6 @@ impl DesktopView {
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         window.set_window_title(self.window_title());
-        // The launch splash owns the window while the backend handshake runs
-        // (plus its minimum dwell): no route, chrome, or panel paints beneath
-        // it, so the first frame is always the branded placeholder.
-        if self.launch_screen_active() {
-            return self.render_launch_screen(cx);
-        }
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
         let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;

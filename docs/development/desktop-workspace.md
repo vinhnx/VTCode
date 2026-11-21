@@ -157,9 +157,9 @@ The app owns one selected workspace, one local service process, and at most one 
 wait for active work to cancel and its runloop to clean up. Closing the app or disconnecting the protocol also cancels
 owned work and pending interactions.
 
-At launch, the window paints a launch screen while the service transport starts and the handshake has not completed:
-the monochrome V brand mark over a shimmer status line, held at least 400ms so a fast handshake never flashes the
-placeholder away. With no service starting or on launch failure, the normal surfaces return.
+At launch, the workspace window shows connection status in the conversation area while the service starts.
+Settings and other local controls are available during the handshake. Service-backed actions become available as
+their data arrives.
 
 Session history is discovered from VT Code's existing durable stores. The recent-thread sidebar virtualizes its bounded
 session list and retains a themed scrollbar as history grows. The sidebar and Activity tab reuse their fixed-row geometry
@@ -584,11 +584,10 @@ The most recent workspace reopens on launch when it still exists.
 The Files group in Appearance settings chooses the default file open destination: the system default,
 Finder reveal, Terminal, or a detected editor (VS Code, Sublime Text, Xcode, Android Studio,
 iTerm2, Ghostty). Images always open in the built-in viewer regardless of this setting. The dropdown lists
-system apps and editors found in /Applications and
-~/Applications at launch, plus the saved choice even when its app is missing; installing an editor while the app
-runs needs a restart to appear. Selecting a file in the sidebar, palettes, review views, or attached sources
-opens the image viewer, reveals the file, opens its directory in a terminal, or launches the configured
-editor directly; unknown saved values (including the removed `viewer` id) fall back to the system default.
+system apps and the saved choice, even when its app is missing. The first visit to Settings scans `/Applications`
+and `~/Applications` for other options for the file and CLI terminal pickers. Selecting a file opens the image viewer,
+reveals the file, opens its directory in a terminal, or launches the configured editor. Unknown saved values
+(including the removed `viewer` id) fall back to the system default.
 External launches re-resolve the path inside the workspace at launch time and report failures in the app error
 notice without opening the overlay.
 

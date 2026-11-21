@@ -571,18 +571,24 @@ fn profile_sizes_are_clamped_and_legacy_shared_typography_is_inherited() {
 fn touch_workspace_moves_to_front_and_bounds_the_list() {
     let mut preferences = Preferences::default();
     for index in 0..(MAX_RECENT_WORKSPACES + 4) {
-        preferences.touch_workspace(&format!("/ws-{index}"));
+        assert!(preferences.touch_workspace(&format!("/ws-{index}")));
     }
     assert_eq!(preferences.recent_workspaces.len(), MAX_RECENT_WORKSPACES);
     assert_eq!(preferences.recent_workspaces[0], format!("/ws-{}", MAX_RECENT_WORKSPACES + 3));
 
-    preferences.touch_workspace("/ws-5");
+    assert!(preferences.touch_workspace("/ws-5"));
     assert_eq!(preferences.recent_workspaces[0], "/ws-5");
     assert_eq!(
         preferences.recent_workspaces.iter().filter(|path| **path == "/ws-5").count(),
         1,
         "re-touching moves the entry instead of duplicating it"
     );
+    assert!(!preferences.touch_workspace("/ws-5"), "restoring the first workspace needs no write");
+    let _previous = preferences
+        .workspace_permissions
+        .insert("/stale".into(), vtcode_desktop_protocol::PermissionMode::Ask);
+    assert!(preferences.touch_workspace("/ws-5"), "stale permissions still need pruning");
+    assert!(preferences.workspace_permissions.is_empty());
 }
 
 #[test]
@@ -622,7 +628,7 @@ fn round_trips_through_json() {
         navigation_visible: Some(false),
         ..Preferences::default()
     };
-    preferences.touch_workspace("/tmp/ws");
+    assert!(preferences.touch_workspace("/tmp/ws"));
     preferences.set_widths(240.0, 380.0);
 
     let content = serde_json::to_string(&preferences).expect("serialize");

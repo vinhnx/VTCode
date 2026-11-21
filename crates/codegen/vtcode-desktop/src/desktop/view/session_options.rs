@@ -42,7 +42,7 @@ impl DesktopView {
             return;
         }
         if let Some(workspace) = self.permission_workspace_key() {
-            self.preferences.touch_workspace(&workspace);
+            let _recents_changed = self.preferences.touch_workspace(&workspace);
             let _previous = self.preferences.workspace_permissions.insert(workspace, choice);
             if let Err(error) = self.preferences.try_save() {
                 self.error = Some(rust_i18n::t!("app.permissions.save_failed", error = error.to_string()).to_string());

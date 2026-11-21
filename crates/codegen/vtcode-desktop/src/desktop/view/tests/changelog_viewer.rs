@@ -364,7 +364,7 @@ fn release_notes_acknowledge_failure_stays_silent(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn release_notes_banner_shows_on_the_launch_screen(cx: &mut TestAppContext) {
+fn release_notes_banner_shows_on_the_welcome_screen(cx: &mut TestAppContext) {
     // Fresh launch: no workspace, no session, the welcome screen owns the
     // column. The banner must still reach the user there — that is the whole
     // point of an inline banner instead of a workspace-only dialog.
@@ -377,7 +377,7 @@ fn release_notes_banner_shows_on_the_launch_screen(cx: &mut TestAppContext) {
             view.handle_update_status_response(post_update_payload());
         });
         window.render_frame(cx);
-        assert!(window.try_find("welcome").is_some(), "the launch screen is showing");
+        assert!(window.try_find("welcome").is_some(), "the welcome screen is showing");
         assert!(window.try_find("release-notes-banner").is_some(), "the banner does not need a workspace");
         assert!(window.try_find("release-notes-dismiss").is_some(), "and it is dismissible there");
     })
