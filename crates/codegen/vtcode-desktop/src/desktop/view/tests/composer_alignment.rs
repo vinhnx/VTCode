@@ -288,3 +288,89 @@ fn composer_button_row_stays_aligned_in_normal_mode(cx: &mut TestAppContext) {
         .unwrap();
     }
 }
+
+#[gpui_kit::test]
+fn zen_connection_pills_keep_order_wrap_and_visibility(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let ids = ["composer-workspace", "composer-cli-webmcp", "composer-connect-cli"];
+    view.update(cx, |view, cx| {
+        view.zen_mode = true;
+        view.workspace = None;
+        cx.notify();
+    });
+    cx.simulate_window_resize(window, size(px(960.), px(720.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let [workspace, webmcp, cli] = ids.map(|id| window.find(id));
+        assert_eq!(workspace.label(), Some("Workspace"));
+        assert_eq!(webmcp.label(), Some("WebMCP"));
+        assert_eq!(cli.label(), Some("VT Code CLI"));
+        assert_eq!(cli.description(), Some("Open Settings → Connections"));
+        assert!(workspace.bounds().right() <= webmcp.bounds().left());
+        assert!(webmcp.bounds().right() <= cli.bounds().left());
+        assert_eq!(workspace.bounds().top(), cli.bounds().top());
+        assert!(window.try_find("composer-webmcp-connected-dot").is_none());
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(360.), px(720.)));
+    view.update(cx, |view, cx| {
+        view.webmcp_status = Some(vtcode_desktop_protocol::webmcp::WebmcpBridgeStatus {
+            running: true,
+            endpoint: None,
+            allowed_origins: vec![],
+            session_id: None,
+            turns_available: false,
+            workspace: String::new(),
+        });
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let row = window.find("composer-context").bounds();
+        let [workspace, webmcp, cli] = ids.map(|id| window.find(id));
+        assert_eq!(webmcp.label(), Some("WebMCP connected"));
+        assert!(window.try_find("composer-webmcp-connected-dot").is_some());
+        assert!(cli.bounds().top() > workspace.bounds().top(), "narrow composer should wrap");
+        for pill in [workspace, webmcp, cli] {
+            assert!(pill.bounds().left() >= row.left() && pill.bounds().right() <= row.right());
+        }
+    })
+    .unwrap();
+
+    for (zen, workspace, pending) in [
+        (false, None, false),
+        (true, Some(PathBuf::from("/project/selected")), false),
+        (true, None, true),
+    ] {
+        view.update(cx, |view, cx| {
+            view.zen_mode = zen;
+            view.workspace = workspace;
+            view.workspace_selection_pending = pending;
+            cx.notify();
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(ids.into_iter().all(|id| window.try_find(id).is_none()));
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn zen_cli_pill_opens_connections_settings(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.zen_mode = true;
+        view.workspace = None;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("composer-connect-cli", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Settings);
+        assert!(window.try_find("connections-settings").is_some());
+    })
+    .unwrap();
+}

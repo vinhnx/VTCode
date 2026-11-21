@@ -261,6 +261,7 @@ pub(super) mod i18n {
     pub const SHORTCUTS_SEARCH_ARIA: &str = "app.shortcuts.search_aria";
     pub const TRANSCRIPT_PLAN_TITLE: &str = "app.transcript.plan_title";
     pub const TRANSCRIPT_YOU: &str = "app.transcript.you";
+    pub const COMPOSER_CONNECT_CLI_TOOLTIP: &str = "app.composer.connect_cli_tooltip";
     pub const WORKSPACE_CHOOSE: &str = "app.workspace.choose";
     pub const WORKSPACE_CURRENT_LABEL: &str = "app.workspace.current_label";
     pub const WORKSPACE_REVIEW_SPLIT: &str = "app.workspace_review.split";

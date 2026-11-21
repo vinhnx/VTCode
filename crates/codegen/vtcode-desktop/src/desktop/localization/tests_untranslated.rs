@@ -308,3 +308,24 @@ fn queue_button_copy_resolves_in_every_language() {
     assert_eq!(rust_i18n::t!("app.composer.queue", locale = "en").to_string(), "Queue message");
     assert_eq!(rust_i18n::t!("app.composer.queue_tooltip", locale = "en").to_string(), "Queue message (Tab)");
 }
+
+#[test]
+fn welcome_context_labels_resolve_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.composer.context_workspace",
+            "app.composer.context_webmcp",
+            "app.composer.context_cli",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(rust_i18n::t!("app.composer.context_workspace", locale = "en").to_string(), "Workspace");
+    assert_eq!(rust_i18n::t!("app.composer.context_webmcp", locale = "en").to_string(), "WebMCP");
+    assert_eq!(rust_i18n::t!("app.composer.context_cli", locale = "en").to_string(), "VT Code CLI");
+}

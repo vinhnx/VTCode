@@ -103,14 +103,14 @@ impl DesktopView {
         self.webmcp_notice = notice;
     }
 
-    fn open_webmcp_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn open_cli_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings_tab = super::settings::SettingsTab::Connections;
         self.open_settings(window, cx);
         cx.notify();
     }
 
     pub(super) fn open_webmcp_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_webmcp_settings_panel(window, cx);
+        self.open_cli_settings(window, cx);
         self.request_webmcp_status();
     }
 
@@ -141,7 +141,7 @@ impl DesktopView {
         }
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.error = None;
-        self.open_webmcp_settings_panel(window, cx);
+        self.open_cli_settings(window, cx);
         match command {
             WebmcpCommand::Help => {
                 self.webmcp_notice = Some(WebmcpNotice::CommandsHelp);

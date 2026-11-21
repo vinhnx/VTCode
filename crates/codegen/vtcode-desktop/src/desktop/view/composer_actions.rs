@@ -194,18 +194,18 @@ impl DesktopView {
         let current = self.workspace.as_ref().map(|path| path.display().to_string());
         let current_label = self
             .workspace_file_name()
-            .unwrap_or_else(|| rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string());
+            .unwrap_or_else(|| rust_i18n::t!("app.composer.context_workspace").to_string());
         let recent = self.recent_workspaces();
         let disabled =
             !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
         let view = cx.entity().downgrade();
         let trigger = desktop_ghost_button("composer-workspace")
             .icon(IconName::Folder)
-            .label(current_label)
+            .label(current_label.clone())
             .small()
             .max_w(px(240.))
             .overflow_hidden()
-            .accessibility_label(rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string())
+            .accessibility_label(current_label)
             .tooltip(rust_i18n::t!("app.workspace.choose_or_recent").to_string())
             .desktop_disabled(disabled);
 

@@ -460,6 +460,10 @@ impl DesktopView {
         // carries no horizontal inset, so the row needs none either: its
         // button frames start on the input spine directly.
         if self.zen_mode && self.workspace.is_none() && !self.workspace_selection_pending {
+            // Premium landing action bar: one raised, softly edged surface
+            // gathers the three quiet ghost actions. The card keeps the
+            // composer's leading spine — its hairline is the only inset — so
+            // every button still lands on the input spine below it.
             panel = panel.child(
                 div().w_full().child(
                     div()
@@ -471,21 +475,22 @@ impl DesktopView {
                         .flex_wrap()
                         .items_center()
                         .gap_2()
-                        .py_1()
+                        .py_2()
+                        .bg(colors.group_box)
+                        .border_1()
+                        .border_color(themes::soft_edge_color(&colors))
+                        .rounded(cx.theme().radius_lg)
+                        .shadow(themes::elevated_card_shadows())
                         .fade_in("composer-context-fade", cx.theme())
                         .child(self.render_workspace_picker(cx))
+                        .child(self.render_webmcp_connection_pill(cx))
                         .child(
-                            desktop_ghost_button("composer-cli-webmcp")
+                            desktop_ghost_button("composer-connect-cli")
                                 .icon(IconName::Terminal)
-                                .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
-                                    rust_i18n::t!("app.composer.webmcp_connected").to_string()
-                                } else {
-                                    rust_i18n::t!("app.composer.connect_webmcp").to_string()
-                                })
-                                .accessibility_label(rust_i18n::t!("app.composer.webmcp_accessibility").to_string())
-                                .tooltip(rust_i18n::t!("app.composer.webmcp_tooltip").to_string())
+                                .label(rust_i18n::t!("app.composer.context_cli").to_string())
+                                .tooltip(rust_i18n::t!(i18n::COMPOSER_CONNECT_CLI_TOOLTIP).to_string())
                                 .small()
-                                .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
+                                .on_click(cx.listener(|view, _, window, cx| view.open_cli_settings(window, cx))),
                         ),
                 ),
             );
@@ -614,6 +619,36 @@ impl DesktopView {
     /// anchors to the recorded bounds via `anchored().attach`, so the panel
     /// follows the CTA that opened it while keyboard navigation keeps
     /// working.
+    fn render_webmcp_connection_pill(&self, cx: &mut Context<Self>) -> Button {
+        let running = self.webmcp_status.as_ref().is_some_and(|status| status.running);
+        let button = desktop_ghost_button("composer-cli-webmcp")
+            .tooltip(rust_i18n::t!("app.composer.webmcp_tooltip").to_string())
+            .small()
+            .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx)));
+        if running {
+            let label = rust_i18n::t!("app.composer.webmcp_connected").to_string();
+            button.icon(IconName::Plug).accessibility_label(label.clone()).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .id("composer-webmcp-connected-dot")
+                            .test_support()
+                            .size(px(6.))
+                            .rounded_full()
+                            .bg(cx.theme().colors.success),
+                    )
+                    .child(label),
+            )
+        } else {
+            button
+                .icon(IconName::Plug)
+                .label(rust_i18n::t!("app.composer.context_webmcp").to_string())
+        }
+    }
+
     fn composer_trigger_pill(&self, pill: ComposerPill, element: impl IntoElement, cx: &Context<Self>) -> AnyElement {
         let view = cx.entity().downgrade();
         div()

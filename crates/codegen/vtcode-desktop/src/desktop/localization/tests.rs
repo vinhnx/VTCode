@@ -853,6 +853,6 @@ fn welcome_day_periods_are_translated_in_every_language() {
 
     assert_eq!(
         KEYS.map(|key| rust_i18n::t!(key, locale = "en").into_owned()),
-        ["Good morning", "Good afternoon", "Good evening"]
+        ["Good morning!", "Good afternoon!", "Good evening!"]
     );
 }

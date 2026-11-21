@@ -59,3 +59,26 @@ fn assert_not_trailing_space(name: &str, index: usize, line: &str, close: usize)
         .is_some_and(|head| head.chars().next_back().is_some_and(|ch| ch == ' ' || ch == '\t'));
     assert!(!trailing, "{name}:{} ends a value with whitespace", index + 1);
 }
+
+#[test]
+fn composer_cli_copy_covers_each_supported_locale() {
+    use super::UiLanguage;
+
+    let composer = include_str!("../../../locales/app.composer.yml");
+    for (entry, key) in [
+        ("    connect_cli: {", "app.composer.connect_cli"),
+        ("    connect_cli_tooltip: {", "app.composer.connect_cli_tooltip"),
+    ] {
+        let translations = composer
+            .lines()
+            .find_map(|line| line.strip_prefix(entry))
+            .expect("composer locale entry");
+        assert_eq!(translations.matches(": \"").count(), UiLanguage::ALL.len());
+        for language in UiLanguage::ALL {
+            let locale = language.locale();
+            assert!(translations.contains(&format!("{locale}: \"")), "missing {locale} translation for {key}");
+            let translated = rust_i18n::t!(key, locale = locale);
+            assert!(!translated.is_empty() && translated != key);
+        }
+    }
+}

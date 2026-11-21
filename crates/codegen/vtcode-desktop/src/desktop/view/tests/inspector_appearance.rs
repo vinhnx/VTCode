@@ -700,7 +700,7 @@ fn welcome_keeps_a_long_workspace_name_action_within_the_composer_column(cx: &mu
         assert!(link.bounds().left() >= composer.left() && link.bounds().right() <= composer.right());
         let heading = window.find("welcome-prompt");
         assert_eq!(heading.role(), Some(gpui_kit::Role::Heading));
-        assert_eq!(heading.label(), Some("Good afternoon"));
+        assert_eq!(heading.label(), Some("Good afternoon!"));
         assert!(heading.bounds().bottom() <= link.bounds().top());
 
         window.click("welcome-workspace", cx);
@@ -721,7 +721,7 @@ fn welcome_keeps_a_long_workspace_name_action_within_the_composer_column(cx: &mu
         view.update(cx, |view, _| view.workspace = None);
         window.render_frame(cx);
         assert!(window.try_find("welcome-workspace").is_none());
-        assert_eq!(window.find("welcome-prompt").label(), Some("Good afternoon"));
+        assert_eq!(window.find("welcome-prompt").label(), Some("Good afternoon!"));
         // With the sidebar collapsed, the window shortcut still opens the picker.
         window.press("cmd-o", cx);
         assert!(view.read(cx).workspace_picker_open);

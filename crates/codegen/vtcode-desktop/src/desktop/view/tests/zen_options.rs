@@ -497,7 +497,7 @@ fn welcome_greeting_stays_aligned_with_the_composer_when_toggling_zen(cx: &mut T
             let composer = window.find("message-composer-frame").bounds();
             let transcript = window.find("transcript-scroll").bounds();
             let mark = window.find("welcome-brand-mark").bounds();
-            assert_eq!(title.label(), Some("Good evening"));
+            assert_eq!(title.label(), Some("Good evening!"));
             assert!((title.bounds().left() - composer.left()).abs() <= px(1.));
             assert!((mark.left() - composer.left()).abs() <= px(1.));
             assert!(mark.bottom() <= title.bounds().top());

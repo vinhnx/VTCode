@@ -125,6 +125,14 @@ pub(in crate::desktop) fn accented_button_shadows() -> Vec<BoxShadow> {
     ]
 }
 
+/// Soft elevation for a raised content card (the welcome action cluster): one
+/// neutral drop shadow that reads on both light and dark canvases without a
+/// colored glow. Pair with the soft-edge hairline and one-step-above-canvas
+/// fill so elevation comes from the surface, not from a heavy shadow.
+pub(in crate::desktop) fn elevated_card_shadows() -> Vec<BoxShadow> {
+    vec![BoxShadow::new(px(0.), px(2.), black().opacity(0.14)).blur_radius(px(10.))]
+}
+
 /// Resting tab labels sit on canvas (thread strip, inspector) and directly on
 /// popover (attachment picker folder bar); the segmented track survives only
 /// as the dimming anchor. Dim the palette foreground toward the track as far
