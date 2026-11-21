@@ -677,11 +677,21 @@ impl LifecycleHookEngine {
             let mut payload_bytes =
                 serde_json::to_vec(payload).context("failed to serialize lifecycle hook payload")?;
             payload_bytes.push(b'\n');
-            stdin
-                .write_all(&payload_bytes)
-                .await
-                .context("failed to write lifecycle hook payload")?;
-            stdin.shutdown().await.context("failed to close lifecycle hook stdin")?;
+            // Hook commands that never read stdin (one-liners such as
+            // `printf '...'`) exit immediately and close the pipe; whether the
+            // payload write wins that race is pure scheduling. A broken pipe
+            // there means the hook ran without consuming its payload — not a
+            // hook failure. Any other write error is real.
+            if let Err(error) = stdin.write_all(&payload_bytes).await {
+                if error.kind() != std::io::ErrorKind::BrokenPipe {
+                    return Err(error).context("failed to write lifecycle hook payload");
+                }
+            }
+            if let Err(error) = stdin.shutdown().await {
+                if error.kind() != std::io::ErrorKind::BrokenPipe {
+                    return Err(error).context("failed to close lifecycle hook stdin");
+                }
+            }
         }
 
         let mut stdout_pipe = child.stdout.take().context("lifecycle hook missing stdout pipe")?;

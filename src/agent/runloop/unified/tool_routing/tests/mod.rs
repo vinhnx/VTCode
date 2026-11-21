@@ -37,13 +37,24 @@ pub(super) use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 pub(super) use crate::agent::runloop::unified::state::CtrlCState;
 
 fn create_headless_session() -> InlineSession {
-    let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+    create_headless_session_with_capture().0
+}
+
+/// Headless session that also returns the renderer's command channel, so a
+/// test can drain the lines the flow appended (hook failures surface there
+/// and nowhere else).
+fn create_headless_session_with_capture()
+-> (InlineSession, tokio::sync::mpsc::UnboundedReceiver<vtcode_ui::tui::app::InlineCommand>) {
+    let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
-    InlineSession {
-        handle: InlineHandle::new_for_tests(command_tx),
-        events: event_rx,
-        worker: None,
-    }
+    (
+        InlineSession {
+            handle: InlineHandle::new_for_tests(command_tx),
+            events: event_rx,
+            worker: None,
+        },
+        command_rx,
+    )
 }
 
 /// Builder for [`ToolPermissionsContext`].

@@ -36,7 +36,7 @@ async fn pre_tool_use_hook_rewrite_reaches_approved_args() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     isolate_workspace_config(temp_dir.path());
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    let mut session = create_headless_session();
+    let (mut session, mut renderer_rx) = create_headless_session_with_capture();
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = Arc::new(CtrlCState::new());
@@ -82,7 +82,12 @@ async fn pre_tool_use_hook_rewrite_reaches_approved_args() {
     .await
     .expect("permission flow");
 
-    assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: Some(json!({"path": "src/lib.rs"})) });
+    assert_eq!(
+        flow,
+        ToolPermissionFlow::Approved { updated_args: Some(json!({"path": "src/lib.rs"})) },
+        "hook failures surface as renderer lines: {:?}",
+        drain_appended_lines(&mut renderer_rx)
+    );
 }
 #[tokio::test]
 async fn pre_tool_use_hook_rewrite_survives_forwarded_hook_phase() {
