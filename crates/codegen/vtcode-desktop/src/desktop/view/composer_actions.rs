@@ -194,7 +194,7 @@ impl DesktopView {
         let current = self.workspace.as_ref().map(|path| path.display().to_string());
         let current_label = self
             .workspace_file_name()
-            .unwrap_or_else(|| rust_i18n::t!("app.composer.context_workspace").to_string());
+            .unwrap_or_else(|| rust_i18n::t!(i18n::COMPOSER_CONTEXT_WORKSPACE).to_string());
         let recent = self.recent_workspaces();
         let disabled =
             !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;

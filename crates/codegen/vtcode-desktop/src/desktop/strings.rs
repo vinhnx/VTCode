@@ -262,6 +262,9 @@ pub(super) mod i18n {
     pub const TRANSCRIPT_PLAN_TITLE: &str = "app.transcript.plan_title";
     pub const TRANSCRIPT_YOU: &str = "app.transcript.you";
     pub const COMPOSER_CONNECT_CLI_TOOLTIP: &str = "app.composer.connect_cli_tooltip";
+    pub const COMPOSER_CONTEXT_WORKSPACE: &str = "app.composer.context_workspace";
+    pub const COMPOSER_CONTEXT_WEBMCP: &str = "app.composer.context_webmcp";
+    pub const COMPOSER_CONTEXT_CLI: &str = "app.composer.context_cli";
     pub const WORKSPACE_CHOOSE: &str = "app.workspace.choose";
     pub const WORKSPACE_CURRENT_LABEL: &str = "app.workspace.current_label";
     pub const WORKSPACE_REVIEW_SPLIT: &str = "app.workspace_review.split";

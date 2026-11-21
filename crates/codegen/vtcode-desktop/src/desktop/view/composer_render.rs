@@ -487,7 +487,7 @@ impl DesktopView {
                         .child(
                             desktop_ghost_button("composer-connect-cli")
                                 .icon(IconName::Terminal)
-                                .label(rust_i18n::t!("app.composer.context_cli").to_string())
+                                .label(rust_i18n::t!(i18n::COMPOSER_CONTEXT_CLI).to_string())
                                 .tooltip(rust_i18n::t!(i18n::COMPOSER_CONNECT_CLI_TOOLTIP).to_string())
                                 .small()
                                 .on_click(cx.listener(|view, _, window, cx| view.open_cli_settings(window, cx))),
@@ -645,7 +645,7 @@ impl DesktopView {
         } else {
             button
                 .icon(IconName::Plug)
-                .label(rust_i18n::t!("app.composer.context_webmcp").to_string())
+                .label(rust_i18n::t!(i18n::COMPOSER_CONTEXT_WEBMCP).to_string())
         }
     }
 

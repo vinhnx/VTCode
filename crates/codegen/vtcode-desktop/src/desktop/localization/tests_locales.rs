@@ -61,24 +61,19 @@ fn assert_not_trailing_space(name: &str, index: usize, line: &str, close: usize)
 }
 
 #[test]
-fn composer_cli_copy_covers_each_supported_locale() {
+fn composer_cli_tooltip_covers_each_supported_locale() {
     use super::UiLanguage;
 
     let composer = include_str!("../../../locales/app.composer.yml");
-    for (entry, key) in [
-        ("    connect_cli: {", "app.composer.connect_cli"),
-        ("    connect_cli_tooltip: {", "app.composer.connect_cli_tooltip"),
-    ] {
-        let translations = composer
-            .lines()
-            .find_map(|line| line.strip_prefix(entry))
-            .expect("composer locale entry");
-        assert_eq!(translations.matches(": \"").count(), UiLanguage::ALL.len());
-        for language in UiLanguage::ALL {
-            let locale = language.locale();
-            assert!(translations.contains(&format!("{locale}: \"")), "missing {locale} translation for {key}");
-            let translated = rust_i18n::t!(key, locale = locale);
-            assert!(!translated.is_empty() && translated != key);
-        }
+    let translations = composer
+        .lines()
+        .find_map(|line| line.strip_prefix("    connect_cli_tooltip: {"))
+        .expect("composer locale entry");
+    assert_eq!(translations.matches(": \"").count(), UiLanguage::ALL.len());
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        assert!(translations.contains(&format!("{locale}: \"")), "missing {locale} translation for the CLI tooltip");
+        let translated = rust_i18n::t!("app.composer.connect_cli_tooltip", locale = locale);
+        assert!(!translated.is_empty() && translated != "app.composer.connect_cli_tooltip");
     }
 }

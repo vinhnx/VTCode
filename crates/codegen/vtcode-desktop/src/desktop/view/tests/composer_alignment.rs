@@ -290,7 +290,7 @@ fn composer_button_row_stays_aligned_in_normal_mode(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_connection_pills_keep_order_wrap_and_visibility(cx: &mut TestAppContext) {
+fn zen_connection_actions_keep_order_wrap_and_visibility(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let ids = ["composer-workspace", "composer-cli-webmcp", "composer-connect-cli"];
     view.update(cx, |view, cx| {
@@ -332,8 +332,8 @@ fn zen_connection_pills_keep_order_wrap_and_visibility(cx: &mut TestAppContext) 
         assert_eq!(webmcp.label(), Some("WebMCP connected"));
         assert!(window.try_find("composer-webmcp-connected-dot").is_some());
         assert!(cli.bounds().top() > workspace.bounds().top(), "narrow composer should wrap");
-        for pill in [workspace, webmcp, cli] {
-            assert!(pill.bounds().left() >= row.left() && pill.bounds().right() <= row.right());
+        for action in [workspace, webmcp, cli] {
+            assert!(action.bounds().left() >= row.left() && action.bounds().right() <= row.right());
         }
     })
     .unwrap();
@@ -358,7 +358,7 @@ fn zen_connection_pills_keep_order_wrap_and_visibility(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
-fn zen_cli_pill_opens_connections_settings(cx: &mut TestAppContext) {
+fn zen_cli_action_opens_connections_settings(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
         view.zen_mode = true;
