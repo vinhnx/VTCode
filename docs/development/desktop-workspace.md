@@ -576,10 +576,11 @@ it must not install Base's fixed light default over Kit's theme tokens.
 
 ## Preferences
 
-Comfort settings live in `~/.vtcode/desktop/preferences.json`: the selected theme, recent workspaces (at most 8),
-inspector visibility, pane widths, and the `notifications` block (master toggle, turn-completion mode, category
-toggles, and the last announced release version). A missing or corrupt file falls back to defaults; write failures are ignored.
-The most recent workspace reopens on launch when it still exists.
+Comfort settings live in the resolved config directory's `desktop/preferences.json`: the selected theme, recent workspaces
+(at most 8), inspector visibility, pane widths, and the `notifications` block (master toggle, turn-completion mode,
+category toggles, and the last announced release version). The pre-XDG `~/.vtcode/desktop/preferences.json` is still read
+when the canonical file is absent, so existing installs keep their settings. A missing or corrupt canonical file falls back
+to defaults; write failures are ignored. The most recent workspace reopens on launch when it still exists.
 
 The Files group in Appearance settings chooses the default file open destination: the system default,
 Finder reveal, Terminal, or a detected editor (VS Code, Sublime Text, Xcode, Android Studio,
