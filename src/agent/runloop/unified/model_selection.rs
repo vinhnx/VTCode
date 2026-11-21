@@ -206,7 +206,10 @@ pub(crate) async fn finalize_model_selection(
 
     let reasoning_dropped = client_installed
         && is_real_model_switch(&prev_provider, &prev_model, &selection.provider, &selection.model)
-        && compaction.history.iter().any(|message| message.reasoning_details.is_some());
+        && compaction
+            .history
+            .iter()
+            .any(|message| message.reasoning_details.as_ref().is_some_and(|details| !details.is_empty()));
     let reasoning_note =
         reasoning_dropped.then_some(" Reasoning continuation metadata from the previous model was dropped.");
 

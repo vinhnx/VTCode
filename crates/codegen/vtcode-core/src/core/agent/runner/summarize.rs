@@ -7,11 +7,12 @@ use crate::core::agent::context_reset::maybe_write_reset_after_compaction_with_c
 use crate::core::agent::conversation::conversation_from_messages;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::state::{
-    clear_old_tool_results_with_recent_batches, normalize_history_for_request_shared,
-    resolve_tool_result_clearing_trigger, should_apply_local_tool_result_clearing,
+    clear_old_tool_results_with_recent_batches, invalidate_reasoning_details_after_request_edits,
+    normalize_history_for_request_shared, resolve_tool_result_clearing_trigger,
+    should_apply_local_tool_result_clearing,
 };
 use crate::exec::events::CompactionTrigger;
-use crate::llm::provider::Message;
+use crate::llm::provider::{Message, supports_responses_chaining};
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -30,7 +31,7 @@ impl AgentRunner {
         if !should_apply_local_tool_result_clearing(self.provider_client.name(), false, clearing.enabled) {
             return normalized;
         }
-        Arc::new(clear_old_tool_results_with_recent_batches(
+        let mut projected = clear_old_tool_results_with_recent_batches(
             &normalized,
             resolve_tool_result_clearing_trigger(
                 self.config(),
@@ -43,7 +44,19 @@ impl AgentRunner {
             clearing.keep_recent_tool_batches,
             clearing.clear_at_least_tokens,
             clearing.clear_tool_inputs,
-        ))
+        );
+        // Mirror the interactive runloop: a rewritten tool-result prefix makes
+        // later Responses reasoning items invalid. Durable history is untouched.
+        if supports_responses_chaining(
+            self.provider_client.name(),
+            self.provider_client.supports_responses_compaction(turn_model),
+        ) {
+            let invalidated = invalidate_reasoning_details_after_request_edits(&mut projected, &normalized);
+            if invalidated > 0 {
+                tracing::debug!(invalidated, "headless request dropped reasoning items after prefix edit");
+            }
+        }
+        Arc::new(projected)
     }
 
     /// Compress the conversation trace when automatic compaction should fire.

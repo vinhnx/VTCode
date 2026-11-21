@@ -93,7 +93,8 @@ pub(crate) fn is_real_model_switch(prev_provider: &str, prev_model: &str, new_pr
 fn clear_cross_model_reasoning_items(history: &mut [Message]) -> usize {
     let mut cleared = 0usize;
     for message in history {
-        if message.reasoning_details.take().is_some() {
+        if message.reasoning_details.as_ref().is_some_and(|details| !details.is_empty()) {
+            message.reasoning_details = None;
             cleared = cleared.saturating_add(1);
         }
     }

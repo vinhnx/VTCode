@@ -373,3 +373,60 @@ async fn headless_clearing_preserves_opt_out_and_anthropic_local_fallback() {
         assert!(validate_history_invariants(&requests.last().unwrap().messages).is_valid());
     }
 }
+
+#[tokio::test]
+async fn headless_clearing_invalidates_reasoning_items_only_on_responses_routes() {
+    for (provider_name, expect_invalidated) in [("openai", true), ("queued-test-provider", false)] {
+        let temp = TempDir::new().unwrap();
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.harness.tool_result_clearing.enabled = true;
+        cfg.agent.harness.tool_result_clearing.keep_tool_uses = 1;
+        cfg.context.max_context_tokens = 32_000;
+        let mut runner = Box::pin(make_runner(&temp, cfg, "headless-invalidation")).await;
+        runner.provider_client = Box::new(ClearingProvider {
+            name: provider_name,
+            capacity: 32_000,
+            requests: Arc::new(Mutex::new(Vec::new())),
+        });
+
+        let mut history = evidence_history(32_000, false);
+        let detail = json!({"type":"reasoning","id":"rs_1","encrypted_content":"opaque"});
+        for message in &mut history {
+            if message.role == MessageRole::Assistant {
+                message.reasoning_details = Some(vec![detail.clone()]);
+            }
+        }
+        let first_assistant = history
+            .iter()
+            .position(|message| message.role == MessageRole::Assistant)
+            .unwrap();
+        let mut state = AgentSessionState::new("headless-invalidation".into(), 1, 32_000);
+        state.messages = Arc::new(history.clone());
+
+        let projected = runner.project_request_history(&state, "gpt-5", 0, 2_000);
+
+        assert!(
+            projected.iter().any(|message| {
+                message.role == MessageRole::Tool && message.content.as_text().contains("\"cleared\":\"tool_result\"")
+            }),
+            "{provider_name}: clearing must rewrite the request view"
+        );
+        assert!(
+            projected[first_assistant].reasoning_details.is_some(),
+            "{provider_name}: items before the first edit stay valid"
+        );
+        for (index, message) in projected.iter().enumerate().skip(first_assistant + 1) {
+            if message.role == MessageRole::Assistant {
+                assert_eq!(
+                    message.reasoning_details.is_none(),
+                    expect_invalidated,
+                    "{provider_name}: assistant at index {index}"
+                );
+            }
+        }
+        assert!(
+            history.iter().any(|message| message.reasoning_details.is_some()),
+            "{provider_name}: durable history is untouched"
+        );
+    }
+}
