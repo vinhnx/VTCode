@@ -1,6 +1,5 @@
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
-use ratatui_cheese::input::InputState;
 use std::sync::Arc;
 use std::time::Instant;
 

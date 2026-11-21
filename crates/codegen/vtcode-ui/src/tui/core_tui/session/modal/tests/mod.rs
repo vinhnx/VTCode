@@ -93,6 +93,7 @@ fn single_custom_note_step(default: Option<&str>) -> WizardStep {
         allow_freeform: true,
         freeform_label: Some("Custom note".to_string()),
         freeform_placeholder: Some("Type your response...".to_string()),
+        mask_input: false,
         freeform_default: default.map(ToOwned::to_owned),
     }
 }
@@ -188,6 +189,7 @@ fn wizard_step_with_options(count: usize) -> WizardStep {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     }
 }

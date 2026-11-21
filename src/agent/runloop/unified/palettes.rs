@@ -14,6 +14,7 @@ use vtcode_ui::tui::core::convert_style;
 
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;
+use crate::agent::runloop::unified::settings_interactive::secrets::{self, SecretPaletteConfig};
 use crate::agent::runloop::unified::settings_interactive::{
     ACTION_BACK, ACTION_OPEN_ROOT, ACTION_RELOAD, ACTION_RESET, ACTION_RESET_CANCEL, ACTION_RESET_CONFIRM,
     SettingsPaletteState, apply_settings_action, parent_view_path, show_settings_palette,
@@ -472,6 +473,7 @@ pub(crate) async fn handle_palette_selection(
                 }
             }
 
+            state.secret_config = vt_cfg.as_ref().map(SecretPaletteConfig::from);
             if show_settings_palette(renderer, state.as_ref(), Some(normalized_selection))? {
                 Ok(Some(ActivePalette::Settings { state, esc_armed: false }))
             } else {
@@ -596,7 +598,10 @@ pub(crate) fn handle_palette_cancel(
             let selected = state.selection_for_view(parent_path.as_deref());
             state.view_path = parent_path;
             if show_settings_palette(renderer, state.as_ref(), selected)? {
-                Ok(Some(ActivePalette::Settings { state, esc_armed: true }))
+                Ok(Some(ActivePalette::Settings {
+                    state,
+                    esc_armed: secrets::view_title(&current_path).is_none(),
+                }))
             } else {
                 Ok(None)
             }

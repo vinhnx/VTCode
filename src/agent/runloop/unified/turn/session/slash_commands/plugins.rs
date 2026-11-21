@@ -172,6 +172,7 @@ async fn prompt_source(ctx: &mut SlashCommandContext<'_>) -> Result<Option<Strin
         allow_freeform: true,
         freeform_label: Some("Source".to_string()),
         freeform_placeholder: Some("https://github.com/org/plugin or /local/path".to_string()),
+        mask_input: false,
         freeform_default: None,
     };
 

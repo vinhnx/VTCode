@@ -422,6 +422,7 @@ async fn prompt_overwrite_confirmation(
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     };
 
@@ -530,6 +531,7 @@ fn build_question_step(question: &GuidedInitQuestion) -> WizardStep {
         allow_freeform: question.allow_custom,
         freeform_label: question.allow_custom.then(|| question.key.custom_label().to_string()),
         freeform_placeholder: question.allow_custom.then(|| question.key.custom_placeholder().to_string()),
+        mask_input: false,
         freeform_default: None,
     }
 }

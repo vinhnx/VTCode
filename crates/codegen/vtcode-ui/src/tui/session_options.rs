@@ -632,6 +632,7 @@ mod tests {
                     allow_freeform: true,
                     freeform_label: Some("Custom answer".to_string()),
                     freeform_placeholder: None,
+                    mask_input: false,
                     freeform_default: None,
                 }],
                 current_step: 0,

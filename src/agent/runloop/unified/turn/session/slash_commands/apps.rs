@@ -567,6 +567,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
         WizardStep {
@@ -583,6 +584,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
         WizardStep {
@@ -619,6 +621,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
         WizardStep {
@@ -648,6 +651,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
     ]
@@ -727,6 +731,7 @@ fn build_custom_editor_command_step(placeholder: String) -> WizardStep {
         allow_freeform: true,
         freeform_label: Some("Editor command".to_string()),
         freeform_placeholder: Some(placeholder.clone()),
+        mask_input: false,
         freeform_default: Some(placeholder),
     }
 }

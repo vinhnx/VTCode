@@ -32,15 +32,21 @@ pub(super) fn render_secret_usage(renderer: &mut AnsiRenderer) -> Result<()> {
         MessageStyle::Info,
         "Usage: /secret [list|status [provider] [key-name]|add <provider> [key-name]|delete <provider> [key-name]|migrate [provider]|help]",
     )?;
-    renderer.line(MessageStyle::Info, "  (no args)        – Show every provider and where its key comes from")?;
-    renderer.line(MessageStyle::Info, "  list             – Same as above (status table of all providers)")?;
+    renderer.line(
+        MessageStyle::Info,
+        "  (no args)        – Open Settings → Secrets (show status in headless sessions)",
+    )?;
+    renderer.line(MessageStyle::Info, "  list             – Show the status table for all providers")?;
     renderer
         .line(MessageStyle::Info, "  status [provider] [key-name]– Detailed status for one provider/key, or all")?;
     renderer.line(
         MessageStyle::Info,
-        "  add <provider> [key-name] – Paste a key into the secure prompt (stored in OS keyring)",
+        "  add <provider> [key-name] – Paste a key into the secure prompt (OS keyring or encrypted file)",
     )?;
-    renderer.line(MessageStyle::Info, "  delete <provider> [key-name]– Clear one keyring entry")?;
+    renderer.line(
+        MessageStyle::Info,
+        "  delete <provider> [key-name]– Remove one key from secure storage after confirmation",
+    )?;
     renderer.line(MessageStyle::Info, "  migrate [provider]– Move API keys from workspace .env to secure storage")?;
     renderer.line(MessageStyle::Info, "  help             – Show this help")?;
     renderer.line(MessageStyle::Info, "")?;

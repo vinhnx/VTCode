@@ -766,6 +766,7 @@ async fn prompt_text_value(
                 allow_freeform: true,
                 freeform_label: Some("Value".to_string()),
                 freeform_placeholder: Some(placeholder.to_string()),
+                mask_input: false,
                 freeform_default: None,
             }],
             0,

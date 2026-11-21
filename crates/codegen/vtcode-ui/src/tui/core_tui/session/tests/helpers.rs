@@ -542,6 +542,7 @@ pub(crate) fn request_user_input_step(question_id: &str, label: &str) -> WizardS
         allow_freeform: true,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     }
 }
@@ -569,6 +570,7 @@ pub(crate) fn request_user_input_custom_step(question_id: &str, label: &str, def
         allow_freeform: true,
         freeform_label: Some(label.to_string()),
         freeform_placeholder: Some(default.to_string()),
+        mask_input: false,
         freeform_default: Some(default.to_string()),
     }
 }
@@ -698,6 +700,7 @@ pub(crate) fn wizard_auth_transient(url: &str) -> app_types::TransientRequest {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         }],
         current_step: 0,

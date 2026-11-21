@@ -256,16 +256,15 @@ pub(crate) enum SlashCommandOutcome {
 
 /// Actions for the `/secret` API-key controller.
 ///
-/// `/secret` (no args) and `/secret list` both render the status table of all
-/// providers and where their credential comes from (env var / workspace `.env`
+/// Bare `/secret` opens Settings → Secrets in the TUI. `/secret list` renders
+/// a status table of all providers and where their credential comes from (env var / workspace `.env`
 /// / OS keyring / OAuth / local / managed auth / none). `/secret add` and
 /// `/secret delete` operate on a `(provider, key-name)` storage identity for a
 /// single provider — they do not touch shell environment variables. `/secret
 /// migrate` moves keys from the workspace `.env` into secure storage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SecretCommandAction {
-    /// `/secret` with no args — render the status table (text mode) or open
-    /// the interactive action menu (inline UI mode).
+    /// `/secret` with no args opens Settings → Secrets, or prints status in headless mode.
     Interactive,
     /// `/secret list` — render the status table of all providers.
     List,

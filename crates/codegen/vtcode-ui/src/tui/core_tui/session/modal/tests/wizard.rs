@@ -21,6 +21,7 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
         WizardStep {
@@ -41,6 +42,7 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
     ];
@@ -77,6 +79,7 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     }];
 
@@ -125,6 +128,7 @@ fn wizard_tabbed_list_mouse_click_submits_on_first_click() {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     }];
 
@@ -177,6 +181,7 @@ fn wizard_tabbed_list_mouse_click_activates_custom_note_editor() {
         allow_freeform: true,
         freeform_label: Some("Other".to_owned()),
         freeform_placeholder: Some("Type your response...".to_owned()),
+        mask_input: false,
         freeform_default: None,
     }];
 
@@ -208,6 +213,7 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
         WizardStep {
@@ -228,6 +234,7 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         },
     ];
@@ -273,6 +280,7 @@ fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
         allow_freeform: true,
         freeform_label: Some("Custom note".to_string()),
         freeform_placeholder: Some("Type your response...".to_string()),
+        mask_input: false,
         freeform_default: None,
     }];
 
@@ -451,6 +459,7 @@ fn wizard_multistep_numeric_select_submits() {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     }];
 
@@ -500,6 +509,7 @@ fn wizard_multi_select_keeps_focus_independent_and_returns_checked_options_with_
             allow_freeform: true,
             freeform_label: None,
             freeform_placeholder: None,
+            mask_input: false,
             freeform_default: None,
         }],
         0,

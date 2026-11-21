@@ -74,6 +74,7 @@ impl WizardModalState {
                     allow_freeform: step.allow_freeform,
                     freeform_label: step.freeform_label,
                     freeform_placeholder: step.freeform_placeholder,
+                    mask_input: step.mask_input,
                     freeform_default: step.freeform_default,
                 }
             })
@@ -92,6 +93,23 @@ impl WizardModalState {
             search: search.map(ModalSearchState::from),
             mode,
         }
+    }
+
+    pub(crate) fn paste_notes(&mut self, content: &str) -> bool {
+        let Some(step) = self.steps.get_mut(self.current_step) else {
+            return false;
+        };
+        if !step.notes_active && Self::step_selected_custom_note_item_index(step).is_none() {
+            return false;
+        }
+        step.notes_active = true;
+        // Sensitive input keeps pasted whitespace intact for literal validation.
+        if step.mask_input {
+            step.notes.push_str(content);
+        } else {
+            step.notes.extend(content.chars().filter(|ch| !matches!(ch, '\n' | '\r')));
+        }
+        true
     }
 
     /// Handle key event for wizard navigation
@@ -118,6 +136,9 @@ impl WizardModalState {
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
+                }
+                KeyCode::Esc if step.mask_input => {
+                    return ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled));
                 }
                 KeyCode::Tab | KeyCode::Esc => {
                     if !step.multi_select && !step.notes.is_empty() {
@@ -530,7 +551,7 @@ impl WizardModalState {
             {
                 return Some(format!("{label} {placeholder}"));
             }
-            Some(format!("{} {}", label, step.notes))
+            Some(format!("{} {}", label, step.display_notes()))
         } else {
             None
         }
@@ -631,6 +652,14 @@ impl WizardModalState {
 }
 
 impl WizardStepState {
+    pub(in super::super) fn display_notes(&self) -> std::borrow::Cow<'_, str> {
+        if self.mask_input {
+            "•".repeat(self.notes.chars().count()).into()
+        } else {
+            self.notes.as_str().into()
+        }
+    }
+
     fn has_freeform_default(&self) -> bool {
         self.freeform_default.is_some()
     }

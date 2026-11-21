@@ -1,32 +1,119 @@
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::str::FromStr;
 
-use crate::agent::runloop::ui_list;
-use crate::agent::runloop::ui_list::Tone;
-use crate::agent::runloop::unified::session_setup::configured_anthropic_config;
 use anyhow::Result;
-use vtcode_auth::AuthCredentialsStoreMode;
+use vtcode_auth::{AuthCredentialsStoreMode, OpenAIPreferredMethod, resolve_openai_auth};
+use vtcode_commons::ui_protocol::{InlineStatus, InlineTone};
 use vtcode_config::VTCodeConfig;
-use vtcode_config::api_keys::CredentialSource;
-use vtcode_config::workspace_env::workspace_env_path;
+use vtcode_config::api_keys::{CredentialSource, ResolvedCredential};
 use vtcode_core::config::models::Provider;
-use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
+use vtcode_core::config::types::AgentConfig;
+use vtcode_core::llm::provider::LLMProvider;
 use vtcode_tui_runtime::utils::ansi::MessageStyle;
-use vtcode_ui::tui::app::{InlineEvent, InlineListItem, InlineListSelection, TransientEvent};
+use vtcode_ui::tui::app::{InlineEvent, TransientEvent};
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::slash_commands::SecretCommandAction;
+use crate::agent::runloop::unified::session_setup::create_provider_client;
+use crate::agent::runloop::unified::settings_interactive::secrets::SECRETS_VIEW;
 
 mod storage;
 use storage::SecretStorage;
 
+const SECURE_STORAGE_LABEL: &str = "OS keyring / encrypted file";
+pub(crate) const DELETE_CONFIRMATION: &str = "confirm";
+
 #[derive(Clone)]
-struct SecretTarget {
-    provider_name: String,
-    label: String,
+pub(crate) struct SecretTarget {
+    pub(crate) provider_name: String,
+    pub(crate) label: String,
     provider: Option<Provider>,
-    env_key: String,
+    pub(crate) env_key: String,
     local: bool,
     managed_auth: bool,
+}
+
+impl SecretTarget {
+    pub(crate) fn static_key_hint(&self) -> Option<&'static str> {
+        if self.local {
+            Some("Local provider • no key required")
+        } else if self.managed_auth {
+            Some("Managed authentication • use the provider's login flow")
+        } else if self.env_key.is_empty() {
+            Some("OAuth • use the provider's login flow")
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn settings_add_hint(&self, openai_method: OpenAIPreferredMethod) -> Option<&'static str> {
+        self.static_key_hint().or_else(|| {
+            (self.is_default_openai_key() && openai_method == OpenAIPreferredMethod::Chatgpt)
+                .then_some("ChatGPT OAuth • use /login openai")
+        })
+    }
+
+    fn is_default_openai_key(&self) -> bool {
+        self.provider == Some(Provider::OpenAI)
+            && self.env_key.eq_ignore_ascii_case(Provider::OpenAI.default_api_key_env())
+    }
+
+    pub(crate) fn add_question(&self) -> String {
+        let platform = self
+            .provider
+            .and_then(|provider| provider.platform_url())
+            .map(|url| format!("Get your key at {url}."))
+            .unwrap_or_else(|| format!("Get your key from the {} platform.", self.label));
+        format!("Enter the {} API key ({}). {platform}", self.label, self.env_key)
+    }
+
+    pub(crate) fn delete_question(&self) -> String {
+        format!("Type `{DELETE_CONFIRMATION}` to delete the stored {} API key ({}).", self.label, self.env_key)
+    }
+
+    fn resolve(&self, workspace: &Path, mode: AuthCredentialsStoreMode) -> Result<Option<ResolvedCredential>> {
+        vtcode_config::api_keys::resolve_credential_with_mode(&self.provider_name, &self.env_key, Some(workspace), mode)
+    }
+
+    pub(crate) fn status(&self, workspace: &Path, mode: AuthCredentialsStoreMode) -> (&'static str, &'static str) {
+        let source = if self.local {
+            Some(CredentialSource::Local)
+        } else if self.managed_auth {
+            Some(CredentialSource::ManagedAuth)
+        } else {
+            match self.resolve(workspace, mode) {
+                Ok(resolved) => resolved.map(|credential| credential.source),
+                Err(_) => return ("Unavailable", "Could not read credential sources"),
+            }
+        };
+        match source {
+            Some(source) => ("Ready", source_label(source)),
+            None => ("Missing", "Not configured"),
+        }
+    }
+
+    pub(crate) fn has_stored_key(&self, mode: AuthCredentialsStoreMode) -> Result<bool, String> {
+        SecretStorage::new(mode)
+            .load_stored(&self.provider_name, &self.env_key)
+            .map(|key| key.is_some())
+            .map_err(|_storage| format!("Could not inspect secure storage for {}.", self.label))
+    }
+}
+
+fn source_label(source: CredentialSource) -> &'static str {
+    match source {
+        CredentialSource::Env => "Environment variable",
+        CredentialSource::Workspace => "Workspace .env",
+        CredentialSource::SecureStorage => SECURE_STORAGE_LABEL,
+        CredentialSource::OAuth => "OAuth session",
+        CredentialSource::ManagedAuth => "Managed auth (external CLI)",
+        CredentialSource::Local => "Local — no key required",
+    }
+}
+
+pub(crate) fn storage_mode(config: Option<&VTCodeConfig>) -> AuthCredentialsStoreMode {
+    config.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default()
 }
 
 pub(crate) async fn handle_manage_secrets(
@@ -35,64 +122,38 @@ pub(crate) async fn handle_manage_secrets(
 ) -> Result<SlashCommandControl> {
     match action {
         SecretCommandAction::Interactive => {
-            if !ctx.renderer.supports_inline_ui() {
-                let mode = storage_mode(&ctx);
-                render_secret_status_table(&mut ctx, None, None, mode)?;
-                return Ok(SlashCommandControl::Continue);
-            }
-            run_interactive_secret_manager(&mut ctx).await?;
-            Ok(SlashCommandControl::Continue)
+            return super::handlers::show_settings_at_path_from_context(&mut ctx, Some(SECRETS_VIEW)).await;
         }
-        SecretCommandAction::List => {
-            let mode = storage_mode(&ctx);
-            render_secret_status_table(&mut ctx, None, None, mode)?;
-            Ok(SlashCommandControl::Continue)
-        }
+        SecretCommandAction::List => render_secret_status_table(&mut ctx, None, None)?,
         SecretCommandAction::Status { provider, key_name } => {
-            let mode = storage_mode(&ctx);
-            render_secret_status_table(&mut ctx, provider.as_deref(), key_name.as_deref(), mode)?;
-            Ok(SlashCommandControl::Continue)
+            render_secret_status_table(&mut ctx, provider.as_deref(), key_name.as_deref())?;
         }
         SecretCommandAction::Add { provider, key_name } => {
-            let target = match resolve_secret_target(ctx.vt_cfg.as_ref(), &provider, key_name.as_deref()) {
-                Ok(p) => p,
-                Err(err) => {
-                    ctx.renderer.line(MessageStyle::Error, &err)?;
-                    return Ok(SlashCommandControl::Continue);
-                }
-            };
-            let _ = handle_add_secret(&mut ctx, target).await?;
-            Ok(SlashCommandControl::Continue)
+            prompt_for_secret(&mut ctx, &provider, key_name.as_deref(), false).await?;
         }
         SecretCommandAction::Delete { provider, key_name } => {
-            let target = match resolve_secret_target(ctx.vt_cfg.as_ref(), &provider, key_name.as_deref()) {
-                Ok(p) => p,
-                Err(err) => {
-                    ctx.renderer.line(MessageStyle::Error, &err)?;
-                    return Ok(SlashCommandControl::Continue);
-                }
-            };
-            handle_delete_secret(&mut ctx, target).await?;
-            Ok(SlashCommandControl::Continue)
+            prompt_for_secret(&mut ctx, &provider, key_name.as_deref(), true).await?;
         }
         SecretCommandAction::Migrate { provider } => {
-            let target = match provider {
-                Some(name) => match resolve_secret_target(ctx.vt_cfg.as_ref(), &name, None) {
-                    Ok(p) => Some(p),
-                    Err(err) => {
-                        ctx.renderer.line(MessageStyle::Error, &err)?;
+            let targets = if let Some(name) = provider {
+                match resolve_secret_target(ctx.vt_cfg.as_ref(), &name, None) {
+                    Ok(target) => vec![target],
+                    Err(error) => {
+                        ctx.renderer.line(MessageStyle::Error, &error)?;
                         return Ok(SlashCommandControl::Continue);
                     }
-                },
-                None => None,
+                }
+            } else {
+                all_secret_targets(ctx.vt_cfg.as_ref())
             };
-            handle_migrate_secrets(&mut ctx, target).await?;
-            Ok(SlashCommandControl::Continue)
+            let result = migrate_env_core(&targets, ctx.config, ctx.vt_cfg.as_ref(), ctx.provider_client);
+            render_operation_result(&mut ctx, Ok(result))?;
         }
     }
+    Ok(SlashCommandControl::Continue)
 }
 
-fn resolve_secret_target(
+pub(crate) fn resolve_secret_target(
     vt_cfg: Option<&VTCodeConfig>,
     name: &str,
     key_name: Option<&str>,
@@ -103,13 +164,13 @@ fn resolve_secret_target(
     }
     if let Ok(provider) = Provider::from_str(&provider_name) {
         return Ok(SecretTarget {
-            provider_name: provider_name.clone(),
+            provider_name: provider.as_ref().to_owned(),
             label: provider.label().to_string(),
             provider: Some(provider),
             env_key: key_name
                 .filter(|key| !key.trim().is_empty())
-                .map(ToOwned::to_owned)
-                .or_else(|| vt_cfg.and_then(|cfg| cfg.configured_api_key_env(&provider_name)))
+                .map(|key| key.trim().to_owned())
+                .or_else(|| vt_cfg.and_then(|cfg| cfg.configured_api_key_env(provider.as_ref())))
                 .unwrap_or_else(|| provider.default_api_key_env().to_string()),
             local: provider.is_local(),
             managed_auth: provider.uses_managed_auth(),
@@ -140,7 +201,7 @@ fn resolve_secret_target(
         } else {
             key_name
                 .filter(|key| !key.trim().is_empty())
-                .map(ToOwned::to_owned)
+                .map(|key| key.trim().to_owned())
                 .unwrap_or_else(|| custom.resolved_api_key_env())
         },
         local: false,
@@ -148,7 +209,7 @@ fn resolve_secret_target(
     })
 }
 
-fn all_secret_targets(vt_cfg: Option<&VTCodeConfig>) -> Vec<SecretTarget> {
+pub(crate) fn all_secret_targets(vt_cfg: Option<&VTCodeConfig>) -> Vec<SecretTarget> {
     let mut targets = Provider::all_providers()
         .into_iter()
         .filter_map(|provider| resolve_secret_target(vt_cfg, provider.as_ref(), None).ok())
@@ -163,395 +224,290 @@ fn all_secret_targets(vt_cfg: Option<&VTCodeConfig>) -> Vec<SecretTarget> {
     targets
 }
 
-fn should_show_secret_items(
+type SecretOperationResult = Result<InlineStatus, String>;
+
+pub(crate) fn store_secret_core(
     target: &SecretTarget,
-    workspace: &std::path::Path,
-    storage_mode: AuthCredentialsStoreMode,
-) -> bool {
-    if target.local || target.managed_auth || target.env_key.is_empty() {
-        return false;
+    value: &str,
+    config: &mut AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    client: &mut Box<dyn LLMProvider>,
+) -> SecretOperationResult {
+    if let Some(hint) = target.static_key_hint() {
+        return Err(format!("{} • {hint}.", target.label));
     }
-    !matches!(
-        vtcode_config::api_keys::resolve_credential_with_mode(
-            &target.provider_name,
-            &target.env_key,
-            Some(workspace),
-            storage_mode,
-        )
-        .ok()
-        .flatten()
-        .map(|resolved| resolved.source),
-        Some(CredentialSource::OAuth)
-    )
+    let saved = format!("{} API key stored in {SECURE_STORAGE_LABEL}.", target.label);
+    let verified = persist_secret(target, value, storage_mode(vt_cfg))?;
+    if !verified {
+        return Ok(InlineStatus::warning(format!(
+            "{saved} Could not verify the stored key. The running session kept its credential."
+        )));
+    }
+
+    let warning = clean_workspace_entry(&config.workspace, &target.env_key)
+        .err()
+        .map(|()| format!("Could not remove {} from workspace .env.", target.env_key));
+    let (running, reload_warning) = reload_active_credential(target, config, vt_cfg, client);
+    Ok(operation_status(saved, running, warning.into_iter().chain(reload_warning).collect()))
 }
 
-async fn run_interactive_secret_manager(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
-    loop {
-        show_secret_actions_modal(ctx);
-        let Some(selection) = super::handlers::ui::wait_for_list_modal_selection(ctx).await else {
-            return Ok(());
-        };
-
-        let InlineListSelection::ConfigAction(action) = selection else {
-            continue;
-        };
-        if action == "secret:back" {
-            return Ok(());
-        }
-
-        let Some(action_key) = action.strip_prefix("secret:") else {
-            continue;
-        };
-
-        match action_key {
-            "list" | "status" => {
-                let mode = storage_mode(ctx);
-                render_secret_status_table(ctx, None, None, mode)?;
-            }
-            "migrate" => {
-                handle_migrate_secrets(ctx, None).await?;
-            }
-            _ => {
-                if let Some(provider_name) = action_key.strip_prefix("add:") {
-                    let target = match resolve_secret_target(ctx.vt_cfg.as_ref(), provider_name, None) {
-                        Ok(target) => target,
-                        Err(err) => {
-                            ctx.renderer.line(MessageStyle::Error, &err)?;
-                            continue;
-                        }
-                    };
-                    match handle_add_secret(ctx, target).await? {
-                        SecretEntryOutcome::Continue => {}
-                        SecretEntryOutcome::CloseManager => {
-                            // `wait_for_secure_prompt_input` already dismisses
-                            // the secure prompt. Returning here prevents the
-                            // `/secret` manager loop from opening its menu
-                            // again and returns focus to the main TUI.
-                            return Ok(());
-                        }
-                    }
-                } else if let Some(provider_name) = action_key.strip_prefix("delete:") {
-                    let target = match resolve_secret_target(ctx.vt_cfg.as_ref(), provider_name, None) {
-                        Ok(target) => target,
-                        Err(err) => {
-                            ctx.renderer.line(MessageStyle::Error, &err)?;
-                            continue;
-                        }
-                    };
-                    handle_delete_secret(ctx, target).await?;
-                }
-            }
-        }
+/// Returns false when the store reports success but the read-back could not verify it.
+fn persist_secret(target: &SecretTarget, value: &str, mode: AuthCredentialsStoreMode) -> Result<bool, String> {
+    let value = value.trim();
+    if value.is_empty() || value.chars().any(char::is_control) {
+        return Err(format!("Enter a single non-empty API key for {}.", target.label));
     }
+    let storage = SecretStorage::new(mode);
+    storage
+        .store(&target.provider_name, &target.env_key, value)
+        .map_err(|_storage| {
+            format!("Could not store the {} API key. Check secure storage permissions.", target.label)
+        })?;
+    Ok(matches!(storage.load_stored(&target.provider_name, &target.env_key), Ok(Some(ref key)) if key == value))
 }
 
-// --- Actions ---
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SecretEntryOutcome {
-    Continue,
-    CloseManager,
-}
-
-#[derive(Clone, Copy)]
-enum CredentialReadback {
-    Stored,
-    Resolved,
-}
-
-async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, target: SecretTarget) -> Result<SecretEntryOutcome> {
-    if target.local || target.managed_auth || target.env_key.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("{} does not use a static API key; use its configured authentication flow instead.", target.label),
-        )?;
-        return Ok(SecretEntryOutcome::Continue);
-    }
-    // The secure prompt is a modal: without inline UI the wait below would
-    // wedge the turn until cancel. Desktop users get the native Settings
-    // form instead; everyone else can use the terminal command.
-    if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "API key entry needs an interactive surface. In VT Code Desktop, store the key from Settings → VT Code; or run `vtcode secret add {}` in a terminal.",
-                target.provider_name
-            ),
-        )?;
-        return Ok(SecretEntryOutcome::Continue);
-    }
-    let label = target.label.as_str();
-    let env_key = target.env_key.as_str();
-    let prompt_label = format!("{} API key ({})", label, env_key);
-
-    let platform_hint = target
-        .provider
-        .and_then(|provider| provider.platform_url())
-        .map(|url| format!("Get your key at {url}"))
-        .unwrap_or_else(|| format!("Get your {} API key from the provider's platform.", label));
-    let lines = vec![
-        format!("Bring your own key (BYOK) for {label}."),
-        platform_hint,
-        "Secure display hint: \u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}".to_string(),
-        "Key will be stored in secure storage (OS keyring or encrypted file).".to_string(),
-        "Key will NOT be stored in vtcode.toml or workspace environment files.".to_string(),
-        "Paste the key now, or press Esc to cancel.".to_string(),
-    ];
-
-    ctx.renderer
-        .show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
-
-    let Some(key) = wait_for_secure_prompt_input(ctx).await else {
-        ctx.renderer.line(MessageStyle::Info, "Secret entry cancelled.")?;
-        return Ok(SecretEntryOutcome::Continue);
-    };
-
-    let trimmed = key.trim();
-    if trimmed.is_empty() {
-        ctx.renderer.line(MessageStyle::Error, "API key cannot be empty.")?;
-        return Ok(SecretEntryOutcome::Continue);
-    }
-
-    let storage = SecretStorage::new(storage_mode(ctx));
-    match storage.store(&target.provider_name, env_key, trimmed) {
-        Ok(()) => {
-            ctx.renderer
-                .line(MessageStyle::Info, &format!("API key for {label} stored in secure storage."))?;
-            ctx.renderer.line(MessageStyle::Output, "The key will be used automatically.")?;
-            if vtcode_config::read_workspace_env_value(&ctx.config.workspace, env_key)?.is_some() {
-                vtcode_config::remove_workspace_env_value(&ctx.config.workspace, env_key)?;
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Removed stale {env_key} from workspace .env to avoid conflicts."),
-                )?;
-            }
-            if let Err(err) = reload_provider_client_if_matching(ctx, &target, CredentialReadback::Stored) {
-                ctx.renderer.line(MessageStyle::Warning, &err)?;
-            }
-            return Ok(SecretEntryOutcome::CloseManager);
-        }
-        Err(err) => {
-            tracing::warn!("Failed to store API key for {}: {}", label, err);
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to store API key for {label}. Check secure storage permissions."),
-            )?;
-        }
-    }
-
-    Ok(SecretEntryOutcome::Continue)
-}
-
-async fn handle_migrate_secrets(
-    ctx: &mut SlashCommandContext<'_>,
-    target: Option<SecretTarget>,
-) -> Result<SlashCommandControl> {
-    let targets = match target {
-        Some(target) => vec![target],
-        None => all_secret_targets(ctx.vt_cfg.as_ref()),
-    }
-    .into_iter()
-    .filter(|target| !target.local && !target.managed_auth && !target.env_key.is_empty())
-    .collect::<Vec<_>>();
-
-    let env_path = workspace_env_path(&ctx.config.workspace);
-    let env_path_display = env_path.display().to_string();
-
-    if !env_path.exists() {
-        ctx.renderer
-            .line(MessageStyle::Info, &format!("No .env file found at {}. Nothing to migrate.", env_path_display))?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let storage = SecretStorage::new(storage_mode(ctx));
-    let mut migrated = 0usize;
-    let mut skipped = 0usize;
-    let mut failed = 0usize;
-    for target in targets {
-        let env_key = target.env_key.as_str();
-        let Some(value) = vtcode_config::read_workspace_env_value(&ctx.config.workspace, env_key)? else {
-            skipped += 1;
-            continue;
-        };
-        match storage.store(&target.provider_name, env_key, value.trim()) {
-            Ok(()) => {
-                vtcode_config::remove_workspace_env_value(&ctx.config.workspace, env_key)?;
-                ctx.renderer
-                    .line(MessageStyle::Info, &format!("Migrated {} API key to secure storage.", target.label))?;
-                migrated += 1;
-            }
-            Err(err) => {
-                ctx.renderer
-                    .line(MessageStyle::Error, &format!("Failed to migrate {} API key: {}", target.label, err))?;
-                failed += 1;
-            }
-        }
-    }
-
-    ctx.renderer.line(MessageStyle::Output, "")?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Migration complete: {} migrated, {} skipped, {} failed.", migrated, skipped, failed),
-    )?;
-
-    if migrated > 0 {
-        ctx.renderer
-            .line(MessageStyle::Output, "Keys moved from .env to secure storage (OS keyring or encrypted file).")?;
-        ctx.renderer
-            .line(MessageStyle::Output, "The change takes effect immediately.")?;
-    }
-
-    Ok(SlashCommandControl::Continue)
-}
-
-async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, target: SecretTarget) -> Result<SlashCommandControl> {
-    if target.local || target.managed_auth || target.env_key.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("{} does not use a static API key; use its configured authentication flow instead.", target.label),
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    // Deletion confirms through the secure prompt modal, which does not
-    // exist without inline UI; fail closed with the terminal equivalent
-    // instead of wedging the turn until cancel.
-    if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "API key deletion needs an interactive confirmation. Run `vtcode secret delete {}` in a terminal.",
-                target.provider_name
-            ),
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    let label = target.label.as_str();
-
-    let storage = SecretStorage::new(storage_mode(ctx));
-    match storage.load_stored(&target.provider_name, &target.env_key) {
-        Ok(None) => {
-            ctx.renderer
-                .line(MessageStyle::Info, &format!("No stored API key found for {label}."))?;
-            return Ok(SlashCommandControl::Continue);
-        }
-        Ok(Some(_)) => {}
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Could not inspect stored key for {label}; refusing to delete it: {err}"),
-            )?;
-            return Ok(SlashCommandControl::Continue);
-        }
-    }
-
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Type 'confirm' to delete the stored API key for {label}, or press Esc to cancel."),
-    )?;
-
-    let Some(confirmation) = wait_for_secure_prompt_input(ctx).await else {
-        ctx.renderer.line(MessageStyle::Info, "Deletion cancelled.")?;
-        return Ok(SlashCommandControl::Continue);
-    };
-
-    if confirmation.trim().ne("confirm") {
-        ctx.renderer.line(MessageStyle::Info, "Deletion cancelled.")?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    match storage.clear(&target.provider_name, &target.env_key) {
-        Ok(()) => {
-            ctx.renderer
-                .line(MessageStyle::Info, &format!("API key for {label} deleted from secure storage."))?;
-            ctx.renderer
-                .line(MessageStyle::Output, "The change takes effect immediately.")?;
-            if let Err(err) = reload_provider_client_if_matching(ctx, &target, CredentialReadback::Resolved) {
-                ctx.renderer.line(MessageStyle::Warning, &err)?;
-            }
-        }
-        Err(err) => {
-            ctx.renderer
-                .line(MessageStyle::Error, &format!("Failed to delete API key for {label}: {err}"))?;
-        }
-    }
-
-    Ok(SlashCommandControl::Continue)
-}
-
-// --- Storage ---
-
-fn reload_provider_client_if_matching(
-    ctx: &mut SlashCommandContext<'_>,
-    target: &SecretTarget,
-    readback: CredentialReadback,
-) -> Result<(), String> {
-    let current_provider = ctx.config.provider.trim().to_lowercase();
-    if !target.provider_name.eq_ignore_ascii_case(&current_provider) {
+fn clean_workspace_entry(workspace: &Path, env_key: &str) -> Result<(), ()> {
+    let Some(value) = vtcode_config::read_workspace_env_value(workspace, env_key).map_err(|_read| ())? else {
         return Ok(());
+    };
+    // The workspace editor works on physical lines.
+    if value.contains(['\n', '\r']) {
+        return Err(());
     }
-
-    let storage = SecretStorage::new(storage_mode(ctx));
-    let new_api_key = match match readback {
-        CredentialReadback::Stored => storage.load_stored(&target.provider_name, &target.env_key),
-        CredentialReadback::Resolved => {
-            storage.load_resolved(&target.provider_name, &target.env_key, &ctx.config.workspace)
-        }
-    } {
-        Ok(Some(key)) => key,
-        Ok(None) => {
-            return Err(format!(
-                "Secure storage read-back failed: no key found for {} after store. The key may not have persisted.",
-                target.provider_name
-            ));
-        }
-        Err(err) => {
-            return Err(format!(
-                "Secure storage read-back failed for {}: {err}. The key is stored but the running session may need a restart.",
-                target.provider_name
-            ));
-        }
-    };
-
-    ctx.config.api_key = new_api_key;
-    let new_provider = match create_provider_with_config(
-        &target.provider_name,
-        ProviderConfig {
-            api_key: Some(ctx.config.api_key.clone()),
-            openai_chatgpt_auth: ctx.config.openai_chatgpt_auth.clone(),
-            copilot_auth: ctx.vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()),
-            base_url: None,
-            model: Some(ctx.config.model.clone()),
-            prompt_cache: Some(ctx.config.prompt_cache.clone()),
-            timeouts: None,
-            openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
-            anthropic: configured_anthropic_config(ctx.vt_cfg.as_ref()),
-            openrouter: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openrouter.clone()),
-            model_behavior: ctx.config.model_behavior.clone(),
-            workspace_root: Some(ctx.config.workspace.clone()),
-        },
-    ) {
-        Ok(provider) => provider,
-        Err(err) => {
-            return Err(format!(
-                "Failed to recreate provider client for {}: {err}. The key is stored but the running session may need a restart.",
-                target.provider_name
-            ));
-        }
-    };
-    *ctx.provider_client = new_provider;
+    vtcode_config::remove_workspace_env_value(workspace, env_key).map_err(|_remove| ())?;
+    if vtcode_config::read_workspace_env_value(workspace, env_key)
+        .map_err(|_verify| ())?
+        .is_some()
+    {
+        return Err(());
+    }
     Ok(())
 }
 
-/// Resolve the storage mode from the user config, falling back to the
-/// platform-aware default ([`AuthCredentialsStoreMode::default()`]).
-fn storage_mode(ctx: &SlashCommandContext<'_>) -> AuthCredentialsStoreMode {
-    ctx.vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent.credential_storage_mode)
-        .unwrap_or_default()
+pub(crate) fn clear_secret_core(
+    target: &SecretTarget,
+    confirmation: &str,
+    config: &mut AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    client: &mut Box<dyn LLMProvider>,
+) -> SecretOperationResult {
+    if confirmation.trim() != DELETE_CONFIRMATION {
+        return Err(format!("Type `{DELETE_CONFIRMATION}` exactly to delete the {} API key.", target.label));
+    }
+
+    let mode = storage_mode(vt_cfg);
+    if !target.has_stored_key(mode)? {
+        return Err(format!("No stored API key found for {}.", target.label));
+    }
+
+    SecretStorage::new(mode)
+        .clear(&target.provider_name, &target.env_key)
+        .map_err(|_storage| format!("Could not delete the stored {} API key.", target.label))?;
+
+    let deleted = format!("{} API key deleted from {SECURE_STORAGE_LABEL}.", target.label);
+    let (running, warning) = reload_active_credential(target, config, vt_cfg, client);
+    Ok(operation_status(deleted, running, warning.into_iter().collect()))
 }
 
-// --- Input ---
+pub(crate) fn migrate_env_core(
+    targets: &[SecretTarget],
+    config: &mut AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    client: &mut Box<dyn LLMProvider>,
+) -> InlineStatus {
+    let mut targets_by_env_key = BTreeMap::<&str, Vec<&SecretTarget>>::new();
+    for target in targets.iter().filter(|target| target.static_key_hint().is_none()) {
+        targets_by_env_key.entry(&target.env_key).or_default().push(target);
+    }
+
+    let mode = storage_mode(vt_cfg);
+    let mut migrated = Vec::new();
+    let mut warnings = Vec::new();
+    let mut running = None;
+    for (env_key, targets) in targets_by_env_key {
+        let value = match vtcode_config::read_workspace_env_value(&config.workspace, env_key) {
+            Ok(Some(value)) => value,
+            Ok(None) => continue,
+            Err(_) => {
+                warnings.push(format!("Could not read {env_key} from workspace .env."));
+                continue;
+            }
+        };
+
+        // A shared variable remains in .env until every destination is verified.
+        let mut stored = Vec::new();
+        for target in &targets {
+            match persist_secret(target, &value, mode) {
+                Ok(true) => stored.push(*target),
+                Ok(false) => warnings.push(format!("Could not verify the stored {} API key.", target.label)),
+                Err(error) => warnings.push(error),
+            }
+        }
+
+        if stored.is_empty() {
+            continue;
+        }
+        if stored.len() == targets.len() && clean_workspace_entry(&config.workspace, env_key).is_ok() {
+            migrated.extend(stored.iter().map(|target| target.label.as_str()));
+        } else {
+            let names = stored.iter().map(|target| target.label.as_str()).collect::<Vec<_>>().join(", ");
+            warnings.push(format!("Stored keys for {names} in {SECURE_STORAGE_LABEL}. {env_key} remains in workspace .env or its removal could not be verified."));
+        }
+        for target in stored {
+            let (source, warning) = reload_active_credential(target, config, vt_cfg, client);
+            running = source.or(running);
+            warnings.extend(warning);
+        }
+    }
+
+    let message = if migrated.is_empty() && warnings.is_empty() {
+        return InlineStatus::info("No workspace .env API keys to migrate.");
+    } else if migrated.is_empty() {
+        "Migration encountered issues.".to_string()
+    } else {
+        format!("Migrated {} from workspace .env to {SECURE_STORAGE_LABEL}.", migrated.join(", "))
+    };
+    operation_status(message, running, warnings)
+}
+
+fn operation_status(message: String, running: Option<String>, warnings: Vec<String>) -> InlineStatus {
+    let has_warning = !warnings.is_empty();
+    let message = std::iter::once(message)
+        .chain(running)
+        .chain(warnings)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if has_warning {
+        InlineStatus::warning(message)
+    } else {
+        InlineStatus::success(message)
+    }
+}
+
+fn reload_active_credential(
+    target: &SecretTarget,
+    config: &mut AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    client: &mut Box<dyn LLMProvider>,
+) -> (Option<String>, Option<String>) {
+    if !target.provider_name.eq_ignore_ascii_case(&config.provider) {
+        return (None, None);
+    }
+
+    match rebuild_active_credential(target, config, vt_cfg, client) {
+        Ok(source) => (Some(format!("Running credential source is {}.", source_label(source))), None),
+        Err(()) => (None, Some(format!("Restart the running session to refresh {} authentication.", target.label))),
+    }
+}
+
+fn rebuild_active_credential(
+    target: &SecretTarget,
+    config: &mut AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    client: &mut Box<dyn LLMProvider>,
+) -> Result<CredentialSource, ()> {
+    let mode = storage_mode(vt_cfg);
+    let resolved = target.resolve(&config.workspace, mode).map_err(|_resolve| ())?;
+    let mut source = resolved.as_ref().map(|credential| credential.source);
+    let key = resolved.and_then(|credential| credential.secret);
+    let mut replacement = config.clone();
+    replacement.api_key_env.clone_from(&target.env_key);
+    if target.is_default_openai_key() {
+        let auth_config = vt_cfg.map(|cfg| cfg.auth.openai.clone()).unwrap_or_default();
+        let key = if key.is_none() && auth_config.preferred_method == OpenAIPreferredMethod::ApiKey {
+            let stored = SecretStorage::new(mode)
+                .load_stored(&target.provider_name, &target.env_key)
+                .map_err(|_load| ())?;
+            source = stored.as_ref().map(|_| CredentialSource::SecureStorage);
+            stored
+        } else {
+            key
+        };
+        let auth = resolve_openai_auth(&auth_config, mode, key).map_err(|_auth| ())?;
+        replacement.api_key = auth.api_key().to_string();
+        replacement.openai_chatgpt_auth = auth.handle();
+        if replacement.openai_chatgpt_auth.is_some() {
+            source = Some(CredentialSource::OAuth);
+        }
+    } else {
+        replacement.api_key = key.ok_or(())?;
+        replacement.openai_chatgpt_auth = None;
+    }
+    let source = source.ok_or(())?;
+
+    let replacement_client = create_provider_client(&replacement, vt_cfg).map_err(|_build| ())?;
+    *client = replacement_client;
+    *config = replacement;
+    Ok(source)
+}
+
+async fn prompt_for_secret(
+    ctx: &mut SlashCommandContext<'_>,
+    name: &str,
+    key_name: Option<&str>,
+    delete: bool,
+) -> Result<()> {
+    let target = match resolve_secret_target(ctx.vt_cfg.as_ref(), name, key_name) {
+        Ok(target) => target,
+        Err(error) => return ctx.renderer.line(MessageStyle::Error, &error),
+    };
+    if let Some(hint) = target.static_key_hint() {
+        return ctx.renderer.line(MessageStyle::Info, &format!("{} • {hint}.", target.label));
+    }
+    if !ctx.renderer.supports_inline_ui() {
+        let command = if delete { "delete" } else { "add" };
+        let explicit_key = key_name.map(|key| format!(" --key-name {key}")).unwrap_or_default();
+        return ctx.renderer.line(
+            MessageStyle::Info,
+            &format!("Use VT Code Desktop Settings → VT Code or run `vtcode secret {command} {}{explicit_key}` in a terminal.", target.provider_name),
+        );
+    }
+    if !super::handlers::ui::ensure_selection_ui_available(ctx, "managing secrets")? {
+        return Ok(());
+    }
+    if delete {
+        match target.has_stored_key(storage_mode(ctx.vt_cfg.as_ref())) {
+            Ok(true) => {}
+            Ok(false) => {
+                return ctx
+                    .renderer
+                    .line(MessageStyle::Info, &format!("No stored API key found for {}.", target.label));
+            }
+            Err(error) => return ctx.renderer.line(MessageStyle::Error, &error),
+        }
+    }
+
+    let (title, question, label) = if delete {
+        ("Delete API key", target.delete_question(), "Confirmation")
+    } else {
+        ("Add or replace a key", target.add_question(), "API key")
+    };
+    ctx.renderer.show_secure_prompt_modal(title, vec![question], label.to_string());
+    let Some(value) = wait_for_secure_prompt_input(ctx).await else {
+        return ctx.renderer.line(MessageStyle::Info, "Secret operation cancelled.");
+    };
+
+    let result = if delete {
+        clear_secret_core(&target, &value, ctx.config, ctx.vt_cfg.as_ref(), ctx.provider_client)
+    } else {
+        store_secret_core(&target, &value, ctx.config, ctx.vt_cfg.as_ref(), ctx.provider_client)
+    };
+    render_operation_result(ctx, result)
+}
+
+fn render_operation_result(ctx: &mut SlashCommandContext<'_>, result: SecretOperationResult) -> Result<()> {
+    match result {
+        Ok(status) => {
+            let style = if status.tone == InlineTone::Warning {
+                MessageStyle::Warning
+            } else {
+                MessageStyle::Info
+            };
+            ctx.renderer.line(style, &status.message)
+        }
+        Err(error) => ctx.renderer.line(MessageStyle::Error, &error),
+    }
+}
 
 async fn wait_for_secure_prompt_input(ctx: &mut SlashCommandContext<'_>) -> Option<String> {
     let _status_wait = ctx
@@ -615,205 +571,40 @@ fn dismiss_modal(ctx: &mut SlashCommandContext<'_>) {
     ctx.handle.force_redraw();
 }
 
-// --- Render ---
-
-const SECRET_ACTION_PREFIX: &str = "secret:";
-const SECRET_ACTION_BACK: &str = "secret:back";
-const CURRENT_BADGE: &str = "Current";
-
-fn show_secret_actions_modal(ctx: &mut SlashCommandContext<'_>) {
-    let current_provider = ctx.config.provider.trim().to_ascii_lowercase();
-    let (items, selected) =
-        build_secret_action_items(&current_provider, ctx.vt_cfg.as_ref(), &ctx.config.workspace, storage_mode(ctx));
-    ctx.renderer.show_list_modal(
-        "Secrets",
-        vec![
-            "Manage API keys in secure storage (OS keyring or encrypted file).".to_string(),
-            "Keys are never written to vtcode.toml or workspace environment files.".to_string(),
-        ],
-        items,
-        Some(selected),
-        None,
-    );
-}
-
-fn build_secret_action_items(
-    current_provider: &str,
-    vt_cfg: Option<&VTCodeConfig>,
-    workspace: &std::path::Path,
-    storage_mode: AuthCredentialsStoreMode,
-) -> (Vec<InlineListItem>, InlineListSelection) {
-    let mut items = vec![
-        list_item(
-            "List all secrets",
-            "Show status table for all providers",
-            format!("{SECRET_ACTION_PREFIX}list"),
-            "list all secrets status",
-        ),
-        list_item(
-            "Migrate .env keys",
-            "Move API keys from workspace .env to secure storage",
-            format!("{SECRET_ACTION_PREFIX}migrate"),
-            "migrate dotenv workspace secrets",
-        ),
-        list_item(
-            "Add or replace a secret",
-            "Paste an API key for a provider",
-            format!("{SECRET_ACTION_PREFIX}add:provider"),
-            "add replace secret api key",
-        ),
-        list_item(
-            "Delete a secret",
-            "Remove a stored API key from secure storage",
-            format!("{SECRET_ACTION_PREFIX}delete:provider"),
-            "delete remove secret",
-        ),
-    ];
-
-    let mut current_selection = None;
-    for target in all_secret_targets(vt_cfg) {
-        if !should_show_secret_items(&target, workspace, storage_mode) {
-            continue;
-        }
-        let is_current = target.provider_name.eq_ignore_ascii_case(current_provider);
-        let label = target.label.as_str();
-        let key = target.provider_name.as_str();
-        let badge = is_current.then(|| CURRENT_BADGE.to_string());
-        let prefix = if is_current { "Current • " } else { "" };
-        let add_action = format!("{SECRET_ACTION_PREFIX}add:{key}");
-        let delete_action = format!("{SECRET_ACTION_PREFIX}delete:{key}");
-        items.push(InlineListItem {
-            title: format!("Add {label} key"),
-            subtitle: Some(format!("{prefix}Store {label} API key in secure storage")),
-            badge: badge.clone(),
-            indent: 1,
-            selection: Some(InlineListSelection::ConfigAction(add_action.clone())),
-            search_value: Some(format!("add {} api key", label.to_lowercase())),
-            ..Default::default()
-        });
-        items.push(InlineListItem {
-            title: format!("Delete {label} key"),
-            subtitle: Some(format!("{prefix}Remove stored {label} API key")),
-            badge,
-            indent: 1,
-            selection: Some(InlineListSelection::ConfigAction(delete_action)),
-            search_value: Some(format!("delete {} api key", label.to_lowercase())),
-            ..Default::default()
-        });
-        if is_current {
-            current_selection = Some(InlineListSelection::ConfigAction(add_action));
-        }
-    }
-
-    items.push(
-        ui_list::action(
-            "Back",
-            "Close secret manager".to_string(),
-            None,
-            Tone::Neutral,
-            Some(InlineListSelection::ConfigAction(SECRET_ACTION_BACK.to_string())),
-        )
-        .with_search_value("back close exit".to_string()),
-    );
-
-    let selected =
-        current_selection.unwrap_or_else(|| InlineListSelection::ConfigAction(format!("{SECRET_ACTION_PREFIX}list")));
-
-    (items, selected)
-}
-
-fn render_secret_status_table(
+pub(super) fn render_secret_status_table(
     ctx: &mut SlashCommandContext<'_>,
     filter: Option<&str>,
     key_name: Option<&str>,
-    storage_mode: AuthCredentialsStoreMode,
 ) -> Result<()> {
-    ctx.renderer.line(MessageStyle::Info, "API Key Status")?;
-    ctx.renderer.line(MessageStyle::Output, "")?;
-
     let targets = match filter {
-        Some(name) => {
-            vec![resolve_secret_target(ctx.vt_cfg.as_ref(), name, key_name).map_err(|err| anyhow::anyhow!(err))?]
-        }
+        Some(name) => match resolve_secret_target(ctx.vt_cfg.as_ref(), name, key_name) {
+            Ok(target) => vec![target],
+            Err(error) => return ctx.renderer.line(MessageStyle::Error, &error),
+        },
         None => all_secret_targets(ctx.vt_cfg.as_ref()),
     };
 
-    let mut has_oauth_or_managed = false;
-    for target in &targets {
-        let source = if target.local {
-            Some(CredentialSource::Local)
-        } else if target.managed_auth {
-            Some(CredentialSource::ManagedAuth)
-        } else {
-            vtcode_config::api_keys::resolve_credential_with_mode(
-                &target.provider_name,
-                &target.env_key,
-                Some(&ctx.config.workspace),
-                storage_mode,
-            )?
-            .map(|resolved| resolved.source)
-        };
-        let source_label = match source {
-            Some(CredentialSource::Env) => "Environment variable",
-            Some(CredentialSource::Workspace) => "Workspace .env",
-            Some(CredentialSource::SecureStorage) => "OS keyring / encrypted file",
-            Some(CredentialSource::OAuth) => "OAuth session",
-            Some(CredentialSource::ManagedAuth) => "Managed auth (external CLI)",
-            Some(CredentialSource::Local) => "Local \u{2014} no key required",
-            None => "Not configured",
-        };
-        let status = if source.is_some() { "Ready" } else { "Missing" };
-        if matches!(source, Some(CredentialSource::OAuth | CredentialSource::ManagedAuth)) {
-            has_oauth_or_managed = true;
-        }
-
+    ctx.renderer.line(MessageStyle::Info, "API Key Status")?;
+    let mode = storage_mode(ctx.vt_cfg.as_ref());
+    for target in targets {
+        let (status, source) = target.status(&ctx.config.workspace, mode);
         ctx.renderer
             .line(MessageStyle::Output, &format!("  {} ({})", target.label, target.provider_name))?;
-        ctx.renderer.line(MessageStyle::Output, &format!("    Status: {}", status))?;
-        ctx.renderer
-            .line(MessageStyle::Output, &format!("    Source: {}", source_label))?;
-
+        ctx.renderer.line(MessageStyle::Output, &format!("    Status: {status}"))?;
+        ctx.renderer.line(MessageStyle::Output, &format!("    Source: {source}"))?;
         if !target.env_key.is_empty() {
             ctx.renderer
                 .line(MessageStyle::Output, &format!("    Env var: {}", target.env_key))?;
         }
         if let Some(url) = target.provider.and_then(|provider| provider.platform_url()) {
-            ctx.renderer.line(MessageStyle::Output, &format!("    Platform: {}", url))?;
+            ctx.renderer.line(MessageStyle::Output, &format!("    Platform: {url}"))?;
         }
-
-        ctx.renderer.line(MessageStyle::Output, "")?;
     }
 
-    ctx.renderer
-        .line(MessageStyle::Info, "Use /secret add <provider> [key-name] to store a key.")?;
-    if !has_oauth_or_managed {
-        ctx.renderer
-            .line(MessageStyle::Info, "Use /secret delete <provider> [key-name] to remove a stored key.")?;
-    }
-    ctx.renderer
-        .line(MessageStyle::Info, "Use /secret migrate to move keys from workspace .env to secure storage.")?;
-    if has_oauth_or_managed {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "OAuth / managed-auth providers (copilot, openai, openrouter) use their own login flows.",
-        )?;
-        ctx.renderer.line(MessageStyle::Info, "Run `/login <provider>` for those.")?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "  Tip: If you have Codex CLI installed, VT Code automatically reuses its ChatGPT auth.json.",
-        )?;
-    }
-
-    Ok(())
-}
-
-fn list_item(title: &str, subtitle: &str, action: String, search: &str) -> InlineListItem {
-    ui_list::action(
-        title.to_string(),
-        subtitle.to_string(),
-        None,
-        Tone::Neutral,
-        Some(InlineListSelection::ConfigAction(action)),
-    )
-    .with_search_value(search.to_string())
+    let guidance = if ctx.renderer.supports_inline_ui() {
+        "Use Settings → Secrets (/secret) to manage keys."
+    } else {
+        "Use VT Code Desktop Settings → VT Code or run `vtcode secret` in a terminal to manage keys."
+    };
+    ctx.renderer.line(MessageStyle::Info, guidance)
 }

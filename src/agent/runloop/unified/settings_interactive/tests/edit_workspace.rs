@@ -21,6 +21,8 @@ fn custom_providers_array_add_uses_valid_template() {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            pending_secret: None,
+            secret_config: None,
             status: None,
         };
 
@@ -130,6 +132,8 @@ fn toggle_action_produces_change_feedback_message() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
 

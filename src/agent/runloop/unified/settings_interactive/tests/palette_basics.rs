@@ -38,6 +38,8 @@ fn settings_selection_memory_restores_parent_and_falls_back_when_removed() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let root_selection = InlineListSelection::ConfigAction("settings:open:group:agent_automation".to_string());
@@ -85,6 +87,8 @@ fn reset_confirmation_lists_only_confirm_and_cancel_actions() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");

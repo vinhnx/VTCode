@@ -11,6 +11,8 @@ fn tool_display_mode_is_exposed_as_a_cycle_setting() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
@@ -46,6 +48,8 @@ fn tool_display_mode_cycle_persists_to_disk() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
 
@@ -71,6 +75,8 @@ fn decisions_probe_toggle_persists_reloads_and_survives_provider_changes() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("serialize config");
@@ -114,6 +120,8 @@ fn interface_terminal_group_exposes_copy_on_select_toggle() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
@@ -142,6 +150,8 @@ fn interface_terminal_group_exposes_message_timestamps_toggle() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
@@ -172,6 +182,8 @@ fn copy_on_select_toggle_persists_manual_mode_to_disk() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     assert!(state.draft.ui.fullscreen.copy_on_select);

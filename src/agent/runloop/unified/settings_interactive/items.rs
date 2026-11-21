@@ -250,6 +250,9 @@ pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlVal
             ACTION_BACK,
             vtcode_commons::ui_protocol::InlineTone::Neutral,
         ));
+        if super::secrets::append_items(state, view_path, &mut items) {
+            return Ok(items);
+        }
         items.push(action_item(
             "Reload configuration",
             "Reload effective values from current configuration files",
@@ -288,6 +291,7 @@ pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlVal
         append_node_items(&mut items, view_path, node, draft)?;
     } else {
         append_curated_root_items(&mut items, draft);
+        items.push(super::secrets::root_item());
         items.push(section_item("Actions"));
         items.push(action_item(
             "Reload configuration",

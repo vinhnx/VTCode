@@ -369,3 +369,126 @@ async fn headless_session_palette_reports_guidance_without_parking_modal_state()
         assert!(harness.palette_state().is_none(), "session list must not park modal state");
     }
 }
+
+#[tokio::test]
+async fn settings_secrets_slash_routes_share_palette_and_refuse_conflicts() {
+    use super::outcome_router::route_outcome;
+    use crate::agent::runloop::slash_commands::handle_slash_command;
+    use crate::agent::runloop::unified::settings_interactive::secrets::SECRETS_VIEW;
+    use vtcode_ui::tui::app::{InlineCommand, InlineHandle, TransientRequest};
+
+    let mut harness = HeadlessHarness::new().await;
+    let workspace = tempfile::tempdir().expect("temporary workspace");
+    harness.ctx().config.workspace = workspace.path().to_path_buf();
+
+    for command in ["secret", "config secrets"] {
+        let outcome = handle_slash_command(command, &mut harness.renderer, workspace.path())
+            .await
+            .expect("parse Secrets route");
+        expect_continue(timeout(HEADLESS_TEST_TIMEOUT, route_outcome(outcome, harness.ctx())).await, command).await;
+        assert!(harness.palette_state().is_none(), "headless Secrets should finish without a palette");
+    }
+
+    let (tx, mut commands) = tokio::sync::mpsc::unbounded_channel();
+    harness.renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(tx), Default::default());
+    for command in ["secret", "config secrets"] {
+        *harness.palette_state = Some(ActivePalette::Mode);
+        let outcome = handle_slash_command(command, &mut harness.renderer, workspace.path())
+            .await
+            .unwrap();
+        route_outcome(outcome, harness.ctx()).await.unwrap();
+        assert!(matches!(harness.palette_state(), Some(ActivePalette::Mode)));
+        assert!(
+            !std::iter::from_fn(|| commands.try_recv().ok())
+                .any(|cmd| matches!(cmd, InlineCommand::ShowTransient { .. }))
+        );
+
+        *harness.palette_state = None;
+        let outcome = handle_slash_command(command, &mut harness.renderer, workspace.path())
+            .await
+            .unwrap();
+        route_outcome(outcome, harness.ctx()).await.unwrap();
+        assert!(matches!(harness.palette_state(), Some(ActivePalette::Settings { state, .. })
+            if state.view_path.as_deref() == Some(SECRETS_VIEW)));
+        assert!(std::iter::from_fn(|| commands.try_recv().ok()).any(|cmd| matches!(cmd,
+            InlineCommand::ShowTransient { request } if matches!(request.as_ref(), TransientRequest::List(list)
+                if list.search.as_ref().is_some_and(|search| search.fuzzy)
+                    && list.items.iter().any(|item| item.title == "Migrate .env keys")))));
+    }
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn secret_migration_and_deletion_refresh_the_active_credential() {
+    use super::secrets::{clear_secret_core, migrate_env_core, resolve_secret_target};
+    use vtcode_auth::AuthCredentialsStoreMode;
+    use vtcode_commons::ui_protocol::InlineTone;
+    use vtcode_config::api_keys::load_stored_credential_with_mode;
+
+    const ENV_KEY: &str = "VTCODE_TEST_ACTIVE_PROVIDER_KEY";
+    const MIGRATED_KEY: &str = "disposable-migration-fixture";
+    const FALLBACK_KEY: &str = "disposable-workspace-fallback";
+    let mut harness = HeadlessHarness::new().await;
+    let workspace = tempfile::tempdir().expect("temporary workspace");
+    let env = vtcode_commons::env_lock::lock();
+    let previous_config = std::env::var_os("VTCODE_CONFIG");
+    let previous_key = std::env::var_os(ENV_KEY);
+    env.set_var("VTCODE_CONFIG", workspace.path().join("storage"));
+    env.remove_var(ENV_KEY);
+
+    let ctx = harness.ctx();
+    ctx.config.workspace = workspace.path().to_path_buf();
+    ctx.config.provider = "gemini".to_string();
+    ctx.config.api_key_env = ENV_KEY.to_string();
+    let mut fixture = VTCodeConfig::default();
+    fixture.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
+    fixture.custom_providers.push(vtcode_config::core::CustomProviderConfig {
+        name: "migration-company".to_string(),
+        display_name: "Migration Company".to_string(),
+        base_url: "https://example.invalid/v1".to_string(),
+        api_key_env: ENV_KEY.to_string(),
+        ..Default::default()
+    });
+    let targets = [
+        resolve_secret_target(Some(&fixture), "gemini", Some(ENV_KEY)).unwrap(),
+        resolve_secret_target(Some(&fixture), "migration-company", None).unwrap(),
+    ];
+    let dotenv = workspace.path().join(".env");
+    std::fs::write(&dotenv, format!("{ENV_KEY}={MIGRATED_KEY}\nPRESERVE_ME=hello\n")).unwrap();
+    let status = migrate_env_core(&targets, ctx.config, Some(&fixture), ctx.provider_client);
+    assert_eq!(status.tone, InlineTone::Success);
+    assert!(status.message.contains("Migration Company") && !status.message.contains(MIGRATED_KEY));
+    assert_eq!(std::fs::read_to_string(&dotenv).unwrap(), "PRESERVE_ME=hello\n");
+    for provider in ["gemini", "migration-company"] {
+        let stored = load_stored_credential_with_mode(provider, ENV_KEY, AuthCredentialsStoreMode::File).unwrap();
+        assert!(stored.as_deref() == Some(MIGRATED_KEY), "migration failed storage read-back for {provider}");
+    }
+    assert!(ctx.config.api_key == MIGRATED_KEY, "migration retained the old runtime key");
+    assert_eq!(ctx.provider_client.name(), "gemini");
+
+    std::fs::write(&dotenv, format!("{ENV_KEY}={FALLBACK_KEY}\n")).unwrap();
+    let status = clear_secret_core(&targets[0], "confirm", ctx.config, Some(&fixture), ctx.provider_client).unwrap();
+    assert_eq!(status.tone, InlineTone::Success);
+    assert!(status.message.contains("Workspace .env") && !status.message.contains(FALLBACK_KEY));
+    assert!(ctx.config.api_key == FALLBACK_KEY, "deletion did not install the workspace fallback");
+    assert!(
+        load_stored_credential_with_mode("gemini", ENV_KEY, AuthCredentialsStoreMode::File)
+            .unwrap()
+            .is_none()
+    );
+
+    // If read-back or construction fails the store can succeed, but the
+    // runtime must retain both the previous client and its matching key.
+    ctx.config.provider = "migration-company".to_string();
+    let previous_client = std::ptr::from_ref(ctx.provider_client.as_ref());
+    let status =
+        super::secrets::store_secret_core(&targets[1], MIGRATED_KEY, ctx.config, Some(&fixture), ctx.provider_client)
+            .unwrap();
+    assert_eq!(status.tone, InlineTone::Warning);
+    assert!(status.message.contains("Restart"));
+    assert!(ctx.config.api_key == FALLBACK_KEY);
+    assert!(std::ptr::eq(previous_client, ctx.provider_client.as_ref()));
+
+    env.restore_var(ENV_KEY, previous_key);
+    env.restore_var("VTCODE_CONFIG", previous_config);
+}

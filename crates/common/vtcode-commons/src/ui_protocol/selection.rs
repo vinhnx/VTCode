@@ -215,5 +215,7 @@ pub struct WizardStep {
     pub allow_freeform: bool,
     pub freeform_label: Option<String>,
     pub freeform_placeholder: Option<String>,
+    /// Conceal freeform input wherever the wizard displays it.
+    pub mask_input: bool,
     pub freeform_default: Option<String>,
 }

@@ -50,6 +50,8 @@ fn root_settings_contains_only_curated_groups_and_global_actions() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -68,6 +70,7 @@ fn root_settings_contains_only_curated_groups_and_global_actions() {
             "Computer Use",
             "Performance & Diagnostics",
             "Advanced settings",
+            "Secrets",
             "Actions",
             "Reload configuration",
             "Reset configuration",
@@ -80,7 +83,10 @@ fn root_settings_contains_only_curated_groups_and_global_actions() {
                 .subtitle
                 .as_deref()
                 .is_some_and(|subtitle| subtitle.contains("editable setting"))
-            || matches!(item.title.as_str(), "Advanced settings" | "Reload configuration" | "Reset configuration")
+            || matches!(
+                item.title.as_str(),
+                "Advanced settings" | "Secrets" | "Reload configuration" | "Reset configuration"
+            )
     }));
 }
 #[test]
@@ -94,6 +100,8 @@ fn root_settings_remove_quick_access_duplicates_and_nested_fields() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft: TomlValue = toml::from_str(
@@ -138,6 +146,8 @@ fn root_settings_do_not_show_missing_nested_optional_fields() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -156,6 +166,8 @@ fn nested_settings_titles_are_humanized() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft: TomlValue = toml::from_str(

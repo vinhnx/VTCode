@@ -11,6 +11,8 @@ fn curated_groups_resolve_to_their_declared_field_paths() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -42,6 +44,8 @@ fn computer_use_group_renders_unset_target_as_editable() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     // Default config leaves browser_build unset, exactly the state that
@@ -87,6 +91,8 @@ fn advanced_view_indexes_every_documented_field_for_search() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -135,6 +141,8 @@ fn advanced_view_keeps_uninstantiated_wildcard_fields_read_only() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -162,6 +170,8 @@ fn advanced_direct_path_opens_the_specific_nested_field() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -189,6 +199,8 @@ fn curated_container_navigation_returns_to_its_group() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
@@ -223,6 +235,8 @@ fn advanced_container_navigation_returns_to_advanced_search() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
@@ -258,6 +272,8 @@ fn advanced_view_handles_dotted_dynamic_map_keys() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft: TomlValue = toml::from_str(
@@ -291,6 +307,8 @@ fn curated_group_navigation_preserves_breadcrumb_parent() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");

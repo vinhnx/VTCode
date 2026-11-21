@@ -116,6 +116,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
                 allow_freeform: false,
                 freeform_label: None,
                 freeform_placeholder: None,
+                mask_input: false,
                 freeform_default: None,
             }],
             current_step: 0,
@@ -191,6 +192,7 @@ fn wizard_notes_paste_appends_to_custom_note_editor() {
                 allow_freeform: true,
                 freeform_label: Some("Other".to_string()),
                 freeform_placeholder: Some("Type here...".to_string()),
+                mask_input: false,
                 freeform_default: None,
             }],
             current_step: 0,
@@ -213,4 +215,62 @@ fn wizard_notes_paste_appends_to_custom_note_editor() {
     let wizard = session.wizard_overlay().expect("wizard should stay open after second paste");
     let step = wizard.steps.get(wizard.current_step).expect("current step should exist");
     assert_eq!(step.notes.as_str(), "helloabc");
+}
+
+#[test]
+fn wizard_masked_typing_and_paste_stay_out_of_both_render_paths() {
+    for inline in [true, false] {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut step = request_user_input_custom_step("credential", "Key", "");
+        step.mask_input = true;
+        if !inline {
+            step.multi_select = true;
+            step.items.push(InlineListItem::new(
+                "Continue",
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "credential".to_string(),
+                    selected: vec!["continue".to_string()],
+                    other: None,
+                }),
+            ));
+        }
+        session.handle_command(InlineCommand::ShowOverlay {
+            request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
+                title: "Secure entry".to_string(),
+                steps: vec![step],
+                current_step: 0,
+                search: None,
+                mode: WizardModalMode::TabbedList,
+            })),
+        });
+
+        let fixture = "z9-β";
+        session.handle_event(CrosstermEvent::Key(KeyEvent::from(KeyCode::Char('z'))), &tx, None);
+        session.handle_event(CrosstermEvent::Paste("9-β".to_string()), &tx, None);
+        if !inline {
+            session.handle_event(CrosstermEvent::Key(KeyEvent::from(KeyCode::Down)), &tx, None);
+        }
+
+        let shown = rendered_session_lines(&mut session, VIEW_ROWS).join("\n");
+        assert!(!shown.contains(fixture), "credential appeared in frame");
+        assert!(shown.contains("Key ••••"), "missing mask with inline={inline}: {shown}");
+        let wizard = session.wizard_overlay().expect("active wizard");
+        let step = &wizard.steps[wizard.current_step];
+        assert_eq!(modal::inline_editor_for_step(step).is_some(), inline);
+        assert!(
+            wizard
+                .notes_line()
+                .is_some_and(|line| !line.contains(fixture) && line.contains("••••"))
+        );
+        assert!(wizard.steps[wizard.current_step].notes == fixture);
+
+        session.handle_event(CrosstermEvent::Key(KeyEvent::from(KeyCode::Esc)), &tx, None);
+        assert!(session.wizard_overlay().is_none(), "Esc must close masked wizard in one press");
+        assert!(
+            (0..4)
+                .filter_map(|_| rx.try_recv().ok())
+                .any(|event| matches!(event, InlineEvent::Overlay(OverlayEvent::Cancelled)))
+        );
+    }
 }

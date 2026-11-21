@@ -63,6 +63,7 @@ pub(crate) async fn execute_request_user_input_tool(
                 allow_freeform,
                 freeform_label: freeform_label.clone(),
                 freeform_placeholder: freeform_placeholder.clone(),
+                mask_input: false,
                 freeform_default: None,
             }
         })

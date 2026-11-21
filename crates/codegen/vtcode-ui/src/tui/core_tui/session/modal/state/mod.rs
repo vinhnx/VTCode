@@ -58,6 +58,7 @@ pub struct WizardStepState {
     allow_freeform: bool,
     pub(crate) freeform_label: Option<String>,
     pub(crate) freeform_placeholder: Option<String>,
+    pub(super) mask_input: bool,
     freeform_default: Option<String>,
 }
 

@@ -11,6 +11,8 @@ fn codex_app_server_custom_command_entry_is_cycleable() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft: TomlValue = toml::from_str(
@@ -42,6 +44,8 @@ fn model_config_root_shows_main_section() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -61,6 +65,8 @@ fn model_config_main_uses_picker_backed_default_model() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -84,6 +90,8 @@ fn tools_view_routes_external_editor_to_configure_action() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -106,6 +114,8 @@ fn agent_view_uses_picker_backed_default_model() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");

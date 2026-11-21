@@ -232,6 +232,11 @@ async fn show_settings_at_path_from_context_with_reset(
     }
 
     if !ctx.renderer.supports_inline_ui() {
+        if view_path.map(str::trim) == Some(crate::agent::runloop::unified::settings_interactive::secrets::SECRETS_VIEW)
+        {
+            super::super::secrets::render_secret_status_table(ctx, None, None)?;
+            return Ok(SlashCommandControl::Continue);
+        }
         // Reset is destructive and has no text-driven confirm path; the
         // desktop config page documents the same terminal command instead of
         // offering the call.

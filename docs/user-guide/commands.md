@@ -376,14 +376,19 @@ into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `mem
 - `/feedback` opens the VT Code GitHub issue form in your browser to report a bug or request a feature.
 - `/donate` opens a picker with the project's support links (Buy Me a Coffee and GitHub Sponsors) and opens the
   chosen one in your browser.
+- `/secret` and `/config secrets` open **Settings → Secrets** in the terminal UI. The page shows credential sources
+  and lets you add, delete, or migrate keys for built-in and custom providers. Deletion requires typing `confirm`.
+  `/secret list` prints all providers, and `/secret status [provider] [key-name]` filters the status table.
+  `/secret add <provider> [key-name]`, `/secret delete <provider> [key-name]`, and `/secret migrate [provider]`
+  invoke the corresponding actions directly.
 - Sessions without the inline TUI surface (for example turns driven through the VT Code Desktop service) degrade
   interactive slash commands to plain text so a turn never wedges on a missing picker or modal: `/permissions` reports
   the effective mode, `/mode` prints the primary-agent list (`/mode <name>` still switches), `/docs` and `/feedback`
   open the browser directly and print the URL, `/donate` prints both support links, `/login <provider>` for
   browser-OAuth providers (Copilot stays available — it is CLI-driven) points at `vtcode login <provider>` in a
   terminal, `/update` install points at `vtcode update install`, `/config reset` points at `vtcode config reset`,
-  `/clear` reports that the transcript is kept, `/stats` reports the disk event count, and `/secret add|delete`
-  point at the desktop Settings form or `vtcode secret` in a terminal instead of the secure prompt.
+  `/clear` reports that the transcript is kept, and `/stats` reports the disk event count. Bare `/secret` prints the
+  provider status table. `/secret add|delete` point to Desktop Settings or `vtcode secret` in a terminal.
 
 ## WebMCP browser bridge
 

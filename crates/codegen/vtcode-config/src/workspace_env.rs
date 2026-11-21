@@ -83,13 +83,22 @@ pub fn read_workspace_env_values(
 pub fn remove_workspace_env_value(workspace: &Path, key: &str) -> Result<()> {
     let env_path = workspace.join(".env");
     let mut lines = read_existing_lines(&env_path)?;
-    if !lines
-        .iter()
-        .any(|line| line.split_once('=').map(|(k, _)| k.trim()) == Some(key))
-    {
+    let length = lines.len();
+    lines.retain(|line| {
+        let Some((name, _)) = line.split_once('=') else {
+            return true;
+        };
+        let name = name.trim();
+        let name = name
+            .strip_prefix("export")
+            .filter(|suffix| suffix.starts_with(char::is_whitespace))
+            .map(str::trim_start)
+            .unwrap_or(name);
+        name != key
+    });
+    if lines.len() == length {
         return Ok(());
     }
-    lines.retain(|line| line.split_once('=').map(|(k, _)| k.trim()) != Some(key));
 
     let parent = env_path.parent().unwrap_or(workspace);
     fs::create_dir_all(parent).with_context(|| format!("Failed to create directory {}", parent.display()))?;
@@ -459,7 +468,7 @@ mod tests {
     #[test]
     fn remove_deletes_existing_key() -> Result<()> {
         let dir = tempdir()?;
-        fs::write(dir.path().join(".env"), "OPENAI_API_KEY=sk-test\nOTHER_KEY=value\n")?;
+        fs::write(dir.path().join(".env"), "export OPENAI_API_KEY=sk-test\nOTHER_KEY=value\n")?;
 
         remove_workspace_env_value(dir.path(), "OPENAI_API_KEY")?;
 

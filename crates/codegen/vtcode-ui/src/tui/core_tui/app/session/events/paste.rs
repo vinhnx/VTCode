@@ -4,7 +4,7 @@ use super::*;
 
 pub(crate) fn handle_paste(session: &mut Session, content: &str) -> Option<InlineEvent> {
     // Secure prompt modal: auto-submit pasted content directly without requiring Enter.
-    // This saves the API key to .env immediately and dismisses the modal.
+    // The request owner validates the submitted value.
     if let Some(modal) = session.modal_state_mut()
         && modal.secure_prompt.is_some()
         && modal.list.is_none()
@@ -44,21 +44,10 @@ pub(crate) fn handle_paste(session: &mut Session, content: &str) -> Option<Inlin
             step.list.apply_search(&search.query, search.fuzzy);
         }
         session.mark_dirty();
-    } else if let Some(wizard) = session.wizard_overlay_mut()
-        && let Some(step) = wizard.steps.get_mut(wizard.current_step)
-        && (step.notes_active || modal::inline_editor_for_step(step).is_some())
-    {
-        // Mirror typed input: pasted text lands in the custom-note editor when
-        // it is active (or when the custom-note item is selected).
-        step.notes_active = true;
-        let mut state = InputState::new();
-        state.set_value(step.notes.clone());
-        state.end();
-        for ch in content.chars().filter(|ch| !matches!(ch, '\n' | '\r')) {
-            state.insert_char(ch);
+    } else if let Some(wizard) = session.wizard_overlay_mut() {
+        if wizard.paste_notes(content) {
+            session.mark_dirty();
         }
-        step.notes = state.value().to_owned();
-        session.mark_dirty();
     } else if session.core.input_enabled()
         && !session.visible_transient_surface().is_some_and(|surface| {
             matches!(surface.focus_policy(), TransientFocusPolicy::Modal | TransientFocusPolicy::CapturedInput)

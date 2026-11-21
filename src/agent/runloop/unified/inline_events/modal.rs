@@ -1,5 +1,3 @@
-use crate::agent::runloop::ui_list;
-use crate::agent::runloop::ui_list::Tone;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -10,10 +8,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_ui::tui::app::{
-    InlineHandle, InlineHeaderContext, InlineListSelection, SubmittedInput, TransientRequest, WizardModalMode,
-    WizardOverlayRequest, WizardStep,
-};
+use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineListSelection, SubmittedInput, TransientRequest};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
@@ -23,9 +18,10 @@ use crate::agent::runloop::unified::palettes::{
     show_fork_mode_palette, show_sessions_palette, show_theme_palette,
 };
 use crate::agent::runloop::unified::planning_workflow::{PlanExecutionContext, PlanExecutionTarget};
+use crate::agent::runloop::unified::settings_interactive::secrets::{self, SecretPaletteAction};
 use crate::agent::runloop::unified::settings_interactive::{
     ACTION_CONFIGURE_EDITOR, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_EDIT, apply_string_edit, begin_string_edit,
-    show_settings_palette,
+    show_settings_palette, string_editor_overlay,
 };
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::agent::runloop::unified::url_guard::{
@@ -147,7 +143,7 @@ impl<'a> InlineModalProcessor<'a> {
         match self.model_picker.handle_submit(renderer, selection).await? {
             ModelPickerOutcome::SkipPalette => Ok(InlineLoopAction::Continue),
             ModelPickerOutcome::ForwardToPalette(selection) => {
-                if let Some(action) = self.handle_settings_submit(&selection)? {
+                if let Some(action) = self.handle_settings_submit(renderer, &selection)? {
                     return Ok(action);
                 }
                 if self.handle_palette_redirect(renderer, &selection).await? {
@@ -178,11 +174,15 @@ impl<'a> InlineModalProcessor<'a> {
             return Ok(InlineLoopAction::Continue);
         }
 
-        if let Some(ActivePalette::Settings { state, .. }) = self.palette.state.as_mut()
-            && state.pending_edit_path.take().is_some()
-        {
-            show_settings_palette(renderer, state.as_ref(), state.selection_for_view(state.view_path.as_deref()))?;
-            return Ok(InlineLoopAction::Continue);
+        if let Some(ActivePalette::Settings { state, .. }) = self.palette.state.as_mut() {
+            let cancelled_secret = state.pending_secret.take().is_some();
+            if cancelled_secret {
+                state.status = Some(vtcode_commons::ui_protocol::InlineStatus::info("Secret operation cancelled."));
+            }
+            if cancelled_secret || state.pending_edit_path.take().is_some() {
+                show_settings_palette(renderer, state.as_ref(), state.selection_for_view(state.view_path.as_deref()))?;
+                return Ok(InlineLoopAction::Continue);
+            }
         }
 
         self.palette.handle_cancel(renderer)?;
@@ -197,6 +197,18 @@ impl<'a> InlineModalProcessor<'a> {
         let Some(ActivePalette::Settings { state, .. }) = self.palette.state.as_mut() else {
             return Ok(InlineLoopAction::Continue);
         };
+        if let Some(pending) = state.pending_secret.take() {
+            secrets::finish(
+                state,
+                pending,
+                selections,
+                self.model_picker.config,
+                self.model_picker.vt_cfg.as_ref(),
+                self.model_picker.provider_client,
+            );
+            show_settings_palette(renderer, state.as_ref(), None)?;
+            return Ok(InlineLoopAction::Continue);
+        }
         let Some(path) = state.pending_edit_path.take() else {
             return Ok(InlineLoopAction::Continue);
         };
@@ -245,7 +257,8 @@ impl<'a> InlineModalProcessor<'a> {
             }
         }
 
-        if let Some(ActivePalette::Settings { state, .. }) = self.palette.state.as_ref() {
+        if let Some(ActivePalette::Settings { state, .. }) = self.palette.state.as_mut() {
+            state.secret_config = self.model_picker.vt_cfg.as_ref().map(secrets::SecretPaletteConfig::from);
             let selected = InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_EDIT}{path}"));
             show_settings_palette(renderer, state.as_ref(), Some(selected))?;
         }
@@ -354,7 +367,10 @@ impl<'a> InlineModalProcessor<'a> {
                 }
             }
             ActivePalette::Settings { state, .. } => {
-                if show_settings_palette(renderer, state.as_ref(), None)? {
+                if let Some(pending) = state.pending_secret.as_ref() {
+                    self.palette.handle.show_transient(TransientRequest::Wizard(pending.wizard()));
+                    *self.palette.state = Some(ActivePalette::Settings { state, esc_armed: false });
+                } else if show_settings_palette(renderer, state.as_ref(), None)? {
                     *self.palette.state = Some(ActivePalette::Settings { state, esc_armed: false });
                 }
             }
@@ -394,13 +410,46 @@ impl<'a> InlineModalProcessor<'a> {
         }
     }
 
-    fn handle_settings_submit(&mut self, selection: &InlineListSelection) -> Result<Option<InlineLoopAction>> {
+    fn handle_settings_submit(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        selection: &InlineListSelection,
+    ) -> Result<Option<InlineLoopAction>> {
+        if matches!(self.palette.state.as_ref(), Some(ActivePalette::Settings { state, .. }) if state.pending_secret.is_some())
+        {
+            return Ok(Some(InlineLoopAction::Continue));
+        }
+        if let (Some(ActivePalette::Settings { state, esc_armed }), InlineListSelection::ConfigAction(action)) =
+            (self.palette.state.as_mut(), selection)
+            && let Some(next) = secrets::handle_action(
+                state,
+                action,
+                self.model_picker.config,
+                self.model_picker.vt_cfg.as_ref(),
+                self.model_picker.provider_client,
+            )
+        {
+            *esc_armed = false;
+            let view = state.view_path.clone();
+            state.remember_selection(view.as_deref(), selection.clone());
+            match next {
+                SecretPaletteAction::Prompt(wizard) => {
+                    self.model_picker.handle.show_transient(TransientRequest::Wizard(wizard))
+                }
+                SecretPaletteAction::Refresh => {
+                    show_settings_palette(renderer, state.as_ref(), Some(selection.clone()))?;
+                }
+            }
+            return Ok(Some(InlineLoopAction::Continue));
+        }
         if let (Some(ActivePalette::Settings { state, .. }), InlineListSelection::ConfigAction(action)) =
             (self.palette.state.as_mut(), selection)
             && let Some(path) = action.strip_prefix(ACTION_PREFIX_EDIT)
         {
             let current = begin_string_edit(state, path)?;
-            self.show_settings_string_editor(path, current);
+            self.model_picker
+                .handle
+                .show_transient(TransientRequest::Wizard(string_editor_overlay(path, current)));
             return Ok(Some(InlineLoopAction::Continue));
         }
 
@@ -413,42 +462,6 @@ impl<'a> InlineModalProcessor<'a> {
             }
             _ => Ok(None),
         }
-    }
-
-    fn show_settings_string_editor(&self, path: &str, current: String) {
-        self.model_picker
-            .handle
-            .show_transient(TransientRequest::Wizard(WizardOverlayRequest {
-                title: "Edit setting".to_string(),
-                steps: vec![WizardStep {
-                    multi_select: false,
-                    title: "Value".to_string(),
-                    question: format!("Enter a new value for `{path}`."),
-                    items: vec![
-                        ui_list::action(
-                            "Edit value",
-                            "Type the value below, then press Enter to save it.".to_string(),
-                            None,
-                            Tone::Neutral,
-                            Some(InlineListSelection::RequestUserInputAnswer {
-                                question_id: "settings_value".to_string(),
-                                selected: Vec::new(),
-                                other: Some(String::new()),
-                            }),
-                        )
-                        .with_search_value("edit value custom response".to_string()),
-                    ],
-                    completed: false,
-                    answer: None,
-                    allow_freeform: true,
-                    freeform_label: Some("Value".to_string()),
-                    freeform_placeholder: Some("Type a value".to_string()),
-                    freeform_default: Some(current),
-                }],
-                current_step: 0,
-                search: None,
-                mode: WizardModalMode::TabbedList,
-            }));
     }
 }
 

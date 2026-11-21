@@ -153,15 +153,11 @@ vtcode dependencies install search-tools
 
 ### 1. Set Your API Key (Recommended)
 
-Use VT Code's built-in secret management — keys are stored in your OS keyring, never in a workspace `.env`:
+In the terminal UI, type `/secret` or `/config secrets` to open **Settings → Secrets**. Choose **Add or replace a
+key…**, select your provider, and paste the key into the masked field. VT Code stores it in your OS keyring or
+encrypted file. **Migrate .env keys** moves existing workspace keys into secure storage.
 
-```bash
-# From the TUI
-/secret add gemini
-
-# Or from the command line
-vtcode secret add openai
-```
+From a shell, you can also use `vtcode secret add openai`.
 
 **ChatGPT subscription users:** No API key needed — run `vtcode login openai` for in-process PKCE OAuth (full
 auto-refresh, no Codex CLI required) or `vtcode login openai --from-codex` to reuse Codex CLI's existing login. In the

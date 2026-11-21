@@ -91,7 +91,7 @@ fn handle_init_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 
 fn handle_config_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     const USAGE: &str =
-        "Usage: /config [memory|permissions|model|tasks|jobs|log|subprocess|notify|checkup|<path>|reset]";
+        "Usage: /config [memory|permissions|model|secrets|tasks|jobs|log|subprocess|notify|checkup|<path>|reset]";
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return Ok(SlashCommandOutcome::ShowSettings);
@@ -129,6 +129,13 @@ fn handle_config_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slas
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::ShowSettingsAtPath { path: command.to_string() })
+        }
+        "secrets" => {
+            if !rest.is_empty() {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ShowSettingsAtPath { path: normalized })
         }
         "tasks" => handle_tasks_command(rest, renderer),
         "jobs" => handle_jobs_command(rest, renderer),

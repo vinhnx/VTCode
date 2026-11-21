@@ -649,6 +649,7 @@ async fn confirm_memory_plan(
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     };
 
@@ -727,6 +728,7 @@ async fn confirm_memory_cleanup(
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        mask_input: false,
         freeform_default: None,
     };
 
@@ -797,6 +799,7 @@ async fn prompt_missing_memory_value(
         allow_freeform: true,
         freeform_label: Some(field.to_string()),
         freeform_placeholder: Some(String::new()),
+        mask_input: false,
         freeform_default: None,
     };
     let outcome = show_wizard_modal_and_wait(

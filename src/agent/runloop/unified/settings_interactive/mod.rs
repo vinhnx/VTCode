@@ -3,11 +3,13 @@ mod items;
 mod mutations;
 mod path;
 mod render;
+pub(crate) mod secrets;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::config_section_headings::{heading_for_path, humanize_identifier};
+use crate::agent::runloop::ui_list::{self, Tone};
 use anyhow::{Context, Result, anyhow, bail};
 use path::get_node;
 use render::summarize_value;
@@ -15,7 +17,9 @@ use toml::Value as TomlValue;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::{ConfigResetRequest, ConfigService, ConfigWriteTarget};
 use vtcode_tui_runtime::utils::ansi::AnsiRenderer;
-use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::app::{
+    InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardOverlayRequest, WizardStep,
+};
 
 use docs::FIELD_DOCS;
 use items::build_settings_items;
@@ -73,6 +77,8 @@ pub(crate) struct SettingsPaletteState {
     pub(crate) selection_by_view: BTreeMap<String, InlineListSelection>,
     /// Path currently being edited in the settings value wizard.
     pub(crate) pending_edit_path: Option<String>,
+    pub(crate) pending_secret: Option<secrets::PendingSecretOperation>,
+    pub(crate) secret_config: Option<secrets::SecretPaletteConfig>,
     /// Last apply/save feedback shown as the modal status strip.
     pub(crate) status: Option<vtcode_commons::ui_protocol::InlineStatus>,
 }
@@ -251,6 +257,8 @@ pub(crate) fn create_settings_palette_state(
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: vt_snapshot.map(secrets::SecretPaletteConfig::from),
         status: None,
     })
 }
@@ -263,6 +271,41 @@ pub(crate) fn begin_string_edit(state: &mut SettingsPaletteState, path: &str) ->
         .to_string();
     state.pending_edit_path = Some(path.to_string());
     Ok(current)
+}
+
+pub(crate) fn string_editor_overlay(path: &str, current: String) -> WizardOverlayRequest {
+    WizardOverlayRequest {
+        title: "Edit setting".to_string(),
+        steps: vec![WizardStep {
+            multi_select: false,
+            title: "Value".to_string(),
+            question: format!("Enter a new value for `{path}`."),
+            items: vec![
+                ui_list::action(
+                    "Edit value",
+                    "Type the value below, then press Enter to save it.".to_string(),
+                    None,
+                    Tone::Neutral,
+                    Some(InlineListSelection::RequestUserInputAnswer {
+                        question_id: "settings_value".to_string(),
+                        selected: Vec::new(),
+                        other: Some(String::new()),
+                    }),
+                )
+                .with_search_value("edit value custom response".to_string()),
+            ],
+            completed: false,
+            answer: None,
+            allow_freeform: true,
+            freeform_label: Some("Value".to_string()),
+            freeform_placeholder: Some("Type a value".to_string()),
+            mask_input: false,
+            freeform_default: Some(current),
+        }],
+        current_step: 0,
+        search: None,
+        mode: WizardModalMode::TabbedList,
+    }
 }
 
 pub(crate) fn apply_string_edit(
@@ -402,6 +445,9 @@ fn short_display_path(path: &Path, workspace: &Path) -> String {
 }
 
 fn settings_header_lines(state: &SettingsPaletteState) -> Vec<String> {
+    if let Some(title) = state.view_path.as_deref().and_then(secrets::view_title) {
+        return vec![format!("Settings › {title}.")];
+    }
     let write_target = format!("Writing to {}", short_display_path(&state.source_path, &state.workspace));
 
     if state.view_path.as_deref() == Some(RESET_CONFIRMATION_VIEW) {

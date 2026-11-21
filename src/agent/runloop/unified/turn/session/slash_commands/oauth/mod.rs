@@ -512,6 +512,7 @@ async fn prompt_openai_manual_callback_input(
         allow_freeform: true,
         freeform_label: Some("Redirect URL or query".to_string()),
         freeform_placeholder: Some(openai_manual_placeholder(callback_port)),
+        mask_input: false,
         freeform_default: None,
     };
 

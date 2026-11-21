@@ -371,7 +371,7 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     ),
     built_in_command_spec!(
         "secret",
-        "Manage provider API keys in your OS keyring (usage: /secret [list|status [provider] [key-name]|add <provider> [key-name]|delete <provider> [key-name]|migrate [provider]|help])",
+        "Open Settings → Secrets or manage API keys in secure storage (usage: /secret [list|status [provider] [key-name]|add <provider> [key-name]|delete <provider> [key-name]|migrate [provider]|help])",
         "/secret [list|status [provider] [key-name]|add <provider> [key-name]|delete <provider> [key-name]|migrate [provider]|help]",
         "auth"
     ),

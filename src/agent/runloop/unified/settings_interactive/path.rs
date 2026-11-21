@@ -10,6 +10,9 @@ pub(super) enum PathToken {
 }
 
 pub(crate) fn parent_view_path(path: &str) -> Option<String> {
+    if let Some(parent) = super::secrets::parent_view(path) {
+        return Some(parent.to_string());
+    }
     if path.is_empty() {
         return None;
     }

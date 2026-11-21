@@ -24,6 +24,8 @@ fn cycle_service_tier_from(
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     state.draft.provider.openai.service_tier = preset;
@@ -46,6 +48,8 @@ fn header_test_state(view_path: Option<&str>) -> SettingsPaletteState {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     }
 }

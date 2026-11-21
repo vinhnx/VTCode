@@ -94,7 +94,7 @@ pub(crate) fn inline_editor_for_step(step: &WizardStepState) -> Option<ModalInli
             Some(ModalInlineEditor {
                 item_index,
                 label: step.freeform_label.clone().unwrap_or_else(|| "Custom note".to_string()),
-                text: step.notes.clone(),
+                text: step.display_notes().into_owned(),
                 placeholder: step.freeform_placeholder.clone(),
                 active: step.notes_active,
             })
@@ -215,9 +215,12 @@ pub(crate) fn render_wizard_modal_body(
         && idx < chunks.len()
     {
         let label_text = step.freeform_label.as_deref().unwrap_or("Custom note");
-        let input_widget = Input::new(label_text)
+        let input_widget = Input::new("")
+            .prompt(label_text)
+            .password_mode(step.mask_input)
+            .password_char('•')
             .placeholder(step.freeform_placeholder.as_deref().unwrap_or("Type here..."))
-            .palette(&ratatui_cheese::theme::Palette::dark());
+            .styles(input_styles.clone());
         let mut input_state = InputState::new();
         input_state.set_value(step.notes.clone());
         if step.notes_active {

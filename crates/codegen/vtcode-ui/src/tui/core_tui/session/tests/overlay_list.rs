@@ -791,6 +791,7 @@ fn wizard_click_below_inline_editor_selects_correct_item() {
                 allow_freeform: true,
                 freeform_label: Some("Other".to_string()),
                 freeform_placeholder: Some("Type here...".to_string()),
+                mask_input: false,
                 freeform_default: None,
             }],
             current_step: 0,

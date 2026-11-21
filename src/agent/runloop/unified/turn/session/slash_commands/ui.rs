@@ -25,7 +25,10 @@ mod terminal_title;
 pub(crate) use statusline::handle_start_statusline_setup;
 pub(crate) use terminal_title::handle_start_terminal_title_setup;
 
-pub(super) fn ensure_selection_ui_available(ctx: &mut SlashCommandContext<'_>, activity: &str) -> Result<bool> {
+pub(in super::super) fn ensure_selection_ui_available(
+    ctx: &mut SlashCommandContext<'_>,
+    activity: &str,
+) -> Result<bool> {
     if ctx.model_picker_state.is_some() {
         ctx.renderer
             .line(MessageStyle::Error, &format!("Close the active model picker before {activity}."))?;

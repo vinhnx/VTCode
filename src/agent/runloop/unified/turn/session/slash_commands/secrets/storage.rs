@@ -1,15 +1,13 @@
-//! Strict storage boundary for the interactive secret manager.
+//! Strict storage boundary for the session Secrets actions.
 //!
 //! UI code should depend on [`SecretStorage`] rather than constructing auth
 //! backends directly. This keeps provider validation, normalization, and the
 //! configured backend selection in one independently testable interface.
 
 use anyhow::{Context, Result, bail};
-use std::path::Path;
 use vtcode_auth::AuthCredentialsStoreMode;
 use vtcode_config::api_keys::{
-    clear_credential_with_mode, load_stored_credential_with_mode, resolve_credential_with_mode,
-    store_credential_with_mode,
+    clear_credential_with_mode, load_stored_credential_with_mode, store_credential_with_mode,
 };
 
 pub(super) struct SecretStorage {
@@ -19,12 +17,6 @@ pub(super) struct SecretStorage {
 impl SecretStorage {
     pub(super) fn new(mode: AuthCredentialsStoreMode) -> Self {
         Self { mode }
-    }
-
-    pub(super) fn load_resolved(&self, provider: &str, key_name: &str, workspace: &Path) -> Result<Option<String>> {
-        resolve_credential_with_mode(provider, key_name, Some(workspace), self.mode)
-            .with_context(|| format!("failed to resolve {provider} credential"))
-            .map(|resolved| resolved.and_then(|credential| credential.secret))
     }
 
     pub(super) fn load_stored(&self, provider: &str, key_name: &str) -> Result<Option<String>> {

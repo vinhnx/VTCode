@@ -11,6 +11,8 @@ fn agent_view_hides_deprecated_auto_permissions_field() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
@@ -29,6 +31,8 @@ fn provider_openai_view_includes_missing_service_tier_doc_field() {
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
         status: None,
     };
     let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
