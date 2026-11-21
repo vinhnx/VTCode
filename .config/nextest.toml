@@ -175,7 +175,8 @@ failure-output = "immediate-final"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
 [profile.ci-partition.junit]
-path = "target/nextest/ci-partition-junit.xml"
+# Resolved against the profile's store directory (target/nextest/ci-partition/).
+path = "ci-partition-junit.xml"
 store-success-output = false
 store-failure-output = true
 

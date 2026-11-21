@@ -27,8 +27,55 @@ pub use ast::{BashNode, BashTree, prewarm_bash_parser};
 
 /// Parse a shell script into command/argument lists.
 ///
+<<<<<<< HEAD
 /// If tree-sitter parsing fails, falls back to simple tokenization.
+||||||| 059d4e06c
+/// # Example
+/// ```text
+/// Input:  "git status && cargo check"
+/// Output: Ok([["git", "status"], ["cargo", "check"]])
+/// ```
+///
+/// # Fallback
+/// If tree-sitter parsing fails, falls back to simple tokenization
+=======
+/// # Example
+/// ```text
+/// Input:  "git status && cargo check"
+/// Output: Ok([["git", "status"], ["cargo", "check"]])
+/// ```
+///
+/// # Fallback
+/// Upstream tree-sitter-bash #337: the bash external scanner SIGSEGVs when a
+/// `{` is followed anywhere later in the input by a 4-byte UTF-8 lead byte
+/// (0xF0..=0xF7) — e.g. `{` + U+2FA8E — crashing the whole process instead of
+/// returning an error. The minimal reproducer is two characters. A safety
+/// classifier may never crash the agent that calls it, so inputs with that
+/// shape skip the scanner and parse with the basic tokenizer directly.
+fn scanner_crash_shape(script: &str) -> bool {
+    let mut saw_open_brace = false;
+    for byte in script.as_bytes() {
+        match byte {
+            b'{' => saw_open_brace = true,
+            0xF0..=0xF7 if saw_open_brace => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Parse a shell script into command/argument lists.
+///
+/// If tree-sitter parsing fails, falls back to simple tokenization.
+>>>>>>> 2ac0a8b0ac29ffb7c44474f95127e80a45c93241
 pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
+<<<<<<< HEAD
+||||||| 059d4e06c
+    // Try tree-sitter parsing first
+=======
+    // Try tree-sitter parsing first; crash-shape input is rejected inside
+    // parse_with_tree_sitter and lands in the basic tokenizer via the Err arm.
+>>>>>>> 2ac0a8b0ac29ffb7c44474f95127e80a45c93241
     match parse_with_tree_sitter(script, false) {
         Ok(commands) if !commands.is_empty() => return Ok(commands),
         Ok(_) => {} // Empty result, fall through to basic parsing
@@ -267,6 +314,13 @@ fn is_output_redirection(text: &str) -> bool {
 
 /// Parses shell script using tree-sitter bash grammar.
 fn parse_with_tree_sitter(script: &str, reject_syntax_errors: bool) -> Result<Vec<Vec<String>>, String> {
+    // Never hand the scanner an input upstream tree-sitter-bash #337 crashes
+    // on: the guard covers both the lenient route (parse_shell_commands falls
+    // back to basic tokenization on Err) and every strict caller, which
+    // already handle Err fail-closed.
+    if scanner_crash_shape(script) {
+        return Err("shell script matches the tree-sitter-bash #337 scanner crash shape".to_string());
+    }
     let tree = BashTree::parse(script)?;
 
     let mut commands = Vec::new();
@@ -712,6 +766,7 @@ fn base_command_name(command: &str) -> &str {
         .unwrap_or(command)
 }
 #[cfg(test)]
+<<<<<<< HEAD
 mod crash_regression {
     use super::*;
 
@@ -742,4 +797,50 @@ mod crash_regression {
 }
 
 #[cfg(test)]
+||||||| 059d4e06c
+=======
+mod crash_regression {
+    use super::*;
+
+    /// tree-sitter-bash #337: `{` + U+2FA8E (the delta-minimal reproducer,
+    /// found by fuzzing on linux) SIGSEGV'd the external scanner and killed
+    /// the process; the guard routes such input to the basic tokenizer.
+    #[test]
+    fn parse_survives_brace_plus_astral_input() {
+        let parsed = parse_shell_commands("{\u{2FA8E}");
+        assert!(parsed.is_ok(), "parse must not fail: {parsed:?}");
+
+        // A real command containing the crash shape keeps its tokens, and a
+        // following command survives too.
+        let parsed = parse_shell_commands("echo {\u{2FA8E}} && echo done").expect("two commands");
+        assert_eq!(parsed.len(), 2, "both commands must survive: {parsed:?}");
+        assert!(parsed[0].contains(&"echo".to_string()), "first command tokens: {parsed:?}");
+        assert_eq!(parsed[1].last().map(String::as_str), Some("done"));
+    }
+
+    #[test]
+    fn strict_parse_rejects_crash_shape_instead_of_crashing() {
+        // parse_shell_commands_tree_sitter has no fallback: strict callers
+        // (validate_bang_shell_command, is_valid_bash_grammar,
+        // looks_like_shell_command) handle Err fail-closed.
+        let result = parse_shell_commands_tree_sitter("{\u{2FA8E}");
+        assert!(result.is_err(), "strict path must reject, not crash: {result:?}");
+    }
+
+    #[test]
+    fn scanner_crash_shape_matches_issue_337_shape() {
+        assert!(scanner_crash_shape("{\u{2FA8E}"));
+        assert!(scanner_crash_shape("echo {a}\u{1F574}"));
+        assert!(scanner_crash_shape("{x} \u{1F847}"));
+        // No brace before the 4-byte lead: safe for the scanner.
+        assert!(!scanner_crash_shape("\u{2FA8E}{"));
+        // No 4-byte lead at all.
+        assert!(!scanner_crash_shape("{hello}"));
+        // 3-byte and 2-byte leads do not trigger the upstream crash.
+        assert!(!scanner_crash_shape("{\u{CAF}\u{9bf}"));
+    }
+}
+
+#[cfg(test)]
+>>>>>>> 2ac0a8b0ac29ffb7c44474f95127e80a45c93241
 mod tests;
