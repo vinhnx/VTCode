@@ -268,6 +268,11 @@ fn legacy_mappings(paths: &VtCodePaths) -> Vec<LegacyMapping> {
         "auth",
         "output-styles",
         "output_styles",
+        // Desktop GUI preferences. The desktop app also reads the legacy file
+        // directly (it may launch before the CLI runs this migration), but
+        // mapping it here keeps the report accurate and populates the
+        // canonical location for installs that start through the CLI.
+        "desktop",
     ] {
         add_mapping(&mut mappings, legacy, name, paths.config_dir().join(name));
     }

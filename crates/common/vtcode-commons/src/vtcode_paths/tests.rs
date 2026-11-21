@@ -242,6 +242,27 @@ fn migration_copies_user_guidance_and_prompt_configuration_to_config() {
 }
 
 #[test]
+fn migration_copies_legacy_desktop_preferences_to_config() {
+    let temp = tempdir().expect("tempdir");
+    let paths = migration_paths(&temp);
+    let legacy_prefs = paths.legacy_home_dir().join("desktop/preferences.json");
+    fs::create_dir_all(legacy_prefs.parent().expect("legacy desktop dir")).expect("legacy desktop dir");
+    fs::write(&legacy_prefs, "{\"theme\":\"ciapre\"}").expect("legacy desktop preferences");
+
+    let report = paths.migrate_legacy().expect("migrate legacy desktop preferences");
+
+    assert_eq!(
+        fs::read_to_string(paths.config_dir().join("desktop/preferences.json")).expect("migrated preferences"),
+        "{\"theme\":\"ciapre\"}"
+    );
+    assert!(legacy_prefs.is_file(), "migration keeps the legacy source for rollback");
+    assert!(
+        !report.skipped.iter().any(|skip| skip.path == legacy_prefs.parent().unwrap()),
+        "desktop preferences must not be reported as unmapped"
+    );
+}
+
+#[test]
 fn migration_copies_pre_xdg_config_root_cache_and_state() {
     let temp = tempdir().expect("tempdir");
     let paths = migration_paths(&temp);
