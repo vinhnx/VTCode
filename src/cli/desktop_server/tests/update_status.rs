@@ -186,6 +186,9 @@ async fn update_status_carries_the_live_install_state() {
 /// A second install while one runs is refused instead of racing two bundle
 /// replacements. The guard is exercised without touching the network or the
 /// app bundle by seeding the in-flight state directly.
+// The install path refuses to run outside macOS ("the VT Code desktop app
+// requires macOS"), so the concurrent-install refusal is only reachable there.
+#[cfg(target_os = "macos")]
 #[tokio::test]
 #[serial_test::serial]
 async fn update_install_refuses_a_second_concurrent_install() {

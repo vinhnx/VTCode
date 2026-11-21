@@ -209,7 +209,15 @@ impl LinuxSandboxLauncher {
         if let Some(helper) = std::env::var_os("VTCODE_LINUX_SANDBOX_EXECUTABLE") {
             return Some(Self::external(helper.into()));
         }
-        std::env::current_exe().ok().map(Self::busybox)
+        // Wrapping with the running binary is only valid when that binary is
+        // the VT Code CLI, which owns the sandbox-exec launcher protocol.
+        // Under a test harness the current executable is a libtest binary
+        // that cannot parse launcher flags, so only the CLI binary qualifies.
+        let exe = std::env::current_exe().ok()?;
+        if exe.file_stem().is_some_and(|stem| stem == "vtcode") {
+            return Some(Self::busybox(exe));
+        }
+        None
     }
 
     #[cfg(not(target_os = "linux"))]
