@@ -64,9 +64,9 @@ Install on macOS, Linux, or Windows/WSL, configure once, and run. Source builds 
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
 ```
 
-Same-guide alternatives: `brew install vinhnx/tap/vtcode`, `cargo install vtcode`, Windows
-`irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex`, or
-[Desktop app](#desktop-app). Verify with `vtcode --version`.
+Alternatives in the [installation guide](./docs/installation/README.md): `brew install vinhnx/tap/vtcode`,
+`cargo install vtcode`, [Desktop app](#desktop-app), or the Windows `install.ps1` script.
+Verify with `vtcode --version`.
 
 ### 2. Configure your project
 
@@ -91,8 +91,8 @@ Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/gu
 vtcode   # open the interactive TUI
 ```
 
-Ask one focused question, review the changes and test results, then commit. See [Usage](#usage) for automation
-and session commands.
+Ask one focused question, review the proposed changes and test results, then commit.
+See [Usage](#usage) for automation and session commands.
 
 ## Usage
 
@@ -110,18 +110,17 @@ Common commands (full list in [command reference](./docs/user-guide/commands.md)
 | Roll back a snapshot    | `vtcode snapshots` / `vtcode revert`               |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-`ask` is tool-free; `exec` runs the full tool loop and needs workspace trust (approve the TTY prompt, or set
-`VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs; `deny` refuses instead). `review` inspects uncommitted
-changes without the agent loop. For larger tasks, start read-only, review the turn diff, and use `/explain`
-without another model call. See [interactive mode](./docs/user-guide/interactive-mode.md),
-[exec mode](./docs/user-guide/exec-mode.md), and [full automation](./docs/guides/full-automation.md).
+Trust levels: `ask` never runs tools; `review` inspects uncommitted changes without the agent loop;
+only `exec` runs the full tool loop and needs workspace trust — approve the TTY prompt, or set
+`VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead). For larger tasks, start
+read-only, review the turn diff, and use `/explain` without another model call. See
+[interactive mode](./docs/user-guide/interactive-mode.md), [exec mode](./docs/user-guide/exec-mode.md),
+and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
 Native macOS app (macOS 15+) sharing the CLI runloop, providers, tool policy, sandboxing, sessions, config,
-and credentials. Configure a provider first ([Quick start](#quick-start)). Opening a thread or page
-uses a short fade, and Back reveals the destination with ease-out. The composer stays in place when
-sending the first message. Settings → Accessibility controls Reduce Motion.
+and credentials. Configure a provider first ([Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
@@ -155,6 +154,7 @@ The index is canonical; this section keeps one link per task.
 
 - [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
 - [Configuration](./docs/config/config_field_reference.md) and [security model](./docs/security/security_model.md)
+- [Computer Use](./docs/user-guide/computer-use.md) — isolated offline browser preview with per-turn approval
 
 ### Automate
 
@@ -164,10 +164,9 @@ The index is canonical; this section keeps one link per task.
 ### Extend
 
 - [Skills](./docs/skills/skills_guide.md), [plugins](./docs/guides/agent-plugins.md), and
-  [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md))
-- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md)
-  ([deployment](./docs/reference/webmcp.md)), [A2A](./docs/a2a/README.md), and
-  [Companion](./docs/user-guide/vtcode-companion.md)
+  [MCP](./docs/guides/mcp-integration.md)
+- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md),
+  [A2A](./docs/a2a/README.md), and [Companion](./docs/user-guide/vtcode-companion.md)
 
 ### Develop
 
@@ -178,7 +177,7 @@ The index is canonical; this section keeps one link per task.
 
 ## Development
 
-26-crate workspace sketch at version 0.183.1 (full list in the [architecture guide](./docs/architecture.md);
+27-crate workspace sketch at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md);
 `default-members` builds only the root binary, `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and
 `vtcode-ui`):
 
@@ -194,7 +193,7 @@ graph LR
     CORE --> UI["vtcode-ui"]
 ```
 
-Build with Rust 1.100.0+ (edition 2024; workspace version 0.183.1):
+Build with Rust 1.100.0+ (edition 2024; workspace version 0.185.0):
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git
@@ -229,7 +228,8 @@ reporting](https://github.com/vinhnx/vtcode/security/advisories/new). See the [s
 - [Report a bug](https://github.com/vinhnx/vtcode/issues/new?template=bug_report.md) ·
   [Request a feature](https://github.com/vinhnx/vtcode/issues/new?template=feature_request.md) ·
   [Discussions](https://github.com/vinhnx/vtcode/discussions)
-- [Good first issues](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted)
+- Elsewhere: [building VT Code, a year in](https://huggingface.co/blog/vinhnx90/building-vtcode-a-year-in) ·
+  [podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
 The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive. Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
@@ -296,11 +296,6 @@ Thank you to everyone below. You are the reason this project keeps moving.
 <!-- CONTRIBUTORS:END -->
 
 </details>
-
-## Resources
-
-- [Building VT Code, a year in](https://huggingface.co/blog/vinhnx90/building-vtcode-a-year-in) ·
-  [podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
 ## Support VT Code
 

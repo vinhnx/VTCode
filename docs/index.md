@@ -29,6 +29,7 @@ Last reviewed: 2026-11-06
   bounded standalone workspace bridge.
 - [VT Code Companion](user-guide/vtcode-companion.md) - Install the local MCP plugin, generate a machine-specific
   marketplace, and share its source through GitHub.
+- [Computer Use](user-guide/computer-use.md) - Drive an isolated offline browser preview with per-turn approval.
 - [Planning Workflow](guides/planning-workflow.md) - `/plan`, review gate, plan handoff to build/auto agents.
 - [Permissions Guide](guides/permissions.md) - Granular agent permissions and rule grammar.
 - [Decisions Probe Guide](guides/decisions-probe.md) - Experimental OpenAI Decisions tool-output probe usage.
