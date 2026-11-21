@@ -4,7 +4,9 @@
 //! and the Open Responses specification. It uses configuration from
 //! `vtcode.toml` to control when and how Open Responses events are emitted.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use crate::provider::NormalizedStreamEvent;
 use vtcode_config::OpenResponsesConfig;
@@ -183,10 +185,11 @@ impl OpenResponsesIntegration {
         // Store in local buffer
         self.events.push(event.clone());
 
-        // Send to callback if registered
-        if let Some(callback) = &self.callback
-            && let Ok(mut cb) = callback.lock()
-        {
+        // Send to the callback if registered. `parking_lot::Mutex` never
+        // poisons, so a panic inside an arbitrary callback cannot silently drop
+        // every later event (which `if let Ok(...)` on `std::sync::Mutex` did).
+        if let Some(callback) = &self.callback {
+            let mut cb = callback.lock();
             cb(event);
         }
     }
@@ -344,5 +347,38 @@ mod tests {
                 .iter()
                 .any(|event| matches!(event, ResponseStreamEvent::ResponseCompleted { .. }))
         );
+    }
+
+    /// A callback that panics must not disable delivery of later events.
+    /// With `std::sync::Mutex` the panic poisons the lock and the old
+    /// `if let Ok(...)` branch silently dropped every subsequent event.
+    #[test]
+    fn callback_panic_does_not_silently_drop_later_events() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let delivered = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&delivered);
+        let callback: OpenResponsesCallback = Arc::new(Mutex::new(Box::new(move |_event| {
+            if seen.fetch_add(1, Ordering::SeqCst) == 0 {
+                panic!("callback failed once");
+            }
+        })));
+
+        let config = OpenResponsesConfig {
+            enabled: true,
+            emit_events: true,
+            ..Default::default()
+        };
+        let mut integration = OpenResponsesIntegration::new(config);
+        integration.start_response("gpt-5");
+        integration.set_callback(callback);
+
+        let first = ResponseStreamEvent::ResponseCreated { response: Response::new("resp-1", "gpt-5") };
+        assert!(catch_unwind(AssertUnwindSafe(|| integration.emit_event(first))).is_err());
+
+        let second = ResponseStreamEvent::ResponseCreated { response: Response::new("resp-2", "gpt-5") };
+        integration.emit_event(second);
+        assert_eq!(delivered.load(Ordering::SeqCst), 2, "later events must survive an earlier callback panic");
     }
 }

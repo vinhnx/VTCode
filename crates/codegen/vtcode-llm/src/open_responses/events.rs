@@ -3,8 +3,10 @@
 //! Streaming is modeled as a series of semantic events, not raw text deltas.
 //! Events describe meaningful transitions like state changes or content deltas.
 
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
 
 use super::{ContentPart, OutputItem, Response, ResponseId};
 
