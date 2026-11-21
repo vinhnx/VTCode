@@ -207,8 +207,20 @@ impl LinuxSandboxLauncher {
     #[cfg(target_os = "linux")]
     pub fn resolve() -> Option<Self> {
         if let Some(helper) = std::env::var_os("VTCODE_LINUX_SANDBOX_EXECUTABLE") {
-            return Some(Self::external(helper.into()));
+            let helper = PathBuf::from(helper);
+            // A helper named `vtcode` speaks the busybox protocol (dispatch to
+            // the hidden sandbox-exec subcommand); anything else is an
+            // external helper with its own invocation contract.
+            if helper.file_stem().is_some_and(|stem| stem == "vtcode") {
+                return Some(Self::busybox(helper));
+            }
+            return Some(Self::external(helper));
         }
+        // The running binary always owns the sandbox-exec protocol, whatever
+        // it is named (renamed/symlinked installs included), so production
+        // launches wrap with current_exe unconditionally. Test harnesses that
+        // cannot parse launcher flags opt out by setting
+        // VTCODE_LINUX_SANDBOX_EXECUTABLE to a real helper (CI does).
         std::env::current_exe().ok().map(Self::busybox)
     }
 

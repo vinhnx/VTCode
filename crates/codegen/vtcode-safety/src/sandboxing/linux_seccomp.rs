@@ -106,12 +106,12 @@ pub fn apply_seccomp_filter(profile: &SeccompProfile) -> Result<()> {
     // while everything else returns EPERM.
     if !profile.allow_namespaces() {
         let mut clone3 = BTreeMap::new();
-        let _ = clone3.insert(libc::SYS_clone3, vec![SeccompRule::new(vec![])?]);
+        let _ = clone3.insert(libc::SYS_clone3, vec![unconditional_rule()?]);
         #[cfg(target_arch = "x86_64")]
         {
             // clone3's flags hide behind a pointer BPF cannot dereference, so
             // the x32-aliased number needs its own entry here too.
-            let _ = clone3.insert(libc::SYS_clone3 | X32_SYSCALL_BIT, vec![SeccompRule::new(vec![])?]);
+            let _ = clone3.insert(libc::SYS_clone3 | X32_SYSCALL_BIT, vec![unconditional_rule()?]);
         }
         let filter = SeccompFilter::new(
             clone3,
@@ -148,6 +148,20 @@ fn insert_rule(rules: &mut BTreeMap<i64, Vec<SeccompRule>>, nr: i64, rule: Secco
     }
 }
 
+/// seccompiler 0.5 rejects rules with zero conditions, so outright blocks use
+/// a condition that always holds: `MaskedEq` with mask 0 compares nothing and
+/// matches every argument set. Without this, every unconditional block fails
+/// filter construction and the launcher fails closed on Linux.
+fn unconditional_rule() -> Result<SeccompRule> {
+    SeccompRule::new(vec![SeccompCondition::new(
+        0,
+        SeccompCmpArgLen::Dword,
+        SeccompCmpOp::MaskedEq(0),
+        0,
+    )?])
+    .map_err(|error| anyhow!("unconditional seccomp rule construction failed: {error}"))
+}
+
 /// Build the primary rule set: outright blocks, plus argument-filtered rules
 /// for `clone` (namespace flags), `socket` (INET domains), and `ioctl`
 /// (terminal injection requests).
@@ -156,7 +170,7 @@ fn primary_rules(profile: &SeccompProfile) -> Result<BTreeMap<i64, Vec<SeccompRu
 
     for name in profile.blocked_syscalls() {
         match syscall_number(name) {
-            Some(nr) => insert_rule(&mut rules, nr, SeccompRule::new(vec![])?),
+            Some(nr) => insert_rule(&mut rules, nr, unconditional_rule()?),
             None => tracing::debug!(syscall = %name, "syscall absent on this architecture; not blocking"),
         }
     }

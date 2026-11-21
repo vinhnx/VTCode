@@ -349,7 +349,7 @@ fn enumerate_read_grants(roots: &[PathBuf], sensitive: &[PathBuf]) -> Result<Vec
                 // sensitive path: an ancestor grant would re-admit the
                 // excluded subtree beneath it (e.g. a link to `$HOME` or `/`
                 // would re-admit `~/.ssh`).
-                if let Ok(target) = std::fs::canonicalize(&path)
+                if let Ok(target) = vtcode_commons::paths::canonicalize(&path)
                     && !sensitive.iter().any(|sp| path_within(&target, sp) || path_within(sp, &target))
                 {
                     grants.push(path);
