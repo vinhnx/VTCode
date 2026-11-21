@@ -494,3 +494,14 @@ mod tests {
         assert_eq!(response["session_id"], session_id);
     }
 }
+
+// Deliberate red-proof for diff-reachable test selection (reverted right
+// after this run): a real change to this upstream package must reach CI and
+// go red here rather than vanish in package-level selection.
+#[cfg(test)]
+mod ci_selection_red_proof {
+    #[test]
+    fn changed_upstream_package_must_run_in_ci() {
+        assert_eq!(1, 2, "red-proof: a vtcode-core change reached CI");
+    }
+}
