@@ -138,6 +138,15 @@ fn loads_config_from_home_directory_when_workspace_missing() -> Result<()> {
 }
 
 #[test]
+fn compiled_default_route_is_anthropic() {
+    let anthropic_default = vtcode_config::constants::models::anthropic::DEFAULT_MODEL;
+    assert_eq!(defaults::DEFAULT_PROVIDER, "anthropic");
+    assert_eq!(defaults::DEFAULT_MODEL, anthropic_default);
+    assert_eq!(defaults::DEFAULT_CLI_MODEL, anthropic_default);
+    assert_eq!(defaults::DEFAULT_API_KEY_ENV, "ANTHROPIC_API_KEY");
+}
+
+#[test]
 #[serial]
 fn falls_back_to_default_config_when_no_files_found() -> Result<()> {
     let workspace = TempDir::new()?;

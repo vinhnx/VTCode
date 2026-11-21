@@ -462,8 +462,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   - [API overview](https://openrouter.ai/docs/api-reference/overview/llms)
   - [Streaming](https://openrouter.ai/docs/api-reference/streaming/llms)
   - [Model catalog](https://openrouter.ai/docs/llms)
-- Default model: `xiaomi/mimo-v2.6-pro` (VT Code's default). Xiaomi MiMo V2.6 Flash and V2.6 Pro UltraSpeed are also
-  available.
+- OpenRouter's default model: `xiaomi/mimo-v2.6-pro`. Xiaomi MiMo V2.6 Flash and V2.6 Pro UltraSpeed are also available.
+  VT Code's global default is Anthropic with `claude-sonnet-5`.
 - For Meta Muse, prefer the official [`meta` provider](./meta.md) when direct Meta access is desired. OpenRouter's
   `meta/...` entries are separately namespaced marketplace routes.
 - **Meta Muse models via OpenRouter:** `meta/muse-glimmer-30b`, `meta/muse-spark-1.3` and `meta/muse-spark-open`

@@ -100,7 +100,7 @@ fn assign_origins(
 /// `default_provider = "ollama"` / `default_model = "..."` at the document
 /// root. `VTCodeConfig` only deserializes `agent.provider` /
 /// `agent.default_model`, so without this promotion those keys are silently
-/// dropped and the runtime falls back to the compiled-in default (openrouter).
+/// dropped and the runtime falls back to the compiled-in default.
 /// The promotion is per-layer so normal layer precedence still applies: an
 /// explicit `[agent] provider` in the same file wins over its own top-level
 /// alias, and higher-precedence layers win over lower ones.

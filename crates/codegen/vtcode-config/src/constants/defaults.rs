@@ -1,9 +1,9 @@
 use super::{models, ui};
 
-pub const DEFAULT_MODEL: &str = models::openrouter::DEFAULT_MODEL;
-pub const DEFAULT_CLI_MODEL: &str = models::openrouter::DEFAULT_MODEL;
-pub const DEFAULT_PROVIDER: &str = "openrouter";
-pub const DEFAULT_API_KEY_ENV: &str = "OPENROUTER_API_KEY";
+pub const DEFAULT_MODEL: &str = models::anthropic::DEFAULT_MODEL;
+pub const DEFAULT_CLI_MODEL: &str = models::anthropic::DEFAULT_MODEL;
+pub const DEFAULT_PROVIDER: &str = "anthropic";
+pub const DEFAULT_API_KEY_ENV: &str = "ANTHROPIC_API_KEY";
 pub const DEFAULT_THEME: &str = "ciapre";
 pub(crate) use super::tool_limits::DEFAULT_FULL_AUTO_MAX_TURNS;
 pub const DEFAULT_MAX_REPEATED_TOOL_CALLS: usize = 2;

@@ -30,7 +30,7 @@ fn whitelist_has_only_custom_providers(config: &VTCodeConfig) -> bool {
 pub(crate) fn resolve_initial_provider(config: &VTCodeConfig, discovered: &[DiscoveredProvider]) -> Provider {
     let configured = config.agent.provider.trim();
     let hardcoded_default =
-        Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER).unwrap_or(Provider::OpenAI);
+        Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER).unwrap_or(Provider::Anthropic);
 
     if !configured.is_empty() {
         // Custom provider names don't have a Provider enum variant.
@@ -403,8 +403,8 @@ mod tests {
             },
         ];
 
-        let expected =
-            Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER).unwrap_or(Provider::OpenAI);
+        let expected = Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER)
+            .unwrap_or(Provider::Anthropic);
 
         let resolved = resolve_initial_provider(&config, &discovered);
         assert_eq!(

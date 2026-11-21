@@ -33,7 +33,7 @@ fn save_config_preserves_comments() {
     let config_with_comments = r#"# This is a test comment
 [agent]
 # Provider comment
-provider = "anthropic"
+provider = "openai"
 default_model = "gpt-5-nano"
 
 # Tools section comment

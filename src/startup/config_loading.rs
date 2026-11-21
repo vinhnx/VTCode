@@ -170,8 +170,8 @@ fn apply_cli_provider_selection(config: &mut VTCodeConfig, args: &Cli) {
 /// `vtcode review` / `exec` (and every other command) resolve the runtime
 /// provider from `VTCodeConfig.agent.provider`. Users editing the global
 /// `config.toml` expect those preferences to apply; previously they were
-/// silently ignored and the runtime kept the compiled-in openrouter default,
-/// failing with an openrouter auth error even after configuring e.g. ollama.
+/// silently ignored and the runtime kept the compiled-in default,
+/// failing with that provider's auth error even after configuring e.g. ollama.
 async fn apply_aux_dotconfig_provider_defaults(
     config: &mut VTCodeConfig,
     manager: &ConfigManager,
@@ -205,17 +205,17 @@ pub(super) fn apply_dot_preferences(
     let mut provider_changed = false;
     if !provider_explicit {
         let preferred = preferences.default_provider.trim();
-        // A pristine auxiliary file carries the compiled-in default
-        // (`openrouter`), which is a no-op. Only an explicit, non-default
-        // auxiliary provider overrides the canonical default.
+        // A pristine auxiliary file carries the compiled-in default, which is
+        // a no-op. Only an explicit, non-default auxiliary provider overrides
+        // the canonical default.
         if !preferred.is_empty()
             && !preferred.eq_ignore_ascii_case(compiled_default_provider)
             && !preferred.eq_ignore_ascii_case(&config.agent.provider)
         {
             config.agent.provider = preferred.to_owned();
             provider_changed = true;
-            // The placeholder default (`OPENROUTER_API_KEY`) resolves per-provider
-            // via `resolve_api_key_env`; reset it so diagnostics and downstream
+            // The placeholder default resolves per-provider via
+            // `resolve_api_key_env`; reset it so diagnostics and downstream
             // resolution use the new provider's default env key.
             let current_env = config.agent.api_key_env.trim().to_owned();
             if current_env.is_empty()
@@ -238,7 +238,7 @@ pub(super) fn apply_dot_preferences(
         // Provider switched via the auxiliary file but the auxiliary model was
         // left at the compiled-in default: adopt the new provider's default
         // model instead of keeping the old provider's default (which would
-        // fail model validation, e.g. an openrouter route with ollama).
+        // fail model validation, e.g. a Claude route with ollama).
         if let Some(provider_default) =
             vtcode_core::config::constants::model_helpers::default_for(&config.agent.provider)
             && provider_default != config.agent.default_model
@@ -403,13 +403,13 @@ enable_tracing = true
     #[test]
     fn aux_dotconfig_ollama_provider_applies_when_canonical_is_default() {
         let mut config = VTCodeConfig::default();
-        assert_eq!(config.agent.provider, "openrouter");
+        assert_eq!(config.agent.provider, vtcode_core::config::constants::defaults::DEFAULT_PROVIDER);
         let preferences = vtcode_core::utils::dot_config::UserPreferences {
             default_provider: "ollama".to_string(),
             ..Default::default()
         };
         // Auxiliary model left at the compiled-in default: the ollama default
-        // model must be adopted instead of keeping the openrouter route.
+        // model must be adopted instead of keeping the compiled default route.
         apply_dot_preferences(&mut config, &preferences, false, false);
         assert_eq!(config.agent.provider, "ollama");
         assert_eq!(config.agent.default_model, vtcode_core::config::constants::models::ollama::DEFAULT_MODEL);
@@ -477,7 +477,7 @@ enable_tracing = true
     fn aux_dotconfig_custom_model_applies_when_canonical_model_is_default() {
         let mut config = VTCodeConfig::default();
         let preferences = vtcode_core::utils::dot_config::UserPreferences {
-            default_provider: "openrouter".to_string(),
+            default_provider: "ollama".to_string(),
             default_model: "custom-route/model".to_string(),
             ..Default::default()
         };

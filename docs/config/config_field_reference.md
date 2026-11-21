@@ -22,7 +22,7 @@ python3 scripts/generate_config_field_reference.py
 | `acp.zed.transport` | `string` | no | `"stdio"` | Transport used to communicate with the Zed client |
 | `acp.zed.workspace_trust` | `string` | no | `"full_auto"` | Desired workspace trust level when running under ACP |
 | `agent.allow_reasoning_effort_downgrade` | `boolean` | no | `false` | Permit a lower supported effort with an explicit harness diagnostic. |
-| `agent.api_key_env` | `string` | no | `"OPENROUTER_API_KEY"` | Environment variable that stores the API key for the active provider |
+| `agent.api_key_env` | `string` | no | `"ANTHROPIC_API_KEY"` | Environment variable that stores the API key for the active provider |
 | `agent.checkpointing.enabled` | `boolean` | no | `true` | Enable automatic checkpoints after each successful turn |
 | `agent.checkpointing.max_age_days` | `integer \| null` | no | `30` | Maximum age in days before checkpoints are removed automatically (None disables) |
 | `agent.checkpointing.max_snapshots` | `integer` | no | `50` | Maximum number of checkpoints to retain on disk |
@@ -40,7 +40,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.credential_storage_mode` | `string` | no | `"file"` | Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service), with encrypted-file fallback when unavailable. - `file`: Use AES-256-GCM encrypted file with machine-derived key - `auto`: Try keyring first, fall back to file if unavailable |
 | `agent.custom_api_keys` | `object` | no | `-` | Provider/key identities captured from interactive configuration flows Note: Actual API keys are stored securely in the configured credential backend (OS keyring when available, otherwise encrypted file storage). Keys use `<provider>/<environment-variable>` identity keys and this field only tracks which identities have keys stored (for UI/migration purposes). The keys themselves are NOT serialized to the config file for security. |
 | `agent.custom_api_keys.*` | `string` | no | `-` | - |
-| `agent.default_model` | `string` | no | `"xiaomi/mimo-v2.6-pro"` | Default model for new conversations. |
+| `agent.default_model` | `string` | no | `"claude-sonnet-5"` | Default model for new conversations. |
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: exec_command, code_search, apply_patch, and retained internal helpers Default: true (opt-out for compatibility), recommended for production use |
 | `agent.harness.async_approval.auto_approve_below_usd` | `number` | no | `0.1` | Auto-approve tool calls whose estimated cost is below this threshold (USD). Set to 0.0 to require approval for everything. |
@@ -142,7 +142,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.prompt_suggestions.model` | `string` | no | `""` | Lightweight model to use for suggestions. Leave empty to auto-select an efficient sibling of the main model. |
 | `agent.prompt_suggestions.show_cost_notice` | `boolean` | no | `true` | Whether VT Code should remind users that LLM-backed suggestions consume tokens. |
 | `agent.prompt_suggestions.temperature` | `number` | no | `0.3` | Temperature for inline prompt suggestion generation (0.0-1.0). |
-| `agent.provider` | `string` | no | `"openrouter"` | Active provider for single-agent runs. |
+| `agent.provider` | `string` | no | `"anthropic"` | Active provider for single-agent runs. |
 | `agent.reasoning_effort` | `string` | no | `"none"` | Reasoning depth for capable models (none to max). |
 | `agent.refine_prompts_enabled` | `boolean` | no | `false` | Enable prompt refinement pass before sending to LLM |
 | `agent.refine_prompts_max_passes` | `integer` | no | `1` | Max refinement passes for prompt writing |
