@@ -370,12 +370,17 @@ fn rules_layers_from(workspace_root: &Path, user_roots: &[PathBuf]) -> Vec<PathB
     }
 
     let mut layers = dir_layers(workspace_root.join(".vtcode").join("rules"));
+    let mut seen: HashSet<PathBuf> = layers.iter().cloned().collect();
     for root in user_roots {
-        layers.extend(dir_layers(root.clone()));
+        for path in dir_layers(root.clone()) {
+            // An override can make the canonical root coincide with the
+            // legacy root. Keep the first occurrence; `Vec::dedup` would miss
+            // non-adjacent duplicates once a directory holds several files.
+            if seen.insert(path.clone()) {
+                layers.push(path);
+            }
+        }
     }
-    // A canonical root can coincide with the legacy root via overrides; keep
-    // the first occurrence so precedence and order stay stable.
-    layers.dedup();
     layers
 }
 
@@ -532,13 +537,16 @@ mod tests {
             .collect();
         assert_eq!(names, vec!["project.rules", "canonical.rules", "legacy.rules"]);
 
-        // Identical roots (possible through overrides) must not load twice.
+        // An override can make the canonical root coincide with the legacy
+        // one. Two files per root produce a non-adjacent duplicate sequence
+        // (a, b, a, b), which `Vec::dedup` would leave untouched.
+        std::fs::write(canonical_rules.join("second.rules"), "").unwrap();
         let deduped = rules_layers_from(workspace.path(), &[canonical_rules.clone(), canonical_rules]);
         let deduped_names: Vec<_> = deduped
             .iter()
             .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(deduped_names, vec!["project.rules", "canonical.rules"]);
+        assert_eq!(deduped_names, vec!["project.rules", "canonical.rules", "second.rules"]);
     }
 
     #[tokio::test]
