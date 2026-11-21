@@ -176,7 +176,15 @@ fn resolve_lightweight_model(
     let active_provider = infer_provider(Some(parent_provider), parent_model);
     let configured_provider = infer_provider_from_model(configured).or_else(|| infer_provider(None, configured));
 
-    if configured_provider.is_some() && configured_provider != active_provider {
+    // A custom endpoint may deliberately serve a model whose slug looks like a
+    // built-in provider's (e.g. a gateway exposing `gpt-5.6-luna`). Its explicit
+    // declaration is authoritative — the same rule `route_for_candidate` uses
+    // for every other lightweight route — so provider inference must not reject it.
+    let is_declared_custom_model = vt_cfg
+        .custom_provider(parent_provider)
+        .is_some_and(|provider| provider.effective_models().iter().any(|model| model == configured));
+
+    if configured_provider.is_some() && configured_provider != active_provider && !is_declared_custom_model {
         tracing::warn!(
             agent_name,
             configured_model = configured,
@@ -503,7 +511,11 @@ fn memory_excerpt(content: &str) -> (String, bool) {
     let mut bytes = 0usize;
     let mut excerpt_lines = Vec::new();
     for line in content.lines().take(SUBAGENT_MEMORY_LINE_LIMIT) {
-        let next_bytes = bytes.saturating_add(line.len() + 1);
+        // Only lines already accepted contribute a separator in `join("\n")`;
+        // counting a trailing newline for every line overcharges by one byte
+        // and can drop a line that actually fits the budget.
+        let separator = usize::from(!excerpt_lines.is_empty());
+        let next_bytes = bytes.saturating_add(separator).saturating_add(line.len());
         if next_bytes > SUBAGENT_MEMORY_BYTES_LIMIT {
             break;
         }
@@ -589,5 +601,61 @@ mod memory_cache_tests {
             load_primary_memory_appendix_async(workspace.path(), "reviewer", Some(SubagentMemoryScope::Project)),
         );
         assert_eq!(first.expect("first appendix"), second.expect("second appendix"));
+    }
+}
+
+#[cfg(test)]
+mod memory_excerpt_tests {
+    use super::{SUBAGENT_MEMORY_BYTES_LIMIT, SUBAGENT_MEMORY_LINE_LIMIT, memory_excerpt};
+
+    #[test]
+    fn byte_budget_counts_join_separators_not_trailing_newlines() {
+        let separators = SUBAGENT_MEMORY_LINE_LIMIT - 1;
+        let short_line_len = 127;
+        let last_line_len = SUBAGENT_MEMORY_BYTES_LIMIT - separators - short_line_len * separators;
+        let mut lines = vec!["x".repeat(short_line_len); separators];
+        lines.push("y".repeat(last_line_len));
+        let content = lines.join("\n");
+        assert_eq!(content.len(), SUBAGENT_MEMORY_BYTES_LIMIT);
+
+        let (excerpt, truncated) = memory_excerpt(&content);
+        assert_eq!(excerpt, content, "a byte-exact fit must not lose its last line");
+        assert!(!truncated);
+
+        let one_byte_over = format!("{content}z");
+        let (excerpt, truncated) = memory_excerpt(&one_byte_over);
+        assert_eq!(excerpt.lines().count(), separators);
+        assert!(truncated);
+    }
+}
+
+#[cfg(test)]
+mod lightweight_model_tests {
+    use super::{CustomProviderConfig, VTCodeConfig, resolve_lightweight_model};
+
+    fn config_with_gateway_declaring(declared_models: &[&str]) -> VTCodeConfig {
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.small_model.model = "gpt-5.6-luna".to_string();
+        vt_cfg.custom_providers.push(CustomProviderConfig {
+            name: "my-gateway".to_string(),
+            models: declared_models.iter().map(|model| (*model).to_string()).collect(),
+            ..Default::default()
+        });
+        vt_cfg
+    }
+
+    #[test]
+    fn declared_custom_provider_small_model_wins_over_builtin_provider_inference() {
+        let vt_cfg = config_with_gateway_declaring(&["gpt-5.6-luna"]);
+
+        assert_eq!(resolve_lightweight_model(&vt_cfg, "my-gateway", "auto", "reviewer"), "gpt-5.6-luna");
+    }
+
+    #[test]
+    fn undeclared_cross_provider_small_model_still_falls_back() {
+        let vt_cfg = config_with_gateway_declaring(&["other-model"]);
+
+        let resolved = resolve_lightweight_model(&vt_cfg, "my-gateway", "auto", "reviewer");
+        assert_ne!(resolved, "gpt-5.6-luna", "an undeclared model must keep the cross-provider guard");
     }
 }
