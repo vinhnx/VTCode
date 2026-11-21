@@ -777,6 +777,13 @@ build_artifacts/
 
 # Agent snapshots for debugging and reproducibility
 snapshots/
+# Tool-schema baselines are reviewable test fixtures, not agent debug artifacts. Re-ignore the
+# rest of the directory so the insta/TUI snapshots stay untracked as before.
+!tests/snapshots/
+tests/snapshots/*
+!tests/snapshots/tool_schemas/
+tests/snapshots/tool_schemas/*
+!tests/snapshots/tool_schemas/*.json
 !vtcode-tui/src/core_tui/widgets/snapshots/
 !vtcode-tui/src/core_tui/widgets/snapshots/*.snap
 !crates/codegen/vtcode-ui/src/tui/core_tui/widgets/snapshots/

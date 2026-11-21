@@ -1,0 +1,48 @@
+{
+  "name": "record_decision",
+  "description": "Use to record consequential choices, rejected approaches, or recovery changes with public rationale. Optional evidence IDs must belong to the current session task. Rationale is agent-reported; ordinary commands need no record.",
+  "parameters": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "summary",
+      "rationale"
+    ],
+    "properties": {
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "alternatives": {
+        "type": "array",
+        "maxItems": 3,
+        "items": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "evidence_ids": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        }
+      },
+      "max_output_tokens": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50000,
+        "default": 10000,
+        "description": "Maximum number of result tokens returned to the model. Full oversized output is spooled when available."
+      }
+    }
+  }
+}

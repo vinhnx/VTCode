@@ -1,0 +1,36 @@
+{
+  "name": "apply_patch",
+  "description": "Apply a patch in VT Code format (*** Begin Patch / *** Update File: path / @@ hunks with -/+ lines / *** End Patch); standard unified diffs (---/+++ format) are rejected. Inspect relevant hunks and anchors, including docs; edit a bounded region, refresh after mismatch, then verify. Strict inspection requires retained source; warn mode is advisory. *** Add File: path, *** Delete File: path, and *** Move to: path (after *** Update File) are also supported. Every patch path must be workspace-relative; absolute paths, `..`, and traversal-like forms are rejected. Changes require permission checks. Call this tool directly instead of through a shell; JSON calls use input (patch is an alias). Use complete current context/deletion lines, preserving internal whitespace; boundary whitespace and Unicode punctuation normalization are supported, but partial lines are rejected. A typed context mismatch permits one fresh bounded file read range per affected path per turn; other limits remain authoritative. Prefer stable semantic @@ anchors such as function, class, method, or impl names.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "input": {
+        "type": "string",
+        "description": "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch. Every patch path must be workspace-relative; absolute paths, `..`, and traversal-like forms are rejected. Prefer stable semantic @@ anchors such as function, class, method, or impl names."
+      },
+      "patch": {
+        "type": "string",
+        "description": "Alias for 'input': same VT Code patch envelope (*** Begin Patch … *** End Patch); unified diffs (---/+++ format) are rejected. Prefer stable semantic @@ anchors such as function, class, method, or impl names."
+      },
+      "max_output_tokens": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50000,
+        "default": 10000,
+        "description": "Maximum number of result tokens returned to the model. Full oversized output is spooled when available."
+      }
+    },
+    "anyOf": [
+      {
+        "required": [
+          "input"
+        ]
+      },
+      {
+        "required": [
+          "patch"
+        ]
+      }
+    ]
+  }
+}

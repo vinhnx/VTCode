@@ -1,0 +1,42 @@
+{
+  "name": "search_tools",
+  "description": "Search the session tool catalog by capability and return ranked matches. Use it to find tools whose definitions are deferred and not yet sent to you, such as code_search, web_fetch, web_search, cron, and MCP server tools. Deferred matches are listed in `expanded_for_next_segment` and become callable on the next request. It is not needed for tools already defined in the current request; call those directly.",
+  "parameters": {
+    "type": "object",
+    "required": [
+      "query"
+    ],
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Natural-language description of the capability to discover."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25,
+        "default": 5,
+        "description": "Maximum number of ranked matches to return (default: 5, max: 25)."
+      },
+      "detail_level": {
+        "type": "string",
+        "enum": [
+          "name",
+          "name_description",
+          "full"
+        ],
+        "default": "name_description",
+        "description": "Fields returned per match (default: name_description). name returns the tool name and score; name_description adds the description; full also adds the parameter schema."
+      },
+      "max_output_tokens": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50000,
+        "default": 10000,
+        "description": "Maximum number of result tokens returned to the model. Full oversized output is spooled when available."
+      }
+    },
+    "additionalProperties": false
+  }
+}

@@ -12,6 +12,18 @@
 //! newlines altered request encoding.
 //!
 //! Run with: `cargo test --test tool_serialization_stability_test -- --nocapture`
+//!
+//! # Blessing intentional changes
+//!
+//! The baselines in `tests/snapshots/tool_schemas/` are committed and reviewed like code. When a tool schema
+//! change is intentional, regenerate them with:
+//!
+//! ```text
+//! VTCODE_BLESS_TOOL_SNAPSHOTS=1 cargo nextest run -p vtcode -E 'test(ci_validate_no_schema_drift)'
+//! ```
+//!
+//! Bless rewrites baselines to match current output, so always review the resulting diff before committing —
+//! an unreviewed bless can hide a regression.
 
 use anyhow::{Context, Result};
 use serde_json::{Map, Value, json};
@@ -22,6 +34,23 @@ use vtcode_commons::utils::calculate_sha256;
 
 /// Snapshot directory for baseline tool schemas
 const SNAPSHOT_DIR: &str = "tests/snapshots/tool_schemas";
+
+/// Environment variable that switches the drift test from verification to bless mode. An environment variable
+/// (rather than a test binary argument) is used because nextest does not forward arbitrary trailing arguments.
+const BLESS_ENV_VAR: &str = "VTCODE_BLESS_TOOL_SNAPSHOTS";
+
+/// Exact command surfaced in failure messages so the bless path is discoverable.
+const BLESS_COMMAND: &str =
+    "VTCODE_BLESS_TOOL_SNAPSHOTS=1 cargo nextest run -p vtcode -E 'test(ci_validate_no_schema_drift)'";
+
+/// Pure parser for the bless opt-in so the decision is testable without mutating process environment.
+fn bless_enabled(value: Option<&str>) -> bool {
+    matches!(value.map(str::trim).map(str::to_ascii_lowercase).as_deref(), Some("1" | "true"))
+}
+
+fn bless_requested() -> bool {
+    bless_enabled(std::env::var(BLESS_ENV_VAR).ok().as_deref())
+}
 
 /// Generates a stable hash of a tool's canonical serialized form using SHA-256.
 fn generate_tool_schema_hash(tool_name: &str, schema: &Value) -> Result<String> {
@@ -281,6 +310,17 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn bless_opt_in_accepts_only_explicit_truthy_values() {
+        assert!(bless_enabled(Some("1")));
+        assert!(bless_enabled(Some("true")));
+        assert!(bless_enabled(Some(" TRUE ")));
+        assert!(!bless_enabled(Some("0")));
+        assert!(!bless_enabled(Some("false")));
+        assert!(!bless_enabled(Some("yes")));
+        assert!(!bless_enabled(None));
+    }
+
     /// # Property: canonical schema hashing is deterministic across processes.
     #[test]
     fn test_snapshot_generation() {
@@ -438,36 +478,22 @@ mod ci_tests {
     use super::*;
 
     #[test]
-    #[ignore] // Run only in CI or with explicit flag
     fn ci_validate_no_schema_drift() {
-        let snapshot_path = PathBuf::from(SNAPSHOT_DIR);
-
-        // If snapshots don't exist, create them
-        if !snapshot_path.exists() {
-            fs::create_dir_all(&snapshot_path).unwrap();
-            let schemas = snapshot_current_tool_schemas().unwrap();
-
-            for (tool_name, schema) in schemas {
-                let file_path = snapshot_path.join(format!("{tool_name}.json"));
-                let content = serde_json::to_string_pretty(&schema).unwrap();
-                fs::write(file_path, content).unwrap();
-            }
-
-            println!("Created baseline snapshots in {SNAPSHOT_DIR}");
+        if bless_requested() {
+            update_schema_snapshots().expect("failed to bless tool schema snapshots");
             return;
         }
 
-        // Load current schemas and compare against snapshots
+        let snapshot_path = PathBuf::from(SNAPSHOT_DIR);
         let current_schemas = snapshot_current_tool_schemas().unwrap();
 
         for (tool_name, current_schema) in current_schemas {
             let snapshot_file = snapshot_path.join(format!("{tool_name}.json"));
-
-            if !snapshot_file.exists() {
-                panic!("No snapshot found for tool '{tool_name}' - run with --update-snapshots to create");
-            }
-
-            let baseline_content = fs::read_to_string(&snapshot_file).unwrap();
+            let baseline_content = fs::read_to_string(&snapshot_file).unwrap_or_else(|error| {
+                panic!(
+                    "Missing baseline for tool '{tool_name}' ({error}); bless intentional changes with {BLESS_COMMAND}"
+                )
+            });
             let baseline_schema: Value = serde_json::from_str(&baseline_content).unwrap();
 
             validate_schema_stability(&tool_name, &current_schema, &baseline_schema).unwrap();

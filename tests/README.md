@@ -1,7 +1,7 @@
-# VT Code TUI Snapshot Tests
+# VT Code Snapshot Tests
 
 This directory contains snapshot tests for the VT Code terminal user interface (TUI), following Ratatui best practices
-for UI testing.
+for UI testing, plus the committed tool-schema stability baselines.
 
 ## Test Categories
 
@@ -39,9 +39,14 @@ cargo test tui_snapshot
 
 ## Snapshot Management
 
+Snapshots are reviewable fixtures, not generated noise. Blessing rewrites baselines to match whatever the code currently
+produces, so an unreviewed bless can silently absorb a regression. Generate the change, read the diff, then accept it —
+never accept first and inspect later.
+
 ### Accepting New Snapshots
 
-When a test generates a new snapshot (first run or after changes), accept it with:
+When a test generates a new snapshot (first run or after changes), review the pending change first (see below), then
+accept it with:
 
 ```bash
 cargo insta accept --include-ignored
@@ -57,11 +62,24 @@ cargo insta review --include-ignored
 
 ### Updating Snapshots
 
-If UI changes are intentional, update snapshots with:
+If UI changes are intentional, regenerate and accept them in one reviewed step:
 
 ```bash
-cargo insta test
+cargo insta test --accept
 ```
+
+Then inspect the snapshot diff before committing.
+
+### Tool-schema stability baselines
+
+`tests/snapshots/tool_schemas/` holds committed JSON baselines checked by `ci_validate_no_schema_drift`. They are not
+insta snapshots and are not gitignored. When a tool schema change is intentional, bless them and review the diff:
+
+```bash
+VTCODE_BLESS_TOOL_SNAPSHOTS=1 cargo nextest run -p vtcode -E 'test(ci_validate_no_schema_drift)'
+```
+
+The same command without `VTCODE_BLESS_TOOL_SNAPSHOTS` verifies current output against the committed baselines.
 
 ## Test Structure
 
