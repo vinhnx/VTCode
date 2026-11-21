@@ -84,7 +84,11 @@ impl ZedAgent {
     }
 
     fn model_supports_thought_level(&self, provider: &str, model: &str) -> bool {
-        ModelResolver::resolve(Some(provider), model, &[], None)
+        // Model availability is credential-backend dependent: using the
+        // platform default here would hide thought levels when the operator
+        // configured a different storage mode, even though the same model is
+        // selectable and usable in this session.
+        ModelResolver::resolve_with_mode(Some(provider), model, &[], None, self.credential_storage_mode)
             .map(|resolved| resolved.reasoning_supported())
             .unwrap_or(false)
     }

@@ -28,13 +28,14 @@ pub mod workspace;
 mod zed;
 
 /// Compatibility facade re-exporting the upstream
-/// [`agent_client_protocol`](https://docs.rs/agent-client-protocol) schema types
-/// that the ACP bridge uses internally. The protocol schema types live under
-/// [`agent_client_protocol::schema::v1`]; the role/transport types are imported
-/// directly from the crate root.
+/// [`agent_client_protocol`](https://docs.rs/agent-client-protocol) v1 schema
+/// types that the ACP bridge uses internally. Since SDK 5.0 each version's
+/// messages live under `agent_client_protocol::v1::schema`; the version-neutral
+/// `Error` lives at the crate root and `ProtocolVersion` under `agent_client_protocol::schema`.
 pub(crate) mod acp {
+    pub(crate) use agent_client_protocol::Error;
     pub(crate) use agent_client_protocol::schema::ProtocolVersion;
-    pub(crate) use agent_client_protocol::schema::v1::*;
+    pub(crate) use agent_client_protocol::v1::schema::*;
 }
 
 pub(crate) use capabilities::{

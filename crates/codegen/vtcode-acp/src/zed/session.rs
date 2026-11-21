@@ -7,7 +7,8 @@ use crate::zed::agent::ZedAgent;
 use crate::zed::agent::handlers::install_handlers;
 use crate::zed::agent::lifecycle::install_lifecycle_handlers;
 use crate::zed::connection::ConnectionHandle;
-use agent_client_protocol::{Agent, Client, ConnectionTo, Stdio};
+use agent_client_protocol::v1::ConnectionTo;
+use agent_client_protocol::{Agent, Client, Stdio};
 use anyhow::{Context, Result};
 use std::future::pending;
 use std::sync::Arc;
@@ -96,7 +97,7 @@ pub async fn run_acp_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig, titl
             // plus the VT Code lifecycle extensions (session/fork,
             // session/rollback, session/compact).
             let builder = install_lifecycle_handlers(
-                install_handlers(Agent.builder().name("vtcode"), Arc::clone(&agent)),
+                install_handlers(Agent.v1().name("vtcode"), Arc::clone(&agent)),
                 Arc::clone(&agent),
             );
 

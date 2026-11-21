@@ -23,6 +23,8 @@ use super::types::SessionHandle;
 pub(crate) mod handlers;
 pub(crate) mod lifecycle;
 mod prompt;
+#[cfg(test)]
+mod protocol_tests;
 mod session_state;
 #[cfg(test)]
 pub(crate) mod test_support;

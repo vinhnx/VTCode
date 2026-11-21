@@ -33,16 +33,16 @@ use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
 use crate::acp;
 use crate::acp::Error as SdkError;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AuthenticateRequest, AuthenticateResponse, CancelNotification, CloseSessionRequest, CloseSessionResponse,
     DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse, ListSessionsRequest,
     ListSessionsResponse, LoadSessionRequest, LoadSessionResponse, LogoutRequest, LogoutResponse, NewSessionRequest,
     NewSessionResponse, PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
     SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
+use agent_client_protocol::v1::{Builder, ConnectionTo, Responder};
 use agent_client_protocol::{
-    Agent, Builder, Client, ConnectionTo, HandleDispatchFrom, Responder, RunWithConnectionTo, on_receive_notification,
-    on_receive_request,
+    Agent, Client, HandleDispatchFrom, RunWithConnectionTo, on_receive_notification, on_receive_request,
 };
 use futures::StreamExt;
 use serde_json::json;

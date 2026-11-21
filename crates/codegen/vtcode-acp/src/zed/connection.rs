@@ -24,13 +24,14 @@
 
 use std::sync::Arc;
 
-use agent_client_protocol::{
-    Client, ConnectionTo, Error,
-    schema::v1::{
+use agent_client_protocol::v1::{
+    ConnectionTo,
+    schema::{
         ReadTextFileRequest, ReadTextFileResponse, RequestPermissionRequest, RequestPermissionResponse,
         SessionNotification,
     },
 };
+use agent_client_protocol::{Client, Error};
 
 type AgentCx = ConnectionTo<Client>;
 

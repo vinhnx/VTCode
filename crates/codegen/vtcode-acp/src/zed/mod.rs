@@ -45,10 +45,10 @@ mod tests {
         PrimaryAgentCatalog, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PRIMARY_AGENT_ID, SESSION_CONFIG_PROVIDER_ID,
         SESSION_CONFIG_THOUGHT_LEVEL_ID,
     };
-    use agent_client_protocol::schema::v1::{
-        LoadSessionRequest, NewSessionRequest, SetSessionConfigOptionRequest, ToolCallStatus,
+    use agent_client_protocol::v1::schema::{
+        LoadSessionRequest, NewSessionRequest, SessionConfigKind, SessionConfigSelectOptions,
+        SetSessionConfigOptionRequest, ToolCallStatus,
     };
-    use agent_client_protocol::schema::v1::{SessionConfigKind, SessionConfigSelectOptions};
     use assert_fs::TempDir;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;

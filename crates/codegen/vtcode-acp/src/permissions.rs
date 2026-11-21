@@ -201,10 +201,11 @@ mod tests {
     };
     use crate::tooling::{AcpToolRegistry, SupportedTool};
     use crate::zed::connection::ConnectionHandle;
-    use agent_client_protocol::schema::v1::{
+    use agent_client_protocol::v1::ConnectionTo;
+    use agent_client_protocol::v1::schema::{
         RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome,
     };
-    use agent_client_protocol::{Agent, Channel, Client, ConnectionTo, on_receive_request};
+    use agent_client_protocol::{Agent, Channel, Client, on_receive_request};
     use serde_json::json;
     use std::path::Path;
     use tokio::sync::oneshot;
@@ -229,19 +230,17 @@ mod tests {
         let call = acp::ToolCall::new("permission-test-call", "Read file src/lib.rs");
         let args = json!({ "path": "src/lib.rs" });
 
-        let agent = Agent
-            .builder()
-            .connect_with(agent_channel, async move |cx: ConnectionTo<Client>| {
-                let handle = ConnectionHandle::new(cx);
-                let result = test_prompter()
-                    .request_tool_permission(&handle, &session_id, &call, SupportedTool::ReadFile, &args)
-                    .await;
-                drop(result_tx.send(result));
-                Ok(())
-            });
+        let agent = Agent.v1().connect_with(agent_channel, async move |cx: ConnectionTo<Client>| {
+            let handle = ConnectionHandle::new(cx);
+            let result = test_prompter()
+                .request_tool_permission(&handle, &session_id, &call, SupportedTool::ReadFile, &args)
+                .await;
+            drop(result_tx.send(result));
+            Ok(())
+        });
 
         let client = Client
-            .builder()
+            .v1()
             .on_receive_request(
                 async move |request: RequestPermissionRequest, responder, _connection| {
                     assert_eq!(request.options.len(), 4);

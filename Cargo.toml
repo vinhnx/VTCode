@@ -93,7 +93,7 @@ dunce = "1.0"
 memchr = "2.8"
 url = "2.5"
 hotpath = "0.30.1"
-agent-client-protocol = { version = "=3.6.0", features = ["stdio", "schemars"] }
+agent-client-protocol = { version = "=5.0.0", features = ["stdio", "schemars"] }
 uuid = "1.23.2"
 ignore = "0.4"
 ring = "0.17"

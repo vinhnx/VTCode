@@ -23,10 +23,11 @@
 use std::sync::Arc;
 
 use crate::acp::Error as SdkError;
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::v1::schema::SessionId;
+use agent_client_protocol::v1::{Builder, Responder};
 use agent_client_protocol::{
-    Agent, Builder, Client, HandleDispatchFrom, JsonRpcMessage, JsonRpcRequest, JsonRpcResponse, Responder,
-    RunWithConnectionTo, UntypedMessage, on_receive_request,
+    Agent, Client, HandleDispatchFrom, JsonRpcMessage, JsonRpcRequest, JsonRpcResponse, RunWithConnectionTo,
+    UntypedMessage, on_receive_request,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -107,13 +108,11 @@ macro_rules! impl_lifecycle_request {
                 UntypedMessage::new($method, self)
             }
 
-            fn parse_message(method: &str, params: &impl Serialize) -> Result<Self, agent_client_protocol::Error> {
+            fn parse_message(method: &str, params: &serde_json::Value) -> Result<Self, agent_client_protocol::Error> {
                 if !Self::matches_method(method) {
                     return Err(agent_client_protocol::Error::method_not_found());
                 }
-                let params = serde_json::to_value(params)
-                    .map_err(|error| agent_client_protocol::Error::invalid_params().data(error.to_string()))?;
-                serde_json::from_value(params)
+                serde_json::from_value(params.clone())
                     .map_err(|error| agent_client_protocol::Error::invalid_params().data(error.to_string()))
             }
         }
@@ -136,7 +135,7 @@ macro_rules! impl_lifecycle_response {
                     .map_err(|error| agent_client_protocol::Error::internal_error().data(error.to_string()))
             }
 
-            fn from_value(_method: &str, value: serde_json::Value) -> Result<Self, agent_client_protocol::Error> {
+            fn from_json(_method: &str, value: serde_json::Value) -> Result<Self, agent_client_protocol::Error> {
                 serde_json::from_value(value)
                     .map_err(|error| agent_client_protocol::Error::invalid_params().data(error.to_string()))
             }
@@ -565,15 +564,17 @@ mod tests {
     fn lifecycle_wire_types_parse_their_own_json() {
         let session_id = SessionId::new(Arc::from("vtcode-zed-session-1"));
         let fork = SessionForkRequest { session_id: session_id.clone() };
-        let parsed: SessionForkRequest = SessionForkRequest::parse_message("session/fork", &fork).expect("parse");
+        let fork_json = serde_json::to_value(&fork).expect("serialize fork");
+        let parsed: SessionForkRequest = SessionForkRequest::parse_message("session/fork", &fork_json).expect("parse");
         assert_eq!(parsed.session_id, session_id);
         assert!(SessionForkRequest::matches_method("session/fork"));
         assert!(!SessionForkRequest::matches_method("session/rollback"));
-        assert!(SessionForkRequest::parse_message("session/rollback", &fork).is_err());
+        assert!(SessionForkRequest::parse_message("session/rollback", &fork_json).is_err());
 
         let rollback = SessionRollbackRequest { session_id, keep_last_turns: 2 };
+        let rollback_json = serde_json::to_value(&rollback).expect("serialize rollback");
         let parsed: SessionRollbackRequest =
-            SessionRollbackRequest::parse_message("session/rollback", &rollback).expect("parse");
+            SessionRollbackRequest::parse_message("session/rollback", &rollback_json).expect("parse");
         assert_eq!(parsed.keep_last_turns, 2);
     }
 }

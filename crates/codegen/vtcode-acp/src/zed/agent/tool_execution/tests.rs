@@ -7,11 +7,12 @@
 use super::*;
 use crate::reports::{TOOL_PERMISSION_ALLOW_OPTION_ID, TOOL_PERMISSION_DENY_OPTION_ID};
 use crate::zed::agent::test_support::{build_agent, build_agent_with_commands};
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::ConnectionTo;
+use agent_client_protocol::v1::schema::{
     ClientCapabilities, CreateTerminalRequest, RequestPermissionOutcome, RequestPermissionRequest,
     RequestPermissionResponse, SelectedPermissionOutcome, SessionNotification,
 };
-use agent_client_protocol::{Agent, Channel, Client, ConnectionTo, on_receive_notification, on_receive_request};
+use agent_client_protocol::{Agent, Channel, Client, on_receive_notification, on_receive_request};
 use assert_fs::TempDir;
 use serde_json::json;
 use tokio::sync::oneshot;
@@ -59,17 +60,15 @@ async fn run_tool_call(
     let (agent_channel, client_channel) = Channel::duplex();
     let (result_tx, result_rx) = oneshot::channel();
 
-    let agent_task = Agent
-        .builder()
-        .connect_with(agent_channel, async move |cx: ConnectionTo<Client>| {
-            agent.attach_client(ConnectionHandle::new(cx));
-            let call = ProviderToolCall::function("call-1".to_string(), tool_name.to_string(), args.to_string());
-            drop(result_tx.send(agent.execute_tool_calls(&session, &session_id, &[call]).await));
-            Ok(())
-        });
+    let agent_task = Agent.v1().connect_with(agent_channel, async move |cx: ConnectionTo<Client>| {
+        agent.attach_client(ConnectionHandle::new(cx));
+        let call = ProviderToolCall::function("call-1".to_string(), tool_name.to_string(), args.to_string());
+        drop(result_tx.send(agent.execute_tool_calls(&session, &session_id, &[call]).await));
+        Ok(())
+    });
 
     let client_task = Client
-        .builder()
+        .v1()
         .on_receive_request(
             async move |_request: RequestPermissionRequest, responder, _connection| {
                 responder.respond(RequestPermissionResponse::new(RequestPermissionOutcome::Selected(

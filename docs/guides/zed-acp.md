@@ -184,13 +184,16 @@ Common cases:
 
 ### Keep protocol alignment
 
-- Review the [ACP initialization contract](https://agentclientprotocol.com/protocol/initialization) when updating
+- Review the [ACP v1 initialization contract](https://agentclientprotocol.com/protocol/v1/initialization) when updating
   handshake fields so `agent_capabilities`, `agent_info`, and auth methods stay in sync with the spec.
-- Cross-check `NewSession` behaviour with Zed’s expectations outlined in the
-  [session setup flow](https://agentclientprotocol.com/workflows/session/new) before changing session lifecycle code.
+- Cross-check `NewSession` behaviour with the [v1 session setup flow](https://agentclientprotocol.com/protocol/v1/session-setup)
+  before changing session lifecycle code.
 - Tool routing (for example `fs.readTextFile`) should continue to follow the
-  [tools guidance](https://agentclientprotocol.com/protocol/tools) so capability negotiation and permission prompts
-  remain interoperable.
+  [v1 tool-call guidance](https://agentclientprotocol.com/protocol/v1/tool-calls) so capability negotiation and permission
+  prompts remain interoperable.
+- The bridge targets stable ACP v1 via `agent-client-protocol` 5.x. ACP v2 is Preview; serve it alongside v1 rather than
+  replacing the v1 surface, and see the [SDK migration guide](https://github.com/agentclientprotocol/rust-sdk/blob/main/md/migration-v5.md)
+  before changing SDK entry points.
 
 ## Runtime behaviour
 

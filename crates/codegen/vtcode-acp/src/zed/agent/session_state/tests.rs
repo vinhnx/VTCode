@@ -2,7 +2,7 @@ use super::*;
 use crate::zed::helpers::PrimaryAgentCatalog;
 use assert_fs::TempDir;
 use chrono::Utc;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use vtcode_config::{SubagentDiscoveryInput, discover_subagents};
@@ -414,4 +414,102 @@ async fn provider_whitelist_blocks_excluded_selection_and_construction() {
             .expect("excluded provider must fail")
     );
     assert!(error.contains("providers_whitelist"), "{error}");
+}
+
+#[tokio::test]
+async fn model_select_options_expose_the_full_builtin_catalog_for_every_provider() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent(temp.path()).await;
+    let mut checked_providers = 0usize;
+
+    for provider in Provider::all_providers() {
+        let catalog = ModelId::models_for_provider(provider);
+        if catalog.is_empty() {
+            continue;
+        }
+        // Choose a model that is in the catalog so the "preserve current
+        // selection" fallback cannot add an extra option to the comparison.
+        let current = catalog[0].as_str().into_owned();
+        let advertised: HashSet<String> = agent
+            .model_select_options(provider.as_ref(), &current)
+            .into_iter()
+            .map(|option| option.value.0.as_ref().to_string())
+            .collect();
+        let expected: HashSet<String> = catalog.iter().map(|model| model.as_str().into_owned()).collect();
+        assert_eq!(advertised, expected, "provider {provider} must advertise its full builtin model catalog");
+        checked_providers += 1;
+    }
+
+    assert!(
+        checked_providers >= 5,
+        "expected several providers with builtin models, checked {checked_providers}"
+    );
+}
+
+#[tokio::test]
+async fn reasoning_options_match_the_canonical_effort_levels() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent(temp.path()).await;
+    let options = session_config_options(
+        "build",
+        &agent.primary_agents,
+        ReasoningEffortLevel::Medium,
+        true,
+        "openai",
+        Vec::new(),
+        "gpt-5.6-sol",
+        Vec::new(),
+    );
+
+    let thought_level = options
+        .iter()
+        .find(|option| option.id == acp::SessionConfigId::new("thought_level"))
+        .expect("thought level option");
+    let advertised: Vec<String> = match &thought_level.kind {
+        acp::SessionConfigKind::Select(select) => match &select.options {
+            acp::SessionConfigSelectOptions::Ungrouped(options) => {
+                options.iter().map(|option| option.value.0.as_ref().to_string()).collect()
+            }
+            acp::SessionConfigSelectOptions::Grouped(groups) => groups
+                .iter()
+                .flat_map(|group| group.options.iter())
+                .map(|option| option.value.0.as_ref().to_string())
+                .collect(),
+            other => panic!("unexpected reasoning option shape: {other:?}"),
+        },
+        other => panic!("thought level must be a select option: {other:?}"),
+    };
+    let expected: Vec<String> = ReasoningEffortLevel::allowed_values()
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect();
+    assert_eq!(advertised, expected, "all supported reasoning levels must be selectable");
+}
+
+#[tokio::test]
+async fn reasoning_detection_uses_the_session_credential_backend() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent_with_policies(
+        temp.path(),
+        "build",
+        vtcode_config::CommandsConfig::default(),
+        vtcode_config::SandboxConfig::default(),
+        vtcode_config::core::permissions::PermissionsConfig::default(),
+        Vec::new(),
+    )
+    .await;
+    let storage_mode = agent.credential_storage_mode;
+
+    for provider in Provider::all_providers() {
+        for model in ModelId::models_for_provider(provider) {
+            let expected =
+                ModelResolver::resolve_with_mode(Some(provider.as_ref()), &model.as_str(), &[], None, storage_mode)
+                    .is_some_and(|resolved| resolved.reasoning_supported());
+            assert_eq!(
+                agent.model_supports_thought_level(provider.as_ref(), &model.as_str()),
+                expected,
+                "reasoning support must match the configured credential backend for {provider}/{model}"
+            );
+        }
+    }
 }

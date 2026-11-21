@@ -13,7 +13,7 @@
 ## Rules
 
 - `zed/` (`ZedAgent`, `StandardAcpAdapter`) is the spec surface; `vtcode-core::acp` is only a compatibility facade.
-- ACP 1.0.1 uses the SACP builder plus handlers, not the old `impl acp::Agent` trait.
+- SDK 5.x: use `Agent.v1()`/`Client.v1()` and `v1::schema`/`v1::{Builder,Responder,ConnectionTo}`; `Agent.builder()` and `schema::v1` are removed. `Error` is version-neutral at the crate root.
 - `register_acp_connection()` is a global `OnceLock`: call it once, after `connect_with` receives `cx`.
 - Client RPCs (`fs/read_text_file`, `session/request_permission`, any `block_task()`) run only inside a
   `cx.spawn(...)` task; calling them from a request handler deadlocks the dispatch loop.
