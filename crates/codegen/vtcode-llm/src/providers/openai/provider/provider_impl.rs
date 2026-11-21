@@ -250,6 +250,58 @@ impl provider::LLMProvider for OpenAIProvider {
         super::super::native::parse_response_native(openai_response, model)
     }
 
+    async fn stream_native(&self, request: provider::LLMRequest) -> Result<provider::NativeStream, provider::LLMError> {
+        // Same discipline as `generate_native`: no WebSocket, harmony, chat
+        // fallback, flex retry, or model fallback. Native turns run
+        // Responses SSE on verified models only, and any failure surfaces
+        // for the run loop to decide on.
+        let mut request = request;
+        crate::providers::common::ensure_model(&mut request, &self.model);
+        let model = request.model.clone();
+        if !vtcode_computer_use::gate::verified_target_default(
+            "openai",
+            &model,
+            &self.base_url,
+            super::super::computer_use::PROTOCOL,
+        ) {
+            return Err(provider::LLMError::Provider {
+                message: format!("Computer use is not verified for model {model}"),
+                metadata: None,
+            });
+        }
+        let mut openai_request = self.convert_to_openai_responses_format(&request)?;
+        super::super::native::declare(&mut openai_request);
+        openai_request["stream"] = Value::Bool(true);
+        let url = &self.responses_url[..];
+        let client_request_id = Self::new_client_request_id();
+        let response = self
+            .send_authorized(|auth| {
+                headers::apply_turn_metadata(
+                    headers::apply_client_request_id(
+                        headers::apply_responses_beta(self.authorize_with_api_key(self.http_client.post(url), auth)),
+                        &client_request_id,
+                    ),
+                    request.metadata.as_ref(),
+                )
+                .json(&openai_request)
+            })
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let headers = response.headers().clone();
+            let error_text = crate::providers::common::read_provider_error_body(response).await;
+            if is_rate_limit_error(status.as_u16(), &error_text) {
+                return Err(parse_api_error("OpenAI", status, &error_text));
+            }
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format_openai_error(status, &error_text, &headers, "Responses API error", Some(&client_request_id)),
+            );
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
+        }
+        Ok(super::super::native_stream::create_native_stream(response, model))
+    }
+
     async fn generate_auxiliary(
         &self,
         mut request: provider::LLMRequest,

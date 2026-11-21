@@ -9,7 +9,7 @@ use vtcode_commons::llm::BackendKind;
 use vtcode_commons::tool_types::CompactStr;
 
 use super::{
-    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, NativeResponse,
+    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, NativeResponse, NativeStream,
     ResponsesCompactionOptions, SamplingOverrides,
 };
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
@@ -201,6 +201,18 @@ pub trait LLMProvider: Send + Sync {
     /// without I/O. Implementations verify the target against the
     /// computer-use gate before sending anything.
     async fn generate_native(&self, _request: LLMRequest) -> Result<NativeResponse, LLMError> {
+        Err(LLMError::Provider {
+            message: "Computer use is unsupported for this provider".to_owned(),
+            metadata: None,
+        })
+    }
+
+    /// Stream one request on the bound computer-use route. Only providers
+    /// that declare native tools implement this; the default reports
+    /// unsupported without I/O. Implementations verify the target against
+    /// the computer-use gate before sending anything and complete with the
+    /// same [`NativeResponse`] the non-streaming route returns.
+    async fn stream_native(&self, _request: LLMRequest) -> Result<NativeStream, LLMError> {
         Err(LLMError::Provider {
             message: "Computer use is unsupported for this provider".to_owned(),
             metadata: None,

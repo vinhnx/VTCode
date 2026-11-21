@@ -69,7 +69,7 @@ pub use decisions::{
     DecisionProbability, is_standard_decisions_endpoint,
 };
 pub use message::{AssistantPhase, ContentPart, ImageDetail, Message, MessageClearAt, MessageContent, MessageRole};
-pub use native::{NativeCall, NativeCallBody, NativeProvider, NativeResponse};
+pub use native::{NativeCall, NativeCallBody, NativeProvider, NativeResponse, NativeStream, NativeStreamEvent};
 pub use provider_trait::{
     ContextWindowProvider, LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
 };

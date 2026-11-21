@@ -8,9 +8,10 @@
 //! `Debug` impls reveal routing metadata only.
 
 use serde_json::Value;
+use std::pin::Pin;
 use vtcode_computer_use::Action;
 
-use super::{FinishReason, ToolCall, Usage};
+use super::{FinishReason, LLMError, ToolCall, Usage};
 
 /// Which provider produced a native call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,3 +120,35 @@ impl std::fmt::Debug for NativeResponse {
             .finish()
     }
 }
+
+/// One streamed bound-route event. Deltas mirror the ordinary stream
+/// contract; the completed response is the authoritative decode and matches
+/// the non-streaming route byte-for-byte by construction.
+pub enum NativeStreamEvent {
+    /// Assistant text fragment.
+    TextDelta {
+        /// Text fragment.
+        delta: String,
+    },
+    /// Thinking fragment.
+    ReasoningDelta {
+        /// Reasoning fragment.
+        delta: String,
+    },
+    /// Final accumulated response, decoded by the same parser the
+    /// non-streaming route uses.
+    Completed(Box<NativeResponse>),
+}
+
+impl std::fmt::Debug for NativeStreamEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TextDelta { delta } => f.debug_struct("TextDelta").field("bytes", &delta.len()).finish(),
+            Self::ReasoningDelta { delta } => f.debug_struct("ReasoningDelta").field("bytes", &delta.len()).finish(),
+            Self::Completed(response) => f.debug_tuple("Completed").field(response).finish(),
+        }
+    }
+}
+
+/// Streamed bound computer-use route.
+pub type NativeStream = Pin<Box<dyn futures::Stream<Item = Result<NativeStreamEvent, LLMError>> + Send>>;

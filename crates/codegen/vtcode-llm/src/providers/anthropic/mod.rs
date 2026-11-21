@@ -22,6 +22,7 @@ pub mod computer_use;
 mod fallback_retry;
 mod headers;
 mod native;
+mod native_stream;
 mod prompt_cache;
 mod provider;
 pub(crate) mod request_builder;

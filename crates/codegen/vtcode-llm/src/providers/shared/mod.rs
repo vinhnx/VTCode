@@ -12,7 +12,7 @@ mod usage;
 
 pub use crate::providers::ReasoningBuffer;
 pub(crate) use prompt_cache::{session_lineage_from_prompt_cache_key, split_dynamic_prompt_suffix};
-pub(crate) use responses_adapter::reject_unbound_computer_item;
+pub(crate) use responses_adapter::{ResponsesStreamAdapter, ResponsesStreamEvent, reject_unbound_computer_item};
 pub(crate) use responses_stream::{
     RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, ResponsesStreamEventPolicy,
     response_stream_event_policy,

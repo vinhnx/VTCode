@@ -1,0 +1,174 @@
+use super::*;
+use crate::provider::{FinishReason, NativeCallBody, NativeProvider, NativeResponse, ToolCall};
+use futures::StreamExt;
+use serde_json::{Value, json};
+use vtcode_computer_use::{Action, Point};
+
+const MODEL: &str = "claude-sonnet-5";
+
+/// The same logical turn as the streamed fixture, in the non-streaming
+/// response shape the Messages API returns.
+fn equivalent_response_payload() -> Value {
+    json!({
+        "content": [
+            {"type": "thinking", "thinking": "click then type", "signature": "sig-native"},
+            {"type": "text", "text": "acting now"},
+            {"type": "tool_use", "id": "tc_1", "name": "type", "input": {"text": "shell"}},
+            {"type": "tool_use", "toolset_name": "computer", "id": "cu_1", "name": "left_click",
+             "input": {"coordinate": [500, 300]}},
+        ],
+        "stop_reason": "tool_use",
+        "usage": {"input_tokens": 11, "output_tokens": 7},
+    })
+}
+
+fn mixed_turn_sse_frames() -> Vec<String> {
+    vec![
+        json!({"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "content": [],
+               "model": MODEL, "stop_reason": null, "stop_sequence": null, "stop_details": null,
+               "usage": {"input_tokens": 11, "output_tokens": 1}}})
+            .to_string(),
+        json!({"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}})
+            .to_string(),
+        json!({"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "click then type"}})
+            .to_string(),
+        json!({"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig-native"}})
+            .to_string(),
+        json!({"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}}).to_string(),
+        json!({"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": "acting "}}).to_string(),
+        json!({"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": "now"}}).to_string(),
+        json!({"type": "content_block_start", "index": 2, "content_block": {"type": "tool_use", "id": "tc_1",
+               "name": "type", "input": {}}})
+            .to_string(),
+        json!({"type": "content_block_delta", "index": 2, "delta": {"type": "input_json_delta",
+               "partial_json": "{\"text\":\"sh"}})
+            .to_string(),
+        json!({"type": "content_block_delta", "index": 2, "delta": {"type": "input_json_delta",
+               "partial_json": "ell\"}"}})
+            .to_string(),
+        json!({"type": "content_block_start", "index": 3, "content_block": {"type": "tool_use",
+               "toolset_name": "computer", "id": "cu_1", "name": "left_click", "input": {}}})
+            .to_string(),
+        json!({"type": "content_block_delta", "index": 3, "delta": {"type": "input_json_delta",
+               "partial_json": "{\"coordinate\":[500,300]}"}})
+            .to_string(),
+        json!({"type": "content_block_stop", "index": 3}).to_string(),
+        json!({"type": "message_delta", "delta": {"stop_reason": "tool_use", "stop_sequence": null},
+               "usage": {"output_tokens": 7}})
+            .to_string(),
+        json!({"type": "message_stop"}).to_string(),
+    ]
+}
+
+fn frame(payload: &str) -> String {
+    format!("data: {payload}\n\n")
+}
+
+async fn pump_chunks(chunks: Vec<Vec<u8>>) -> Result<Vec<NativeStreamEvent>, LLMError> {
+    let body = futures::stream::iter(chunks.into_iter().map(Ok::<_, LLMError>));
+    let mut stream = pump_native_stream(body, MODEL.to_string(), Some("req_native_1".to_string()), None);
+    let mut events = Vec::new();
+    while let Some(event) = stream.next().await {
+        events.push(event?);
+    }
+    Ok(events)
+}
+
+fn assert_completed_mixed_turn(native: &NativeResponse) {
+    // Parity by construction: the streamed decode must match the
+    // non-streaming parser for the same logical response, including the
+    // verbatim assistant blocks.
+    let direct = parse_response_native(equivalent_response_payload(), MODEL.to_string()).expect("fixture parses");
+    assert_eq!(native.content.as_deref(), direct.content.as_deref());
+    assert_eq!(native.reasoning.as_deref(), direct.reasoning.as_deref());
+    assert_eq!(native.finish_reason, direct.finish_reason);
+    assert_eq!(native.assistant_blocks, direct.assistant_blocks);
+    assert_eq!(native.tool_calls.len(), direct.tool_calls.len());
+    assert_eq!(native.native_calls.len(), direct.native_calls.len());
+
+    // Exact decoded content, independently derived from the fixtures.
+    assert_eq!(native.content.as_deref(), Some("acting now"));
+    assert_eq!(native.reasoning.as_deref(), Some("click then type"));
+    assert_eq!(native.finish_reason, FinishReason::ToolCalls);
+    assert_eq!(native.request_id.as_deref(), Some("req_native_1"));
+    let usage = native.usage.as_ref().expect("usage merged from start and delta");
+    assert_eq!((usage.prompt_tokens, usage.completion_tokens, usage.total_tokens), (11, 7, 18));
+
+    let expected_calls = [ToolCall::function(
+        "tc_1".to_string(),
+        "type".to_string(),
+        "{\"text\":\"shell\"}".to_string(),
+    )];
+    assert_eq!(native.tool_calls.len(), 1);
+    assert_eq!(native.tool_calls[0].id, expected_calls[0].id);
+    assert_eq!(native.tool_calls[0].function.as_ref().unwrap().name, "type");
+    assert_eq!(native.tool_calls[0].function.as_ref().unwrap().arguments, "{\"text\":\"shell\"}");
+
+    assert_eq!(native.native_calls.len(), 1);
+    assert_eq!(native.native_calls[0].id, "cu_1");
+    assert_eq!(native.native_calls[0].provider, NativeProvider::Anthropic);
+    assert_eq!(native.native_calls[0].index, 3);
+    let NativeCallBody::Anthropic { name, action } = &native.native_calls[0].body else {
+        panic!("expected an Anthropic native body");
+    };
+    assert_eq!(name, "left_click");
+    assert!(matches!(
+        action.as_ref().unwrap(),
+        Action::Click { at: Some(Point { x: 500, y: 300 }), count: 1, .. }
+    ));
+}
+
+#[tokio::test]
+async fn forwards_deltas_and_matches_non_streaming_parse() {
+    let frames = mixed_turn_sse_frames();
+    let events = pump_chunks(frames.iter().map(|payload| frame(payload).into_bytes()).collect())
+        .await
+        .expect("stream decodes");
+
+    // Ping and block-stop events stay silent; the deltas and the completion
+    // surface in wire order.
+    assert_eq!(events.len(), 4, "one reasoning delta, two text deltas, one completion");
+    assert!(matches!(&events[0], NativeStreamEvent::ReasoningDelta { delta } if delta == "click then type"));
+    assert!(matches!(&events[1], NativeStreamEvent::TextDelta { delta } if delta == "acting "));
+    assert!(matches!(&events[2], NativeStreamEvent::TextDelta { delta } if delta == "now"));
+    let NativeStreamEvent::Completed(native) = &events[3] else {
+        panic!("expected a completed response");
+    };
+    assert_completed_mixed_turn(native);
+}
+
+#[tokio::test]
+async fn frames_split_across_chunks_still_decode() {
+    let mut buffer = mixed_turn_sse_frames()
+        .iter()
+        .map(|payload| frame(payload))
+        .collect::<String>()
+        .into_bytes();
+    let tail = buffer.split_off(buffer.len() / 4);
+    let events = pump_chunks(vec![buffer, tail]).await.expect("framed stream decodes");
+    assert_eq!(events.len(), 4);
+    let NativeStreamEvent::Completed(native) = &events[3] else {
+        panic!("expected a completed response");
+    };
+    assert_completed_mixed_turn(native);
+}
+
+#[tokio::test]
+async fn error_events_fail_the_stream() {
+    let payload = json!({"type": "error", "error": {"type": "overloaded_error", "message": "provider outage"}});
+    let error = pump_chunks(vec![frame(&payload.to_string()).into_bytes()])
+        .await
+        .expect_err("error events must fail the stream");
+    assert!(error.to_string().contains("provider outage"), "{error}");
+}
+
+#[tokio::test]
+async fn stream_without_message_stop_fails() {
+    let payload = json!({"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "content": [],
+                    "model": MODEL, "stop_reason": null, "stop_sequence": null, "stop_details": null,
+                    "usage": {"input_tokens": 11, "output_tokens": 1}}});
+    let error = pump_chunks(vec![frame(&payload.to_string()).into_bytes()])
+        .await
+        .expect_err("a stream without message_stop must fail");
+    assert!(error.to_string().contains("without message_stop"), "{error}");
+}

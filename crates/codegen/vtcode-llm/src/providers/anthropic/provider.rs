@@ -11,7 +11,8 @@
 
 use crate::client::LLMClient;
 use crate::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, NativeResponse, ToolDefinition,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, NativeResponse, NativeStream,
+    ToolDefinition,
 };
 use vtcode_config::constants::{models, urls};
 use vtcode_config::core::{AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig};
@@ -818,6 +819,32 @@ impl LLMProvider for AnthropicProvider {
         native_response.request_id = request_id;
         native_response.organization_id = organization_id;
         Ok(native_response)
+    }
+
+    async fn stream_native(&self, request: LLMRequest) -> Result<NativeStream, LLMError> {
+        let resolved_model = self.resolved_request_model(&request).to_string();
+        if !vtcode_computer_use::gate::verified_target_default(
+            "anthropic",
+            &resolved_model,
+            &self.base_url,
+            super::computer_use::PROTOCOL,
+        ) {
+            return Err(LLMError::Provider {
+                message: format!("Computer use is not verified for model {resolved_model}"),
+                metadata: None,
+            });
+        }
+        // No refusal retry: a refused native turn surfaces as an error for
+        // the run loop to decide on. HTTP errors are classified by
+        // `send_request` before the stream starts.
+        let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
+        native::declare(&mut anthropic_request);
+        if let Some(obj) = anthropic_request.as_object_mut() {
+            obj.insert("stream".to_string(), Value::Bool(true));
+        }
+        let AnthropicHttpResponse { response, request_id, organization_id } =
+            self.send_request(&request, &anthropic_request).await?;
+        Ok(super::native_stream::create_native_stream(response, resolved_model, request_id, organization_id))
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {

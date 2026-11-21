@@ -32,6 +32,7 @@ pub(crate) mod errors;
 mod harmony;
 pub(crate) mod headers;
 mod native;
+mod native_stream;
 pub(crate) mod request_builder;
 pub(crate) mod response_parser;
 pub(crate) mod responses_api;

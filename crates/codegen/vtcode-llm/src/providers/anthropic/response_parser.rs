@@ -347,3 +347,26 @@ pub fn parse_usage(usage_value: &Value) -> Usage {
         iterations,
     }
 }
+
+/// Merge a `message_delta` usage snapshot into the running usage.
+///
+/// `message_delta.usage` may contain only the output count: keep the
+/// message-start input tokens and cache metrics whenever the delta omits
+/// them. Shared by the stream decoder and the bound computer-use route.
+pub(crate) fn merge_message_delta_usage(current: &mut Usage, delta: Usage) {
+    if delta.prompt_tokens != 0 {
+        current.prompt_tokens = delta.prompt_tokens;
+    }
+    current.completion_tokens = delta.completion_tokens;
+    current.total_tokens = current.prompt_tokens.saturating_add(current.completion_tokens);
+    if delta.cached_prompt_tokens.is_some() {
+        current.cached_prompt_tokens = delta.cached_prompt_tokens;
+        current.cache_read_tokens = delta.cache_read_tokens;
+    }
+    if delta.cache_creation_tokens.is_some() {
+        current.cache_creation_tokens = delta.cache_creation_tokens;
+    }
+    if delta.iterations.is_some() {
+        current.iterations = delta.iterations;
+    }
+}

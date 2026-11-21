@@ -18,7 +18,9 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
 use super::block_order::StreamBlockOrder;
-use super::response_parser::{parse_finish_reason, parse_usage, stop_details_reasoning_detail};
+use super::response_parser::{
+    merge_message_delta_usage, parse_finish_reason, parse_usage, stop_details_reasoning_detail,
+};
 
 enum ReasoningBlockState {
     Thinking {
@@ -345,27 +347,7 @@ pub fn create_stream(
                                 served_speed = super::speed::parse_served_speed(&usage_value).or(served_speed);
                                 let delta_usage = parse_usage(&usage_value);
                                 let mut current_usage = aggregator.usage.take().unwrap_or_default();
-
-                                // `message_delta.usage` may contain only the
-                                // output count. Keep the message-start input
-                                // and cache metrics when they are omitted.
-                                if delta_usage.prompt_tokens != 0 {
-                                    current_usage.prompt_tokens = delta_usage.prompt_tokens;
-                                }
-                                current_usage.completion_tokens = delta_usage.completion_tokens;
-                                current_usage.total_tokens = current_usage
-                                    .prompt_tokens
-                                    .saturating_add(current_usage.completion_tokens);
-                                if delta_usage.cached_prompt_tokens.is_some() {
-                                    current_usage.cached_prompt_tokens = delta_usage.cached_prompt_tokens;
-                                    current_usage.cache_read_tokens = delta_usage.cache_read_tokens;
-                                }
-                                if delta_usage.cache_creation_tokens.is_some() {
-                                    current_usage.cache_creation_tokens = delta_usage.cache_creation_tokens;
-                                }
-                                if delta_usage.iterations.is_some() {
-                                    current_usage.iterations = delta_usage.iterations;
-                                }
+                                merge_message_delta_usage(&mut current_usage, delta_usage);
                                 aggregator.usage = Some(current_usage);
                             }
                             if let Some(reason) = delta.stop_reason {
