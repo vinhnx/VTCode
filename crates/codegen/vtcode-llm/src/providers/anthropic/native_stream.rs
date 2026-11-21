@@ -15,7 +15,7 @@ use crate::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent, AnthropicToolUseBlock,
 };
 use crate::providers::shared::{
-    Utf8StreamDecoder, check_sse_tail_bound, extract_data_payload, find_sse_boundary_bytes,
+    Utf8StreamDecoder, drain_and_bound_sse_tail, extract_data_payload, find_sse_boundary_bytes,
 };
 use async_stream::try_stream;
 use futures::{StreamExt, pin_mut};
@@ -96,8 +96,15 @@ impl NativeResponsesStreamProcessor {
                 Ok(Vec::new())
             }
             AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                // The accumulator drives execution, so a delta for a block
+                // that never started is a protocol violation, not a gap to
+                // tolerate: silently dropping it would assemble a truncated
+                // tool input (or an empty one via the malformed-input
+                // fallback) and decode a response the model never sent. The
+                // display decoder tolerates unknown indices because its
+                // artifacts are never executed; here the stream fails closed.
                 let Some(state) = self.blocks.get_mut(&index) else {
-                    return Ok(Vec::new());
+                    return Err(stream_error(format!("content block delta for unknown block index {index}")));
                 };
                 match (state, delta) {
                     (BlockState::Text { text }, AnthropicStreamDelta::TextDelta { text: delta_text }) => {
@@ -179,12 +186,17 @@ impl NativeResponsesStreamProcessor {
                     .map_err(|error| stream_error(format!("failed to serialize thinking block: {error}")))?
                 }
                 BlockState::ToolUse { toolset_name, id, name, input_json } => {
+                    // An empty accumulator is the legitimate zero-input call
+                    // (no `input_json_delta` was sent); anything else must
+                    // parse. Silently substituting `{}` would execute a
+                    // native call with arguments the model never sent, so a
+                    // corrupt partial JSON fails the response instead.
                     let input = if input_json.is_empty() {
                         serde_json::from_str::<Value>("{}")
                     } else {
                         serde_json::from_str::<Value>(input_json)
                     }
-                    .unwrap_or_else(|_| Map::new().into());
+                    .map_err(|error| stream_error(format!("tool call {id} input JSON failed to parse: {error}")))?;
                     serde_json::to_value(AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock {
                         toolset_name: toolset_name.clone(),
                         id: id.clone(),
@@ -287,19 +299,11 @@ where
                 }
             }
 
-            // Drain the consumed prefix so `buf` stays bounded to the
-            // unprocessed tail rather than growing for the entire stream.
-            if offset > 0 {
-                buf.drain(..offset);
-                offset = 0;
-            }
-
-            // Fail closed: a peer that never emits an event boundary must
-            // not grow the retained tail without bound. Measured after the
-            // drain so one large-but-complete event still parses.
-            if let Err(overflow) = check_sse_tail_bound(buf.len()) {
-                Err::<(), _>(stream_error(overflow))?;
-            }
+            // Drain the consumed prefix, then fail closed when the retained
+            // tail tops the bound: a peer that never emits an event boundary
+            // must not grow memory without limit. Measured after the drain so
+            // one large-but-complete event still parses.
+            drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(stream_error)?;
 
             if processor.is_done() {
                 break;

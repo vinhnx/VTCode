@@ -174,6 +174,87 @@ async fn stream_without_message_stop_fails() {
 }
 
 #[tokio::test]
+async fn delta_for_unknown_block_index_fails_the_stream() {
+    // Execution-driving accumulator: a delta for a never-started block is a
+    // protocol violation whose silent drop would assemble a truncated or
+    // empty tool input. Fail closed and name the offending index. The
+    // matching positive — the same delta after its start — decodes in
+    // `forwards_deltas_and_matches_non_streaming_parse`.
+    let frames = [
+        json!({"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "content": [],
+               "model": MODEL, "stop_reason": null, "stop_sequence": null, "stop_details": null,
+               "usage": {"input_tokens": 11, "output_tokens": 1}}})
+        .to_string(),
+        json!({"type": "content_block_delta", "index": 5, "delta": {"type": "text_delta", "text": "orphan"}})
+            .to_string(),
+    ];
+    let error = pump_chunks(frames.iter().map(|payload| frame(payload).into_bytes()).collect())
+        .await
+        .expect_err("a delta without a started block must fail the stream");
+    assert!(error.to_string().contains("unknown block index 5"), "{error}");
+}
+
+#[tokio::test]
+async fn malformed_tool_input_fails_assembly_with_the_call_id() {
+    // Truncated tool input must not silently become `{}` and execute a
+    // native call with arguments the model never sent. The boundary pair:
+    // a tool_use with no input deltas at all is the legitimate empty input
+    // and still assembles (covered by the declined-screenshot fixture).
+    let frames = [
+        json!({"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "content": [],
+               "model": MODEL, "stop_reason": null, "stop_sequence": null, "stop_details": null,
+               "usage": {"input_tokens": 11, "output_tokens": 1}}})
+        .to_string(),
+        json!({"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use",
+               "toolset_name": "computer", "id": "cu_bad", "name": "left_click", "input": {}}})
+        .to_string(),
+        json!({"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta",
+               "partial_json": "{\"coordinate\":[500,"}})
+        .to_string(),
+        json!({"type": "message_delta", "delta": {"stop_reason": "tool_use", "stop_sequence": null}}).to_string(),
+        json!({"type": "message_stop"}).to_string(),
+    ];
+    let error = pump_chunks(frames.iter().map(|payload| frame(payload).into_bytes()).collect())
+        .await
+        .expect_err("unparseable accumulated tool input must fail the response");
+    assert!(error.to_string().contains("cu_bad"), "{error}");
+    assert!(error.to_string().contains("input JSON failed to parse"), "{error}");
+}
+
+#[tokio::test]
+async fn zero_input_tool_use_still_assembles_an_empty_object() {
+    // No `input_json_delta` for a tool_use is the zero-input call: the
+    // accumulator must keep decoding it as `{}`, not fail like the
+    // malformed-JSON case above.
+    let frames = [
+        json!({"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "content": [],
+               "model": MODEL, "stop_reason": null, "stop_sequence": null, "stop_details": null,
+               "usage": {"input_tokens": 11, "output_tokens": 1}}})
+        .to_string(),
+        json!({"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use",
+               "toolset_name": "computer", "id": "cu_empty", "name": "screenshot", "input": {}}})
+        .to_string(),
+        json!({"type": "message_delta", "delta": {"stop_reason": "tool_use", "stop_sequence": null}}).to_string(),
+        json!({"type": "message_stop"}).to_string(),
+    ];
+    let events = pump_chunks(frames.iter().map(|payload| frame(payload).into_bytes()).collect())
+        .await
+        .expect("a zero-input native call must decode");
+    let NativeStreamEvent::Completed(native) = &events[0] else {
+        panic!("expected a completed response");
+    };
+    assert_eq!(native.native_calls.len(), 1);
+    let NativeCallBody::Anthropic { name, action } = &native.native_calls[0].body else {
+        panic!("expected an Anthropic native body");
+    };
+    assert_eq!(name, "screenshot");
+    assert!(
+        matches!(action.as_ref().expect("zero input decodes"), Action::Screenshot),
+        "zero input must decode the bare screenshot action"
+    );
+}
+
+#[tokio::test]
 async fn unterminated_frame_fails_the_tail_bound() {
     use crate::providers::shared::MAX_SSE_TAIL_BYTES;
 

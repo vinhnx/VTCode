@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 
 use super::sse::find_sse_boundary;
 use super::{
-    ReasoningBuffer, TagStreamSanitizer, Utf8StreamDecoder, check_sse_tail_bound, extract_data_payload,
+    ReasoningBuffer, TagStreamSanitizer, Utf8StreamDecoder, drain_and_bound_sse_tail, extract_data_payload,
     find_sse_boundary_bytes,
 };
 
@@ -436,20 +436,14 @@ where
             }
         }
 
-        // Drain the consumed prefix so `buf` stays bounded to the unprocessed
-        // tail rather than growing for the entire stream lifetime.
-        if offset > 0 {
-            buf.drain(..offset);
-            offset = 0;
-        }
-
-        // Fail closed: a peer that never emits an event boundary must not
-        // grow the retained tail without bound. Measured after the drain so
-        // one large-but-complete event still parses.
-        if let Err(overflow) = check_sse_tail_bound(buf.len()) {
-            let message = error_display::format_llm_error(provider_name, &overflow.to_string());
-            return Err(LLMError::Provider { message, metadata: None });
-        }
+        // Drain the consumed prefix, then fail closed when the retained tail
+        // tops the bound: a peer that never emits an event boundary must not
+        // grow memory without limit. Measured after the drain so one
+        // large-but-complete event still parses.
+        drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(|overflow| LLMError::Provider {
+            message: error_display::format_llm_error(provider_name, &overflow.to_string()),
+            metadata: None,
+        })?;
     }
 
     // Attempt to extract final response metadata (usage, etc) from last chunk if not already done

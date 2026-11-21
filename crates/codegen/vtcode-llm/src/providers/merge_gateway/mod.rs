@@ -13,8 +13,8 @@ use crate::providers::error_handling::{format_network_error, format_parse_error}
 use crate::providers::gemini::sanitize_function_parameters;
 use crate::providers::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec};
 use crate::providers::shared::{
-    RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, Utf8StreamDecoder, extract_data_payload,
-    function_output_value_from_message_content, generate_tool_call_id, next_sse_event,
+    RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, Utf8StreamDecoder, drain_and_bound_sse_tail,
+    extract_data_payload, function_output_value_from_message_content, generate_tool_call_id, next_sse_event,
     parse_cache_write_tokens_from_usage, parse_cached_prompt_tokens_from_usage, usage_u32_from_keys,
 };
 use async_stream::try_stream;

@@ -368,9 +368,13 @@ pub fn create_stream(
                 }
             }
 
-            // Drain the consumed prefix so `buf` stays bounded to the
-            // unprocessed tail rather than growing for the entire stream.
-            shared::drain_consumed_sse(&mut buf, &mut offset);
+            // Drain the consumed prefix, then fail closed when the retained
+            // tail tops the bound: a peer that never emits an event boundary
+            // must not grow memory without limit.
+            shared::drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(|overflow| LLMError::Provider {
+                message: crate::error_display::format_parse_error("Anthropic", &overflow),
+                metadata: None,
+            })?;
         }
 
         for (index, reasoning_block) in reasoning_blocks {

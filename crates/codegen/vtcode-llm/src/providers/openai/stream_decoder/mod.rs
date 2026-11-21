@@ -413,9 +413,15 @@ fn create_chat_event_stream(
                 }
             }
 
-            // Keep `buf` bounded to the unprocessed tail rather than growing
-            // for the entire stream.
-            crate::providers::shared::drain_consumed_sse(&mut buf, &mut offset);
+            // Drain the consumed prefix, then fail closed when the retained
+            // tail tops the bound: a peer that never emits an event boundary
+            // must not grow memory without limit.
+            crate::providers::shared::drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(|overflow| {
+                provider::LLMError::Provider {
+                    message: error_display::format_parse_error("OpenAI", &overflow),
+                    metadata: None,
+                }
+            })?;
         }
 
         let response = aggregator.finalize();
@@ -706,9 +712,15 @@ pub(crate) fn create_responses_stream(
                 }
             }
 
-            // Keep `buf` bounded to the unprocessed tail rather than growing
-            // for the entire stream.
-            crate::providers::shared::drain_consumed_sse(&mut buf, &mut offset);
+            // Drain the consumed prefix, then fail closed when the retained
+            // tail tops the bound: a peer that never emits an event boundary
+            // must not grow memory without limit.
+            crate::providers::shared::drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(|overflow| {
+                provider::LLMError::Provider {
+                    message: error_display::format_parse_error("OpenAI", &overflow),
+                    metadata: None,
+                }
+            })?;
 
             if done {
                 break;

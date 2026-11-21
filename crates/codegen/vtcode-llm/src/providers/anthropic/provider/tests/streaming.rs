@@ -398,3 +398,50 @@ async fn computer_use_anthropic_ordinary_stream_rejects_native_calls() {
     assert!(error.to_string().contains("requires an active computer-use route"));
     assert!(!error.to_string().contains("private-sentinel"));
 }
+
+#[tokio::test]
+async fn stream_fails_closed_when_a_frame_never_terminates() {
+    // The display pump must bound the retained SSE tail: a peer that never
+    // emits an event boundary would otherwise grow memory for the stream
+    // lifetime. Same bound as the bound computer-use route.
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(vec![b'a'; MAX_SSE_TAIL_BYTES + 1], "text/event-stream"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = AnthropicProvider::new_with_client(
+        "test-key".to_string(),
+        models::CLAUDE_SONNET_5.to_string(),
+        reqwest::Client::builder().no_proxy().build().expect("test client should build"),
+        format!("{}/v1", server.uri()),
+        vtcode_config::TimeoutsConfig::default(),
+    );
+    let mut stream = LLMProvider::stream(
+        &provider,
+        LLMRequest {
+            model: models::CLAUDE_SONNET_5.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            stream: true,
+            ..Default::default()
+        },
+    )
+    .await
+    .expect("stream request should succeed");
+
+    let mut error = None;
+    while let Some(event) = stream.next().await {
+        if let Err(failure) = event {
+            error = Some(failure);
+            break;
+        }
+    }
+    let error = error.expect("a boundary-less frame must fail the stream");
+    assert!(error.to_string().contains("without an event boundary"), "{error}");
+}

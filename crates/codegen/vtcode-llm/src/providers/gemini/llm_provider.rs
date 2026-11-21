@@ -1,6 +1,6 @@
 use super::helpers::InteractionStreamState;
 use super::*;
-use crate::providers::shared::{StreamAssemblyError, extract_data_payload, next_sse_event};
+use crate::providers::shared::{StreamAssemblyError, drain_and_bound_sse_tail, extract_data_payload, next_sse_event};
 
 fn normalize_stream_event(event: LLMStreamEvent, interaction_reasoning: bool) -> Vec<NormalizedStreamEvent> {
     match event {
@@ -251,13 +251,13 @@ impl LLMProvider for GeminiProvider {
                             }
                         }
 
-                        // Drain the consumed prefix so `buf` stays bounded to
-                        // the unprocessed tail rather than growing for the
-                        // entire stream lifetime.
-                        if offset > 0 {
-                            buf.drain(..offset);
-                            offset = 0;
-                        }
+                        // Drain the consumed prefix, then fail closed when the
+                        // retained tail tops the bound: a peer that never
+                        // emits an event boundary must not grow memory without
+                        // limit for the stream lifetime.
+                        drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(|overflow| {
+                            StreamAssemblyError::InvalidPayload(overflow.to_string()).into_llm_error("Gemini")
+                        })?;
                     }
 
                     if !state.completed {

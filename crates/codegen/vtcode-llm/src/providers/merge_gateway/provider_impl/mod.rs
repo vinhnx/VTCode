@@ -546,10 +546,11 @@ impl MergeGatewayProvider {
                     }
                 }
 
-                if offset > 0 {
-                    buffer.drain(..offset);
-                    offset = 0;
-                }
+                // Drain the consumed prefix, then fail closed when the
+                // retained tail tops the bound: a peer that never emits an
+                // event boundary must not grow memory without limit.
+                drain_and_bound_sse_tail(&mut buffer, &mut offset)
+                    .map_err(|overflow| format_parse_error("Merge Gateway", &overflow))?;
 
                 if state.done {
                     break;

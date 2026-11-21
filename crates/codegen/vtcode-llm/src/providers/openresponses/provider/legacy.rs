@@ -267,9 +267,11 @@ impl OpenResponsesProvider {
                     }
                 }
 
-                // Keep `buf` bounded to the unprocessed tail rather than
-                // growing for the entire stream.
-                crate::providers::shared::drain_consumed_sse(&mut buf, &mut offset);
+                // Drain the consumed prefix, then fail closed when the
+                // retained tail tops the bound: a peer that never emits an
+                // event boundary must not grow memory without limit.
+                crate::providers::shared::drain_and_bound_sse_tail(&mut buf, &mut offset)
+                    .map_err(|overflow| format_parse_error("OpenResponses", &overflow))?;
             }
 
             yield LLMStreamEvent::Completed { response: Box::new(aggregator.finalize()) };

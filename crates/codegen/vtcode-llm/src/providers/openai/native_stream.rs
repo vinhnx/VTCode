@@ -10,7 +10,7 @@
 use crate::error_display;
 use crate::provider::{LLMError, NativeStream, NativeStreamEvent};
 use crate::providers::shared::{
-    ResponsesStreamAdapter, ResponsesStreamEvent, Utf8StreamDecoder, check_sse_tail_bound, extract_data_payload,
+    ResponsesStreamAdapter, ResponsesStreamEvent, Utf8StreamDecoder, drain_and_bound_sse_tail, extract_data_payload,
     find_sse_boundary_bytes,
 };
 use async_stream::try_stream;
@@ -119,19 +119,11 @@ where
                 }
             }
 
-            // Drain the consumed prefix so `buf` stays bounded to the
-            // unprocessed tail rather than growing for the entire stream.
-            if offset > 0 {
-                buf.drain(..offset);
-                offset = 0;
-            }
-
-            // Fail closed: a peer that never emits an event boundary must
-            // not grow the retained tail without bound. Measured after the
-            // drain so one large-but-complete event still parses.
-            if let Err(overflow) = check_sse_tail_bound(buf.len()) {
-                Err::<(), _>(stream_error(overflow))?;
-            }
+            // Drain the consumed prefix, then fail closed when the retained
+            // tail tops the bound: a peer that never emits an event boundary
+            // must not grow memory without limit. Measured after the drain so
+            // one large-but-complete event still parses.
+            drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(stream_error)?;
 
             if processor.is_done() {
                 break;

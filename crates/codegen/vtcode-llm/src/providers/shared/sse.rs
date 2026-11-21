@@ -13,8 +13,8 @@ use std::borrow::Cow;
 ///
 /// Returns `None` when no complete event remains. The returned `&str` borrows
 /// `buf`, so the caller must finish handling it before mutating the buffer —
-/// then call [`drain_consumed_sse`] once per chunk to drop the consumed
-/// prefix and keep the buffer bounded to the unprocessed tail.
+/// then call [`drain_and_bound_sse_tail`] once per chunk to drop the consumed
+/// prefix and fail closed when the retained tail tops the bound.
 ///
 /// `*offset` is advanced past the event before it is returned, matching the
 /// historical behavior where parse failures and `[DONE]` breaks leave the
@@ -39,6 +39,24 @@ pub(crate) fn drain_consumed_sse(buf: &mut Vec<u8>, offset: &mut usize) {
         buf.drain(..*offset);
         *offset = 0;
     }
+}
+
+/// Per-chunk pump epilogue: drain the consumed prefix, then fail closed when
+/// the retained tail tops [`MAX_SSE_TAIL_BYTES`].
+///
+/// Every SSE pump must call this once per chunk after its
+/// [`next_sse_event`] loop: draining keeps the wire buffer at the
+/// unprocessed tail, and the bound stops a peer that never emits an event
+/// boundary from growing memory for the stream lifetime. Measured after the
+/// drain so one large-but-complete event still parses.
+///
+/// # Errors
+///
+/// Returns [`SseTailOverflow`] when the retained tail tops
+/// [`MAX_SSE_TAIL_BYTES`]; the caller must abort the stream.
+pub(crate) fn drain_and_bound_sse_tail(buf: &mut Vec<u8>, offset: &mut usize) -> Result<(), SseTailOverflow> {
+    drain_consumed_sse(buf, offset);
+    check_sse_tail_bound(buf.len())
 }
 
 /// Maximum bytes retained for one incomplete SSE event.
@@ -307,5 +325,30 @@ mod tests {
         let message = overflow.to_string();
         assert!(message.contains(&MAX_SSE_TAIL_BYTES.to_string()), "{message}");
         assert!(message.contains(&(MAX_SSE_TAIL_BYTES + 41).to_string()), "{message}");
+    }
+
+    #[test]
+    fn drain_and_bound_consumes_first_then_enforces_the_bound() {
+        use super::{MAX_SSE_TAIL_BYTES, SseTailOverflow, drain_and_bound_sse_tail};
+
+        // Drain first: one complete event plus a partial tail that together top
+        // the cap still pass, because the consumed event is not retained.
+        let mut buf = b"data: one\n\n".to_vec();
+        let pad = vec![b'x'; MAX_SSE_TAIL_BYTES - buf.len()];
+        buf.extend_from_slice(&pad);
+        let mut offset = 0usize;
+        assert_eq!(next_sse_event(&buf, &mut offset).expect("utf-8"), Some("data: one"));
+        assert!(drain_and_bound_sse_tail(&mut buf, &mut offset).is_ok());
+        assert_eq!(buf.len(), MAX_SSE_TAIL_BYTES - 11);
+        assert_eq!(offset, 0);
+
+        // Without a boundary the whole tail is retained, so the bound trips:
+        // the (MAX - 11)-byte tail plus 12 more tops the cap by one.
+        buf.extend_from_slice(&[b'x'; 12]);
+        assert_eq!(
+            drain_and_bound_sse_tail(&mut buf, &mut offset),
+            Err(SseTailOverflow { retained_bytes: MAX_SSE_TAIL_BYTES + 1 })
+        );
+        assert_eq!(offset, 0);
     }
 }
