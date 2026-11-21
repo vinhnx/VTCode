@@ -108,6 +108,22 @@ def main():
     print("ids:", [c.get("id") for c in calls], "| actions:", [c.get("name") for c in calls])
 
     print("=== P2: replay tool_use blocks with a real screenshot ===", flush=True)
+    # Every tool_use id needs a matching tool_result or the API rejects the
+    # replay; screenshot members get the image, others a plain acknowledgement.
+    tool_results = [
+        {
+            "type": "tool_result",
+            "tool_use_id": call.get("id"),
+            "toolset_name": "computer",
+            "is_error": False,
+            "content": (
+                [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": shot}}]
+                if call.get("name") == "screenshot"
+                else "OK"
+            ),
+        }
+        for call in calls
+    ]
     status2, body2 = post(
         {
             "model": MODEL,
@@ -116,23 +132,7 @@ def main():
             "messages": [
                 {"role": "user", "content": "Take a screenshot of the current screen."},
                 {"role": "assistant", "content": calls},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": calls[0].get("id"),
-                            "toolset_name": "computer",
-                            "is_error": False,
-                            "content": [
-                                {
-                                    "type": "image",
-                                    "source": {"type": "base64", "media_type": "image/png", "data": shot},
-                                }
-                            ],
-                        }
-                    ],
-                },
+                {"role": "user", "content": tool_results},
             ],
         },
         key,
