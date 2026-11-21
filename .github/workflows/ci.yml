@@ -195,6 +195,6 @@ jobs:
         uses: actions/upload-artifact@v7.0.2
         with:
           name: nextest-junit-${{ github.sha }}
-          path: target/nextest/ci-partition-junit.xml
+          path: target/nextest/ci-partition/ci-partition-junit.xml
           if-no-files-found: error
           retention-days: 7
