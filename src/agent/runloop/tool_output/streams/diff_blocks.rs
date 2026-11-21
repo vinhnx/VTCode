@@ -567,7 +567,7 @@ fn format_side_by_side_pane_ansi(
     // Track used width in display cells, not chars, to handle wide glyphs.
     let mut used = 1 + number_width + 1; // sign + number + │
     for ch in body.chars() {
-        used += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+        used += vtcode_commons::display_width::char_display_width_or(ch, 1);
     }
     let pad = pane_width.saturating_sub(used);
     if pad > 0 {
@@ -586,7 +586,7 @@ fn truncate_chars_to_width(text: &str, max_width: usize) -> String {
     let mut out = String::with_capacity(text.len());
     let mut used = 0usize;
     for ch in text.chars() {
-        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+        let w = vtcode_commons::display_width::char_display_width_or(ch, 1);
         if used + w > max_width {
             break;
         }

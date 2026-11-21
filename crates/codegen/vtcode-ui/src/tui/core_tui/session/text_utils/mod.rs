@@ -25,50 +25,26 @@ pub(super) fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
 
 /// Terminal display width of `text` in cells.
 ///
-/// This is `unicode-width` plus the halfwidth-voiced-sound-mark correction
-/// that terminals apply: `U+FF9E` (dakuten) and `U+FF9F` (handakuten) occupy
-/// one cell each (same correction as `ratatui::buffer::CellWidth`). Older
-/// `unicode-width` releases report them as width 0 while newer ones count
-/// them, so only the missing width is credited — crediting unconditionally
-/// double-counts on the newer tables. Without the correction, strings like
-/// `ｶﾞ` measure 1 cell wide here but render 2 cells wide, breaking wrap and
-/// truncation math.
-///
-/// On terminals configured to render East-Asian-ambiguous glyphs (UAX #11) as
-/// two cells (`ui.ambiguous_width = "wide"`), the CJK width table is used so
-/// the math matches what the terminal actually shows.
-///
+/// Delegates to the canonical `vtcode_commons::display_width` home so the TUI,
+/// tool-output previews and hit-testing all agree on column width. That home
+/// adds the halfwidth-voiced-sound-mark correction `unicode-width` cannot
+/// express on its own and honours the resolved UAX #11 ambiguous-width verdict.
 /// Prefer this over calling `unicode-width` directly on the wrapping path.
 pub(crate) fn display_width(text: &str) -> usize {
-    let wide = vtcode_commons::terminal_capabilities::ambiguous_width_wide();
-    let missing_mark_width: usize = text
-        .chars()
-        .filter(|ch| matches!(ch, '\u{FF9E}' | '\u{FF9F}'))
-        .map(|mark| 1usize.saturating_sub(UnicodeWidthChar::width(mark).unwrap_or(0)))
-        .sum();
-    let width = if wide {
-        UnicodeWidthStr::width_cjk(text)
-    } else {
-        UnicodeWidthStr::width(text)
-    };
-    width.saturating_add(missing_mark_width)
+    vtcode_commons::display_width::display_width(text)
 }
 
 /// Terminal display width of one character under the resolved
 /// ambiguous-width verdict, for char-by-char column mapping.
 pub(crate) fn char_display_width(ch: char) -> usize {
-    char_display_width_or(ch, 0)
+    vtcode_commons::display_width::char_display_width(ch)
 }
 
 /// Terminal display width of one character, with `fallback` for characters
 /// the width tables do not classify (control characters), matching call
 /// sites that treat unknown widths as one cell.
 pub(crate) fn char_display_width_or(ch: char, fallback: usize) -> usize {
-    if vtcode_commons::terminal_capabilities::ambiguous_width_wide() {
-        UnicodeWidthChar::width_cjk(ch).unwrap_or(fallback)
-    } else {
-        UnicodeWidthChar::width(ch).unwrap_or(fallback)
-    }
+    vtcode_commons::display_width::char_display_width_or(ch, fallback)
 }
 
 /// Simplify tool call display text for better human readability

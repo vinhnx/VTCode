@@ -6,7 +6,8 @@
 
 //! Shared preview formatting helpers.
 
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use crate::display_width::char_display_width_or;
+pub use crate::display_width::display_width;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct HeadTailPreview<'a, T> {
@@ -24,10 +25,6 @@ pub struct TextLineExcerpt<'a> {
     pub total: usize,
 }
 
-pub fn display_width(text: &str) -> usize {
-    UnicodeWidthStr::width(text)
-}
-
 pub fn truncate_to_display_width(text: &str, max_width: usize) -> &str {
     if max_width == 0 {
         return "";
@@ -38,7 +35,7 @@ pub fn truncate_to_display_width(text: &str, max_width: usize) -> &str {
 
     let mut consumed_width = 0usize;
     for (idx, ch) in text.char_indices() {
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        let char_width = char_display_width_or(ch, 0);
         if consumed_width + char_width > max_width {
             return &text[..idx];
         }
@@ -86,7 +83,7 @@ pub fn suffix_for_display_width(value: &str, max_width: usize) -> &str {
     let mut consumed_width = 0usize;
     let mut start_idx = value.len();
     for (idx, ch) in value.char_indices().rev() {
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        let char_width = char_display_width_or(ch, 0);
         if consumed_width + char_width > max_width {
             break;
         }
@@ -284,6 +281,25 @@ mod tests {
     fn pad_to_display_width_handles_wide_chars() {
         let padded = pad_to_display_width("表", 4, ' ');
         assert_eq!(display_width(padded.as_str()), 4);
+    }
+
+    #[test]
+    fn preview_padding_credits_halfwidth_sound_marks() {
+        // The shared helper must agree with the TUI: `ｶﾞ` renders in two
+        // cells, so a width-3 budget leaves exactly one space, not two.
+        assert_eq!(pad_to_display_width("ｶﾞ", 3, ' '), "ｶﾞ ");
+        assert_eq!(truncate_to_display_width("aｶﾞ", 2), "aｶ");
+    }
+
+    #[test]
+    fn preview_width_math_follows_ambiguous_width_verdict() {
+        // nextest isolates this process, so the one-time verdict override
+        // cannot affect other tests. Truncation used to strip two ambiguous
+        // glyphs here because it bypassed the TUI's CJK width table.
+        crate::terminal_capabilities::set_ambiguous_width(crate::ui_protocol::AmbiguousWidthMode::Wide);
+        assert_eq!(display_width("│││"), 6);
+        assert_eq!(truncate_to_display_width("│││", 2), "│");
+        assert_eq!(pad_to_display_width("│", 3, ' '), "│ ");
     }
 
     #[test]
