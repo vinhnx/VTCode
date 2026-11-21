@@ -125,8 +125,10 @@ def files_to_packages(
                 break
             parent = os.path.dirname(directory)
             if parent == directory or len(parent) < len(repo_root):
-                # Outside every package (docs/, scripts/, .github/): no tests
-                # to reach from this file.
+                # Walked past every manifest. The workspace root is itself a
+                # package (`vtcode`), so every file under the repository —
+                # docs/, scripts/, .github/ included — reaches it: bounded
+                # over-selection, never a hidden test.
                 break
             directory = parent
     return selected

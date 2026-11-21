@@ -311,8 +311,11 @@ affect all run and nothing else does. The pure closure is covered by
 **Inputs that rerun everything** (checked first, fail-safe direction):
 any `Cargo.toml` (manifest re-resolution), `Cargo.lock`, `rust-toolchain.toml`,
 `.cargo/config.toml`/`.cargo/config`, `.github/workflows/ci.yml`,
-`.config/nextest.toml`. Docs- and scripts-only diffs select no packages, and the
-test job reports that instead of pretending to run an empty suite.
+`.config/nextest.toml`. Docs- and scripts-only diffs select the workspace-root
+`vtcode` package (the nearest-manifest walk reaches it from every file under
+the repository) — bounded over-selection, never a hidden test. The job's
+empty-selection branch is defensive and unreachable while a package sits at
+the workspace root.
 
 The base diff is two-dot on purpose: if `main` moved past the recorded base sha,
 its changes also appear in the selection — over-selection never hides a test.

@@ -165,8 +165,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             if [ -z "$SELECTED_PACKAGES" ]; then
-              echo "No package is reachable from this diff (docs/scripts-only change); no tests to run."
-              exit 0
+              # Defensive: the workspace root package captures every repo
+              # file, so a real diff always selects at least `vtcode`.
+              echo "Selection unexpectedly empty; treating as a selection bug."
+              exit 1
             fi
             # shellcheck disable=SC2086
             cargo nextest run --locked --profile ci-partition $SELECTED_PACKAGES
