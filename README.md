@@ -11,33 +11,22 @@
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-BFB38F?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/vtcode.svg)](https://github.com/vinhnx/vtcode/releases)
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/vinhnx/vtcode?utm_source=oss&utm_medium=github&utm_campaign=vinhnx%2Fvtcode&labelColor=171717&color=FF570A&label=CodeRabbit+Reviews)](https://coderabbit.ai)
-
-<!-- NB: not https://deepwiki.com/badge.svg — that route is behind a Vercel bot
-  challenge, so GitHub's camo proxy gets 429 and renders the alt text instead.
-  This shields.io URL reproduces the same 109x20 badge, logo, and colors. -->
-<!-- markdownlint-disable-next-line MD013 -->
-
-[![Ask DeepWiki](https://img.shields.io/badge/-Ask_DeepWiki-007ec6?logo=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAPoAAAD6AG1e1JrAAACIUlEQVRYw%2B2XP2gUQRTGv7d3JhYWQawkIBaCVWzETos0gmAnVoKNTSoLK0E7EQQvC20sBVFBtLPQRgTBtBaKjYgIQUSxiJq7fT%2BLvCGPJZdNLt4dQj5Y3u7sznzfzLw%2Fs9IO%2FicANiniCujEfWdsQgBLxAbsbraPZcmBfcAt4DNwKQsZNfEUsAB8YRV12LfA6ZHuedg7AO7ed%2Fc%2BUBcbQhbiu%2B6wXIM6EnZWkszMJe2Ke0n6I2la0v51hFeSMLN6OwIK6jJwEBdUYb2MAxRSz6sY4geiahFgLe1Hwq6YWe3us8AN4FQQU4QM64SPY69Xyr43fADgNjAPXHb3peSsD4FDQ0VLEjAHvIhBPS6AHvA1bBO9JPAXcHFbIRtJ5yzwIQZ9CZwAusDJENIkLqsG8DpNyIZJwSUk9wLHgakcesC1JCCjiHm1kYDNOEjptCxpSVK%2F8f73OFLxPLAYM3oCzEX7MXf%2FlJbc%2F8kWpA4HgQdpYI9IWAbeh83whi84cHXL%2B58EPBoQhnmm94EzwE3gZ2p%2FDhzdbhg%2BTaRr01x7ftb4%2FjBwFzjXrCvDpmLW9crVLNeR9CaapoGemb2TdCERW1tNaBNQ8jktwmozqwtpqRNtdWAjARYk39IS12ZWRX7vmJmA71nQZgi36gN7gCvAj5xc3P0jcH7kx7Ik5IC73wsh14GZsZySow5002l4Jr0b6%2Bm4eSyvpAn8lEzsx2QHo8RfUrlN%2BuPq4ksAAAAASUVORK5CYII%3D&labelColor=30363D)](https://deepwiki.com/vinhnx/vtcode)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-007ec6?style=flat-square)](https://deepwiki.com/vinhnx/vtcode)
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-383B73?style=flat-square&logo=apple)](#desktop-app)
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
 
 <p>
-  <img src="./resources/gif/demo-desktop.gif" width="100%" alt="VT Code Desktop app demo" />
-  <sub>Desktop app</sub>
-</p>
-
-<p>
-  <img src="./resources/screenshots/vtcode-cli-tui.gif" width="100%"
-    alt="VT Code terminal TUI demo" /><br />
-  <sub>Terminal TUI</sub>
+  <img src="./resources/gif/demo-desktop.gif" width="85%" alt="VT Code Desktop app demo" loading="lazy" />
+  <br />
+  <sub>Desktop app — <a href="./resources/screenshots/vtcode-cli-tui.gif">terminal TUI demo</a></sub>
 </p>
 
 </div>
 
 ## Overview
 
-VT Code is an auditable, resumable agentic coding loop — terminal TUI plus native macOS app,
-open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and [License](#license)).
+VT Code is an auditable, resumable agentic coding loop — terminal TUI plus native macOS app on one
+shared runloop, open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and [License](#license)).
 Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
@@ -46,8 +35,8 @@ Start with [Quick start](#quick-start); the full map is in [Documentation](#docu
 | ----------- | ------------ |
 | **Plan** | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md). |
 | **Safety** | [Auditable command policy](./docs/security/security_model.md) with sandboxing. |
-| **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md), [subagents](./docs/user-guide/subagents.md). |
-| **Extend** | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), [plugins](./docs/guides/agent-plugins.md). |
+| **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
+| **Extend** | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
 | **Models** | [Hosted or local providers](./docs/providers/provider_guides.md) per task. |
 
 <!-- markdownlint-enable MD060 -->
@@ -62,11 +51,11 @@ Install on macOS, Linux, or Windows/WSL, configure once, and run. Source builds 
 ```bash
 # Review the installer script before running it: https://github.com/vinhnx/vtcode/blob/main/scripts/install.sh
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+vtcode --version
 ```
 
 Alternatives in the [installation guide](./docs/installation/README.md): `brew install vinhnx/tap/vtcode`,
 `cargo install vtcode`, [Desktop app](#desktop-app), or the Windows `install.ps1` script.
-Verify with `vtcode --version`.
 
 ### 2. Configure your project
 
@@ -76,6 +65,7 @@ From your project directory:
 cd path/to/your/project
 vtcode init # scaffolds vtcode.toml, .vtcode/, and AGENTS.md; review before committing
 vtcode secret add openai # replace `openai` with your provider
+vtcode --version # confirm the install before your first task
 ```
 
 Keys stay in secure storage (OS keyring or encrypted file); env vars, workspace `.env`, or `vtcode login`
@@ -88,10 +78,11 @@ Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/gu
 ### 3. Run your first task
 
 ```bash
-vtcode   # open the interactive TUI
+vtcode # open the interactive TUI
 ```
 
-Ask one focused question, review the proposed changes and test results, then commit.
+Ask one focused question, review the proposed changes and test results, then commit. Run
+`vtcode --version` if the binary is not on your `PATH`.
 See [Usage](#usage) for automation and session commands.
 
 ## Usage
@@ -110,8 +101,8 @@ Common commands (full list in [command reference](./docs/user-guide/commands.md)
 | Roll back a snapshot    | `vtcode snapshots` / `vtcode revert`               |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-Trust levels: `ask` never runs tools; `review` inspects uncommitted changes without the agent loop;
-only `exec` runs the full tool loop and needs workspace trust — approve the TTY prompt, or set
+Trust levels: `ask` never runs tools, `review` inspects uncommitted changes without the agent loop, and
+only `exec` runs the full tool loop. `exec` needs workspace trust: approve the TTY prompt, or set
 `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead). For larger tasks, start
 read-only, review the turn diff, and use `/explain` without another model call. See
 [interactive mode](./docs/user-guide/interactive-mode.md), [exec mode](./docs/user-guide/exec-mode.md),
@@ -131,7 +122,8 @@ brew install --cask vinhnx/tap/vtcode-desktop
 Update cask installs with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. Without Homebrew, download the
 [latest release](https://github.com/vinhnx/vtcode/releases/latest) or run `vtcode desktop --install`,
 then launch with `vtcode desktop` or from Finder. The cask ships Apple Silicon builds; Intel Macs install
-from source with `vtcode desktop --install` (see [installation guide](./docs/installation/README.md)).
+from source with `vtcode desktop --install`. Full options are in the
+[installation guide](./docs/installation/README.md).
 
 > [!WARNING]
 > **First launch needs one-time approval** for ad hoc-signed builds (Homebrew cask included):
@@ -141,8 +133,8 @@ from source with `vtcode desktop --install` (see [installation guide](./docs/ins
 
 ## Documentation
 
-Start from the [documentation index](./docs/index.md) or [Wiki](https://github.com/vinhnx/vtcode/wiki).
-The index is canonical; this section keeps one link per task.
+Start from the canonical [documentation index](./docs/index.md) or [Wiki](https://github.com/vinhnx/vtcode/wiki).
+This section keeps one link per task.
 
 ### Start
 
@@ -177,9 +169,9 @@ The index is canonical; this section keeps one link per task.
 
 ## Development
 
-27-crate workspace sketch at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md);
-`default-members` builds only the root binary, `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and
-`vtcode-ui`):
+27-crate workspace at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md);
+`default-members` builds only the root binary plus `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and
+`vtcode-ui`). The sketch below shows the core harness path, not every crate:
 
 ```mermaid
 graph LR
