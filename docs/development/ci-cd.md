@@ -4,10 +4,11 @@ This document describes the CI/CD pipeline and code quality tools used in the vt
 
 ## GitHub Actions Workflows
 
-The project runs these GitHub Actions workflows: `build-linux-windows.yml` (release
-binaries), `webmcp.yml` (Pages deploy), `hotpath-benchmark.yml` + `hotpath-relay.yml`
-(benchmarks), `desktop-macos.yml` (desktop validation), `deny.yml` (dependency audit),
-and `verify-lockfile.yml` (action pin verification). See [action lockfiles](#action-lockfiles)
+The project runs these GitHub Actions workflows: `ci.yml` (PR/main quality gate),
+`build-linux-windows.yml` (release binaries), `webmcp.yml` (Pages deploy),
+`hotpath-benchmark.yml` + `hotpath-relay.yml` (benchmarks), `desktop-macos.yml`
+(desktop validation), `deny.yml` (dependency audit), and `verify-lockfile.yml`
+(action pin verification). See [action lockfiles](#action-lockfiles)
 for how `uses:` refs are pinned.
 
 ### Action lockfiles
@@ -272,7 +273,67 @@ prerequisite of the selected crate is missing from crates.io. The derivation is 
 python3 scripts/tests/test_publish_order.py
 ```
 
-### 4. Dependency audit (`deny.yml`)
+### 4. CI quality gate (`ci.yml`)
+
+**Triggers:** every pull request, pushes to `main`, and manual dispatch.
+
+**Jobs (parallel, no `needs:` edges):**
+
+- **fast-gates** (seconds): `cargo fmt --all -- --check` plus the governance gates
+  sourced from `scripts/common.sh` (`run_repo_governance_gates`), the structured
+  logging lint, and the agent legibility lint. Every step runs even after another
+  fails, so one red run lists every failure.
+- **clippy**: `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`
+  — the same workspace lint gate `scripts/check.sh` runs locally.
+- **tests**: `cargo nextest run --locked --profile ci-partition`. Pushes to main and
+  manual dispatches run `--workspace`; pull requests run only the packages the diff
+  can reach via `scripts/select_tests.py` (see [test selection](#test-selection-on-pull-requests)).
+
+**Contract:**
+
+- `profile.ci-partition` sets `retries = 0`: a test that passes only on retry has a
+  bug, and retrying hides it. It also sets `fail-fast = false`, so all failures list.
+- Pushes to `main` run the full suite and seed the `rust-cache` lineage that PR
+  jobs restore (cache lookup falls back to the default branch), keeping PR cache
+  hit rates high without a separate seeding workflow.
+- Concurrency cancels a branch's in-progress run when a new commit lands.
+- A `macOS`/`Windows` test matrix is deliberately absent: `desktop-macos.yml`
+  covers macOS for desktop paths, and release-path builds cover the other
+  platforms. Adding a matrix is a measured decision, not a default.
+
+### Test selection on pull requests
+
+`scripts/select_tests.py` maps the PR diff to packages and takes the transitive
+reverse-dependency closure (normal + dev + build edges), so the tests a diff can
+affect all run and nothing else does. The pure closure is covered by
+`python3 scripts/tests/test_select_tests.py`.
+
+**Inputs that rerun everything** (checked first, fail-safe direction):
+any `Cargo.toml` (manifest re-resolution), `Cargo.lock`, `rust-toolchain.toml`,
+`.cargo/config.toml`/`.cargo/config`, `.github/workflows/ci.yml`,
+`.config/nextest.toml`. Docs- and scripts-only diffs select no packages, and the
+test job reports that instead of pretending to run an empty suite.
+
+The base diff is two-dot on purpose: if `main` moved past the recorded base sha,
+its changes also appear in the selection — over-selection never hides a test.
+The proof obligation when changing the selection logic: hide a real change from
+it on purpose (commit an upstream break and confirm the dependent crate's tests
+still go red) before merging.
+
+### Test sharding
+
+There are no test shards yet, on purpose: sharding before measuring multiplies
+cold builds (each shard compiles its own test binaries). The plan, applied once
+the full-suite job is the bottleneck:
+
+1. `ci.yml` records per-test times on every `main` run via
+   `profile.ci-partition.junit` and uploads `nextest-junit` (7-day retention).
+2. Balance shards from those recorded times with nextest's partition support
+   (`--partition`), not test counts.
+3. Prove the shards together ran every file, and split any test file over 20
+   seconds.
+
+### 5. Dependency audit (`deny.yml`)
 
 **Triggers:** pull requests and pushes to `main` touching any `Cargo.toml`/`Cargo.lock`/`deny.toml`
 or the workflow itself, a weekly schedule (Mondays 05:00 UTC, default branch only — re-audits the
@@ -398,11 +459,15 @@ Use the provided development check script to run the same checks locally:
 ./scripts/check.sh contracts # Release-artifact contract tests
 ```
 
-### Repository Governance Gates (local only)
+### Repository Governance Gates
 
-No GitHub Actions workflow runs these checks; they run only through the local gate scripts, so run
-`./scripts/check-dev.sh` before every commit and `./scripts/check.sh` before a release. Both scripts
-call the shared functions in `scripts/common.sh`, so the fast gate and the release gate cannot drift:
+The governance gates run through both the local gate scripts and CI: `ci.yml`'s
+fast-gates job sources the same `scripts/common.sh` functions
+(`run_repo_governance_gates`) plus the structured logging and agent legibility
+lints, so local and hosted gates cannot drift. Markdown lint stays local-only
+(it needs Node.js 22+ with `npx`; run `npm install` so the pinned linter resolves
+locally). Run `./scripts/check-dev.sh` before every commit and `./scripts/check.sh`
+before a release:
 
 | Function | Checks | Runs in |
 | --- | --- | --- |
@@ -443,18 +508,24 @@ cargo install cargo-tarpaulin  # Code coverage
 
 ## Best Practices
 
-### 1. Pre-commit Hooks
+### 1. Git Hooks
 
-Set up pre-commit hooks to run checks before committing:
+Fast local enforcement, installed via `core.hooksPath` (a hook, not a line in
+AGENTS.md, because agents skip steps):
 
 ```bash
-# Install pre-commit (if using)
-pre-commit install
-
-# Or create .git/hooks/pre-commit manually:
-#!/bin/bash
-./scripts/check.sh
+./scripts/install-hooks.sh
 ```
+
+| Hook | Runs | Budget |
+| --- | --- | --- |
+| `scripts/hooks/pre-commit` | `rustfmt --edition 2024 --check` on staged `.rs` files + `run_repo_governance_gates` + docs-map regeneration for staged docs | ~2s |
+| `scripts/hooks/pre-push` | `./scripts/check-dev.sh --quiet --workspace` (the CI fast gate, workspace scope) | ~10-30s warm |
+
+Tests are deliberately not repeated in hooks: CI runs the full suite on `main`
+and the diff-reachable selection on PRs, so a local re-run would only add the
+waiting the gate design removes. Remove the hooks with
+`git config --unset core.hooksPath`.
 
 ### 2. Editor Integration
 
@@ -493,8 +564,11 @@ Configure branch protection rules in GitHub:
 
 1. Go to repository Settings → Branches
 2. Add rule for `main`/`master` branch
-3. Require the status checks your branches rely on. `build-linux-windows.yml` is
-   `workflow_dispatch`/`workflow_call` only, so add checks for whichever workflows you run on pull
+3. Require the status checks your branches rely on. `ci.yml`'s jobs (`Fast gates
+   (fmt + governance)`, `Clippy (workspace, -D warnings)`, `Tests (nextest)`) are
+   the quality gate; require them when the branch-protection settings are
+   updated. `build-linux-windows.yml` is `workflow_dispatch`/`workflow_call`
+   only, so add checks for whichever workflows you run on pull
    requests (for example `webmcp.yml` for browser-editor changes).
 
 ### Status Badges

@@ -163,13 +163,21 @@ test-group = "slow"
 slow-timeout = { period = "60s", terminate-after = 2 }
 
 # ── Partition profile (CI parallel) ──────────────────────────────
+# Used by .github/workflows/ci.yml. retries = 0 by policy: a check that needs a
+# retry has a bug, and retrying hides it (docs/development/ci-cd.md). The junit
+# record gives future shard balancing per-test times from every main run.
 [profile.ci-partition]
 fail-fast = false
-retries = 1
+retries = 0
 status-level = "all"
 final-status-level = "all"
 failure-output = "immediate-final"
 slow-timeout = { period = "60s", terminate-after = 2 }
+
+[profile.ci-partition.junit]
+path = "target/nextest/ci-partition-junit.xml"
+store-success-output = false
+store-failure-output = true
 
 # OOM guard for vtcode-core's memory-heavy headless runner tests (see default
 # profile); keeps each CI shard from saturating its runner's memory budget.

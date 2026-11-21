@@ -1,0 +1,41 @@
+#!/bin/bash
+# Pre-commit hook: format and lint the staged change in seconds.
+#
+# Scope is the staged diff, not the working tree: an unrelated dirty file must
+# never block a commit it is not part of. Full-repo gates run pre-push (CI
+# parity) and in CI itself.
+#
+# Installed by scripts/install-hooks.sh via `git config core.hooksPath`.
+
+set -euo pipefail
+
+staged_rs_files=$(git diff --staged --name-only --diff-filter=ACMR -- '*.rs' || true)
+if [ -n "$staged_rs_files" ]; then
+	# Readable file list for rustfmt (paths with spaces are not supported by
+	# this interface; the repo's tracked layout has none).
+	files=$(echo "$staged_rs_files" | tr '\n' ' ')
+	# shellcheck disable=SC2086
+	rustfmt --edition 2024 --check $files || {
+		echo "pre-commit: formatting check failed. Run: rustfmt --edition 2024 <files> (or cargo fmt --all)" >&2
+		exit 1
+	}
+fi
+
+# Sub-second governance gates: file length, docs links, docs placement, tracked
+# file sizes, MCP provider doc scope. These are repo-wide by nature (a staged
+# docs edit changes repo-wide link integrity), and they read the working tree,
+# which matches the staged content in the normal add-then-commit flow. Same
+# functions CI runs (ci.yml fast job).
+# shellcheck disable=SC1091
+source scripts/common.sh
+run_repo_governance_gates
+
+# Regenerate the docs map when this commit stages docs Markdown, so the map
+# lands with the change that caused it. This preserves the behavior of the
+# previously installed .git/hooks/pre-commit that core.hooksPath replaces; the
+# release step regenerates it as a backstop.
+if git diff --cached --name-only --diff-filter=ACMRD -- 'docs/*.md' 'docs/**/*.md' |
+	grep -qv '^docs/modules/vtcode_docs_map\.md$'; then
+	python3 scripts/generate_docs_map.py
+	git add docs/modules/vtcode_docs_map.md
+fi
