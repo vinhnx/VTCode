@@ -1,5 +1,8 @@
 use super::*;
 use crate::provider::{AnthropicRequestOverrides, AnthropicThinkingModeOverride, FallbackModel, Message, ToolChoice};
+use crate::providers::shared::{
+    TOOL_CALL_ID, completed_computer_turn_history, interrupted_computer_turn_history, leaked_native_artifacts,
+};
 use vtcode_config::constants::models::anthropic;
 use vtcode_config::core::AdvisorConfig;
 
@@ -563,4 +566,69 @@ fn resolve_advisor_tool_enforces_fable_5_2_advisor_rules() {
     // A Fable 5.2 advisor is accepted by every executor model.
     let cfg = advisor_config(true, "claude-fable-5-2", None);
     assert!(resolve_advisor_tool("claude-sonnet-5", &cfg).is_some());
+}
+
+fn computer_turn_request(messages: Vec<Message>) -> LLMRequest {
+    LLMRequest {
+        model: anthropic::DEFAULT_MODEL.to_string(),
+        messages: messages.into(),
+        ..Default::default()
+    }
+}
+
+fn content_blocks(payload: &Value) -> Vec<&Value> {
+    payload["messages"]
+        .as_array()
+        .expect("payload messages")
+        .iter()
+        .flat_map(|message| message["content"].as_array().expect("block content"))
+        .collect()
+}
+
+#[test]
+fn resumed_computer_turn_replays_ordinary_blocks_without_native_artifacts() {
+    let request = computer_turn_request(completed_computer_turn_history());
+    let payload = convert(&request);
+    let serialized = serde_json::to_string(&payload).expect("serialize payload");
+
+    assert!(serialized.contains("\"tool_use\""), "assistant call replays as an ordinary tool_use block");
+    assert!(serialized.contains("computer_use"), "tool name survives replay");
+    assert!(serialized.contains("Computer turn completed"), "redacted summary replays as the tool result");
+    assert_eq!(
+        leaked_native_artifacts(&serialized),
+        Vec::<&str>::new(),
+        "no native items or screenshot bytes may leak into a durable request"
+    );
+
+    let tool_uses = content_blocks(&payload)
+        .iter()
+        .filter(|block| block["type"] == "tool_use")
+        .count();
+    let tool_results = content_blocks(&payload)
+        .iter()
+        .filter(|block| block["type"] == "tool_result")
+        .count();
+    assert_eq!(tool_uses, tool_results, "every tool_use must be answered by a tool_result");
+}
+
+#[test]
+fn interrupted_computer_turn_synthesizes_aborted_tool_result() {
+    let request = computer_turn_request(interrupted_computer_turn_history());
+    let payload = convert(&request);
+    let serialized = serde_json::to_string(&payload).expect("serialize payload");
+    assert_eq!(
+        leaked_native_artifacts(&serialized),
+        Vec::<&str>::new(),
+        "no native items or screenshot bytes may leak into a durable request"
+    );
+
+    let tool_results: Vec<&Value> = content_blocks(&payload)
+        .iter()
+        .copied()
+        .filter(|block| block["type"] == "tool_result")
+        .collect();
+    assert_eq!(tool_results.len(), 1, "the interrupted call must be answered by one synthesized result");
+    assert_eq!(tool_results[0]["tool_use_id"], TOOL_CALL_ID);
+    assert_eq!(tool_results[0]["content"], json!("aborted"));
+    assert_eq!(tool_results[0]["is_error"], json!(true));
 }

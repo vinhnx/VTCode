@@ -937,3 +937,51 @@ fn ultrafast_service_tier_checks_models_for_explicit_and_provider_defaults() {
         }
     }
 }
+
+fn computer_turn_request(messages: Vec<provider::Message>) -> provider::LLMRequest {
+    provider::LLMRequest {
+        messages: messages.into(),
+        model: models::openai::GPT_5.to_string(),
+        stream: true,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn resumed_computer_turn_replays_ordinary_items_without_native_artifacts() {
+    use crate::providers::shared::{completed_computer_turn_history, leaked_native_artifacts};
+
+    let request = computer_turn_request(completed_computer_turn_history());
+    let payload = build_responses_request(&request, &base_context(None)).expect("payload builds");
+    let serialized = serde_json::to_string(&payload).expect("serialize payload");
+
+    assert!(serialized.contains("\"function_call\""), "assistant call replays as an ordinary function_call item");
+    assert!(serialized.contains("computer_use"), "tool name survives replay");
+    assert!(serialized.contains("Computer turn completed"), "redacted summary replays as the tool output");
+    assert_eq!(
+        leaked_native_artifacts(&serialized),
+        Vec::<&str>::new(),
+        "no native items or screenshot bytes may leak into a durable request"
+    );
+}
+
+#[test]
+fn interrupted_computer_turn_synthesizes_aborted_output() {
+    use crate::providers::shared::{TOOL_CALL_ID, interrupted_computer_turn_history, leaked_native_artifacts};
+
+    let request = computer_turn_request(interrupted_computer_turn_history());
+    let payload = build_responses_request(&request, &base_context(None)).expect("payload builds");
+    let input = payload["input"].as_array().expect("input items");
+
+    let outputs: Vec<&Value> = input.iter().filter(|item| item["type"] == "function_call_output").collect();
+    assert_eq!(outputs.len(), 1, "the interrupted call must be answered by one synthesized output");
+    assert_eq!(outputs[0]["call_id"], TOOL_CALL_ID);
+    assert_eq!(outputs[0]["output"], json!("aborted"));
+
+    let serialized = serde_json::to_string(&payload).expect("serialize payload");
+    assert_eq!(
+        leaked_native_artifacts(&serialized),
+        Vec::<&str>::new(),
+        "no native items or screenshot bytes may leak into a durable request"
+    );
+}

@@ -1,5 +1,6 @@
 //! Shared provider wire helpers with stable facade imports.
 
+mod native_resume;
 mod prompt_cache;
 mod responses_adapter;
 mod responses_stream;
@@ -11,6 +12,9 @@ mod tool_output;
 mod usage;
 
 pub use crate::providers::ReasoningBuffer;
+pub(crate) use native_resume::{
+    TOOL_CALL_ID, completed_computer_turn_history, interrupted_computer_turn_history, leaked_native_artifacts,
+};
 pub(crate) use prompt_cache::{session_lineage_from_prompt_cache_key, split_dynamic_prompt_suffix};
 pub(crate) use responses_adapter::{ResponsesStreamAdapter, ResponsesStreamEvent, reject_unbound_computer_item};
 pub(crate) use responses_stream::{

@@ -57,6 +57,7 @@ pub(crate) fn build_messages(
 ) -> Result<Vec<AnthropicMessage>, LLMError> {
     let mut messages = Vec::with_capacity(messages_to_process.len());
     let mut tool_use_ids = HashSet::new();
+    let mut pending_tool_use_ids: Vec<String> = Vec::new();
     let mut compaction_seen = false;
     let allow_mid_conversation_system = supports_mid_conversation_system_messages(&request.model, default_model);
     let allow_container_uploads = request
@@ -80,7 +81,9 @@ pub(crate) fn build_messages(
             MessageRole::Assistant => {
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
-                        tool_use_ids.insert(call.id.clone());
+                        if tool_use_ids.insert(call.id.clone()) {
+                            pending_tool_use_ids.push(call.id.clone());
+                        }
                     }
                 }
 
@@ -137,6 +140,7 @@ pub(crate) fn build_messages(
                 if let Some(tool_call_id) = &msg.tool_call_id
                     && tool_use_ids.contains(tool_call_id)
                 {
+                    pending_tool_use_ids.retain(|pending| pending != tool_call_id);
                     let tool_content_blocks = tool_result_blocks(msg.content.as_text().as_ref());
                     let content_val = if tool_content_blocks.len() == 1 && tool_content_blocks[0]["type"] == "text" {
                         json!(tool_content_blocks[0]["text"])
@@ -179,6 +183,23 @@ pub(crate) fn build_messages(
                 });
             }
         }
+    }
+
+    // Messages requires every tool_use to be answered by a matching
+    // tool_result. An interrupted turn can persist the call without its
+    // response; synthesize the aborted result so resumed history replays as
+    // a valid request, mirroring the OpenAI builder's convention.
+    for call_id in pending_tool_use_ids {
+        messages.push(AnthropicMessage {
+            role: "user".to_string(),
+            content: vec![AnthropicContentBlock::ToolResult(Box::new(AnthropicToolResultBlock {
+                tool_use_id: call_id,
+                content: json!("aborted"),
+                is_error: Some(true),
+                cache_control: None,
+            }))],
+            clear_at: None,
+        });
     }
 
     // Rolling-anchor placement: identify qualifying user messages and place
