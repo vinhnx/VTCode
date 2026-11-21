@@ -22,9 +22,10 @@ no pointer-only workflows, honored OS accessibility preferences, and plain-text 
 
 - Default minimum contrast is WCAG AA 4.5:1 (`ui.minimum_contrast = 4.5`). WCAG AAA 7.0 is supported via
   `minimum_contrast = 7.0`. See [Terminal Color Guidelines](../docs/guides/color_guidelines.md).
-- `ui.high_contrast_mode = true` (or `VTCODE_HIGH_CONTRAST=1`) raises the effective floor to 7.0:1 on both the TUI and
-  desktop without rewriting a saved `minimum_contrast`. On desktop, Settings → Accessibility → High contrast drives the
-  palette to maximum contrast and restores the previous slider value when switched off.
+- `ui.high_contrast_mode = true` (or `VTCODE_HIGH_CONTRAST=1`) raises the effective floor to 7.0:1 in the TUI without
+  rewriting a saved `minimum_contrast`. The desktop app does not read this setting; it has its own independent
+  Settings → Accessibility → High contrast switch, which drives the palette to maximum contrast and restores the
+  previous slider value when switched off.
 - Theme contrast is validated at startup with warnings, and every built-in theme is gated to meet the AA floor
   (`cargo nextest run -p vtcode-ui -E 'test(theme)'`).
 - `NO_COLOR=1` and `vtcode --no-color` suppress ANSI color; `ui.safe_colors_only` restricts output to the 11 portable
