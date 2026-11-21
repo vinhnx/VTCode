@@ -169,6 +169,13 @@ jobs:
           # Package names come from cargo metadata (cargo's package-name
           # grammar), never from PR-controlled free text.
           SELECTED_PACKAGES: ${{ steps.select.outputs.packages }}
+          # Sandbox-dependent tests (WebMCP check adapter, lifecycle hooks) on
+          # Linux need the real CLI as the sandbox launcher: the workspace test
+          # build always compiles it (the root package depends on every crate
+          # the diff can reach, so selection never excludes it while selecting
+          # those tests). Without it the launcher would resolve to the libtest
+          # harness, which cannot parse the sandbox-exec protocol.
+          VTCODE_LINUX_SANDBOX_EXECUTABLE: ${{ github.workspace }}/target/debug/vtcode
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             if [ -z "$SELECTED_PACKAGES" ]; then
