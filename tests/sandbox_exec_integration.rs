@@ -45,7 +45,7 @@ static LAUNCHER_SUPPORTED: LazyLock<bool> = LazyLock::new(|| {
     panic!("sandbox-exec canary unexpectedly failed: {stderr}");
 });
 
-fn sandbox_command(cwd: &Path) -> Command {
+fn sandbox_command(cwd: &Path) -> assert_cmd::Command {
     let mut cmd = cargo_bin_cmd!("vtcode");
     cmd.arg("sandbox-exec").current_dir(cwd);
     cmd
