@@ -1,5 +1,4 @@
-use std::cell::Cell;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 // Re-exported through `use super::*`: several view modules hash element IDs
 // and need these traits in scope for method resolution.
@@ -16,7 +15,6 @@ use gpui_kit::base::{
     Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, ResizeHandleContext, ResizeHandleRenderer,
     ResizeHandleState, StyledExt, TextViewStyle,
 };
-use gpui_kit::component::TitleBar;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
@@ -33,10 +31,10 @@ use gpui_kit::component::empty::{
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
     Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Editor,
-    EditorState, Enter, IndentInline, Input, InputEvent, InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp,
-    OutdentInline, Paste, Position, Redo, SelectAll, Textarea, TextareaState, Undo,
+    EditorState, Enter, IndentInline, Input, InputEvent, InputGroup, InputGroupAddon, InputGroupAddonAlignment,
+    InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp, OutdentInline, Paste, Position, Redo, SelectAll,
+    Textarea, TextareaState, Undo,
 };
-use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::marker::{Marker, MarkerContent, MarkerIcon, MarkerLoadingStyle, MarkerVariant};
 use gpui_kit::component::menu::DropdownMenu;
@@ -56,7 +54,9 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::component::toolbar::{Toolbar, ToolbarGroup};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{Icon, Selectable, Sizable, VirtualListScrollHandle, h_virtual_list, v_virtual_list};
+use gpui_kit::component::{
+    Icon, Selectable, Sizable, TitleBar, VirtualListScrollHandle, h_virtual_list, v_virtual_list,
+};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
@@ -76,18 +76,13 @@ use vtcode_desktop_protocol::{
     SessionOutputPage, SessionSummary, ThreadEventNotification,
 };
 
-use super::app_icon;
-use super::build_info;
-use super::diff_preferences;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{
     MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepare_markdown, render_code_preview,
     render_markdown, render_markdown_view, render_markdown_with_style, render_output_text,
 };
-use super::preferences;
 use super::strings::{app, bundle, display, i18n, key, key_context, keys};
-use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, EditTotals, NoticePayload, NoticeSeverity, SessionPollKey, SessionPollRun,
     ToolCategory, ToolCategoryCounts, Transcript, TranscriptItem, TranscriptRole, UserAttachment,
@@ -99,6 +94,7 @@ use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,
     launch_backend, request_fits_frame,
 };
+use super::{app_icon, build_info, diff_preferences, preferences, themes};
 use cli_handoff::CliHandoff;
 use file_rename::FileRenameState;
 use full_access_confirm::FullAccessConfirmState;
@@ -245,40 +241,8 @@ fn service_reconnect_guidance(has_retained_submission: bool) -> String {
     }
 }
 
-/// Leading sentence shared by both credential-guidance variants. The full
-/// sentences stay intact below (one localizable unit each); only this prefix
-/// is shared so [`is_provider_auth_guidance`] cannot drift from the generator.
-const PROVIDER_AUTH_GUIDANCE_PREFIX: &str = "No provider credentials are configured.";
-
-/// Whether an error banner shows credential guidance rather than an
-/// unrelated failure. A prefix match avoids rebuilding the guidance string
-/// just to compare; no other error uses this prefix.
-fn is_provider_auth_guidance(error: &str) -> bool {
-    error.starts_with(PROVIDER_AUTH_GUIDANCE_PREFIX)
-}
-
-/// Guidance shown while the service is connected but the active provider has
-/// no credentials. API-key providers offer an in-app Settings form (no reload
-/// needed after saving); login-flow providers still go through the Terminal.
-fn provider_auth_guidance(configuration: Option<&ConfigurationSnapshot>) -> String {
-    let setup = configuration
-        .map(|snapshot| snapshot.credential_setup_command.trim())
-        .filter(|command| !command.is_empty())
-        .unwrap_or("vtcode auth");
-    if configuration.is_some_and(|snapshot| snapshot.secret_store.is_some()) {
-        format!(
-            "{PROVIDER_AUTH_GUIDANCE_PREFIX} Save your API key in Settings → VT Code → Provider to reconnect. Terminal alternative: run `{setup}`, then choose Reload CLI settings in Settings → VT Code."
-        )
-    } else {
-        format!(
-            "{PROVIDER_AUTH_GUIDANCE_PREFIX} In Terminal, run `{setup}`, then choose Reload CLI settings in Settings → VT Code to reconnect."
-        )
-    }
-}
-
-fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
-    row_height * font_size.as_f32() / DEFAULT_UI_FONT_SIZE
-}
+mod auth_guidance;
+use auth_guidance::*;
 
 /// Pane-width drag bounds, shared with the preferences clamp.
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;

@@ -1,15 +1,14 @@
+use super::text_utils::display_width;
 use crate::tui::utils::transcript::{
     NON_WHITESPACE_TOKEN_PATTERN, QUOTED_PATH_PATTERN, has_explicit_path_syntax, trim_transcript_token_bounds,
 };
-use std::borrow::Cow;
-use std::path::Path;
-use std::time::{Duration, Instant};
-
-use super::text_utils::display_width;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
+use std::borrow::Cow;
+use std::path::Path;
+use std::time::{Duration, Instant};
 use unicode_width::UnicodeWidthStr;
 use vtcode_commons::{EditorTarget, parse_editor_target};
 

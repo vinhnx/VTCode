@@ -1,8 +1,7 @@
 use crate::agent::runloop::ui_list::{self, Tone};
 
 use anyhow::Result;
-use vtcode_core::skills::loader::EnhancedSkillLoader;
-use vtcode_core::skills::types::SkillVariety;
+use vtcode_core::skills::{loader::EnhancedSkillLoader, types::SkillVariety};
 use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep};
 

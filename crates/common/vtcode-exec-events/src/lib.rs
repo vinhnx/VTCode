@@ -18,7 +18,6 @@
 //! for tracking AI-generated code attribution. See the [`trace`] module for details.
 
 use serde::{Deserialize, Serialize};
-
 pub mod atif;
 pub mod diagnostic;
 pub use diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity};

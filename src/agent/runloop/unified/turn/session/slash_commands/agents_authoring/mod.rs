@@ -5,8 +5,7 @@ type YamlMapping = serde_json::Map<String, YamlValue>;
 use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use vtcode_commons::VtCodePaths;
-use vtcode_commons::fs::write_private_file_atomic;
+use vtcode_commons::{VtCodePaths, fs::write_private_file_atomic};
 use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 #[cfg(test)]
 use vtcode_config::load_subagent_from_file;

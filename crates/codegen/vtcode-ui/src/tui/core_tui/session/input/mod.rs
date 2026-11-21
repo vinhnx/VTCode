@@ -1,8 +1,7 @@
 use super::{
     Action, PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline,
 };
-use crate::tui::config::constants::ui;
-use crate::tui::ui::tui::types::InlineTextStyle;
+use crate::tui::{config::constants::ui, ui::tui::types::InlineTextStyle};
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     buffer::Buffer,

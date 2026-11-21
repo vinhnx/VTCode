@@ -1,7 +1,5 @@
 //! Backend-event dispatch: response routing, lifecycle, and interaction intake.
-
 use super::*;
-
 impl DesktopView {
     #[expect(clippy::cognitive_complexity, reason = "event router; split per event family")]
     pub(in super::super) fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {

@@ -1,9 +1,7 @@
 //! Workspace files: scanning, tree, attachments, and the preview overlay.
-
 use super::*;
 use gpui_kit::Action;
 use gpui_kit::component::menu::PopupMenu;
-
 #[derive(Action, Clone, PartialEq, Debug)]
 #[action(namespace = desktop, no_json)]
 pub(super) struct CopyFilePath {

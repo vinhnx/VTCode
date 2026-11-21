@@ -1,5 +1,4 @@
 //! Guided `/init` support for repository analysis and `AGENTS.md` generation.
-
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -9,7 +8,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use vtcode_commons::walk::{build_default_walker, is_excluded_dir};
-
 mod analysis;
 use analysis::analyze_project;
 

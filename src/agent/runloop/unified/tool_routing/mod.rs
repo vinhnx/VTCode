@@ -10,15 +10,13 @@ mod permission_events;
 mod permission_prompt;
 mod preflight;
 mod shell_approval;
-
+use anyhow::Result;
 use std::borrow::Cow;
 use std::fmt::Write;
 #[cfg(test)]
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Instant;
-
-use anyhow::Result;
 use tokio::sync::{Notify, RwLock};
 
 use serde_json::Value;

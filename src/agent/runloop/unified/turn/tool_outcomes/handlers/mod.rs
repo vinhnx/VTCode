@@ -1,5 +1,4 @@
 //! Tool outcome handling helpers for turn execution.
-
 use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
