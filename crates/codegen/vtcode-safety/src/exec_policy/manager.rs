@@ -338,19 +338,23 @@ pub type SharedExecPolicyManager = Arc<ExecPolicyManager>;
 /// layers. Both user roots stay in the list so installations that have not
 /// migrated to the native/XDG layout keep loading their personal rules.
 pub fn rules_layers(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut user_roots = Vec::with_capacity(2);
     match VtCodePaths::resolve() {
-        Ok(paths) => {
-            user_roots.push(paths.config_dir().join("rules"));
-            user_roots.push(paths.legacy_dir().join("rules"));
-        }
+        Ok(paths) => rules_layers_for_paths(workspace_root, &paths),
         Err(_) => {
             // Path resolution failure must not silently drop user rules.
+            let mut user_roots = Vec::new();
             if let Some(home) = dirs::home_dir() {
                 user_roots.push(home.join(".vtcode").join("rules"));
             }
+            rules_layers_from(workspace_root, &user_roots)
         }
     }
+}
+
+/// Resolve the user rule roots from one path policy snapshot. Pure over the
+/// snapshot so the canonical-config wiring is testable without process env.
+fn rules_layers_for_paths(workspace_root: &Path, paths: &VtCodePaths) -> Vec<PathBuf> {
+    let user_roots = [paths.config_dir().join("rules"), paths.legacy_dir().join("rules")];
     rules_layers_from(workspace_root, &user_roots)
 }
 
@@ -510,6 +514,34 @@ mod tests {
         assert_eq!(layers[0].file_name().unwrap(), "a.rules");
         assert_eq!(layers[1].file_name().unwrap(), "b.rules");
         assert!(layers.iter().all(|p| p.extension().and_then(|e| e.to_str()) == Some("rules")));
+    }
+
+    #[test]
+    fn rules_layers_for_paths_wires_canonical_config_before_legacy() {
+        // Build a path policy from explicit values so the production wrapper's
+        // config-dir wiring is verified without mutating process-global env.
+        let canonical = tempdir().unwrap();
+        let legacy = tempdir().unwrap();
+        let paths = VtCodePaths::from_environment(&[
+            ("VTCODE_CONFIG", canonical.path().to_str().unwrap()),
+            ("VTCODE_HOME", legacy.path().to_str().unwrap()),
+        ])
+        .expect("resolve explicit path policy");
+
+        let canonical_rules = canonical.path().join("rules");
+        let legacy_rules = legacy.path().join("rules");
+        std::fs::create_dir_all(&canonical_rules).unwrap();
+        std::fs::create_dir_all(&legacy_rules).unwrap();
+        std::fs::write(canonical_rules.join("canonical.rules"), "").unwrap();
+        std::fs::write(legacy_rules.join("legacy.rules"), "").unwrap();
+
+        let workspace = tempdir().unwrap();
+        let layers = rules_layers_for_paths(workspace.path(), &paths);
+        let names: Vec<_> = layers
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["canonical.rules", "legacy.rules"]);
     }
 
     #[test]
