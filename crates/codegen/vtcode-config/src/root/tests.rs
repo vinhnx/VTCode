@@ -138,6 +138,36 @@ fn reduce_motion_uses_environment_default_and_preserves_animation_override() {
 }
 
 #[test]
+fn high_contrast_raises_effective_floor_without_rewriting_preference() {
+    let normal = UiConfig::default();
+    assert!(!normal.high_contrast_mode);
+    assert_eq!(normal.effective_minimum_contrast(), normal.minimum_contrast);
+
+    // Below the AAA floor: the floor wins, but the saved value is untouched.
+    let raised: UiConfig = toml::from_str("minimum_contrast = 5.0\nhigh_contrast_mode = true").unwrap();
+    assert!(raised.high_contrast_mode);
+    assert_eq!(raised.minimum_contrast, 5.0);
+    assert_eq!(raised.effective_minimum_contrast(), 7.0);
+
+    // Above the AAA floor: a stricter user preference is preserved.
+    let stricter: UiConfig = toml::from_str("minimum_contrast = 8.0\nhigh_contrast_mode = true").unwrap();
+    assert_eq!(stricter.effective_minimum_contrast(), 8.0);
+}
+
+#[test]
+#[serial]
+fn high_contrast_env_var_sets_default_and_explicit_false_wins() {
+    with_env_var("VTCODE_HIGH_CONTRAST", Some("1"), || {
+        assert!(UiConfig::default().high_contrast_mode);
+        let explicit: UiConfig = toml::from_str("high_contrast_mode = false").unwrap();
+        assert!(!explicit.high_contrast_mode);
+    });
+    with_env_var("VTCODE_HIGH_CONTRAST", Some("0"), || {
+        assert!(!UiConfig::default().high_contrast_mode);
+    });
+}
+
+#[test]
 fn tool_display_mode_defaults_to_compact() {
     let ui = UiConfig::default();
     assert_eq!(ui.tool_display_mode, ToolDisplayMode::Compact);

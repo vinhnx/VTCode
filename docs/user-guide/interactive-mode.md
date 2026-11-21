@@ -118,6 +118,10 @@ To keep progress animation while reduced motion is enabled, set `ui.reduce_motio
 Screen reader mode always keeps progress animation disabled. Suppressed thinking indicators use text such as `Thinking`
 in the footer, composer status, and terminal title, without a Braille spinner. Configured status text remains visible.
 
+`ui.high_contrast_mode = true` (or `VTCODE_HIGH_CONTRAST=1`) raises the effective contrast floor to WCAG AAA 7.0:1
+without changing a saved `minimum_contrast`. Screen-reader mode also forces the inline surface, keeping output in
+terminal scrollback even when `agent.ui_surface = "alternate"` or a Codex `tui.alternate_screen` override is present.
+
 Enable `ui.screen_reader_mode = true` or run with `VTCODE_SCREEN_READER=1`. Transcript Review opens in raw mode;
 enabling the setting during an open review also switches it to raw. You can still toggle rich/raw manually. Disabling
 screen-reader mode leaves the current review mode unchanged.

@@ -35,7 +35,7 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
             window.render_frame(cx);
             let context = window.find("composer-context").bounds();
             let frame = window.find("message-composer-frame").bounds();
-            let cluster = window.find("zen-composer-context").bounds();
+            let cluster = window.find("composer-secondary-options").bounds();
             let workspace_button = window.find("composer-workspace").bounds();
             let attach_button = window.find("attach-files").bounds();
             let model_button = window.find("pick-model").bounds();
@@ -56,16 +56,17 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
                 (workspace_button.origin.x - attach_button.origin.x).abs() <= px(1.),
                 "context-row buttons start on the button-row spine at {base_size}px: workspace={workspace_button:?} attach={attach_button:?}"
             );
-            let leading = cluster.origin.x - frame.origin.x;
-            let trailing = (frame.origin.x + frame.size.width) - (send.origin.x + send.size.width);
-            assert!(
-                (trailing - leading).abs() <= px(1.),
-                "send keeps a symmetric trailing lane at {base_size}px: leading={leading:?} trailing={trailing:?} frame={frame:?} send={send:?}"
-            );
-            // The option cluster may wrap to a second row at large font
-            // sizes; the shared center line only pins while it fits on one.
-            let wrapped = policy_button.top() >= mode_button.bottom();
-            if !wrapped {
+            // The leading group and the trailing send cluster share one row
+            // at typical sizes. At larger zoom the row wraps: both lines then
+            // restart on the leading spine and send rides the model's line.
+            let frame_right = frame.origin.x + frame.size.width;
+            if (model_button.origin.y - attach_button.origin.y).abs() <= px(1.) {
+                let leading = cluster.origin.x - frame.origin.x;
+                let trailing = frame_right - (send.origin.x + send.size.width);
+                assert!(
+                    (trailing - leading).abs() <= px(1.),
+                    "send keeps a symmetric trailing lane at {base_size}px: leading={leading:?} trailing={trailing:?} frame={frame:?} send={send:?}"
+                );
                 for (name, button) in
                     [("mode", mode_button), ("policy", policy_button), ("send", send)]
                 {
@@ -73,6 +74,23 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
                     assert!(
                         drift <= px(1.),
                         "button row shares one center line at {base_size}px: {name} drifts {drift:?} from model: model={model_button:?} other={button:?}"
+                    );
+                }
+            } else {
+                assert!(
+                    (model_button.origin.x - attach_button.origin.x).abs() <= px(1.),
+                    "wrapped lines share the leading spine at {base_size}px: attach={attach_button:?} model={model_button:?}"
+                );
+                assert!(
+                    (send.center().y - model_button.center().y).abs() <= px(1.),
+                    "send rides the model's wrapped line at {base_size}px: send={send:?} model={model_button:?}"
+                );
+                for (name, button) in
+                    [("attach", attach_button), ("mode", mode_button), ("policy", policy_button), ("send", send)]
+                {
+                    assert!(
+                        button.origin.x + button.size.width <= frame_right + px(1.),
+                        "{name} stays inside the frame at {base_size}px: button={button:?} frame={frame:?}"
                     );
                 }
             }

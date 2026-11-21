@@ -62,6 +62,10 @@ use_memories = true
 atif_enabled = true
 
 [ui]
+# Raise the text contrast floor to WCAG AAA (7.0:1) across the TUI and desktop.
+# An explicit minimum_contrast above 7.0 is preserved. Overridable per run with
+# VTCODE_HIGH_CONTRAST=1.
+# high_contrast_mode = true
 # Application icon artwork: "dynamic" follows the active light/dark mode,
 # "light", "dark", "clear", and "tinted" pin one variant.
 # app_icon = "dynamic"

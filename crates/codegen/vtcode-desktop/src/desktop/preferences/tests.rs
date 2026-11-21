@@ -11,6 +11,35 @@ fn contrast_defaults_to_zero_and_clamps_saved_values() {
 }
 
 #[test]
+fn high_contrast_preserves_a_custom_contrast_when_switched_off() {
+    let mut prefs = Preferences::default();
+    assert!(!prefs.high_contrast);
+    assert_eq!(prefs.contrast_before_high_contrast, None);
+
+    prefs.contrast = 60;
+    assert_eq!(prefs.set_high_contrast(true), Some(100));
+    assert!(prefs.high_contrast);
+    assert_eq!(prefs.contrast_before_high_contrast, Some(60));
+    assert_eq!(prefs.contrast(), 100);
+
+    assert_eq!(prefs.set_high_contrast(false), Some(60));
+    assert!(!prefs.high_contrast);
+    assert_eq!(prefs.contrast_before_high_contrast, None);
+
+    // No-op toggles must not overwrite the stored value.
+    assert_eq!(prefs.set_high_contrast(false), None);
+    assert_eq!(prefs.contrast(), 60);
+}
+
+#[test]
+fn high_contrast_off_without_a_saved_value_resets_to_theme_default() {
+    let mut prefs: Preferences = serde_json::from_str(r#"{"highContrast":true}"#).unwrap();
+    assert!(prefs.high_contrast);
+    assert_eq!(prefs.set_high_contrast(false), Some(0));
+    assert_eq!(prefs.contrast(), 0);
+}
+
+#[test]
 fn test_preferences_paths_are_fresh_and_isolated_per_thread() {
     let first = install_test_preferences_path();
     let current = install_test_preferences_path();

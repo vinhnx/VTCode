@@ -73,6 +73,13 @@ impl DesktopView {
         if self.preferences.contrast() == contrast {
             return;
         }
+        // Taking manual control of the slider ends the one-click overlay.
+        // Its stored value is stale now; clearing it prevents a later toggle
+        // from restoring a contrast the user has already replaced.
+        if self.preferences.high_contrast {
+            self.preferences.high_contrast = false;
+            self.preferences.contrast_before_high_contrast = None;
+        }
         self.preferences.contrast = contrast;
         self.theme_mode = themes::apply_selection_with_contrast(
             &self.theme_id,
@@ -98,6 +105,28 @@ impl DesktopView {
         self.contrast_slider.update(cx, |slider, cx| slider.set_value(0.0, window, cx));
         // Discrete action: persist once (the drag path above never saves).
         self.save_preferences();
+    }
+
+    /// One-click high-contrast overlay. The slider observer short-circuits on
+    /// the value we just wrote, so the palette is applied exactly once here.
+    pub(super) fn set_high_contrast(&mut self, enabled: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(contrast) = self.preferences.set_high_contrast(enabled) else {
+            return;
+        };
+        self.theme_mode = themes::apply_selection_with_contrast(
+            &self.theme_id,
+            contrast,
+            &self.preferences.custom_themes,
+            Some(window),
+            cx,
+        );
+        self.sync_terminal_palette(cx);
+        self.refresh_composer_highlight(cx);
+        self.transcript.remeasure();
+        self.contrast_slider
+            .update(cx, |slider, cx| slider.set_value(f32::from(contrast), window, cx));
+        self.save_preferences();
+        cx.notify();
     }
 
     pub(super) fn set_terminal_position(&mut self, position: preferences::TerminalPosition, cx: &mut Context<Self>) {

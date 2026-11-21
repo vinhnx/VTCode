@@ -331,7 +331,7 @@ pub(crate) async fn refresh_runtime_config_from_manager(
     vtcode_ui::tui::panic_hook::set_show_diagnostics(runtime_config.ui.show_diagnostics_in_transcript);
 
     theme::set_color_accessibility_config(theme::ColorAccessibilityConfig {
-        minimum_contrast: runtime_config.ui.minimum_contrast,
+        minimum_contrast: runtime_config.ui.effective_minimum_contrast(),
         bold_is_bright: runtime_config.ui.bold_is_bright,
         safe_colors_only: runtime_config.ui.safe_colors_only,
     });

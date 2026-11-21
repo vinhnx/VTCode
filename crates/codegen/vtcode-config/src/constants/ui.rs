@@ -118,6 +118,8 @@ pub fn agent_mode_hue(mode: &str) -> Option<&'static str> {
 
 // Theme and color constants
 pub const THEME_MIN_CONTRAST_RATIO: f32 = 4.5;
+/// WCAG AAA floor applied when `ui.high_contrast_mode` is enabled.
+pub const THEME_HIGH_CONTRAST_RATIO: f32 = 7.0;
 /// Luminance where white and black text reach the same WCAG contrast ratio;
 /// drives the filled-control foreground choice (`filled_text`).
 pub const THEME_FILLED_TEXT_LUMINANCE_CROSSOVER: f32 = 0.179;

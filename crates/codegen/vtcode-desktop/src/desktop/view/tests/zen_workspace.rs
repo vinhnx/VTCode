@@ -932,25 +932,39 @@ fn zen_composer_pairs_option_controls_with_send_action(cx: &mut TestAppContext) 
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Ask before protected actions"));
         let attach = window.find("attach-files").bounds();
         let model = window.find("pick-model").bounds();
-        assert!(attach.right() <= model.left(), "attach leads the zen option cluster: {attach:?} vs {model:?}");
-        let context = window.find("zen-composer-context").bounds();
+        let context = window.find("composer-secondary-options").bounds();
         let send = window.find("send-prompt").bounds();
-        assert!(
-            context.right() <= send.left(),
-            "the option cluster must end before the send action: {context:?} vs {send:?}"
-        );
-        assert!(
-            send.top() <= context.center().y && context.center().y <= send.bottom(),
-            "the option cluster shares the send action row: {context:?} vs {send:?}"
-        );
+        if (model.origin.y - attach.origin.y).abs() <= px(1.) {
+            assert!(attach.right() <= model.left(), "attach leads the option group: {attach:?} vs {model:?}");
+            assert!(
+                context.right() <= send.left(),
+                "the option group must end before the send action: {context:?} vs {send:?}"
+            );
+            assert!(
+                send.top() <= context.center().y && context.center().y <= send.bottom(),
+                "the option group shares the send action row: {context:?} vs {send:?}"
+            );
+        } else {
+            // Wrapped: the trailing cluster restarts on the leading spine and
+            // the send action shares the model's row.
+            assert!(
+                (model.origin.x - attach.origin.x).abs() <= px(1.),
+                "wrapped lines share the leading spine: attach={attach:?} model={model:?}"
+            );
+            assert!(
+                (send.center().y - model.center().y).abs() <= px(1.),
+                "send rides the model's wrapped line: send={send:?} model={model:?}"
+            );
+        }
         assert!(
             window.find("message-composer-frame").bounds().contains(&context.center()),
-            "the option cluster sits inside the composer card"
+            "the option group sits inside the composer card"
         );
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
-        assert!(window.try_find("zen-composer-context").is_none());
+        // One layout in both modes: the same option group and buttons stay put.
+        assert!(window.try_find("composer-secondary-options").is_some());
         assert!(window.try_find("attach-files").is_some());
         assert!(window.try_find("pick-model").is_some());
         assert!(window.try_find("composer-mode").is_some());

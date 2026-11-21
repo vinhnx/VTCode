@@ -22,6 +22,9 @@ no pointer-only workflows, honored OS accessibility preferences, and plain-text 
 
 - Default minimum contrast is WCAG AA 4.5:1 (`ui.minimum_contrast = 4.5`). WCAG AAA 7.0 is supported via
   `minimum_contrast = 7.0`. See [Terminal Color Guidelines](../docs/guides/color_guidelines.md).
+- `ui.high_contrast_mode = true` (or `VTCODE_HIGH_CONTRAST=1`) raises the effective floor to 7.0:1 on both the TUI and
+  desktop without rewriting a saved `minimum_contrast`. On desktop, Settings → Accessibility → High contrast drives the
+  palette to maximum contrast and restores the previous slider value when switched off.
 - Theme contrast is validated at startup with warnings, and every built-in theme is gated to meet the AA floor
   (`cargo nextest run -p vtcode-ui -E 'test(theme)'`).
 - `NO_COLOR=1` and `vtcode --no-color` suppress ANSI color; `ui.safe_colors_only` restricts output to the 11 portable
@@ -38,8 +41,10 @@ no pointer-only workflows, honored OS accessibility preferences, and plain-text 
 
 ### Screen readers and assistive technology
 
-- `ui.screen_reader_mode = true` (or `VTCODE_SCREEN_READER=1`) disables animations, uses plain-text indicators, and
-  optimizes output for assistive technology.
+- `ui.screen_reader_mode = true` (or `VTCODE_SCREEN_READER=1`) disables animations, uses plain-text indicators, labels
+  diagnostic severity in text (`[Warning]`, `[Error]`), and optimizes output for assistive technology. It also forces the
+  scrollback-friendly inline surface even when an explicit `agent.ui_surface` or Codex `tui.alternate_screen` asks for
+  the alternate screen.
 - Headless commands produce linear plain-text output that works better with screen readers and pipes:
   `vtcode ask`, `vtcode exec`, and `vtcode review`.
 - Transcript Review (`Ctrl+T`) has an ANSI-free raw rendering mode (`R`), `Ctrl+O` to copy, `v` to open the full
@@ -56,9 +61,11 @@ no pointer-only workflows, honored OS accessibility preferences, and plain-text 
 
 ## Known limitations
 
-- The interactive TUI uses alternate-screen fullscreen rendering (like `vim` or `less`). This limits terminal
-  scrollback and some screen-reader virtual buffers. Workarounds: headless `ask`/`exec`, Transcript Review raw mode
-  (`R`), `[` for native scrollback, or `v` to read in your editor.
+- The default interactive surface is inline, so output stays in terminal scrollback. Setting `agent.ui_surface =
+  "alternate"` (or Codex `tui.alternate_screen = "always"`) switches to fullscreen rendering, which limits scrollback and
+  some screen-reader virtual buffers; screen-reader mode overrides that choice back to inline. Workarounds for the
+  fullscreen surface: headless `ask`/`exec`, Transcript Review raw mode (`R`), `[` for native scrollback, or `v` to read
+  in your editor.
 - Complex live-updating rows (progress, background-task indicators) are simplified under reduced-motion and
   screen-reader modes, but not every animated surface has a separate static equivalent yet.
 - Windows support and some terminal-specific key bindings (for example `Shift+Enter` multiline input) vary by
@@ -85,10 +92,12 @@ We aim to acknowledge reports promptly and will coordinate fixes openly unless p
 ## Contributor expectations
 
 - Keep new UI text at or above the configured minimum contrast (default 4.5:1); do not add pointer-only flows.
-- Honor existing accessibility switches: `NO_COLOR`/`--no-color`, `reduce_motion_mode`, `screen_reader_mode`, and
-  `mouse_capture = false`. Animated or color-only signals need a static or textual equivalent.
-- Test TUI changes with `VTCODE_REDUCE_MOTION=1`, `VTCODE_SCREEN_READER=1`, `NO_COLOR=1`, and a light and a dark theme
-  before opening a PR, and run `./scripts/check-dev.sh` plus `cargo nextest run -p vtcode-ui -E 'test(theme)'`.
+- Honor existing accessibility switches: `NO_COLOR`/`--no-color`, `reduce_motion_mode`, `screen_reader_mode`,
+  `high_contrast_mode`, and `mouse_capture = false`. Animated or color-only signals need a static or textual equivalent.
+- Test TUI changes with `VTCODE_REDUCE_MOTION=1`, `VTCODE_SCREEN_READER=1`, `VTCODE_HIGH_CONTRAST=1`, `NO_COLOR=1`, and
+  a light and a dark theme before opening a PR, and run `./scripts/check-dev.sh` plus
+  `cargo nextest run -p vtcode-ui -E 'test(theme)'`. `python3 scripts/check_accessibility.py` guards the documented
+  switch contract and desktop locale parity.
 - Follow [Contributing](../docs/CONTRIBUTING.md) (Conventional Commits, surgical diffs, docs with user-facing changes).
 
 ## Technical notes
@@ -99,5 +108,5 @@ and Markdown documentation. No audio, video, or CAPTCHA content ships in the def
 
 ## Maintenance
 
-This statement is maintained by the VT Code maintainers alongside the docs. Last reviewed: 2026-10-03. If this file
+This statement is maintained by the VT Code maintainers alongside the docs. Last reviewed: 2026-11-21. If this file
 and the linked guides disagree, the guides describe current behavior; please file an issue so we can fix the statement.

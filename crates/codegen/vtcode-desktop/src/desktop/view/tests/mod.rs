@@ -759,6 +759,7 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
 }
 
 mod about_dialog;
+mod accessibility_controls;
 mod activity_navigation;
 mod activity_settings;
 mod activity_summary;

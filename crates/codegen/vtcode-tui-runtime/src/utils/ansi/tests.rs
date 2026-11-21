@@ -427,6 +427,22 @@ fn streaming_markdown_table_uses_same_aligned_record_layout() -> Result<()> {
 }
 
 #[test]
+fn diagnostic_severity_is_labeled_only_in_screen_reader_mode() {
+    use vtcode_commons::diagnostics::DiagnosticSeverity;
+
+    let text = "disk full";
+    // Same severity across both modes: the label must differ, not the input.
+    assert_eq!(output::labeled_diagnostic_text(DiagnosticSeverity::Error, text, false).as_ref(), text);
+    assert_eq!(output::labeled_diagnostic_text(DiagnosticSeverity::Error, text, true).as_ref(), "[Error] disk full");
+    // Different severities must produce different labels even with the same text.
+    assert_eq!(
+        output::labeled_diagnostic_text(DiagnosticSeverity::Warning, text, true).as_ref(),
+        "[Warning] disk full"
+    );
+    assert_eq!(output::labeled_diagnostic_text(DiagnosticSeverity::Info, text, true).as_ref(), "[Info] disk full");
+}
+
+#[test]
 fn line_function_no_trailing_empty_line() {
     use anstream::{AutoStream, ColorChoice};
     use vtcode_core::utils::ansi_capabilities::AnsiCapabilities;

@@ -83,6 +83,10 @@ All color accessibility settings in `[ui]` section:
 # WCAG minimum contrast ratio (4.5 = AA, 7.0 = AAA, 1.0 = disabled)
 minimum_contrast = 4.5
 
+# Raise the effective floor to AAA (7.0) on every surface without rewriting
+# minimum_contrast. Also settable via VTCODE_HIGH_CONTRAST=1.
+# high_contrast_mode = true
+
 # Legacy terminal compatibility: avoid bold (may map to bright)
 bold_is_bright = false
 

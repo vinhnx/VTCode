@@ -10,6 +10,7 @@ pub(super) struct AccessibilitySettingsProps {
     pub(super) contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
     pub(super) contrast_focus: FocusHandle,
     pub(super) contrast: u8,
+    pub(super) high_contrast: bool,
 }
 
 impl AccessibilitySettingsProps {
@@ -22,7 +23,8 @@ impl AccessibilitySettingsProps {
             motion_choice_focus: view.motion_choice_focus.clone(),
             contrast_slider: view.contrast_slider.clone(),
             contrast_focus: view.contrast_focus.clone(),
-            contrast: view.preferences.contrast,
+            contrast: view.preferences.contrast(),
+            high_contrast: view.preferences.high_contrast,
         }
     }
 }
@@ -142,6 +144,19 @@ impl DesktopView {
                                 let view = view.clone();
                                 move |_, _: &mut Window, cx: &mut App| {
                                     view.update(cx, |view, cx| view.toggle_status_bar(cx));
+                                }
+                            }),
+                    )
+                    .child(
+                        gpui_kit::component::switch::Switch::new("high-contrast")
+                            .label(rust_i18n::t!("app.settings.accessibility.high_contrast").to_string())
+                            .checked(props.high_contrast)
+                            .on_click({
+                                let view = view.clone();
+                                move |checked: &bool, window: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| {
+                                        view.set_high_contrast(*checked, window, cx);
+                                    });
                                 }
                             }),
                     )

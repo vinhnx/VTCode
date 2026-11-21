@@ -454,7 +454,7 @@ pub(super) fn apply_live_theme_and_appearance(
     session_bootstrap: &SessionBootstrap,
 ) {
     let color_config = theme::ColorAccessibilityConfig {
-        minimum_contrast: cfg.ui.minimum_contrast,
+        minimum_contrast: cfg.ui.effective_minimum_contrast(),
         bold_is_bright: cfg.ui.bold_is_bright,
         safe_colors_only: cfg.ui.safe_colors_only,
     };

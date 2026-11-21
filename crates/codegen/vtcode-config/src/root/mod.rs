@@ -219,6 +219,12 @@ pub struct UiConfig {
     #[serde(default = "default_minimum_contrast")]
     pub minimum_contrast: f32,
 
+    /// Raise the effective text contrast floor to WCAG AAA (7.0:1) on both the
+    /// TUI and desktop. Can also be enabled with VTCODE_HIGH_CONTRAST=1. It
+    /// wins over `minimum_contrast` without rewriting the saved value.
+    #[serde(default = "default_high_contrast_mode")]
+    pub high_contrast_mode: bool,
+
     /// Compatibility mode for legacy terminals that map bold to bright colors.
     /// When enabled, avoids using bold styling on text that would become bright colors,
     /// preventing visibility issues in terminals with "bold is bright" behavior.
@@ -324,6 +330,10 @@ pub enum ColorSchemeMode {
 
 fn default_minimum_contrast() -> f32 {
     crate::constants::ui::THEME_MIN_CONTRAST_RATIO
+}
+
+fn default_high_contrast_mode() -> bool {
+    env_bool_var("VTCODE_HIGH_CONTRAST").unwrap_or(false)
 }
 
 fn default_bold_is_bright() -> bool {
@@ -481,6 +491,7 @@ impl Default for UiConfig {
             show_message_timestamps: default_show_message_timestamps(),
             // Color accessibility defaults
             minimum_contrast: default_minimum_contrast(),
+            high_contrast_mode: default_high_contrast_mode(),
             bold_is_bright: default_bold_is_bright(),
             ambiguous_width: default_ambiguous_width(),
             safe_colors_only: default_safe_colors_only(),
@@ -495,6 +506,21 @@ impl Default for UiConfig {
             hide_header: default_hide_header(),
             diff_preview_mode: default_diff_preview_mode(),
             transcript_review: UiTranscriptReviewConfig::default(),
+        }
+    }
+}
+
+impl UiConfig {
+    /// Contrast floor actually applied to rendered text.
+    ///
+    /// `high_contrast_mode` raises it to the WCAG AAA floor without rewriting
+    /// the user's saved `minimum_contrast`, so toggling it is reversible and
+    /// never loses a custom value.
+    pub fn effective_minimum_contrast(&self) -> f32 {
+        if self.high_contrast_mode {
+            crate::constants::ui::THEME_HIGH_CONTRAST_RATIO.max(self.minimum_contrast)
+        } else {
+            self.minimum_contrast
         }
     }
 }

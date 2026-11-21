@@ -213,7 +213,7 @@ impl DesktopView {
             })
             .map(capitalize_agent_label)
             .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_LOADING_VALUE).to_string());
-        desktop_trigger_pill("composer-mode")
+        desktop_ghost_button("composer-mode")
             .open(self.palette_open_for(&[PaletteKind::Modes]))
             .child(
                 div()

@@ -207,14 +207,11 @@ pub(crate) async fn initialize_session_shell(
         theme_spec.clone(),
         SessionOptions {
             placeholder: default_placeholder.clone(),
-            surface_preference: vt_cfg
-                .and_then(|cfg| cfg.tui.alternate_screen)
-                .map(|mode| match mode {
-                    vtcode_core::config::TuiAlternateScreen::Always => vtcode_ui::tui::app::SessionSurface::Alternate,
-                    vtcode_core::config::TuiAlternateScreen::Never
-                    | vtcode_core::config::TuiAlternateScreen::Unknown => vtcode_ui::tui::app::SessionSurface::Inline,
-                })
-                .unwrap_or_else(|| to_tui_surface(config.ui_surface)),
+            surface_preference: resolve_surface_preference(
+                vt_cfg.is_some_and(|cfg| cfg.ui.screen_reader_mode),
+                vt_cfg.and_then(|cfg| cfg.tui.alternate_screen),
+                to_tui_surface(config.ui_surface),
+            ),
             inline_rows,
             event_callback: Some(interrupt_callback),
             focus_callback: Some(focus_callback),
@@ -338,8 +335,63 @@ pub(crate) fn build_session_event_callback(
     })
 }
 
+/// Resolve the interactive surface.
+///
+/// Screen-reader mode always selects the inline surface: output then stays in
+/// terminal scrollback instead of being hidden by the alternate screen, which
+/// most screen-reader virtual buffers cannot read. Without screen-reader mode
+/// the explicit Codex `tui.alternate_screen` wins, then `agent.ui_surface`.
+fn resolve_surface_preference(
+    screen_reader_mode: bool,
+    alternate_screen: Option<vtcode_core::config::TuiAlternateScreen>,
+    fallback: vtcode_ui::tui::app::SessionSurface,
+) -> vtcode_ui::tui::app::SessionSurface {
+    use vtcode_core::config::TuiAlternateScreen;
+    use vtcode_ui::tui::app::SessionSurface;
+
+    if screen_reader_mode {
+        return SessionSurface::Inline;
+    }
+    alternate_screen
+        .map(|mode| match mode {
+            TuiAlternateScreen::Always => SessionSurface::Alternate,
+            TuiAlternateScreen::Never | TuiAlternateScreen::Unknown => SessionSurface::Inline,
+        })
+        .unwrap_or(fallback)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use vtcode_core::config::TuiAlternateScreen;
+    use vtcode_ui::tui::app::SessionSurface;
+
+    /// Screen-reader mode outranks both explicit surface switches: a Codex
+    /// sidecar config that forces the alternate screen must not hide the
+    /// transcript from assistive technology.
+    #[test]
+    fn screen_reader_mode_forces_the_inline_surface() {
+        assert_eq!(
+            resolve_surface_preference(true, Some(TuiAlternateScreen::Always), SessionSurface::Alternate),
+            SessionSurface::Inline
+        );
+        assert_eq!(resolve_surface_preference(true, None, SessionSurface::Alternate), SessionSurface::Inline);
+    }
+
+    /// Without screen-reader mode the old precedence is unchanged. Distinct
+    /// inputs prove both branches instead of repeating an identical case.
+    #[test]
+    fn surface_precedence_is_unchanged_without_screen_reader_mode() {
+        assert_eq!(
+            resolve_surface_preference(false, Some(TuiAlternateScreen::Always), SessionSurface::Inline),
+            SessionSurface::Alternate
+        );
+        assert_eq!(
+            resolve_surface_preference(false, Some(TuiAlternateScreen::Never), SessionSurface::Alternate),
+            SessionSurface::Inline
+        );
+        assert_eq!(resolve_surface_preference(false, None, SessionSurface::Alternate), SessionSurface::Alternate);
+    }
 
     /// Structural ratchet (blog "anything you can count"): the shell paint
     /// path must never reintroduce heavy init before first paint.

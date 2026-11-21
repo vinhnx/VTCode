@@ -162,6 +162,10 @@ run_repo_governance_gates() {
     run_python_gate "No new third-party MCP provider docs." \
         "New MCP provider guide/example added (out of scope; see docs/CONTRIBUTING.md)." \
         scripts/check_mcp_provider_docs.py || failed=1
+    print_status "Checking the documented accessibility contract..."
+    run_python_gate "Accessibility contract is consistent." \
+        "Accessibility switch documentation or desktop locale parity drifted." \
+        scripts/check_accessibility.py || failed=1
     return "$failed"
 }
 

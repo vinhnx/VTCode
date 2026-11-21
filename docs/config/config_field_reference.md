@@ -53,7 +53,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.auto_compaction_pause_after` | `boolean` | no | `false` | Whether to pause after compaction (Anthropic only). When true and compaction triggers, the API returns early with `stop_reason: "compaction"` and only the compaction block. The caller can then insert additional messages before the model generates its text response. |
 | `agent.harness.auto_compaction_threshold_tokens` | `integer \| null` | no | `null` | Optional absolute compaction threshold (tokens) for native and local compaction. When set, this may lower the trigger but cannot bypass the resolved model capacity or `context.max_context_tokens` safety ceiling. The next response budget is reserved before deriving the trigger. |
 | `agent.harness.budget_warning_threshold` | `number` | no | `0.75` | Fraction of `max_budget_usd` at which VT Code emits a one-time near-budget warning. Ignored when `max_budget_usd` is unset. |
-| `agent.harness.compact_on_model_switch` | `boolean` | no | `true` | Automatically compact conversation context when the main session model or provider is switched mid-conversation, so the newly selected model starts from a summary instead of the outgoing model's raw trace. Default: true. Disable to keep the full history across a model switch; reasoning continuation metadata is still dropped when the active client actually changes. |
+| `agent.harness.compact_on_model_switch` | `boolean` | no | `true` | Automatically compact conversation context when the main session model or provider is switched mid-conversation, so the newly selected model starts from a summary instead of the outgoing model's raw trace. Default: true. Disable to keep the full history across a model switch. |
 | `agent.harness.confidence_escalation.always_escalate_tools` | `array` | no | `["delete_file", "remove", "rm"]` | Tool names that always trigger escalation regardless of confidence. These are matched against the tool call's function name. |
 | `agent.harness.confidence_escalation.always_escalate_tools[]` | `string` | no | `-` | - |
 | `agent.harness.confidence_escalation.confidence_threshold` | `number` | no | `0.7` | Minimum p_success threshold (0.0–1.0). Tools whose estimated success probability falls below this threshold trigger escalation. |
@@ -233,12 +233,12 @@ python3 scripts/generate_config_field_reference.py
 | `commands.deny_regex[]` | `string` | no | `-` | - |
 | `commands.extra_path_entries` | `array` | no | `["$HOME/.cargo/bin", "$HOME/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "$HOME/.asdf/bin", "$HOME/.asdf/shims...` | Additional directories that should be searched/prepended to PATH for command execution |
 | `commands.extra_path_entries[]` | `string` | no | `-` | - |
-| `computer_use.browser_build` | `string \| null` | no | `null` | Approved static build served to the browser target; absolute directory, required before turns can run. |
-| `computer_use.decisions_review` | `boolean` | no | `false` | Ask OpenAI Decisions to review each proposed batch for prompt injection and task drift. OpenAI routes only; uses API billing. |
-| `computer_use.enabled` | `boolean` | no | `false` | Opt-in marker for the computer-use runtime. Needs a verified computer-use model (currently OpenAI gpt-6-luna). Approval stays per turn and per target. |
+| `computer_use.browser_build` | `null \| string` | no | `null` | Approved static build served to the browser target. Required before turns can run, but not before the switch can persist: Settings enables first and guides to the target second, and turns fail closed until a target is set. Must be absolute when present. Existence is verified at launch, not here. |
+| `computer_use.decisions_review` | `boolean` | no | `false` | Ask OpenAI Decisions to review each proposed batch for prompt injection and task drift before execution. Only OpenAI providers whose route supports Decisions are reviewed; anything else proceeds on the human turn approval alone. Uses OpenAI API billing. |
+| `computer_use.enabled` | `boolean` | no | `false` | Opt-in marker. Needs a verified computer-use model. The feature stays inert unless this is true. |
 | `computer_use.image` | `string` | no | `"vtcode-computer-use-browser:1.65.1"` | Pinned browser container image (tag or digest, never `latest`). |
-| `computer_use.max_actions_per_turn` | `integer` | no | `50` | Maximum actions executed in one approved turn (1-1000). |
-| `computer_use.turn_timeout_secs` | `integer` | no | `300` | Wall-clock budget for one approved turn, in seconds (1-3600). |
+| `computer_use.max_actions_per_turn` | `integer` | no | `50` | Maximum actions executed in one approved turn. |
+| `computer_use.turn_timeout_secs` | `integer` | no | `300` | Wall-clock budget for one approved turn, in seconds. |
 | `context.dynamic.enabled` | `boolean` | no | `true` | Enable dynamic context discovery features |
 | `context.dynamic.max_spooled_files` | `integer` | no | `100` | Maximum number of spooled files to keep |
 | `context.dynamic.persist_history` | `boolean` | no | `true` | Enable persisting conversation history during summarization |
@@ -504,7 +504,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.182.7"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.184.0"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -854,9 +854,9 @@ python3 scripts/generate_config_field_reference.py
 | `tui.notifications` | `TuiNotificationsConfig \| null` | no | `null` | - |
 | `tui.show_tooltips` | `boolean \| null` | no | `null` | - |
 | `ui.allow_tool_ansi` | `boolean` | no | `false` | Allow ANSI escape sequences in tool output (enables colors but may cause layout issues) |
+| `ui.ambiguous_width` | `string` | no | `"narrow"` | How the terminal renders East-Asian-ambiguous-width glyphs (UAX #11), which include every box-drawing character. Terminals set to render the set as double width (xterm `cjkWidth`, iTerm2's ambiguous-width checkbox, some CJK-locale defaults) draw each glyph as two cells, so box-drawing frames and table rules break. Not detectable at runtime. Can also be controlled via VTCODE_AMBIGUOUS_WIDTH=wide. - "narrow": ambiguous glyphs occupy one cell (default) - "wide": ambiguous glyphs occupy two cells; chrome degrades to ASCII and width math counts the glyphs as wide |
 | `ui.app_icon` | `string` | no | `"dynamic"` | Application icon artwork variant for terminal tab icons and the desktop picker. - "dynamic": Follow the active light/dark mode (default) - "light": Always use the light-mode artwork - "dark": Always use the dark-mode artwork - "clear": Always use the clear (glass V on a subtle translucent tile) artwork - "tinted": Always use the tinted (monochrome slate) artwork |
 | `ui.bold_is_bright` | `boolean` | no | `false` | Compatibility mode for legacy terminals that map bold to bright colors. When enabled, avoids using bold styling on text that would become bright colors, preventing visibility issues in terminals with "bold is bright" behavior. |
-| `ui.ambiguous_width` | `string` | no | `"narrow"` | How the terminal renders East-Asian-ambiguous-width glyphs (UAX #11), which include every box-drawing character. Terminals set to render the set as double width (xterm `cjkWidth`, iTerm2's ambiguous-width checkbox, some CJK-locale defaults) draw each glyph as two cells, so box-drawing frames and table rules break. Not detectable at runtime. Can also be controlled via VTCODE_AMBIGUOUS_WIDTH=wide. - "narrow": ambiguous glyphs occupy one cell (default) - "wide": ambiguous glyphs occupy two cells; chrome degrades to ASCII and width math counts the glyphs as wide. |
 | `ui.busy_enter_behavior` | `string` | no | `"queue"` | How plain Enter submits while a turn is running ("queue" or "steer"). "queue" (default) holds each message for the next turn; "steer" injects plain-text input into the live turn via the steering channel. Slash commands and attachments always queue. Options: "queue", "steer". |
 | `ui.color_scheme_mode` | `string` | no | `"auto"` | Color scheme mode for automatic light/dark theme switching. - "auto": Detect from terminal (via the Contour dark/light query where supported, else OSC 11, or the COLORFGBG env var) and follow live palette changes - "light": Force light mode theme selection - "dark": Force dark mode theme selection |
 | `ui.communication_style` | `string` | no | `"balanced"` | How much routine agent-internal failure chatter reaches the interactive transcript ("balanced", "quiet", or "verbose"). Applies to new sessions; already-running sessions keep the value they started with. Options: "balanced", "quiet", "verbose". |
@@ -867,6 +867,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.fullscreen.mouse_capture` | `boolean` | no | `true` | Capture mouse events inside the fullscreen UI. Can also be controlled via VTCODE_FULLSCREEN_MOUSE_CAPTURE=0/1. |
 | `ui.fullscreen.scroll_speed` | `integer` | no | `3` | Multiplier applied to mouse wheel transcript scrolling in fullscreen mode. Values are clamped to the range 1..=20. Can also be controlled via VTCODE_FULLSCREEN_SCROLL_SPEED. |
 | `ui.hide_header` | `boolean` | no | `true` | Hide the full TUI header, showing only version info in a compact line. |
+| `ui.high_contrast_mode` | `boolean` | no | `false` | Raise the effective text contrast floor to WCAG AAA (7.0:1) on both the TUI and desktop. Can also be enabled with VTCODE_HIGH_CONTRAST=1. It wins over `minimum_contrast` without rewriting the saved value. |
 | `ui.inline_viewport_rows` | `integer` | no | `16` | Number of rows to allocate for inline UI viewport |
 | `ui.keybindings` | `object` | no | `{}` | Session action bindings. Each action maps to one or more key specs; an empty list explicitly unbinds the built-in action. |
 | `ui.keybindings.*` | `array` | no | `-` | - |

@@ -32,30 +32,22 @@ impl DesktopView {
             })
         };
 
-        // Premium prelude: the brand V sits on a soft accent tile, then one
-        // generous step to the greeting at the page-title tier. The tile owns
-        // the measured id so the mark keeps one leading spine with the
-        // greeting and the composer below in both normal and Zen modes.
+        // Prelude: the bare brand V, then one generous step to the greeting at
+        // the page-title tier. The mark owns the measured id so it keeps one
+        // leading spine with the greeting and the composer below in both normal
+        // and Zen modes.
         let mark_size = gpui_kit::rems(1.5).to_pixels(window.rem_size()).as_f32();
-        let tile_size = gpui_kit::rems(2.75).to_pixels(window.rem_size()).as_f32();
         let prelude = div()
             .flex()
             .flex_col()
             .items_start()
             .gap_3()
             .pb_6()
-            .child(
-                div()
-                    .id("welcome-brand-mark")
-                    .test_support()
-                    .size(px(tile_size))
-                    .rounded(cx.theme().radius_lg)
-                    .bg(colors.primary.opacity(0.12))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(brand_mark("welcome-brand-glyph", mark_size, colors.primary)),
-            )
+            .child(div().id("welcome-brand-mark").test_support().child(brand_mark(
+                "welcome-brand-glyph",
+                mark_size,
+                colors.primary,
+            )))
             .child(
                 div()
                     .id(title_id)

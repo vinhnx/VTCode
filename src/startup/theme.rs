@@ -20,7 +20,7 @@ pub(super) async fn determine_theme(
     read_user_preference: bool,
 ) -> Result<ThemeResolution> {
     let color_config = ui_theme::ColorAccessibilityConfig {
-        minimum_contrast: config.ui.minimum_contrast,
+        minimum_contrast: config.ui.effective_minimum_contrast(),
         bold_is_bright: config.ui.bold_is_bright,
         safe_colors_only: config.ui.safe_colors_only,
     };

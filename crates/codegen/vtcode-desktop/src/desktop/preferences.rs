@@ -656,6 +656,11 @@ pub(super) struct Preferences {
     pub launch_at_login: Option<bool>,
     /// Additional foreground contrast, from 0 (theme default) to 100.
     pub contrast: u8,
+    /// One-click WCAG AAA overlay. It drives the contrast slider to 100 while
+    /// remembering the previous value so turning it off is lossless.
+    pub high_contrast: bool,
+    /// Slider value captured when high contrast was switched on.
+    pub contrast_before_high_contrast: Option<u8>,
     /// Sidebar width in logical pixels.
     pub sidebar_width: Option<f32>,
     pub terminal_panel_height: Option<f32>,
@@ -678,6 +683,23 @@ impl Preferences {
     pub(super) fn contrast(&self) -> u8 {
         self.contrast.min(100)
     }
+
+    /// Toggle the high-contrast overlay, returning the effective slider value.
+    /// `None` means the preference did not change, so callers skip repainting.
+    pub(super) fn set_high_contrast(&mut self, enabled: bool) -> Option<u8> {
+        if enabled == self.high_contrast {
+            return None;
+        }
+        self.high_contrast = enabled;
+        if enabled {
+            self.contrast_before_high_contrast = Some(self.contrast());
+            self.contrast = 100;
+        } else {
+            self.contrast = self.contrast_before_high_contrast.take().unwrap_or(0);
+        }
+        Some(self.contrast())
+    }
+
     pub(super) fn ui_language(&self) -> UiLanguage {
         UiLanguage::from_saved(self.ui_language.as_deref())
     }

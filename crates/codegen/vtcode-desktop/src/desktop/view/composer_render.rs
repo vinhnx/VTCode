@@ -306,92 +306,60 @@ impl DesktopView {
             .items_center()
             .justify_between()
             .gap_2()
-            .when(self.zen_mode, |buttons| {
-                // Zen keeps the same option commands as one quiet cluster:
-                // attach, model (with effort), mode, and policy stay
-                // reachable opposite the send action while every other
-                // control hides.
-                buttons.justify_between().child(
-                    div()
-                        .id("zen-composer-context")
-                        .test_support()
-                        .min_w_0()
-                        .flex_1()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_1()
-                        .overflow_hidden()
-                        .fade_in("zen-composer-context-fade", cx.theme())
-                        .child(self.render_attach_button(cx))
-                        .child(self.composer_trigger_pill(
-                            ComposerPill::Model,
-                            self.render_model_button(cx).max_w(px(224.)),
-                            cx,
-                        ))
-                        .child(self.composer_trigger_pill(ComposerPill::Effort, self.render_effort_button(cx), cx))
-                        .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx))
-                        .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx)),
-                )
-            })
-            .when(!self.zen_mode, |buttons| {
-                buttons.child(
-                    // One quiet option group: tighter than the gap to the
-                    // trailing model/send cluster (separate groups).
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .min_w_0()
-                        .fade_in("composer-secondary-fade", cx.theme())
-                        .child(self.render_attach_button(cx))
-                        .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx))
-                        .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx)),
-                )
-            });
-        let mut model_actions =
-            div()
-                .min_w_0()
-                .max_w_full()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap_2()
-                .when(!self.zen_mode, |actions| {
-                    actions
-                        .child(
-                            self.composer_trigger_pill(
-                                ComposerPill::Model,
-                                self.render_model_button(cx)
-                                    .max_w(px(336.))
-                                    .fade_in("pick-model-fade", cx.theme()),
-                                cx,
-                            ),
-                        )
-                        .child(self.composer_trigger_pill(ComposerPill::Effort, self.render_effort_button(cx), cx))
-                });
-        // Running cluster: the frequent stop takes the primary fill (no red
-        // anywhere in the cluster) and owns the emphasis alone while the
-        // turn runs normally. Force-cancel steps down to a neutral ghost
-        // that appears only once a stop is outstanding and the turn still
-        // runs — the stuck-process moment, when hammering the exec kill
-        // without re-sending the turn cancel is actually useful. Every
+            // One layout for every mode: attach, policy, and mode lead; the
+            // model/effort options join send in the trailing cluster below.
+            .child(
+                div()
+                    .id("composer-secondary-options")
+                    .test_support()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .min_w_0()
+                    .fade_in("composer-secondary-fade", cx.theme())
+                    .child(self.render_attach_button(cx))
+                    .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx))
+                    .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx)),
+            );
+        let mut model_actions = div()
+            .min_w_0()
+            .max_w_full()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                self.composer_trigger_pill(
+                    ComposerPill::Model,
+                    self.render_model_button(cx)
+                        .max_w(px(336.))
+                        .fade_in("pick-model-fade", cx.theme()),
+                    cx,
+                ),
+            )
+            .child(self.composer_trigger_pill(ComposerPill::Effort, self.render_effort_button(cx), cx));
+        // Running cluster: every action is a quiet ghost button — no filled
+        // pill bodies anywhere in the composer, so the frequent stop stays
+        // legible without owning a competing accent fill. Force-cancel is a
+        // ghost that appears only once a stop is outstanding and the turn
+        // still runs — the stuck-process moment, when hammering the exec
+        // kill without re-sending the turn cancel is actually useful. Every
         // delivered stop already kills foreground exec sessions, so a
         // visible-by-default kill would duplicate Stop on every run. The
         // background action stays reachable from the running-session
         // surfaces (sidebar/tab strip) rather than the composer, which
         // keeps the run cluster to its moment-relevant choices. Glyphs
         // stay minimal bare strokes (no enclosing container shapes): the
-        // filled cancel button uses a plain square — the universal stop
-        // mark — while the ghost neighbor uses an X. The buttons stay on
-        // the Medium tier for their icon: Kit derives an icon-only
-        // button's glyph from its own size tier (Large paints a 24px
-        // icon, Medium 16px, same 32px frame) and its `ButtonIcon`
-        // wrapper overwrites any size set on the inner `Icon`. A
-        // non-empty draft swaps the stop out for the queue commit: the
-        // send look (ArrowUp) with queue copy, since Enter would queue
-        // behind the turn from this state. Clearing the draft swaps the
-        // stop back in; the force-cancel ghost is independent of the swap.
+        // cancel button uses a plain square — the universal stop mark —
+        // while its neighbor uses an X. The buttons stay on the Medium
+        // tier for their icon: Kit derives an icon-only button's glyph
+        // from its own size tier (Large paints a 24px icon, Medium 16px,
+        // same 32px frame) and its `ButtonIcon` wrapper overwrites any
+        // size set on the inner `Icon`. A non-empty draft swaps the stop
+        // out for the queue commit: the send look (ArrowUp) with queue
+        // copy, since Enter would queue behind the turn from this state.
+        // Clearing the draft swaps the stop back in; force-cancel is
+        // independent of the swap.
         if self.running {
             model_actions = model_actions.when(self.cancel_requested, |actions| {
                 actions.child(
@@ -405,9 +373,8 @@ impl DesktopView {
             });
             if draft_ready {
                 model_actions = model_actions.child(
-                    desktop_primary_button("queue-prompt")
+                    desktop_ghost_button("queue-prompt")
                         .desktop_disabled(!can_queue)
-                        .rounded(cx.theme().radius_full())
                         .accessibility_label(rust_i18n::t!("app.composer.queue").to_string())
                         .tooltip(rust_i18n::t!("app.composer.queue_tooltip").to_string())
                         .icon(IconName::ArrowUp)
@@ -415,8 +382,7 @@ impl DesktopView {
                 );
             } else {
                 model_actions = model_actions.child(
-                    desktop_primary_button("cancel-turn")
-                        .rounded(cx.theme().radius_full())
+                    desktop_ghost_button("cancel-turn")
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -429,9 +395,8 @@ impl DesktopView {
             }
         } else {
             model_actions = model_actions.child(
-                desktop_primary_button("send-prompt")
+                desktop_ghost_button("send-prompt")
                     .desktop_disabled(!can_submit)
-                    .rounded(cx.theme().radius_full())
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
@@ -660,14 +625,11 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// Model picker button, shared by the normal composer and the zen option
-    /// cluster. Call sites add their own width and fade: normal mode animates
-    /// the button itself, while zen fades the whole cluster at once. Zen
-    /// renders the speed as quiet text instead of the filled badge. Reasoning
-    /// effort has its own pill (`render_effort_button`), so the model pill
-    /// opens the model list, not the effort panel.
+    /// Model picker button, shared by every composer mode. Call sites add
+    /// their own width and fade. The processing tier uses the filled badge in
+    /// all modes; reasoning effort has its own pill (`render_effort_button`),
+    /// so the model pill opens the model list, not the effort panel.
     pub(super) fn render_model_button(&self, cx: &Context<Self>) -> Button {
-        let colors = cx.theme().colors;
         let current_model = self
             .configuration
             .as_ref()
@@ -685,30 +647,14 @@ impl DesktopView {
             .chain(selected_speed.as_deref())
             .collect::<Vec<_>>()
             .join(display::MIDDOT);
-        let muted = themes::muted_text(&colors);
         let model_label = div()
             .min_w_0()
             .flex()
             .items_center()
             .gap_1()
             .child(div().min_w_0().max_w(px(176.)).truncate().font_medium().child(current_model))
-            .when_some(selected_speed, |row, speed| {
-                if self.zen_mode {
-                    // Zen reads the tier as quiet text: the filled badge
-                    // would compete with the send action on a
-                    // distraction-free surface. Identity, role, and
-                    // accessible label stay put; only the paint changes.
-                    row.child(composer_controls::quiet_option_suffix(
-                        "composer-model-speed",
-                        rust_i18n::t!("app.composer.speed_aria", label = speed).to_string(),
-                        &speed,
-                        muted,
-                    ))
-                } else {
-                    row.child(composer_controls::processing_tier_badge(&speed, cx))
-                }
-            });
-        desktop_trigger_pill("pick-model")
+            .when_some(selected_speed, |row, speed| row.child(composer_controls::processing_tier_badge(&speed, cx)));
+        desktop_ghost_button("pick-model")
             .accessibility_label(model_summary)
             .child(model_label)
             .dropdown_caret(true)
@@ -734,7 +680,7 @@ impl DesktopView {
             .session_options()
             .map(|options| composer_controls::runtime_option_label(&options.reasoning_effort))
             .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_LOADING_VALUE).to_string());
-        desktop_trigger_pill("composer-effort")
+        desktop_ghost_button("composer-effort")
             .accessibility_label(rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort.as_str()).to_string())
             .child(
                 div()
@@ -777,7 +723,7 @@ impl DesktopView {
         };
         let (permission_icon, permission_icon_color) =
             composer_controls::permission_indicator(permission_mode, cx.theme().colors);
-        desktop_trigger_pill("composer-policy")
+        desktop_ghost_button("composer-policy")
             .open(self.palette_open_for(&[PaletteKind::Permissions]))
             .accessibility_label(rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string())
             .tooltip_with_action(
@@ -805,7 +751,7 @@ impl DesktopView {
     /// Attachments entry point shared by the normal composer and the zen
     /// option cluster: same id, enablement, and picker in both modes.
     pub(super) fn render_attach_button(&self, cx: &Context<Self>) -> Button {
-        desktop_trigger_pill("attach-files")
+        desktop_ghost_button("attach-files")
             .icon(IconName::Plus)
             .open(self.attachment_picker.is_some())
             .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())

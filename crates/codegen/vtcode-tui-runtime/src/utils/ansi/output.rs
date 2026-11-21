@@ -15,6 +15,29 @@ use vtcode_core::utils::ansi_capabilities::AnsiCapabilities;
 
 const RECENT_DIAGNOSTIC_LIMIT: usize = 128;
 
+/// Prefix a diagnostic with its severity in screen-reader mode.
+///
+/// Diagnostic severity is otherwise carried by color and modifier alone, which
+/// disappears under `NO_COLOR` and is not announced by assistive technology.
+pub(super) fn labeled_diagnostic_text<'a>(
+    severity: vtcode_commons::diagnostics::DiagnosticSeverity,
+    text: &'a str,
+    screen_reader_mode: bool,
+) -> std::borrow::Cow<'a, str> {
+    use std::borrow::Cow;
+    use vtcode_commons::diagnostics::DiagnosticSeverity;
+
+    if !screen_reader_mode {
+        return Cow::Borrowed(text);
+    }
+    let label = match severity {
+        DiagnosticSeverity::Info => "Info",
+        DiagnosticSeverity::Warning => "Warning",
+        DiagnosticSeverity::Error => "Error",
+    };
+    Cow::Owned(format!("[{label}] {text}"))
+}
+
 impl AnsiRenderer {
     pub fn set_table_max_width(&mut self, max_width: Option<usize>) {
         if let Some(sink) = &mut self.sink {
@@ -75,9 +98,13 @@ impl AnsiRenderer {
             } else {
                 sink.handle.present_diagnostic(diagnostic.clone());
             }
-            transcript::append(&diagnostic.text());
+            let diagnostic_text = diagnostic.text();
+            let text = labeled_diagnostic_text(diagnostic.severity, &diagnostic_text, self.screen_reader_mode);
+            transcript::append(text.as_ref());
         } else {
-            self.render_markdown(style, &diagnostic.text())?;
+            let diagnostic_text = diagnostic.text();
+            let text = labeled_diagnostic_text(diagnostic.severity, &diagnostic_text, self.screen_reader_mode);
+            self.render_markdown(style, text.as_ref())?;
         }
         if let Some(error) = persistence_error {
             return Err(error);
