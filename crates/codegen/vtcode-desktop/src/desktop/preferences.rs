@@ -926,19 +926,7 @@ impl Preferences {
         if let Some(path) = TEST_PREFERENCES_PATH.with(|path| path.borrow().clone()) {
             return Some(path);
         }
-        Self::canonical_preferences_path()
-    }
-
-    /// Canonical preference file under the resolved config home.
-    fn canonical_preferences_path() -> Option<PathBuf> {
-        vtcode_commons::VtCodePaths::resolve()
-            .ok()
-            .map(|paths| paths.config_dir().join("desktop").join("preferences.json"))
-    }
-
-    /// Pre-XDG preference file, read only when the canonical file is absent.
-    fn legacy_preferences_path() -> Option<PathBuf> {
-        dirs::home_dir().map(|home| home.join(".vtcode").join("desktop").join("preferences.json"))
+        storage::canonical_preferences_path()
     }
 
     /// Load preferences, returning defaults for a missing file. A corrupt
@@ -949,44 +937,16 @@ impl Preferences {
         if let Some(path) = TEST_PREFERENCES_PATH.with(|path| path.borrow().clone()) {
             return Self::load_from(&path, None);
         }
-        let Some(canonical) = Self::canonical_preferences_path() else {
+        let Some(canonical) = storage::canonical_preferences_path() else {
             return Self::default();
         };
-        let legacy = Self::legacy_preferences_path();
+        let legacy = storage::legacy_preferences_path();
         Self::load_from(&canonical, legacy.as_deref())
     }
 
-    /// Pure core of [`Self::load`]: the legacy file is used only when the
-    /// canonical one is missing, and is never renamed or overwritten here.
+    /// Testable core of [`Self::load`]; see [`storage::load`] for the contract.
     fn load_from(canonical: &Path, legacy: Option<&Path>) -> Self {
-        if let Ok(content) = std::fs::read_to_string(canonical) {
-            return Self::parse_or_quarantine(canonical, content);
-        }
-        legacy
-            .and_then(|path| std::fs::read_to_string(path).ok())
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or_default()
-    }
-
-    fn parse_or_quarantine(path: &Path, content: String) -> Self {
-        match serde_json::from_str(&content) {
-            Ok(preferences) => preferences,
-            Err(error) => {
-                let quarantined = path.with_extension("json.corrupt");
-                if let Err(rename_error) = std::fs::rename(path, &quarantined) {
-                    vtcode_commons::diagnostics::stderr(format_args!(
-                        "failed to quarantine corrupt desktop preferences ({}): {rename_error}",
-                        quarantined.display()
-                    ));
-                } else {
-                    vtcode_commons::diagnostics::stderr(format_args!(
-                        "desktop preferences corrupt ({error}); moved to {}",
-                        quarantined.display()
-                    ));
-                }
-                Self::default()
-            }
-        }
+        storage::load(canonical, legacy)
     }
 
     /// Best-effort saves for existing comfort controls. Failures are loud on
@@ -1016,6 +976,7 @@ mod chat_width;
 pub(super) use chat_width::{ChatWidth, ChatWidthOption, ChatWidthSelectState};
 mod paths;
 pub(super) use paths::*;
+mod storage;
 
 #[cfg(test)]
 mod tests;

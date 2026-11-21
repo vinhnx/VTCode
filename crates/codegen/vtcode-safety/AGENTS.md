@@ -20,6 +20,7 @@
 - Sandboxed pipe/PTY and MCP stdio launches rebuild allowlisted env vars after overrides, and macOS unenforceable hostname policies and Windows restrictions fail closed.
 - Mounted-target `rm` approval reads the shell script text as well as argv, unwraps program runners (`env`, `sudo`, `exec`, ...), and requires approval for every recursive `rm` on hosts without a mount table.
 - Zero-token execution-policy rules and trusted amendments never match and are rejected at insertion/load; keep ordered matching and atomic reloads.
+- `rules_layers` resolves user `.rules` from the canonical config dir plus legacy `~/.vtcode`; keep both roots so unmigrated installs still load rules.
 - `classify_git_subcommand` is the single decision home for guarded git subcommands, and only destructive modes are preflight-blocked.
 
 ## Gotchas

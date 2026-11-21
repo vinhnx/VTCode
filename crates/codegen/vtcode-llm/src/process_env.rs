@@ -155,11 +155,12 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn copilot_exception_preserves_only_its_auth_token() {
         // The sanitizer re-reads allowed variables from the process environment,
         // so seed them explicitly instead of assuming the invoking shell or CI
-        // provides GITHUB_TOKEN. nextest runs each test in its own process and
-        // the guard serializes env access, restoring originals on drop.
+        // provides GITHUB_TOKEN. EnvGuard serializes env access; nextest also
+        // isolates each test in its own process so these values cannot leak.
         let guard = vtcode_commons::env_lock::lock();
         guard.set_var("GITHUB_TOKEN", "github-from-process-a73");
         guard.set_var("OPENAI_API_KEY", "openai-from-process-b29");
