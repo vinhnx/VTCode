@@ -101,6 +101,56 @@ fn a_new_interaction_opens_the_scrolled_body_at_its_top(cx: &mut TestAppContext)
     .unwrap();
 }
 
+/// A crowded approval (the command-confirmation shape from the bug report:
+/// environment row, `sh` command block, and two prose details, plus a long
+/// choice list) must show every detail at full height. Before the fix the
+/// detail wrappers used `overflow_hidden`, which made them collapse to the
+/// font's em box (or zero under flex pressure) and clipped the text's
+/// ascenders and wrapped lines. Overflow belongs to the scroll body.
+#[gpui_kit::test]
+fn crowded_interaction_never_clips_detail_text(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1600., 1000.);
+    let mut interaction = tool_loop_interaction(Some("grant-40"));
+    interaction.title = "Would you like to run the following command?".into();
+    interaction.details = vec![
+        "Environment: default policy".into(),
+        "`$ bun x markdownlint-cli2 README.md`".into(),
+        "No additional details were provided. Review the action above before allowing.".into(),
+        "Choose how to handle this run:".into(),
+    ];
+    let long_desc = "Sync facts and mermaid sketch to checkout truth -> files: [ README.md ] -> verify: [ rg -n \"0-185-0\" README.md ]";
+    for choice in interaction.choices.iter_mut().chain(interaction.steps[0].choices.iter_mut()) {
+        choice.description = Some(long_desc.to_string());
+    }
+    for index in 0..8 {
+        let choice = vtcode_desktop_protocol::InteractionChoice {
+            id: format!("bulk-{index}"),
+            label: format!("Bulk choice {index}"),
+            description: Some(long_desc.to_string()),
+            recommended: false,
+        };
+        interaction.choices.push(choice.clone());
+        interaction.steps[0].choices.push(choice);
+    }
+    deliver(&view, interaction, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let body = window.find("interaction-body").bounds();
+        assert!(body.size.height <= px(361.), "body stays capped: {body:?}");
+        // Every detail keeps a full line box; the code block is taller still.
+        for index in 0..4 {
+            let detail = window.find(format!("interaction-detail-{index}")).bounds();
+            assert!(detail.size.height >= px(20.), "detail {index} must keep its full line height, got {detail:?}");
+        }
+        let code = window.find("interaction-detail-1").bounds();
+        assert!(code.size.height > px(40.), "the command block keeps its full height: {code:?}");
+        // The panel scrolls instead of shaving text off the details.
+        let max_offset = view.read(cx).interaction_scroll.max_offset();
+        assert!(max_offset.y > px(0.), "crowded content scrolls inside the capped body: {max_offset:?}");
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn arrow_navigation_keeps_the_highlighted_choice_in_view(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

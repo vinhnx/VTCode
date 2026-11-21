@@ -61,7 +61,12 @@ fn shell_command_span(detail: &str) -> Option<&str> {
 /// memoize at the call site if profiling ever implicates this.
 /// Every wrapper clamps to the panel width: `min_w_0` breaks the flex
 /// min-content chain that otherwise shoves trailing content past the card
-/// edge, and `overflow_hidden` clips unbreakable paint instead of the layout.
+/// edge, and `overflow_x_hidden` clips unbreakable paint instead of the
+/// layout. Clipping only the horizontal axis matters: `overflow_hidden` made
+/// the wrapper a zero-height flex item inside the capped, height-constrained
+/// interaction body, so wrapped prose (and whole details on a crowded panel)
+/// got sliced off at the top. `flex_shrink_0` keeps every detail at its
+/// natural height; overflow scrolls the body instead of hiding the message.
 fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx: &App) -> AnyElement {
     let colors = cx.theme().colors;
     let wrapper = div()
@@ -70,7 +75,8 @@ fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx:
         .w_full()
         .min_w_0()
         .max_w_full()
-        .overflow_hidden();
+        .flex_shrink_0()
+        .overflow_x_hidden();
     if let Some(command) = shell_command_span(detail) {
         let mut fenced = String::with_capacity(command.len().saturating_add(8));
         fenced.push_str("```sh\n");
@@ -714,7 +720,8 @@ impl DesktopView {
                             .flex_1()
                             .min_w_0()
                             .max_w_full()
-                            .overflow_hidden()
+                            .flex_shrink_0()
+                            .overflow_x_hidden()
                             .text_sm()
                             .text_color(themes::muted_text(&colors))
                             .child(description.clone()),
