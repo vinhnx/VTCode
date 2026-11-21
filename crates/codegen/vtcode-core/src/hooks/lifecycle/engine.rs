@@ -726,24 +726,19 @@ impl LifecycleHookEngine {
             }
         };
 
-        // After a timeout the group kill should close every writer, but a
-        // setsid-escaped descendant can still hold a pipe open — bound the
-        // drain so a hook can never stall the lifecycle engine.
-        let stdout_bytes = if timed_out {
-            match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stdout_task).await {
-                Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
-                Err(_) => Vec::new(),
-            }
-        } else {
-            stdout_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default()
+        // The group kill should close every writer on timeout, but a
+        // setsid-escaped descendant can still hold a pipe open on ANY exit
+        // path — a hook that leaves a background child inherits the pipes and
+        // read_to_end would never see EOF. Bound the drain either way so a
+        // hook can never stall the lifecycle engine; a descendant that writes
+        // within the bound still contributes its output.
+        let stdout_bytes = match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stdout_task).await {
+            Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
+            Err(_) => Vec::new(),
         };
-        let stderr_bytes = if timed_out {
-            match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stderr_task).await {
-                Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
-                Err(_) => Vec::new(),
-            }
-        } else {
-            stderr_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default()
+        let stderr_bytes = match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stderr_task).await {
+            Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
+            Err(_) => Vec::new(),
         };
 
         Ok(HookCommandResult {

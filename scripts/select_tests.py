@@ -48,6 +48,7 @@ RERUN_ALL_PATHS = frozenset(
         ".cargo/config",
         ".github/workflows/ci.yml",
         ".config/nextest.toml",
+        "scripts/select_tests.py",
     }
 )
 

@@ -11,12 +11,18 @@ set -euo pipefail
 
 staged_rs_files=$(git diff --staged --name-only --diff-filter=ACMR -- '*.rs' || true)
 if [ -n "$staged_rs_files" ]; then
-	# Readable file list for rustfmt (paths with spaces are not supported by
-	# this interface; the repo's tracked layout has none).
-	files=$(echo "$staged_rs_files" | tr '\n' ' ')
+	# Check what the commit will contain, not the working tree: snapshot each
+	# staged blob to a temp tree so unstaged edits cannot skew the verdict.
+	snapshot_dir=$(mktemp -d)
+	trap 'rm -rf "$snapshot_dir"' EXIT
+	while IFS= read -r file; do
+		mkdir -p "$snapshot_dir/$(dirname "$file")"
+		git show ":$file" > "$snapshot_dir/$file"
+	done <<< "$staged_rs_files"
+	files=$(echo "$staged_rs_files" | sed "s|^|$snapshot_dir/|" | tr '\n' ' ')
 	# shellcheck disable=SC2086
 	rustfmt --edition 2024 --check $files || {
-		echo "pre-commit: formatting check failed. Run: rustfmt --edition 2024 <files> (or cargo fmt --all)" >&2
+		echo "pre-commit: staged formatting check failed. Run: cargo fmt --all, re-add, and commit." >&2
 		exit 1
 	}
 fi
