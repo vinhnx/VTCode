@@ -216,15 +216,12 @@ impl LinuxSandboxLauncher {
             }
             return Some(Self::external(helper));
         }
-        // Wrapping with the running binary is only valid when that binary is
-        // the VT Code CLI, which owns the sandbox-exec launcher protocol.
-        // Under a test harness the current executable is a libtest binary
-        // that cannot parse launcher flags, so only the CLI binary qualifies.
-        let exe = std::env::current_exe().ok()?;
-        if exe.file_stem().is_some_and(|stem| stem == "vtcode") {
-            return Some(Self::busybox(exe));
-        }
-        None
+        // The running binary always owns the sandbox-exec protocol, whatever
+        // it is named (renamed/symlinked installs included), so production
+        // launches wrap with current_exe unconditionally. Test harnesses that
+        // cannot parse launcher flags opt out by setting
+        // VTCODE_LINUX_SANDBOX_EXECUTABLE to a real helper (CI does).
+        std::env::current_exe().ok().map(Self::busybox)
     }
 
     #[cfg(not(target_os = "linux"))]

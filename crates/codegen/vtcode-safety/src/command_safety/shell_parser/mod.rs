@@ -34,7 +34,6 @@ pub use ast::{BashNode, BashTree, prewarm_bash_parser};
 /// ```
 ///
 /// # Fallback
-/// If tree-sitter parsing fails, falls back to simple tokenization
 /// Upstream tree-sitter-bash #337: the bash external scanner SIGSEGVs when a
 /// `{` is followed anywhere later in the input by a 4-byte UTF-8 lead byte
 /// (0xF0..=0xF7) — e.g. `{` + U+2FA8E — crashing the whole process instead of
@@ -53,6 +52,9 @@ fn scanner_crash_shape(script: &str) -> bool {
     false
 }
 
+/// Parse a shell script into command/argument lists.
+///
+/// If tree-sitter parsing fails, falls back to simple tokenization.
 pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
     // Never hand the scanner an input it is known to crash on.
     if scanner_crash_shape(script) {
