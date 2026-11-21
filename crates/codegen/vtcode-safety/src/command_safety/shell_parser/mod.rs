@@ -35,7 +35,29 @@ pub use ast::{BashNode, BashTree, prewarm_bash_parser};
 ///
 /// # Fallback
 /// If tree-sitter parsing fails, falls back to simple tokenization
+/// Upstream tree-sitter-bash #337: the bash external scanner SIGSEGVs when a
+/// `{` is followed anywhere later in the input by a 4-byte UTF-8 lead byte
+/// (0xF0..=0xF7) — e.g. `{` + U+2FA8E — crashing the whole process instead of
+/// returning an error. The minimal reproducer is two characters. A safety
+/// classifier may never crash the agent that calls it, so inputs with that
+/// shape skip the scanner and parse with the basic tokenizer directly.
+fn scanner_crash_shape(script: &str) -> bool {
+    let mut saw_open_brace = false;
+    for byte in script.as_bytes() {
+        match byte {
+            b'{' => saw_open_brace = true,
+            0xF0..=0xF7 if saw_open_brace => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
+    // Never hand the scanner an input it is known to crash on.
+    if scanner_crash_shape(script) {
+        return parse_with_basic_tokenization(script);
+    }
     // Try tree-sitter parsing first
     match parse_with_tree_sitter(script, false) {
         Ok(commands) if !commands.is_empty() => return Ok(commands),
@@ -719,5 +741,32 @@ fn base_command_name(command: &str) -> &str {
         .and_then(|name| name.to_str())
         .unwrap_or(command)
 }
+#[cfg(test)]
+mod crash_regression {
+    use super::*;
+
+    /// tree-sitter-bash #337: `{` + U+2FA8E (the delta-minimal reproducer,
+    /// found by fuzzing on linux) SIGSEGV'd the external scanner and killed
+    /// the process; the guard routes such input to the basic tokenizer.
+    #[test]
+    fn parse_survives_brace_plus_astral_input() {
+        let parsed = parse_shell_commands("{\u{2FA8E}");
+        assert!(parsed.is_ok(), "parse must not fail: {parsed:?}");
+    }
+
+    #[test]
+    fn scanner_crash_shape_matches_issue_337_shape() {
+        assert!(scanner_crash_shape("{\u{2FA8E}"));
+        assert!(scanner_crash_shape("echo {a}\u{1F574}"));
+        assert!(scanner_crash_shape("{x} \u{1F847}"));
+        // No brace before the 4-byte lead: safe for the scanner.
+        assert!(!scanner_crash_shape("\u{2FA8E}{"));
+        // No 4-byte lead at all.
+        assert!(!scanner_crash_shape("{hello}"));
+        // 3-byte and 2-byte leads do not trigger the upstream crash.
+        assert!(!scanner_crash_shape("{\u{CAF}\u{9bf}"));
+    }
+}
+
 #[cfg(test)]
 mod tests;
