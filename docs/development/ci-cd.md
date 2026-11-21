@@ -288,6 +288,14 @@ python3 scripts/tests/test_publish_order.py
 - **tests**: `cargo nextest run --locked --profile ci-partition`. Pushes to main and
   manual dispatches run `--workspace`; pull requests run only the packages the diff
   can reach via `scripts/select_tests.py` (see [test selection](#test-selection-on-pull-requests)).
+- **platform-smoke**: a bounded macOS (`macos-15`) and Windows (`windows-latest`)
+  nextest matrix. Both runners execute the sandbox path-policy tests
+  (`vtcode-safety::sandboxing::policy`) and the platform-neutral TUI/tool-schema
+  snapshot binaries in `vtcode`; macOS additionally runs the `#[cfg(unix)]` PTY
+  harness (`vtcode-core::pty_tests`). Toolchain pin, pinned nextest version,
+  ripgrep, and `profile.ci-partition` match the Linux `tests` job, with a per-OS
+  rust-cache key. The Linux-only `VTCODE_LINUX_SANDBOX_EXECUTABLE` hook is not set
+  because the selected tests do not need a sandbox launcher.
 
 **Contract:**
 
@@ -297,9 +305,11 @@ python3 scripts/tests/test_publish_order.py
   jobs restore (cache lookup falls back to the default branch), keeping PR cache
   hit rates high without a separate seeding workflow.
 - Concurrency cancels a branch's in-progress run when a new commit lands.
-- A `macOS`/`Windows` test matrix is deliberately absent: `desktop-macos.yml`
-  covers macOS for desktop paths, and release-path builds cover the other
-  platforms. Adding a matrix is a measured decision, not a default.
+- Platform coverage is deliberately bounded. The full suite stays on Linux;
+  `platform-smoke` runs a small cross-platform subset on macOS and Windows to
+  catch shared-code regressions early without letting platform quirks in
+  unrelated tests block PRs. `desktop-macos.yml` and the release build workflow
+  cover the desktop and release paths on those platforms.
 
 ### Test selection on pull requests
 

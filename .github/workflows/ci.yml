@@ -1,5 +1,6 @@
-# Pull-request and main-branch quality gate: formatting, workspace lint, and
-# the full nextest suite, as three parallel jobs with no `needs:` edges.
+# Pull-request and main-branch quality gate: formatting, workspace lint, the
+# full nextest suite on Linux, and a bounded nextest smoke matrix on macOS and
+# Windows, as four parallel jobs with no `needs:` edges.
 #
 # Design contract (docs/development/ci-cd.md):
 # - Same gates as the local scripts: `cargo fmt --all -- --check`,
@@ -206,3 +207,81 @@ jobs:
           path: target/nextest/ci-partition/ci-partition-junit.xml
           if-no-files-found: error
           retention-days: 7
+
+  # Bounded cross-platform coverage: a platform-neutral subset of nextest on
+  # macOS and Windows, plus the Unix PTY harness on macOS. Deliberately not the
+  # full suite — Unix-only PTY/sandbox-launcher tests and memory-heavy agent
+  # runner tests stay in the Linux `tests` job. A platform quirk in an unrelated
+  # test must not block PRs, but a regression in shared, platform-sensitive code
+  # (tool schemas, TUI rendering, sandbox path policy, PTY sessions) should.
+  platform-smoke:
+    name: Platform smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            run_pty: true
+          - os: windows-latest
+            # pty_tests and the real CLI sandbox launcher are Unix-only.
+            run_pty: false
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # toolchain_pins_test requires an explicit version on every Rust setup step.
+          toolchain: 1.100.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        with:
+          # Cross-OS matrix jobs must not share a cache key (docs/development/ci-cd.md).
+          key: platform-smoke-${{ matrix.os }}
+
+      - name: Resolve nextest version
+        id: nextest
+        shell: bash
+        run: |
+          version=$(sed -n 's/^nextest-version *= *"//p' .config/nextest.toml | head -1)
+          version=${version%\"}
+          if [[ -z "$version" ]]; then
+            echo "Could not read nextest-version from .config/nextest.toml" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2.90.5
+        with:
+          tool: nextest@${{ steps.nextest.outputs.version }}
+
+      # Kept in sync with the Linux tests job: agent-loop tests shell out to rg.
+      # No sandbox launcher is configured here — VTCODE_LINUX_SANDBOX_EXECUTABLE is
+      # a Linux-only hook and the selected tests do not depend on it.
+      - name: Install ripgrep
+        uses: taiki-e/install-action@v2.90.5
+        with:
+          tool: ripgrep
+
+      - name: Sandbox path policy
+        shell: bash
+        run: cargo nextest run --locked --profile ci-partition -p vtcode-safety -E 'test(/sandboxing::policy/)'
+
+      - name: TUI rendering and tool-schema baselines
+        shell: bash
+        run: |
+          cargo nextest run --locked --profile ci-partition -p vtcode \
+            -E 'binary(/tui_snapshot_tests/) | binary(/ratatui_integration_tests/) | binary(/improved_tui_snapshot_tests/) | binary(/advanced_tui_scenario_tests/) | binary(/tool_serialization_stability_test/)'
+
+      - name: Unix PTY harness (macOS only)
+        if: matrix.run_pty
+        shell: bash
+        run: cargo nextest run --locked --profile ci-partition -p vtcode-core -E 'binary(/pty_tests/)'
