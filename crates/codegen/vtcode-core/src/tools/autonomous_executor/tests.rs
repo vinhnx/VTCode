@@ -153,8 +153,10 @@ fn test_execution_stats_tracking() {
 #[test]
 fn test_workspace_boundary_validation() {
     let mut executor = AutonomousExecutor::new();
-    let temp_dir = std::env::temp_dir();
-    executor.set_workspace_dir(temp_dir.clone());
+    // A dedicated workspace, not bare temp_dir(): on Linux temp_dir() is /tmp,
+    // which would legitimately contain the prefix-sibling assertions below.
+    let workspace = tempfile::tempdir().expect("workspace dir");
+    executor.set_workspace_dir(workspace.path().to_path_buf());
 
     // Absolute path outside workspace should fail
     let args = json!({"path": "/etc/passwd"});

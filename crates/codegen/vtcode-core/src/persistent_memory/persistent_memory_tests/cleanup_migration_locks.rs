@@ -102,7 +102,10 @@ fn resolves_project_scoped_memory_directory() {
     let directory = resolve_persistent_memory_dir(&config, workspace.path())
         .expect("memory dir")
         .expect("memory dir should resolve");
-    assert!(directory.to_string_lossy().contains("state/projects/renamed-project/memory"));
+    // The state root layout is platform-specific (macOS:
+    // ~/Library/Application Support/vtcode/state, Linux: ~/.local/state/vtcode);
+    // assert the project scoping, which is the contract under test.
+    assert!(directory.ends_with("projects/renamed-project/memory"));
 }
 #[test]
 fn migrates_legacy_memory_into_empty_target_directory() {

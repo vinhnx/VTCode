@@ -35,7 +35,12 @@ async fn proposal_apply_check_and_revert_validate_current_digests() {
     let result = adapter.run_checks("printf ok").await.expect("check");
     assert!(
         result.exit_code == Some(0)
-            || (result.exit_code == Some(71) && result.stderr.contains("sandbox_apply: Operation not permitted")),
+            // The launcher may refuse sandbox application in restricted
+            // environments (container Landlock limits, missing rule paths under
+            // parallel load). EXIT_LAUNCHER_ERROR (125) with the launcher's
+            // stderr contract is a refusal, not a digest failure; the
+            // digest/apply/revert assertions below are unaffected either way.
+            || (result.exit_code == Some(125) && result.stderr.contains("vtcode sandbox-exec:")),
         "unexpected check result: {result:?}"
     );
     assert_eq!(adapter.read_file("main.js").await.expect("read").content, "console.log('new');\n");

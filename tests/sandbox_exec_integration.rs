@@ -45,16 +45,16 @@ static LAUNCHER_SUPPORTED: LazyLock<bool> = LazyLock::new(|| {
     panic!("sandbox-exec canary unexpectedly failed: {stderr}");
 });
 
-fn sandbox_command(cwd: &Path) -> Command {
+fn sandbox_command(cwd: &Path) -> assert_cmd::Command {
     let mut cmd = cargo_bin_cmd!("vtcode");
-    cmd.arg("sandbox-exec").current_dir(cwd);
+    let _ = cmd.arg("sandbox-exec").current_dir(cwd);
     cmd
 }
 
 /// Run a `sh -c` command under the given sandbox policy JSON.
 fn run_sandboxed(policy: &str, cwd: &Path, home: Option<&Path>, script: &str) -> std::process::Output {
     let mut cmd = sandbox_command(cwd);
-    cmd.args([
+    let _ = cmd.args([
         "--sandbox-policy-cwd",
         &cwd.display().to_string(),
         "--sandbox-policy",
@@ -69,7 +69,7 @@ fn run_sandboxed(policy: &str, cwd: &Path, home: Option<&Path>, script: &str) ->
         script,
     ]);
     if let Some(home) = home {
-        cmd.env("HOME", home);
+        let _ = cmd.env("HOME", home);
     }
     cmd.output().expect("spawn sandboxed sh")
 }
