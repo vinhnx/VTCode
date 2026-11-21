@@ -12,15 +12,15 @@ Inputs that rerun everything (fail-safe direction — over-selection never hides
 a test; under-selection would):
 
 - any ``Cargo.toml`` (manifest re-resolution changes the graph itself)
-
-Files outside a package's ``src``/``tests``/``benches``/``examples`` (plus
-``build.rs``) select nothing — docs, scripts, and root-level loose files
-cannot change test outcomes.
 - ``Cargo.lock`` (any dependency change can reach any package)
 - ``rust-toolchain.toml`` (compiler change invalidates every crate)
 - ``.cargo/config.toml`` / ``.cargo/config`` (build flags apply everywhere)
 - ``.github/workflows/ci.yml`` (the gate definition itself changed)
 - ``.config/nextest.toml`` (test profile, filters, or groups changed)
+- ``scripts/select_tests.py`` (test selection changed)
+
+Other paths outside a package's ``src``, ``tests``, ``benches``, ``examples``, and
+``build.rs`` do not add packages to this gate.
 
 Usage:
     python3 scripts/select_tests.py --base <sha>   # PR mode, prints "-p a -p b"
@@ -48,6 +48,7 @@ RERUN_ALL_PATHS = frozenset(
         ".cargo/config",
         ".github/workflows/ci.yml",
         ".config/nextest.toml",
+        "scripts/select_tests.py",
     }
 )
 

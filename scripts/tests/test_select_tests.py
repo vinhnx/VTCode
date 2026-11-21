@@ -128,6 +128,15 @@ class SelectForFilesTests(unittest.TestCase):
         self.assertEqual(selected, {p["name"] for p in self.ws.packages})
         self.assertIn("ci.yml", reason)
 
+    def test_selector_self_change_reruns_everything(self):
+        # The selector defines what runs: a change to it must not be able to
+        # narrow itself out of the suite.
+        selected, reason = select_tests.select_for_files(
+            ["scripts/select_tests.py"], self.ws.packages, self.ws.root
+        )
+        self.assertEqual(selected, {p["name"] for p in self.ws.packages})
+        self.assertIn("select_tests.py", reason)
+
     def test_docs_and_scripts_select_nothing(self):
         selected, reason = select_tests.select_for_files(
             ["docs/development/ci-cd.md", "scripts/check-dev.sh"],

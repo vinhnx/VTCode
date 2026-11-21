@@ -1,14 +1,11 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use serde_json::Value;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::sync::Mutex;
-use tokio::time;
 
 use crate::config::{HookCommandConfig, HooksConfig};
 use crate::exec::events::{CompactionMode, CompactionTrigger};
@@ -31,15 +28,8 @@ use crate::hooks::lifecycle::utils::path_to_string;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
 
-/// Upper bound on the post-kill stdout/stderr drain for a timed-out hook.
-/// Mirrors `crate::exec::async_command`: a descendant that escaped the process
-/// group via `setsid()` can keep a pipe write end open forever, so the drain
-/// must be bounded or `run_session_end` can hang (and leak the hook task).
-const HOOK_POST_KILL_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
-
 mod process_guard;
-#[cfg(unix)]
-use process_guard::HookProcessGroupGuard;
+mod process_io;
 
 mod payloads;
 
@@ -667,92 +657,11 @@ impl LifecycleHookEngine {
             process.env("CLAUDE_TRANSCRIPT_PATH", &transcript_path);
         }
 
-        let mut child = process
+        let child = process
             .spawn()
             .with_context(|| format!("failed to spawn lifecycle hook `{}`", command.command))?;
-        #[cfg(unix)]
-        let mut group_guard = HookProcessGroupGuard::new(child.id());
-
-        if let Some(mut stdin) = child.stdin.take() {
-            let mut payload_bytes =
-                serde_json::to_vec(payload).context("failed to serialize lifecycle hook payload")?;
-            payload_bytes.push(b'\n');
-            // Hook commands that never read stdin (one-liners such as
-            // `printf '...'`) exit immediately and close the pipe; whether the
-            // payload write wins that race is pure scheduling. A broken pipe
-            // there means the hook ran without consuming its payload — not a
-            // hook failure. Any other write error is real.
-            if let Err(error) = stdin.write_all(&payload_bytes).await {
-                if error.kind() != std::io::ErrorKind::BrokenPipe {
-                    return Err(error).context("failed to write lifecycle hook payload");
-                }
-            }
-            if let Err(error) = stdin.shutdown().await {
-                if error.kind() != std::io::ErrorKind::BrokenPipe {
-                    return Err(error).context("failed to close lifecycle hook stdin");
-                }
-            }
-        }
-
-        let mut stdout_pipe = child.stdout.take().context("lifecycle hook missing stdout pipe")?;
-        let mut stderr_pipe = child.stderr.take().context("lifecycle hook missing stderr pipe")?;
-
-        let stdout_task = tokio::spawn(async move {
-            let mut buffer = Vec::new();
-            stdout_pipe.read_to_end(&mut buffer).await.map(|_| buffer)
-        });
-        let stderr_task = tokio::spawn(async move {
-            let mut buffer = Vec::new();
-            stderr_pipe.read_to_end(&mut buffer).await.map(|_| buffer)
-        });
-
         let timeout_secs = command.timeout_seconds.unwrap_or(DEFAULT_TIMEOUT_SECS).max(1);
-        let wait_result = time::timeout(Duration::from_secs(timeout_secs), child.wait()).await;
-
-        let (exit_code, timed_out) = match wait_result {
-            Ok(status_res) => {
-                let status = status_res.context("failed to wait for lifecycle hook")?;
-                #[cfg(unix)]
-                group_guard.disarm();
-                (status.code(), false)
-            }
-            Err(_) => {
-                #[cfg(unix)]
-                group_guard.kill();
-                #[cfg(not(unix))]
-                let _ = child.start_kill();
-                let _ = child.wait().await;
-                (None, true)
-            }
-        };
-
-        // After a timeout the group kill should close every writer, but a
-        // setsid-escaped descendant can still hold a pipe open — bound the
-        // drain so a hook can never stall the lifecycle engine.
-        let stdout_bytes = if timed_out {
-            match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stdout_task).await {
-                Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
-                Err(_) => Vec::new(),
-            }
-        } else {
-            stdout_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default()
-        };
-        let stderr_bytes = if timed_out {
-            match time::timeout(HOOK_POST_KILL_DRAIN_TIMEOUT, stderr_task).await {
-                Ok(result) => result.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default(),
-                Err(_) => Vec::new(),
-            }
-        } else {
-            stderr_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default()
-        };
-
-        Ok(HookCommandResult {
-            exit_code,
-            stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
-            stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
-            timed_out,
-            timeout_seconds: timeout_secs,
-        })
+        process_io::capture_hook_output(child, payload, timeout_secs).await
     }
 
     async fn current_transcript_path(&self) -> Option<String> {

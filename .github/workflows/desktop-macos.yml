@@ -100,6 +100,9 @@ jobs:
       - name: Test the headless service process
         run: cargo nextest run --locked -p vtcode --test desktop_server
 
+      - name: Test the concurrent-install refusal (macOS-only unit test)
+        run: cargo nextest run --locked -p vtcode --bin vtcode update_install_refuses_a_second_concurrent_install
+
       - name: Test macOS bundle assembly safeguards
         run: bash scripts/tests/test_package_desktop_macos.sh
 

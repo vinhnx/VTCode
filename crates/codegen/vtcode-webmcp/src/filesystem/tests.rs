@@ -33,14 +33,21 @@ async fn proposal_apply_check_and_revert_validate_current_digests() {
         .expect("propose");
     let applied = adapter.apply_proposal(&proposal.proposal_id).await.expect("apply");
     let result = adapter.run_checks("printf ok").await.expect("check");
+    // A host without Landlock and transiently missing rule paths can cause a
+    // launcher refusal before the command executes. Other launcher failures
+    // should fail the test with their diagnostic.
+    let landlock_host_refusal = cfg!(target_os = "linux")
+        && result.exit_code == Some(125)
+        && result
+            .stderr
+            .strip_prefix("vtcode sandbox-exec: applying Linux sandbox restrictions: ")
+            .is_some_and(|reason| {
+                reason.starts_with("Landlock is not supported by this kernel")
+                    || (reason.starts_with("Landlock cannot open rule path ")
+                        && reason.contains("No such file or directory"))
+            });
     assert!(
-        result.exit_code == Some(0)
-            // The launcher may refuse sandbox application in restricted
-            // environments (container Landlock limits, missing rule paths under
-            // parallel load). EXIT_LAUNCHER_ERROR (125) with the launcher's
-            // stderr contract is a refusal, not a digest failure; the
-            // digest/apply/revert assertions below are unaffected either way.
-            || (result.exit_code == Some(125) && result.stderr.contains("vtcode sandbox-exec:")),
+        (result.exit_code == Some(0) && result.stdout.trim() == "ok") || landlock_host_refusal,
         "unexpected check result: {result:?}"
     );
     assert_eq!(adapter.read_file("main.js").await.expect("read").content, "console.log('new');\n");

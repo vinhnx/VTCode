@@ -9,16 +9,29 @@
 
 set -euo pipefail
 
-staged_rs_files=$(git diff --staged --name-only --diff-filter=ACMR -- '*.rs' || true)
-if [ -n "$staged_rs_files" ]; then
-	# Readable file list for rustfmt (paths with spaces are not supported by
-	# this interface; the repo's tracked layout has none).
-	files=$(echo "$staged_rs_files" | tr '\n' ' ')
-	# shellcheck disable=SC2086
-	rustfmt --edition 2024 --check $files || {
-		echo "pre-commit: formatting check failed. Run: rustfmt --edition 2024 <files> (or cargo fmt --all)" >&2
-		exit 1
-	}
+snapshot_dir=$(mktemp -d)
+trap 'rm -rf -- "$snapshot_dir"' EXIT
+git diff --cached --name-only -z --diff-filter=ACMR -- '*.rs' > "$snapshot_dir/paths"
+if [ -s "$snapshot_dir/paths" ]; then
+	# Stdin isolates each staged blob from unchanged module children. Mirror
+	# staged formatter configs so rustfmt can still find the nearest policy.
+	config_root="$snapshot_dir/config"
+	git ls-files --cached -z -- ':(glob)**/rustfmt.toml' ':(glob)**/.rustfmt.toml' > "$snapshot_dir/configs"
+	while IFS= read -r -d '' config; do
+		mkdir -p -- "$config_root/$(dirname -- "$config")"
+		git show ":$config" > "$config_root/$config"
+	done < "$snapshot_dir/configs"
+	while IFS= read -r -d '' file; do
+		config_directory="$config_root/$(dirname -- "$file")"
+		mkdir -p -- "$config_directory"
+		git show ":$file" > "$snapshot_dir/source"
+		rustfmt --edition 2024 --config-path "$config_directory" --emit stdout \
+			< "$snapshot_dir/source" > "$snapshot_dir/formatted"
+		if ! cmp -s "$snapshot_dir/source" "$snapshot_dir/formatted"; then
+			printf 'pre-commit: staged formatting check failed for %q. Run cargo fmt --all and re-add the file.\n' "$file" >&2
+			exit 1
+		fi
+	done < "$snapshot_dir/paths"
 fi
 
 # Sub-second governance gates: file length, docs links, docs placement, tracked

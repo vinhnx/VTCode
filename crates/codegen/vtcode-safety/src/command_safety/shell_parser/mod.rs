@@ -25,42 +25,10 @@ use anyhow::Result;
 
 pub use ast::{BashNode, BashTree, prewarm_bash_parser};
 
-/// Parses a shell script into individual commands using tree-sitter bash grammar
-///
-/// # Example
-/// ```text
-/// Input:  "git status && cargo check"
-/// Output: Ok([["git", "status"], ["cargo", "check"]])
-/// ```
-///
-/// # Fallback
-/// Upstream tree-sitter-bash #337: the bash external scanner SIGSEGVs when a
-/// `{` is followed anywhere later in the input by a 4-byte UTF-8 lead byte
-/// (0xF0..=0xF7) — e.g. `{` + U+2FA8E — crashing the whole process instead of
-/// returning an error. The minimal reproducer is two characters. A safety
-/// classifier may never crash the agent that calls it, so inputs with that
-/// shape skip the scanner and parse with the basic tokenizer directly.
-fn scanner_crash_shape(script: &str) -> bool {
-    let mut saw_open_brace = false;
-    for byte in script.as_bytes() {
-        match byte {
-            b'{' => saw_open_brace = true,
-            0xF0..=0xF7 if saw_open_brace => return true,
-            _ => {}
-        }
-    }
-    false
-}
-
 /// Parse a shell script into command/argument lists.
 ///
 /// If tree-sitter parsing fails, falls back to simple tokenization.
 pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
-    // Never hand the scanner an input it is known to crash on.
-    if scanner_crash_shape(script) {
-        return parse_with_basic_tokenization(script);
-    }
-    // Try tree-sitter parsing first
     match parse_with_tree_sitter(script, false) {
         Ok(commands) if !commands.is_empty() => return Ok(commands),
         Ok(_) => {} // Empty result, fall through to basic parsing
@@ -754,6 +722,22 @@ mod crash_regression {
     fn parse_survives_brace_plus_astral_input() {
         let parsed = parse_shell_commands("{\u{2FA8E}");
         assert!(parsed.is_ok(), "parse must not fail: {parsed:?}");
+
+        // A real command containing the crash shape keeps its tokens, and a
+        // following command survives too.
+        let parsed = parse_shell_commands("echo {\u{2FA8E}} && echo done").expect("two commands");
+        assert_eq!(parsed.len(), 2, "both commands must survive: {parsed:?}");
+        assert!(parsed[0].contains(&"echo".to_string()), "first command tokens: {parsed:?}");
+        assert_eq!(parsed[1].last().map(String::as_str), Some("done"));
+    }
+
+    #[test]
+    fn strict_parse_rejects_crash_shape_instead_of_crashing() {
+        // parse_shell_commands_tree_sitter has no fallback: strict callers
+        // (validate_bang_shell_command, is_valid_bash_grammar,
+        // looks_like_shell_command) handle Err fail-closed.
+        let result = parse_shell_commands_tree_sitter("{\u{2FA8E}");
+        assert!(result.is_err(), "strict path must reject, not crash: {result:?}");
     }
 
     #[test]

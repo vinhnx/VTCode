@@ -6,25 +6,27 @@
 #   scripts/hooks/pre-commit — rustfmt + governance gates on the staged diff
 #   scripts/hooks/pre-push   — check-dev.sh --workspace (the CI fast gate)
 #
-# Idempotent: re-running is safe. Refuses to replace an existing non-repo hook
-# so unrelated tooling is never clobbered.
+# Idempotent: re-running is safe. Refuses to override a different configured hook path.
 
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-for hook in pre-commit pre-push; do
-	target=".git/hooks/$hook"
-	if [ -e "$target" ] && [ ! -e "$target.repobackup" ]; then
-		echo "Backing up existing $target to $target.repobackup"
-		mv "$target" "$target.repobackup"
-	elif [ -e "$target" ] && [ -e "$target.repobackup" ]; then
-		echo "Existing $target already backed up; skipping"
-	fi
-done
+if current_hooks_path=$(git config --get core.hooksPath); then
+	:
+elif [ "$?" -ne 1 ]; then
+	exit 1
+fi
+if [ -n "$current_hooks_path" ] && [ "$current_hooks_path" != "scripts/hooks" ]; then
+	echo "Refusing to install: core.hooksPath is already set to '$current_hooks_path'." >&2
+	echo "Unset it first (git config --unset core.hooksPath) if you want the repo hooks." >&2
+	exit 1
+fi
 
+# .git/hooks/ is left untouched: core.hooksPath bypasses that directory
+# entirely, so any hooks there keep working once core.hooksPath is unset.
 chmod +x scripts/hooks/pre-commit scripts/hooks/pre-push
-git config core.hooksPath scripts/hooks
+git config --local core.hooksPath scripts/hooks
 
 echo "Hooks installed (core.hooksPath=scripts/hooks):"
 echo "  pre-commit: rustfmt --check + governance gates on staged files"
