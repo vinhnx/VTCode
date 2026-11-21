@@ -66,7 +66,11 @@ Last reviewed: 2026-10-29
 - Promoted the 1000-line all-files ceiling to enforce (`check_file_length.py`, gated by `check-dev.sh`,
   `check.sh file-length`, and the `setup.sh --with-hooks` pre-commit hook). Caps only ratchet down; stale
   allowlist entries fail the gate.
-- Still planned: promote `check_zen_allowlist.py` and the `unwrap/expect` production scan to enforce.
+- Both production scans are enforced: `unwrap/expect` (`check_no_unwrap_expect_prod.py`) and panics
+  inside `Result`-returning functions (`check_no_panic_in_result_fn.py`, including `debug_assert!`,
+  which panics here because release keeps debug assertions on). The latter is a host gate rather than
+  clippy's `panic_in_result_fn` because that lint fires on ~500 `Result<()>` test functions and misses
+  `debug_assert!`. Still planned: promote allowlist hygiene to enforce.
 
 ## Verification Commands
 
@@ -78,6 +82,7 @@ python3 scripts/check_rust_file_length.py --mode warn
 python3 scripts/check_rust_file_length.py --mode enforce --max-lines 800 --quiet
 python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet
 python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt
+python3 scripts/check_no_panic_in_result_fn.py --mode enforce --allowlist scripts/zen_allowlist.txt
 python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt
 ```
 

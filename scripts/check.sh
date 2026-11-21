@@ -263,12 +263,15 @@ run_harness_regression_tests() {
 	fi
 }
 
-# Run Zen governance checks. The unwrap/expect scan is enforced (the allowlist
+# Run Zen governance checks. Both production scans are enforced (the allowlist
 # is clean and every entry names a current finding); allowlist hygiene stays
-# warn-first so refactors surface stale entries without blocking.
+# warn-first so refactors surface stale entries without blocking. The
+# panic-in-Result gate covers production only: clippy's equivalent lint also
+# fires on ~500 Result<()> test functions, so it cannot be enabled workspace-wide.
 run_zen_governance() {
-	print_status "Running Zen governance checks (unwrap enforced, hygiene warn)..."
+	print_status "Running Zen governance checks (unwrap + panic-in-Result enforced, hygiene warn)..."
 	if python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt &&
+		python3 scripts/check_no_panic_in_result_fn.py --mode enforce --allowlist scripts/zen_allowlist.txt &&
 		python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt; then
 		print_success "Zen governance checks completed."
 		return 0
@@ -493,7 +496,7 @@ case "${1:-}" in
 	echo "  legibility - Run agent legibility hotspot checks"
 	echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
 	echo "  contracts - Run release-artifact contract tests"
-	echo "  zen     - Run Zen governance checks (unwrap enforced, hygiene warn)"
+	echo "  zen     - Run Zen governance checks (unwrap + panic-in-Result enforced, hygiene warn)"
 	echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
 	echo "  rust-length - Gate tiered Rust file lengths: src 800, tests 1000 (enforce)"
 	echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"

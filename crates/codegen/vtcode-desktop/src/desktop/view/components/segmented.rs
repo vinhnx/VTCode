@@ -25,7 +25,7 @@ pub(in crate::desktop::view) fn desktop_folder_tab_bar(id: impl Into<gpui_kit::E
 /// Mutually exclusive choices (source switches, preference choices): Kit's
 /// segmented variant owns the track, sliding pill, concentric corners and
 /// hover/selected states; the palette colors come from
-/// [`crate::desktop::themes::fills`]. Kit tabs are not focusable themselves,
+/// `themes/fills.rs`. Kit tabs are not focusable themselves,
 /// so callers wrap the bar in a focusable element with arrow/Home/End handling
 /// through [`segmented_choice_index`].
 pub(in crate::desktop::view) fn desktop_segmented_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {

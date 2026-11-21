@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # vtcode-acp
 
 [Root AGENTS.md](../../../AGENTS.md) | Agent Client Protocol (Zed integration). Canonical ACP entrypoint.

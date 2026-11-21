@@ -1,13 +1,13 @@
-# Zen governance allowlist
+# Zen governance allowlist (shared by the unwrap/expect and panic-in-Result scans)
 # Format:
 #   path/glob.rs | rationale
 #   path/glob.rs:123 | rationale
 # Keep rules scoped and remove them once the underlying code is refactored.
-# A bare path rule pre-authorizes every future unwrap/expect in that file, so
-# reserve it for files whose entire purpose is the construct class (dedicated
-# regex/decoder modules, test fixtures); line-scope everything else — a rotted
-# line rule resurfaces as a warn finding, a bare rule hides new debt. Every
-# rule must silence at least one current finding (re-verified 2026-11-14).
+# A bare path rule pre-authorizes every future unwrap/expect/panic in that
+# file, so reserve it for files whose entire purpose is the construct class
+# (dedicated regex/decoder modules, test fixtures); line-scope everything else
+# — a rotted line rule resurfaces as a warn finding, a bare rule hides new
+# debt. Every rule must silence at least one current finding (re-verified 2026-11-14).
 
 # Intentional startup/static regex initialization in production paths.
 src/agent/runloop/unified/reasoning.rs | static regex initialization at module load for runtime heuristics
@@ -35,7 +35,7 @@ vtcode-core/src/tools/web_fetch/html_preview.rs:31 | static html title regex
 vtcode-core/src/tools/web_fetch/html_preview.rs:32 | static html tag regex
 vtcode-skills/src/file_references.rs:13 | static markdown link regex
 vtcode-skills/src/file_references.rs:17 | static plain path regex
-vtcode-ui/src/tui/core_tui/session/input/helpers.rs:113 | static inline image path regex
+vtcode-ui/src/tui/core_tui/session/input/helpers.rs:114 | static inline image path regex
 vtcode-ui/src/tui/core_tui/session/wrapping.rs | static URL/path token regex
 vtcode-ui/src/tui/utils/transcript.rs:15 | static regex for transcript token parsing
 vtcode-ui/src/tui/utils/transcript.rs:20 | static regex for quoted transcript path parsing
@@ -54,12 +54,12 @@ vtcode-core/src/core/agent/session/mod.rs:584 | serde_json::to_string on Value; 
 vtcode-core/src/core/loop_detector/normalization.rs:76 | tokens.len() >= 2 checked above
 vtcode-core/src/exec/code_executor.rs:305 | builtin_names implies a builtin executor
 vtcode-core/src/pods/manager.rs:446 | pod manager home directory; default impl
-vtcode-ui/src/tui/ui/markdown/mod.rs:331 | cursor is on a character boundary
+vtcode-ui/src/tui/ui/markdown/mod.rs:332 | cursor is on a character boundary
 src/agent/runloop/tool_output/streams/diff_format.rs:40 | word background checked above
 src/agent/runloop/unified/plan_blocks/mod.rs:474 | cursor is on a character boundary
 src/agent/runloop/unified/plan_blocks/mod.rs:736 | cursor is on a character boundary
-src/agent/runloop/unified/settings_interactive/path.rs:65 | position should remain on a character boundary
-src/agent/runloop/unified/settings_interactive/path.rs:90 | position should remain on a character boundary
+src/agent/runloop/unified/settings_interactive/path.rs:68 | position should remain on a character boundary
+src/agent/runloop/unified/settings_interactive/path.rs:93 | position should remain on a character boundary
 
 # Infallible serde serialization.
 vtcode-core/src/skills/skill_policy.rs:366 | sandbox permissions serialize
@@ -72,6 +72,30 @@ vtcode-config/src/loader/manager/cache.rs | config cache lock/thread-join poison
 vtcode-config/src/models/model_id/as_str.rs:26 | generated OpenRouter model metadata
 vtcode-config/src/models/model_id/description.rs:27 | generated OpenRouter model metadata
 vtcode-config/src/models/model_id/display.rs:26 | generated OpenRouter model metadata
+
+# Test-helper oracles: this module is compiled into the library, but every
+# assertion below is the oracle of a `test_*` helper, not a production failure
+# path. Line-scoped so new panics in the file are still reported.
+vtcode-core/src/marketplace/testing.rs:66 | test-helper oracle: install succeeded
+vtcode-core/src/marketplace/testing.rs:75 | test-helper oracle: uninstall succeeded
+vtcode-core/src/marketplace/testing.rs:126 | test-helper oracle: auto_update setting round-trips
+vtcode-core/src/marketplace/testing.rs:127 | test-helper oracle: trust level round-trips
+vtcode-core/src/marketplace/testing.rs:128 | test-helper oracle: marketplace count round-trips
+vtcode-core/src/marketplace/testing.rs:129 | test-helper oracle: plugin count round-trips
+
+# debug_assert! guards in Result-returning fns. The release profile keeps debug
+# assertions on, so these are deliberate crash-loud invariant checks, not
+# recoverable failures; each is established by adjacent control flow.
+vtcode-bash-runner/src/stream.rs:42 | read length bounded by available bytes above
+vtcode-bash-runner/src/stream.rs:57 | remaining space bounded by available bytes above
+vtcode-bash-runner/src/stream.rs:84 | remaining space bounded by available bytes above
+vtcode-config/src/loader/manager/repository.rs:18 | symlink metadata already resolved to a file
+vtcode-core/src/tools/registry/execution_facade/gates.rs:330 | prevalidated call rechecked under cfg(debug_assertions)
+vtcode-desktop/src/desktop/files/launch.rs:175 | terminal verified by the handoff-script gate
+vtcode-desktop-protocol/src/interaction_registry.rs:21 | duplicate identity checked before insertion
+src/agent/runloop/unified/planning_workflow/plan_approval/mod.rs:774 | handoff target is the approved target
+src/agent/runloop/unified/settings_interactive/path.rs:83 | cursor advanced only past a `[` byte
+src/cli/desktop_server/pump.rs:234 | turn id cloned under the same lock that gates it
 
 # Initialization-ordering invariants.
 vtcode-core/src/tools/registry/distributed.rs:45 | OnceCell initialized after first set() call

@@ -278,7 +278,8 @@ where
             decoder.push_bytes(&chunk, &mut buf);
 
             while let Some((split_idx, delimiter_len)) = find_sse_boundary_bytes(&buf, offset) {
-                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                let event = std::str::from_utf8(&buf[offset..split_idx])
+                    .map_err(|error| stream_error(format!("invalid utf-8 stream data: {error}")))?;
                 offset = split_idx + delimiter_len;
 
                 if let Some(data_payload) = extract_data_payload(event) {

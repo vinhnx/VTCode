@@ -8,7 +8,7 @@
 //! settings section headings keep sentence case via [`section_label`] and
 //! [`group_box_title`] one size step above body text. Interactive controls
 //! use the pointing hand
-//! through the button baseline in [`buttons`](self::buttons)/[`DesktopButtonExt::desktop_disabled`]; rows
+//! through the button baseline in [`buttons`]/[`DesktopButtonExt::desktop_disabled`]; rows
 //! that act as buttons keep their own cursor. Chain `.lock_scroll_axis()`
 //! before `.test_support()`: the test wrapper hides that method.
 

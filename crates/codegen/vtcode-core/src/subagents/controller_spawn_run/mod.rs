@@ -577,7 +577,7 @@ impl SubagentController {
         record.closing = true;
         if let Some(handle) = record.handle.take() {
             handle.abort();
-            assert!(pending.insert(target.to_owned(), handle).is_none(), "duplicate owned subagent handle");
+            anyhow::ensure!(pending.insert(target.to_owned(), handle).is_none(), "duplicate subagent handle");
         }
         drop(state);
         if let Some(handle) = pending.get_mut(target) {
@@ -922,7 +922,7 @@ impl SubagentController {
             // Abort schedules cancellation; await the owned launch before
             // reserving its replacement's concurrency slot.
             if let Some(handle) = finishing_handle {
-                assert!(pending.insert(target.to_owned(), handle).is_none(), "duplicate owned subagent handle");
+                anyhow::ensure!(pending.insert(target.to_owned(), handle).is_none(), "duplicate subagent handle");
             }
             if let Some(handle) = pending.get_mut(target) {
                 let result = wait_for_child_stop(handle, target).await;

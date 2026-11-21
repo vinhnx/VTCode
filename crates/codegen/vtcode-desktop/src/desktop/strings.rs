@@ -77,7 +77,7 @@ pub(super) mod key_context {
 /// GPUI `Keystroke::key` spellings inspected or bound from more than one site.
 ///
 /// GPUI models a pressed key as a plain `String`, so every branch, `matches!`
-/// guard and binding must agree on one spelling. [`Named`] gives the closed set
+/// guard and binding must agree on one spelling. [`key::Named`] gives the closed set
 /// we inspect a typed form; the `&str` constants below are derived aliases so
 /// `match` arms and `Keystroke::key == …` reference the same source of truth.
 pub(super) mod key {

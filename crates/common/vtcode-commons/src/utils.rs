@@ -45,16 +45,16 @@ pub fn calculate_sha256(content: &[u8]) -> String {
     output
 }
 
-#[allow(
-    clippy::unreachable,
-    reason = "Intentional compatibility, platform, or test-only suppression."
-)]
+/// Map a 4-bit value to its lowercase hexadecimal digit.
+///
+/// Both call sites pass either `byte >> 4` or `byte & 0x0f`, so `nibble` is
+/// structurally confined to `0..=15`. The lookup itself is total: the mask
+/// keeps the index in bounds, while the `debug_assert!` keeps a violated
+/// contract loud (vtcode's release profile keeps debug assertions enabled).
 fn nibble_to_hex(nibble: u8) -> char {
-    match nibble {
-        0..=9 => char::from(b'0' + nibble),
-        10..=15 => char::from(b'a' + (nibble - 10)),
-        _ => unreachable!("nibble must be in 0..=15"),
-    }
+    debug_assert!(nibble <= 0x0f, "hex nibble outside 0..=15: {nibble}");
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    char::from(DIGITS.get(usize::from(nibble & 0x0f)).copied().unwrap_or(b'?'))
 }
 
 /// Extract a string value from a simple TOML key assignment within the `[package]` section
@@ -182,6 +182,22 @@ pub fn safe_replace_text(content: &str, old_str: &str, new_str: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nibble_to_hex_covers_the_full_four_bit_domain() {
+        let mapped: String = (0u8..=15).map(nibble_to_hex).collect();
+        assert_eq!(mapped, "0123456789abcdef");
+
+        // Independent oracle: a hardened SHA-256 vector exercises both digit
+        // halves (high nibble `>> 4`, low nibble `& 0x0f`) across many bytes.
+        assert_eq!(calculate_sha256(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    #[test]
+    #[should_panic(expected = "hex nibble outside 0..=15")]
+    fn nibble_to_hex_fails_loud_when_its_contract_is_violated() {
+        let _ = nibble_to_hex(16);
+    }
 
     #[test]
     fn readme_excerpt_does_not_split_utf8() {

@@ -142,7 +142,9 @@ grounding/citation rules that only activate when the task is research or citatio
 
 ## Reasoning item removal across requests
 
-The Responses API may drop reasoning items when the request that reuses them no longer matches the request that produced them. VT Code handles the cases it controls at the request boundary instead of relying on silent server-side removal:
+The Responses API may drop reasoning items when the request that reuses them no longer matches the request that
+produced them. VT Code handles the cases it controls at the request boundary instead of relying on silent
+server-side removal:
 
 | Reason | VT Code behavior |
 | --- | --- |
@@ -152,7 +154,11 @@ The Responses API may drop reasoning items when the request that reuses them no 
 | `organization_mismatch` | Continuation chains are per provider instance and per `(provider, model)`; no cross-organization replay is attempted. |
 | `turn_boundary` | `reasoning.context` is not sent; the provider's default persistence behavior applies to the full-history replay. |
 
-When the API reports removals anyway, VT Code counts the reasons from `input_transformations` and emits a bounded debug diagnostic (counts only, no item content or ids). Plain text and unrelated objects are suppressed for model families that cannot render summaries, but structured reasoning items (including non-encrypted summaries near function calls), opaque `encrypted_content`, and compaction state are retained across request rewrites; a real model/provider switch drops them.
+When the API reports removals anyway, VT Code counts the reasons from `input_transformations` and emits a
+bounded debug diagnostic (counts only, no item content or ids). Plain text and unrelated objects are
+suppressed for model families that cannot render summaries, but structured reasoning items (including
+non-encrypted summaries near function calls), opaque `encrypted_content`, and compaction state are retained
+across request rewrites; a real model/provider switch drops them.
 
 ## Example workflow
 

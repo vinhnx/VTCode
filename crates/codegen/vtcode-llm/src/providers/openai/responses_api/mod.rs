@@ -327,18 +327,20 @@ fn append_tool_result_to_instructions(
         return;
     }
 
-    let (heading_str, heading_cap) = match tool_call_id {
-        Some(id) if !id.is_empty() => (None, 26 + id.len()),
-        _ => (Some("Previous tool result:"), 0),
+    // Match the id directly in the branch that formats it so the pairing is
+    // structural instead of an invariant enforced by a runtime panic.
+    let heading_cap = match tool_call_id {
+        Some(id) if !id.is_empty() => 26 + id.len(),
+        _ => "Previous tool result:".len(),
     };
-    let mut s = String::with_capacity(heading_str.map_or(heading_cap, |h| h.len()) + 1 + text.len());
-    match heading_str {
-        Some(h) => s.push_str(h),
-        None => {
+    let mut s = String::with_capacity(heading_cap + 1 + text.len());
+    match tool_call_id {
+        Some(id) if !id.is_empty() => {
             s.push_str("Previous tool result (");
-            s.push_str(tool_call_id.expect("heading_str is None only when tool_call_id is Some"));
+            s.push_str(id);
             s.push_str("):");
         }
+        _ => s.push_str("Previous tool result:"),
     }
     s.push('\n');
     s.push_str(&text);
