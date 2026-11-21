@@ -143,6 +143,13 @@ jobs:
           # action's own (stale) manifest — 0.9.132 — below nextest.toml's floor.
           tool: nextest@${{ steps.nextest.outputs.version }}
 
+      # The ubuntu-26.04 runner image does not ship ripgrep; agent-loop tests
+      # shell out to `rg` and assert on its exit codes.
+      - name: Install ripgrep
+        uses: taiki-e/install-action@v2.90.5
+        with:
+          tool: ripgrep
+
       # PRs run only the packages the diff can reach; main and manual runs
       # execute the full workspace suite and record test times for shard
       # balancing (docs/development/ci-cd.md#test-sharding).
@@ -162,13 +169,18 @@ jobs:
           # Package names come from cargo metadata (cargo's package-name
           # grammar), never from PR-controlled free text.
           SELECTED_PACKAGES: ${{ steps.select.outputs.packages }}
+          # Sandbox-dependent tests (WebMCP check adapter, lifecycle hooks) on
+          # Linux need the real CLI as the sandbox launcher: the workspace test
+          # build always compiles it (the root package depends on every crate
+          # the diff can reach, so selection never excludes it while selecting
+          # those tests). Without it the launcher would resolve to the libtest
+          # harness, which cannot parse the sandbox-exec protocol.
+          VTCODE_LINUX_SANDBOX_EXECUTABLE: ${{ github.workspace }}/target/debug/vtcode
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             if [ -z "$SELECTED_PACKAGES" ]; then
-              # Defensive: the workspace root package captures every repo
-              # file, so a real diff always selects at least `vtcode`.
-              echo "Selection unexpectedly empty; treating as a selection bug."
-              exit 1
+              echo "No package is reachable from this diff (docs/scripts-only change); no tests to run."
+              exit 0
             fi
             # shellcheck disable=SC2086
             cargo nextest run --locked --profile ci-partition $SELECTED_PACKAGES
@@ -182,7 +194,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: nextest-junit
+          name: nextest-junit-${{ github.sha }}
           path: target/nextest/ci-partition-junit.xml
           if-no-files-found: error
           retention-days: 7

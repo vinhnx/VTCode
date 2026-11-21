@@ -12,6 +12,10 @@ Inputs that rerun everything (fail-safe direction — over-selection never hides
 a test; under-selection would):
 
 - any ``Cargo.toml`` (manifest re-resolution changes the graph itself)
+
+Files outside a package's ``src``/``tests``/``benches``/``examples`` (plus
+``build.rs``) select nothing — docs, scripts, and root-level loose files
+cannot change test outcomes.
 - ``Cargo.lock`` (any dependency change can reach any package)
 - ``rust-toolchain.toml`` (compiler change invalidates every crate)
 - ``.cargo/config.toml`` / ``.cargo/config`` (build flags apply everywhere)
@@ -108,27 +112,46 @@ def rerun_all_reason(changed_files: list[str]) -> str | None:
     return None
 
 
+# Within a package, only these locations hold code whose tests the diff can
+# affect. Without this boundary, any loose file at the workspace root (README,
+# .github/, docs/) would map to the root package — the workspace root is
+# itself a package — and docs-only PRs would run its heavy test binaries.
+PACKAGE_SOURCE_DIRS = frozenset({"src", "tests", "benches", "examples"})
+
+
+def _maps_to_package_source(file_path: str, package_root: str) -> bool:
+    """True when a changed file sits inside the package's code locations."""
+    relative = os.path.relpath(file_path, package_root)
+    if relative == "build.rs" or relative == "Cargo.toml":
+        return True
+    top = relative.split(os.sep)[0]
+    return top in PACKAGE_SOURCE_DIRS
+
+
 def files_to_packages(
     changed_files: list[str],
     packages: list[dict],
     repo_root: str,
 ) -> set[str]:
-    """Map each changed file to its owning package (nearest manifest ancestor)."""
+    """Map each changed file to its owning package (nearest manifest ancestor).
+
+    Files outside every package's source locations (docs/, scripts/, .github/,
+    loose root files) select nothing: they cannot change test outcomes.
+    """
     roots = {package_root(p["manifest_path"]): p["name"] for p in packages}
     selected: set[str] = set()
     for path in changed_files:
-        directory = os.path.dirname(os.path.join(repo_root, os.fsdecode(path)))
+        full_path = os.path.join(repo_root, os.fsdecode(path))
+        directory = os.path.dirname(full_path)
         while True:
             name = roots.get(directory)
             if name is not None:
-                selected.add(name)
+                if _maps_to_package_source(full_path, directory):
+                    selected.add(name)
                 break
             parent = os.path.dirname(directory)
             if parent == directory or len(parent) < len(repo_root):
-                # Walked past every manifest. The workspace root is itself a
-                # package (`vtcode`), so every file under the repository —
-                # docs/, scripts/, .github/ included — reaches it: bounded
-                # over-selection, never a hidden test.
+                # Outside every package: no tests to reach from this file.
                 break
             directory = parent
     return selected
@@ -224,7 +247,10 @@ def main() -> int:
         return 0
 
     if reason is not None:
-        print(f"::notice::Full test suite selected — {reason}", file=sys.stderr)
+        # reason embeds PR-controlled paths; strip control characters so a
+        # crafted filename cannot inject workflow commands into the log.
+        safe_reason = "".join(ch for ch in reason if ch.isprintable())
+        print(f"::notice::Full test suite selected — {safe_reason}", file=sys.stderr)
     print(format_package_args(selected))
     return 0
 

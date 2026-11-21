@@ -1,0 +1,15 @@
+#!/bin/bash
+# Pre-push hook: the same fast gate CI runs, workspace-wide.
+#
+# Runs check-dev.sh (rustfmt, clippy default-members, cargo check, governance
+# gates) in quiet mode. Tests are deliberately not repeated here: CI runs the
+# full suite on main and the diff-reachable selection on PRs, so re-running
+# minutes of tests on every push adds the exact waiting the gate design
+# removes. A push that skips tests still gets them from CI — this hook only
+# catches what would waste a CI round trip.
+#
+# Installed by scripts/install-hooks.sh via `git config core.hooksPath`.
+
+set -euo pipefail
+
+exec ./scripts/check-dev.sh --quiet --workspace

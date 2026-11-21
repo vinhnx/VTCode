@@ -52,6 +52,41 @@ pinned_refs() {
     ' "$LOCKFILE"
 }
 
+# The Actions runner enforces the lockfile per workflow: a `uses:` ref with no
+# entry under that workflow's `workflows:` section is rejected at job setup,
+# even when the ref exists in the `dependencies:` section. Emit
+# "<workflow>\t<ref>" pairs so the offline gate can match the online
+# `gh actions-lock --verify-local` coverage check.
+workflow_ref_map() {
+    [ -f "$LOCKFILE" ] || return 1
+    awk '
+        /^workflows:[[:space:]]*$/ { in_wf = 1; next }
+        in_wf && /^[^[:space:]#]/ { in_wf = 0 }
+        in_wf && /^    "[^"]*":$/ || in_wf && /^    '"'"'[^'"'"']*'"'"':$/ {
+            current = $0
+            sub(/^    /, "", current)
+            sub(/:$/, "", current)
+            gsub(/["\047]/, "", current)
+            next
+        }
+        in_wf && /^        - / {
+            ref = $0
+            sub(/^        - /, "", ref)
+            gsub(/["\047]/, "", ref)
+            print tolower(current) "\t" ref
+        }
+    ' "$LOCKFILE"
+}
+
+# True when the workflow's lockfile section lists the ref. Paths in this repo
+# are lowercase on both sides; no case folding (macOS ships bash 3.2, which
+# lacks the ${var,,} expansion).
+workflow_ref_locked() {
+    local wf="$1" ref="$2"
+    [ -f "$LOCKFILE" ] || return 1
+    printf '%s\n' "$WORKFLOW_REF_MAP" | grep -qxF "$(printf '%s\t%s' "$wf" "$ref")"
+}
+
 if [ ! -f "$LOCKFILE" ]; then
     report_error "$LOCKFILE" "0" "missing workflow lockfile; run \`gh actions-lock\`"
 elif ! grep -q '^version:' "$LOCKFILE"; then
@@ -59,6 +94,7 @@ elif ! grep -q '^version:' "$LOCKFILE"; then
 fi
 
 pinned_list=$(pinned_refs || true)
+WORKFLOW_REF_MAP=$(workflow_ref_map || true)
 
 for file in .github/workflows/*.yml; do
     while IFS=: read -r _path line _text; do
@@ -96,6 +132,14 @@ for file in .github/workflows/*.yml; do
 
         if ! printf '%s\n' "$pinned_list" | grep -qxF "$(printf '%s' "$uses_ref" | tr '[:upper:]' '[:lower:]')"; then
             report_error "$file" "$line" "action '$uses_ref' has no lockfile entry pinning it to a commit SHA; run \`gh actions-lock\`"
+        fi
+
+        # Runner-side enforcement is per workflow: a ref missing from this
+        # workflow's own lockfile section is rejected at job setup even though
+        # the dependencies section pins it. This is the offline equivalent of
+        # `gh actions-lock --verify-local` coverage.
+        if ! workflow_ref_locked "$file" "$(printf '%s' "$uses_ref" | tr '[:upper:]' '[:lower:]')"; then
+            report_error "$file" "$line" "action '$uses_ref' has no $LOCKFILE section for $file; run \`gh actions-lock\`"
         fi
     done < <(rg -nH '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*' "$file" || true)
 done

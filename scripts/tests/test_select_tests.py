@@ -39,6 +39,15 @@ class SyntheticWorkspace:
         package["dependencies"] = [{"name": dep, "kind": None} for dep in dependencies]
         self.packages.append(package)
 
+    def add_root_package(self, name: str, dependencies: list[str]) -> None:
+        """A package whose manifest sits at the workspace root (like the real repo)."""
+        package = {
+            "name": name,
+            "manifest_path": str(Path(self.root) / "Cargo.toml"),
+            "dependencies": [{"name": dep, "kind": None} for dep in dependencies],
+        }
+        self.packages.append(package)
+
     def close(self) -> None:
         self._tmp.cleanup()
 
@@ -121,12 +130,32 @@ class SelectForFilesTests(unittest.TestCase):
 
     def test_docs_and_scripts_select_nothing(self):
         selected, reason = select_tests.select_for_files(
-            ["docs/development/ci-cd.md", "scripts/check-dev.sh", "README.md"],
+            ["docs/development/ci-cd.md", "scripts/check-dev.sh"],
             self.ws.packages,
             self.ws.root,
         )
         self.assertEqual(selected, set())
         self.assertIsNone(reason)
+
+    def test_root_package_loose_files_do_not_select(self):
+        # Real workspaces: the workspace root is itself a package. Without the
+        # source-dir boundary, a loose root file (README.md) would map to the
+        # root package and docs-only PRs would run its heavy test binaries.
+        root = tempfile.TemporaryDirectory()
+        try:
+            ws = SyntheticWorkspace()
+            ws.root = root.name
+            ws.add_root_package("rootpkg", [])
+            selected, _ = select_tests.select_for_files(["README.md"], ws.packages, ws.root)
+            self.assertEqual(selected, set())
+            selected, _ = select_tests.select_for_files(["src/main.rs"], ws.packages, ws.root)
+            self.assertEqual(selected, {"rootpkg"})
+            selected, _ = select_tests.select_for_files([".github/workflows/x.yml"], ws.packages, ws.root)
+            self.assertEqual(selected, set())
+            selected, _ = select_tests.select_for_files(["build.rs"], ws.packages, ws.root)
+            self.assertEqual(selected, {"rootpkg"})
+        finally:
+            root.cleanup()
 
     def test_nested_file_maps_to_nearest_manifest(self):
         selected, _ = select_tests.select_for_files(
