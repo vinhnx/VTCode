@@ -28,12 +28,11 @@ pub fn reasoning_from_selection_string(s: &str) -> ReasoningEffortLevel {
 }
 
 /// Convert a config `UiSurfacePreference` to the TUI `SessionSurface` enum.
+///
+/// The `From` impl is owned by `vtcode-config` alongside the config type, so
+/// the conversion has a single definition shared by every surface.
 pub fn to_tui_surface(preference: vtcode_core::config::types::UiSurfacePreference) -> SessionSurface {
-    match preference {
-        vtcode_core::config::types::UiSurfacePreference::Auto => SessionSurface::Auto,
-        vtcode_core::config::types::UiSurfacePreference::Alternate => SessionSurface::Alternate,
-        vtcode_core::config::types::UiSurfacePreference::Inline => SessionSurface::Inline,
-    }
+    preference.into()
 }
 
 /// Convert a [`KeyboardProtocolConfig`] to the TUI [`KeyboardProtocolSettings`].

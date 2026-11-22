@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fmt;
 use std::path::PathBuf;
+use vtcode_commons::ui_protocol::SessionSurface;
 
 // Re-export from vtcode-commons so downstream code can use `vtcode_config::types::ReasoningEffortLevel`.
 pub use vtcode_commons::reasoning::ReasoningEffortLevel;
@@ -431,6 +432,31 @@ impl fmt::Display for UiSurfacePreference {
     }
 }
 
+// Both directions live here, in the crate that owns `UiSurfacePreference`.
+// `impl From<UiSurfacePreference> for SessionSurface` is legal even though both
+// `From` and `SessionSurface` are foreign: the local type occupies the trait's
+// generic parameter slot (RFC 2451 rebalanced coherence). Keeping them together
+// lets UI crates re-export this type instead of declaring an orphan-driven copy.
+impl From<SessionSurface> for UiSurfacePreference {
+    fn from(value: SessionSurface) -> Self {
+        match value {
+            SessionSurface::Auto => Self::Auto,
+            SessionSurface::Alternate => Self::Alternate,
+            SessionSurface::Inline => Self::Inline,
+        }
+    }
+}
+
+impl From<UiSurfacePreference> for SessionSurface {
+    fn from(value: UiSurfacePreference) -> Self {
+        match value {
+            UiSurfacePreference::Auto => Self::Auto,
+            UiSurfacePreference::Alternate => Self::Alternate,
+            UiSurfacePreference::Inline => Self::Inline,
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for UiSurfacePreference {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -568,6 +594,19 @@ mod tests {
     #[test]
     fn ui_surface_defaults_to_inline() {
         assert_eq!(UiSurfacePreference::default(), UiSurfacePreference::Inline);
+        assert_eq!(SessionSurface::default(), SessionSurface::from(UiSurfacePreference::default()));
+    }
+
+    #[test]
+    fn ui_surface_converts_to_and_from_tui_surface() {
+        for (preference, surface) in [
+            (UiSurfacePreference::Auto, SessionSurface::Auto),
+            (UiSurfacePreference::Alternate, SessionSurface::Alternate),
+            (UiSurfacePreference::Inline, SessionSurface::Inline),
+        ] {
+            assert_eq!(SessionSurface::from(preference), surface);
+            assert_eq!(UiSurfacePreference::from(surface), preference);
+        }
     }
 
     #[test]

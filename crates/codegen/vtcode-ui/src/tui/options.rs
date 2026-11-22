@@ -3,26 +3,6 @@ use crate::tui::config::KeyboardProtocolConfig;
 // Re-export shared types from vtcode-commons.
 pub use vtcode_commons::ui_protocol::{KeyboardProtocolSettings, SessionSurface};
 
-impl From<SessionSurface> for crate::tui::config::UiSurfacePreference {
-    fn from(value: SessionSurface) -> Self {
-        match value {
-            SessionSurface::Auto => Self::Auto,
-            SessionSurface::Alternate => Self::Alternate,
-            SessionSurface::Inline => Self::Inline,
-        }
-    }
-}
-
-impl From<crate::tui::config::UiSurfacePreference> for SessionSurface {
-    fn from(value: crate::tui::config::UiSurfacePreference) -> Self {
-        match value {
-            crate::tui::config::UiSurfacePreference::Auto => Self::Auto,
-            crate::tui::config::UiSurfacePreference::Alternate => Self::Alternate,
-            crate::tui::config::UiSurfacePreference::Inline => Self::Inline,
-        }
-    }
-}
-
 impl From<KeyboardProtocolConfig> for KeyboardProtocolSettings {
     fn from(value: KeyboardProtocolConfig) -> Self {
         Self {
