@@ -56,9 +56,9 @@ fn shell_command_span(detail: &str) -> Option<&str> {
 /// Prose keeps the plain themed paragraph (first-line hierarchy intact); a
 /// lone `` `$ ...` `` span renders as a highlighted `sh` block and any other
 /// backtick content as inline Markdown, so tool calls never show raw ticks.
-/// Parsing runs per render over a handful of short strings (unlike the
-/// transcript, which prepares hundreds of streaming rows at ingestion);
-/// memoize at the call site if profiling ever implicates this.
+/// Parsing goes through [`prepared_markdown`], whose
+/// content key keeps repeated frames over an unchanged detail parse-free
+/// (unlike the transcript, which prepares streaming rows at ingestion).
 /// Every wrapper clamps to the panel width: `min_w_0` breaks the flex
 /// min-content chain that otherwise shoves trailing content past the card
 /// edge, and `overflow_x_hidden` clips unbreakable paint instead of the
