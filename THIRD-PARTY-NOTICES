@@ -49,7 +49,7 @@ Do not edit by hand — regenerate after dependency changes.
 --------------------------------------------------------------------------------
 License Overview
 --------------------------------------------------------------------------------
-  Apache License 2.0 (790 crates) — SPDX: Apache-2.0
+  Apache License 2.0 (796 crates) — SPDX: Apache-2.0
   MIT License (293 crates) — SPDX: MIT
   Unicode License v3 (23 crates) — SPDX: Unicode-3.0
   BSD 3-Clause "New" or "Revised" License (12 crates) — SPDX: BSD-3-Clause
@@ -190,6 +190,9 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows-collections 0.3.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows-core 0.57.0
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows-core 0.58.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
@@ -199,10 +202,16 @@ Apache License 2.0 — SPDX: Apache-2.0
   windows-future 0.3.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
+  windows-implement 0.57.0
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
   windows-implement 0.58.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-implement 0.60.2
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows-interface 0.57.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-interface 0.58.0
@@ -224,6 +233,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-registry 0.6.1
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows-result 0.1.2
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-result 0.2.0
@@ -272,6 +284,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows-version 0.1.7
+    Source: https://github.com/microsoft/windows-rs
+    License: MIT OR Apache-2.0
+  windows 0.57.0
     Source: https://github.com/microsoft/windows-rs
     License: MIT OR Apache-2.0
   windows 0.58.0
@@ -1093,7 +1108,7 @@ Apache License 2.0 — SPDX: Apache-2.0
   heapless 0.8.0
     Source: https://github.com/rust-embedded/heapless
     License: MIT OR Apache-2.0
-  heapless 0.9.3
+  heapless 0.9.4
     Source: https://github.com/rust-embedded/heapless
     License: MIT OR Apache-2.0
   heck 0.4.1
@@ -1133,9 +1148,6 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/rust-itertools/itertools
     License: MIT OR Apache-2.0
   itertools 0.14.0
-    Source: https://github.com/rust-itertools/itertools
-    License: MIT OR Apache-2.0
-  itertools 0.15.0
     Source: https://github.com/rust-itertools/itertools
     License: MIT OR Apache-2.0
   jobserver 0.1.35
@@ -1873,75 +1885,81 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode-a2a 0.181.11
+  vtcode-a2a 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-acp 0.181.11
+  vtcode-acp 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-auth 0.181.11
+  vtcode-auth 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-bash-runner 0.181.11
+  vtcode-bash-runner 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-config 0.181.11
+  vtcode-computer-use 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-core 0.181.11
+  vtcode-config 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop 0.181.11
-    License: MIT OR Apache-2.0
-  vtcode-eval 0.181.11
+  vtcode-core 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-indexer 0.181.11
+  vtcode-desktop 0.185.0
+    License: MIT OR Apache-2.0
+  vtcode-eval 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-llm 0.181.11
+  vtcode-indexer 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-mcp 0.181.11
+  vtcode-llm 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-memory 0.181.11
+  vtcode-mcp 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-safety 0.181.11
+  vtcode-memory 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-skills 0.181.11
+  vtcode-safety 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-ui 0.181.11
+  vtcode-skills 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-webmcp 0.181.11
+  vtcode-tui-runtime 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-agent-plugins 0.181.11
+  vtcode-ui 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-commons 0.181.11
+  vtcode-webmcp 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop-protocol 0.181.11
+  vtcode-agent-plugins 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-diff 0.181.11
+  vtcode-commons 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-exec-events 0.181.11
+  vtcode-desktop-protocol 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-macros 0.181.11
+  vtcode-diff 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-threads 0.181.11
+  vtcode-exec-events 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-utility-tool-specs 0.181.11
+  vtcode-macros 0.185.0
+    Source: https://github.com/vinhnx/vtcode
+    License: MIT OR Apache-2.0
+  vtcode-threads 0.185.0
+    Source: https://github.com/vinhnx/vtcode
+    License: MIT OR Apache-2.0
+  vtcode-utility-tool-specs 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
   mac-notification-sys 0.6.15
@@ -1965,13 +1983,13 @@ Apache License 2.0 — SPDX: Apache-2.0
   accesskit_windows 0.34.0
     Source: https://github.com/AccessKit/accesskit
     License: MIT OR Apache-2.0
-  agent-client-protocol-derive 2.0.0
+  agent-client-protocol-derive 5.0.0
     Source: https://github.com/agentclientprotocol/rust-sdk
     License: Apache-2.0
-  agent-client-protocol-schema 1.5.0
+  agent-client-protocol-schema 1.15.1
     Source: https://github.com/agentclientprotocol/agent-client-protocol
     License: Apache-2.0
-  agent-client-protocol 2.0.0
+  agent-client-protocol 5.0.0
     Source: https://github.com/agentclientprotocol/rust-sdk
     License: Apache-2.0
   allocator-api2 0.2.21
@@ -2653,18 +2671,18 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
+  gpui-component 0.9.1
+    Source: https://github.com/longbridge/gpui-kit
+    License: Apache-2.0
   gpui-base 0.9.1
     Source: https://github.com/longbridge/gpui-kit
     License: Apache-2.0
   gpui-component-macros 0.9.1
     License: Apache-2.0
-  gpui-component 0.9.1
-    Source: https://github.com/longbridge/gpui-kit
-    License: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode 0.181.11
+  vtcode 0.185.0
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
