@@ -266,52 +266,85 @@ pub(super) async fn render_patched_text_from_content(
     Ok(render_patched_content(original_lines, replacements, ensure_trailing_newline, line_ending))
 }
 
+/// The ordered line slices of the patched document, borrowed from the
+/// immutable original and the replacement segments.
+///
+/// This is the single edit-application pass: one walk over the collected
+/// replacements builds the result without copying line text. Both the
+/// in-memory renderer and the streaming writer consume it, so there is exactly
+/// one definition of how edits are applied — mirroring the `SyntaxEditor`
+/// approach of collecting edits and building a fresh document from them.
+fn patched_line_segments<'a>(
+    original_lines: &'a [String],
+    replacements: &'a [(usize, usize, Vec<String>)],
+) -> Vec<&'a [String]> {
+    // # Requires
+    // - `replacements` is sorted by start index and non-overlapping (as
+    //   produced by `compute_replacements_with_inspection`).
+    // # Ensures
+    // - The returned slices, concatenated, are the patched document's lines.
+    // - Total (terminating): one pass over `replacements`.
+    let mut segments = Vec::with_capacity(replacements.len().saturating_mul(2).saturating_add(1));
+    let mut cursor = 0usize;
+    for (start_idx, old_len, new_segment) in replacements {
+        let start = *start_idx;
+        debug_assert!(
+            cursor <= start && start <= original_lines.len(),
+            "replacement plan must be ordered and in bounds"
+        );
+        if cursor < start {
+            segments.push(&original_lines[cursor..start]);
+        }
+        segments.push(new_segment.as_slice());
+        cursor = start.saturating_add(*old_len);
+    }
+    if cursor < original_lines.len() {
+        segments.push(&original_lines[cursor..]);
+    }
+    segments
+}
+
+/// One trailing-newline verdict shared by both application paths.
+fn needs_trailing_ending(segments: &[&[String]], ensure_trailing_newline: bool) -> bool {
+    if !ensure_trailing_newline {
+        return false;
+    }
+    // A trailing empty line already contributed the separator that ends the
+    // document. For zero lines the empty document gets the ending, matching
+    // the previous `last_line_was_empty = false` behaviour.
+    segments
+        .iter()
+        .rev()
+        .find_map(|segment| segment.last())
+        .is_none_or(|line| !line.is_empty())
+}
+
 fn render_patched_content(
     original_lines: Vec<String>,
     replacements: Vec<(usize, usize, Vec<String>)>,
     ensure_trailing_newline: bool,
     line_ending: LineEnding,
 ) -> String {
+    let segments = patched_line_segments(&original_lines, &replacements);
     let ending = line_ending.as_str();
-    let estimated_capacity = original_lines.iter().map(|l| l.len()).sum::<usize>()
-        + original_lines.len().saturating_sub(1) * ending.len()
-        + ending.len();
+    let estimated_capacity = original_lines
+        .iter()
+        .map(|line| line.len())
+        .sum::<usize>()
+        .saturating_add(original_lines.len().saturating_sub(1).saturating_mul(ending.len()))
+        .saturating_add(ending.len());
     let mut rendered = String::with_capacity(estimated_capacity);
-    let mut current_idx = 0usize;
     let mut first = true;
-
-    for (start_idx, old_len, new_segment) in replacements {
-        for line in original_lines.iter().take(start_idx).skip(current_idx) {
-            if !first {
-                rendered.push_str(ending);
-            }
-            rendered.push_str(line);
-            first = false;
-        }
-
-        for line in new_segment {
-            if !first {
-                rendered.push_str(ending);
-            }
-            rendered.push_str(&line);
-            first = false;
-        }
-
-        current_idx = start_idx + old_len;
-    }
-
-    for line in original_lines.iter().skip(current_idx) {
+    for line in segments.iter().flat_map(|segment| segment.iter()) {
         if !first {
             rendered.push_str(ending);
         }
         rendered.push_str(line);
         first = false;
     }
-
-    if ensure_trailing_newline && !rendered.ends_with(ending) {
+    if needs_trailing_ending(&segments, ensure_trailing_newline) {
         rendered.push_str(ending);
     }
-
     rendered
 }
 
@@ -322,50 +355,19 @@ pub(super) async fn write_patched_content(
     ensure_trailing_newline: bool,
     line_ending: LineEnding,
 ) -> Result<(), PatchError> {
-    let mut current_idx = 0;
+    let segments = patched_line_segments(&original_lines, &replacements);
     let ending = line_ending.as_str();
     let mut first = true;
-    let mut last_line_was_empty = false;
-
-    for (start_idx, old_len, new_segment) in replacements {
-        // Write lines before the replacement
-        for line in original_lines.iter().take(start_idx).skip(current_idx) {
-            if !first {
-                writer.write_all(ending.as_bytes()).await?;
-            }
-            writer.write_all(line.as_bytes()).await?;
-            first = false;
-            last_line_was_empty = line.is_empty();
-        }
-        // Write the replacement lines
-        for line in new_segment {
-            if !first {
-                writer.write_all(ending.as_bytes()).await?;
-            }
-            writer.write_all(line.as_bytes()).await?;
-            first = false;
-            last_line_was_empty = line.is_empty();
-        }
-        current_idx = start_idx + old_len;
-    }
-
-    // Write remaining lines
-    for line in original_lines.iter().skip(current_idx) {
+    for line in segments.iter().flat_map(|segment| segment.iter()) {
         if !first {
             writer.write_all(ending.as_bytes()).await?;
         }
         writer.write_all(line.as_bytes()).await?;
         first = false;
-        last_line_was_empty = line.is_empty();
     }
-
-    // Only add a trailing ending if the content does not already end with one.
-    // When the last written line is empty, the separator written before it
-    // already produces a trailing ending, mirroring render_patched_content.
-    if ensure_trailing_newline && !last_line_was_empty {
+    if needs_trailing_ending(&segments, ensure_trailing_newline) {
         writer.write_all(ending.as_bytes()).await?;
     }
-
     Ok(())
 }
 
@@ -389,4 +391,76 @@ pub(crate) async fn inspection_replacements(
             .collect(),
         required_ranges: plan.required_ranges,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::io::AtomicWriter;
+    use super::{
+        LineEnding, needs_trailing_ending, patched_line_segments, render_patched_content, write_patched_content,
+    };
+
+    #[test]
+    fn patched_segments_apply_edits_in_file_order() {
+        let original: Vec<String> = ["top", "remove", "keep", "bottom"].iter().map(|s| (*s).to_string()).collect();
+        let replacements = vec![
+            (1usize, 1usize, vec!["replacement".to_string()]),
+            (2usize, 0usize, vec!["first-insert".to_string()]),
+            (2usize, 0usize, vec!["second-insert".to_string()]),
+            (3usize, 1usize, Vec::new()),
+        ];
+
+        let segments = patched_line_segments(&original, &replacements);
+        let lines: Vec<&str> = segments.iter().flat_map(|segment| segment.iter()).map(String::as_str).collect();
+
+        assert_eq!(lines, ["top", "replacement", "first-insert", "second-insert", "keep"]);
+    }
+
+    #[test]
+    fn trailing_ending_ignores_empty_final_line_and_empty_document() {
+        let one = vec!["a".to_string()];
+        let with_empty_tail = vec!["a".to_string(), String::new()];
+        let empty: Vec<String> = Vec::new();
+        let segments: Vec<&[String]> = vec![one.as_slice(), with_empty_tail.as_slice(), empty.as_slice()];
+        let verdicts: Vec<bool> = segments
+            .iter()
+            .map(|segment| needs_trailing_ending(&[*segment], true))
+            .collect();
+
+        assert_eq!(verdicts, [true, false, true]);
+        assert!(!needs_trailing_ending(&[one.as_slice()], false));
+    }
+
+    #[tokio::test]
+    async fn streaming_writer_matches_in_memory_renderer() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let original: Vec<String> = ["alpha", "stale", "omega"].iter().map(|s| (*s).to_string()).collect();
+        let replacements = vec![(1usize, 1usize, vec!["fresh".to_string()])];
+        let cases = [
+            (LineEnding::LF, true),
+            (LineEnding::LF, false),
+            (LineEnding::Crlf, true),
+        ];
+
+        for (line_ending, ensure_trailing_newline) in cases {
+            let rendered =
+                render_patched_content(original.clone(), replacements.clone(), ensure_trailing_newline, line_ending);
+
+            let path = dir.path().join("patched.txt");
+            let mut writer = AtomicWriter::create(&path, None).await.expect("create writer");
+            write_patched_content(
+                &mut writer,
+                original.clone(),
+                replacements.clone(),
+                ensure_trailing_newline,
+                line_ending,
+            )
+            .await
+            .expect("write patched content");
+            writer.commit().await.expect("commit");
+            let streamed = tokio::fs::read_to_string(&path).await.expect("read patched file");
+
+            assert_eq!(streamed, rendered, "renderer and writer must apply edits identically");
+        }
+    }
 }
