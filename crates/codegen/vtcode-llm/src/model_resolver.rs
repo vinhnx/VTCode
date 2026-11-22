@@ -205,6 +205,19 @@ impl ModelResolver {
             ));
         }
 
+        // An explicit override that is not a built-in Provider names a custom
+        // route (e.g. `[[custom_providers]] mycorp`). Falling through to the
+        // model slug would silently report the slug's catalog provider — wrong
+        // catalog metadata and the wrong API-key env for that route. Custom
+        // routes carry their own config/profile metadata at the call sites, so
+        // there is nothing this catalog-backed resolver can truthfully return.
+        if provider_override.is_some_and(|value| {
+            let trimmed = value.trim();
+            !trimmed.is_empty() && parse_provider_override(trimmed).is_none()
+        }) {
+            return None;
+        }
+
         if let Ok(model_id) = ModelId::from_str(model) {
             return Some(Self::resolve_for_model_id(
                 model,
@@ -541,6 +554,22 @@ mod tests {
         assert_eq!(resolved.provider, Provider::OpenAI);
         assert!(resolved.known_model());
         assert_eq!(resolved.display_name(), "GPT-5.6 Sol");
+    }
+
+    #[test]
+    fn resolver_does_not_misattribute_custom_provider_slugs() {
+        // A gateway serving an OpenAI-looking slug must not be reported as
+        // OpenAI (catalog metadata + OPENAI_API_KEY availability).
+        assert!(ModelResolver::resolve(Some("mycorp"), "gpt-5.6-sol", &[], None).is_none());
+        assert!(ModelResolver::resolve(Some("my-gateway"), "claude-sonnet-5", &[], None).is_none());
+
+        // Control: built-in overrides still resolve normally.
+        let builtin = ModelResolver::resolve(Some("openai"), "gpt-5.6-sol", &[], None).expect("built-in route");
+        assert_eq!(builtin.provider, Provider::OpenAI);
+        assert!(builtin.known_model());
+
+        // A blank override is not a custom route; model inference still works.
+        assert!(ModelResolver::resolve(Some("  "), "gpt-5.6-sol", &[], None).is_some());
     }
 
     #[test]

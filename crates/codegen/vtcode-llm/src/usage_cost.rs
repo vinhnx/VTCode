@@ -272,6 +272,17 @@ mod tests {
     }
 
     #[test]
+    fn custom_provider_route_has_no_borrowed_catalog_pricing() {
+        // A custom gateway serving a catalog-looking slug must not inherit the
+        // catalog provider's prices for budget accounting.
+        assert!(estimate_session_costs("mycorp", "gpt-6-astra", &vtcode_exec_events::Usage::default()).is_none());
+        assert!(require_budget_pricing("mycorp", "gpt-6-astra", Some(1.0)).is_err());
+
+        // Control: a genuinely priced catalog route still resolves.
+        assert!(estimate_session_costs("openai", "gpt-6-astra", &vtcode_exec_events::Usage::default()).is_some());
+    }
+
+    #[test]
     fn switching_to_a_cheaper_model_never_reprices_previous_spend() {
         let usage = vtcode_exec_events::Usage { input_tokens: 100, ..Default::default() };
         let mut session = SessionCostAccumulator::default();
