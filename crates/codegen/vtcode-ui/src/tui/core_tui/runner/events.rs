@@ -88,6 +88,38 @@ impl EventChannels {
     }
 }
 
+/// Restores event delivery when a scoped pause ends, including on unwind.
+///
+/// Terminal setup around `SIGTSTP` can fail or panic. Without a guard, an
+/// unwinding panic would leave `rx_paused` set forever: the event loop drops
+/// every crossterm event and the drive loop skips redraws, freezing the TUI
+/// with no diagnostic. The guard keeps the pause strictly scoped.
+#[cfg(unix)]
+pub(super) struct EventPauseGuard<'a> {
+    channels: &'a EventChannels,
+    inputs: &'a mut EventListener,
+}
+
+#[cfg(unix)]
+impl<'a> EventPauseGuard<'a> {
+    /// Pause delivery and drain events queued before the pause.
+    pub(super) fn new(channels: &'a EventChannels, inputs: &'a mut EventListener) -> Self {
+        channels.pause();
+        inputs.clear_queue();
+        Self { channels, inputs }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for EventPauseGuard<'_> {
+    fn drop(&mut self) {
+        self.channels.resume();
+        // Events that raced the pause are stale; drop them after resuming so
+        // only input received after the pause ends reaches the session.
+        self.inputs.clear_queue();
+    }
+}
+
 pub(super) struct EventListener {
     receiver: Receiver<TerminalEvent>,
     tick_pending: Arc<AtomicBool>,
@@ -275,6 +307,37 @@ pub(super) async fn spawn_event_loop(
 mod tests {
     use super::*;
     use crossterm::event::{KeyEvent, KeyModifiers, MouseEvent};
+
+    #[cfg(unix)]
+    #[test]
+    fn pause_guard_restores_delivery_on_scope_exit() {
+        let (mut inputs, channels) = EventListener::new();
+        {
+            let _guard = EventPauseGuard::new(&channels, &mut inputs);
+            assert!(channels.rx_paused.load(Ordering::Acquire));
+        }
+        assert!(!channels.rx_paused.load(Ordering::Acquire));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pause_guard_restores_delivery_on_unwind() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let (mut inputs, channels) = EventListener::new();
+        channels.tx.send_tick().expect("queued tick");
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = EventPauseGuard::new(&channels, &mut inputs);
+            assert!(channels.rx_paused.load(Ordering::Acquire));
+            panic!("simulated failure between pause and resume");
+        }));
+        assert!(outcome.is_err());
+
+        assert!(!channels.rx_paused.load(Ordering::Acquire), "event delivery must resume on unwind");
+        assert!(!channels.tx.tick_pending.load(Ordering::Acquire), "tick flag must reset on unwind");
+        assert!(inputs.receiver.try_recv().is_err(), "stale events must be drained on unwind");
+    }
 
     #[tokio::test]
     async fn pending_ticks_coalesce_without_dropping_or_reordering_keys() {

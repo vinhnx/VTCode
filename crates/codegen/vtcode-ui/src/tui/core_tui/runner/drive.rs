@@ -13,6 +13,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError}
 use crate::tui::core_tui::types::FocusChangeCallback;
 use crate::tui::options::FullscreenInteractionSettings;
 
+#[cfg(unix)]
+use super::events::EventPauseGuard;
 use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEvent};
 use super::terminal_io::{MousePointerShape, set_mouse_pointer_shape};
 use super::{TuiCommand, TuiSessionDriver};
@@ -66,8 +68,9 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
     };
     use signal_hook::{consts::signal::SIGTSTP, low_level::raise};
 
-    event_channels.pause();
-    inputs.clear_queue();
+    // Scope the pause so any panic in the terminal setup/teardown below
+    // restores event delivery instead of freezing the TUI permanently.
+    let _pause_guard = EventPauseGuard::new(event_channels, inputs);
 
     let suspend_result = (|| -> Result<()> {
         let mut stderr = io::stderr();
@@ -126,8 +129,6 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
         Ok(())
     })();
 
-    event_channels.resume();
-    inputs.clear_queue();
     if suspend_result.is_ok() {
         session.mark_dirty();
     }
