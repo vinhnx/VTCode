@@ -13,6 +13,7 @@ use std::fmt;
 use std::io;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::sync::MutexGuard as StdMutexGuard;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use bytes::Bytes;
@@ -70,6 +71,37 @@ impl fmt::Debug for PtyHandles {
     }
 }
 
+/// Coherent snapshot of the direct child's exit facts.
+///
+/// `has_exited`, `has_observed_exit` and `exit_code` describe a single event.
+/// When they lived in three independent atomics/mutexes, the writer published
+/// them in sequence, so a reader could observe `has_exited() == true` while
+/// `exit_code()` was still `None` — the same "two fields that must stay in
+/// sync" failure mode as a dangling pointer after a reallocation, just with
+/// atomics. Keeping all three behind one lock makes a torn state
+/// unrepresentable: every accessor reads one published snapshot.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ProcessExitState {
+    status_recorded: bool,
+    observed: bool,
+    code: Option<i32>,
+}
+
+impl ProcessExitState {
+    /// Publish all exit facts in one critical section. `observed` is false
+    /// when the OS wait itself failed; `code` is still recorded so callers can
+    /// distinguish "wait failed" from "still running" via `has_exited`.
+    pub(crate) fn publish(state: &StdMutex<Self>, observed: bool, code: i32) {
+        let mut guard = state.lock().unwrap_or_else(|e| e.into_inner());
+        guard.status_recorded = true;
+        guard.observed = observed;
+        guard.code = Some(code);
+        // The single writer repaired the state, so future readers need not
+        // keep taking the poison-recovery path.
+        state.clear_poison();
+    }
+}
+
 /// Handle for driving an interactive or non-interactive process.
 ///
 /// This provides a unified interface for both PTY and pipe-based processes:
@@ -85,9 +117,7 @@ pub struct ProcessHandle {
     reader_abort_handles: StdMutex<Vec<AbortHandle>>,
     writer_handle: StdMutex<Option<JoinHandle<()>>>,
     wait_handle: StdMutex<Option<JoinHandle<()>>>,
-    exit_status: Arc<AtomicBool>,
-    exit_observed: Arc<AtomicBool>,
-    exit_code: Arc<StdMutex<Option<i32>>>,
+    exit_state: Arc<StdMutex<ProcessExitState>>,
     // PTY handles must be preserved to prevent the process from receiving Control+C
     _pty_handles: StdMutex<Option<PtyHandles>>,
 }
@@ -116,9 +146,7 @@ impl ProcessHandle {
         reader_abort_handles: Vec<AbortHandle>,
         writer_handle: JoinHandle<()>,
         wait_handle: JoinHandle<()>,
-        exit_status: Arc<AtomicBool>,
-        exit_observed: Arc<AtomicBool>,
-        exit_code: Arc<StdMutex<Option<i32>>>,
+        exit_state: Arc<StdMutex<ProcessExitState>>,
         pty_handles: Option<PtyHandles>,
     ) -> (Self, broadcast::Receiver<Bytes>) {
         (
@@ -130,13 +158,18 @@ impl ProcessHandle {
                 reader_abort_handles: StdMutex::new(reader_abort_handles),
                 writer_handle: StdMutex::new(Some(writer_handle)),
                 wait_handle: StdMutex::new(Some(wait_handle)),
-                exit_status,
-                exit_observed,
-                exit_code,
+                exit_state,
                 _pty_handles: StdMutex::new(pty_handles),
             },
             initial_output_rx,
         )
+    }
+
+    /// One coherent read of the exit snapshot. Readers never mutate the state,
+    /// so a recovered poison is not cleared here — the writer repairs it on
+    /// its next `publish`.
+    fn exit_state(&self) -> StdMutexGuard<'_, ProcessExitState> {
+        self.exit_state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Returns a channel sender for writing raw bytes to the child stdin.
@@ -164,20 +197,20 @@ impl ProcessHandle {
     /// Use [`Self::has_observed_exit`] when successful wait evidence matters.
     #[inline]
     pub fn has_exited(&self) -> bool {
-        self.exit_status.load(Ordering::SeqCst)
+        self.exit_state().status_recorded
     }
 
     /// Whether waiting for the direct child returned an exit status. Unlike
     /// `has_exited`, this remains false if the operating-system wait failed.
     #[inline]
     pub fn has_observed_exit(&self) -> bool {
-        self.exit_observed.load(Ordering::SeqCst)
+        self.exit_state().observed
     }
 
     /// Returns the exit code if the process has exited.
     #[inline]
     pub fn exit_code(&self) -> Option<i32> {
-        *self.exit_code.lock().unwrap_or_else(|e| e.into_inner())
+        self.exit_state().code
     }
 
     /// True once the stdout/stderr reader task has drained the child streams.
@@ -441,12 +474,13 @@ mod tests {
         }
     }
 
+    fn fresh_exit_state() -> Arc<StdMutex<ProcessExitState>> {
+        Arc::new(StdMutex::new(ProcessExitState::default()))
+    }
+
     #[tokio::test]
     async fn test_process_handle_debug() {
         // Just verify Debug impl doesn't panic
-        let exit_status = Arc::new(AtomicBool::new(false));
-        let exit_code = Arc::new(StdMutex::new(None));
-
         let (writer_tx, _) = mpsc::channel(1);
         let (output_tx, initial_rx) = broadcast::channel(1);
 
@@ -459,9 +493,7 @@ mod tests {
             vec![],
             tokio::spawn(async {}),
             tokio::spawn(async {}),
-            exit_status,
-            Arc::new(AtomicBool::new(false)),
-            exit_code,
+            fresh_exit_state(),
             None,
         );
 
@@ -470,9 +502,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_has_exited() {
-        let exit_status = Arc::new(AtomicBool::new(false));
-        let exit_code = Arc::new(StdMutex::new(None));
+    async fn exit_facts_are_one_coherent_snapshot() {
+        let exit_state = fresh_exit_state();
 
         let (writer_tx, _) = mpsc::channel(1);
         let (output_tx, initial_rx) = broadcast::channel(1);
@@ -486,16 +517,64 @@ mod tests {
             vec![],
             tokio::spawn(async {}),
             tokio::spawn(async {}),
-            Arc::clone(&exit_status),
-            Arc::new(AtomicBool::new(false)),
-            exit_code,
+            Arc::clone(&exit_state),
             None,
         );
 
         assert!(!handle.has_exited());
-        exit_status.store(true, Ordering::SeqCst);
+        assert!(!handle.has_observed_exit());
+        assert_eq!(handle.exit_code(), None);
+
+        // A failed OS wait still publishes a complete snapshot: "exited" with
+        // a code, but not "observed". The old three-field layout allowed a
+        // reader to see exited=true while the code was still None.
+        ProcessExitState::publish(&exit_state, false, -1);
         assert!(handle.has_exited());
         assert!(!handle.has_observed_exit(), "a completed wait is not necessarily a successful wait");
+        assert_eq!(handle.exit_code(), Some(-1));
+
+        ProcessExitState::publish(&exit_state, true, 7);
+        assert!(handle.has_exited());
+        assert!(handle.has_observed_exit());
+        assert_eq!(handle.exit_code(), Some(7));
+    }
+
+    #[tokio::test]
+    async fn poisoned_exit_state_recovers_and_publish_clears_poison() {
+        let exit_state = fresh_exit_state();
+        let poisoner = Arc::clone(&exit_state);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = poisoner.lock().unwrap();
+            panic!("intentional poison of exit state");
+        }));
+        assert!(outcome.is_err());
+        assert!(exit_state.is_poisoned());
+
+        let (writer_tx, _) = mpsc::channel(1);
+        let (output_tx, initial_rx) = broadcast::channel(1);
+        let (handle, _) = ProcessHandle::new(
+            writer_tx,
+            output_tx,
+            initial_rx,
+            Box::new(NoopTerminator),
+            tokio::spawn(async {}),
+            vec![],
+            tokio::spawn(async {}),
+            tokio::spawn(async {}),
+            Arc::clone(&exit_state),
+            None,
+        );
+
+        // Readers recover a coherent snapshot instead of silently skipping.
+        assert!(!handle.has_exited());
+        assert_eq!(handle.exit_code(), None);
+
+        // The single writer repairs the state and clears poison.
+        ProcessExitState::publish(&exit_state, true, 5);
+        assert!(!exit_state.is_poisoned());
+        assert!(handle.has_exited());
+        assert!(handle.has_observed_exit());
+        assert_eq!(handle.exit_code(), Some(5));
     }
 
     struct RecordingTerminator(Arc<AtomicBool>);
@@ -531,9 +610,7 @@ mod tests {
             vec![],
             tokio::spawn(async {}),
             tokio::spawn(async {}),
-            Arc::new(AtomicBool::new(false)),
-            Arc::new(AtomicBool::new(false)),
-            Arc::new(StdMutex::new(None)),
+            fresh_exit_state(),
             None,
         );
         assert!(handle.try_terminate_process().is_err());
@@ -549,8 +626,6 @@ mod tests {
     #[tokio::test]
     async fn drop_kills_child_synchronously_without_bridging_runtime() {
         let killed = Arc::new(AtomicBool::new(false));
-        let exit_status = Arc::new(AtomicBool::new(false));
-        let exit_code = Arc::new(StdMutex::new(None));
         let (writer_tx, _) = mpsc::channel(1);
         let (output_tx, initial_rx) = broadcast::channel(1);
 
@@ -564,9 +639,7 @@ mod tests {
             vec![],
             tokio::spawn(std::future::pending()),
             tokio::spawn(std::future::pending()),
-            exit_status,
-            Arc::new(AtomicBool::new(false)),
-            exit_code,
+            fresh_exit_state(),
             None,
         );
 

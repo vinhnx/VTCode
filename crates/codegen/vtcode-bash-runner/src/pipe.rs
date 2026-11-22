@@ -12,7 +12,6 @@ use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::sync::atomic::AtomicBool;
 
 use anyhow::{Context, Result};
 use bytes::{Bytes, BytesMut};
@@ -21,7 +20,7 @@ use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
-use crate::process::{ChildTerminator, ProcessHandle, SpawnedProcess};
+use crate::process::{ChildTerminator, ProcessExitState, ProcessHandle, SpawnedProcess};
 use crate::process_group;
 
 /// Terminator for pipe-based child processes.
@@ -314,25 +313,17 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
 
     // Spawn wait task
     let (exit_tx, exit_rx) = oneshot::channel::<i32>();
-    let exit_status = Arc::new(AtomicBool::new(false));
-    let wait_exit_status = Arc::clone(&exit_status);
-    let exit_observed = Arc::new(AtomicBool::new(false));
-    let wait_exit_observed = Arc::clone(&exit_observed);
-    let exit_code = Arc::new(StdMutex::new(None));
-    let wait_exit_code = Arc::clone(&exit_code);
+    // One lock, one published snapshot: a reader that sees `has_exited()` is
+    // guaranteed to see the matching `exit_code()` on its next read.
+    let exit_state = Arc::new(StdMutex::new(ProcessExitState::default()));
+    let wait_exit_state = Arc::clone(&exit_state);
 
     let wait_handle: JoinHandle<()> = tokio::spawn(async move {
-        let code = match child.wait().await {
-            Ok(status) => {
-                wait_exit_observed.store(true, std::sync::atomic::Ordering::SeqCst);
-                status.code().unwrap_or(-1)
-            }
-            Err(_) => -1,
+        let (code, observed) = match child.wait().await {
+            Ok(status) => (status.code().unwrap_or(-1), true),
+            Err(_) => (-1, false),
         };
-        wait_exit_status.store(true, std::sync::atomic::Ordering::SeqCst);
-        if let Ok(mut guard) = wait_exit_code.lock() {
-            *guard = Some(code);
-        }
+        ProcessExitState::publish(&wait_exit_state, observed, code);
         let _ = exit_tx.send(code);
     });
 
@@ -350,9 +341,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
         reader_abort_handles,
         writer_handle,
         wait_handle,
-        exit_status,
-        exit_observed,
-        exit_code,
+        exit_state,
         None,
     );
 
@@ -466,6 +455,28 @@ mod tests {
         assert_eq!(exit_code, 0);
         assert!(spawned.session.has_observed_exit(), "successful wait records the direct-child exit");
 
+        Ok(())
+    }
+
+    /// Mirrors the exec-session consumer: gate on `has_exited()`, then read
+    /// `exit_code()`. With the former three-field publication there was a
+    /// window where the first was true and the second still `None`, so a
+    /// just-finished session could be reported as "still running".
+    #[tokio::test]
+    async fn exit_code_is_present_as_soon_as_has_exited_flips() -> Result<()> {
+        let Some((program, mut base_args)) = find_echo_command() else {
+            return Ok(());
+        };
+        base_args.push("hello".to_string());
+
+        let env: HashMap<String, String> = std::env::vars().collect();
+        let spawned = spawn_process(&program, &base_args, Path::new("."), &env, None).await?;
+
+        while !spawned.session.has_exited() {
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        assert_eq!(spawned.session.exit_code(), Some(0));
+        assert_eq!(spawned.exit_rx.await.unwrap_or(-1), 0);
         Ok(())
     }
 

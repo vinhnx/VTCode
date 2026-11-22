@@ -185,30 +185,64 @@ fn ensure_non_null_c_string_ptr(ptr: *const c_char, context: &'static str) -> Re
     NonNull::new(ptr.cast_mut()).ok_or_else(|| anyhow!("{context} returned null pointer"))
 }
 
+/// A plugin-returned C string paired with its matching plugin deallocator.
+///
+/// This is the safety boundary's ownership contract made structural: keeping
+/// the buffer and its deallocator in one owned value means `Drop` releases the
+/// plugin memory on *every* exit path (success, decode error, or unwind). A
+/// plain "decode, then call `free`" sequence is correct today but one early
+/// return away from becoming a leak; the guard removes that class of bug.
+///
+/// `NonNull` is deliberately `!Send`/`!Sync`, so a plugin string cannot be
+/// retained or shared past the call that produced it — the safe wrapper never
+/// holds a reference to plugin-owned memory after the bridge call completes.
+struct PluginOwnedCString {
+    ptr: NonNull<c_char>,
+    free: Option<PluginFreeStringFn>,
+}
+
+impl PluginOwnedCString {
+    fn new(ptr: NonNull<c_char>, free: Option<PluginFreeStringFn>) -> Self {
+        Self { ptr, free }
+    }
+
+    /// Copy the plugin buffer into an owned Rust `String`.
+    ///
+    /// The borrow from `CStr::from_ptr` ends at `to_owned`, before `Drop`
+    /// releases the buffer, so no reference outlives the deallocation.
+    fn decode(&self, utf8_error_context: &'static str) -> Result<String> {
+        let raw_ptr = self.ptr.as_ptr().cast_const();
+        // SAFETY:
+        // 1. `raw_ptr` is non-null (validated by `ensure_non_null_c_string_ptr`).
+        // 2. The plugin ABI guarantees a nul-terminated C string until the
+        //    matching deallocator runs, which `Drop` does only after this
+        //    borrow ends.
+        // 3. We copy into a Rust `String`; no reference survives this call.
+        unsafe { CStr::from_ptr(raw_ptr) }
+            .to_str()
+            .context(utf8_error_context)
+            .map(str::to_owned)
+    }
+}
+
+impl Drop for PluginOwnedCString {
+    fn drop(&mut self) {
+        if let Some(free_fn) = self.free {
+            // SAFETY: `ptr` came from the same plugin instance that supplied
+            // `free_fn`; it is released exactly once, after any decoding.
+            unsafe { free_fn(self.ptr.as_ptr().cast_const()) };
+        }
+    }
+}
+
+/// Decode a plugin-owned C string into an owned Rust `String`, then release
+/// the plugin buffer through its matching deallocator (if one was exported).
 fn decode_plugin_c_string(
     ptr: NonNull<c_char>,
     free_string_fn: Option<PluginFreeStringFn>,
     utf8_error_context: &'static str,
 ) -> Result<String> {
-    let raw_ptr = ptr.as_ptr().cast_const();
-    // SAFETY:
-    // 1. `raw_ptr` is guaranteed to be non-null (validated by `ensure_non_null_c_string_ptr`).
-    // 2. We assume the plugin-returned pointer is a valid nul-terminated C string per the plugin ABI.
-    // 3. The reference created by `CStr::from_ptr` is only used to copy the data into a Rust `String`.
-    //    Since we own the only reference during this brief window and copy-then-release,
-    //    we avoid Undefined Behavior related to mutable aliasing that "Unsafe Rust is not C" warns about.
-    let decoded = unsafe { CStr::from_ptr(raw_ptr) }
-        .to_str()
-        .context(utf8_error_context)
-        .map(str::to_owned);
-
-    if let Some(free_fn) = free_string_fn {
-        // SAFETY: The pointer originated from the same plugin instance that provided `free_fn`.
-        // We call it only after we've finished reading the data into our own `String`.
-        unsafe { free_fn(raw_ptr) };
-    }
-
-    decoded
+    PluginOwnedCString::new(ptr, free_string_fn).decode(utf8_error_context)
 }
 
 impl std::fmt::Debug for NativePlugin {

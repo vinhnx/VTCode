@@ -12,6 +12,7 @@ thread_local! {
 
 static TEST_EXECUTE_ACTIVE_CALLS: AtomicUsize = AtomicUsize::new(0);
 static TEST_EXECUTE_MAX_CONCURRENCY: AtomicUsize = AtomicUsize::new(0);
+static TEST_FREE_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 /// Test-only C ABI shim for the plugin loader.
 ///
@@ -21,6 +22,17 @@ static TEST_EXECUTE_MAX_CONCURRENCY: AtomicUsize = AtomicUsize::new(0);
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_free_string(ptr: *const c_char) {
     TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(true));
+    if !ptr.is_null() {
+        // Safety: tests pass pointers produced by `CString::into_raw` in this module.
+        let _ = unsafe { CString::from_raw(ptr.cast_mut()) };
+    }
+}
+
+/// Counting deallocator: proves the bridge releases a plugin buffer exactly
+/// once, including on error paths (no leak, no double-free).
+#[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
+unsafe extern "C" fn test_free_counting(ptr: *const c_char) {
+    TEST_FREE_CALLS.fetch_add(1, Ordering::SeqCst);
     if !ptr.is_null() {
         // Safety: tests pass pointers produced by `CString::into_raw` in this module.
         let _ = unsafe { CString::from_raw(ptr.cast_mut()) };
@@ -86,6 +98,64 @@ unsafe extern "C" fn test_execute_with_delay(_input: *const c_char) -> *const c_
     CString::new(r#"{"success":true,"output":{},"error":null,"files":[]}"#)
         .unwrap()
         .into_raw()
+}
+
+/// Boundary adversarial inputs: a conforming plugin must never return null,
+/// invalid UTF-8, or malformed JSON, but the bridge must fail closed (and still
+/// release the buffer) rather than introducing a crash of its own.
+#[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
+unsafe extern "C" fn test_execute_null(_input: *const c_char) -> *const c_char {
+    std::ptr::null()
+}
+
+#[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
+unsafe extern "C" fn test_execute_invalid_utf8(_input: *const c_char) -> *const c_char {
+    // 0xFF is never valid UTF-8; the nul keeps it a well-formed C string.
+    CString::from_vec_with_nul(vec![0xFF, 0x00]).unwrap().into_raw()
+}
+
+#[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
+unsafe extern "C" fn test_execute_malformed_json(_input: *const c_char) -> *const c_char {
+    CString::new("not json").unwrap().into_raw()
+}
+
+#[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
+unsafe extern "C" fn test_execute_valid(_input: *const c_char) -> *const c_char {
+    CString::new(r#"{"success":true,"output":{},"error":null,"files":[]}"#)
+        .unwrap()
+        .into_raw()
+}
+
+fn test_context() -> PluginContext {
+    PluginContext {
+        input: HashMap::new(),
+        workspace_root: None,
+        config: HashMap::new(),
+    }
+}
+
+/// Shared builder: keeps the plugin literal in one place so the concurrency
+/// tests and the boundary tests exercise the same construction path.
+fn test_plugin(execute_fn: PluginExecuteFn, free_string_fn: Option<PluginFreeStringFn>) -> NativePlugin {
+    NativePlugin {
+        _library: current_process_library(),
+        metadata: PluginMetadata {
+            name: "boundary-test".to_string(),
+            description: "test plugin".to_string(),
+            version: "1.0.0".to_string(),
+            author: None,
+            abi_version: PLUGIN_ABI_VERSION,
+            when_to_use: None,
+            when_not_to_use: None,
+            allowed_tools: None,
+            thread_safe: false,
+        },
+        path: PathBuf::from("/tmp/boundary-test-plugin"),
+        execute_fn,
+        free_string_fn,
+        execution_lock: Mutex::new(()),
+        thread_safe: false,
+    }
 }
 
 #[test]
@@ -260,30 +330,8 @@ fn test_native_plugin_serializes_concurrent_execution() {
     TEST_EXECUTE_ACTIVE_CALLS.store(0, Ordering::SeqCst);
     TEST_EXECUTE_MAX_CONCURRENCY.store(0, Ordering::SeqCst);
 
-    let plugin = Arc::new(NativePlugin {
-        _library: current_process_library(),
-        metadata: PluginMetadata {
-            name: "serialized".to_string(),
-            description: "test plugin".to_string(),
-            version: "1.0.0".to_string(),
-            author: None,
-            abi_version: PLUGIN_ABI_VERSION,
-            when_to_use: None,
-            when_not_to_use: None,
-            allowed_tools: None,
-            thread_safe: false,
-        },
-        path: PathBuf::from("/tmp/serialized-plugin"),
-        execute_fn: test_execute_with_delay,
-        free_string_fn: Some(test_free_string),
-        execution_lock: Mutex::new(()),
-        thread_safe: false,
-    });
-    let ctx = PluginContext {
-        input: HashMap::new(),
-        workspace_root: None,
-        config: HashMap::new(),
-    };
+    let plugin = Arc::new(test_plugin(test_execute_with_delay, Some(test_free_string)));
+    let ctx = test_context();
 
     let handles = (0..4)
         .map(|_| {
@@ -307,31 +355,13 @@ fn test_native_plugin_allows_parallel_execution() {
     TEST_EXECUTE_ACTIVE_CALLS.store(0, Ordering::SeqCst);
     TEST_EXECUTE_MAX_CONCURRENCY.store(0, Ordering::SeqCst);
 
-    let plugin = Arc::new(NativePlugin {
-        _library: current_process_library(),
-        metadata: PluginMetadata {
-            name: "parallel".to_string(),
-            description: "reentrant test plugin".to_string(),
-            version: "1.0.0".to_string(),
-            author: None,
-            abi_version: PLUGIN_ABI_VERSION,
-            when_to_use: None,
-            when_not_to_use: None,
-            allowed_tools: None,
-            thread_safe: true, // OPT-IN to parallel execution
-        },
-        path: PathBuf::from("/tmp/parallel-plugin"),
-        execute_fn: test_execute_with_delay,
-        free_string_fn: Some(test_free_string),
-        execution_lock: Mutex::new(()),
-        thread_safe: true,
-    });
+    let mut plugin = test_plugin(test_execute_with_delay, Some(test_free_string));
+    // OPT-IN to parallel execution; the shared builder defaults to serialized.
+    plugin.thread_safe = true;
+    plugin.metadata.thread_safe = true;
+    let plugin = Arc::new(plugin);
 
-    let ctx = PluginContext {
-        input: HashMap::new(),
-        workspace_root: None,
-        config: HashMap::new(),
-    };
+    let ctx = test_context();
 
     let num_threads = 4;
     let handles = (0..num_threads)
@@ -375,4 +405,66 @@ fn test_warn_if_insecure_trusted_dir_silent_on_restricted_dir() {
     std::fs::set_permissions(&restricted_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     warn_if_insecure_trusted_dir(&restricted_dir);
+}
+
+// --- FFI boundary: adversarial plugin responses ---
+
+#[test]
+fn test_execute_ffi_null_result_fails_closed_without_freeing() {
+    TEST_FREE_CALLS.store(0, Ordering::SeqCst);
+    let plugin = test_plugin(test_execute_null, Some(test_free_counting));
+
+    let err = plugin.execute(&test_context()).expect_err("null result must be rejected");
+
+    assert!(err.to_string().contains("returned null pointer"));
+    // No buffer was returned, so the deallocator must not be called.
+    assert_eq!(TEST_FREE_CALLS.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn test_execute_ffi_invalid_utf8_frees_buffer_exactly_once() {
+    TEST_FREE_CALLS.store(0, Ordering::SeqCst);
+    let plugin = test_plugin(test_execute_invalid_utf8, Some(test_free_counting));
+
+    let err = plugin.execute(&test_context()).expect_err("invalid UTF-8 must be rejected");
+
+    assert!(err.to_string().contains("not valid UTF-8"));
+    assert_eq!(TEST_FREE_CALLS.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_execute_ffi_malformed_json_frees_buffer_exactly_once() {
+    TEST_FREE_CALLS.store(0, Ordering::SeqCst);
+    let plugin = test_plugin(test_execute_malformed_json, Some(test_free_counting));
+
+    let err = plugin.execute(&test_context()).expect_err("malformed JSON must be rejected");
+
+    assert!(err.to_string().contains("Failed to parse plugin result JSON"));
+    assert_eq!(TEST_FREE_CALLS.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_execute_ffi_without_deallocator_still_decodes() {
+    TEST_FREE_CALLS.store(0, Ordering::SeqCst);
+    let plugin = test_plugin(test_execute_valid, None);
+
+    let result = plugin
+        .execute(&test_context())
+        .expect("valid result decodes even without a deallocator");
+
+    assert!(result.success);
+    assert_eq!(TEST_FREE_CALLS.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn test_plugin_owned_c_string_frees_exactly_once_on_decode_error() {
+    TEST_FREE_CALLS.store(0, Ordering::SeqCst);
+    let raw = CString::from_vec_with_nul(vec![0xFF, 0x00]).expect("valid C string").into_raw();
+    let owned = PluginOwnedCString::new(NonNull::new(raw).expect("non-null"), Some(test_free_counting));
+
+    let err = owned.decode("bad payload").expect_err("invalid UTF-8 must be rejected");
+    drop(owned);
+
+    assert!(err.to_string().contains("bad payload"));
+    assert_eq!(TEST_FREE_CALLS.load(Ordering::SeqCst), 1);
 }
