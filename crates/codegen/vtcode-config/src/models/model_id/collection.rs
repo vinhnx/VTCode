@@ -222,12 +222,18 @@ impl ModelId {
     /// [`ModelId::from_str`].
     ///
     /// Models declared under the active provider in `[providers.<name>]`
-    /// overrides or by a `[[custom_providers]]` profile are not part of the
-    /// static catalog, so they are represented as [`ModelId::Custom`].
-    /// Matching is scoped to the active provider to avoid mis-routing a model
-    /// ID shared across providers, mirroring the catalog and custom-provider
-    /// branches of the subagent resolution path. Local-provider pass-through
-    /// (arbitrary Ollama/llama.cpp IDs) is intentionally not handled here.
+    /// overrides or by a `[[custom_providers]]` profile are represented as
+    /// [`ModelId::Custom`]. Matching is scoped to the active provider to avoid
+    /// mis-routing a model ID shared across providers, mirroring the catalog
+    /// and custom-provider branches of the subagent resolution path.
+    ///
+    /// An active-provider declaration is authoritative when the catalog would
+    /// attribute the same slug to a *different* provider — for example a custom
+    /// gateway serving `gpt-5.6-sol`, a setup shown in `docs/config/models.md`.
+    /// Catalog identity is still preferred for a declaration under the model's
+    /// own provider, so no catalog metadata is lost there. Local-provider
+    /// pass-through (arbitrary Ollama/llama.cpp IDs) is intentionally not
+    /// handled here.
     pub fn from_config(
         model: &str,
         provider: &str,
@@ -235,26 +241,50 @@ impl ModelId {
         custom_providers: &[CustomProviderConfig],
     ) -> Result<Self, crate::models::ModelParseError> {
         let trimmed = model.trim();
-        if let Ok(parsed) = Self::from_str(trimmed) {
+        let hinted_provider = provider.trim().parse::<Provider>().ok();
+        let declared =
+            Self::declared_custom_model(trimmed, provider, hinted_provider, provider_overrides, custom_providers);
+        let catalog = Self::from_str(trimmed).ok();
+
+        if let Some(declared) = &declared
+            && catalog.as_ref().is_none_or(|parsed| Some(parsed.provider()) != hinted_provider)
+        {
+            return Ok(declared.clone());
+        }
+        if let Some(parsed) = catalog {
             return Ok(parsed);
         }
-        let hinted_provider = provider.trim().parse::<Provider>().ok();
+        if let Some(declared) = declared {
+            return Ok(declared);
+        }
+        Self::from_str(trimmed)
+    }
+
+    /// Find a model explicitly declared by the active provider, keeping the
+    /// same scoped matching rules as the resolution paths elsewhere.
+    fn declared_custom_model(
+        trimmed: &str,
+        provider: &str,
+        hinted_provider: Option<Provider>,
+        provider_overrides: &BTreeMap<String, ProviderOverrideConfig>,
+        custom_providers: &[CustomProviderConfig],
+    ) -> Option<Self> {
         for (provider_key, override_cfg) in provider_overrides {
             let matches_hint = match hinted_provider {
                 Some(active) => provider_key.parse::<Provider>().ok() == Some(active),
                 None => provider_key.eq_ignore_ascii_case(provider.trim()),
             };
             if matches_hint && override_cfg.models.iter().any(|candidate| candidate.trim() == trimmed) {
-                return Ok(ModelId::Custom(provider_key.clone(), trimmed.to_owned()));
+                return Some(ModelId::Custom(provider_key.clone(), trimmed.to_owned()));
             }
         }
         for custom in custom_providers {
             if custom.name.eq_ignore_ascii_case(provider.trim())
                 && custom.effective_models().iter().any(|candidate| candidate == trimmed)
             {
-                return Ok(ModelId::Custom(custom.name.to_lowercase(), trimmed.to_owned()));
+                return Some(ModelId::Custom(custom.name.to_lowercase(), trimmed.to_owned()));
             }
         }
-        Self::from_str(trimmed)
+        None
     }
 }

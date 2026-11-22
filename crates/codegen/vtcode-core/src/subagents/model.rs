@@ -42,7 +42,12 @@ fn resolve_inherit_model(
     parent_provider: &str,
     agent_name: &str,
 ) -> Result<ModelId> {
-    if let Ok(model) = parent_model.parse::<ModelId>() {
+    let sources = RuntimeModelSources::from_config(vt_cfg);
+    // Use the same identity rule as the CLI's ModelId::from_config so a parent
+    // and its inheriting subagent cannot disagree about the active route.
+    if let Ok(model) =
+        ModelId::from_config(parent_model, parent_provider, sources.provider_overrides, sources.custom_providers)
+    {
         return Ok(model);
     }
     if parent_provider.eq_ignore_ascii_case("copilot") {
@@ -57,7 +62,7 @@ fn resolve_inherit_model(
         return Ok(fallback);
     }
 
-    finalize_subagent_model(&RuntimeModelSources::from_config(vt_cfg), parent_model, parent_provider, agent_name)
+    finalize_subagent_model(&sources, parent_model, parent_provider, agent_name)
 }
 
 /// Narrow, read-only view of the config-defined runtime model sources that are
@@ -110,29 +115,24 @@ fn finalize_subagent_model(
 /// unrelated providers and avoids mis-routing a model to the wrong endpoint.
 fn parse_model_or_custom(sources: &RuntimeModelSources<'_>, model: &str, provider_hint: &str) -> Result<ModelId> {
     let trimmed = model.trim();
-    if let Ok(parsed) = trimmed.parse::<ModelId>() {
-        return Ok(parsed);
-    }
-
     let provider_hint = provider_hint.trim();
     let hinted_provider = provider_hint.parse::<Provider>().ok();
+    let declared = declared_custom_model(sources, trimmed, provider_hint, hinted_provider);
+    let catalog = trimmed.parse::<ModelId>().ok();
 
-    // Built-in provider overrides (`[providers.<name>]`), scoped to the active provider.
-    for (provider_key, override_cfg) in sources.provider_overrides {
-        let matches_hint = match hinted_provider {
-            Some(active) => provider_key.parse::<Provider>().ok() == Some(active),
-            None => provider_key.eq_ignore_ascii_case(provider_hint),
-        };
-        if matches_hint && override_cfg.models.iter().any(|m| m.trim() == trimmed) {
-            return Ok(ModelId::Custom(provider_key.clone(), trimmed.to_string()));
-        }
+    // An explicit declaration by the active provider wins when the catalog
+    // would attribute the slug to a different provider, matching both
+    // ModelId::from_config and the lightweight-routing rule.
+    if let Some(declared) = &declared
+        && catalog.as_ref().is_none_or(|parsed| Some(parsed.provider()) != hinted_provider)
+    {
+        return Ok(declared.clone());
     }
-
-    // Custom OpenAI-compatible providers (`[[custom_providers]]`), matched by key.
-    for custom in sources.custom_providers {
-        if custom.name.eq_ignore_ascii_case(provider_hint) && custom.effective_models().iter().any(|m| m == trimmed) {
-            return Ok(ModelId::Custom(custom.name.to_lowercase(), trimmed.to_string()));
-        }
+    if let Some(parsed) = catalog {
+        return Ok(parsed);
+    }
+    if let Some(declared) = declared {
+        return Ok(declared);
     }
 
     // Local providers expose arbitrary runtime model identifiers that cannot be
@@ -142,6 +142,34 @@ fn parse_model_or_custom(sources: &RuntimeModelSources<'_>, model: &str, provide
     }
 
     Ok(trimmed.parse::<ModelId>()?)
+}
+
+/// Find a model explicitly declared by the active provider, using the same
+/// scoped matching rules as `ModelId::from_config`.
+fn declared_custom_model(
+    sources: &RuntimeModelSources<'_>,
+    trimmed: &str,
+    provider_hint: &str,
+    hinted_provider: Option<Provider>,
+) -> Option<ModelId> {
+    // Built-in provider overrides (`[providers.<name>]`), scoped to the active provider.
+    for (provider_key, override_cfg) in sources.provider_overrides {
+        let matches_hint = match hinted_provider {
+            Some(active) => provider_key.parse::<Provider>().ok() == Some(active),
+            None => provider_key.eq_ignore_ascii_case(provider_hint),
+        };
+        if matches_hint && override_cfg.models.iter().any(|m| m.trim() == trimmed) {
+            return Some(ModelId::Custom(provider_key.clone(), trimmed.to_string()));
+        }
+    }
+
+    // Custom OpenAI-compatible providers (`[[custom_providers]]`), matched by key.
+    for custom in sources.custom_providers {
+        if custom.name.eq_ignore_ascii_case(provider_hint) && custom.effective_models().iter().any(|m| m == trimmed) {
+            return Some(ModelId::Custom(custom.name.to_lowercase(), trimmed.to_string()));
+        }
+    }
+    None
 }
 
 fn resolve_explicit_model(
@@ -657,5 +685,67 @@ mod lightweight_model_tests {
 
         let resolved = resolve_lightweight_model(&vt_cfg, "my-gateway", "auto", "reviewer");
         assert_ne!(resolved, "gpt-5.6-luna", "an undeclared model must keep the cross-provider guard");
+    }
+}
+
+#[cfg(test)]
+mod model_identity_tests {
+    use super::*;
+
+    fn gateway_config(declared: &[&str]) -> VTCodeConfig {
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.custom_providers.push(CustomProviderConfig {
+            name: "my-gateway".to_string(),
+            models: declared.iter().map(|model| (*model).to_string()).collect(),
+            ..Default::default()
+        });
+        vt_cfg
+    }
+
+    #[test]
+    fn declared_catalog_slug_keeps_active_provider_identity() {
+        let vt_cfg = gateway_config(&["gpt-5.6-sol"]);
+        let sources = RuntimeModelSources::from_config(&vt_cfg);
+
+        let parsed = parse_model_or_custom(&sources, "gpt-5.6-sol", "my-gateway").unwrap();
+        assert_eq!(parsed, ModelId::Custom("my-gateway".to_string(), "gpt-5.6-sol".to_string()));
+
+        // Control: the same slug without an active declaration stays catalog.
+        let catalog = parse_model_or_custom(&sources, "gpt-5.6-sol", "unrelated-gateway").unwrap();
+        assert_eq!(catalog, ModelId::GPT56Sol);
+    }
+
+    #[test]
+    fn inherited_parent_model_agrees_with_cli_resolution() {
+        let vt_cfg = gateway_config(&["gpt-5.6-sol"]);
+        let inherited = resolve_inherit_model(&vt_cfg, "gpt-5.6-sol", "my-gateway", "reviewer").unwrap();
+        let cli =
+            ModelId::from_config("gpt-5.6-sol", "my-gateway", &vt_cfg.provider_overrides, &vt_cfg.custom_providers)
+                .unwrap();
+
+        assert_eq!(inherited, cli);
+        assert_eq!(inherited, ModelId::Custom("my-gateway".to_string(), "gpt-5.6-sol".to_string()));
+    }
+
+    #[test]
+    fn same_provider_declaration_keeps_catalog_identity() {
+        let mut overrides = BTreeMap::new();
+        overrides.insert(
+            "openai".to_string(),
+            ProviderOverrideConfig {
+                models: vec!["gpt-5.6-sol".to_string()],
+                base_url: None,
+                api_key_env: None,
+            },
+        );
+        let sources = RuntimeModelSources {
+            provider_overrides: &overrides,
+            custom_providers: &[],
+        };
+
+        // Declaring a catalog slug under its own provider must not degrade the
+        // picker's variant-only metadata (display name, generation sort, tiers).
+        let parsed = parse_model_or_custom(&sources, "gpt-5.6-sol", "openai").unwrap();
+        assert_eq!(parsed, ModelId::GPT56Sol);
     }
 }

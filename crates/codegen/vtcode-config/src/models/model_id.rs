@@ -7,6 +7,8 @@ mod defaults;
 mod description;
 mod display;
 mod format;
+#[cfg(test)]
+mod from_config_tests;
 mod openrouter;
 mod parse;
 mod provider;
