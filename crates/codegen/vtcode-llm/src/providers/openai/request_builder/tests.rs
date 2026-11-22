@@ -24,6 +24,7 @@ fn base_context<'a>(default_responses_include: Option<&'a [String]>) -> Response
         prompt_cache_retention: None,
         supports_prompt_cache_options: false,
         prompt_cache_ttl: None,
+        stable_prefix_ttl: None,
         include_explicit_cache_breakpoints: true,
         default_service_tier: None,
         default_response_store: None,

@@ -100,6 +100,7 @@ code_search = "allow"
 # 12h writes cost 2.5x ordinary input; 30m writes cost 1.25x.
 [prompt_cache.providers.openai]
 # prompt_cache_ttl = "12h"
+# stable_prefix_ttl = "12h" # per-breakpoint lifetime for stable instructions (native GPT-5.6+)
 
 # Timeouts. Every value is in seconds; 0 disables that limit.
 # The defaults suit a fast, warm connection. Raise them if you are on a slow or

@@ -33,6 +33,7 @@ fn prompt_caching_defaults_align_with_constants() {
     assert_eq!(cfg.providers.gemini.mode, GeminiPromptCacheMode::Implicit);
     assert!(cfg.providers.moonshot.enabled);
     assert_eq!(cfg.providers.openai.prompt_cache_retention, None);
+    assert_eq!(cfg.providers.openai.stable_prefix_ttl, None);
 }
 
 #[test]

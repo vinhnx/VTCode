@@ -3,6 +3,7 @@
 use crate::error_display;
 use crate::provider;
 use crate::providers::extract_reasoning_trace;
+use crate::providers::openai::prompt_cache_usage::log_cache_write_lifetime_breakdown;
 use crate::providers::shared::parse_cache_write_tokens_from_usage;
 use crate::providers::shared::parse_openai_tool_calls;
 use serde_json::Value;
@@ -91,6 +92,7 @@ pub(crate) fn parse_chat_response(
                 None
             };
             let cache_creation_tokens = parse_cache_write_tokens_from_usage(usage_value, include_cached_prompt_tokens);
+            log_cache_write_lifetime_breakdown(usage_value, include_cached_prompt_tokens);
 
             provider::Usage {
                 prompt_tokens: usage_value

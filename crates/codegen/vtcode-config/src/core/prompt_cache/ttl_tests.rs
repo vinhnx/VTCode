@@ -12,6 +12,16 @@ fn prompt_cache_ttl_parsing_and_default() {
 }
 
 #[test]
+fn stable_prefix_ttl_parsing_defaults_to_inherit() {
+    assert_eq!(OpenAIPromptCacheSettings::default().stable_prefix_ttl, None);
+    for (wire, expected) in [("30m", PromptCacheTtl::M30), ("12h", PromptCacheTtl::H12)] {
+        let parsed: OpenAIPromptCacheSettings = toml::from_str(&format!("stable_prefix_ttl = \"{wire}\"")).unwrap();
+        assert_eq!(parsed.stable_prefix_ttl, Some(expected));
+    }
+    assert!(toml::from_str::<OpenAIPromptCacheSettings>("stable_prefix_ttl = \"24h\"").is_err());
+}
+
+#[test]
 fn prompt_cache_gap_route_fallback_preserves_model_baselines() {
     let mut cfg = PromptCachingConfig::default();
     cfg.providers.openai.prompt_cache_ttl = Some(PromptCacheTtl::H12);

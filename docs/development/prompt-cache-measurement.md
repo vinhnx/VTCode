@@ -66,6 +66,12 @@ Writes replace ordinary-input charges; they are not an additive charge on the sa
 cost unknown. Output tokens, tool fees, unreported failed attempts, and prewarming are outside this input-only report.
 Provider billing remains the authority for actual spend.
 
+OpenAI GPT-5.6+ usage may include `input_tokens_details.cache_write_tokens_details` with `ttl_30m_tokens` and
+`ttl_12h_tokens`. VT Code logs those counts at debug level under `vtcode::llm::responses::prompt_cache` as
+`OpenAI Responses cache-write lifetime breakdown`. They split `cache_write_tokens` by requested lifetime, not
+additional charges. When `prompt_cache.providers.openai.stable_prefix_ttl` mixes lifetimes in one request, estimate
+cost from each component's write rate instead of a single `--write-rate`.
+
 ## Compare policies after paid testing is authorized
 
 1. Keep endpoint, exact model, service tier, reasoning effort, tool definitions/order, and task inputs fixed.
@@ -82,9 +88,11 @@ Provider billing remains the authority for actual spend.
 
 ## Retention and deferred optimizations
 
-Native GPT-5.6/GPT-6 requests use `prompt_cache_options.ttl: "30m"`. Model-aware gap advisories use 30 minutes even
-if legacy 24h retention is configured; legacy settings do not extend the modern TTL. Older supported routes retain
-their configured policy; explicit legacy 24h retention uses a cautious 30-minute advisory because 24 hours is a maximum,
+Native GPT-5.6/GPT-6 requests use `prompt_cache_options.ttl: "30m"`. `prompt_cache.providers.openai.stable_prefix_ttl`
+can give the stable developer-instruction breakpoint a longer lifetime while history keeps the request TTL; it is
+unset by default and applies only to native OpenAI routes. Model-aware gap advisories use 30 minutes even if legacy
+24h retention is configured; legacy settings do not extend the modern TTL. Older supported routes retain their
+configured policy; explicit legacy 24h retention uses a cautious 30-minute advisory because 24 hours is a maximum,
 not a guarantee. Explicit warning thresholds remain overrides. A warning expresses possible expiry, not proof.
 OpenAI-compatible services may implement different cache semantics; evaluate them with their own documentation.
 

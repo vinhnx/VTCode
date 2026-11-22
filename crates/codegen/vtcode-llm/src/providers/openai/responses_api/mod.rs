@@ -4,6 +4,7 @@ use crate::provider::{
     ToolCall, Usage,
 };
 use crate::providers::common::append_normalized_reasoning_detail_items;
+use crate::providers::openai::prompt_cache_usage::log_cache_write_lifetime_breakdown;
 use crate::providers::openai::types::{InstructionSegmentKind, MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload};
 use crate::providers::shared::{
     RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, collect_tool_references_from_tool_search_output,
@@ -537,6 +538,7 @@ pub(crate) fn parse_responses_payload(
     let usage = response_json.get("usage").map(|usage_value| {
         let cached_prompt_tokens = parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
         let cache_creation_tokens = parse_cache_write_tokens_from_usage(usage_value, include_cached_prompt_metrics);
+        log_cache_write_lifetime_breakdown(usage_value, include_cached_prompt_metrics);
 
         Usage {
             prompt_tokens: usage_u32_from_keys(usage_value, RESPONSES_PROMPT_TOKEN_KEYS),

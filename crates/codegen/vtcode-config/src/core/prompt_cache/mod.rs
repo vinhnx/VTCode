@@ -325,6 +325,14 @@ pub struct OpenAIPromptCacheSettings {
     /// Optional Responses minimum write lifetime; defaults to catalog policy or 30m.
     #[serde(default)]
     pub prompt_cache_ttl: Option<PromptCacheTtl>,
+
+    /// Optional lifetime for the stable developer-instruction cache breakpoint on native
+    /// GPT-5.6+ Responses routes. When unset, the breakpoint inherits `prompt_cache_ttl`.
+    /// Set to `"12h"` to keep the stable prefix reusable across longer gaps while session
+    /// history stays at the shorter request lifetime. 12-hour writes cost 2.5x ordinary
+    /// input versus 1.25x for 30-minute writes. Options: "30m", "12h".
+    #[serde(default)]
+    pub stable_prefix_ttl: Option<PromptCacheTtl>,
 }
 
 impl Default for OpenAIPromptCacheSettings {
@@ -338,6 +346,7 @@ impl Default for OpenAIPromptCacheSettings {
             prompt_cache_key_mode: default_openai_prompt_cache_key_mode(),
             prompt_cache_retention: None,
             prompt_cache_ttl: None,
+            stable_prefix_ttl: None,
         }
     }
 }

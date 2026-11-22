@@ -736,6 +736,7 @@ impl OpenAIProvider {
             None
         };
         let backend_defaults = self.backend_setup.responses_defaults();
+        let requested_ttl = self.requested_prompt_cache_ttl(&request.model);
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
             supports_allowed_tools: self.supports_responses_allowed_tools(&request.model),
@@ -753,8 +754,9 @@ impl OpenAIProvider {
             prompt_cache_key,
             include_prompt_cache_retention: self.prompt_cache_hints_enabled
                 && backend_defaults.include_prompt_cache_retention,
-            supports_prompt_cache_options: self.requested_prompt_cache_ttl(&request.model).is_some(),
+            supports_prompt_cache_options: requested_ttl.is_some(),
             prompt_cache_ttl: self.prompt_cache_settings.prompt_cache_ttl,
+            stable_prefix_ttl: requested_ttl.and(self.prompt_cache_settings.stable_prefix_ttl),
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_ref().map(|r| r.as_str()),
             include_explicit_cache_breakpoints: self.prompt_cache_hints_enabled && is_native_openai,
             default_service_tier,

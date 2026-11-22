@@ -30,5 +30,6 @@
 - Gemini rejects `systemInstruction`/`tools`/`toolConfig` beside `cachedContent`, so requests with a non-default tool config must skip the explicit cache.
 - Responses stream parsers tolerate unknown event types (warn + skip): providers add events without coordination, so strictness turns deploys into outages. Strictness covers malformed shapes of known types only.
 - Suppressing visible reasoning for a model family must not clear `reasoning_details`: keep structured reasoning/compaction items (including non-encrypted summaries near function calls) so Responses replay survives; use the shared `suppress_unsupported_reasoning_output` helper.
+- OpenAI cache-write lifetime breakdown logging stays in `providers/openai/prompt_cache_usage.rs`: `cache_write_tokens_details` is an OpenAI Responses field, so do not widen the provider-neutral parsers in `providers/shared/usage.rs`.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-llm.md) — read the section for the subsystem you change before editing it.

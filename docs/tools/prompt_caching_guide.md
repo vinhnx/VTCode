@@ -36,6 +36,7 @@ surface_metrics = true
 auxiliary_explicit_cache = false # opt-in experiment on supported native models
 prompt_cache_key_mode = "session" # session | off
 # prompt_cache_ttl = "12h" # opt-in; 30m is the default
+# stable_prefix_ttl = "12h" # opt-in per-breakpoint lifetime for stable instructions
 ```
 
 - `enabled` — controls VT Code's explicit cache hints and comparison diagnostics together with the global flag.
@@ -57,7 +58,10 @@ prompt_cache_key_mode = "session" # session | off
 - `prompt_cache_ttl` accepts `"30m"` and `"12h"`. Explicit configuration takes precedence over the model catalog,
   then defaults to `"30m"`. It applies to eligible native GPT-5.6+ Responses requests and explicitly opted-in custom
   `openai-responses` routes. Chat Completions, ChatGPT subscriptions, and other endpoints omit the new options.
-  Existing explicit breakpoints inherit the request lifetime; VT Code does not expose per-breakpoint TTL overrides.
+  Existing explicit breakpoints inherit the request lifetime by default. `stable_prefix_ttl` opts native GPT-5.6+
+  routes into a separate lifetime for the stable developer-instruction anchor; other breakpoints and the request
+  keep `prompt_cache_ttl`. Default: inherit. Use `"12h"` only when that prefix survives idle gaps long enough to
+  justify the higher write rate.
   Cache-gap advisories follow the effective lifetime (1,800 or 43,200 seconds), unless an explicit warning threshold
   is configured. The lifetime is a minimum for cache-read eligibility, not a deletion deadline or a latency guarantee.
   According to the [official OpenAI guide](https://developers.openai.com/api/docs/guides/prompt-caching),

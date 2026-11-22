@@ -91,6 +91,19 @@ fn is_eligible_cache_breakpoint_block(block: &Value) -> bool {
     matches!(block.get("type").and_then(Value::as_str), Some("input_text" | "input_image" | "input_file"))
 }
 
+/// Breakpoint for the stable developer-instruction anchor.
+///
+/// A configured stable-prefix lifetime overrides the request-level TTL for this
+/// prefix only, so growing history keeps the shorter request lifetime. The
+/// setting is already gated to native GPT-5.6+ Responses routes by the caller.
+fn instruction_anchor_breakpoint(ctx: &ResponsesRequestContext<'_>) -> Value {
+    let mut breakpoint = json!({ "mode": "explicit" });
+    if let Some(ttl) = ctx.stable_prefix_ttl {
+        breakpoint["ttl"] = json!(ttl.as_str());
+    }
+    breakpoint
+}
+
 /// Whether an input item is the relocated volatile-reminance reminder.
 ///
 /// The reminder carries per-turn content, so it must never receive an explicit
@@ -215,7 +228,7 @@ pub(super) fn build_responses_item_history(
                 json!({
                     "role": "developer",
                     "content": [{"type": "input_text", "text": instructions,
-                        "prompt_cache_breakpoint": {"mode": "explicit"}}]
+                        "prompt_cache_breakpoint": instruction_anchor_breakpoint(ctx)}]
                 }),
             );
         }

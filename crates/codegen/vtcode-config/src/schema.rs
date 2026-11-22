@@ -40,5 +40,10 @@ mod tests {
                 .pointer("/$defs/OpenAIPromptCacheSettings/properties/prompt_cache_ttl")
                 .is_some()
         );
+        assert!(
+            schema
+                .pointer("/$defs/OpenAIPromptCacheSettings/properties/stable_prefix_ttl")
+                .is_some()
+        );
     }
 }

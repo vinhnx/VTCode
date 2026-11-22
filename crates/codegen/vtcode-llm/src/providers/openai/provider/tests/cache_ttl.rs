@@ -55,6 +55,49 @@ fn prompt_cache_ttl_native_payload_and_negative_routes() {
 }
 
 #[test]
+fn stable_prefix_ttl_overrides_only_native_openai_instruction_anchor() {
+    let model = models::openai::GPT_6_LUNA;
+    let mut provider = test_provider("https://api.openai.com/v1", model);
+    let mut request = sample_request(model);
+    request.prompt_cache_profile = Some(provider::PromptCacheProfile::StablePrefix);
+    request.system_prompt = Some("Reusable instructions".into());
+
+    let baseline = provider.convert_to_openai_responses_format(&request).unwrap();
+    assert_eq!(baseline.pointer("/prompt_cache_options/ttl"), Some(&json!("30m")));
+    assert!(baseline.pointer("/input/0/content/0/prompt_cache_breakpoint/ttl").is_none());
+
+    provider.prompt_cache_settings.stable_prefix_ttl = Some(PromptCacheTtl::H12);
+    let mixed = provider.convert_to_openai_responses_format(&request).unwrap();
+    assert_eq!(mixed.pointer("/prompt_cache_options/ttl"), Some(&json!("30m")));
+    assert_eq!(mixed.pointer("/input/0/content/0/prompt_cache_breakpoint/ttl"), Some(&json!("12h")));
+    assert_eq!(mixed.pointer("/input/0/content/0/text"), baseline.pointer("/input/0/content/0/text"));
+    assert_eq!(mixed.pointer("/input/0/content/0/prompt_cache_breakpoint/mode"), Some(&json!("explicit")));
+
+    provider.prompt_cache_settings.prompt_cache_ttl = Some(PromptCacheTtl::H12);
+    provider.prompt_cache_settings.stable_prefix_ttl = Some(PromptCacheTtl::M30);
+    let inverted = provider.convert_to_openai_responses_format(&request).unwrap();
+    assert_eq!(inverted.pointer("/prompt_cache_options/ttl"), Some(&json!("12h")));
+    assert_eq!(inverted.pointer("/input/0/content/0/prompt_cache_breakpoint/ttl"), Some(&json!("30m")));
+
+    let mut subscription = chatgpt_backend_provider(model);
+    subscription.prompt_cache_settings.stable_prefix_ttl = Some(PromptCacheTtl::H12);
+    let chatgpt = subscription.convert_to_openai_responses_format(&request).unwrap();
+    assert!(chatgpt.get("prompt_cache_options").is_none());
+    assert!(!chatgpt.to_string().contains("prompt_cache_breakpoint"));
+
+    let mut compat = test_provider("https://compatible.example/v1", "opaque-model")
+        .with_api_format_override(Some(CustomProviderApiFormat::OpenAIResponses))
+        .with_prompt_cache_options_models(vec!["opaque-model".into()]);
+    compat.prompt_cache_settings.stable_prefix_ttl = Some(PromptCacheTtl::H12);
+    let mut compat_request = sample_request("opaque-model");
+    compat_request.prompt_cache_profile = Some(provider::PromptCacheProfile::StablePrefix);
+    compat_request.system_prompt = Some("Reusable instructions".into());
+    let compat_payload = compat.convert_to_openai_responses_format(&compat_request).unwrap();
+    assert_eq!(compat_payload.pointer("/prompt_cache_options/ttl"), Some(&json!("30m")));
+    assert!(!compat_payload.to_string().contains("prompt_cache_breakpoint"));
+}
+
+#[test]
 fn prompt_cache_ttl_custom_responses_requires_explicit_capability() {
     let mut provider = test_provider("https://compatible.example/v1", "opaque-model")
         .with_api_format_override(Some(CustomProviderApiFormat::OpenAIResponses));

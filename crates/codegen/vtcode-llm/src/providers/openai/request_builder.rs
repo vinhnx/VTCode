@@ -46,6 +46,10 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub prompt_cache_retention: Option<&'a str>,
     pub supports_prompt_cache_options: bool,
     pub prompt_cache_ttl: Option<vtcode_config::core::prompt_cache::PromptCacheTtl>,
+    /// Optional separate lifetime for the stable developer-instruction breakpoint.
+    /// Emitted only on native GPT-5.6+ Responses routes that already support
+    /// `prompt_cache_options`; other routes inherit the request-level TTL.
+    pub stable_prefix_ttl: Option<vtcode_config::core::prompt_cache::PromptCacheTtl>,
     /// Emit explicit `prompt_cache_breakpoint` markers on the stable prefix.
     /// Only native api.openai.com honors them: third-party
     /// Responses-compatible endpoints (e.g. Merge Gateway via a base-URL
