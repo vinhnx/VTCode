@@ -36,15 +36,11 @@ pub fn to_tui_surface(preference: vtcode_core::config::types::UiSurfacePreferenc
 }
 
 /// Convert a [`KeyboardProtocolConfig`] to the TUI [`KeyboardProtocolSettings`].
+///
+/// The `From` impl is owned by `vtcode-config` alongside the config type, so
+/// the conversion has a single definition shared by every surface.
 pub fn to_tui_keyboard_protocol(keyboard: KeyboardProtocolConfig) -> KeyboardProtocolSettings {
-    KeyboardProtocolSettings {
-        enabled: keyboard.enabled,
-        mode: keyboard.mode.as_str().to_owned(),
-        disambiguate_escape_codes: keyboard.disambiguate_escape_codes,
-        report_event_types: keyboard.report_event_types,
-        report_alternate_keys: keyboard.report_alternate_keys,
-        report_all_keys: keyboard.report_all_keys,
-    }
+    keyboard.into()
 }
 
 /// Build [`FullscreenInteractionSettings`] from the loaded [`VTCodeConfig`].

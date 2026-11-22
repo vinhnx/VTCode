@@ -6,10 +6,15 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fmt;
 use std::path::PathBuf;
-use vtcode_commons::ui_protocol::SessionSurface;
+use vtcode_commons::ui_protocol::{KeyboardProtocolSettings, SessionSurface};
 
 // Re-export from vtcode-commons so downstream code can use `vtcode_config::types::ReasoningEffortLevel`.
 pub use vtcode_commons::reasoning::ReasoningEffortLevel;
+
+// Re-export the canonical keyboard-protocol config so downstream UI crates
+// re-export it instead of declaring a shadowed local copy (see the conversions
+// below and `vtcode-ui`'s "config-owned values live in vtcode-config" rule).
+pub use crate::root::{KeyboardProtocolConfig, KeyboardProtocolMode};
 
 /// System prompt mode (inspired by pi-coding-agent philosophy)
 /// Controls verbosity and complexity of system prompts sent to models
@@ -457,6 +462,39 @@ impl From<UiSurfacePreference> for SessionSurface {
     }
 }
 
+// Same orphan-rule-safe arrangement for the keyboard protocol config: the
+// local `KeyboardProtocolConfig` occupies `From`'s generic parameter slot, so
+// both directions are legal even though `From` and `KeyboardProtocolSettings`
+// are foreign. Owning them here lets the TUI re-export the canonical config
+// instead of carrying a second `mode: String` copy that can drift from the
+// enum-based source of truth. An unrecognised settings string falls back to
+// the default mode, matching the env-var defaulting in `root`.
+impl From<KeyboardProtocolSettings> for KeyboardProtocolConfig {
+    fn from(value: KeyboardProtocolSettings) -> Self {
+        Self {
+            enabled: value.enabled,
+            mode: value.mode.parse().unwrap_or_default(),
+            disambiguate_escape_codes: value.disambiguate_escape_codes,
+            report_event_types: value.report_event_types,
+            report_alternate_keys: value.report_alternate_keys,
+            report_all_keys: value.report_all_keys,
+        }
+    }
+}
+
+impl From<KeyboardProtocolConfig> for KeyboardProtocolSettings {
+    fn from(value: KeyboardProtocolConfig) -> Self {
+        Self {
+            enabled: value.enabled,
+            mode: value.mode.as_str().to_owned(),
+            disambiguate_escape_codes: value.disambiguate_escape_codes,
+            report_event_types: value.report_event_types,
+            report_alternate_keys: value.report_alternate_keys,
+            report_all_keys: value.report_all_keys,
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for UiSurfacePreference {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -607,6 +645,60 @@ mod tests {
             assert_eq!(SessionSurface::from(preference), surface);
             assert_eq!(UiSurfacePreference::from(surface), preference);
         }
+    }
+
+    #[test]
+    fn keyboard_protocol_conversion_roundtrips_every_mode() {
+        for (mode, text) in [
+            (KeyboardProtocolMode::Default, "default"),
+            (KeyboardProtocolMode::Full, "full"),
+            (KeyboardProtocolMode::Minimal, "minimal"),
+            (KeyboardProtocolMode::Custom, "custom"),
+        ] {
+            let config = KeyboardProtocolConfig {
+                enabled: false,
+                mode,
+                disambiguate_escape_codes: true,
+                report_event_types: false,
+                report_alternate_keys: true,
+                report_all_keys: true,
+            };
+            let settings = KeyboardProtocolSettings::from(config.clone());
+            assert_eq!(settings.mode, text);
+            assert_eq!(settings.enabled, config.enabled);
+            assert_eq!(settings.disambiguate_escape_codes, config.disambiguate_escape_codes);
+            assert_eq!(settings.report_event_types, config.report_event_types);
+            assert_eq!(settings.report_alternate_keys, config.report_alternate_keys);
+            assert_eq!(settings.report_all_keys, config.report_all_keys);
+            let restored = KeyboardProtocolConfig::from(settings);
+            assert_eq!(restored.mode, mode);
+            assert_eq!(restored.enabled, config.enabled);
+            assert_eq!(restored.disambiguate_escape_codes, config.disambiguate_escape_codes);
+            assert_eq!(restored.report_event_types, config.report_event_types);
+            assert_eq!(restored.report_alternate_keys, config.report_alternate_keys);
+            assert_eq!(restored.report_all_keys, config.report_all_keys);
+        }
+    }
+
+    #[test]
+    fn keyboard_protocol_unknown_mode_falls_back_to_default() {
+        let settings = KeyboardProtocolSettings {
+            enabled: false,
+            mode: "bogus-mode".to_owned(),
+            disambiguate_escape_codes: true,
+            report_event_types: false,
+            report_alternate_keys: true,
+            report_all_keys: false,
+        };
+        let config = KeyboardProtocolConfig::from(settings);
+        assert_eq!(config.mode, KeyboardProtocolMode::Default);
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn keyboard_protocol_mode_parsing_is_case_insensitive() {
+        assert_eq!("FULL".parse::<KeyboardProtocolMode>(), Ok(KeyboardProtocolMode::Full));
+        assert!("unknown".parse::<KeyboardProtocolMode>().is_err());
     }
 
     #[test]

@@ -1,33 +1,8 @@
-use crate::tui::config::KeyboardProtocolConfig;
-
-// Re-export shared types from vtcode-commons.
+// Re-export shared types from vtcode-commons. The conversions to/from the
+// canonical `KeyboardProtocolConfig` live in `vtcode-config`, which owns that
+// type; a local type in `From`'s generic slot makes both directions legal
+// there without this crate carrying a shadowed copy.
 pub use vtcode_commons::ui_protocol::{KeyboardProtocolSettings, SessionSurface};
-
-impl From<KeyboardProtocolConfig> for KeyboardProtocolSettings {
-    fn from(value: KeyboardProtocolConfig) -> Self {
-        Self {
-            enabled: value.enabled,
-            mode: value.mode,
-            disambiguate_escape_codes: value.disambiguate_escape_codes,
-            report_event_types: value.report_event_types,
-            report_alternate_keys: value.report_alternate_keys,
-            report_all_keys: value.report_all_keys,
-        }
-    }
-}
-
-impl From<KeyboardProtocolSettings> for KeyboardProtocolConfig {
-    fn from(value: KeyboardProtocolSettings) -> Self {
-        Self {
-            enabled: value.enabled,
-            mode: value.mode,
-            disambiguate_escape_codes: value.disambiguate_escape_codes,
-            report_event_types: value.report_event_types,
-            report_alternate_keys: value.report_alternate_keys,
-            report_all_keys: value.report_all_keys,
-        }
-    }
-}
 
 /// Standalone fullscreen interaction settings for alternate-screen behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +25,7 @@ impl Default for FullscreenInteractionSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::config::KeyboardProtocolConfig;
 
     #[test]
     fn session_surface_conversion_roundtrip() {

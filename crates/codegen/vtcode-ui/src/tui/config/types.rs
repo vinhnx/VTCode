@@ -7,4 +7,7 @@
 
 // Re-export from canonical sources.
 pub use vtcode_commons::reasoning::ReasoningEffortLevel;
-pub use vtcode_config::types::{SystemPromptMode, ToolDocumentationMode, UiSurfacePreference, VerbosityLevel};
+pub use vtcode_config::types::{
+    KeyboardProtocolConfig, KeyboardProtocolMode, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
+};

@@ -806,6 +806,20 @@ impl KeyboardProtocolMode {
     }
 }
 
+impl std::str::FromStr for KeyboardProtocolMode {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "default" => Ok(Self::Default),
+            "full" => Ok(Self::Full),
+            "minimal" => Ok(Self::Minimal),
+            "custom" => Ok(Self::Custom),
+            _ => Err(()),
+        }
+    }
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KeyboardProtocolConfig {
@@ -865,13 +879,7 @@ fn default_keyboard_protocol_enabled() -> bool {
 fn default_keyboard_protocol_mode() -> KeyboardProtocolMode {
     std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE")
         .ok()
-        .and_then(|v| match v.to_ascii_lowercase().as_str() {
-            "default" => Some(KeyboardProtocolMode::Default),
-            "full" => Some(KeyboardProtocolMode::Full),
-            "minimal" => Some(KeyboardProtocolMode::Minimal),
-            "custom" => Some(KeyboardProtocolMode::Custom),
-            _ => None,
-        })
+        .and_then(|v| v.parse().ok())
         .unwrap_or_default()
 }
 

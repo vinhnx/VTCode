@@ -7,48 +7,12 @@ pub mod constants {
 /// Configuration type definitions re-exported for convenience.
 pub mod types;
 
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use vtcode_commons::terminal_detection::is_ghostty_terminal;
 
-pub use types::{ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference, VerbosityLevel};
-
-/// Configuration for the terminal keyboard protocol (Kitty progressive enhancement).
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct KeyboardProtocolConfig {
-    pub(crate) enabled: bool,
-    pub(crate) mode: String,
-    pub(crate) disambiguate_escape_codes: bool,
-    pub(crate) report_event_types: bool,
-    pub(crate) report_alternate_keys: bool,
-    pub(crate) report_all_keys: bool,
-}
-
-impl Default for KeyboardProtocolConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            mode: "default".to_string(),
-            disambiguate_escape_codes: true,
-            report_event_types: true,
-            report_alternate_keys: true,
-            report_all_keys: false,
-        }
-    }
-}
-
-impl KeyboardProtocolConfig {
-    /// Validate the keyboard protocol configuration.
-    pub fn validate(&self) -> Result<()> {
-        match self.mode.as_str() {
-            "default" | "full" | "minimal" | "custom" => Ok(()),
-            _ => anyhow::bail!(
-                "Invalid keyboard protocol mode '{}'. Must be: default, full, minimal, or custom",
-                self.mode
-            ),
-        }
-    }
-}
+pub use types::{
+    KeyboardProtocolConfig, KeyboardProtocolMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
+    UiSurfacePreference, VerbosityLevel,
+};
 
 /// Convert KeyboardProtocolConfig to crossterm keyboard enhancement flags.
 pub fn keyboard_protocol_to_flags(config: &KeyboardProtocolConfig) -> crossterm::event::KeyboardEnhancementFlags {
@@ -72,20 +36,20 @@ fn keyboard_protocol_to_flags_for_terminal(
         return KeyboardEnhancementFlags::empty();
     }
 
-    let mut flags = match config.mode.as_str() {
-        "default" => {
+    let mut flags = match config.mode {
+        KeyboardProtocolMode::Default => {
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
         }
-        "full" => {
+        KeyboardProtocolMode::Full => {
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
                 | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
         }
-        "minimal" => KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
-        "custom" => {
+        KeyboardProtocolMode::Minimal => KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
+        KeyboardProtocolMode::Custom => {
             let mut flags = KeyboardEnhancementFlags::empty();
             if config.disambiguate_escape_codes {
                 flags |= KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES;
@@ -101,22 +65,22 @@ fn keyboard_protocol_to_flags_for_terminal(
             }
             flags
         }
-        _ => {
-            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-        }
     };
 
-    if should_force_report_all_keys(config.mode.as_str(), is_macos, term_program, term) {
+    if should_force_report_all_keys(config.mode, is_macos, term_program, term) {
         flags |= KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES;
     }
 
     flags
 }
 
-fn should_force_report_all_keys(mode: &str, is_macos: bool, term_program: Option<&str>, term: Option<&str>) -> bool {
-    if !is_macos || !matches!(mode, "default") {
+fn should_force_report_all_keys(
+    mode: KeyboardProtocolMode,
+    is_macos: bool,
+    term_program: Option<&str>,
+    term: Option<&str>,
+) -> bool {
+    if !is_macos || mode != KeyboardProtocolMode::Default {
         return false;
     }
 
@@ -133,7 +97,7 @@ mod keyboard_protocol_tests {
     fn default_keyboard_protocol_config() -> KeyboardProtocolConfig {
         KeyboardProtocolConfig {
             enabled: true,
-            mode: "default".to_string(),
+            mode: KeyboardProtocolMode::Default,
             disambiguate_escape_codes: true,
             report_event_types: true,
             report_alternate_keys: true,
@@ -173,7 +137,7 @@ mod keyboard_protocol_tests {
         let flags = keyboard_protocol_to_flags_for_terminal(
             &KeyboardProtocolConfig {
                 enabled: true,
-                mode: "custom".to_string(),
+                mode: KeyboardProtocolMode::Custom,
                 disambiguate_escape_codes: true,
                 report_event_types: true,
                 report_alternate_keys: true,
