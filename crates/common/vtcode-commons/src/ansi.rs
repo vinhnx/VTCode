@@ -196,13 +196,33 @@ pub fn strip_ansi_codes(text: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(strip_ansi(text))
 }
 
+/// Remove the C0 controls that must never reach a transcript.
+///
+/// `anstream` keeps FF (`0x0C`) because it is ASCII whitespace in its state
+/// machine, and the old in-tree stripper removed every control byte except
+/// `\n`, `\r`, and `\t` (plus DEL). Keep that contract: the escape-sequence
+/// parsing is delegated, but control-byte filtering is owned here.
+#[inline]
+fn is_transcript_control(byte: u8) -> bool {
+    (byte < b' ' && !matches!(byte, b'\n' | b'\r' | b'\t')) || byte == DEL
+}
+
+/// Strip escape sequences and residual control bytes from already-valid UTF-8.
+fn strip_plain(text: &str) -> String {
+    let mut output = strip_str(text).to_string().into_bytes();
+    // Only ASCII control bytes are removed, so no multi-byte UTF-8 sequence
+    // can be broken and `from_utf8` reuses the existing allocation.
+    output.retain(|byte| !is_transcript_control(*byte));
+    String::from_utf8(output).expect("removing ASCII control bytes preserves UTF-8")
+}
+
 /// Strip ANSI escape codes from text, keeping only plain text.
 ///
 /// Delegates to `anstream`'s ANSI state machine. An incomplete sequence at the
 /// end of the input is dropped rather than emitted as raw control bytes; for
 /// chunked input use [`AnsiStripStream`] so a split sequence is not lost.
 pub fn strip_ansi(text: &str) -> String {
-    strip_str(text).to_string()
+    strip_plain(text)
 }
 
 /// Stateful ANSI stripper for chunked input such as a PTY byte stream.
@@ -295,7 +315,7 @@ impl AnsiStripStream {
         if !overlong {
             self.pending.push_str(pending);
         }
-        strip_str(ready).to_string()
+        strip_plain(ready)
     }
 }
 
@@ -384,9 +404,10 @@ pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
 /// ANSI stripping for ASCII-only text.
 ///
 /// Retained for API compatibility; this now shares [`strip_ansi`]'s parser.
-/// Unlike the previous implementation it does not keep an unterminated escape
-/// sequence at the end of the input — that would leak raw control bytes into
-/// transcripts when a PTY chunk splits a sequence.
+/// Two deliberate contract changes from the old copy-raw-spans implementation:
+/// C0 controls and DEL are filtered (as in [`strip_ansi`]), and an unterminated
+/// escape sequence at the end of the input is dropped instead of kept — the
+/// latter would leak raw control bytes when a PTY chunk splits a sequence.
 pub fn strip_ansi_ascii_only(text: &str) -> String {
     strip_ansi(text)
 }
@@ -422,6 +443,22 @@ mod tests {
     fn strip_removes_ascii_del_control() {
         let input = format!("a{}b", char::from(0x7f));
         assert_eq!(strip_ansi(&input), "ab");
+    }
+
+    #[test]
+    fn strip_removes_c0_controls_except_line_whitespace() {
+        // anstream treats FF (0x0C) as printable ASCII whitespace; the shared
+        // stripper must still remove it so raw control bytes never reach a
+        // transcript. VT (0x0B) and the other C0 controls are filtered too.
+        // ESC (0x1B) is an escape-sequence introducer, not a plain control
+        // byte; its behavior is covered by the sequence tests above.
+        for code in (0x00..0x20).filter(|&code| !matches!(code, b'\n' | b'\r' | b'\t' | 0x1b)) {
+            let input = format!("a{}b", char::from(code));
+            assert_eq!(strip_ansi(&input), "ab", "control byte 0x{code:02x}");
+
+            let mut stream = AnsiStripStream::new();
+            assert_eq!(stream.strip_chunk(&input), "ab", "control byte 0x{code:02x}");
+        }
     }
 
     #[test]
