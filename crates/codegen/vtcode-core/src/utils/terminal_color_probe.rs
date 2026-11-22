@@ -8,7 +8,11 @@
 //! - Query rich-clipboard support (`CSI ? 5522 $ p`, DECRQM) so the TUI can
 //!   fall back to Kitty OSC 5522 reads for image paste over SSH/headless
 //! - Send DA1 (`ESC [ c`) as a flush sentinel
-//! - Read until a DA1 response begins (`ESC [ ?`)
+//! - Read until a DA1 response is complete; terminals answer requests in
+//!   order, so DA1 marks the end of the reply set. A color query the terminal
+//!   ignored is a negative answer, not a reason to wait for a timeout.
+//! - Parse each reply independently by its OSC selector, so partial answers
+//!   still yield useful hints and an absent reply leaves its hint unset.
 //! - Infer terminal light/dark scheme and palette harmony; the explicit
 //!   Contour report wins over luminance inference when available
 
@@ -58,23 +62,29 @@ pub fn probe_and_cache_terminal_palette_harmony() {
             Ok(result) => {
                 // The Contour color-scheme report is an explicit answer from the
                 // terminal; fall back to foreground/background luminance inference
-                // for terminals that ignore the `CSI ? 996 n` query.
-                let scheme = result.scheme_report.unwrap_or(if result.is_term_light_theme {
-                    ColorScheme::Light
-                } else {
-                    ColorScheme::Dark
+                // for terminals that ignore the `CSI ? 996 n` query. Leave the
+                // override unset when neither source answered: guessing "dark"
+                // from silence would mis-theme a terminal that gave no data.
+                let scheme = result.scheme_report.or_else(|| {
+                    result
+                        .is_term_light_theme()
+                        .map(|light| if light { ColorScheme::Light } else { ColorScheme::Dark })
                 });
-                set_color_scheme_override(Some(scheme));
-                set_harmonious_runtime_hint(Some(result.is_harmonious));
+                if let Some(scheme) = scheme {
+                    set_color_scheme_override(Some(scheme));
+                }
+                if let Some(harmonious) = result.is_harmonious() {
+                    set_harmonious_runtime_hint(Some(harmonious));
+                }
                 set_clipboard_5522_hint(result.clipboard_5522);
                 tracing::trace!(
-                    scheme = scheme.name(),
+                    scheme = scheme.map(ColorScheme::name),
                     explicit_scheme = result.scheme_report.is_some(),
                     clipboard_5522 = result.clipboard_5522,
-                    term_light = result.is_term_light_theme,
-                    palette_light = result.is_palette_light_theme,
-                    harmonious = result.is_harmonious,
-                    generated = result.is_generated,
+                    term_light = result.is_term_light_theme(),
+                    palette_light = result.is_palette_light_theme(),
+                    harmonious = result.is_harmonious(),
+                    generated = result.is_generated(),
                     "terminal OSC color probe completed"
                 );
             }
@@ -86,18 +96,72 @@ pub fn probe_and_cache_terminal_palette_harmony() {
 }
 
 #[cfg(unix)]
+type Rgb = (u8, u8, u8);
+
+/// The four color replies, each optional: a terminal may answer some OSC
+/// queries and ignore the rest. Positional parsing would mis-assign the
+/// replies that did arrive, so each is keyed by its own OSC selector.
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct ColorReplies {
+    foreground: Option<Rgb>,
+    background: Option<Rgb>,
+    palette_low: Option<Rgb>,
+    palette_high: Option<Rgb>,
+}
+
+#[cfg(unix)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ProbeResult {
-    is_term_light_theme: bool,
-    is_palette_light_theme: bool,
-    is_harmonious: bool,
-    is_generated: bool,
+    colors: ColorReplies,
     /// Explicit dark/light answer from a `CSI ? 997 ; Ps n` reply, when the
     /// terminal supports the Contour color-scheme query.
     scheme_report: Option<ColorScheme>,
     /// Rich-clipboard verdict from a `CSI ? 5522 ; Ps $ y` reply; `None`
     /// when the terminal sent no 5522 report (reads as unsupported).
     clipboard_5522: Option<bool>,
+}
+
+#[cfg(unix)]
+impl ProbeResult {
+    /// Light/dark verdict from OSC 10/11 foreground and background, when both
+    /// replies arrived.
+    fn is_term_light_theme(self) -> Option<bool> {
+        match (self.colors.foreground, self.colors.background) {
+            (Some(fg), Some(bg)) => Some(lightness(bg) > lightness(fg)),
+            _ => None,
+        }
+    }
+
+    /// Light/dark verdict from the OSC 4;16 and 4;231 palette endpoints, when
+    /// both replies arrived.
+    fn is_palette_light_theme(self) -> Option<bool> {
+        match (self.colors.palette_low, self.colors.palette_high) {
+            // OSC 4;16 is the dark endpoint and 4;231 the light endpoint in a
+            // standard palette. A dark palette therefore has low brighter than
+            // high; reversing them flips every harmony verdict.
+            (Some(low), Some(high)) => Some(lightness(low) > lightness(high)),
+            _ => None,
+        }
+    }
+
+    /// Whether terminal and palette agree on light/dark, when both verdicts
+    /// are available.
+    fn is_harmonious(self) -> Option<bool> {
+        match (self.is_term_light_theme(), self.is_palette_light_theme()) {
+            (Some(term), Some(palette)) => Some(term == palette),
+            _ => None,
+        }
+    }
+
+    /// Diagnostic: whether the palette endpoints were synthesized from the
+    /// theme, which makes the harmony verdict uninformative.
+    fn is_generated(self) -> Option<bool> {
+        match (self.colors.foreground, self.colors.background, self.colors.palette_low, self.colors.palette_high) {
+            (Some(fg), Some(bg), Some(low), Some(high)) => Some(bg == low && fg == high),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -128,23 +192,12 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
         drain_tty_input(&mut tty);
     }
     let response = result?;
-    let parsed = match parse_four_colors(&response) {
-        Ok(parsed) => parsed,
-        Err(error) => {
-            drain_tty_input(&mut tty);
-            return Err(error);
-        }
-    };
-    let [fg, bg, c16, c231] = parsed;
-
-    let is_term_light_theme = lightness(bg) > lightness(fg);
-    let is_palette_light_theme = lightness(c16) > lightness(c231);
-
+    // DA1 is sent last and terminals answer requests in order, so its reply
+    // marks the end of the reply set. A color query the terminal ignored is a
+    // negative answer, not a reason to wait for the overall timeout — parse
+    // whatever arrived and leave absent hints unset.
     Ok(ProbeResult {
-        is_term_light_theme,
-        is_palette_light_theme,
-        is_harmonious: is_term_light_theme == is_palette_light_theme,
-        is_generated: bg == c16 && fg == c231,
+        colors: parse_color_replies(&response),
         scheme_report: parse_scheme_report(&response),
         clipboard_5522: parse_decrpm_5522(&response),
     })
@@ -217,7 +270,7 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
     let mut settle_deadline = None;
 
     loop {
-        if has_complete_probe_response(&buffer) && settle_deadline.is_none() {
+        if has_complete_da1_response(&buffer) && settle_deadline.is_none() {
             settle_deadline = Some(Instant::now() + RESPONSE_SETTLE_WINDOW);
         }
 
@@ -261,42 +314,34 @@ fn has_complete_da1_response(buffer: &[u8]) -> bool {
         .is_some_and(|pos| buffer[pos..].contains(&b'c'))
 }
 
+/// Parse one color reply keyed by its OSC selector rather than by position.
+/// Terminals are free to ignore individual queries; positional parsing would
+/// shift the surviving replies into the wrong slots.
 #[cfg(unix)]
-fn has_complete_probe_response(buffer: &[u8]) -> bool {
-    has_complete_da1_response(buffer) && parse_four_colors(buffer).is_ok()
-}
-
-#[cfg(unix)]
-fn parse_four_colors(response: &[u8]) -> Result<[(u8, u8, u8); 4]> {
-    let mut parsed = Vec::with_capacity(4);
-    let decoded = String::from_utf8_lossy(response);
-
-    for part in decoded.split("rgb:").skip(1) {
-        if let Some(rgb) = parse_rgb_part(part) {
-            parsed.push(rgb);
-            if parsed.len() == 4 {
-                break;
-            }
-        }
-    }
-
-    if parsed.len() != 4 {
-        return Err(anyhow!("expected 4 colors from OSC probe, got {}", parsed.len()));
-    }
-
-    Ok([parsed[0], parsed[1], parsed[2], parsed[3]])
-}
-
-#[cfg(unix)]
-fn parse_rgb_part(part: &str) -> Option<(u8, u8, u8)> {
-    let payload = part.split(ESC_CHAR).next()?;
-    let mut channels = payload.split('/');
-
+fn parse_color_reply(decoded: &str, selector: &str) -> Option<Rgb> {
+    let prefix = format!("{OSC}{selector};rgb:");
+    let start = decoded.find(prefix.as_str())? + prefix.len();
+    let payload = decoded.get(start..)?;
+    // ST is `ESC \`, BEL is the legacy OSC terminator.
+    let end = payload.find([ESC_CHAR, '\x07']).unwrap_or(payload.len());
+    let channels = payload.get(..end)?;
+    let mut parts = channels.split('/');
     Some((
-        normalize_channel(channels.next()?)?,
-        normalize_channel(channels.next()?)?,
-        normalize_channel(channels.next()?)?,
+        normalize_channel(parts.next()?)?,
+        normalize_channel(parts.next()?)?,
+        normalize_channel(parts.next()?)?,
     ))
+}
+
+#[cfg(unix)]
+fn parse_color_replies(response: &[u8]) -> ColorReplies {
+    let decoded = String::from_utf8_lossy(response);
+    ColorReplies {
+        foreground: parse_color_reply(&decoded, "10"),
+        background: parse_color_reply(&decoded, "11"),
+        palette_low: parse_color_reply(&decoded, "4;16"),
+        palette_high: parse_color_reply(&decoded, "4;231"),
+    }
 }
 
 #[cfg(unix)]
@@ -369,26 +414,59 @@ mod tests {
     use super::*;
     use vtcode_commons::ansi_codes::CSI;
 
+    fn fg() -> String {
+        format!("{OSC}10;rgb:dddd/dddd/dddd{ST}")
+    }
+    fn bg() -> String {
+        format!("{OSC}11;rgb:1111/1111/1111{ST}")
+    }
+    fn low() -> String {
+        format!("{OSC}4;16;rgb:1111/1111/1111{ST}")
+    }
+    fn high() -> String {
+        format!("{OSC}4;231;rgb:eeee/eeee/eeee{ST}")
+    }
+    fn da1() -> String {
+        format!("{CSI}?62;4c")
+    }
+
     #[test]
     fn parse_rgb_handles_16bit_channels() {
-        let response = format!(
-            "{OSC}10;rgb:dddd/dddd/dddd{ST}{OSC}11;rgb:1111/1111/1111{ST}{OSC}4;16;rgb:1111/1111/1111{ST}{OSC}4;231;rgb:dddd/dddd/dddd{ST}{CSI}?62;4c"
-        );
-        let [fg, bg, c16, c231] = parse_four_colors(response.as_bytes()).expect("valid colors");
-        assert_eq!(fg, (0xdd, 0xdd, 0xdd));
-        assert_eq!(bg, (0x11, 0x11, 0x11));
-        assert_eq!(c16, (0x11, 0x11, 0x11));
-        assert_eq!(c231, (0xdd, 0xdd, 0xdd));
+        let response = format!("{}{}{}{}{}", fg(), bg(), low(), high(), da1());
+        let colors = parse_color_replies(response.as_bytes());
+        assert_eq!(colors.foreground, Some((0xdd, 0xdd, 0xdd)));
+        assert_eq!(colors.background, Some((0x11, 0x11, 0x11)));
+        assert_eq!(colors.palette_low, Some((0x11, 0x11, 0x11)));
+        assert_eq!(colors.palette_high, Some((0xee, 0xee, 0xee)));
     }
 
     #[test]
     fn parse_rgb_handles_single_digit_channels() {
-        let response = format!(
-            "{OSC}10;rgb:a/b/c{ST}{OSC}11;rgb:0/0/0{ST}{OSC}4;16;rgb:0/0/0{ST}{OSC}4;231;rgb:f/f/f{ST}{CSI}?1;2c"
-        );
-        let [fg, _, _, c231] = parse_four_colors(response.as_bytes()).expect("valid colors");
-        assert_eq!(fg, (0xaa, 0xbb, 0xcc));
-        assert_eq!(c231, (0xff, 0xff, 0xff));
+        let response =
+            format!("{OSC}10;rgb:a/b/c{ST}{OSC}11;rgb:0/0/0{ST}{OSC}4;16;rgb:0/0/0{ST}{OSC}4;231;rgb:f/f/f{ST}");
+        let colors = parse_color_replies(response.as_bytes());
+        assert_eq!(colors.foreground, Some((0xaa, 0xbb, 0xcc)));
+        assert_eq!(colors.palette_high, Some((0xff, 0xff, 0xff)));
+    }
+
+    #[test]
+    fn parses_each_reply_by_selector_not_position() {
+        // A terminal that answers OSC 10 and 4;231 but skips 11 and 4;16 must
+        // not have its two replies shifted into the wrong slots.
+        let response = format!("{}{}{}", fg(), high(), da1());
+        let colors = parse_color_replies(response.as_bytes());
+        assert_eq!(colors.foreground, Some((0xdd, 0xdd, 0xdd)));
+        assert_eq!(colors.background, None);
+        assert_eq!(colors.palette_low, None);
+        assert_eq!(colors.palette_high, Some((0xee, 0xee, 0xee)));
+    }
+
+    #[test]
+    fn ignores_malformed_reply_without_rejecting_the_others() {
+        let response = format!("{OSC}10;rgb:zz/dd/dd{ST}{}{}", bg(), da1());
+        let colors = parse_color_replies(response.as_bytes());
+        assert_eq!(colors.foreground, None);
+        assert_eq!(colors.background, Some((0x11, 0x11, 0x11)));
     }
 
     #[test]
@@ -400,15 +478,66 @@ mod tests {
     }
 
     #[test]
-    fn waits_for_all_color_responses_before_settling() {
-        let da1_only = b"\x1b[?62;22;52c";
-        assert!(has_complete_da1_response(da1_only));
-        assert!(!has_complete_probe_response(da1_only));
+    fn da1_reply_alone_completes_the_probe() {
+        // Protocol insight: replies arrive in request order, so DA1 with no
+        // color reply is a prompt negative — not a reason to wait for a
+        // timeout. An absent reply leaves every derived hint unset.
+        let da1_only = da1();
+        assert!(has_complete_da1_response(da1_only.as_bytes()));
+        let result = ProbeResult {
+            colors: parse_color_replies(da1_only.as_bytes()),
+            scheme_report: None,
+            clipboard_5522: None,
+        };
+        assert_eq!(result.is_term_light_theme(), None);
+        assert_eq!(result.is_palette_light_theme(), None);
+        assert_eq!(result.is_harmonious(), None);
+        assert_eq!(result.is_generated(), None);
+    }
 
-        let response = format!(
-            "{OSC}10;rgb:dddd/dddd/dddd{ST}{OSC}11;rgb:1111/1111/1111{ST}{OSC}4;16;rgb:1111/1111/1111{ST}{OSC}4;231;rgb:dddd/dddd/dddd{ST}{CSI}?62;4c"
-        );
-        assert!(has_complete_probe_response(response.as_bytes()));
+    #[test]
+    fn partial_fg_bg_still_infers_light_dark_scheme() {
+        let response = format!("{}{}{}", fg(), bg(), da1());
+        let result = ProbeResult {
+            colors: parse_color_replies(response.as_bytes()),
+            scheme_report: None,
+            clipboard_5522: None,
+        };
+        assert_eq!(result.is_term_light_theme(), Some(false));
+        assert_eq!(result.is_palette_light_theme(), None);
+        assert_eq!(result.is_harmonious(), None);
+    }
+
+    #[test]
+    fn full_reply_set_yields_all_hints() {
+        let response = format!("{}{}{}{}{}", fg(), bg(), low(), high(), da1());
+        let result = ProbeResult {
+            colors: parse_color_replies(response.as_bytes()),
+            scheme_report: None,
+            clipboard_5522: None,
+        };
+        assert_eq!(result.is_term_light_theme(), Some(false));
+        // OSC 4;16 is the dark endpoint: low=0x11 < high=0xee means a dark
+        // palette, which agrees with the dark terminal -> harmonious.
+        assert_eq!(result.is_palette_light_theme(), Some(false));
+        assert_eq!(result.is_harmonious(), Some(true));
+        assert_eq!(result.is_generated(), Some(false));
+    }
+
+    #[test]
+    fn inverted_palette_endpoints_flip_only_the_palette_verdict() {
+        // Asymmetric control: swap the two palette endpoints. The terminal stays
+        // dark, so harmony must flip to false; this pins the operand order.
+        let response =
+            format!("{}{}{OSC}4;16;rgb:eeee/eeee/eeee{ST}{OSC}4;231;rgb:1111/1111/1111{ST}{}", fg(), bg(), da1());
+        let result = ProbeResult {
+            colors: parse_color_replies(response.as_bytes()),
+            scheme_report: None,
+            clipboard_5522: None,
+        };
+        assert_eq!(result.is_term_light_theme(), Some(false));
+        assert_eq!(result.is_palette_light_theme(), Some(true));
+        assert_eq!(result.is_harmonious(), Some(false));
     }
 
     #[test]
