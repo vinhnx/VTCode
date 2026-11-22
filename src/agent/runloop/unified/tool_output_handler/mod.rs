@@ -337,6 +337,12 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         handle_pipeline_output_full(&mut run_ctx, name, args_val, outcome, vt_config).await?;
 
     if let ToolExecutionStatus::Success { output, modified_files, command_success: true, .. } = &outcome.status {
+        if !modified_files.is_empty() {
+            // The prompt embeds instructions but its cache key sees only
+            // paths/flags. Invalidating on every accepted write also covers
+            // `@import`ed files without having to enumerate them.
+            ctx.context_manager.invalidate_system_prompt_cache();
+        }
         let activity_paths =
             collect_instruction_activity_paths(ctx.config.workspace.as_path(), args_val, output, modified_files);
         if !activity_paths.is_empty() {

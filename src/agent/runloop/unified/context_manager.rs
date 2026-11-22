@@ -206,6 +206,20 @@ impl ContextManager {
 
     pub(crate) fn reset_for_fresh_execution(&mut self) {
         self.cached_stats = ContextStats::default();
+        self.reset_incremental_prompt();
+    }
+
+    /// Drop the cached system prompt after files changed.
+    ///
+    /// The prompt embeds AGENTS.md / rule / persistent-memory content, but the
+    /// builder's cache key only tracks paths and flags. A tool edit to an
+    /// instruction file (or a file it `@import`s) therefore keeps serving the
+    /// pre-edit appendix for the rest of the session unless we invalidate here.
+    pub(crate) fn invalidate_system_prompt_cache(&mut self) {
+        self.reset_incremental_prompt();
+    }
+
+    fn reset_incremental_prompt(&mut self) {
         self.incremental_prompt_builder = IncrementalSystemPrompt::new();
     }
 

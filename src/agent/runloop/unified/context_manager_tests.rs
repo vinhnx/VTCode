@@ -207,6 +207,36 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
     assert!(result.unwrap_err().to_string().contains("empty"));
 }
 
+#[tokio::test]
+async fn file_edits_invalidate_the_cached_instruction_appendix() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+    let agents = workspace.path().join("AGENTS.md");
+    std::fs::write(&agents, "rule version one").expect("write rules");
+
+    let config = vtcode_config::core::AgentConfig { instruction_max_bytes: 4096, ..Default::default() };
+    let mut manager =
+        ContextManager::new("Base prompt".to_string(), (), Arc::new(RwLock::new(HashMap::new())), Some(config));
+    manager.set_workspace_root(workspace.path());
+    let params = SystemPromptParams {
+        full_auto: false,
+        planning_active: false,
+        request_user_input_enabled: true,
+    };
+
+    let first = manager.build_system_prompt(params.clone()).await.expect("first prompt");
+    assert!(first.contains("rule version one"), "first prompt: {first}");
+
+    // The context hash only sees paths and flags, so an on-disk rewrite of the
+    // same file is invisible to the cache key: without invalidation this would
+    // still contain "rule version one".
+    std::fs::write(&agents, "rule version two").expect("rewrite rules");
+    manager.invalidate_system_prompt_cache();
+    let fresh = manager.build_system_prompt(params).await.expect("fresh prompt");
+    assert!(fresh.contains("rule version two"), "fresh prompt: {fresh}");
+    assert!(!fresh.contains("rule version one"), "stale rules must be gone");
+}
+
 #[test]
 fn test_update_token_usage_prefers_prompt_pressure() {
     let mut manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
