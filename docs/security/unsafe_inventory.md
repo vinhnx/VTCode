@@ -7,7 +7,7 @@ and Clippy lint families in the root `Cargo.toml` (`unsafe_code`, `undocumented_
 ## Snapshot: 2026-08-10
 
 The external audit reported 44 textual `unsafe` occurrences. That count also includes prose, diagnostics, and test
-descriptions. The current source inventory below contains 24 syntactic unsafe sites: unsafe operations,
+descriptions. The current source inventory below contains 26 syntactic unsafe sites: unsafe operations,
 `unsafe extern "C"` ABI declarations, the two allocator link attributes, and test-only FFI callbacks.
 
 | Source | Sites | Boundary and invariant |
@@ -17,7 +17,8 @@ descriptions. The current source inventory below contains 24 syntactic unsafe si
 | [`crates/common/vtcode-commons/src/memory.rs`](../../crates/common/vtcode-commons/src/memory.rs) | 4 | macOS Mach calls use a zeroed ABI struct, the current task port, valid output pointers, and the expected count; Linux `sysconf` receives a compile-time selector. |
 | [`crates/codegen/vtcode-skills/src/native_plugin/mod.rs`](../../crates/codegen/vtcode-skills/src/native_plugin/mod.rs) | 14 | Native plugins cross a C ABI: function signatures are fixed, libraries are canonicalized under trusted roots, returned pointers are non-null NUL-terminated strings, plugin deallocation uses the matching callback, and non-reentrant plugins are locked. |
 | [`crates/codegen/vtcode-bash-runner/src/pipe.rs`](../../crates/codegen/vtcode-bash-runner/src/pipe.rs) | 1 | The Unix `pre_exec` hook calls only the async-signal-safe `nix` process-group wrapper before `exec`. |
-| **Total** | **24** | |
+| [`crates/common/vtcode-commons/src/process_exit.rs`](../../crates/common/vtcode-commons/src/process_exit.rs) | 2 | `libc::_exit` terminates a child thread without running exit handlers; the test-only `atexit` registration is a non-unwinding `extern "C"` callback whose body uses safe `std::fs::write`. |
+| **Total** | **26** | |
 
 ## Native-plugin site breakdown
 

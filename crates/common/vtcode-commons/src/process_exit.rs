@@ -40,7 +40,7 @@ pub fn emergency_exit(code: i32) -> ! {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::ffi::CString;
+    use std::path::PathBuf;
     use std::process::Command;
     use std::sync::OnceLock;
 
@@ -48,38 +48,30 @@ mod tests {
     const MARKER_ENV: &str = "VTCODE_EMERGENCY_EXIT_MARKER_PATH";
     const TEST_NAME: &str = "process_exit::tests::emergency_exit_skips_atexit_handlers";
 
-    static MARKER_PATH: OnceLock<CString> = OnceLock::new();
+    static MARKER_PATH: OnceLock<PathBuf> = OnceLock::new();
 
     /// Runs only if libc `exit` invokes `atexit` handlers. Its absence proves
     /// `emergency_exit` used `_exit`.
-    #[expect(unsafe_code, reason = "test-only atexit handler writing a marker with libc calls")]
     extern "C" fn write_marker_on_exit() {
         let Some(path) = MARKER_PATH.get() else {
             return;
         };
-        // SAFETY: `path` is a nul-terminated CString initialized before the
-        // handler was registered; open/write/close take validated arguments.
-        unsafe {
-            let fd = libc::open(path.as_ptr(), libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC, 0o600);
-            if fd >= 0 {
-                let byte = [b'x'];
-                let _ = libc::write(fd, byte.as_ptr().cast(), 1);
-                let _ = libc::close(fd);
-            }
-        }
+        // `fs::write` reports I/O failures as `Err` rather than unwinding, so
+        // this `extern "C"` callback stays non-unwinding during teardown.
+        std::fs::write(path, b"x").unwrap_or_default();
     }
 
     #[test]
     #[expect(unsafe_code, reason = "test-only atexit registration to verify _exit semantics")]
     fn emergency_exit_skips_atexit_handlers() {
         let marker = std::env::temp_dir().join(format!("vtcode-emergency-exit-{}", std::process::id()));
-        let _ = std::fs::remove_file(&marker);
+        std::fs::remove_file(&marker).unwrap_or_default();
 
         if std::env::var_os(CHILD_ENV).is_some() {
             let path = std::env::var_os(MARKER_ENV).expect("marker path in child");
-            let _ = MARKER_PATH.get_or_init(|| CString::new(path.as_encoded_bytes()).expect("nul-free marker path"));
-            // SAFETY: the handler is a `extern "C" fn`, never unwinds, and only
-            // calls libc with arguments validated above.
+            MARKER_PATH.set(PathBuf::from(path)).unwrap_or_default();
+            // SAFETY: the handler is an `extern "C" fn` that cannot unwind, and
+            // `atexit` only registers it in this short-lived child process.
             assert_eq!(unsafe { libc::atexit(write_marker_on_exit) }, 0);
             emergency_exit(42);
         }
@@ -95,6 +87,6 @@ mod tests {
 
         assert_eq!(output.status.code(), Some(42), "child stdout: {}", String::from_utf8_lossy(&output.stdout));
         assert!(!marker.exists(), "atexit handler ran; emergency_exit must use _exit on Unix");
-        let _ = std::fs::remove_file(&marker);
+        std::fs::remove_file(&marker).unwrap_or_default();
     }
 }

@@ -12,8 +12,8 @@ safety guarantee - users must always be able to exit the program without being t
 
 1. **First Ctrl+C**: Immediately cancels the current operation (Cancel signal)
 2. **Second Ctrl+C (within 1 second)**: Immediately exits the program (Exit signal)
-3. **Emergency exit path**: On double Ctrl+C, the program calls `std::process::exit(130)` which bypasses all other
-   operations and cleanup routines
+3. **Emergency exit path**: On double Ctrl+C, the program calls `emergency_exit(130)` (raw `libc::_exit` on Unix) which
+   bypasses all other operations and cleanup routines
 4. **No signal masking**: SIGINT is never blocked or masked anywhere in the codebase
 5. **Atomic operations**: All state transitions use lock-free atomic operations, ensuring no mutex contention can block
    signal handling
@@ -71,7 +71,7 @@ blocked by other operations.
 1. OS delivers SIGINT → Tokio runtime wakes up the signal handler task
 2. Signal handler calls `request_local_stop()` → `CtrlCState::register_signal()`
 3. If `CtrlCSignal::Exit` is returned → fire-and-forget MCP shutdown (500ms timeout)
-4. Call `emergency_terminal_cleanup()` → `restore_tui()` → `std::process::exit(130)`
+4. Call `emergency_terminal_cleanup()` → `restore_tui()` → `emergency_exit(130)`
 
 #### Emergency Exit Path
 
@@ -82,11 +82,12 @@ When a double Ctrl+C is detected, the signal handler:
    - Disables terminal focus tracking
    - Restores the TUI to its original state
    - Flushes trace logs
-   - Calls `std::process::exit(130)` to immediately terminate the process
+   - Calls `emergency_exit(130)` to immediately terminate the process
 
-The `std::process::exit(130)` call bypasses:
+The `emergency_exit(130)` call bypasses:
 
 - Rust's drop logic
+- libc `atexit` handlers and thread-local destructors (raw `_exit` on Unix)
 - Async runtime shutdown
 - Any pending background tasks
 - Any blocking operations
@@ -215,7 +216,8 @@ The `CtrlCState` state machine is thoroughly tested to verify:
 2. **Never mask SIGINT**: Always allow the OS to deliver signals to the handler
 3. **Never hold locks across signal checks**: This can cause deadlocks
 4. **Always check exit at the top of loops**: Ensure exit requests are processed promptly
-5. **Use `std::process::exit()` for emergency exit**: This bypasses all other operations
+5. **Use `vtcode_commons::process_exit::emergency_exit()` for emergency exits**: It uses raw `_exit` on Unix, bypassing
+   all other operations and `atexit` cleanup; flush stdout/stderr and restore the terminal before calling it
 
 ## Future Improvements
 

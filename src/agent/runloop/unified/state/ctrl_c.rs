@@ -64,7 +64,7 @@ impl CtrlCPhase {
 /// 2. **Second Ctrl+C (within 1 second)**: Escalates to exit; a 200ms debounce
 ///    sub-window suppresses accidental double-taps so a rapid second tap returns
 ///    `Cancel` (debounced) rather than `Exit` (see State Machine below)
-/// 3. **Emergency exit path**: On double Ctrl+C, the program calls `std::process::exit(130)`
+/// 3. **Emergency exit path**: On double Ctrl+C, the program calls `emergency_exit(130)`
 ///    which bypasses all other operations and cleanup routines
 /// 4. **No signal masking**: SIGINT is never blocked or masked anywhere in the codebase
 /// 5. **Atomic operations**: All state transitions use lock-free atomic operations,
@@ -154,7 +154,7 @@ impl CtrlCState {
     /// 1. Always process the signal immediately (no blocking)
     /// 2. Never be blocked by any other operation
     /// 3. Return `CtrlCSignal::Exit` on double Ctrl+C, which triggers
-    ///    `emergency_terminal_cleanup()` → `std::process::exit(130)`
+    ///    `emergency_terminal_cleanup()` → `emergency_exit(130)`
     ///
     /// # Debounce Behavior
     ///
