@@ -15,7 +15,7 @@
 - Reasoning controls are route-specific: send `reasoning_effort` or `thinking.budget_tokens` only on routes advertising them, never a generic provider-wide field.
 - Provider tool formatters return `Result<Option<Value>, LLMError>` and must never hide serialization failures or let extension maps collide with reserved wire fields.
 - Provider error bodies are read with a 16 KiB cap and passed through the secret-redacting sanitizer before metadata, display, or logs.
-- Provider-owned child processes use the shared filtered environment, and WebSocket TLS uses an explicit per-connection Rustls provider while preserving trust roots and certificate verification.
+- Provider-owned child processes use the shared filtered environment, and WebSocket TLS uses an explicit per-connection Rustls provider while preserving system trust roots and certificate verification.
 - `ResponsesContinuationStore` owns continuation-chain semantics for both runloop and headless runner, so never re-implement the map in a caller.
 - `ModelResolver::resolve_with_mode` and `availability_with_mode` must receive the loaded config's credential storage mode, and availability must not be inferred from provider alone.
 - `ToolChoice::None` must disable callable tools on the wire, and Decisions uses a separate no-redirect client that fails closed.

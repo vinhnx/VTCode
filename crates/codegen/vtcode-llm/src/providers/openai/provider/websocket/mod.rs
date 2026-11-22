@@ -13,14 +13,20 @@ const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
 use crate::provider::LLMError;
 
 fn websocket_tls_connector() -> Result<tokio_tungstenite::Connector, LLMError> {
+    use rustls_platform_verifier::BuilderVerifierExt;
+
     // Other dependencies enable both Rustls providers. Select one per connection
     // instead of relying on ambiguous process-wide provider inference.
     let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
-    let root_store = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
+    // Verify against the system trust store so WebSocket connections honor the
+    // same roots (and root/intermediate distrust updates) as the HTTP clients.
+    // A bundled `webpki-roots` store would silently ignore custom or corporate
+    // CAs and require shipping a new binary whenever roots change.
     let config = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
         .map_err(|err| format_network_error(format!("Invalid OpenAI WebSocket TLS configuration: {err}")))?
-        .with_root_certificates(root_store)
+        .with_platform_verifier()
+        .map_err(|err| format_network_error(format!("Failed to load system trust roots for OpenAI WebSocket: {err}")))?
         .with_no_client_auth();
     Ok(tokio_tungstenite::Connector::Rustls(std::sync::Arc::new(config)))
 }
