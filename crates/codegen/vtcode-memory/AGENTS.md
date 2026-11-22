@@ -26,6 +26,7 @@
 - Shared `open` tolerates contention on `session.lock`; `open_exclusive` fails closed with `SessionBusy`. Both require the stable session guard.
 - Use `snapshot::read_event_tail` for external inspection and never open a writer to read archives.
 - Matrix resume fails closed when ambiguous, and evicting old turns must not reset consumed planning-recovery requests.
+- Atomically persist goal snapshots before committing state changes. Activation IDs and usage cursors are runloop-local. Restored active goals start paused.
 
 ## Testing
 

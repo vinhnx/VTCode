@@ -60,8 +60,8 @@ use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSes
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 use crate::agent::runloop::unified::session_settings::{SessionSettingsControl, SharedSettingsSnapshot};
 use crate::agent::runloop::unified::session_setup::{
-    EditorOpenDispatcher, EditorOpenRequestSender, active_deferred_tool_policy, refresh_tool_snapshot,
-    register_goal_tools,
+    EditorOpenDispatcher, EditorOpenRequestSender, active_deferred_tool_policy, prepare_goal_runtime,
+    refresh_tool_snapshot,
 };
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
@@ -663,24 +663,16 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         crate::agent::runloop::unified::stop_requests::publish_exec_registry(slot, &tool_registry);
         crate::agent::runloop::unified::stop_requests::mark_host_turns_ready(slot);
     }
-    let goal_session_dir = vtcode_memory::session_directory(&config.workspace, thread_handle.thread_id().as_str());
-    let goal_tracker = match vtcode_memory::GoalTracker::restore(goal_session_dir.clone()) {
-        Ok(tracker) => tracker,
-        Err(err) => {
-            tracing::warn!("goal snapshot restore failed, starting without a goal: {err:#}");
-            vtcode_memory::GoalTracker::new(goal_session_dir)
-        }
-    };
-    let goal_tracker = Arc::new(tokio::sync::Mutex::new(goal_tracker));
-    if let Some(slot) = stop_slot.as_ref() {
-        crate::agent::runloop::unified::stop_requests::publish_goal_tracker(slot, &goal_tracker);
-        if let Some(emitter) = harness_emitter.as_ref() {
-            crate::agent::runloop::unified::stop_requests::publish_goal_emitter(slot, emitter);
-        }
-    }
-    finalize_harness_on_err(
+    let goal_tracker = finalize_harness_on_err(
         harness_emitter.as_ref(),
-        register_goal_tools(&mut tool_registry, goal_tracker.clone(), harness_emitter.clone()).await,
+        prepare_goal_runtime(
+            vtcode_memory::session_directory(&config.workspace, thread_handle.thread_id().as_str()),
+            &mut session_stats,
+            &mut tool_registry,
+            harness_emitter.clone(),
+            stop_slot.as_ref(),
+        )
+        .await,
     )
     .await?;
     {

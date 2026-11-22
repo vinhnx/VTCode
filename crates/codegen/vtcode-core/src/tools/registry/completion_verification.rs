@@ -1,6 +1,7 @@
 //! Runtime verification evidence, independent of compactable source exposure.
 
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 
 use serde_json::Value;
 
@@ -342,6 +343,12 @@ impl ToolRegistry {
     /// Code changes require an observed exit zero from the same mutation generation.
     pub fn completion_verification_pending(&self) -> bool {
         self.harness_context.completion_verification.lock().pending()
+    }
+
+    /// Share a read-only view of the verification gate without retaining the registry.
+    pub fn completion_verification_check(&self) -> impl Fn() -> bool + Send + Sync + 'static {
+        let verification = Arc::clone(&self.harness_context.completion_verification);
+        move || verification.lock().pending()
     }
 
     /// Monotonic identity of the code state used to reject stale completion drafts.

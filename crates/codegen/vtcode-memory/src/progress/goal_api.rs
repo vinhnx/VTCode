@@ -8,12 +8,30 @@
 //! so a reloaded goal never resumes driving itself.
 
 use std::path::PathBuf;
+use std::{fs, io};
+use vtcode_commons::VtCodePaths;
 
 use super::{GoalOrchestration, GoalStatus, GoalTracker};
 use crate::error::SessionStoreError;
 
 /// Snapshot filename inside the session's `goal/` directory.
 const GOAL_SNAPSHOT_FILE: &str = "goal.json";
+
+fn goal_snapshot_path(session_dir: &std::path::Path) -> Result<PathBuf, SessionStoreError> {
+    // Session IDs and the goal subdirectory are owned paths, even when a
+    // workspace ancestor is a permitted platform alias.
+    for dir in [session_dir.to_path_buf(), session_dir.join("goal")] {
+        match fs::symlink_metadata(&dir) {
+            Ok(metadata) if !metadata.is_dir() => {
+                return Err(SessionStoreError::io(dir, io::Error::other("goal storage requires a real directory")));
+            }
+            Ok(_) => (),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => (),
+            Err(err) => return Err(SessionStoreError::io(dir, err)),
+        }
+    }
+    Ok(session_dir.join("goal").join(GOAL_SNAPSHOT_FILE))
+}
 
 impl GoalStatus {
     /// Wire value used in persisted snapshots (`"active"`, `"user_paused"`, …).
@@ -48,6 +66,19 @@ impl GoalStatus {
 }
 
 impl GoalTracker {
+    /// Runtime identity of the current active interval. Paused and restored goals
+    /// cannot authorize work until the user resumes them.
+    #[must_use]
+    pub fn active_activation_id(&self) -> Option<uuid::Uuid> {
+        self.activation_id.filter(|_| self.is_active())
+    }
+
+    /// Replace the live tracker only after the proposed snapshot is persisted.
+    pub fn commit(&mut self, staged: Self) -> Result<(), SessionStoreError> {
+        staged.persist()?;
+        *self = staged;
+        Ok(())
+    }
     /// `true` when a goal snapshot exists, regardless of lifecycle status.
     #[must_use]
     pub fn has_goal(&self) -> bool {
@@ -79,8 +110,7 @@ impl GoalTracker {
         base
     }
 
-    /// High-water mark of tokens spent on the goal (session total minus the
-    /// start baseline, floored at zero). Zero when no goal exists.
+    /// Tokens charged while the goal was active. Zero when no goal exists.
     #[must_use]
     pub fn tokens_used(&self) -> i64 {
         self.orchestration.as_ref().map_or(0, |o| o.tokens_used_high_water)
@@ -103,13 +133,17 @@ impl GoalTracker {
         Some(o.auto_continue_turns)
     }
 
-    /// Fold a session token-total observation into the high-water mark.
-    /// Monotonic, and a no-op without a goal.
+    /// Charge the increase in this runloop's cumulative token total to an active
+    /// goal. Observations while paused only advance the cursor. Observe before
+    /// changing status so usage is attributed to the interval that just ended.
     pub fn record_token_observation(&mut self, session_total: i64) {
         if let Some(o) = self.orchestration.as_mut() {
-            o.last_session_tokens_seen = Some(session_total);
-            let used = session_total.saturating_sub(o.token_baseline).max(0);
-            o.tokens_used_high_water = o.tokens_used_high_water.max(used);
+            let previous = self.last_session_tokens_seen.unwrap_or(session_total.max(0));
+            let current = session_total.max(previous);
+            self.last_session_tokens_seen = Some(current);
+            if o.status == GoalStatus::Active {
+                o.tokens_used_high_water = o.tokens_used_high_water.saturating_add(current - previous);
+            }
         }
     }
 
@@ -146,20 +180,21 @@ impl GoalTracker {
     /// directory if needed. With no goal, removes a stale snapshot instead so
     /// a cleared goal never resurrects on restart.
     pub fn persist(&self) -> Result<(), SessionStoreError> {
-        let dir = self.goal_dir();
-        std::fs::create_dir_all(&dir).map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
-        let path = dir.join(GOAL_SNAPSHOT_FILE);
+        let path = goal_snapshot_path(&self.session_dir)?;
         match &self.orchestration {
             Some(o) => {
                 let bytes = serde_json::to_vec(o)?;
-                std::fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path, e))?;
-                Ok(())
+                VtCodePaths::write_private_file_atomic(&path, &bytes)
+                    .map_err(|err| SessionStoreError::io(path, io::Error::other(err)))
             }
             None => {
-                if path.exists() {
-                    std::fs::remove_file(&path).map_err(|e| SessionStoreError::io(path, e))?;
+                vtcode_commons::paths::validate_no_escaping_symlink_ancestors(&path, true)
+                    .map_err(|err| SessionStoreError::io(&path, err))?;
+                match fs::remove_file(&path) {
+                    Ok(()) => Ok(()),
+                    Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+                    Err(err) => Err(SessionStoreError::io(path, err)),
                 }
-                Ok(())
             }
         }
     }
@@ -167,11 +202,14 @@ impl GoalTracker {
     /// Restore a tracker from `<session_dir>/goal/goal.json`, or return an
     /// empty tracker when no snapshot exists. In-flight goals restore paused.
     pub fn restore(session_dir: PathBuf) -> Result<Self, SessionStoreError> {
-        let path = session_dir.join("goal").join(GOAL_SNAPSHOT_FILE);
-        if !path.exists() {
-            return Ok(Self::new(session_dir));
+        let path = goal_snapshot_path(&session_dir)?;
+        match fs::symlink_metadata(&path) {
+            Ok(_) => (),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Self::new(session_dir)),
+            Err(err) => return Err(SessionStoreError::io(path, err)),
         }
-        let bytes = std::fs::read(&path).map_err(|e| SessionStoreError::io(path.clone(), e))?;
+        let bytes = VtCodePaths::read_file_no_follow(&path)
+            .map_err(|err| SessionStoreError::io(path, io::Error::other(err)))?;
         let snapshot: GoalOrchestration = serde_json::from_slice(&bytes)?;
         Ok(Self::from_snapshot(session_dir, snapshot))
     }

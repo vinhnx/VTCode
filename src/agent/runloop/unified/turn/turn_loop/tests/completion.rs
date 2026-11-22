@@ -288,7 +288,10 @@ async fn single_tool_free_text_answer_completes_without_fallback() {
     let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(LongAnswerProvider { requests: requests.clone() }));
 
-    let mut history = vec![uni::Message::user("tell me about this project".to_string())];
+    let mut history = vec![
+        uni::Message::assistant("GOAL ACHIEVED: an earlier objective shipped".to_string()),
+        uni::Message::user("tell me about this project".to_string()),
+    ];
     let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
         .await
         .expect("single text answer should complete");
@@ -299,6 +302,13 @@ async fn single_tool_free_text_answer_completes_without_fallback() {
         outcome.result
     );
     assert!(!outcome.final_response_was_fallback, "valid model answer must not be labeled fallback");
+    assert!(
+        outcome
+            .final_model_response
+            .as_deref()
+            .is_some_and(|text| text.starts_with("VT Code stands out")),
+        "turn outcome must carry the current model response"
+    );
     assert_eq!(requests.load(Ordering::SeqCst), 1, "simple answer needs exactly one request");
     assert!(
         !history

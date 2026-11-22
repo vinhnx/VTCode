@@ -63,10 +63,9 @@ pub(crate) struct HostStopHandles {
     handles: std::sync::OnceLock<StopHandles>,
     exec_sessions: std::sync::OnceLock<vtcode_core::tools::exec_session::ExecSessionManager>,
     exec_registry: std::sync::OnceLock<vtcode_core::tools::registry::ToolRegistry>,
-    goal_tracker: std::sync::OnceLock<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker>,
+    goal_handles: std::sync::OnceLock<HostGoalHandles>,
     steering_sender:
         std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<vtcode_core::core::agent::steering::SteeringMessage>>,
-    goal_emitter: std::sync::OnceLock<HarnessEventEmitter>,
     ready: std::sync::atomic::AtomicBool,
     ready_notify: Notify,
 }
@@ -122,34 +121,22 @@ pub(crate) fn host_exec_registry(slot: &StopHandleSlot) -> Option<vtcode_core::t
     slot.exec_registry.get().cloned()
 }
 
-/// Publish the runloop's goal tracker for host-side `goal/execute` calls.
-/// Called once the tracker is restored; a repeated publish keeps the first.
-pub(crate) fn publish_goal_tracker(
-    slot: &StopHandleSlot,
-    tracker: &crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker,
-) {
-    let _kept_first = slot.goal_tracker.set(tracker.clone());
+/// Goal state, usage, and event sink from the same runloop.
+#[derive(Clone)]
+pub(crate) struct HostGoalHandles {
+    pub tracker: crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker,
+    pub token_total: Arc<std::sync::atomic::AtomicI64>,
+    pub emitter: Option<HarnessEventEmitter>,
 }
 
-/// Clone the published goal tracker, if initialization got far enough to
-/// restore one. `None` before that.
-pub(crate) fn host_goal_tracker(
-    slot: &StopHandleSlot,
-) -> Option<crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker> {
-    slot.goal_tracker.get().cloned()
+/// Publish goal state and usage for host-side `goal/execute` calls.
+pub(crate) fn publish_goal_handles(slot: &StopHandleSlot, handles: HostGoalHandles) {
+    let _kept_first = slot.goal_handles.set(handles);
 }
 
-/// Publish the runloop's own event emitter for host-side `goal/execute`
-/// calls, so desktop-driven mutations land in the canonical log (and live
-/// stream) with identical annotation. Called once alongside the tracker.
-pub(crate) fn publish_goal_emitter(slot: &StopHandleSlot, emitter: &HarnessEventEmitter) {
-    let _kept_first = slot.goal_emitter.set(emitter.clone());
-}
-
-/// Clone the published goal emitter, if initialization got far enough to
-/// create one. `None` before that.
-pub(crate) fn host_goal_emitter(slot: &StopHandleSlot) -> Option<HarnessEventEmitter> {
-    slot.goal_emitter.get().cloned()
+/// Clone goal handles once the runloop has restored goal state.
+pub(crate) fn host_goal_handles(slot: &StopHandleSlot) -> Option<HostGoalHandles> {
+    slot.goal_handles.get().cloned()
 }
 
 /// Publish the runloop steering sender for host-side follow-up injection.

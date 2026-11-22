@@ -8,7 +8,7 @@
 use serde_json::{Value, json};
 
 pub fn get_goal_description() -> &'static str {
-    "Read the current thread goal loop state. Returns the goal snapshot (status, objective, elapsed time, token usage) or null when no goal is set. Use it to check what you are pursuing before a long task, and to verify status before completing."
+    "Read the current thread goal loop state. Returns the goal snapshot (status, objective, elapsed time, token usage) or null when no goal is set. An active goal also has an activation_id. Use that exact activation_id with update_goal."
 }
 
 #[must_use]
@@ -21,7 +21,7 @@ pub fn get_goal_parameters() -> Value {
 }
 
 pub fn update_goal_description() -> &'static str {
-    "Update the active thread goal loop. Actions: complete (ONLY after verifying every part of the objective against current evidence — the loop stops and only the user can set a new goal), block (ONLY for a genuine external blocker you cannot resolve: missing credentials, unavailable service, or a required user decision — name it in reason), pause (ONLY when the user explicitly asked to pause). Requires a non-empty reason. Fails when no goal is active or the transition is invalid."
+    "Update the active thread goal loop. Actions: complete (ONLY after verifying every part of the objective against current evidence — the loop stops and only the user can set a new goal), block (ONLY for a genuine external blocker you cannot resolve: missing credentials, unavailable service, or a required user decision — name it in reason), pause (ONLY when the user explicitly asked to pause). Requires a non-empty reason and the activation_id from get_goal. If the goal changed, read it and reassess before updating."
 }
 
 #[must_use]
@@ -29,7 +29,7 @@ pub fn update_goal_parameters() -> Value {
     json!({
         "type": "object",
         "additionalProperties": false,
-        "required": ["action", "reason"],
+        "required": ["action", "reason", "activation_id"],
         "properties": {
             "action": {
                 "type": "string",
@@ -40,6 +40,10 @@ pub fn update_goal_parameters() -> Value {
                 "type": "string",
                 "minLength": 1,
                 "description": "Why: completion summary, the external blocker, or the pause request source."
+            },
+            "activation_id": {
+                "type": "string",
+                "description": "Exact activation_id returned by get_goal for the objective you evaluated."
             }
         }
     })
@@ -64,7 +68,7 @@ mod tests {
         assert_eq!(get["type"], "object");
 
         let update = update_goal_parameters();
-        assert_eq!(update["required"], json!(["action", "reason"]));
+        assert_eq!(update["required"], json!(["action", "reason", "activation_id"]));
         assert_eq!(update["properties"]["action"]["enum"], json!(["complete", "block", "pause"]));
         assert_eq!(update["properties"]["reason"]["minLength"], 1);
     }

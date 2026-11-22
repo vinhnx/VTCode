@@ -208,7 +208,10 @@ pub(crate) const POST_TOOL_RECOVERY_REASON_PLAN_MODE: &str = "Planning research 
 pub(crate) const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE: &str = "Recovery: in plan mode, tools are disabled for this pass, so the next step is to finalize the plan. Emit the `<proposed_plan>` from the research already gathered in this conversation — Summary, numbered steps on single lines (`Action -> files: [src/parser.rs] -> verify: [cargo check --locked]`), Validation, Assumptions — every step with a concrete file, symbol, or behavior target and one concrete `verify:` command or observable check. Valid examples are `verify: [cargo nextest run -p vtcode]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, and `verify: [grep -n 'symbol' src/file.rs]`; invalid examples are `verify: [run checks]`, `verify: [check later]`, and `verify: [git diff --check]`. Each comma-separated verify item must independently be concrete. At most one intro line may appear outside the block; tool calls and `<tool_call>`/`<invoke>`/`<function=...>` markup are discarded, so the response should contain none.";
 pub(super) const APPROVED_PLAN_STALE_PAUSE_RECOVERY_DIRECTIVE: &str = "Approved-plan execution recovery: the previous response stated that tools were disabled or implementation was paused, but the planning approval is complete and the write-capable build agent is active. The next step is the next concrete implementation action: use task_tracker and run an edit or verification command. No further confirmation is needed, and a pause or status-only message does not advance the approved plan.";
 
-fn latest_final_assistant_response(history: &[uni::Message], turn_history_start_len: usize) -> Option<String> {
+pub(super) fn latest_final_assistant_response(
+    history: &[uni::Message],
+    turn_history_start_len: usize,
+) -> Option<String> {
     history
         .get(turn_history_start_len..)
         .unwrap_or_default()

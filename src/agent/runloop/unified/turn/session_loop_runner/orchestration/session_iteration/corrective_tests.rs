@@ -40,7 +40,8 @@ async fn budget_stop_does_not_queue_a_corrective_follow_up() {
             tool_registry: &registry,
             plan_session: &plan,
             goal_tracker: &goal_tracker,
-            harness_emitter: None,
+            goal_at_turn_end: None,
+            goal_final_text: None,
             vt_cfg: &None,
             outcome_result: &outcome,
             ctrl_c_state: &ctrl_c,
@@ -64,6 +65,17 @@ fn noop_goal_tracker() -> SharedGoalTracker {
     Arc::new(tokio::sync::Mutex::new(vtcode_memory::GoalTracker::new(
         std::env::temp_dir().join("vtcode-goal-test-noop"),
     )))
+}
+
+async fn settle_test_goal(
+    tracker: &SharedGoalTracker,
+    stats: &SessionStats,
+    renderer: &mut AnsiRenderer,
+    emitter: Option<&HarnessEventEmitter>,
+    response: Option<&str>,
+) -> Option<uuid::Uuid> {
+    let activation_id = tracker.lock().await.active_activation_id();
+    settle_goal_turn(tracker, stats, renderer, emitter, response, activation_id).await
 }
 
 async fn active_goal_tracker(objective: &str) -> (tempfile::TempDir, SharedGoalTracker) {
@@ -93,6 +105,7 @@ async fn active_goal_queues_continue_after_completed_turn() {
 
     let events_path = goal_dir.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
+    let goal_at_turn_end = settle_test_goal(&goal_tracker, &stats, &mut renderer, Some(&emitter), None).await;
     let flow = run_corrective_gate(CorrectiveGate {
         session_stats: &mut stats,
         runtime: &mut runtime,
@@ -100,7 +113,8 @@ async fn active_goal_queues_continue_after_completed_turn() {
         tool_registry: &registry,
         plan_session: &plan,
         goal_tracker: &goal_tracker,
-        harness_emitter: Some(&emitter),
+        goal_at_turn_end,
+        goal_final_text: Some("One required step remains."),
         vt_cfg: &None,
         outcome_result: &outcome,
         ctrl_c_state: &ctrl_c,
@@ -112,10 +126,16 @@ async fn active_goal_queues_continue_after_completed_turn() {
     .await
     .unwrap();
 
-    assert!(matches!(flow, CorrectiveFlow::ContinueLoop));
-    assert_eq!(goal_tracker.lock().await.auto_continue_turns(), 1);
-    assert_eq!(runtime.state.messages.len(), history_len, "queueing must not add a system message");
-    let queued = runtime.run_until_idle().expect("goal follow-up must be queued");
+    let CorrectiveFlow::GoalContinuation(id) = flow else {
+        panic!("expected a goal continuation");
+    };
+    assert_eq!(goal_tracker.lock().await.auto_continue_turns(), 0);
+    assert_eq!(runtime.state.messages.len(), history_len);
+    let queued = prepare_goal_continuation(&goal_tracker, id, &mut runtime, &ctrl_c, 2)
+        .await
+        .unwrap();
+    assert_eq!(goal_tracker.lock().await.auto_continue_turns(), 0);
+    assert_eq!(runtime.state.messages.len(), history_len + 1);
     assert!(queued.contains(objective), "follow-up must carry the objective: {queued}");
     assert!(
         goal_dir.path().join("session-1").join("goal").join("goal.json").exists(),
@@ -144,6 +164,7 @@ async fn goal_gate_queues(
     let mut renderer = AnsiRenderer::stdout();
     let plan = PlanningWorkflowSessionState::default();
     let ctrl_c = Arc::new(CtrlCState::new());
+    let goal_at_turn_end = settle_test_goal(goal_tracker, &stats, &mut renderer, None, None).await;
     let flow = run_corrective_gate(CorrectiveGate {
         session_stats: &mut stats,
         runtime: &mut runtime,
@@ -151,7 +172,8 @@ async fn goal_gate_queues(
         tool_registry: registry,
         plan_session: &plan,
         goal_tracker,
-        harness_emitter: None,
+        goal_at_turn_end,
+        goal_final_text: Some("One required step remains."),
         vt_cfg: &None,
         outcome_result: &outcome,
         ctrl_c_state: &ctrl_c,
@@ -162,7 +184,14 @@ async fn goal_gate_queues(
     })
     .await
     .unwrap();
-    (matches!(flow, CorrectiveFlow::ContinueLoop), runtime.has_pending_follow_up_inputs())
+    if let CorrectiveFlow::GoalContinuation(id) = flow {
+        let admitted = prepare_goal_continuation(goal_tracker, id, &mut runtime, &ctrl_c, u8::MAX)
+            .await
+            .is_some();
+        (true, admitted)
+    } else {
+        (matches!(flow, CorrectiveFlow::ContinueLoop), runtime.has_pending_follow_up_inputs())
+    }
 }
 
 fn completed_turn() -> RunLoopTurnLoopResult {
@@ -225,7 +254,7 @@ async fn active_goal_queues_despite_turn_input_but_idles_on_pending_queue() {
         (false, true),
         "pending follow-up must idle with the queue intact"
     );
-    assert_eq!(active.lock().await.auto_continue_turns(), 1, "only the queued attempt may consume budget");
+    assert_eq!(active.lock().await.auto_continue_turns(), 0, "preparation must leave the allowance untouched");
 }
 
 #[tokio::test]
@@ -244,6 +273,7 @@ async fn goal_token_budget_limits_and_idles_without_queueing() {
     let events_path = goal_dir.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
 
+    let goal_at_turn_end = settle_test_goal(&goal_tracker, &stats, &mut renderer, Some(&emitter), None).await;
     let flow = run_corrective_gate(CorrectiveGate {
         session_stats: &mut stats,
         runtime: &mut runtime,
@@ -251,7 +281,8 @@ async fn goal_token_budget_limits_and_idles_without_queueing() {
         tool_registry: &registry,
         plan_session: &plan,
         goal_tracker: &goal_tracker,
-        harness_emitter: Some(&emitter),
+        goal_at_turn_end,
+        goal_final_text: None,
         vt_cfg: &None,
         outcome_result: &outcome,
         ctrl_c_state: &ctrl_c,
@@ -290,6 +321,7 @@ async fn goal_budget_exhaustion_idles_without_queueing() {
     let outcome = completed_turn();
     let ctrl_c = Arc::new(CtrlCState::new());
 
+    let goal_at_turn_end = settle_test_goal(&goal_tracker, &stats, &mut renderer, None, None).await;
     let flow = run_corrective_gate(CorrectiveGate {
         session_stats: &mut stats,
         runtime: &mut runtime,
@@ -297,7 +329,8 @@ async fn goal_budget_exhaustion_idles_without_queueing() {
         tool_registry: &registry,
         plan_session: &plan,
         goal_tracker: &goal_tracker,
-        harness_emitter: None,
+        goal_at_turn_end,
+        goal_final_text: Some("One required step remains."),
         vt_cfg: &None,
         outcome_result: &outcome,
         ctrl_c_state: &ctrl_c,
@@ -323,7 +356,114 @@ fn goal_claims_completion_matches_exact_first_line_only() {
     assert!(!goal_claims_completion(Some("goal achieved: done")), "case-sensitive");
     assert!(!goal_claims_completion(Some("Done.\nGOAL ACHIEVED: x")), "first line only");
     assert!(!goal_claims_completion(Some("GOAL ACHIEVED")), "colon required");
+    assert!(!goal_claims_completion(Some("GOAL ACHIEVED:\nMore text")), "summary must be on the same line");
     assert!(!goal_claims_completion(Some("I will write GOAL ACHIEVED: later")), "prefix, not contains");
+}
+
+#[tokio::test]
+async fn rejected_goal_continuation_does_not_consume_a_turn() {
+    let (_dir, tracker) = active_goal_tracker("Ship it").await;
+    let id = tracker.lock().await.active_activation_id().unwrap();
+    let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
+    runtime.try_queue_follow_up_input("user input".into()).unwrap();
+    let ctrl_c = Arc::new(CtrlCState::new());
+    assert!(
+        prepare_goal_continuation(&tracker, id, &mut runtime, &ctrl_c, 1)
+            .await
+            .is_none()
+    );
+    assert_eq!(tracker.lock().await.auto_continue_turns(), 0);
+    assert_eq!(runtime.run_until_idle().as_deref(), Some("user input"));
+    assert!(
+        prepare_goal_continuation(&tracker, id, &mut runtime, &ctrl_c, 1)
+            .await
+            .is_some()
+    );
+    assert_eq!(tracker.lock().await.auto_continue_turns(), 0);
+}
+
+#[tokio::test]
+async fn goal_reservation_cannot_survive_a_pause_and_resume_or_a_lowered_budget() {
+    use crate::agent::runloop::unified::turn::session::slash_commands::commit_goal_command;
+    use vtcode_desktop_protocol::slash_command::GoalSlashCommand;
+
+    let (_dir, tracker) = active_goal_tracker("Ship it").await;
+    let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
+    let ctrl_c = Arc::new(CtrlCState::new());
+    let initial = tracker.lock().await.active_activation_id().unwrap();
+    let resumed = {
+        let mut guard = tracker.lock().await;
+        assert!(commit_goal_command(&mut guard, &GoalSlashCommand::Pause, 20).unwrap().mutated);
+        assert!(commit_goal_command(&mut guard, &GoalSlashCommand::Resume, 93).unwrap().mutated);
+        guard.active_activation_id().unwrap()
+    };
+    assert!(
+        prepare_goal_continuation(&tracker, initial, &mut runtime, &ctrl_c, 2)
+            .await
+            .is_none()
+    );
+    {
+        let mut guard = tracker.lock().await;
+        let change = GoalSlashCommand::Budget { limit: Some(20) };
+        assert!(commit_goal_command(&mut guard, &change, 93).unwrap().mutated);
+        assert_eq!(guard.status(), Some(vtcode_memory::GoalStatus::BudgetLimited));
+    }
+    assert!(
+        prepare_goal_continuation(&tracker, resumed, &mut runtime, &ctrl_c, 2)
+            .await
+            .is_none()
+    );
+    assert_eq!(tracker.lock().await.auto_continue_turns(), 0);
+    assert!(runtime.state.messages.is_empty());
+}
+
+#[tokio::test]
+async fn replacement_goal_does_not_inherit_the_previous_turns_continuation() {
+    use crate::agent::runloop::unified::turn::session::slash_commands::commit_goal_command;
+    use vtcode_desktop_protocol::slash_command::GoalSlashCommand;
+
+    let workspace = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new_for_schema(workspace.path().to_path_buf()).await;
+    let (_dir, tracker) = active_goal_tracker("Ship the release").await;
+    let mut stats = SessionStats::default();
+    let mut renderer = AnsiRenderer::stdout();
+    let prior_goal = settle_test_goal(&tracker, &stats, &mut renderer, None, None).await;
+    {
+        let mut guard = tracker.lock().await;
+        assert!(
+            commit_goal_command(&mut guard, &GoalSlashCommand::Set { objective: "Write release notes".into() }, 0)
+                .unwrap()
+                .mutated
+        );
+        assert_ne!(guard.active_activation_id(), prior_goal);
+    }
+
+    let mut runtime = AgentRuntime::new(AgentSessionState::new("test".into(), 4, 16_000), None, None);
+    let flow = run_goal_gate_tail(GoalGateTail {
+        session_stats: &mut stats,
+        runtime: &mut runtime,
+        renderer: &mut renderer,
+        tool_registry: &registry,
+        goal_tracker: &tracker,
+        goal_at_turn_end: prior_goal,
+        goal_final_text: Some("The release artifacts are ready."),
+        vt_cfg: &None,
+        outcome_result: &completed_turn(),
+        ctrl_c_state: &Arc::new(CtrlCState::new()),
+        turn_refused: false,
+        incoming_exhausted: false,
+    })
+    .await
+    .unwrap();
+    assert!(matches!(flow, CorrectiveFlow::Proceed { .. }));
+    assert!(!runtime.has_pending_follow_up_inputs());
+    assert!(
+        settle_goal_turn(&tracker, &stats, &mut renderer, None, Some("GOAL ACHIEVED: shipped"), prior_goal)
+            .await
+            .is_none()
+    );
+    assert!(tracker.lock().await.is_active(), "an old response cannot complete the replacement");
+    assert_eq!(tracker.lock().await.auto_continue_turns(), 0);
 }
 
 #[tokio::test]
@@ -342,6 +482,14 @@ async fn goal_completion_claim_completes_and_idles_without_queueing() {
     let events_path = goal_dir.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
 
+    let goal_at_turn_end = settle_test_goal(
+        &goal_tracker,
+        &stats,
+        &mut renderer,
+        Some(&emitter),
+        Some("GOAL ACHIEVED: all widgets shipped"),
+    )
+    .await;
     let flow = run_corrective_gate(CorrectiveGate {
         session_stats: &mut stats,
         runtime: &mut runtime,
@@ -349,7 +497,8 @@ async fn goal_completion_claim_completes_and_idles_without_queueing() {
         tool_registry: &registry,
         plan_session: &plan,
         goal_tracker: &goal_tracker,
-        harness_emitter: Some(&emitter),
+        goal_at_turn_end,
+        goal_final_text: Some("GOAL ACHIEVED: all widgets shipped"),
         vt_cfg: &None,
         outcome_result: &outcome,
         ctrl_c_state: &ctrl_c,

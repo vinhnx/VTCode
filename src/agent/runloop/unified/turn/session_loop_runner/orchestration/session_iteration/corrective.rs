@@ -27,7 +27,8 @@ pub(super) struct CorrectiveGate<'a> {
     pub tool_registry: &'a ToolRegistry,
     pub plan_session: &'a PlanningWorkflowSessionState,
     pub goal_tracker: &'a SharedGoalTracker,
-    pub harness_emitter: Option<&'a HarnessEventEmitter>,
+    pub goal_at_turn_end: Option<uuid::Uuid>,
+    pub goal_final_text: Option<&'a str>,
     pub vt_cfg: &'a Option<VTCodeConfig>,
     pub outcome_result: &'a RunLoopTurnLoopResult,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
@@ -41,6 +42,7 @@ pub(super) struct CorrectiveGate<'a> {
 pub(super) enum CorrectiveFlow {
     ContinueLoop,
     BreakLoop,
+    GoalContinuation(uuid::Uuid),
     Proceed { tracker_auto_continue_exhausted: bool },
 }
 
@@ -53,7 +55,8 @@ pub(super) async fn run_corrective_gate(gate: CorrectiveGate<'_>) -> Result<Corr
         tool_registry,
         plan_session,
         goal_tracker,
-        harness_emitter,
+        goal_at_turn_end,
+        goal_final_text,
         vt_cfg,
         outcome_result,
         ctrl_c_state,
@@ -335,13 +338,12 @@ pub(super) async fn run_corrective_gate(gate: CorrectiveGate<'_>) -> Result<Corr
         renderer,
         tool_registry,
         goal_tracker,
-        harness_emitter,
+        goal_at_turn_end,
+        goal_final_text,
         vt_cfg,
         outcome_result,
         ctrl_c_state,
         turn_refused,
-        refused_turn_rolled_back,
-        session_end_reason,
         incoming_exhausted: tracker_auto_continue_exhausted,
     })
     .await
@@ -365,6 +367,60 @@ fn auto_continue_kill_switch(
         && !session_stats.preflight_recovery.corrective_pending()
 }
 
+/// Settle goal accounting before any handoff or recovery can schedule more work.
+pub(super) async fn settle_goal_turn(
+    goal_tracker: &SharedGoalTracker,
+    session_stats: &SessionStats,
+    renderer: &mut AnsiRenderer,
+    emitter: Option<&HarnessEventEmitter>,
+    completion_response: Option<&str>,
+    turn_activation_id: Option<uuid::Uuid>,
+) -> Option<uuid::Uuid> {
+    let mut tracker = goal_tracker.lock().await;
+    if !tracker.is_active() {
+        return None;
+    }
+    tracker.account_elapsed();
+    tracker.record_token_observation(session_stats.total_tokens_i64());
+
+    let completed = turn_activation_id == tracker.active_activation_id() && goal_claims_completion(completion_response);
+    let budget_reached = tracker.token_budget().is_some_and(|budget| tracker.tokens_used() >= budget);
+    let result = if completed || budget_reached {
+        let mut staged = tracker.clone();
+        if completed {
+            staged.complete();
+        } else {
+            staged.enforce_budget();
+        }
+        tracker.commit(staged)
+    } else {
+        tracker.persist()
+    };
+    if let Err(err) = result {
+        tracing::warn!("goal snapshot persist failed: {err:#}");
+        return None;
+    }
+    if completed {
+        let done = format!("[i] Goal complete: {}", tracker.objective().unwrap_or_default());
+        let _ = renderer.line(MessageStyle::Info, &done);
+    } else if budget_reached {
+        let _ = renderer.line(
+            MessageStyle::Info,
+            "[i] Goal hit its token budget and is now limited. Clear it or set a new goal to continue.",
+        );
+    } else if let Some(line) =
+        crate::agent::runloop::unified::turn::session::slash_commands::goal_indicator_line(&tracker)
+    {
+        let _ = renderer.line(MessageStyle::Info, &line);
+    }
+    if let Some(emitter) = emitter
+        && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
+    {
+        tracing::warn!("goal event emit failed: {err:#}");
+    }
+    tracker.active_activation_id().filter(|id| Some(*id) == turn_activation_id)
+}
+
 /// Inputs for the goal-loop tail gate.
 struct GoalGateTail<'a> {
     session_stats: &'a mut SessionStats,
@@ -372,13 +428,12 @@ struct GoalGateTail<'a> {
     renderer: &'a mut AnsiRenderer,
     tool_registry: &'a ToolRegistry,
     goal_tracker: &'a SharedGoalTracker,
-    harness_emitter: Option<&'a HarnessEventEmitter>,
+    goal_at_turn_end: Option<uuid::Uuid>,
+    goal_final_text: Option<&'a str>,
     vt_cfg: &'a Option<VTCodeConfig>,
     outcome_result: &'a RunLoopTurnLoopResult,
     ctrl_c_state: &'a Arc<CtrlCState>,
     turn_refused: bool,
-    refused_turn_rolled_back: bool,
-    session_end_reason: SessionEndReason,
     incoming_exhausted: bool,
 }
 
@@ -393,93 +448,34 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
         renderer,
         tool_registry,
         goal_tracker,
-        harness_emitter,
+        goal_at_turn_end,
+        goal_final_text,
         vt_cfg,
         outcome_result,
         ctrl_c_state,
         turn_refused,
-        refused_turn_rolled_back,
-        session_end_reason,
         incoming_exhausted,
     } = tail;
     let idle = |exhausted: bool| CorrectiveFlow::Proceed {
         tracker_auto_continue_exhausted: incoming_exhausted || exhausted,
     };
-    // Desktop can mutate this same tracker during a turn. Keep the goal
-    // stable through accounting, status updates, and the queue attempt.
-    let mut tracker = goal_tracker.lock().await;
-    if tracker.has_goal() {
-        tracker.account_elapsed();
-        tracker.record_token_observation(session_stats.total_tokens_i64());
-        if let Err(err) = tracker.persist() {
-            tracing::warn!("goal snapshot persist failed: {err:#}");
-        }
-    }
-    if !tracker.is_active() {
+    let Some(activation_id) = goal_at_turn_end else {
         return Ok(idle(false));
-    }
-    if let Some(emitter) = harness_emitter
-        && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
-    {
-        tracing::warn!("goal event emit failed: {err:#}");
+    };
+    let tracker = goal_tracker.lock().await;
+    if tracker.active_activation_id() != Some(activation_id) {
+        return Ok(idle(false));
     }
     let max_turns =
         crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_cross_turn_turns(vt_cfg.as_ref());
-    let turn_completed = matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. });
-    let final_text = if refused_turn_rolled_back {
-        None
-    } else {
-        latest_assistant_result_text(&runtime.state.messages)
+    let Some(final_text) = goal_final_text else {
+        return Ok(idle(false));
     };
-    let completion_claimed = goal_claims_completion(final_text.as_deref())
-        && matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. } | RunLoopTurnLoopResult::Blocked { .. })
-        && !turn_refused;
-    if completion_claimed {
-        if tracker.complete() {
-            if let Err(err) = tracker.persist() {
-                tracing::warn!("goal snapshot persist failed: {err:#}");
-            }
-            if let Some(emitter) = harness_emitter
-                && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
-            {
-                tracing::warn!("goal event emit failed: {err:#}");
-            }
-            let done = format!("[i] Goal complete: {}", tracker.objective().unwrap_or_default());
-            let _ = renderer.line(MessageStyle::Info, &done);
-        }
-        return Ok(idle(false));
-    }
-    if tracker.enforce_budget() {
-        if let Err(err) = tracker.persist() {
-            tracing::warn!("goal snapshot persist failed: {err:#}");
-        }
-        if let Some(emitter) = harness_emitter
-            && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
-        {
-            tracing::warn!("goal event emit failed: {err:#}");
-        }
-        let _ = renderer.line(
-            MessageStyle::Info,
-            "[i] Goal hit its token budget and is now limited. Clear it or set a new goal to continue.",
-        );
-        return Ok(idle(false));
-    }
-    if let Some(line) = crate::agent::runloop::unified::turn::session::slash_commands::goal_indicator_line(&tracker) {
-        let _ = renderer.line(MessageStyle::Info, &line);
-    }
     let should_queue = auto_continue_kill_switch(outcome_result, ctrl_c_state, vt_cfg.as_ref(), session_stats)
         && !tool_registry.is_planning_active()
-        && turn_completed
-        && !vtcode_core::core::agent::completion::tracker_final_text_requires_user_input(
-            final_text.as_deref().unwrap_or(""),
-        )
-        && !vtcode_core::core::agent::completion::tracker_final_text_is_safety_handoff(
-            final_text.as_deref().unwrap_or(""),
-        )
-        && !matches!(outcome_result, RunLoopTurnLoopResult::Blocked { reason }
-        if reason.as_deref().is_some_and(
-            crate::agent::runloop::unified::turn::tool_outcomes::helpers::is_pending_verification_block
-        ))
+        && matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. })
+        && !vtcode_core::core::agent::completion::tracker_final_text_requires_user_input(final_text)
+        && !vtcode_core::core::agent::completion::tracker_final_text_is_safety_handoff(final_text)
         && !turn_refused
         // Already-queued input runs first; the gate re-runs after that
         // turn, so idling here only defers the follow-up by one turn.
@@ -487,70 +483,46 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
     if !should_queue {
         return Ok(idle(false));
     }
-    match run_goal_auto_continue(&mut tracker, runtime, renderer, ctrl_c_state, max_turns) {
-        GoalContinueOutcome::Queued => {
-            if matches!(session_end_reason, SessionEndReason::Exit) {
-                return Ok(CorrectiveFlow::BreakLoop);
-            }
-            Ok(CorrectiveFlow::ContinueLoop)
-        }
-        GoalContinueOutcome::Idle { exhausted } => Ok(idle(exhausted)),
-    }
-}
-
-/// Outcome of one goal auto-continue attempt.
-enum GoalContinueOutcome {
-    /// A follow-up was queued; the loop must continue (or break on Exit).
-    Queued,
-    /// Stayed idle; `exhausted` reports budget/queue failure upstream.
-    Idle { exhausted: bool },
-}
-
-/// Queue one goal-loop follow-up within budget, mirroring the tracker branch.
-fn run_goal_auto_continue(
-    tracker: &mut vtcode_memory::GoalTracker,
-    runtime: &mut AgentRuntime,
-    renderer: &mut AnsiRenderer,
-    ctrl_c_state: &Arc<CtrlCState>,
-    max_turns: u8,
-) -> GoalContinueOutcome {
-    if crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_some() {
-        return GoalContinueOutcome::Idle { exhausted: false };
-    }
-    // Reserve budget first: a failed queue consumes one turn rather than looping.
-    let Some(turn_no) = tracker.claim_auto_continue_turn(max_turns) else {
+    if tracker.auto_continue_turns() >= max_turns {
         let _ = renderer.line(
             MessageStyle::Info,
             "[i] Goal auto-continue budget exhausted; the goal stays active. Type `continue` to resume it.",
         );
-        return GoalContinueOutcome::Idle { exhausted: true };
-    };
+        return Ok(idle(true));
+    }
+    Ok(CorrectiveFlow::GoalContinuation(activation_id))
+}
+
+/// Insert the reserved goal prompt for preparation. Final admission spends its allowance.
+pub(super) async fn prepare_goal_continuation(
+    goal_tracker: &SharedGoalTracker,
+    activation_id: uuid::Uuid,
+    runtime: &mut AgentRuntime,
+    ctrl_c_state: &Arc<CtrlCState>,
+    max_turns: u8,
+) -> Option<String> {
+    let tracker = goal_tracker.lock().await;
+    if tracker.active_activation_id() != Some(activation_id)
+        || runtime.has_pending_follow_up_inputs()
+        || crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_some()
+    {
+        return None;
+    }
+    if tracker.auto_continue_turns() >= max_turns {
+        return None;
+    }
     let objective = tracker.objective().unwrap_or_default();
-    let follow_up = format!(
+    let input = format!(
         "{}\"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently. {}",
         crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX,
         crate::agent::runloop::unified::turn::session::slash_commands::GOAL_COMPLETION_CONTRACT
     );
-    match runtime.try_queue_synthetic_follow_up_input(follow_up) {
-        Ok(()) => {
-            // Queued auto-continue stays quiet like tracker/plan: the next
-            // turn starts immediately.
-            tracing::debug!(goal_turn = turn_no, max_turns, "Queued goal auto-continue without TUI echo");
-            GoalContinueOutcome::Queued
-        }
-        Err(err) => {
-            tracing::warn!(%err, "Goal auto-continue queue full; falling through to turn end");
-            let _ = renderer.line(
-                MessageStyle::Warning,
-                "[i] Goal auto-continue could not resume automatically; the goal stays active. Type `continue` to resume it.",
-            );
-            GoalContinueOutcome::Idle { exhausted: true }
-        }
-    }
+    runtime.state.add_synthetic_user_message(input.clone());
+    Some(input)
 }
 
 /// Whether the model's final text claims the active goal is achieved: the
-/// first non-empty line starts with the exact `GOAL ACHIEVED:` sentinel.
+/// first non-empty line starts with `GOAL ACHIEVED:` and has a summary.
 /// Same trust class as the sibling final-text classifiers; a spurious claim
 /// completes visibly and the user can re-set in one command.
 fn goal_claims_completion(final_text: Option<&str>) -> bool {
@@ -558,7 +530,8 @@ fn goal_claims_completion(final_text: Option<&str>) -> bool {
         text.lines()
             .map(str::trim)
             .find(|line| !line.is_empty())
-            .is_some_and(|line| line.starts_with("GOAL ACHIEVED:"))
+            .and_then(|line| line.strip_prefix("GOAL ACHIEVED:"))
+            .is_some_and(|summary| !summary.trim().is_empty())
     })
 }
 

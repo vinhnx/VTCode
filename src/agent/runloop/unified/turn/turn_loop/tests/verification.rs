@@ -66,7 +66,10 @@ async fn resumed_turn_cannot_complete_while_verification_is_pending() {
     let mut backing = TestTurnProcessingBacking::new().await;
     backing.set_provider(Box::new(TextOnlyProvider { requests: requests.clone() }));
 
-    let mut history = vec![uni::Message::user("continue the implementation".to_string())];
+    let mut history = vec![
+        uni::Message::assistant("GOAL ACHIEVED: another goal was completed".to_string()),
+        uni::Message::user("continue the implementation".to_string()),
+    ];
     let turn_context = backing.turn_loop_context();
     turn_context.session_stats.set_verification_snapshot((true, 0));
     let outcome = run_turn_loop(&mut history, turn_context)
@@ -85,6 +88,7 @@ async fn resumed_turn_cannot_complete_while_verification_is_pending() {
         "missing verification ends this completion attempt without reminders"
     );
     assert!(outcome.final_response_was_fallback);
+    assert!(outcome.final_model_response.is_none());
     assert!(history.iter().any(|message| {
         message.role == uni::MessageRole::System
             && message

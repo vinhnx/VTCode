@@ -161,6 +161,7 @@ pub(crate) async fn run_turn_loop(
     }
 
     // Initialize the outcome result
+    let mut stopped_at_text_cap = false;
     let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
     let mut turn_modified_files = BTreeSet::new();
     // Snapshot the bounded session touched window so the end-of-turn
@@ -369,6 +370,7 @@ pub(crate) async fn run_turn_loop(
         // Anti-runaway guard: cap consecutive text-only responses without
         // admitted tool progress (see `text_cap` for the observed failure mode).
         if let Some(capped) = enforce_text_response_cap(&mut ctx, &mut *working_history, turn_history_start_len) {
+            stopped_at_text_cap = true;
             result = capped;
             break;
         }
@@ -847,7 +849,6 @@ pub(crate) async fn run_turn_loop(
     ctx.set_phase(TurnPhase::Finalizing);
     finalize_turn(&mut ctx, working_history, &result, &turn_usage).await;
 
-    // Final outcome with the correct result status
     ctx.session_stats.record_turn_completed();
     let plan_approved_execution_pending =
         matches!(&result, TurnLoopResult::Completed { plan_approved_execution_pending: true });
@@ -868,12 +869,6 @@ pub(crate) async fn run_turn_loop(
         .harness_state
         .snapshot_turn_diagnostics(turn_usage.clone(), repeated_tool_attempts.low_signal_tool_calls)
         .with_in_progress_exec_sessions(in_progress_sessions);
-    // Touched files include reads/searches recorded during this turn plus
-    // every modified file, so checkpoint replay shows evidence even for
-    // read-only turns without snapshotting file contents. `recent_touched_files`
-    // is a bounded session window (last 5), so turns touching more than 5 new
-    // files keep only the most recent; that is an intentional replay-context
-    // bound, not a per-turn isolation guarantee.
     let mut turn_touched_files: BTreeSet<PathBuf> = turn_modified_files.clone();
     for touched in ctx.session_stats.recent_touched_files() {
         let trimmed = touched.trim();
@@ -890,6 +885,11 @@ pub(crate) async fn run_turn_loop(
         pending_plan_execution_target,
         plan_approved_execution_pending,
         final_response_was_fallback,
+        final_model_response: if final_response_was_fallback || stopped_at_text_cap {
+            None
+        } else {
+            responses::latest_final_assistant_response(working_history, turn_history_start_len)
+        },
         refused: ctx.harness_state.turn_refused(),
     })
 }

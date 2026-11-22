@@ -18,6 +18,7 @@ use request_envelope::{RequestEnvelopeIdentity, ToolCatalogObservabilityIdentity
 
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
 use vtcode_core::compaction::PrefireState;
@@ -132,6 +133,8 @@ pub(crate) struct SessionStats {
     last_tool_catalog_observability: Option<ToolCatalogObservabilityIdentity>,
     recent_touched_files: VecDeque<String>,
     total_usage: HarnessUsage,
+    /// Latest normalized token total for goal operations outside the runloop.
+    goal_token_total: Option<Arc<AtomicI64>>,
     decisions_probe_suggestion_shown: bool,
     fast_mode_suggestion_shown: bool,
     /// Rolling prompt-cache health fed by every recorded turn. Shared
@@ -213,6 +216,16 @@ impl SessionStats {
             return;
         };
         self.total_usage.add(&usage_cost::normalized_turn_usage(provider, usage));
+        if let Some(total) = &self.goal_token_total {
+            total.store(self.total_tokens_i64(), Ordering::Relaxed);
+        }
+    }
+
+    pub(crate) fn share_goal_token_total(&mut self) -> Arc<AtomicI64> {
+        let initial = self.total_tokens_i64();
+        self.goal_token_total
+            .get_or_insert_with(|| Arc::new(AtomicI64::new(initial)))
+            .clone()
     }
 
     pub(crate) fn record_probe_attempt(

@@ -18,6 +18,8 @@ pub(crate) struct TurnLoopOutcome {
     /// Whether the turn's final response came from deterministic recovery
     /// fallback rather than a confirmed model synthesis.
     pub final_response_was_fallback: bool,
+    /// Final model response from this turn, when available.
+    pub final_model_response: Option<String>,
     /// Whether the provider refused this turn's request. The session loop
     /// rolls a refused turn out of model-visible history and skips every
     /// auto-continue and recovery path for it.

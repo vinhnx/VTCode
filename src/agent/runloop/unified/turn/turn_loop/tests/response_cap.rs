@@ -75,6 +75,7 @@ async fn response_cap_preserves_commentary_as_one_completed_final_harness_messag
     assert!(matches!(outcome.result, TurnLoopResult::Completed { plan_approved_execution_pending: false }));
     assert_eq!(requests.load(Ordering::SeqCst), 2, "the response cap must stop before a third request");
     assert!(!outcome.final_response_was_fallback);
+    assert!(outcome.final_model_response.is_none(), "promoted commentary is not goal completion evidence");
     assert_eq!(final_answer_text(&history), SECOND_COMMENTARY);
     assert_eq!(
         history

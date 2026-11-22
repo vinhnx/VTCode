@@ -14,7 +14,7 @@ pub(crate) use editor::EditorOpenRequest;
 #[cfg(test)]
 pub(crate) use editor::bounded_editor_open_requests;
 pub(crate) use editor::{EditorOpenDispatcher, EditorOpenRequestSender, spawn_editor_open_coordinator};
-pub(crate) use goal_setup::register_goal_tools;
+pub(crate) use goal_setup::prepare_goal_runtime;
 pub(crate) use init::active_deferred_tool_policy;
 pub(crate) use init::configured_anthropic_config;
 pub(crate) use init::create_provider_client;

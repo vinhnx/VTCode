@@ -477,18 +477,12 @@ pub struct GoalOrchestration {
     /// Whether the budget limit notification has already been emitted.
     #[serde(skip)]
     budget_limit_reported: bool,
-    /// Baseline token count when the goal started.
-    #[serde(default)]
-    token_baseline: i64,
-    /// High-water mark for tokens used.
+    /// Tokens charged across active intervals, including across process restarts.
     #[serde(default)]
     tokens_used_high_water: i64,
     /// Tokens spent by the parent session before this goal started.
     #[serde(default)]
     parent_tokens_spent: i64,
-    /// Last observed session token count.
-    #[serde(default)]
-    last_session_tokens_seen: Option<i64>,
     /// Ordered history of lifecycle events.
     history: Vec<GoalHistoryEntry>,
     /// User-facing pause message, if any.
@@ -572,7 +566,7 @@ impl GoalOrchestration {
 }
 
 /// Pure state machine for goal tracking.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GoalTracker {
     /// Current goal orchestration state, if a goal is active.
     orchestration: Option<GoalOrchestration>,
@@ -580,6 +574,10 @@ pub struct GoalTracker {
     session_dir: PathBuf,
     /// Instant when the goal became active.
     active_since: Option<Instant>,
+    /// Observation cursor for this runloop only. Its token total resets on reopen.
+    last_session_tokens_seen: Option<i64>,
+    /// Changes whenever work is explicitly started or resumed.
+    activation_id: Option<uuid::Uuid>,
 }
 
 impl GoalTracker {
@@ -589,17 +587,19 @@ impl GoalTracker {
             orchestration: None,
             session_dir,
             active_since: None,
+            last_session_tokens_seen: None,
+            activation_id: None,
         }
     }
 
     /// Restore tracker state from a persisted snapshot.
     pub fn from_snapshot(session_dir: PathBuf, mut snapshot: GoalOrchestration) -> Self {
+        if snapshot.status == GoalStatus::Active {
+            snapshot.status = GoalStatus::UserPaused;
+        }
         match snapshot.phase {
             GoalPhase::Planning | GoalPhase::Executing => {
                 snapshot.phase = GoalPhase::Idle;
-                if snapshot.status == GoalStatus::Active {
-                    snapshot.status = GoalStatus::UserPaused;
-                }
                 snapshot.current_subagent_id = None;
                 snapshot.current_subagent_role = None;
             }
@@ -607,15 +607,12 @@ impl GoalTracker {
         }
         snapshot.planning_in_flight = false;
         snapshot.verifying_in_flight = false;
-        let active_since = if snapshot.status == GoalStatus::Active {
-            Some(Instant::now())
-        } else {
-            None
-        };
         Self {
             orchestration: Some(snapshot),
             session_dir,
-            active_since,
+            active_since: None,
+            last_session_tokens_seen: None,
+            activation_id: None,
         }
     }
 
@@ -669,10 +666,6 @@ impl GoalTracker {
         created_at: String,
         baseline_commit: Option<String>,
     ) {
-        let _ = std::fs::create_dir_all(self.goal_dir());
-        if self.orchestration.is_some() {
-            self.remove_scratch_root();
-        }
         self.orchestration = Some(GoalOrchestration {
             goal_id,
             objective,
@@ -686,10 +679,8 @@ impl GoalTracker {
             total_worker_rounds: 0,
             total_verify_rounds: 0,
             budget_limit_reported: false,
-            token_baseline,
             tokens_used_high_water: 0,
             parent_tokens_spent: 0,
-            last_session_tokens_seen: Some(token_baseline),
             history: Vec::new(),
             pause_message: None,
             classifier_stall_count: 0,
@@ -713,6 +704,8 @@ impl GoalTracker {
             verifying_in_flight: false,
         });
         self.active_since = Some(Instant::now());
+        self.activation_id = Some(uuid::Uuid::new_v4());
+        self.last_session_tokens_seen = Some(token_baseline.max(0));
         self.record_event(GoalEvent::GoalCreated, None);
     }
 
@@ -775,6 +768,7 @@ impl GoalTracker {
             o.reset_strategist_fields();
             o.reset_classifier_stall_fields();
             self.active_since = Some(Instant::now());
+            self.activation_id = Some(uuid::Uuid::new_v4());
             self.record_event(GoalEvent::GoalResumed, None);
             return true;
         }
@@ -825,14 +819,6 @@ impl GoalTracker {
     pub fn clear(&mut self) {
         self.orchestration = None;
         self.active_since = None;
-    }
-
-    fn goal_dir(&self) -> PathBuf {
-        self.session_dir.join("goal")
-    }
-
-    fn remove_scratch_root(&self) {
-        let _ = std::fs::remove_dir_all(self.session_dir.join("goal"));
     }
 
     /// Flush elapsed wall-clock time into `elapsed_ms`.

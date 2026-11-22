@@ -1,6 +1,6 @@
 //! `/goal` slash command: thread goal loop controls.
 //!
-//! Pure command application ([`apply_goal_command`], fully unit-tested below)
+//! Shared command application ([`apply_goal_command`], fully unit-tested below)
 //! plus the thin async handler ([`handle_goal_command`]) that locks the shared
 //! tracker, persists, emits `goal.updated`, and renders status lines.
 
@@ -24,6 +24,30 @@ pub(crate) type SharedGoalTracker = Arc<Mutex<GoalTracker>>;
 /// Shared by `Set`, `Resume`, and the auto-continue follow-up so all three
 /// teach one vocabulary.
 pub(crate) const GOAL_COMPLETION_CONTRACT: &str = "If the goal is fully achieved and verified against current evidence, end your turn without further tool calls and with a final message whose first line is exactly \"GOAL ACHIEVED:\" followed by a one-line summary.";
+const GOAL_ACTIVATION_LABEL: &str = "\n\nGoal activation ID: ";
+
+fn goal_start_prompt(tracker: &GoalTracker, prompt: &str) -> Option<String> {
+    let activation_id = tracker.active_activation_id()?;
+    Some(format!("{prompt}\n\n{GOAL_COMPLETION_CONTRACT}{GOAL_ACTIVATION_LABEL}{activation_id}"))
+}
+
+/// Read the activation bound to an explicit goal prompt.
+pub(crate) fn goal_prompt_activation(input: &str) -> Option<uuid::Uuid> {
+    let (body, suffix) = input.trim_end().rsplit_once(GOAL_ACTIVATION_LABEL)?;
+    body.ends_with(GOAL_COMPLETION_CONTRACT)
+        .then(|| uuid::Uuid::parse_str(suffix).ok())
+        .flatten()
+}
+
+/// Bind completion evidence to a goal started or continued by this input.
+pub(crate) fn goal_activation_for_input(tracker: &GoalTracker, input: &str) -> Option<uuid::Uuid> {
+    let active = tracker.active_activation_id()?;
+    if let Some(id) = goal_prompt_activation(input) {
+        return (id == active).then_some(active);
+    }
+    // Older explicit prompts had no activation identity.
+    (!input.trim_end().ends_with(GOAL_COMPLETION_CONTRACT)).then_some(active)
+}
 
 /// Stable opening of the machine-queued goal auto-continue follow-up.
 /// Shared with `is_internal_harness_follow_up` so goal turns preserve
@@ -31,14 +55,6 @@ pub(crate) const GOAL_COMPLETION_CONTRACT: &str = "If the goal is fully achieved
 /// distinct from the user-initiated Resume prompt (`Continue working toward
 /// the goal: ...`), which stays a user boundary.
 pub(crate) const GOAL_AUTO_CONTINUE_PREFIX: &str = "Continue working toward the active thread goal: ";
-
-/// Seed for a freshly set goal (id + creation timestamp).
-pub(crate) struct GoalSeed<'a> {
-    /// Stable id for the new goal.
-    pub id: &'a str,
-    /// RFC3339 creation timestamp.
-    pub created_at: &'a str,
-}
 
 /// Render lines plus whether the tracker mutated (persist + emit when true).
 pub(crate) struct GoalCommandEffect {
@@ -51,23 +67,23 @@ pub(crate) struct GoalCommandEffect {
     pub submit: Option<String>,
 }
 
-/// Apply a parsed `/goal` command to the tracker. Pure: no I/O, no clock.
+/// Apply a parsed `/goal` command to the tracker.
 pub(crate) fn apply_goal_command(
     tracker: &mut GoalTracker,
     command: &GoalSlashCommand,
     session_tokens: i64,
-    seed: &GoalSeed,
 ) -> GoalCommandEffect {
+    tracker.record_token_observation(session_tokens);
     match command {
         GoalSlashCommand::Status => effect(status_lines(tracker), false),
         GoalSlashCommand::Set { objective } => {
             let replaced = tracker.has_goal();
             tracker.create_goal(
-                seed.id.to_string(),
+                format!("goal-{}", uuid::Uuid::new_v4()),
                 objective.clone(),
                 None,
                 session_tokens,
-                seed.created_at.to_string(),
+                chrono::Utc::now().to_rfc3339(),
                 None,
             );
             let mut lines = if replaced {
@@ -80,7 +96,7 @@ pub(crate) fn apply_goal_command(
             GoalCommandEffect {
                 lines,
                 mutated: true,
-                submit: Some(format!("{objective}\n\n{GOAL_COMPLETION_CONTRACT}")),
+                submit: goal_start_prompt(tracker, objective),
             }
         }
         GoalSlashCommand::Pause => {
@@ -97,11 +113,14 @@ pub(crate) fn apply_goal_command(
         }
         GoalSlashCommand::Resume => {
             if tracker.resume() {
+                if tracker.enforce_budget() {
+                    return effect(status_lines(tracker), true);
+                }
                 let mut lines = vec![(MessageStyle::Info, "Goal resumed.".to_string())];
                 lines.extend(status_lines(tracker));
                 let objective = tracker.objective().unwrap_or_default();
-                let submit = format!("Continue working toward the goal: \"{objective}\". {GOAL_COMPLETION_CONTRACT}");
-                GoalCommandEffect { lines, mutated: true, submit: Some(submit) }
+                let submit = goal_start_prompt(tracker, &format!("Continue working toward the goal: \"{objective}\"."));
+                GoalCommandEffect { lines, mutated: true, submit }
             } else if !tracker.has_goal() {
                 effect(no_goal_lines(), false)
             } else {
@@ -137,6 +156,7 @@ pub(crate) fn apply_goal_command(
                 }
                 Some(cap) => {
                     tracker.set_token_budget(Some(*cap));
+                    tracker.enforce_budget();
                     let mut lines = vec![(MessageStyle::Info, format!("Budget set: {cap} tokens."))];
                     lines.extend(status_lines(tracker));
                     effect(lines, true)
@@ -154,6 +174,26 @@ pub(crate) fn apply_goal_command(
             None => effect(no_goal_lines(), false),
         },
     }
+}
+
+/// Apply an explicit command, retaining the live state if persistence fails.
+pub(crate) fn commit_goal_command(
+    tracker: &mut GoalTracker,
+    command: &GoalSlashCommand,
+    session_tokens: i64,
+) -> Result<GoalCommandEffect> {
+    if matches!(
+        command,
+        GoalSlashCommand::Status | GoalSlashCommand::Edit | GoalSlashCommand::Budget { limit: None }
+    ) {
+        return Ok(apply_goal_command(tracker, command, session_tokens));
+    }
+    let mut staged = tracker.clone();
+    let effect = apply_goal_command(&mut staged, command, session_tokens);
+    if effect.mutated {
+        tracker.commit(staged)?;
+    }
+    Ok(effect)
 }
 
 fn effect(lines: Vec<(MessageStyle, String)>, mutated: bool) -> GoalCommandEffect {
@@ -214,18 +254,19 @@ pub(crate) async fn handle_goal_command(
     command: GoalSlashCommand,
 ) -> Result<SlashCommandControl> {
     let session_tokens = ctx.session_stats.total_tokens_i64();
-    let now = chrono::Utc::now();
-    let id = format!("goal-{}", now.timestamp_millis());
-    let created_at = now.to_rfc3339();
-    let seed = GoalSeed { id: &id, created_at: &created_at };
 
     let mut tracker = ctx.goal_tracker.lock().await;
-    let effect = apply_goal_command(&mut tracker, &command, session_tokens, &seed);
+    let effect = match commit_goal_command(&mut tracker, &command, session_tokens) {
+        Ok(effect) => effect,
+        Err(err) => {
+            drop(tracker);
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Could not persist goal: {err:#}"))?;
+            return Ok(SlashCommandControl::Continue);
+        }
+    };
     let mut extra = Vec::new();
     if effect.mutated {
-        if let Err(err) = tracker.persist() {
-            extra.push((MessageStyle::Error, format!("Could not persist goal: {err:#}")));
-        }
         if let Some(emitter) = ctx.harness_emitter
             && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
         {
@@ -249,10 +290,15 @@ const SESSION_END_PAUSE_MESSAGE: &str = "Session ended; resume to continue.";
 /// snapshot nor the live UI claims a dead session is still pursuing it.
 /// Non-Active goals and lock contention fail closed (`false`): restore
 /// demotes any leftover Active goal to paused anyway.
-pub(crate) fn pause_goal_at_session_end(tracker: &SharedGoalTracker, emitter: Option<&HarnessEventEmitter>) -> bool {
+pub(crate) fn pause_goal_at_session_end(
+    tracker: &SharedGoalTracker,
+    session_tokens: i64,
+    emitter: Option<&HarnessEventEmitter>,
+) -> bool {
     let Ok(mut guard) = tracker.try_lock() else {
         return false;
     };
+    guard.record_token_observation(session_tokens);
     if !guard.pause_with_message(GoalPauseReason::SessionEnd, SESSION_END_PAUSE_MESSAGE.to_string()) {
         return false;
     }
@@ -271,14 +317,25 @@ pub(crate) fn pause_goal_at_session_end(tracker: &SharedGoalTracker, emitter: Op
 mod tests {
     use super::*;
 
+    #[test]
+    fn explicit_goal_prompt_is_bound_even_when_the_same_objective_is_set_twice() {
+        let (_dir, mut tracker) = test_tracker();
+        let set = GoalSlashCommand::Set { objective: "Ship it".into() };
+        let first = apply_goal_command(&mut tracker, &set, 0).submit.unwrap();
+        let first_id = goal_prompt_activation(&first).unwrap();
+        assert_eq!(goal_activation_for_input(&tracker, &first), Some(first_id));
+        let second = apply_goal_command(&mut tracker, &set, 8).submit.unwrap();
+        let second_id = goal_prompt_activation(&second).unwrap();
+        assert_ne!(second_id, first_id);
+        assert_eq!(goal_activation_for_input(&tracker, &first), None);
+        assert_eq!(goal_activation_for_input(&tracker, &second), Some(second_id));
+        assert_eq!(goal_activation_for_input(&tracker, "regular user input"), Some(second_id));
+    }
+
     fn test_tracker() -> (tempfile::TempDir, GoalTracker) {
         let dir = tempfile::tempdir().unwrap();
         let tracker = GoalTracker::new(dir.path().join("session-1"));
         (dir, tracker)
-    }
-
-    fn seed() -> GoalSeed<'static> {
-        GoalSeed { id: "goal-1", created_at: "2026-01-01T00:00:00Z" }
     }
 
     fn texts(effect: &GoalCommandEffect) -> Vec<&str> {
@@ -288,7 +345,7 @@ mod tests {
     #[test]
     fn status_without_goal_shows_help_and_does_not_mutate() {
         let (_dir, mut tracker) = test_tracker();
-        let effect = apply_goal_command(&mut tracker, &GoalSlashCommand::Status, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &GoalSlashCommand::Status, 0);
         assert!(!effect.mutated);
         let lines = texts(&effect);
         assert!(lines.iter().any(|l| l.contains("No thread goal")), "{lines:?}");
@@ -299,7 +356,7 @@ mod tests {
     fn set_creates_goal_and_second_set_reports_replacement() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        let first = apply_goal_command(&mut tracker, &set, 100, &seed());
+        let first = apply_goal_command(&mut tracker, &set, 100);
         assert!(first.mutated);
         assert!(texts(&first).iter().any(|l| l.contains("Goal set: Ship it")));
         assert!(!texts(&first).iter().any(|l| l.contains("Replaced")));
@@ -310,7 +367,9 @@ mod tests {
             "submit must teach the completion contract from the first turn: {submit}"
         );
 
-        let second = apply_goal_command(&mut tracker, &set, 200, &seed());
+        let first_id = tracker.goal_id().unwrap().to_owned();
+        let second = apply_goal_command(&mut tracker, &set, 200);
+        assert_ne!(tracker.goal_id(), Some(first_id.as_str()));
         assert!(second.mutated);
         assert!(texts(&second).iter().any(|l| l.contains("Replaced previous goal")));
     }
@@ -319,17 +378,17 @@ mod tests {
     fn pause_and_resume_round_trip_with_precise_repeat_messages() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        apply_goal_command(&mut tracker, &set, 0, &seed());
+        apply_goal_command(&mut tracker, &set, 0);
 
-        let paused = apply_goal_command(&mut tracker, &GoalSlashCommand::Pause, 0, &seed());
+        let paused = apply_goal_command(&mut tracker, &GoalSlashCommand::Pause, 0);
         assert!(paused.mutated);
         assert!(texts(&paused).iter().any(|l| l.contains("Goal paused")));
 
-        let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Pause, 0, &seed());
+        let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Pause, 0);
         assert!(!repeat.mutated);
         assert!(texts(&repeat).iter().any(|l| l.contains("already Paused")), "{:?}", texts(&repeat));
 
-        let resumed = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0, &seed());
+        let resumed = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0);
         assert!(resumed.mutated);
         let submit = resumed
             .submit
@@ -338,7 +397,7 @@ mod tests {
         assert!(submit.contains("Ship it"), "resume prompt must name the objective: {submit}");
         assert!(submit.contains("GOAL ACHIEVED:"), "resume prompt must re-teach the completion contract: {submit}");
 
-        let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0, &seed());
+        let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0);
         assert!(!repeat.mutated);
         assert!(texts(&repeat).iter().any(|l| l.contains("already active")));
         assert!(repeat.submit.is_none(), "failed Resume must not submit");
@@ -367,7 +426,7 @@ mod tests {
     fn only_set_and_successful_resume_submit_a_turn() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        apply_goal_command(&mut tracker, &set, 0, &seed());
+        apply_goal_command(&mut tracker, &set, 0);
 
         for command in [
             GoalSlashCommand::Status,
@@ -375,7 +434,7 @@ mod tests {
             GoalSlashCommand::Clear,
             GoalSlashCommand::Edit,
         ] {
-            let effect = apply_goal_command(&mut tracker, &command, 0, &seed());
+            let effect = apply_goal_command(&mut tracker, &command, 0);
             assert!(effect.submit.is_none(), "{command:?} must not submit a turn");
         }
     }
@@ -384,10 +443,10 @@ mod tests {
     fn resume_terminal_states_explain_instead_of_resuming() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        apply_goal_command(&mut tracker, &set, 0, &seed());
+        apply_goal_command(&mut tracker, &set, 0);
         assert!(tracker.budget_limit());
 
-        let effect = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &GoalSlashCommand::Resume, 0);
         assert!(!effect.mutated);
         assert!(texts(&effect).iter().any(|l| l.contains("budget")), "{:?}", texts(&effect));
     }
@@ -396,13 +455,13 @@ mod tests {
     fn clear_removes_goal_and_second_clear_is_a_noop() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        apply_goal_command(&mut tracker, &set, 0, &seed());
+        apply_goal_command(&mut tracker, &set, 0);
 
-        let cleared = apply_goal_command(&mut tracker, &GoalSlashCommand::Clear, 0, &seed());
+        let cleared = apply_goal_command(&mut tracker, &GoalSlashCommand::Clear, 0);
         assert!(cleared.mutated);
         assert!(!tracker.has_goal());
 
-        let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Clear, 0, &seed());
+        let repeat = apply_goal_command(&mut tracker, &GoalSlashCommand::Clear, 0);
         assert!(!repeat.mutated);
         assert!(texts(&repeat).iter().any(|l| l.contains("No thread goal")));
     }
@@ -413,24 +472,24 @@ mod tests {
 
         let (_dir, mut tracker) = test_tracker();
         let show = GoalSlashCommand::Budget { limit: None };
-        let effect = apply_goal_command(&mut tracker, &show, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &show, 0);
         assert!(!effect.mutated);
         assert!(texts(&effect).iter().any(|l| l.contains("No thread goal")));
 
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        apply_goal_command(&mut tracker, &set, 0, &seed());
-        let effect = apply_goal_command(&mut tracker, &show, 0, &seed());
+        apply_goal_command(&mut tracker, &set, 0);
+        let effect = apply_goal_command(&mut tracker, &show, 0);
         assert!(!effect.mutated);
         assert!(texts(&effect).iter().any(|l| l.contains("No budget set")));
 
         let set_budget = GoalSlashCommand::Budget { limit: Some(100_000) };
-        let effect = apply_goal_command(&mut tracker, &set_budget, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &set_budget, 0);
         assert!(effect.mutated);
         assert!(texts(&effect).iter().any(|l| l.contains("Budget set: 100000 tokens")));
         assert_eq!(tracker.token_budget(), Some(100_000));
 
         let clear = GoalSlashCommand::Budget { limit: Some(0) };
-        let effect = apply_goal_command(&mut tracker, &clear, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &clear, 0);
         assert!(effect.mutated);
         assert!(texts(&effect).iter().any(|l| l.contains("Budget cleared")));
         assert_eq!(tracker.token_budget(), None);
@@ -439,13 +498,13 @@ mod tests {
     #[test]
     fn edit_shows_objective_or_no_goal() {
         let (_dir, mut tracker) = test_tracker();
-        let empty = apply_goal_command(&mut tracker, &GoalSlashCommand::Edit, 0, &seed());
+        let empty = apply_goal_command(&mut tracker, &GoalSlashCommand::Edit, 0);
         assert!(!empty.mutated);
         assert!(texts(&empty).iter().any(|l| l.contains("No thread goal")));
 
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        apply_goal_command(&mut tracker, &set, 0, &seed());
-        let shown = apply_goal_command(&mut tracker, &GoalSlashCommand::Edit, 0, &seed());
+        apply_goal_command(&mut tracker, &set, 0);
+        let shown = apply_goal_command(&mut tracker, &GoalSlashCommand::Edit, 0);
         assert!(!shown.mutated);
         assert!(texts(&shown).iter().any(|l| l.contains("Current objective: Ship it")));
     }
@@ -465,22 +524,23 @@ mod tests {
         let events_path = dir.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
 
-        assert!(pause_goal_at_session_end(&tracker, Some(&emitter)));
+        assert!(pause_goal_at_session_end(&tracker, 73, Some(&emitter)));
         assert_eq!(tracker.lock().await.status(), Some(vtcode_memory::GoalStatus::UserPaused));
+        assert_eq!(tracker.lock().await.tokens_used(), 73);
         assert_eq!(tracker.lock().await.pause_message(), Some("Session ended; resume to continue."));
         assert!(dir.path().join("session-1").join("goal").join("goal.json").exists(), "teardown pause must persist");
         let log = std::fs::read_to_string(&events_path).unwrap();
         assert!(log.contains("\"goal.updated\""), "teardown pause must emit: {log}");
         assert!(log.contains("\"paused\""), "emit must carry the paused state: {log}");
 
-        assert!(!pause_goal_at_session_end(&tracker, Some(&emitter)), "repeat pause must no-op");
+        assert!(!pause_goal_at_session_end(&tracker, 73, Some(&emitter)), "repeat pause must no-op");
     }
 
     #[tokio::test]
     async fn session_end_leaves_settled_missing_and_locked_goals_alone() {
         let dir = tempfile::tempdir().unwrap();
         let tracker: SharedGoalTracker = Arc::new(Mutex::new(GoalTracker::new(dir.path().join("session-1"))));
-        assert!(!pause_goal_at_session_end(&tracker, None), "no goal must no-op");
+        assert!(!pause_goal_at_session_end(&tracker, 0, None), "no goal must no-op");
 
         tracker.lock().await.create_goal(
             "goal-1".into(),
@@ -492,23 +552,23 @@ mod tests {
         );
         {
             let _held = tracker.lock().await;
-            assert!(!pause_goal_at_session_end(&tracker, None), "contended lock must fail closed");
+            assert!(!pause_goal_at_session_end(&tracker, 0, None), "contended lock must fail closed");
         }
 
         assert!(tracker.lock().await.complete());
-        assert!(!pause_goal_at_session_end(&tracker, None), "complete goal must no-op");
+        assert!(!pause_goal_at_session_end(&tracker, 0, None), "complete goal must no-op");
     }
 
     #[test]
     fn status_lines_show_budget_and_pause_note_only_when_present() {
         let (_dir, mut tracker) = test_tracker();
         let set = GoalSlashCommand::Set { objective: "Ship it".into() };
-        let effect = apply_goal_command(&mut tracker, &set, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &set, 0);
         assert!(texts(&effect).iter().any(|l| l.contains("Goal [Active]: Ship it")));
         assert!(texts(&effect).iter().any(|l| l.contains("0 tokens") && !l.contains('/')));
 
         tracker.pause_with_message(GoalPauseReason::User, "taking a break".into());
-        let effect = apply_goal_command(&mut tracker, &GoalSlashCommand::Status, 0, &seed());
+        let effect = apply_goal_command(&mut tracker, &GoalSlashCommand::Status, 0);
         assert!(texts(&effect).iter().any(|l| l.contains("Goal [Paused]: Ship it")));
         assert!(texts(&effect).iter().any(|l| l.contains("Note: taking a break")));
     }

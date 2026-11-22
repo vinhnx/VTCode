@@ -48,6 +48,9 @@ pub(super) struct TurnPrep<'a> {
     pub pending_matrix_note: &'a mut Option<String>,
     pub pending_monitor_note: &'a mut Option<String>,
     pub tool_registry: &'a ToolRegistry,
+    pub goal_tracker: &'a crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker,
+    pub required_goal_activation: Option<uuid::Uuid>,
+    pub automatic_goal_limit: Option<u8>,
     pub config: &'a CoreAgentConfig,
     pub handle: &'a InlineHandle,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
@@ -82,6 +85,18 @@ pub(super) enum TurnPrepFlow<'a> {
     },
 }
 
+fn admit_prepared_goal(tracker: &mut vtcode_memory::GoalTracker, expected: uuid::Uuid, limit: Option<u8>) -> bool {
+    tracker.active_activation_id() == Some(expected)
+        && limit.is_none_or(|limit| tracker.claim_auto_continue_turn(limit).is_some())
+}
+
+fn emit_prep_failure(emitter: Option<&HarnessEventEmitter>, reports_terminal: bool, reason: &str) -> Result<()> {
+    if reports_terminal && let Some(emitter) = emitter {
+        emitter.emit(crate::agent::runloop::unified::inline_events::harness::turn_failed_event(reason, None))?;
+    }
+    Ok(())
+}
+
 /// Prepare the next turn: validate input, split borrows, checkpoint, notes.
 #[expect(clippy::cognitive_complexity, reason = "turn preparation; split per stage")]
 pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnPrep<'_>) -> Result<TurnPrepFlow<'a>> {
@@ -95,6 +110,9 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         pending_matrix_note,
         pending_monitor_note,
         tool_registry,
+        goal_tracker,
+        required_goal_activation,
+        automatic_goal_limit,
         config,
         handle,
         ctrl_c_state,
@@ -120,12 +138,6 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
     if next_turn_input.trim().is_empty() {
         return Ok(TurnPrepFlow::ContinueLoop);
     }
-    if !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input) {
-        tool_registry.begin_tracker_request(
-            executing_approved_plan
-                || crate::agent::runloop::unified::turn::context::tracker_request_explicitly_adopts(next_turn_input),
-        );
-    }
     if let Some(emitter) = harness_emitter.as_ref() {
         use vtcode_core::exec::events::InputOrigin;
         let origin = if executing_approved_plan {
@@ -143,55 +155,23 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         }
         tool_registry.set_harness_task(Some(task_id));
     }
-    let user_revision = !executing_approved_plan
-        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
-        && (!active_task_follow_up
-            || runtime.state.messages.last().is_some_and(|message| {
-                message.metadata.as_ref().and_then(|metadata| metadata.source()) == Some("user_input")
-            }));
-    if user_revision
-        && tool_registry.is_planning_active()
-        && crate::agent::runloop::unified::planning_workflow::recovery_state::begin_user_revision(
-            &mut plan_session.recovery,
-        )
-        && let Some(emitter) = harness_emitter.as_ref()
-    {
-        emitter
-            .persist_checkpoint(&crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
-                &plan_session.recovery,
-                thread_id,
-                turn_id,
-            ))
-            .await?;
-    }
-    // An explicit user turn after a terminal plan rejection rearms the
-    // validation-repair budget. Planning mode parks recovery in
-    // AwaitingInput/AwaitingApproval; execution mode (no recovery cycle)
-    // sets a one-shot pending flag. Internal follow-ups must not consume
-    // the rearm, so the pending flag is taken last for short-circuiting.
-    let planning_retry_ready = tool_registry.is_planning_active()
-        && matches!(
-            plan_session.recovery.outcome,
-            vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
-                | vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval
-        );
-    if !active_task_follow_up
-        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
-        && (planning_retry_ready || plan_session.take_execution_plan_rejection_pending())
-    {
-        plan_session.begin_explicit_recovery_cycle_for_user_input();
-        if tool_registry.is_planning_active() {
-            crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
-                &mut plan_session.recovery,
-                next_turn_input,
-                false,
-            );
-        }
-    }
     let (session_state, runtime_steering) = runtime.split_mut();
     let working_history = Arc::make_mut(&mut session_state.messages);
     let refused_turn_rollback =
         RefusedTurnRollback::capture(working_history, completed_turn_prompt_message_index, next_turn_input);
+    let reports_terminal = required_goal_activation.is_none() || !active_task_follow_up;
+    let reject_superseded_goal = |history: &mut Vec<Message>| -> Result<()> {
+        refused_turn_rollback.apply(history);
+        emit_prep_failure(harness_emitter.as_ref(), reports_terminal, "goal changed before turn admission")?;
+        handle.set_activity_state(ActivityState::Idle);
+        Ok(())
+    };
+    if let Some(expected) = required_goal_activation
+        && goal_tracker.lock().await.active_activation_id() != Some(expected)
+    {
+        reject_superseded_goal(working_history)?;
+        return Ok(TurnPrepFlow::ContinueLoop);
+    }
     macro_rules! preparation_wait {
         ($future:expr) => {{
             match crate::agent::runloop::unified::stop_requests::await_with_stop(ctrl_c_state, ctrl_c_notify, $future)
@@ -199,13 +179,10 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
             {
                 Some(value) => value,
                 None => {
-                    if let Some(emitter) = harness_emitter.as_ref() {
-                        let _ =
-                            emitter.emit(crate::agent::runloop::unified::inline_events::harness::turn_failed_event(
-                                "turn cancelled during preparation",
-                                None,
-                            ));
+                    if !reports_terminal {
+                        refused_turn_rollback.apply(working_history);
                     }
+                    emit_prep_failure(harness_emitter.as_ref(), reports_terminal, "turn cancelled during preparation")?;
                     // Preparation has not admitted tools. Keep the user's
                     // request as a draft, and require a new submission.
                     handle.set_placeholder(Some(
@@ -277,7 +254,19 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
                 let _ = preparation_wait!(dirty_worktree_task);
                 tracing::debug!("Checkpoint preparation cancelled; prompt retained in input");
                 let _ = renderer.line(MessageStyle::Info, "Prompt kept — checkpoint cancelled. Retry when ready.");
-                restore_kept_prompt(working_history, handle, completed_turn_prompt_message_index, next_turn_input);
+                if reports_terminal {
+                    restore_kept_prompt(working_history, handle, completed_turn_prompt_message_index, next_turn_input);
+                } else {
+                    refused_turn_rollback.apply(working_history);
+                    handle.set_activity_state(ActivityState::Idle);
+                }
+                if required_goal_activation.is_some() {
+                    emit_prep_failure(
+                        harness_emitter.as_ref(),
+                        reports_terminal,
+                        "goal turn checkpoint preparation did not complete",
+                    )?;
+                }
                 return Ok(TurnPrepFlow::ContinueLoop);
             }
             // Deterministic failures (storage, capture, worker) carry no
@@ -295,7 +284,19 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
                 tracing::warn!(error = %err, "Checkpoint unavailable; prompt retained in input");
                 let message = checkpoint_unavailable_notice(&err);
                 let _ = renderer.line(MessageStyle::Info, &message);
-                restore_kept_prompt(working_history, handle, completed_turn_prompt_message_index, next_turn_input);
+                if reports_terminal {
+                    restore_kept_prompt(working_history, handle, completed_turn_prompt_message_index, next_turn_input);
+                } else {
+                    refused_turn_rollback.apply(working_history);
+                    handle.set_activity_state(ActivityState::Idle);
+                }
+                if required_goal_activation.is_some() {
+                    emit_prep_failure(
+                        harness_emitter.as_ref(),
+                        reports_terminal,
+                        "goal turn checkpoint preparation did not complete",
+                    )?;
+                }
                 return Ok(TurnPrepFlow::ContinueLoop);
             }
         }
@@ -320,6 +321,69 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         }
         Ok(Ok(None)) => None,
     };
+    let (mut transient_system_notes, peer_delivery) = preparation_wait!(prepare_transient_turn_notes(
+        config.workspace.as_path(),
+        tool_registry,
+        unrelated_dirty_note,
+    ));
+    if let Some(expected) = required_goal_activation
+        && !admit_prepared_goal(&mut *goal_tracker.lock().await, expected, automatic_goal_limit)
+    {
+        reject_superseded_goal(working_history)?;
+        return Ok(TurnPrepFlow::ContinueLoop);
+    }
+    // Apply request-scoped state only after the prepared input is admitted.
+    if !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input) {
+        tool_registry.begin_tracker_request(
+            executing_approved_plan
+                || crate::agent::runloop::unified::turn::context::tracker_request_explicitly_adopts(next_turn_input),
+        );
+    }
+    let user_revision = !executing_approved_plan
+        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
+        && (!active_task_follow_up
+            || working_history.last().is_some_and(|message| {
+                message.metadata.as_ref().and_then(|metadata| metadata.source()) == Some("user_input")
+            }));
+    if user_revision
+        && tool_registry.is_planning_active()
+        && crate::agent::runloop::unified::planning_workflow::recovery_state::begin_user_revision(
+            &mut plan_session.recovery,
+        )
+        && let Some(emitter) = harness_emitter.as_ref()
+    {
+        emitter
+            .persist_checkpoint(&crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
+                &plan_session.recovery,
+                thread_id,
+                turn_id,
+            ))
+            .await?;
+    }
+    // An explicit user turn after a terminal plan rejection rearms the
+    // validation-repair budget. Planning mode parks recovery in
+    // AwaitingInput/AwaitingApproval; execution mode (no recovery cycle)
+    // sets a one-shot pending flag. Internal follow-ups must not consume
+    // the rearm, so the pending flag is taken last for short-circuiting.
+    let planning_retry_ready = tool_registry.is_planning_active()
+        && matches!(
+            plan_session.recovery.outcome,
+            vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
+                | vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval
+        );
+    if !active_task_follow_up
+        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
+        && (planning_retry_ready || plan_session.take_execution_plan_rejection_pending())
+    {
+        plan_session.begin_explicit_recovery_cycle_for_user_input();
+        if tool_registry.is_planning_active() {
+            crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
+                &mut plan_session.recovery,
+                next_turn_input,
+                false,
+            );
+        }
+    }
     let wake_notes = [
         pending_background_completions.take_transient_note(),
         pending_matrix_note.take(),
@@ -328,17 +392,12 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
     .into_iter()
     .flatten()
     .collect::<Vec<_>>();
-    let wake_note = if wake_notes.is_empty() {
-        None
-    } else {
-        Some(wake_notes.join("\n"))
-    };
-    let (transient_system_notes, peer_delivery) = preparation_wait!(prepare_transient_turn_notes(
-        config.workspace.as_path(),
-        tool_registry,
-        unrelated_dirty_note,
-        wake_note,
-    ));
+    if !wake_notes.is_empty() {
+        let before_peer_note = transient_system_notes
+            .len()
+            .saturating_sub(usize::from(peer_delivery.note.is_some()));
+        transient_system_notes.insert(before_peer_note, wake_notes.join("\n"));
+    }
     working_history.extend(transient_system_notes.iter().cloned().map(Message::system));
     // Ack only after admission: a stop accepted between preparation and this
     // extend leaves the mail queued for redelivery instead of losing it.
@@ -377,4 +436,38 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         transient_system_notes,
         prompt_checkpoint_lease,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn final_goal_admission_charges_only_a_current_automatic_turn() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut tracker = vtcode_memory::GoalTracker::new(dir.path().to_path_buf());
+        tracker.create_goal("goal-id".into(), "Ship it".into(), None, 0, "2026-01-01T00:00:00Z".into(), None);
+        let activation = tracker.active_activation_id().unwrap();
+        assert!(admit_prepared_goal(&mut tracker, activation, None));
+        assert_eq!(tracker.auto_continue_turns(), 0);
+        assert!(tracker.pause(vtcode_memory::GoalPauseReason::User));
+        assert!(tracker.resume());
+        assert!(!admit_prepared_goal(&mut tracker, activation, Some(1)));
+        let resumed = tracker.active_activation_id().unwrap();
+        assert!(admit_prepared_goal(&mut tracker, resumed, Some(1)));
+        assert!(!admit_prepared_goal(&mut tracker, resumed, Some(1)));
+        assert_eq!(tracker.auto_continue_turns(), 1);
+    }
+
+    #[test]
+    fn goal_prep_failure_only_publishes_for_an_owned_turn() {
+        let dir = tempfile::tempdir().unwrap();
+        let events = dir.path().join("events.jsonl");
+        let emitter = HarnessEventEmitter::new(events.clone()).unwrap();
+        emit_prep_failure(Some(&emitter), false, "superseded synthetic").unwrap();
+        emit_prep_failure(Some(&emitter), true, "superseded explicit prompt").unwrap();
+        let log = std::fs::read_to_string(events).unwrap();
+        assert!(log.contains("superseded explicit prompt"));
+        assert!(!log.contains("superseded synthetic"));
+    }
 }

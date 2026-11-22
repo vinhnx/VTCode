@@ -195,12 +195,8 @@ impl SessionStats {
 
     /// Total session tokens as a saturating `i64` for goal budget accounting.
     pub(crate) fn total_tokens_i64(&self) -> i64 {
-        let usage = self.total_usage();
-        let total = usage
-            .input_tokens
-            .saturating_add(usage.cached_input_tokens)
-            .saturating_add(usage.cache_creation_tokens)
-            .saturating_add(usage.output_tokens);
+        // Normalized input already includes both cached and cache-creation tokens.
+        let total = self.total_usage.input_tokens.saturating_add(self.total_usage.output_tokens);
         i64::try_from(total).unwrap_or(i64::MAX)
     }
 

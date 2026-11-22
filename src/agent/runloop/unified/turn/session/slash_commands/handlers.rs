@@ -72,8 +72,8 @@ pub(super) use diagnostics::memory::config_persistence::persist_workspace_config
 pub(super) use fast::handle_toggle_fast_mode;
 pub(super) use goal::handle_goal_command;
 pub(crate) use goal::{
-    GOAL_AUTO_CONTINUE_PREFIX, GOAL_COMPLETION_CONTRACT, GoalSeed, SharedGoalTracker, apply_goal_command,
-    goal_indicator_line, pause_goal_at_session_end,
+    GOAL_AUTO_CONTINUE_PREFIX, GOAL_COMPLETION_CONTRACT, SharedGoalTracker, commit_goal_command,
+    goal_activation_for_input, goal_indicator_line, goal_prompt_activation, pause_goal_at_session_end,
 };
 pub(super) use interactive::{handle_show_jobs_panel, handle_toggle_tasks_panel};
 pub(super) use local_server::handle_manage_local_server;

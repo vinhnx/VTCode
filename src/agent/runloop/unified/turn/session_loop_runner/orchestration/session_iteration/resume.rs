@@ -18,6 +18,13 @@ pub(super) struct FollowUpRestoreContext<'a> {
     pub(super) renderer: &'a mut AnsiRenderer,
 }
 
+fn is_legacy_goal_continuation(intent: &vtcode_core::core::agent::steering::QueuedFollowUpIntent) -> bool {
+    use crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX;
+    use vtcode_core::core::agent::steering::FollowUpProvenance;
+
+    intent.provenance() == FollowUpProvenance::Synthetic && intent.text().starts_with(GOAL_AUTO_CONTINUE_PREFIX)
+}
+
 /// Restore saved intents first, then interrupted input or an adopted tracker.
 /// Fresh sessions must not consume a trailing prompt as resumed input.
 pub(super) async fn restore_session_follow_ups(
@@ -39,10 +46,19 @@ pub(super) async fn restore_session_follow_ups(
     )
     .await;
     if let Some(envelope) = saved_envelope.as_ref() {
-        runtime.restore_follow_up_state(envelope.pending_intents.clone(), envelope.applied_intent_ids.clone())?;
+        let pending: Vec<_> = envelope
+            .pending_intents
+            .iter()
+            .filter(|intent| !is_legacy_goal_continuation(intent))
+            .cloned()
+            .collect();
+        runtime.restore_follow_up_state(pending, envelope.applied_intent_ids.clone())?;
     }
     let original_history = resumed.then(|| runtime.state.messages.clone());
-    if resumed && let Some(pending_prompt) = take_pending_resumed_user_prompt(runtime.state.messages_mut()) {
+    if resumed
+        && let Some(pending_prompt) = take_pending_resumed_user_prompt(runtime.state.messages_mut())
+            .filter(|intent| !is_legacy_goal_continuation(intent))
+    {
         let (_, runtime_steering) = runtime.split_mut();
         let already_queued = runtime_steering
             .pending_follow_up_intents_snapshot()

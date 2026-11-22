@@ -497,7 +497,6 @@ pub(super) async fn prepare_transient_turn_notes(
     workspace: &std::path::Path,
     tool_registry: &ToolRegistry,
     unrelated_dirty_note: Option<String>,
-    background_completion_note: Option<String>,
 ) -> (Vec<String>, PeerMessageDelivery) {
     let mut transient_system_notes = Vec::with_capacity(5);
 
@@ -517,10 +516,6 @@ pub(super) async fn prepare_transient_turn_notes(
     // pre-filled wait call so it needs zero reconstruction. This also covers
     // session restore — both paths flow through the same turn loop.
     if let Some(note) = build_exec_session_resume_note(tool_registry).await {
-        transient_system_notes.push(note);
-    }
-
-    if let Some(note) = background_completion_note {
         transient_system_notes.push(note);
     }
 

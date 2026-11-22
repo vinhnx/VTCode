@@ -35,8 +35,8 @@ mod handlers;
 mod outcome_router;
 pub mod secrets;
 pub(crate) use handlers::{
-    GOAL_AUTO_CONTINUE_PREFIX, GOAL_COMPLETION_CONTRACT, GoalSeed, SharedGoalTracker, apply_goal_command,
-    goal_indicator_line, pause_goal_at_session_end,
+    GOAL_AUTO_CONTINUE_PREFIX, GOAL_COMPLETION_CONTRACT, SharedGoalTracker, commit_goal_command,
+    goal_activation_for_input, goal_indicator_line, goal_prompt_activation, pause_goal_at_session_end,
 };
 
 #[cfg(test)]

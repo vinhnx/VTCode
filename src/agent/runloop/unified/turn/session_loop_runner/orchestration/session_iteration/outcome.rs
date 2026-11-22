@@ -106,6 +106,7 @@ pub(super) struct OutcomeGate<'a> {
     pub provider_client: &'a dyn LLMProvider,
     pub loaded_skills: &'a Arc<RwLock<HashMap<String, Skill>>>,
     pub plan_session: &'a PlanningWorkflowSessionState,
+    pub goal_turn_activation: Option<uuid::Uuid>,
     pub goal_tracker: &'a crate::agent::runloop::unified::turn::session::slash_commands::SharedGoalTracker,
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
     pub safety_validator: &'a Arc<ToolCallSafetyValidator>,
@@ -116,6 +117,7 @@ pub(super) struct OutcomeGate<'a> {
 pub(super) enum OutcomeFlow {
     ContinueLoop,
     BreakLoop,
+    GoalContinuation(uuid::Uuid),
 }
 
 /// Apply the turn outcome and route the loop.
@@ -173,6 +175,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
         provider_client,
         loaded_skills,
         plan_session,
+        goal_turn_activation,
         goal_tracker,
         tool_result_cache,
         safety_validator,
@@ -181,7 +184,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
     // Turn prep hands history through runtime; re-derive it here so
     // the gate owns a single sequential borrow of runtime state.
     let working_history = Arc::make_mut(&mut runtime.state.messages);
-    let outcome = match turn_result {
+    let mut outcome = match turn_result {
         Ok(outcome) => outcome,
         Err(err) => {
             crate::agent::runloop::unified::status_line::clear_input_status(handle, &mut *input_status_state);
@@ -201,6 +204,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
                 pending_plan_execution_target: None,
                 plan_approved_execution_pending: false,
                 final_response_was_fallback: false,
+                final_model_response: None,
                 refused: false,
             }
         }
@@ -260,6 +264,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
     let plan_skip_confirmations = plan_execution_target.is_some_and(|target| target.skip_confirmations);
     let plan_approved_execution_pending = outcome.plan_approved_execution_pending;
     let final_response_was_fallback = outcome.final_response_was_fallback;
+    let goal_final_text = outcome.final_model_response.take();
     *last_turn_result = Some(outcome_result.clone());
     *last_turn_response_was_fallback = final_response_was_fallback;
     let turn_elapsed = turn_started_at.elapsed();
@@ -298,6 +303,24 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
     if executing_approved_plan {
         handle.set_activity_state(ActivityState::Idle);
     }
+    let goal_completion_response = if matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. })
+        && !turn_refused
+        && !tool_registry.is_planning_active()
+        && crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_none()
+    {
+        goal_final_text.as_deref()
+    } else {
+        None
+    };
+    let goal_at_turn_end = corrective::settle_goal_turn(
+        goal_tracker,
+        session_stats,
+        renderer,
+        harness_emitter.as_ref(),
+        goal_completion_response,
+        goal_turn_activation,
+    )
+    .await;
     // Plan-mode "switch to build/auto agent" handoff: perform the
     // primary-agent switch now so the chosen agent executes the plan.
     // This mirrors the `PlanApproved` handoff in the interaction loop
@@ -490,7 +513,8 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
         tool_registry,
         plan_session,
         goal_tracker,
-        harness_emitter: harness_emitter.as_ref(),
+        goal_at_turn_end,
+        goal_final_text: goal_final_text.as_deref(),
         vt_cfg: &*vt_cfg,
         outcome_result: &outcome_result,
         ctrl_c_state,
@@ -503,6 +527,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
     {
         corrective::CorrectiveFlow::ContinueLoop => return Ok(OutcomeFlow::ContinueLoop),
         corrective::CorrectiveFlow::BreakLoop => return Ok(OutcomeFlow::BreakLoop),
+        corrective::CorrectiveFlow::GoalContinuation(id) => return Ok(OutcomeFlow::GoalContinuation(id)),
         corrective::CorrectiveFlow::Proceed { tracker_auto_continue_exhausted } => tracker_auto_continue_exhausted,
     };
     // A refusal is terminal for its request, not a stall to resume:

@@ -168,6 +168,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
     let mut cross_turn_tracker = crate::agent::runloop::unified::run_loop_context::CrossTurnTracker::new();
     let mut approved_plan_execution_turn = false;
     let mut pending_approved_plan_execution_input = false;
+    let mut pending_goal_continuation = None;
     let mut last_approved_plan_summary_status: Option<ExecutionSummaryStatus> = None;
     let mut last_turn_result: Option<RunLoopTurnLoopResult> = None;
     let mut last_turn_response_was_fallback = false;
@@ -279,6 +280,28 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
             let mut active_task_follow_up = false;
             let can_resume = !ctrl_c_state.is_cancel_handled()
                 && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none();
+            let admitted_goal = if let Some(id) = pending_goal_continuation.take()
+                && can_resume
+                && !pending_approved_plan_execution_input
+                && queued_inputs.is_empty()
+                && session.events.is_empty()
+                && !tool_registry.is_planning_active()
+            {
+                corrective::prepare_goal_continuation(
+                    &goal_tracker,
+                    id,
+                    &mut runtime,
+                    &ctrl_c_state,
+                    crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_cross_turn_turns(
+                        vt_cfg.as_ref(),
+                    ),
+                )
+                .await
+                .map(|input| (input, id))
+            } else {
+                None
+            };
+            let mut goal_turn_activation = None;
             let interaction_outcome = if pending_approved_plan_execution_input && can_resume {
                 // An approved-plan handoff is an internal state transition,
                 // not ordinary user steering. Consume it directly so a
@@ -291,6 +314,14 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     input,
                     prompt_message_index: Some(prompt_message_index),
                     turn_id,
+                }
+            } else if let Some((input, id)) = admitted_goal {
+                active_task_follow_up = true;
+                goal_turn_activation = Some(id);
+                InteractionOutcome::Continue {
+                    input,
+                    prompt_message_index: None,
+                    turn_id: SessionId::generate().into_inner(),
                 }
             } else if let Some(input) = can_resume.then(|| runtime.run_until_idle()).flatten() {
                 active_task_follow_up = true;
@@ -469,6 +500,20 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     }
                 }
             };
+            let automatic_goal_limit = goal_turn_activation.map(|_| {
+                crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_cross_turn_turns(vt_cfg.as_ref())
+            });
+            let required_goal_activation = goal_turn_activation.or_else(|| {
+                crate::agent::runloop::unified::turn::session::slash_commands::goal_prompt_activation(&next_turn_input)
+            });
+            if goal_turn_activation.is_none() {
+                let tracker = goal_tracker.lock().await;
+                goal_turn_activation =
+                    crate::agent::runloop::unified::turn::session::slash_commands::goal_activation_for_input(
+                        &tracker,
+                        &next_turn_input,
+                    );
+            }
             let (
                 working_history,
                 runtime_steering,
@@ -487,6 +532,9 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     pending_matrix_note: &mut pending_matrix_note,
                     pending_monitor_note: &mut pending_monitor_note,
                     tool_registry: &tool_registry,
+                    goal_tracker: &goal_tracker,
+                    required_goal_activation,
+                    automatic_goal_limit,
                     config: &*config,
                     handle: &handle,
                     ctrl_c_state: &ctrl_c_state,
@@ -687,6 +735,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 provider_client: provider_client.as_ref(),
                 loaded_skills: &loaded_skills,
                 plan_session: &plan_session,
+                goal_turn_activation,
                 goal_tracker: &goal_tracker,
                 tool_result_cache: &tool_result_cache,
                 safety_validator: &safety_validator,
@@ -694,6 +743,10 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
             })
             .await?
             {
+                outcome::OutcomeFlow::GoalContinuation(id) => {
+                    pending_goal_continuation = Some(id);
+                    continue;
+                }
                 outcome::OutcomeFlow::ContinueLoop => continue,
                 outcome::OutcomeFlow::BreakLoop => break,
             }

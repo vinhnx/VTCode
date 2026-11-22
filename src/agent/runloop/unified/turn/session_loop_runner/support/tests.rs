@@ -183,14 +183,10 @@ async fn cancelled_note_preparation_does_not_publish_transient_history() {
     let notify = Notify::new();
     let mut history = vec![Message::user("preserved request".to_owned())];
     let preparation = async {
-        let (notes, _) = super::prepare_transient_turn_notes(
-            temp.path(),
-            &registry,
-            Some("dirty workspace evidence".to_owned()),
-            Some("completed background job".to_owned()),
-        )
-        .await;
-        assert_eq!(notes, ["dirty workspace evidence", "completed background job"]);
+        let (notes, _) =
+            super::prepare_transient_turn_notes(temp.path(), &registry, Some("dirty workspace evidence".to_owned()))
+                .await;
+        assert_eq!(notes, ["dirty workspace evidence"]);
         // Exercise the harder boundary: preparation finished, but stop is
         // accepted before its result is admitted to the request history.
         state.request_local_cancel();
@@ -207,7 +203,7 @@ async fn cancelled_note_preparation_does_not_publish_transient_history() {
 async fn prepare_transient_turn_notes_omits_resume_hint_without_sessions() {
     let temp = tempfile::tempdir().expect("tempdir");
     let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
-    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
     assert!(transient.is_empty(), "no sessions must produce no notes");
 }
@@ -226,7 +222,7 @@ async fn prepare_transient_turn_notes_injects_bounded_resume_hint() {
         .expect("run should start");
     let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
 
     let hint = transient
         .iter()
@@ -258,7 +254,7 @@ async fn prepare_transient_turn_notes_omits_retained_background_sessions() {
         .expect("background run should start");
     let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
 
     assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
     assert!(transient.is_empty(), "retained background work must not force a resume wait");
@@ -514,7 +510,7 @@ async fn turn_notes_deliver_peer_messages_with_reply_hint_and_ack() {
     .expect("send answer")
     .message_id;
 
-    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     let note = transient
         .iter()
         .find(|note| note.starts_with("Peer session messages"))
@@ -543,7 +539,7 @@ async fn turn_notes_deliver_peer_messages_with_reply_hint_and_ack() {
     // The caller acks after admitting the note; acked mail is not redelivered.
     let received = super::ack_peer_messages(temp.path(), "self-sess", &delivery.pending);
     assert_eq!(received.len(), 2);
-    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     assert!(!transient.iter().any(|note| note.starts_with("Peer session messages")));
     assert!(delivery.pending.is_empty());
 }
@@ -559,11 +555,11 @@ async fn unacked_peer_messages_redeliver_on_the_next_turn() {
 
     // First preparation formats but does not ack (simulating a stop accepted
     // before admission): the next preparation must surface the same mail.
-    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     assert!(transient.iter().any(|note| note.starts_with("Peer session messages")));
     assert_eq!(delivery.pending.len(), 1);
 
-    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     let note = transient
         .iter()
         .find(|note| note.starts_with("Peer session messages"))
@@ -608,7 +604,7 @@ async fn turn_notes_render_every_structured_question_before_ack() {
     .expect("valid multi-question");
     vtcode_memory::send_mail(temp.path(), "peer-a", &mail).expect("send");
 
-    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     let note = transient
         .iter()
         .find(|note| note.starts_with("Peer session messages"))
@@ -645,7 +641,7 @@ async fn turn_notes_surface_expired_peer_messages_as_receipts_without_note_lines
     std::fs::write(inbox.join(format!("{}.json", stale.message_id)), serde_json::to_vec(&stale).expect("ser"))
         .expect("write stale");
 
-    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None).await;
     assert!(!transient.iter().any(|note| note.starts_with("Peer session messages")));
     assert_eq!(delivery.expired_ids, vec![stale.message_id]);
 }

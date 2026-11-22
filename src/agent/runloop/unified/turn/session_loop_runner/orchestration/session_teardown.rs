@@ -407,6 +407,7 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
     // desktop bar — never stuck Active with a frozen timer.
     crate::agent::runloop::unified::turn::session::slash_commands::pause_goal_at_session_end(
         goal_tracker,
+        session_stats.total_tokens_i64(),
         harness_emitter.as_ref(),
     );
     let (outcome_code, subtype) = resolve_thread_completion_status(

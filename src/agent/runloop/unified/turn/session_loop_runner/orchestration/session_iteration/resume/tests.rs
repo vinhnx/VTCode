@@ -56,6 +56,53 @@ async fn fresh_session_preserves_trailing_user_input_without_queuing_it() {
 }
 
 #[tokio::test]
+async fn resume_discards_only_legacy_synthetic_goal_continuations() {
+    use crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX;
+
+    let temp = TempDir::new().unwrap();
+    let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;
+    registry.set_harness_session("goal-resume");
+    let goal_prompt = format!("{GOAL_AUTO_CONTINUE_PREFIX}ship release");
+    let envelope = SessionMemoryEnvelope {
+        session_id: "goal-resume".into(),
+        pending_intents: vec![
+            QueuedFollowUpIntent::from_parts_with_provenance("old-goal", &goal_prompt, FollowUpProvenance::Synthetic),
+            QueuedFollowUpIntent::from_parts("user-quote", &goal_prompt),
+            QueuedFollowUpIntent::from_parts_with_provenance(
+                "other",
+                "Track the verifier",
+                FollowUpProvenance::Synthetic,
+            ),
+        ],
+        ..Default::default()
+    };
+    let path = default_memory_envelope_path_for_session(temp.path(), "goal-resume");
+    vtcode_core::compaction::memory_envelope::write_memory_envelope_to_path_async(&path, &envelope)
+        .await
+        .unwrap();
+    let mut runtime = runtime(vec![
+        Message::assistant("earlier result".into()),
+        Message::user(goal_prompt).with_metadata(MessageMetadata::harness_notice(1, 6).with_intent_id("old-goal")),
+    ]);
+    restore_session_follow_ups(
+        &mut runtime,
+        &registry,
+        FollowUpRestoreContext {
+            workspace_root: temp.path(),
+            vt_cfg: None,
+            resumed: true,
+            ctrl_c_state: &CtrlCState::new(),
+            renderer: &mut AnsiRenderer::stdout(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(runtime.state.messages.len(), 1);
+    let pending = runtime.split_mut().1.pending_follow_up_intents_snapshot();
+    assert_eq!(pending.iter().map(QueuedFollowUpIntent::id).collect::<Vec<_>>(), ["user-quote", "other"]);
+}
+
+#[tokio::test]
 async fn resumed_input_preserves_user_and_synthetic_identity_and_provenance() {
     let temp = TempDir::new().unwrap();
     let registry = ToolRegistry::new_for_schema(temp.path().to_path_buf()).await;

@@ -457,12 +457,13 @@ fn set_and_resume_reset_auto_continue_budget() {
 }
 
 #[test]
-fn record_token_observation_tracks_monotonic_high_water() {
+fn record_token_observation_ignores_duplicate_and_regressing_totals() {
     let mut t = make_tracker();
     activate_tracker(&mut t);
     assert_eq!(t.tokens_used(), 0);
     t.record_token_observation(500);
     assert_eq!(t.tokens_used(), 500);
+    t.record_token_observation(500);
     t.record_token_observation(300);
     assert_eq!(t.tokens_used(), 500, "high-water mark must not decrease");
     t.record_token_observation(700);
@@ -472,6 +473,69 @@ fn record_token_observation_tracks_monotonic_high_water() {
     activate_tracker(&mut fresh);
     fresh.record_token_observation(-50);
     assert_eq!(fresh.tokens_used(), 0, "usage floors at zero");
+}
+
+#[test]
+#[cfg(unix)]
+fn goal_clear_rejects_a_redirected_session_directory() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().unwrap();
+    let target = root.path().join("other-session");
+    let mut tracker = GoalTracker::new(target.clone());
+    tracker.create_goal("other-goal".into(), "Keep this goal".into(), None, 0, "2026-01-01T00:00:00Z".into(), None);
+    tracker.persist().unwrap();
+    let redirected = root.path().join("session-1");
+    symlink(&target, &redirected).unwrap();
+
+    let empty = GoalTracker::new(redirected);
+    assert!(empty.persist().is_err());
+    assert_eq!(GoalTracker::restore(target).unwrap().objective(), Some("Keep this goal"));
+}
+
+#[test]
+fn restored_goal_preserves_usage_with_a_new_runloop_counter() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut tracker = GoalTracker::new(dir.path().to_path_buf());
+    tracker.create_goal("goal-1".into(), "Ship it".into(), Some(105), 900, "2026-01-01T00:00:00Z".into(), None);
+    tracker.record_token_observation(968);
+    tracker.persist().unwrap();
+
+    // Older snapshots can carry a much larger observation cursor from the
+    // previous process. Only the charged usage survives process restart.
+    let path = dir.path().join("goal/goal.json");
+    let mut legacy: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    legacy["token_baseline"] = serde_json::json!(900);
+    legacy["last_session_tokens_seen"] = serde_json::json!(968);
+    std::fs::write(path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+
+    let mut restored = GoalTracker::restore(dir.path().to_path_buf()).unwrap();
+    assert_eq!(restored.status(), Some(GoalStatus::UserPaused));
+    restored.record_token_observation(21);
+    assert!(restored.resume());
+    restored.record_token_observation(57);
+    assert_eq!(restored.tokens_used(), 104);
+    assert!(!restored.enforce_budget());
+    restored.record_token_observation(58);
+    assert!(restored.enforce_budget());
+}
+
+#[test]
+fn goal_restores_paused_even_after_a_previous_resume_left_its_phase_idle() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().to_path_buf();
+    let mut tracker = GoalTracker::new(path.clone());
+    tracker.create_goal("goal-1".into(), "Ship it".into(), None, 350, "2026-01-01T00:00:00Z".into(), None);
+    tracker.persist().unwrap();
+
+    let mut reopened = GoalTracker::restore(path.clone()).unwrap();
+    assert_eq!(reopened.phase(), Some(GoalPhase::Idle));
+    assert!(reopened.resume());
+    assert!(reopened.is_active());
+    reopened.persist().unwrap();
+
+    let reopened_again = GoalTracker::restore(path).unwrap();
+    assert_eq!(reopened_again.status(), Some(GoalStatus::UserPaused));
 }
 
 #[test]

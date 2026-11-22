@@ -79,15 +79,21 @@ elapsed time and token usage while active.
 
 While a goal is active, completed turns automatically continue toward the objective (up to the
 cross-turn budget; type `continue` to resume after it exhausts). Pausing, clearing, stopping, hard
-budget stops, and turns that ask for input all idle the loop instead of continuing. The agent can
-also complete the goal itself by ending its turn with a first line of exactly `GOAL ACHIEVED:` once
-the work verifies, or through its `get_goal`/`update_goal` tools.
+budget stops, and turns that ask for input all idle the loop instead of continuing. Pause prevents
+the next automatic goal turn from starting. An already admitted turn can finish. The agent can
+complete the goal with `update_goal` using the activation ID from `get_goal`, or with
+`GOAL ACHIEVED:` followed by a same-line summary in the goal turn's verified final response.
 
-A token budget set via `/goal budget` limits the loop when usage reaches the cap; `0` clears it.
-While a goal is active or paused, every turn prints a one-line status (`[i] Pursuing goal: …`) above
-its output. In VT Code Desktop the same commands run through the goal bar above the composer, which
+A token budget set via `/goal budget` stops automatic goal continuations when usage reaches the
+cap at a turn boundary. Lowering the cap to recorded usage or below takes effect immediately.
+Setting the budget to `0` clears it. Provider-reported input and output are counted when usage
+arrives, including cached input once. A response arriving after a pause or replacement is attributed
+according to the goal state at that point. Accumulated usage carries over when the session is reopened.
+An active goal prints a one-line status (`[i] Pursuing goal: …`) as turns settle.
+In VT Code Desktop the same commands run through the goal bar above the composer, which
 shows the `Pursuing goal` / `Paused goal` status with pause/resume, clear, and expand actions. The
-bar's elapsed timer ticks live while the goal is active, and ending the session pauses the goal.
+bar's elapsed timer ticks live while the goal is active. Setting or resuming a goal during an
+active Desktop turn queues its prompt. Ending the session pauses the goal.
 
 ## Execution explanations
 

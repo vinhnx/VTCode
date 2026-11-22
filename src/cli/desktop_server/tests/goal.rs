@@ -5,6 +5,7 @@ use std::sync::Arc;
 struct GoalHarness {
     context: ServiceContext,
     events_path: PathBuf,
+    stats: crate::agent::runloop::unified::state::SessionStats,
     _runtime_task: tokio::task::JoinHandle<()>,
     _workspace_guard: tempfile::TempDir,
 }
@@ -32,13 +33,18 @@ impl GoalHarness {
             });
         }
         let tracker = Arc::new(Mutex::new(vtcode_memory::GoalTracker::new(workspace_guard.path().join("session-1"))));
-        stop_requests::publish_goal_tracker(&stop, &tracker);
+        let mut stats = crate::agent::runloop::unified::state::SessionStats::default();
+        let token_total = stats.share_goal_token_total();
         let events_path = workspace_guard.path().join("events.jsonl");
         let emitter = stop_requests::HarnessEventEmitter::new(events_path.clone()).unwrap();
-        stop_requests::publish_goal_emitter(&stop, &emitter);
+        stop_requests::publish_goal_handles(
+            &stop,
+            stop_requests::HostGoalHandles { tracker, token_total, emitter: Some(emitter) },
+        );
         Self {
             context,
             events_path,
+            stats,
             _runtime_task: runtime_task,
             _workspace_guard: workspace_guard,
         }
@@ -58,6 +64,65 @@ impl GoalHarness {
         let (value, _) = handle_request(&self.context, &request).await.expect("goal execute");
         serde_json::from_value(value).expect("goal result")
     }
+}
+
+#[tokio::test]
+async fn goal_execute_only_charges_active_intervals_and_counts_cached_input_once() {
+    let mut harness = GoalHarness::new().await;
+    let sample = |prompt_tokens, completion_tokens, cached_prompt_tokens| vtcode_core::llm::provider::Usage {
+        prompt_tokens,
+        completion_tokens,
+        cached_prompt_tokens: Some(cached_prompt_tokens),
+        ..Default::default()
+    };
+    harness.stats.record_usage("openai", Some(&sample(1000, 19, 700)));
+    let set = harness.execute("session", "Ship it").await;
+    assert_eq!(set.goal.unwrap().tokens_used, 0);
+    harness.stats.record_usage("openai", Some(&sample(160, 11, 130)));
+    let paused = harness.execute("session", "pause").await;
+    assert_eq!(paused.goal.unwrap().tokens_used, 171);
+    harness.stats.record_usage("openai", Some(&sample(500, 29, 300)));
+    let resumed = harness.execute("session", "resume").await;
+    assert_eq!(resumed.goal.unwrap().tokens_used, 171);
+    harness.stats.record_usage("openai", Some(&sample(90, 7, 35)));
+    let status = harness.execute("session", "").await;
+    assert_eq!(status.goal.unwrap().tokens_used, 268);
+    harness.stats.record_usage(
+        "anthropic",
+        Some(&vtcode_core::llm::provider::Usage {
+            prompt_tokens: 60,
+            completion_tokens: 9,
+            cache_read_tokens: Some(21),
+            cache_creation_tokens: Some(17),
+            ..Default::default()
+        }),
+    );
+    let status = harness.execute("session", "").await;
+    assert_eq!(status.goal.unwrap().tokens_used, 375);
+}
+
+#[tokio::test]
+async fn failed_goal_persist_keeps_the_current_goal_and_allows_retry() {
+    let harness = GoalHarness::new().await;
+    let original = harness.execute("session", "Ship it").await.goal.unwrap();
+    let path = harness._workspace_guard.path().join("session-1/goal/goal.json");
+    let backup = path.with_extension("backup");
+    std::fs::rename(&path, &backup).unwrap();
+    std::fs::create_dir(&path).unwrap();
+
+    let request = harness.request("session", "Write release notes");
+    let error = handle_request(&harness.context, &request).await.unwrap_err();
+    assert!(error.to_string().contains("goal snapshot persist failed"));
+    let current = harness.execute("session", "").await.goal.unwrap();
+    assert_eq!(current.goal_id, original.goal_id);
+    assert_eq!(current.objective, "Ship it");
+
+    std::fs::remove_dir(&path).unwrap();
+    std::fs::rename(backup, &path).unwrap();
+    let updated = harness.execute("session", "Write release notes").await.goal.unwrap();
+    assert_ne!(updated.goal_id, original.goal_id);
+    let restored = vtcode_memory::GoalTracker::restore(harness._workspace_guard.path().join("session-1")).unwrap();
+    assert_eq!(restored.objective(), Some("Write release notes"));
 }
 
 #[tokio::test]
@@ -128,7 +193,7 @@ async fn goal_execute_budget_sets_shows_and_rejects_garbage() {
 }
 
 #[tokio::test]
-async fn goal_execute_steers_live_turn_instead_of_queueing() {
+async fn goal_execute_returns_submit_while_a_turn_is_active() {
     let harness = GoalHarness::new().await;
     let (steer_tx, mut steer_rx) = mpsc::unbounded_channel();
     {
@@ -137,28 +202,12 @@ async fn goal_execute_steers_live_turn_instead_of_queueing() {
         let runtime = state.runtime.as_ref().expect("runtime");
         stop_requests::publish_steering_sender(&runtime.stop, &steer_tx);
     }
-
     let result = harness.execute("session", "Ship it").await;
     assert!(result.mutated);
-    assert!(result.submit.is_none(), "steered submit must not queue a turn");
-    let steered = steer_rx.try_recv().expect("steering message");
-    assert!(
-        matches!(steered, vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(steer) if steer.text.starts_with("Ship it") && steer.text.contains("GOAL ACHIEVED:")),
-        "objective plus completion contract must steer the live turn"
-    );
-}
-
-#[tokio::test]
-async fn goal_execute_falls_back_to_submit_without_steering_channel() {
-    let harness = GoalHarness::new().await;
-    {
-        let mut state = harness.context.state.lock().await;
-        state.active_turn_id = Some("turn-1".into());
-    }
-
-    let result = harness.execute("session", "Ship it").await;
-    let submit = result.submit.as_deref().expect("fallback must submit a turn");
-    assert!(submit.starts_with("Ship it"), "{submit}");
+    let submit = result.submit.as_deref().expect("the client can queue the new goal input");
+    assert!(submit.starts_with("Ship it"));
+    assert!(submit.contains("Goal activation ID"));
+    assert!(steer_rx.try_recv().is_err());
 }
 
 #[tokio::test]
