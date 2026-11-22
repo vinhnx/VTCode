@@ -314,8 +314,13 @@ impl ToolDiscoveryCache {
         inner.all_tools_cache.get(provider_name).cloned()
     }
 
-    /// Cache all tools for a provider
-    pub fn cache_all_tools(&self, provider_name: &str, tools: Vec<McpToolInfo>) {
+    /// Cache all tools for a provider.
+    ///
+    /// Takes a borrow so the caller can keep its owned list without paying for
+    /// a second deep clone of every tool (schemas included), and inserts tool
+    /// names into the bloom filter directly instead of collecting an
+    /// intermediate `Vec<String>` of clones.
+    pub fn cache_all_tools(&self, provider_name: &str, tools: &[McpToolInfo]) {
         let mut inner = match self.inner.write() {
             Ok(inner) => inner,
             Err(e) => {
@@ -324,20 +329,17 @@ impl ToolDiscoveryCache {
             }
         };
 
-        drop(inner.all_tools_cache.insert(provider_name.to_owned(), tools.clone()));
+        drop(inner.all_tools_cache.insert(provider_name.to_owned(), tools.to_vec()));
         let _previous = inner.last_refresh.insert(provider_name.to_owned(), Instant::now());
 
-        // Update bloom filter with all tool names
-        inner.bloom_filter.clear(); // Clear and rebuild for accuracy
-
-        let all_tool_names: Vec<String> = inner
-            .all_tools_cache
-            .values()
-            .flat_map(|provider_tools| provider_tools.iter().map(|tool| tool.name.clone()))
-            .collect();
-
-        for tool_name in all_tool_names {
-            inner.bloom_filter.insert(&tool_name);
+        // Update bloom filter with all tool names. Destructure the guard first
+        // so the disjoint field borrows are visible to the borrow checker.
+        let DiscoveryCacheInner { bloom_filter, all_tools_cache, .. } = &mut *inner;
+        bloom_filter.clear(); // Clear and rebuild for accuracy
+        for provider_tools in all_tools_cache.values() {
+            for tool in provider_tools {
+                bloom_filter.insert(&tool.name);
+            }
         }
     }
 
@@ -443,8 +445,9 @@ impl CachedToolDiscovery {
             return cached;
         }
 
-        // Cache the results
-        self.cache.cache_all_tools(provider_name, all_tools.clone());
+        // Cache a snapshot by reference; `cache_all_tools` makes the single
+        // copy it needs, so the owned list can be returned without cloning.
+        self.cache.cache_all_tools(provider_name, &all_tools);
 
         all_tools
     }
@@ -625,6 +628,31 @@ mod tests {
         let results = discovery.search_tools("test_provider", "read", DetailLevel::Full, tools);
         assert_eq!(results.len(), 1);
         assert_eq!(results.first().map(|result| result.tool.name.as_str()), Some("read_file"));
+    }
+
+    #[test]
+    fn get_all_tools_cached_rebuilds_bloom_filter_from_borrowed_snapshot() {
+        // `get_all_tools_cached` now lends its list to `cache_all_tools` (one
+        // copy) instead of cloning it twice. Verify the cached snapshot still
+        // populates the bloom filter and the caller keeps the full list.
+        let discovery = CachedToolDiscovery::new(10);
+        let tool = |name: &str| McpToolInfo {
+            name: name.to_string(),
+            description: format!("Description for {name}"),
+            provider: "provider".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+            output_schema: None,
+            ui: None,
+            visibility: crate::types::McpToolVisibility::default(),
+        };
+
+        let returned = discovery.get_all_tools_cached("provider", vec![tool("alpha_tool"), tool("beta_tool")]);
+
+        let names = returned.iter().map(|item| item.name.as_str()).collect::<Vec<_>>();
+        assert_eq!(names, ["alpha_tool", "beta_tool"]);
+        assert!(discovery.cache.might_have_tool("alpha_tool"));
+        assert!(discovery.cache.might_have_tool("beta_tool"));
+        assert!(!discovery.cache.might_have_tool("tool_that_was_never_registered"));
     }
 
     #[test]

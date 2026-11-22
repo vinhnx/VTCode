@@ -130,12 +130,17 @@ impl ToolDiscovery {
 
         debug!(keyword = keyword, count = tools.len(), "Searching tools for keyword");
 
+        // Normalize the keyword once for the whole scan: scoring is
+        // case-insensitive for every candidate, so doing it per tool would
+        // repeat the identical allocation once per tool.
+        let keyword_lower = keyword.to_lowercase();
+
         // Score by reference first. Only the truncated survivors below pay for
         // owned clones of names/descriptions/schemas; cloning every match
         // up front would discard most of that work at the 5-result cap.
         let mut scored: Vec<(&McpToolInfo, f32)> = Vec::with_capacity(tools.len() / 4);
         for tool in &tools {
-            let relevance_score = self.calculate_relevance(tool, keyword);
+            let relevance_score = self.calculate_relevance(tool, &keyword_lower);
 
             // Filter out tools with no relevance
             if relevance_score > 0.0 {
@@ -225,35 +230,41 @@ impl ToolDiscovery {
         })))
     }
 
-    /// Calculate relevance score for a tool based on keyword match.
+    /// Calculate relevance score for a tool against an already-normalized keyword.
     ///
     /// Uses fuzzy matching on name and description to score relevance.
-    fn calculate_relevance(&self, tool: &McpToolInfo, keyword: &str) -> f32 {
-        let keyword_lower = keyword.to_lowercase();
-
+    /// `keyword_lower` must be pre-normalized with `str::to_lowercase`: callers
+    /// scan many tools with the same keyword, so normalization is hoisted out
+    /// of this per-tool routine. Each tool's name and description are lowered
+    /// once and reused across the containment and fuzzy checks.
+    fn calculate_relevance(&self, tool: &McpToolInfo, keyword_lower: &str) -> f32 {
         // Exact name match: highest score
-        if tool.name.eq_ignore_ascii_case(keyword) {
+        if tool.name.eq_ignore_ascii_case(keyword_lower) {
             return 1.0;
         }
 
+        let name_lower = tool.name.to_lowercase();
+
         // Name contains keyword: high score
-        if tool.name.to_lowercase().contains(&keyword_lower) {
+        if name_lower.contains(keyword_lower) {
             return 0.8;
         }
 
+        let description_lower = tool.description.to_lowercase();
+
         // Description contains keyword: medium-high score
-        if tool.description.to_lowercase().contains(&keyword_lower) {
+        if description_lower.contains(keyword_lower) {
             return 0.6;
         }
 
         // Calculate fuzzy match score for partial matches
-        let name_fuzzy = self.fuzzy_score(&tool.name.to_lowercase(), &keyword_lower);
+        let name_fuzzy = self.fuzzy_score(&name_lower, keyword_lower);
         if name_fuzzy > 0.3 {
             return 0.5 * name_fuzzy;
         }
 
         // Fuzzy fallback for partial description matches
-        let desc_fuzzy = self.fuzzy_score(&tool.description.to_lowercase(), &keyword_lower);
+        let desc_fuzzy = self.fuzzy_score(&description_lower, keyword_lower);
         if desc_fuzzy > 0.2 {
             return 0.3 * desc_fuzzy;
         }
@@ -377,6 +388,32 @@ mod tests {
     #[derive(Default)]
     struct MockMcpClient {
         tools: Vec<McpToolInfo>,
+    }
+
+    #[tokio::test]
+    async fn search_tools_keyword_normalization_is_case_insensitive_and_stable() {
+        // Hoisting `keyword.to_lowercase()` out of the per-tool scoring loop
+        // must not change results: mixed-case queries are equivalent to their
+        // lowercase form, and uppercase tool text still matches.
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient {
+            tools: vec![
+                mock_tool("prov", "ReadMail", "Read incoming MAIL."),
+                mock_tool("prov", "send_mail", "Send a message."),
+                mock_tool("prov", "calendar", "Show the calendar."),
+            ],
+        }));
+
+        fn keyed(results: Vec<ToolDiscoveryResult>) -> Vec<(String, f32)> {
+            results
+                .into_iter()
+                .map(|result| (result.name, result.relevance_score))
+                .collect()
+        }
+
+        let lowercase = keyed(discovery.search_tools("mail", DetailLevel::Full).await.expect("search tools"));
+        assert_eq!(lowercase.first().map(|(name, _)| name.as_str()), Some("ReadMail"));
+        assert_eq!(keyed(discovery.search_tools("MAIL", DetailLevel::Full).await.expect("search tools")), lowercase);
+        assert_eq!(keyed(discovery.search_tools("MaIl", DetailLevel::Full).await.expect("search tools")), lowercase);
     }
 
     #[tokio::test]
