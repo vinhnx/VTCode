@@ -103,6 +103,13 @@ pub(crate) fn build_responses_request(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
+    // Same strict-schema guard as the Chat Completions builder: both wire
+    // shapes share `LLMRequest::output_format` and reject invalid descriptors
+    // before they can become an opaque API 400.
+    if ctx.include_structured_output {
+        super::validate_output_format(request.output_format.as_ref(), "OpenAI")?;
+    }
+
     let responses_payload = build_responses_item_history(request, ctx)?;
     build_responses_request_from_history(request, ctx, responses_payload)
 }

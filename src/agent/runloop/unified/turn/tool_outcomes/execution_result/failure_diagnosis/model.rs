@@ -12,8 +12,8 @@ use vtcode_core::llm::{
 
 use super::evidence::{escape_untrusted_evidence, safe_error_text};
 use super::{
-    DIAGNOSIS_MAX_FIELD_BYTES, DIAGNOSIS_MAX_MODEL_RESPONSE_BYTES, DIAGNOSIS_MAX_OUTPUT_TOKENS,
-    DIAGNOSIS_SYSTEM_PROMPT, DIAGNOSIS_TIMEOUT, ToolFailureDiagnosis,
+    DIAGNOSIS_MAX_MODEL_RESPONSE_BYTES, DIAGNOSIS_MAX_OUTPUT_TOKENS, DIAGNOSIS_SYSTEM_PROMPT, DIAGNOSIS_TIMEOUT,
+    ToolFailureDiagnosis,
 };
 use crate::agent::runloop::unified::run_loop_context::{DiagnosisMemoEntry, DiagnosisMemoKey};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
@@ -203,13 +203,18 @@ pub(super) fn diagnosis_prompt(evidence: &str) -> String {
 }
 
 pub(super) fn diagnosis_json_schema() -> Value {
+    // Keep the schema portable across every provider that advertises native
+    // structured output: string length constraints such as `maxLength` are
+    // rejected by Anthropic's strict schema validator (and only supported for
+    // non-fine-tuned OpenAI models). `ToolFailureDiagnosis::new` bounds every
+    // field in Rust, so the wire constraint is redundant.
     json!({
         "type": "object",
         "additionalProperties": false,
         "properties": {
-            "observed": {"type": "string", "maxLength": DIAGNOSIS_MAX_FIELD_BYTES},
-            "likely_cause": {"type": "string", "maxLength": DIAGNOSIS_MAX_FIELD_BYTES},
-            "next_action": {"type": "string", "maxLength": DIAGNOSIS_MAX_FIELD_BYTES},
+            "observed": {"type": "string"},
+            "likely_cause": {"type": "string"},
+            "next_action": {"type": "string"},
         },
         "required": ["observed", "likely_cause", "next_action"],
     })

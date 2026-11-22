@@ -34,6 +34,7 @@ mod files;
 mod history;
 mod hosted_shell;
 mod request_policy;
+mod structured_output;
 mod tools;
 mod transport;
 use wiremock::matchers::{header, method, path};

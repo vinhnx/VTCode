@@ -773,16 +773,18 @@ mod tests {
     }
 
     #[test]
-    fn diagnosis_schema_is_strict_and_bounded() {
+    fn diagnosis_schema_is_strict_and_portable() {
         let schema = diagnosis_json_schema();
 
         assert_eq!(schema["type"], "object");
         assert_eq!(schema["additionalProperties"], false);
         for field in ["observed", "likely_cause", "next_action"] {
-            assert_eq!(schema["properties"][field]["type"], "string");
-            assert_eq!(schema["properties"][field]["maxLength"], DIAGNOSIS_MAX_FIELD_BYTES);
+            assert_eq!(schema["properties"][field], json!({"type": "string"}));
         }
         assert_eq!(schema["required"], json!(["observed", "likely_cause", "next_action"]));
+        // Length bounds are enforced by ToolFailureDiagnosis::new, not by the
+        // wire schema: Anthropic rejects `maxLength` in strict schemas.
+        assert!(!diagnosis_json_schema().to_string().contains("maxLength"));
     }
 
     #[test]

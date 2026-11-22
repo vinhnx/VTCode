@@ -22,6 +22,13 @@ pub(crate) fn build_chat_request(
     request: &provider::LLMRequest,
     ctx: &ChatRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
+    // Strict Structured Outputs schemas are constrained to a JSON Schema
+    // subset. Reject invalid ones locally with an actionable error instead of
+    // letting the API return an opaque 400 after a wasted round trip.
+    if ctx.include_structured_output {
+        super::validate_output_format(request.output_format.as_ref(), "OpenAI")?;
+    }
+
     for message in request.messages.iter() {
         if let provider::MessageContent::Parts(parts) = &message.content {
             for part in parts {

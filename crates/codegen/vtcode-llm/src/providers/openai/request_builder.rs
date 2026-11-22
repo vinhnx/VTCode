@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use vtcode_config::core::OpenAIHostedShellConfig;
 use vtcode_config::types::ReasoningEffortLevel;
 
+use crate::{error_display, provider::LLMError};
+
 mod chat;
 mod history;
 mod model_policy;
@@ -112,6 +114,169 @@ fn json_schema_format(output_format: &Value) -> Option<JsonSchemaFormat<'_>> {
 
 fn json_object_format(output_format: &Value) -> bool {
     output_format.get("type").and_then(Value::as_str) == Some("json_object")
+}
+
+/// Keywords outside the JSON Schema subset accepted by OpenAI Structured
+/// Outputs (`allOf`, composition gates, `patternProperties`). `anyOf` and
+/// `$defs` are intentionally absent: they are supported in nested positions.
+const UNSUPPORTED_STRICT_KEYWORDS: &[&str] = &[
+    "allOf",
+    "oneOf",
+    "not",
+    "dependentRequired",
+    "dependentSchemas",
+    "if",
+    "then",
+    "else",
+    "patternProperties",
+];
+
+fn invalid_schema(provider_name: &str, message: String) -> LLMError {
+    let formatted = error_display::format_llm_error(provider_name, &message);
+    LLMError::InvalidRequest { message: formatted, metadata: None }
+}
+
+/// Validate a caller-supplied `output_format` against OpenAI's strict
+/// Structured Outputs schema rules before it reaches the wire.
+///
+/// OpenAI rejects a `strict: true` schema whose root is not an object, whose
+/// object nodes omit `additionalProperties: false` or leave a property out of
+/// `required`, or that uses an unsupported keyword. Checking locally turns an
+/// opaque API 400 into an actionable error and avoids a wasted request. This
+/// mirrors `anthropic::validation::validate_anthropic_schema`; JSON mode and
+/// non-strict schemas are left untouched because those rules do not apply.
+pub(super) fn validate_output_format(output_format: Option<&Value>, provider_name: &str) -> Result<(), LLMError> {
+    let Some(format) = output_format else {
+        return Ok(());
+    };
+    if json_object_format(format) {
+        return Ok(());
+    }
+    let Some(schema) = json_schema_format(format) else {
+        // The translation layer drops unknown descriptor shapes on purpose.
+        return Ok(());
+    };
+    if !schema.strict {
+        return Ok(());
+    }
+    validate_strict_schema(schema.schema, "root", provider_name)
+}
+
+/// `items` and `prefixItems` accept either a single schema or a tuple of
+/// schemas; both forms must satisfy the strict subset.
+fn validate_schema_list(value: &Value, path: &str, provider_name: &str) -> Result<(), LLMError> {
+    match value {
+        Value::Array(schemas) => {
+            for (index, child) in schemas.iter().enumerate() {
+                validate_strict_schema(child, &format!("{path}[{index}]"), provider_name)?;
+            }
+        }
+        _ => validate_strict_schema(value, path, provider_name)?,
+    }
+    Ok(())
+}
+
+fn validate_strict_schema(schema: &Value, path: &str, provider_name: &str) -> Result<(), LLMError> {
+    let Value::Object(map) = schema else {
+        return Err(invalid_schema(
+            provider_name,
+            format!("Structured output schema at '{path}' must be a JSON object"),
+        ));
+    };
+
+    if path == "root" {
+        if map.contains_key("anyOf") {
+            return Err(invalid_schema(
+                provider_name,
+                "Structured output root cannot use anyOf; it must be an object".to_string(),
+            ));
+        }
+        if map.get("type").and_then(Value::as_str) != Some("object") {
+            return Err(invalid_schema(provider_name, "Structured output root must have type 'object'".to_string()));
+        }
+    }
+
+    for keyword in UNSUPPORTED_STRICT_KEYWORDS {
+        if map.contains_key(*keyword) {
+            return Err(invalid_schema(
+                provider_name,
+                format!("Keyword '{keyword}' is not supported in strict structured output schemas (path: {path})"),
+            ));
+        }
+    }
+
+    let object_type = match map.get("type") {
+        Some(Value::String(schema_type)) => schema_type == "object",
+        Some(Value::Array(types)) => types.iter().any(|schema_type| schema_type.as_str() == Some("object")),
+        _ => false,
+    };
+    if object_type || map.contains_key("properties") || map.contains_key("required") {
+        if map.get("additionalProperties") != Some(&Value::Bool(false)) {
+            return Err(invalid_schema(
+                provider_name,
+                format!("Object at '{path}' must set additionalProperties to false for strict structured output"),
+            ));
+        }
+
+        let required: Vec<&str> = map
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|names| names.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let properties = map.get("properties").and_then(Value::as_object);
+
+        if let Some(properties) = properties {
+            for name in properties.keys() {
+                if !required.contains(&name.as_str()) {
+                    return Err(invalid_schema(
+                        provider_name,
+                        format!(
+                            "Property '{name}' at '{path}' must be listed in required for strict structured output"
+                        ),
+                    ));
+                }
+            }
+            for name in &required {
+                if !properties.contains_key(*name) {
+                    return Err(invalid_schema(
+                        provider_name,
+                        format!("Required property '{name}' at '{path}' is not declared in properties"),
+                    ));
+                }
+            }
+        } else if !required.is_empty() {
+            return Err(invalid_schema(
+                provider_name,
+                format!("Object at '{path}' declares required properties without a properties map"),
+            ));
+        }
+    }
+
+    if let Some(properties) = map.get("properties").and_then(Value::as_object) {
+        for (name, child) in properties {
+            validate_strict_schema(child, &format!("{path}.properties.{name}"), provider_name)?;
+        }
+    }
+    if let Some(items) = map.get("items") {
+        validate_schema_list(items, &format!("{path}.items"), provider_name)?;
+    }
+    if let Some(prefix_items) = map.get("prefixItems") {
+        validate_schema_list(prefix_items, &format!("{path}.prefixItems"), provider_name)?;
+    }
+    if let Some(variants) = map.get("anyOf").and_then(Value::as_array) {
+        for (index, child) in variants.iter().enumerate() {
+            validate_strict_schema(child, &format!("{path}.anyOf[{index}]"), provider_name)?;
+        }
+    }
+    for key in ["$defs", "definitions"] {
+        if let Some(definitions) = map.get(key).and_then(Value::as_object) {
+            for (name, child) in definitions {
+                validate_strict_schema(child, &format!("{path}.{key}.{name}"), provider_name)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Translate `LLMRequest::output_format` into the Chat Completions

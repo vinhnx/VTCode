@@ -356,6 +356,53 @@ pub(crate) async fn plan_memory_operation(
     .await
 }
 
+/// Strict Structured Outputs requires every declared property to be listed in
+/// `required`. `MemoryPlannedFact::source` is defaulted in Rust, but it still
+/// has to be required on the wire or OpenAI rejects the whole schema.
+fn memory_operation_plan_schema() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "kind": {
+                "type": "string",
+                "enum": ["remember", "forget", "ask_missing", "noop"]
+            },
+            "facts": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "enum": ["preferences", "repository_facts"]
+                        },
+                        "fact": {"type": "string"},
+                        "source": {"type": "string"}
+                    },
+                    "required": ["topic", "fact", "source"],
+                    "additionalProperties": false
+                }
+            },
+            "selected_ids": {
+                "type": "array",
+                "items": {"type": "integer"}
+            },
+            "missing": {
+                "type": ["object", "null"],
+                "properties": {
+                    "field": {"type": "string"},
+                    "prompt": {"type": "string"}
+                },
+                "required": ["field", "prompt"],
+                "additionalProperties": false
+            },
+            "message": {"type": ["string", "null"]}
+        },
+        "required": ["kind", "facts", "selected_ids", "missing", "message"],
+        "additionalProperties": false
+    })
+}
+
 pub(super) async fn plan_memory_operation_with_provider(
     provider: &(impl LLMProvider + ?Sized),
     route: &MemoryModelRoute,
@@ -377,47 +424,7 @@ pub(super) async fn plan_memory_operation_with_provider(
             )
         })
         .unwrap_or_default();
-    let schema = json!({
-        "type": "object",
-        "properties": {
-            "kind": {
-                "type": "string",
-                "enum": ["remember", "forget", "ask_missing", "noop"]
-            },
-            "facts": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "topic": {
-                            "type": "string",
-                            "enum": ["preferences", "repository_facts"]
-                        },
-                        "fact": {"type": "string"},
-                        "source": {"type": "string"}
-                    },
-                    "required": ["topic", "fact"],
-                    "additionalProperties": false
-                }
-            },
-            "selected_ids": {
-                "type": "array",
-                "items": {"type": "integer"}
-            },
-            "missing": {
-                "type": ["object", "null"],
-                "properties": {
-                    "field": {"type": "string"},
-                    "prompt": {"type": "string"}
-                },
-                "required": ["field", "prompt"],
-                "additionalProperties": false
-            },
-            "message": {"type": ["string", "null"]}
-        },
-        "required": ["kind", "facts", "selected_ids", "missing", "message"],
-        "additionalProperties": false
-    });
+    let schema = memory_operation_plan_schema();
     let llm_request = build_memory_json_request(
         provider,
         route,
@@ -600,7 +607,50 @@ fn runtime_provider_name(runtime_config: &RuntimeAgentConfig) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::memory_route_fallback_allowed;
+    use super::{memory_operation_plan_schema, memory_route_fallback_allowed};
+    use serde_json::Value;
+
+    /// Independent check of the object-level rules OpenAI enforces for strict
+    /// Structured Outputs. Mirrors the validator in vtcode-llm's OpenAI request
+    /// builder so a schema regression is caught without a live API call.
+    fn assert_strict_objects(value: &Value, path: &str) {
+        let Some(map) = value.as_object() else {
+            return;
+        };
+        let object_type = match map.get("type") {
+            Some(Value::String(kind)) => kind == "object",
+            Some(Value::Array(kinds)) => kinds.iter().any(|kind| kind.as_str() == Some("object")),
+            _ => false,
+        };
+        if object_type || map.contains_key("properties") || map.contains_key("required") {
+            assert_eq!(map.get("additionalProperties"), Some(&Value::Bool(false)), "{path}");
+            let required = map
+                .get("required")
+                .and_then(Value::as_array)
+                .map(|names| names.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                .unwrap_or_default();
+            if let Some(properties) = map.get("properties").and_then(Value::as_object) {
+                for name in properties.keys() {
+                    assert!(required.contains(&name.as_str()), "{path}.{name} must be required");
+                }
+                for (name, child) in properties {
+                    assert_strict_objects(child, &format!("{path}.{name}"));
+                }
+            }
+        }
+        for key in ["items", "prefixItems"] {
+            if let Some(child) = map.get(key) {
+                match child {
+                    Value::Array(children) => {
+                        for (index, item) in children.iter().enumerate() {
+                            assert_strict_objects(item, &format!("{path}.{key}[{index}]"));
+                        }
+                    }
+                    _ => assert_strict_objects(child, &format!("{path}.{key}")),
+                }
+            }
+        }
+    }
 
     #[test]
     fn memory_route_fallback_skips_configuration_failures() {
@@ -608,5 +658,10 @@ mod tests {
             "unknown model 'memory-model' in agent.small_model.model"
         )));
         assert!(memory_route_fallback_allowed(&anyhow::anyhow!("connection reset by peer")));
+    }
+
+    #[test]
+    fn memory_operation_plan_schema_is_strict_compatible() {
+        assert_strict_objects(&memory_operation_plan_schema(), "root");
     }
 }
