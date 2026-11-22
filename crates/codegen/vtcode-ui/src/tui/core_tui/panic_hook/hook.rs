@@ -74,9 +74,10 @@ fn record_panic(ctx: &PanicContext) {
 /// The default tracing setup (no `RUST_LOG`, no `debug.enable_tracing`) has no
 /// file layer, so the structured event lives only in the in-memory error
 /// collector, which is drained at graceful session finalization — a release
-/// panic raw-exits before that. The human-panic report is always written, so
-/// pin the semantic context there as a TOML comment (valid anywhere in the
-/// document; control characters are flattened to keep it one valid line).
+/// panic raw-exits before that. The human-panic report is the only durable
+/// sink attempted on this path, so pin the semantic context there as a TOML
+/// comment (valid anywhere in the document; control characters are flattened
+/// to keep it one valid line).
 fn append_context_to_crash_report(path: Option<&Path>, ctx: &PanicContext) {
     let Some(path) = path else {
         return;
@@ -160,9 +161,9 @@ pub fn init_panic_hook() {
             // while the rest of the process is still unwinding. The crash
             // report is already written to disk and printed above, so flush
             // the buffered streams explicitly before skipping their cleanup.
-            // Second flush: `restore_tui()` and the rendering above can emit
-            // tracing events that landed in the buffer after the hook's first
-            // event. `_exit` skips `BufWriter` destructors, so flush them now.
+            // `restore_tui()` and the panic rendering above can emit tracing
+            // events after the initial panic event. `_exit` skips `BufWriter`
+            // destructors, so flush every buffered log line now.
             vtcode_commons::trace_flush::flush_trace_log();
             let _ = std::io::Write::flush(&mut std::io::stdout());
             let _ = std::io::Write::flush(&mut std::io::stderr());
