@@ -170,7 +170,7 @@ impl ConfigManager {
     }
 
     /// Remove `path` from `table`, then drop ancestor tables left empty.
-    /// Returns true when `table` itself is now empty.
+    /// Returns true when anything was removed.
     fn remove_path_and_prune_empty_parents(table: &mut dyn toml_edit::TableLike, path: &[&str]) -> bool {
         let Some((first, rest)) = path.split_first() else {
             return false;
