@@ -370,6 +370,7 @@ class ZizmorGateTests(unittest.TestCase):
         self.assertNotRegex(self.local_gate, r"zizmor@\d+\.\d+\.\d+")
         self.assertIn("--offline --no-progress --persona=regular .", self.local_gate)
         self.assertIn('"workflow-audit")', self.check_sh)
+        self.assertIn("\t127)", self.check_sh)
 
     def test_local_gate_skips_with_distinct_code_when_tool_missing(self):
         """Contributors without uv get a skip, not a failing full gate."""
@@ -387,8 +388,39 @@ class ZizmorGateTests(unittest.TestCase):
                 text=True,
                 env={"PATH": str(bin_dir), "HOME": temp},
             )
-            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertEqual(result.returncode, 127, result.stderr)
             self.assertIn("unavailable", result.stderr)
+
+    def test_zizmor_no_inputs_exit_code_is_not_treated_as_skip(self):
+        """Zizmor's exit 3 (no inputs) must fail the gate, not skip it.
+
+        The local gate uses 127 for "tool unavailable"; reusing zizmor's code 3
+        would make an empty/moved workflow collection fail open.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            bin_dir = Path(temp) / "bin"
+            bin_dir.mkdir()
+            for tool in ("bash", "sed", "tr", "head", "dirname"):
+                resolved = shutil.which(tool)
+                if resolved:
+                    (bin_dir / tool).symlink_to(resolved)
+            fake_uvx = bin_dir / "uvx"
+            fake_uvx.write_text(
+                "#!/bin/bash\n"
+                'for arg in "$@"; do [ "$arg" = "--version" ] && exit 0; done\n'
+                "exit 3\n",
+                encoding="utf-8",
+            )
+            fake_uvx.chmod(0o755)
+            result = subprocess.run(
+                [str(bin_dir / "bash"), str(ROOT / "scripts/check_zizmor.sh")],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                env={"PATH": str(bin_dir), "HOME": temp},
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertNotIn("unavailable", result.stderr)
 
     def test_release_run_blocks_bind_tag_through_env(self):
         """The template-injection fix must survive release-workflow edits."""

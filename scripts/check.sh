@@ -216,7 +216,9 @@ run_zizmor_lint() {
 		print_success "zizmor workflow static analysis passed!"
 		return 0
 		;;
-	3)
+	127)
+		# Only our "tool unavailable" sentinel skips. Zizmor's exit 3 means
+		# "no inputs collected" and must fail like any other audit error.
 		print_warning "zizmor is not available. Skipping; CI enforces the same audit via .github/workflows/verify-lockfile.yml. Install uv (uvx) to run it locally."
 		return 0
 		;;

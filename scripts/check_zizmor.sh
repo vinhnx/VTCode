@@ -3,8 +3,10 @@
 # Run the exact zizmor audit enforced by .github/workflows/verify-lockfile.yml.
 # The version comes from the CI workflow so local and CI audits cannot drift.
 #
-# Exit codes: 0 = clean, 1 = findings/audit failure, 3 = tool unavailable
-# (the caller may skip, since CI always enforces the gate).
+# Exit codes: 0 = clean, and zizmor's own codes (1, 2, 3, 11-14) on audit
+# failure. 127 = tool unavailable (the caller may skip, since CI always
+# enforces the gate). 127 is outside zizmor's reserved range: code 3 means
+# "no inputs were collected" and must fail the gate, not silently skip it.
 
 set -euo pipefail
 
@@ -39,4 +41,4 @@ if command -v zizmor >/dev/null 2>&1; then
 fi
 
 echo "[zizmor] unavailable: install uv, or install zizmor $version on PATH" >&2
-exit 3
+exit 127
