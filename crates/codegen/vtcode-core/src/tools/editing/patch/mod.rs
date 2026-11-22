@@ -259,6 +259,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn blank_line_document_keeps_every_trailing_newline() {
+        let patch =
+            Patch::parse("*** Begin Patch\n*** Update File: f.txt\n@@\n-\n+X\n*** End Patch\n").expect("patch parses");
+        let chunks = match &patch.operations()[0] {
+            PatchOperation::UpdateFile { chunks, .. } => chunks.clone(),
+            other => panic!("expected update, got {other:?}"),
+        };
+        // "\n\n" splits into two blank lines; changing the first must not make
+        // the second one disappear with it.
+        let rendered = render_patch_update_content(Path::new("f.txt"), "\n\n", &chunks, "f.txt")
+            .await
+            .expect("blank line exists and must match");
+        assert_eq!(rendered, "X\n\n");
+    }
+
+    #[tokio::test]
+    async fn adding_a_blank_line_at_eof_is_not_swallowed_by_the_trailing_newline() {
+        let patch =
+            Patch::parse("*** Begin Patch\n*** Update File: f.txt\n@@\n a\n+\n*** End Patch\n").expect("patch parses");
+        let chunks = match &patch.operations()[0] {
+            PatchOperation::UpdateFile { chunks, .. } => chunks.clone(),
+            other => panic!("expected update, got {other:?}"),
+        };
+        let rendered = render_patch_update_content(Path::new("f.txt"), "a\n", &chunks, "f.txt")
+            .await
+            .expect("context line must match");
+        assert_eq!(rendered, "a\n\n");
+    }
+
+    #[tokio::test]
     async fn overlapping_chunk_matches_are_rejected() {
         let patch = Patch::parse(
             "*** Begin Patch\n*** Update File: f.txt\n@@ -1,2\n-a\n-b\n+X\n@@ -1,2\n-a\n-b\n+Y\n*** End Patch\n",

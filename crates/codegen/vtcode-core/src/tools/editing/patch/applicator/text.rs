@@ -304,21 +304,6 @@ fn patched_line_segments<'a>(
     segments
 }
 
-/// One trailing-newline verdict shared by both application paths.
-fn needs_trailing_ending(segments: &[&[String]], ensure_trailing_newline: bool) -> bool {
-    if !ensure_trailing_newline {
-        return false;
-    }
-    // A trailing empty line already contributed the separator that ends the
-    // document. For zero lines the empty document gets the ending, matching
-    // the previous `last_line_was_empty = false` behaviour.
-    segments
-        .iter()
-        .rev()
-        .find_map(|segment| segment.last())
-        .is_none_or(|line| !line.is_empty())
-}
-
 fn render_patched_content(
     original_lines: Vec<String>,
     replacements: Vec<(usize, usize, Vec<String>)>,
@@ -342,7 +327,11 @@ fn render_patched_content(
         rendered.push_str(line);
         first = false;
     }
-    if needs_trailing_ending(&segments, ensure_trailing_newline) {
+    // `ensure_trailing_newline` is a property of the document, not of its last
+    // line. Lines never contain the ending, so appending it unconditionally is
+    // the exact inverse of the split in `lines_from_content`/`load_file_lines`:
+    // an empty last line is a real line that needs its own terminator.
+    if ensure_trailing_newline {
         rendered.push_str(ending);
     }
     rendered
@@ -365,7 +354,7 @@ pub(super) async fn write_patched_content(
         writer.write_all(line.as_bytes()).await?;
         first = false;
     }
-    if needs_trailing_ending(&segments, ensure_trailing_newline) {
+    if ensure_trailing_newline {
         writer.write_all(ending.as_bytes()).await?;
     }
     Ok(())
@@ -396,9 +385,7 @@ pub(crate) async fn inspection_replacements(
 #[cfg(test)]
 mod tests {
     use super::super::io::AtomicWriter;
-    use super::{
-        LineEnding, needs_trailing_ending, patched_line_segments, render_patched_content, write_patched_content,
-    };
+    use super::{LineEnding, patched_line_segments, render_patched_content, write_patched_content};
 
     #[test]
     fn patched_segments_apply_edits_in_file_order() {
@@ -417,50 +404,60 @@ mod tests {
     }
 
     #[test]
-    fn trailing_ending_ignores_empty_final_line_and_empty_document() {
-        let one = vec!["a".to_string()];
-        let with_empty_tail = vec!["a".to_string(), String::new()];
-        let empty: Vec<String> = Vec::new();
-        let segments: Vec<&[String]> = vec![one.as_slice(), with_empty_tail.as_slice(), empty.as_slice()];
-        let verdicts: Vec<bool> = segments
-            .iter()
-            .map(|segment| needs_trailing_ending(&[*segment], true))
-            .collect();
-
-        assert_eq!(verdicts, [true, false, true]);
-        assert!(!needs_trailing_ending(&[one.as_slice()], false));
+    fn trailing_ending_is_a_document_property_not_a_last_line_property() {
+        let lines = |values: &[&str]| values.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
+        // Every case is the exact inverse of splitting the expected content
+        // into lines: the final line's emptiness must not consume the ending.
+        let cases = [
+            (lines(&["a"]), true, "a\n"),
+            (lines(&["a"]), false, "a"),
+            (lines(&["a", ""]), true, "a\n\n"),
+            (lines(&["", ""]), true, "\n\n"),
+            (lines(&[""]), true, "\n"),
+            (Vec::new(), true, "\n"),
+        ];
+        for (original, ensure_trailing_newline, expected) in cases {
+            let rendered = render_patched_content(original, Vec::new(), ensure_trailing_newline, LineEnding::LF);
+            assert_eq!(rendered, expected, "ensure={ensure_trailing_newline}");
+        }
     }
 
     #[tokio::test]
     async fn streaming_writer_matches_in_memory_renderer() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let original: Vec<String> = ["alpha", "stale", "omega"].iter().map(|s| (*s).to_string()).collect();
-        let replacements = vec![(1usize, 1usize, vec!["fresh".to_string()])];
-        let cases = [
-            (LineEnding::LF, true),
-            (LineEnding::LF, false),
-            (LineEnding::Crlf, true),
+        let lines = |values: &[&str]| values.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
+        let scenarios = [
+            (lines(&["alpha", "stale", "omega"]), vec![(1usize, 1usize, lines(&["fresh"]))], true),
+            (lines(&["", ""]), vec![(0usize, 1usize, lines(&["X"]))], true),
+            (lines(&["a"]), vec![(1usize, 0usize, lines(&[""]))], true),
+            (lines(&["a", "b"]), vec![(0usize, 1usize, lines(&["c"]))], false),
         ];
 
-        for (line_ending, ensure_trailing_newline) in cases {
-            let rendered =
-                render_patched_content(original.clone(), replacements.clone(), ensure_trailing_newline, line_ending);
+        for (index, (original, replacements, ensure_trailing_newline)) in scenarios.into_iter().enumerate() {
+            for line_ending in [LineEnding::LF, LineEnding::Crlf] {
+                let rendered = render_patched_content(
+                    original.clone(),
+                    replacements.clone(),
+                    ensure_trailing_newline,
+                    line_ending,
+                );
 
-            let path = dir.path().join("patched.txt");
-            let mut writer = AtomicWriter::create(&path, None).await.expect("create writer");
-            write_patched_content(
-                &mut writer,
-                original.clone(),
-                replacements.clone(),
-                ensure_trailing_newline,
-                line_ending,
-            )
-            .await
-            .expect("write patched content");
-            writer.commit().await.expect("commit");
-            let streamed = tokio::fs::read_to_string(&path).await.expect("read patched file");
+                let path = dir.path().join(format!("patched-{index}.txt"));
+                let mut writer = AtomicWriter::create(&path, None).await.expect("create writer");
+                write_patched_content(
+                    &mut writer,
+                    original.clone(),
+                    replacements.clone(),
+                    ensure_trailing_newline,
+                    line_ending,
+                )
+                .await
+                .expect("write patched content");
+                writer.commit().await.expect("commit");
+                let streamed = tokio::fs::read_to_string(&path).await.expect("read patched file");
 
-            assert_eq!(streamed, rendered, "renderer and writer must apply edits identically");
+                assert_eq!(streamed, rendered, "scenario {index}, {line_ending:?}");
+            }
         }
     }
 }
