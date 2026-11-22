@@ -69,17 +69,23 @@ pub(in crate::desktop::view) fn desktop_dismiss_button(
 
 /// The single zen toggle: docked in the title bar normally, floating above
 /// the content in zen mode. Enter and exit share id, size, and variant; only
-/// the icon paint, label, and mount point change.
-pub(in crate::desktop::view) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &FocusHandle) -> Button {
+/// the icon paint, label, and mount point change. The docked entry passes a
+/// quiet tone calibrated to its toolbar surface; the floating exit passes
+/// `None` so the button keeps its default ghost icon tone.
+pub(in crate::desktop::view) fn zen_mode_toggle(
+    zen_mode: bool,
+    entry_icon_color: Option<gpui_kit::Hsla>,
+    focus: &FocusHandle,
+) -> Button {
     let label = if zen_mode {
         rust_i18n::t!("app.navigation.exit_zen").to_string()
     } else {
         rust_i18n::t!("app.navigation.enter_zen").to_string()
     };
-    let icon = if zen_mode {
-        Icon::new(IconName::Leaf)
-    } else {
-        Icon::new(IconName::Leaf).text_color(faded)
+    let icon = Icon::new(IconName::Leaf);
+    let icon = match entry_icon_color {
+        Some(color) => icon.text_color(color),
+        None => icon,
     };
     desktop_ghost_button(ZEN_MODE_TOGGLE_ELEMENT_ID)
         .icon(icon)

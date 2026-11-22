@@ -629,7 +629,6 @@ impl DesktopView {
         const FLOATING_TRAILING_INSET: f32 = 15.;
 
         let colors = cx.theme().colors;
-        let faded = themes::faded_chrome(colors.background, colors.foreground);
         // The pill itself is a raised popover surface: use the hover fill for
         // the armed cue so the highlight is visible against it.
         let swipe_cue_background = colors.accent;
@@ -650,7 +649,7 @@ impl DesktopView {
             .child(self.render_go_home_button(true))
             .child(self.render_browse_threads_button(cx))
             .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
-            .child(zen_mode_toggle(true, faded, &self.focus_handle))
+            .child(zen_mode_toggle(true, None, &self.focus_handle))
     }
 
     /// Trailing header actions for the normal-mode toolbar. The zen toggle is
@@ -687,9 +686,14 @@ impl DesktopView {
         group = group.content(
             self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),
         );
-        let faded = themes::faded_chrome(theme.colors.background, theme.colors.foreground);
+        // The quiet entry icon paints on the toolbar band, whose fill is the
+        // navigation rail, not the canvas. Calibrate against that surface so
+        // the icon holds the 3:1 non-text contrast floor in every theme.
+        let rail =
+            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
+        let faded = themes::faded_chrome(rail, theme.colors.foreground);
         // The toolbar only renders outside zen mode; the toggle always offers entry here.
-        group = group.child(zen_mode_toggle(false, faded, &self.focus_handle));
+        group = group.child(zen_mode_toggle(false, Some(faded), &self.focus_handle));
         Toolbar::new("header-toolbar").small().child(group)
     }
 }
