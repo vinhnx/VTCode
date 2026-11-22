@@ -410,6 +410,7 @@ fn test_warn_if_insecure_trusted_dir_silent_on_restricted_dir() {
 // --- FFI boundary: adversarial plugin responses ---
 
 #[test]
+#[serial]
 fn test_execute_ffi_null_result_fails_closed_without_freeing() {
     TEST_FREE_CALLS.store(0, Ordering::SeqCst);
     let plugin = test_plugin(test_execute_null, Some(test_free_counting));
@@ -422,6 +423,7 @@ fn test_execute_ffi_null_result_fails_closed_without_freeing() {
 }
 
 #[test]
+#[serial]
 fn test_execute_ffi_invalid_utf8_frees_buffer_exactly_once() {
     TEST_FREE_CALLS.store(0, Ordering::SeqCst);
     let plugin = test_plugin(test_execute_invalid_utf8, Some(test_free_counting));
@@ -433,6 +435,7 @@ fn test_execute_ffi_invalid_utf8_frees_buffer_exactly_once() {
 }
 
 #[test]
+#[serial]
 fn test_execute_ffi_malformed_json_frees_buffer_exactly_once() {
     TEST_FREE_CALLS.store(0, Ordering::SeqCst);
     let plugin = test_plugin(test_execute_malformed_json, Some(test_free_counting));
@@ -444,6 +447,7 @@ fn test_execute_ffi_malformed_json_frees_buffer_exactly_once() {
 }
 
 #[test]
+#[serial]
 fn test_execute_ffi_without_deallocator_still_decodes() {
     TEST_FREE_CALLS.store(0, Ordering::SeqCst);
     let plugin = test_plugin(test_execute_valid, None);
@@ -457,6 +461,7 @@ fn test_execute_ffi_without_deallocator_still_decodes() {
 }
 
 #[test]
+#[serial]
 fn test_plugin_owned_c_string_frees_exactly_once_on_decode_error() {
     TEST_FREE_CALLS.store(0, Ordering::SeqCst);
     let raw = CString::from_vec_with_nul(vec![0xFF, 0x00]).expect("valid C string").into_raw();
