@@ -134,9 +134,17 @@ impl CustomThemeState {
                 if let ColorPickerEvent::Change(Some(color)) = event
                     && let Some(draft) = view.theme_editor.draft.as_mut()
                 {
-                    slot.write(&mut draft.seeds, *color);
-                    draft.error = None;
-                    cx.notify();
+                    // A picker emits Change continuously while dragging; an
+                    // equal colour is not a state change and must not repaint
+                    // the whole view. Clearing a stale validation error still is.
+                    let changed = slot.read(draft.seeds) != *color;
+                    let cleared_error = draft.error.take().is_some();
+                    if changed {
+                        slot.write(&mut draft.seeds, *color);
+                    }
+                    if changed || cleared_error {
+                        cx.notify();
+                    }
                 }
             }));
             pickers.push(picker);

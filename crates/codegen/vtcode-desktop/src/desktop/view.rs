@@ -710,6 +710,10 @@ struct DesktopView {
     history_scope_focus: FocusHandle,
     palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
+    /// Last observed effort-slider value. Kit emits a notify on every drag tick,
+    /// even when the snapped value is unchanged; the observer only repaints the
+    /// palette when this differs, so an equal write costs no full-view render.
+    observed_effort_slider_value: Option<gpui_kit::component::slider::SliderValue>,
     contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
     contrast_focus: FocusHandle,
     /// Tab stop for the reduced-motion segmented choice (Kit tabs do not own

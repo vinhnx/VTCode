@@ -4,7 +4,29 @@ use super::composer_controls::{
 };
 use super::*;
 
+/// Forward an effort-slider notify only when the snapped value actually moved.
+/// `SliderState::set_value` notifies unconditionally, so repeated drag ticks
+/// inside one step would otherwise repaint the whole model-options palette.
+fn effort_slider_value_changed(
+    observed: &mut Option<gpui_kit::component::slider::SliderValue>,
+    current: gpui_kit::component::slider::SliderValue,
+) -> bool {
+    if *observed == Some(current) {
+        return false;
+    }
+    *observed = Some(current);
+    true
+}
+
 impl DesktopView {
+    /// Release the model-options slider and its subscriptions as one unit, so a
+    /// stale observed value cannot suppress the first repaint after reopening.
+    pub(super) fn release_effort_slider(&mut self) {
+        self._effort_slider_subscriptions.clear();
+        self.effort_slider = None;
+        self.observed_effort_slider_value = None;
+    }
+
     fn clear_submitted_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.reset_history_recall();
@@ -688,8 +710,7 @@ impl DesktopView {
         // Reopening must not reuse a previous knob: the fallback paths below
         // leave the slider untouched, so a stale range would mislabel the new
         // levels.
-        self._effort_slider_subscriptions.clear();
-        self.effort_slider = None;
+        self.release_effort_slider();
         let Some(config) = self.configuration.as_ref() else {
             return;
         };
@@ -738,8 +759,14 @@ impl DesktopView {
                 .step(1.)
                 .default_value(selected as f32)
         });
+        self.observed_effort_slider_value = Some(slider.read(cx).value());
         let palette_id = self.palette.as_ref().map(|state| state.entity_id());
-        let slider_observation = cx.observe(&slider, |_, _, cx| cx.notify());
+        let slider_observation = cx.observe(&slider, |view, slider, cx| {
+            let value = slider.read(cx).value();
+            if effort_slider_value_changed(&mut view.observed_effort_slider_value, value) {
+                cx.notify();
+            }
+        });
         let slider_events = cx.subscribe_in(&slider, window, move |_view, _, event, window, cx| {
             // The observer above invalidates the view when slider state changes;
             // this typed event only commits a released value to the CLI.
@@ -792,5 +819,23 @@ impl DesktopView {
         self.effort_slider = Some(slider);
         self._effort_slider_subscriptions = vec![slider_observation, slider_events];
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui_kit::component::slider::SliderValue;
+
+    #[test]
+    fn effort_slider_guard_skips_repeated_snapped_values() {
+        let mut observed = None;
+        assert!(effort_slider_value_changed(&mut observed, SliderValue::Single(1.)));
+        assert!(!effort_slider_value_changed(&mut observed, SliderValue::Single(1.)));
+        assert!(effort_slider_value_changed(&mut observed, SliderValue::Single(2.)));
+        assert!(!effort_slider_value_changed(&mut observed, SliderValue::Single(2.)));
+        assert_eq!(observed, Some(SliderValue::Single(2.)));
+        // A range is a distinct value even when its start matches the single.
+        assert!(effort_slider_value_changed(&mut observed, SliderValue::Range(2., 3.)));
     }
 }

@@ -551,8 +551,7 @@ impl DesktopView {
     pub(super) fn clear_palette_state(&mut self) {
         self.palette = None;
         self.palette_query = gpui_kit::SharedString::default();
-        self._effort_slider_subscriptions.clear();
-        self.effort_slider = None;
+        self.release_effort_slider();
         self.palette_groups.clear();
     }
 

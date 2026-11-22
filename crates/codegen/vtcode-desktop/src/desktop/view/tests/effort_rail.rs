@@ -210,11 +210,15 @@ fn reasoning_effort_slider_subscriptions_follow_palette_lifecycle(cx: &mut TestA
         window.render_frame(cx);
 
         view.update(cx, |view, cx| {
-            assert!(view.effort_slider.is_some());
+            let slider = view.effort_slider.clone().expect("filtered knob");
             assert_eq!(view._effort_slider_subscriptions.len(), 2);
+            // The guard seeds from the live slider, so a repeated drag tick at
+            // the initial step cannot trigger a redundant palette repaint.
+            assert_eq!(view.observed_effort_slider_value, Some(slider.read(cx).value()));
             view.close_palette(window, cx);
             assert!(view.effort_slider.is_none());
             assert!(view._effort_slider_subscriptions.is_empty());
+            assert!(view.observed_effort_slider_value.is_none());
             assert!(view.palette.is_none());
         });
     })

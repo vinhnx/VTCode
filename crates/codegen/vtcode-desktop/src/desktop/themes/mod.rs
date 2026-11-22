@@ -21,6 +21,8 @@ mod custom;
 mod fills;
 pub(super) use fills::{accented_button_shadows, button_inset_edges, elevated_card_shadows};
 mod hairline;
+mod muted_text;
+pub(super) use muted_text::muted_text;
 pub(super) mod layout;
 pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
@@ -722,7 +724,7 @@ pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
 /// already at or below the floor, and for the static reduced-motion path
 /// callers pass `tone` directly rather than this.
 ///
-/// Anchored to [`ThemeColor::popover`], like [`muted_text`], because raised
+/// Anchored to [`ThemeColor::popover`], like [`muted_text()`], because raised
 /// surfaces move toward the text color in both polarities, so the popover is
 /// the hardest seat: holding the floor there holds it on the canvas, panel, and
 /// group box too. Anchoring to the canvas instead (the obvious-looking choice)
@@ -738,18 +740,6 @@ pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
 /// background itself, a background-coloured sweep.
 pub(super) fn shimmer_resting(colors: &ThemeColor, tone: Hsla) -> Hsla {
     text_at_contrast(colors.popover, tone, NON_TEXT_RATIO)
-}
-
-/// Secondary copy (row descriptions, hints) one step brighter than
-/// [`aa_muted`]: small muted text at the muted floor reads washed, so this
-/// targets 7:1 on the hardest surface (the raised popover fill, which is
-/// lighter than canvas, panel, and sidebar fills, so the ratio only grows
-/// there). Falls back toward the palette foreground on low-headroom themes
-/// instead of collapsing below AA.
-pub(super) fn muted_text(colors: &ThemeColor) -> Hsla {
-    const TARGET_RATIO: f32 = 7.0;
-    let headroom = contrast_ratio(colors.foreground, colors.popover);
-    text_at_contrast(colors.popover, colors.foreground, TARGET_RATIO.min(headroom))
 }
 
 pub(super) use hairline::hairline;

@@ -17,6 +17,17 @@ mod handoff;
 pub(super) use handoff::*;
 mod prefs;
 
+/// Mirror a Kit tree expand/collapse into the view's persisted set. Returns
+/// whether the set actually changed: GPUI re-renders the whole view on
+/// `cx.notify()`, and Kit emits duplicate expand/collapse events (re-expanding
+/// an open row, collapsing a closed one), so an equal write is pure cost.
+fn track_tree_expansion(expanded: &mut HashSet<String>, event: &TreeEvent) -> bool {
+    match event {
+        TreeEvent::Expanded(path) => expanded.insert(path.to_string()),
+        TreeEvent::Collapsed(path) => expanded.remove(path.as_ref()),
+    }
+}
+
 pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
     let prefs_phase = vtcode_commons::startup_trace::phase_started();
     let preferences = preferences::Preferences::load();
@@ -262,15 +273,9 @@ impl DesktopView {
         let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
-            match event {
-                TreeEvent::Expanded(path) => {
-                    let _inserted = view.expanded_file_directories.insert(path.to_string());
-                }
-                TreeEvent::Collapsed(path) => {
-                    let _removed = view.expanded_file_directories.remove(path.as_ref());
-                }
+            if track_tree_expansion(&mut view.expanded_file_directories, event) {
+                cx.notify();
             }
-            cx.notify();
         });
         // English literal: new strings stay untranslated until full
         // native-quality coverage ships for every locale.
@@ -283,15 +288,9 @@ impl DesktopView {
         });
         let picker_tree = cx.new(|cx| TreeState::new(cx));
         let picker_tree_subscription = cx.subscribe(&picker_tree, |view, _, event, cx| {
-            match event {
-                TreeEvent::Expanded(path) => {
-                    let _inserted = view.expanded_picker_directories.insert(path.to_string());
-                }
-                TreeEvent::Collapsed(path) => {
-                    let _removed = view.expanded_picker_directories.remove(path.as_ref());
-                }
+            if track_tree_expansion(&mut view.expanded_picker_directories, event) {
+                cx.notify();
             }
-            cx.notify();
         });
         let picker_filter_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(files_panel::FILTER_FILES_LABEL.to_string()));
@@ -623,6 +622,7 @@ impl DesktopView {
             history_scope_focus: cx.focus_handle().tab_stop(true),
             palette_query: gpui_kit::SharedString::default(),
             effort_slider: None,
+            observed_effort_slider_value: None,
             contrast_slider,
             contrast_focus: cx.focus_handle().tab_stop(true),
             motion_choice_focus: cx.focus_handle().tab_stop(true),
@@ -777,5 +777,29 @@ impl DesktopView {
             inspector_width: preferences::DEFAULT_INSPECTOR_WIDTH,
             resizing: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tree_expansion_guard_skips_equal_writes_but_keeps_siblings() {
+        let mut expanded = HashSet::new();
+        let expand = TreeEvent::Expanded("src/lib.rs".into());
+        assert!(track_tree_expansion(&mut expanded, &expand));
+        assert!(!track_tree_expansion(&mut expanded, &expand));
+        assert!(expanded.contains("src/lib.rs"));
+
+        let other = TreeEvent::Expanded("src/main.rs".into());
+        assert!(track_tree_expansion(&mut expanded, &other));
+        assert!(!track_tree_expansion(&mut expanded, &other));
+
+        let collapse = TreeEvent::Collapsed("src/lib.rs".into());
+        assert!(track_tree_expansion(&mut expanded, &collapse));
+        assert!(!track_tree_expansion(&mut expanded, &collapse));
+        assert!(!expanded.contains("src/lib.rs"));
+        assert!(expanded.contains("src/main.rs"));
     }
 }
