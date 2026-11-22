@@ -31,13 +31,13 @@ Start with [Quick start](#quick-start); the full map is in [Documentation](#docu
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
 
-| At a glance | What you get |
-| ----------- | ------------ |
-| **Plan** | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md). |
-| **Safety** | [Auditable command policy](./docs/security/security_model.md) with sandboxing. |
-| **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
-| **Extend** | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
-| **Models** | [Hosted or local providers](./docs/providers/provider_guides.md) per task. |
+| At a glance   | What you get                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Plan**      | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md).                                                             |
+| **Safety**    | [Auditable command policy](./docs/security/security_model.md) with sandboxing.                                                                                             |
+| **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md).                   |
+| **Extend**    | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
+| **Models**    | [Hosted or local providers](./docs/providers/provider_guides.md) per task.                                                                                                 |
 
 <!-- markdownlint-enable MD060 -->
 
@@ -303,16 +303,13 @@ Thank you to everyone below. You are the reason this project keeps moving.
 If you like VT Code, please star the repo and share it — starring helps discovery and brings in new users,
 contributors, and sponsors. Thank you for growing the community.
 
-<a
-  href="https://www.star-history.com/?repos=vinhnx%2Fvtcode&type=timeline&legend=top-left">
-<picture>
+## Star History
 
-   <source media="(prefers-color-scheme: dark)"
-     srcset="https://api.star-history.com/chart?repos=vinhnx/vtcode&type=timeline&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)"
-     srcset="https://api.star-history.com/chart?repos=vinhnx/vtcode&type=timeline&legend=top-left" />
-   <img alt="Star History Chart"
-     src="https://api.star-history.com/chart?repos=vinhnx/vtcode&type=timeline&legend=top-left" />
+<a href="https://star-history.com/#vinhnx/vtcode&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
  </picture>
 </a>
 
