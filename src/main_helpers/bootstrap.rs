@@ -3,8 +3,10 @@ use anyhow::{Context, Result};
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor as ClapAnsiColor, Effects as ClapEffects};
 use clap::{ColorChoice as CliColorChoice, CommandFactory};
+use std::io;
 use std::time::Instant;
 use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
+use vtcode_commons::tty::TtyExt;
 use vtcode_core::cli::args::Cli;
 
 use crate::startup::StartupContext;
@@ -211,15 +213,32 @@ fn build_candidate_list() -> Vec<String> {
     candidates
 }
 
-/// Apply ANSI styling to text if the terminal supports color output.
+/// Apply ANSI styling to text when a human is reading it at a terminal.
 ///
-/// Uses `colorchoice::ColorChoice::global()` to respect `--color`, `--no-color`,
-/// and `NO_COLOR` env var. Falls back to raw text when colors are disabled.
+/// Rich diagnostics are an interactive nicety: when stderr is redirected to a
+/// file, pipe, or test harness, scripts and agents must receive a plain,
+/// escape-code-free message. An explicit `--color always` (or `FORCE_COLOR`)
+/// still forces styling. This mirrors uutils' diagnostics rule, where the
+/// human-friendly report is rendered only on a terminal.
 fn styled(text: &str, style: anstyle::Style) -> String {
-    if colorchoice::ColorChoice::global() == colorchoice::ColorChoice::Never {
+    if !enhanced_error_color_enabled() {
         return text.to_string();
     }
     format!("{style}{text}\x1b[0m")
+}
+
+/// Decide whether the enhanced CLI-error block may use ANSI styling.
+///
+/// Explicit `--color always` / `--color never` / `--no-color` are read straight
+/// from argv because clap errors out before the parsed color policy is applied.
+/// The `Auto` case defers to stderr's TTY state (and `NO_COLOR` / `FORCE_COLOR`)
+/// via the canonical [`TtyExt`] helper.
+fn enhanced_error_color_enabled() -> bool {
+    match requested_help_color_choice() {
+        Some(CliColorChoice::Always) => true,
+        Some(CliColorChoice::Never) => false,
+        Some(CliColorChoice::Auto) | None => io::stderr().supports_color(),
+    }
 }
 
 fn style_header(text: &str) -> String {
@@ -371,8 +390,8 @@ fn extract_workspace_invalid_value(err_text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        args_request_version, build_augmented_cli_command, cached_candidates, extract_workspace_invalid_value,
-        similarity_score, suggest_similar_commands, try_enhance_clap_error,
+        args_request_version, build_augmented_cli_command, cached_candidates, enhanced_error_color_enabled,
+        extract_workspace_invalid_value, similarity_score, suggest_similar_commands, try_enhance_clap_error,
     };
     use clap::Parser;
     use vtcode_core::cli::args::Cli;
@@ -472,6 +491,22 @@ mod tests {
         let text = enhanced.unwrap();
         assert!(text.contains("Did you mean one of these?"), "should contain suggestion header: {text}");
         assert!(text.contains("chat"), "should suggest 'chat': {text}");
+    }
+
+    #[test]
+    fn enhanced_clap_error_styling_follows_color_decision() {
+        // Rich CLI diagnostics must follow stderr's TTY/color decision: a
+        // script or pipe gets escape-code-free text, a terminal may get ANSI.
+        // Tests run with captured (non-TTY) stderr, so this asserts the plain
+        // path while staying correct if color is explicitly forced.
+        let err = "invalid value 'ch' for '[WORKSPACE]': 'ch' is not a valid workspace path or subcommand.";
+        let enhanced = try_enhance_clap_error(err).expect("should enhance 'ch'");
+        assert_eq!(
+            enhanced.contains('\x1b'),
+            enhanced_error_color_enabled(),
+            "ANSI styling must match the stderr color decision: {enhanced}"
+        );
+        assert!(enhanced.contains("chat"), "suggestions must remain in both modes: {enhanced}");
     }
 
     #[test]
