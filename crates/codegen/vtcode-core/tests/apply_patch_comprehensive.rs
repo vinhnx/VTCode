@@ -288,7 +288,9 @@ async fn test_add_existing_file_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(result["error"]["message"].as_str().unwrap().contains("invalid patch operation"));
+    let message = result["error"]["message"].as_str().unwrap();
+    assert!(message.contains("already exists"), "{message}");
+    assert!(message.contains("Update File"), "error must explain the fix: {message}");
 }
 
 #[tokio::test]

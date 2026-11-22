@@ -196,14 +196,11 @@ impl SourceInspection {
                     let path =
                         vtcode_commons::paths::ensure_path_within_workspace_resolved(&root.join(path), root).await?;
                     if tokio::fs::try_exists(&path).await? {
-                        // Typed error: the canonical planner produces the same
-                        // "invalid patch operation" contract, so pre-write
-                        // inspection must not replace it with a plain string.
-                        return Err(PatchError::InvalidOperation {
-                            path: path.to_string_lossy().into_owned(),
-                            reason: "new file already exists".to_owned(),
-                        }
-                        .into());
+                        // Same typed contract as the canonical planner: a
+                        // pre-write check must not downgrade this to a string.
+                        return Err(
+                            PatchError::TargetAlreadyExists { path: path.to_string_lossy().into_owned() }.into()
+                        );
                     }
                     prepared.push(PreparedPatchCredit::Created { path, content: content.clone() });
                 }
@@ -231,15 +228,16 @@ impl SourceInspection {
                         }
                         Err(error) => return Err(error.into()),
                     };
-                    let inspection =
-                        crate::tools::editing::patch::inspection_replacements(&source, &before, chunks, path).await?;
+                    // One match produces both the ledger ranges and the
+                    // rendered result; a second full-file matcher pass here
+                    // would be pure duplicated work.
+                    let (inspection, after) =
+                        crate::tools::editing::patch::inspect_and_render_patch_update(&source, &before, chunks, path)
+                            .await?;
                     if !chunks.is_empty() {
                         self.require(&source, &before, &inspection.required_ranges)?;
                     }
                     let replacements = inspection.replacements;
-                    let after =
-                        crate::tools::editing::patch::render_patch_update_content(&source, &before, chunks, path)
-                            .await?;
                     prepared.push(PreparedPatchCredit::Updated { source, destination, before, after, replacements });
                 }
             }

@@ -26,7 +26,7 @@ impl<'a> UpdateOperation<'a> {
     pub(crate) async fn apply(self, root: &Path) -> Result<OperationEffect, PatchError> {
         let source_path = root.join(self.path);
         let (original_lines, had_trailing_newline, line_ending) = load_file_lines(&source_path).await?;
-        let replacements = compute_replacements(&source_path, &original_lines, self.chunks, self.path).await?;
+        let plan = compute_replacements(&source_path, &original_lines, self.chunks, self.path).await?;
         let ensure_trailing_newline = had_trailing_newline || self.chunks.iter().any(|chunk| chunk.is_end_of_file());
         let Some(backup) = snapshot_for(&source_path).await? else {
             return Err(PatchError::MissingFile { path: self.path.to_string() });
@@ -43,7 +43,7 @@ impl<'a> UpdateOperation<'a> {
         };
 
         if let Err(err) =
-            write_patched_content(&mut writer, original_lines, replacements, ensure_trailing_newline, line_ending).await
+            write_patched_content(&mut writer, original_lines, &plan, ensure_trailing_newline, line_ending).await
         {
             let _ = writer.rollback().await;
             backup.restore(&source_path).await?;

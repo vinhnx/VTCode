@@ -95,8 +95,9 @@ pub(crate) fn resolve_semantic_match(
     original_lines: &[String],
     chunk: &PatchChunk,
     terms: &[String],
-    old_segment: Vec<String>,
-    new_segment: Vec<String>,
+    matcher: &PatchContextMatcher,
+    old_segment: &[String],
+    new_segment: &[String],
 ) -> Result<SemanticMatch, PatchError> {
     let anchor = chunk
         .change_context()
@@ -133,15 +134,16 @@ pub(crate) fn resolve_semantic_match(
     }
 
     // The anchor is a *hint*: the hunk is located from the declaration
-    // onwards, exactly like a numeric `@@ -12` hunk header.
-    let matcher = PatchContextMatcher::new(original_lines);
+    // onwards, exactly like a numeric `@@ -12` hunk header. Reuse the caller's
+    // matcher instead of re-normalizing every line of the file for each hunk
+    // that needs semantic resolution.
     let mut resolved: BTreeMap<usize, SemanticMatch> = BTreeMap::new();
     let mut redacted_match = false;
     for candidate in &candidates {
         let start = candidate.line.saturating_sub(1);
-        let mut candidate_old = old_segment.clone();
-        let mut candidate_new = new_segment.clone();
-        match seek_segment(&matcher, &mut candidate_old, &mut candidate_new, start, chunk.is_end_of_file()) {
+        let mut candidate_old = old_segment.to_vec();
+        let mut candidate_new = new_segment.to_vec();
+        match seek_segment(matcher, &mut candidate_old, &mut candidate_new, start, chunk.is_end_of_file()) {
             Some(start_idx) => {
                 resolved.entry(start_idx).or_insert(SemanticMatch {
                     start_idx,

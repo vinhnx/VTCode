@@ -257,7 +257,11 @@ impl ToolExecutionError {
                 PatchError::EmptyInput
                 | PatchError::NoOperations
                 | PatchError::InvalidFormat(_)
-                | PatchError::InvalidHunk { .. } => ErrorCategory::InvalidParameters,
+                | PatchError::InvalidHunk { .. }
+                | PatchError::OverlappingChunks { .. }
+                | PatchError::TargetAlreadyExists { .. }
+                | PatchError::NotAFile { .. }
+                | PatchError::DestinationExists { .. } => ErrorCategory::InvalidParameters,
                 PatchError::Io { source, .. } if source.kind() == std::io::ErrorKind::PermissionDenied => {
                     ErrorCategory::PermissionDenied
                 }

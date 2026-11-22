@@ -38,10 +38,7 @@ pub(crate) async fn plan_operations<'a>(
                 let full_path = root.join(path);
                 match fs::metadata(&full_path).await {
                     Ok(_) => {
-                        return Err(PatchError::InvalidOperation {
-                            path: path.clone(),
-                            reason: "target already exists".to_string(),
-                        });
+                        return Err(PatchError::TargetAlreadyExists { path: path.clone() });
                     }
                     Err(err) if err.kind() == ErrorKind::NotFound => {
                         prepared.push(PreparedOperation::Add { path, content });
@@ -69,10 +66,7 @@ pub(crate) async fn plan_operations<'a>(
                 })?;
 
                 if metadata.is_dir() {
-                    return Err(PatchError::InvalidOperation {
-                        path: path.clone(),
-                        reason: "cannot apply text diff to directory".to_string(),
-                    });
+                    return Err(PatchError::NotAFile { path: path.clone() });
                 }
 
                 if let Some(dest_rel) = new_path.as_ref().filter(|candidate| candidate.as_str() != path) {
@@ -80,14 +74,11 @@ pub(crate) async fn plan_operations<'a>(
                     match fs::metadata(&destination).await {
                         Ok(existing) => {
                             let reason = if existing.is_dir() {
-                                "destination is a directory"
+                                "is a directory"
                             } else {
-                                "destination file already exists"
+                                "already exists"
                             };
-                            return Err(PatchError::InvalidOperation {
-                                path: dest_rel.clone(),
-                                reason: reason.to_string(),
-                            });
+                            return Err(PatchError::DestinationExists { path: dest_rel.clone(), reason });
                         }
                         Err(err) if err.kind() == ErrorKind::NotFound => {}
                         Err(err) => {

@@ -20,6 +20,24 @@ pub enum PatchError {
     #[error("invalid patch operation for '{path}': {reason}")]
     InvalidOperation { path: String, reason: String },
 
+    #[error(
+        "patch chunks for '{path}' match overlapping file ranges. Fix: disambiguate the @@ context lines so each hunk targets a distinct range."
+    )]
+    OverlappingChunks { path: String },
+
+    #[error(
+        "patch target '{path}' already exists. Fix: use '*** Update File' to modify it, or choose a different path."
+    )]
+    TargetAlreadyExists { path: String },
+
+    #[error("cannot apply a text diff to directory '{path}'. Fix: point the hunk at a file instead.")]
+    NotAFile { path: String },
+
+    #[error(
+        "patch move destination '{path}' {reason}. Fix: choose a different '*** Move to:' path or remove the existing target."
+    )]
+    DestinationExists { path: String, reason: &'static str },
+
     #[error("invalid path for {operation}: {path} ({reason})")]
     InvalidPath {
         operation: &'static str,

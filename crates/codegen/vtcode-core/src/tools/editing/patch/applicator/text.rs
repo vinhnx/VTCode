@@ -2,7 +2,6 @@ use std::io::ErrorKind;
 use std::path::Path;
 
 use tokio::fs;
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 use super::super::matcher::{PatchContextMatcher, redacted_context_matches, seek_segment};
 use super::super::semantic::{resolve_semantic_match, semantic_anchor_terms};
@@ -26,8 +25,17 @@ impl LineEnding {
     }
 }
 
+/// Load a file through the same splitter as the dry-run/rendering paths.
+///
+/// `render_updated_content` (conflict previews, approval diffs and the source
+/// ledger) works from a `&str`, while `UpdateOperation` used to open the file
+/// with a separate line reader. The two splitters disagreed on bare `\r` and
+/// on mixed line endings, so a preview could show different bytes from the
+/// ones actually written. Reading the file and delegating to
+/// `lines_from_content` gives every path one authoritative definition of
+/// "lines, trailing newline, line ending".
 pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool, LineEnding), PatchError> {
-    let file = fs::File::open(path).await.map_err(|err| {
+    let content = fs::read_to_string(path).await.map_err(|err| {
         if err.kind() == ErrorKind::NotFound {
             PatchError::MissingFile { path: path.display().to_string() }
         } else {
@@ -38,48 +46,7 @@ pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool, L
             }
         }
     })?;
-    let mut reader = BufReader::new(file);
-    let mut lines = Vec::new();
-    let mut had_trailing_newline = false;
-    let mut line_ending = LineEnding::LF;
-    let mut detected_ending = false;
-
-    loop {
-        let mut line = String::new();
-        let bytes_read = reader.read_line(&mut line).await.map_err(|err| PatchError::Io {
-            action: "read",
-            path: path.to_path_buf(),
-            source: err,
-        })?;
-
-        if bytes_read == 0 {
-            break;
-        }
-
-        if line.ends_with('\n') {
-            had_trailing_newline = true;
-            if !detected_ending {
-                if line.ends_with("\r\n") {
-                    line_ending = LineEnding::Crlf;
-                }
-                detected_ending = true;
-            }
-            line.pop();
-            if line.ends_with('\r') {
-                line.pop();
-            }
-        } else {
-            had_trailing_newline = false;
-        }
-
-        if line.ends_with('\r') {
-            line.pop();
-        }
-
-        lines.push(line);
-    }
-
-    Ok((lines, had_trailing_newline, line_ending))
+    Ok(lines_from_content(&content))
 }
 
 fn lines_from_content(content: &str) -> (Vec<String>, bool, LineEnding) {
@@ -98,15 +65,48 @@ pub(super) async fn compute_replacements(
     original_lines: &[String],
     chunks: &[PatchChunk],
     path: &str,
-) -> Result<Vec<(usize, usize, Vec<String>)>, PatchError> {
-    Ok(compute_replacements_with_inspection(source_path, original_lines, chunks, path)
-        .await?
-        .replacements)
+) -> Result<ReplacementPlan, PatchError> {
+    compute_replacements_with_inspection(source_path, original_lines, chunks, path).await
 }
 
-struct ReplacementPlan {
+/// A validated edit script: replacements are sorted by start index,
+/// non-overlapping, and within the bounds of the document they were computed
+/// against. `build` establishes those invariants once, so every renderer can
+/// apply the script without re-checking them — the same constructor-owned
+/// invariant discipline `SyntaxEditor` uses for its edits.
+#[derive(Debug)]
+pub(super) struct ReplacementPlan {
     replacements: Vec<(usize, usize, Vec<String>)>,
     required_ranges: Vec<std::ops::Range<usize>>,
+}
+
+impl ReplacementPlan {
+    fn build(
+        mut replacements: Vec<(usize, usize, Vec<String>)>,
+        required_ranges: Vec<std::ops::Range<usize>>,
+        path: &str,
+        original_line_count: usize,
+    ) -> Result<Self, PatchError> {
+        replacements.sort_by_key(|(start, _, _)| *start);
+        let mut covered_end = 0usize;
+        for (start, removed, _) in &replacements {
+            if *start > original_line_count || start.saturating_add(*removed) > original_line_count {
+                return Err(PatchError::InvalidOperation {
+                    path: path.to_string(),
+                    reason: "patch replacement targets lines outside the file".to_string(),
+                });
+            }
+            // Line-number hints can move the search backward, so two chunks
+            // may match overlapping ranges. Rendering those would silently
+            // double-apply; fail loud. Zero-length insertions at the same
+            // point are unambiguous and stay allowed.
+            if *start < covered_end {
+                return Err(PatchError::OverlappingChunks { path: path.to_string() });
+            }
+            covered_end = start.saturating_add(*removed);
+        }
+        Ok(Self { replacements, required_ranges })
+    }
 }
 
 async fn compute_replacements_with_inspection(
@@ -187,8 +187,9 @@ async fn compute_replacements_with_inspection(
                 original_lines,
                 chunk,
                 &anchor_terms,
-                old_segment.clone(),
-                new_segment.clone(),
+                &matcher,
+                &old_segment,
+                &new_segment,
             ) {
                 Ok(semantic) => {
                     found = Some(semantic.start_idx);
@@ -236,22 +237,10 @@ async fn compute_replacements_with_inspection(
         }
     }
 
-    replacements.sort_by_key(|(idx, _, _)| *idx);
-    // Line-number hints can move the search backward, so two chunks may match
-    // overlapping ranges. Rendering those would silently double-apply; fail
-    // loud instead. Zero-length insertions at the same point are unambiguous
-    // and stay allowed.
-    let mut covered_end = 0usize;
-    for (start_idx, old_len, _) in &replacements {
-        if *start_idx < covered_end {
-            return Err(PatchError::InvalidOperation {
-                path: path.to_string(),
-                reason: "patch chunks match overlapping file ranges; disambiguate the context lines".to_string(),
-            });
-        }
-        covered_end = start_idx.saturating_add(*old_len);
-    }
-    Ok(ReplacementPlan { replacements, required_ranges: inspected })
+    // Sort, validate bounds and reject overlaps exactly once, at construction.
+    // Both renderers consume the resulting `ReplacementPlan` and rely on its
+    // invariants rather than repeating this sweep.
+    ReplacementPlan::build(replacements, inspected, path, original_lines.len())
 }
 
 pub(super) async fn render_patched_text_from_content(
@@ -261,9 +250,9 @@ pub(super) async fn render_patched_text_from_content(
     path: &str,
 ) -> Result<String, PatchError> {
     let (original_lines, had_trailing_newline, line_ending) = lines_from_content(content);
-    let replacements = compute_replacements(source_path, &original_lines, chunks, path).await?;
+    let plan = compute_replacements(source_path, &original_lines, chunks, path).await?;
     let ensure_trailing_newline = had_trailing_newline || chunks.iter().any(|chunk| chunk.is_end_of_file());
-    Ok(render_patched_content(original_lines, replacements, ensure_trailing_newline, line_ending))
+    Ok(render_patched_content(original_lines, &plan, ensure_trailing_newline, line_ending))
 }
 
 /// The ordered line slices of the patched document, borrowed from the
@@ -274,24 +263,17 @@ pub(super) async fn render_patched_text_from_content(
 /// in-memory renderer and the streaming writer consume it, so there is exactly
 /// one definition of how edits are applied — mirroring the `SyntaxEditor`
 /// approach of collecting edits and building a fresh document from them.
-fn patched_line_segments<'a>(
-    original_lines: &'a [String],
-    replacements: &'a [(usize, usize, Vec<String>)],
-) -> Vec<&'a [String]> {
-    // # Requires
-    // - `replacements` is sorted by start index and non-overlapping (as
-    //   produced by `compute_replacements_with_inspection`).
+fn patched_line_segments<'a>(original_lines: &'a [String], plan: &'a ReplacementPlan) -> Vec<&'a [String]> {
     // # Ensures
     // - The returned slices, concatenated, are the patched document's lines.
-    // - Total (terminating): one pass over `replacements`.
+    // - Total (terminating): one pass over the plan's replacements.
+    // The plan's sorted/non-overlapping/in-bounds invariants are established by
+    // `ReplacementPlan::build`, so consumers never need to re-assert them.
+    let replacements = &plan.replacements;
     let mut segments = Vec::with_capacity(replacements.len().saturating_mul(2).saturating_add(1));
     let mut cursor = 0usize;
     for (start_idx, old_len, new_segment) in replacements {
         let start = *start_idx;
-        debug_assert!(
-            cursor <= start && start <= original_lines.len(),
-            "replacement plan must be ordered and in bounds"
-        );
         if cursor < start {
             segments.push(&original_lines[cursor..start]);
         }
@@ -306,17 +288,23 @@ fn patched_line_segments<'a>(
 
 fn render_patched_content(
     original_lines: Vec<String>,
-    replacements: Vec<(usize, usize, Vec<String>)>,
+    plan: &ReplacementPlan,
     ensure_trailing_newline: bool,
     line_ending: LineEnding,
 ) -> String {
-    let segments = patched_line_segments(&original_lines, &replacements);
+    let segments = patched_line_segments(&original_lines, plan);
     let ending = line_ending.as_str();
     let estimated_capacity = original_lines
         .iter()
         .map(|line| line.len())
         .sum::<usize>()
         .saturating_add(original_lines.len().saturating_sub(1).saturating_mul(ending.len()))
+        .saturating_add(
+            plan.replacements
+                .iter()
+                .flat_map(|(_, _, added)| added.iter().map(|line| line.len()))
+                .sum::<usize>(),
+        )
         .saturating_add(ending.len());
     let mut rendered = String::with_capacity(estimated_capacity);
     let mut first = true;
@@ -340,11 +328,11 @@ fn render_patched_content(
 pub(super) async fn write_patched_content(
     writer: &mut AtomicWriter,
     original_lines: Vec<String>,
-    replacements: Vec<(usize, usize, Vec<String>)>,
+    plan: &ReplacementPlan,
     ensure_trailing_newline: bool,
     line_ending: LineEnding,
 ) -> Result<(), PatchError> {
-    let segments = patched_line_segments(&original_lines, &replacements);
+    let segments = patched_line_segments(&original_lines, plan);
     let ending = line_ending.as_str();
     let mut first = true;
     for line in segments.iter().flat_map(|segment| segment.iter()) {
@@ -360,32 +348,100 @@ pub(super) async fn write_patched_content(
     Ok(())
 }
 
-pub(crate) async fn inspection_replacements(
+/// Derive the source-inspection ledger entries and the rendered `after`
+/// content from a single matched edit script.
+///
+/// Previously `prepare_patch` matched every hunk once to build the inspection
+/// and then again to render the preview — two identical full-file matcher
+/// passes per update. Both views now come from the same plan, so the ledger
+/// and the preview cannot disagree and the match runs once.
+pub(crate) async fn inspect_and_render_patch_update(
     source_path: &Path,
     content: &str,
     chunks: &[PatchChunk],
     path: &str,
-) -> Result<crate::tools::source_inspection::mutations::PatchInspection, PatchError> {
-    let (lines, _, _) = lines_from_content(content);
-    let plan = compute_replacements_with_inspection(source_path, &lines, chunks, path).await?;
-    Ok(crate::tools::source_inspection::mutations::PatchInspection {
+) -> Result<(crate::tools::source_inspection::mutations::PatchInspection, String), PatchError> {
+    let (original_lines, had_trailing_newline, line_ending) = lines_from_content(content);
+    let plan = compute_replacements_with_inspection(source_path, &original_lines, chunks, path).await?;
+    let inspection = crate::tools::source_inspection::mutations::PatchInspection {
         replacements: plan
             .replacements
-            .into_iter()
+            .iter()
             .map(|(start, removed, added)| crate::tools::source_inspection::mutations::InspectedReplacement {
-                start,
-                removed,
+                start: *start,
+                removed: *removed,
                 added: added.len(),
             })
             .collect(),
-        required_ranges: plan.required_ranges,
-    })
+        required_ranges: plan.required_ranges.clone(),
+    };
+    let ensure_trailing_newline = had_trailing_newline || chunks.iter().any(|chunk| chunk.is_end_of_file());
+    let rendered = render_patched_content(original_lines, &plan, ensure_trailing_newline, line_ending);
+    Ok((inspection, rendered))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use crate::tools::editing::patch::{Patch, PatchOperation};
+
     use super::super::io::AtomicWriter;
-    use super::{LineEnding, patched_line_segments, render_patched_content, write_patched_content};
+    use super::{
+        LineEnding, PatchError, ReplacementPlan, inspect_and_render_patch_update, patched_line_segments,
+        render_patched_content, write_patched_content,
+    };
+
+    fn plan(original_len: usize, replacements: Vec<(usize, usize, Vec<String>)>) -> ReplacementPlan {
+        ReplacementPlan::build(replacements, Vec::new(), "/fixture", original_len).expect("valid plan")
+    }
+
+    #[tokio::test]
+    async fn inspection_and_render_derive_from_one_plan() {
+        let patch = Patch::parse("*** Begin Patch\n*** Update File: f.txt\n@@\n-stale\n+fresh\n*** End Patch\n")
+            .expect("patch parses");
+        let chunks = match &patch.operations()[0] {
+            PatchOperation::UpdateFile { chunks, .. } => chunks.clone(),
+            other => panic!("expected update, got {other:?}"),
+        };
+
+        let (inspection, rendered) =
+            inspect_and_render_patch_update(Path::new("f.txt"), "top\nstale\nbottom\n", &chunks, "f.txt")
+                .await
+                .expect("one match drives both views");
+
+        assert_eq!(rendered, "top\nfresh\nbottom\n");
+        assert_eq!(inspection.replacements.len(), 1);
+        let replacement = &inspection.replacements[0];
+        assert_eq!((replacement.start, replacement.removed, replacement.added), (1, 1, 1));
+        assert!(!inspection.required_ranges.is_empty());
+    }
+
+    #[tokio::test]
+    async fn file_loader_and_content_splitter_agree() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        // Asymmetric inputs: bare `\r`, repeated `\r` before `\n`, mixed
+        // endings and an empty document. The on-disk write path and the
+        // in-memory preview path must derive the same lines from identical
+        // bytes, otherwise a preview/approval can disagree with the write.
+        let cases = [
+            "plain\n",
+            "crlf\r\nline\r\n",
+            "a\r",
+            "\r",
+            "a\r\r\n",
+            "a\nb\r\n",
+            "",
+            "\n\n",
+        ];
+        for (index, content) in cases.into_iter().enumerate() {
+            let path = dir.path().join(format!("split-{index}.txt"));
+            tokio::fs::write(&path, content).await.expect("write fixture");
+            let from_file = super::load_file_lines(&path).await.expect("load file lines");
+            let from_content = super::lines_from_content(content);
+            assert_eq!(from_file, from_content, "content {content:?}");
+        }
+    }
 
     #[test]
     fn patched_segments_apply_edits_in_file_order() {
@@ -397,10 +453,41 @@ mod tests {
             (3usize, 1usize, Vec::new()),
         ];
 
-        let segments = patched_line_segments(&original, &replacements);
+        let plan = plan(original.len(), replacements);
+        let segments = patched_line_segments(&original, &plan);
         let lines: Vec<&str> = segments.iter().flat_map(|segment| segment.iter()).map(String::as_str).collect();
 
         assert_eq!(lines, ["top", "replacement", "first-insert", "second-insert", "keep"]);
+    }
+
+    #[test]
+    fn plan_constructor_establishes_order_bounds_and_overlap_invariants() {
+        let lines = |values: &[&str]| values.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
+
+        // Out-of-order input is sorted once at construction, not at each render.
+        let original = lines(&["a", "b", "c", "d"]);
+        let unordered = vec![(2usize, 1usize, lines(&["C"])), (0usize, 1usize, lines(&["A"]))];
+        let plan = plan(original.len(), unordered);
+        assert_eq!(plan.replacements[0].0, 0);
+        assert_eq!(plan.replacements[1].0, 2);
+
+        // Overlapping and out-of-bounds scripts are rejected at construction,
+        // before either renderer can silently double-apply or truncate.
+        let overlap = ReplacementPlan::build(
+            vec![(0usize, 2usize, lines(&["X"])), (1usize, 1usize, lines(&["Y"]))],
+            Vec::new(),
+            "/fixture",
+            original.len(),
+        );
+        assert!(matches!(overlap, Err(PatchError::OverlappingChunks { .. })), "{overlap:?}");
+
+        let out_of_bounds = ReplacementPlan::build(
+            vec![(original.len() + 1, 0usize, lines(&["Z"]))],
+            Vec::new(),
+            "/fixture",
+            original.len(),
+        );
+        assert!(matches!(out_of_bounds, Err(PatchError::InvalidOperation { .. })), "{out_of_bounds:?}");
     }
 
     #[test]
@@ -417,7 +504,8 @@ mod tests {
             (Vec::new(), true, "\n"),
         ];
         for (original, ensure_trailing_newline, expected) in cases {
-            let rendered = render_patched_content(original, Vec::new(), ensure_trailing_newline, LineEnding::LF);
+            let plan = plan(original.len(), Vec::new());
+            let rendered = render_patched_content(original, &plan, ensure_trailing_newline, LineEnding::LF);
             assert_eq!(rendered, expected, "ensure={ensure_trailing_newline}");
         }
     }
@@ -435,24 +523,16 @@ mod tests {
 
         for (index, (original, replacements, ensure_trailing_newline)) in scenarios.into_iter().enumerate() {
             for line_ending in [LineEnding::LF, LineEnding::Crlf] {
-                let rendered = render_patched_content(
-                    original.clone(),
-                    replacements.clone(),
-                    ensure_trailing_newline,
-                    line_ending,
-                );
+                let render_plan = plan(original.len(), replacements.clone());
+                let rendered =
+                    render_patched_content(original.clone(), &render_plan, ensure_trailing_newline, line_ending);
 
                 let path = dir.path().join(format!("patched-{index}.txt"));
                 let mut writer = AtomicWriter::create(&path, None).await.expect("create writer");
-                write_patched_content(
-                    &mut writer,
-                    original.clone(),
-                    replacements.clone(),
-                    ensure_trailing_newline,
-                    line_ending,
-                )
-                .await
-                .expect("write patched content");
+                let write_plan = plan(original.len(), replacements.clone());
+                write_patched_content(&mut writer, original.clone(), &write_plan, ensure_trailing_newline, line_ending)
+                    .await
+                    .expect("write patched content");
                 writer.commit().await.expect("commit");
                 let streamed = tokio::fs::read_to_string(&path).await.expect("read patched file");
 

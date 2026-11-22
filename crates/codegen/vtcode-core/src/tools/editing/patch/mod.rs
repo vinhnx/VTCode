@@ -4,7 +4,7 @@ use anyhow::anyhow;
 
 mod applicator;
 mod semantic;
-pub(crate) use applicator::inspection_replacements;
+pub(crate) use applicator::inspect_and_render_patch_update;
 mod error;
 mod matcher;
 mod parser;

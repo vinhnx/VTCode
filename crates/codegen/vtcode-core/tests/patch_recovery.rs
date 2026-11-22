@@ -79,7 +79,7 @@ async fn add_file_validation_errors_when_target_exists() {
 
     let err = patch.apply(temp_dir.path()).await.unwrap_err();
     let patch_err = err.downcast::<PatchError>().unwrap();
-    assert!(matches!(patch_err, PatchError::InvalidOperation { .. }));
+    assert!(matches!(patch_err, PatchError::TargetAlreadyExists { .. }));
 
     let contents = tokio::fs::read_to_string(existing_path).await.unwrap();
     assert_eq!(contents, "original\n");
