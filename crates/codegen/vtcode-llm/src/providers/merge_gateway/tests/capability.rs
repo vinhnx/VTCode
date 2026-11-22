@@ -564,3 +564,67 @@ async fn terminal_capability_error_names_a_working_route() {
     assert!(text.contains("capability"), "error must preserve the gateway diagnostic, got: {text}");
     assert!(text.contains("default_routing"), "error must name a working route, got: {text}");
 }
+
+/// Merge's automatic-cache routing identity is the `X-Session-Id` header; the
+/// body `session_id` alone is the OpenAI-compat surface. Pin the wire header
+/// on both sides of the boundary: present with a session lineage, absent
+/// without one.
+#[tokio::test]
+async fn native_generate_sends_x_session_id_only_with_session_identity() {
+    use std::sync::Mutex;
+
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let seen_for_mock = Arc::clone(&seen);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |req: &wiremock::Request| {
+            seen_for_mock.lock().expect("mutex not poisoned").push(
+                req.headers
+                    .get("x-session-id")
+                    .map(|value| value.to_str().expect("header value is ASCII").to_owned()),
+            );
+            ResponseTemplate::new(200).set_body_json(json!({
+                "id": "resp_session",
+                "object": "response",
+                "created_at": "2026-03-23T12:03:00Z",
+                "model": "openai/gpt-6.1-sol",
+                "output": [{
+                    "type": "message",
+                    "id": "msg_1",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Hello"}],
+                    "finish_reason": "stop"
+                }],
+                "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15, "cost": 0.01}
+            }))
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let mut with_session = LLMRequest {
+        model: models::merge_gateway::OPENAI_GPT_6_1_SOL.to_string(),
+        messages: vec![Message::user("hi".to_string())].into(),
+        ..Default::default()
+    };
+    with_session.prompt_cache_key = Some("vtcode:merge:session-lineage-1".to_string());
+    provider.generate(with_session).await.expect("request with session identity");
+
+    provider
+        .generate(LLMRequest {
+            model: models::merge_gateway::OPENAI_GPT_6_1_SOL.to_string(),
+            messages: vec![Message::user("hi".to_string())].into(),
+            ..Default::default()
+        })
+        .await
+        .expect("request without session identity");
+
+    assert_eq!(
+        seen.lock().expect("mutex not poisoned").as_slice(),
+        &[Some("session-lineage-1".to_string()), None],
+        "X-Session-Id must follow merge_session_identity and be absent otherwise"
+    );
+}
