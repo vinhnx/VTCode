@@ -12189,7 +12189,9 @@ dependencies = [
 name = "vtcode-commons"
 version = "0.185.0"
 dependencies = [
+ "anstream",
  "anstyle",
+ "anstyle-parse",
  "anyhow",
  "arc-swap",
  "base64 0.23.1",

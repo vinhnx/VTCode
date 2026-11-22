@@ -1,6 +1,18 @@
 use super::*;
 
 #[test]
+fn split_escape_sequence_does_not_leak_into_scrollback() {
+    let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+
+    // The read boundary falls inside an SGR sequence. Neither chunk is
+    // independently valid; together they must produce only visible text.
+    scrollback.push_text("before\x1b[3");
+    scrollback.push_text("1mafter\n");
+
+    assert_eq!(scrollback.pending(), "beforeafter\n");
+}
+
+#[test]
 fn scrollback_enforces_byte_limit() {
     let mut scrollback = PtyScrollback::new(10_000, 1024); // 1KB limit
 

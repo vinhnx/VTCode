@@ -22,9 +22,10 @@ pub(super) struct PtyScrollback {
     lines_dropped: usize,           // Track dropped lines for metrics
     unicode_errors: usize,          // Count UTF-8 decoding errors
     utf8_buffer_remainder: Vec<u8>, // Store incomplete UTF-8 sequences between calls
-    total_unicode_chars: usize,     // NEW: Total unicode characters processed
-    unicode_sessions: usize,        // NEW: Number of sessions with unicode content
-    last_unicode_check: bool,       // NEW: Cache last unicode detection result
+    ansi_strip: crate::utils::ansi_parser::AnsiStripStream,
+    total_unicode_chars: usize, // NEW: Total unicode characters processed
+    unicode_sessions: usize,    // NEW: Number of sessions with unicode content
+    last_unicode_check: bool,   // NEW: Cache last unicode detection result
 }
 
 impl PtyScrollback {
@@ -43,6 +44,7 @@ impl PtyScrollback {
             lines_dropped: 0,
             unicode_errors: 0,
             utf8_buffer_remainder: Vec::new(),
+            ansi_strip: crate::utils::ansi_parser::AnsiStripStream::new(),
             total_unicode_chars: 0,
             unicode_sessions: 0,
             last_unicode_check: false,
@@ -50,7 +52,6 @@ impl PtyScrollback {
     }
 
     fn push_text(&mut self, text: &str) {
-        // Unicode-aware ANSI stripping with fast path for ASCII-only text
         let has_unicode = crate::utils::ansi_parser::contains_unicode(text);
         self.last_unicode_check = has_unicode;
 
@@ -60,13 +61,9 @@ impl PtyScrollback {
             self.total_unicode_chars += text.chars().filter(|&ch| ch as u32 > 127).count();
         }
 
-        let cleaned_text = if has_unicode {
-            // Text contains unicode, use full ANSI stripping
-            crate::utils::ansi_parser::strip_ansi(text)
-        } else {
-            // Fast path: ASCII-only text, use simple escape sequence removal
-            crate::utils::ansi_parser::strip_ansi_ascii_only(text)
-        };
+        // Keep escape-sequence state across PTY chunks: a sequence split by a
+        // read boundary is completed here instead of leaking raw control bytes.
+        let cleaned_text = self.ansi_strip.strip_chunk(text);
 
         let text_bytes = cleaned_text.len();
 

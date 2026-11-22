@@ -1,15 +1,20 @@
 #![expect(
     clippy::indexing_slicing,
-    clippy::string_slice,
-    reason = "The ANSI parser validates byte positions while walking escape-sequence boundaries."
+    reason = "The boundary parser validates byte positions while walking escape sequences; anstream handles plain-text stripping."
 )]
 
 //! Shared ANSI escape parser and stripping utilities for VT Code.
 //!
+//! Plain-text stripping is delegated to `anstream`'s ANSI state machine, which
+//! is already a workspace dependency. The hand-rolled parser below remains for
+//! the one thing `anstream` does not expose: the byte boundaries and payloads
+//! of individual escape sequences (OSC 8 link ranges, echo suppression).
+//!
 //! See `docs/reference/ansi-in-vtcode.md` for the workspace usage map.
 
 use crate::ansi_codes::{BEL_BYTE, ESC_BYTE};
-use memchr::memchr;
+use anstream::adapter::strip_str;
+use anstyle_parse::state::{State, state_change};
 
 const ESC: u8 = ESC_BYTE;
 const BEL: u8 = BEL_BYTE;
@@ -191,43 +196,94 @@ pub fn strip_ansi_codes(text: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(strip_ansi(text))
 }
 
-/// Strip ANSI escape codes from text, keeping only plain text
+/// Strip ANSI escape codes from text, keeping only plain text.
+///
+/// Delegates to `anstream`'s ANSI state machine. An incomplete sequence at the
+/// end of the input is dropped rather than emitted as raw control bytes; for
+/// chunked input use [`AnsiStripStream`] so a split sequence is not lost.
 pub fn strip_ansi(text: &str) -> String {
-    let mut output = Vec::with_capacity(text.len());
-    let bytes = text.as_bytes();
-    let mut i = 0;
+    strip_str(text).to_string()
+}
 
-    while i < bytes.len() {
-        let next_esc = memchr(ESC, &bytes[i..]).map_or(bytes.len(), |offset| i + offset);
-        // Pre-slice to avoid bounds checks in the inner loop — the range
-        // i..next_esc is provably within bytes[..].
-        for &b in &bytes[i..next_esc] {
-            push_visible_byte(&mut output, b);
+/// Stateful ANSI stripper for chunked input such as a PTY byte stream.
+///
+/// `anstream`'s incremental adapter resets its parser to the ground state at
+/// each call, so it cannot recover a sequence split across two chunks. This
+/// wrapper holds back only the trailing, unterminated escape sequence and
+/// re-strips it together with the next chunk. Both the boundary detector and
+/// `anstream` use `anstyle_parse`'s state machine, so they cannot disagree on
+/// where a sequence ends. The retained suffix is bounded.
+#[derive(Default)]
+pub struct AnsiStripStream {
+    pending: String,
+}
+
+impl AnsiStripStream {
+    /// Create a stripper with no retained bytes.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Strip the next chunk, returning its visible text.
+    ///
+    /// A trailing escape sequence that is incomplete in `chunk` is retained
+    /// and prepended to the next call instead of leaking raw control bytes.
+    pub fn strip_chunk(&mut self, chunk: &str) -> String {
+        // The common case has no held-back suffix. Avoid copying the whole
+        // chunk into `pending`'s buffer only to split it again; PTY output is
+        // chunked at high frequency and this path is allocation-sensitive.
+        if self.pending.is_empty() {
+            return self.strip_ready(chunk);
         }
-        i = next_esc;
+        let mut combined = std::mem::take(&mut self.pending);
+        combined.push_str(chunk);
+        self.strip_ready(&combined)
+    }
 
-        if i >= bytes.len() {
-            break;
-        }
-
-        if let Some(len) = parse_ansi_sequence_bytes(&bytes[i..]) {
-            i += len;
-            continue;
+    /// Strip `text`, holding back its trailing incomplete sequence for the next call.
+    fn strip_ready(&mut self, text: &str) -> String {
+        let split_at = if text.as_bytes().contains(&ESC) {
+            trailing_incomplete_sequence_start(text)
         } else {
-            // Incomplete/unterminated control sequence at end of available text.
-            break;
+            text.len()
+        };
+        let (ready, pending) = text.split_at(split_at);
+        self.pending.push_str(pending);
+        strip_str(ready).to_string()
+    }
+}
+
+/// Byte offset where the trailing, unterminated escape sequence begins.
+///
+/// Uses the same `anstyle_parse` state machine as `anstream`. A second,
+/// hand-rolled grammar here would classify sequences differently (notably a
+/// C0 control inside CSI) and make output depend on where a PTY read landed.
+/// Returns `text.len()` when the input ends in a complete sequence or when
+/// the suffix is too long to retain.
+fn trailing_incomplete_sequence_start(text: &str) -> usize {
+    let mut state = State::Ground;
+    let mut candidate = None;
+    for (index, ch) in text.char_indices() {
+        if !ch.is_ascii() {
+            // Validated UTF-8 bytes are printable and do not affect ANSI state.
+            continue;
+        }
+        if state == State::Ground && ch == '\x1b' {
+            candidate = Some(index);
+        }
+        let (next, _) = state_change(state, ch as u8);
+        if next != State::Anywhere {
+            state = next;
         }
     }
 
-    // The output is always valid UTF-8: `push_visible_byte` only filters ASCII
-    // control bytes (< 32 except \n/\r/\t, and DEL=127), which cannot be part of
-    // a multi-byte UTF-8 sequence (those bytes are all >= 0x80). `from_utf8`
-    // reuses the Vec allocation directly; `from_utf8_lossy().into_owned()` would
-    // copy even on the valid-UTF-8 fast path.
-    String::from_utf8(output).unwrap_or_else(|e| {
-        // Defensive fallback — should not happen given the invariant above.
-        String::from_utf8_lossy(&e.into_bytes()).into_owned()
-    })
+    if state == State::Ground {
+        return text.len();
+    }
+    candidate
+        .filter(|&start| text.len() - start <= MAX_STRING_SEQUENCE_BYTES)
+        .unwrap_or(text.len())
 }
 
 /// Strip ANSI escape codes from arbitrary bytes, preserving non-control bytes.
@@ -265,31 +321,14 @@ pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
     parse_ansi_sequence_bytes(bytes)
 }
 
-/// Fast ASCII-only ANSI stripping for performance-critical paths
+/// ANSI stripping for ASCII-only text.
+///
+/// Retained for API compatibility; this now shares [`strip_ansi`]'s parser.
+/// Unlike the previous implementation it does not keep an unterminated escape
+/// sequence at the end of the input — that would leak raw control bytes into
+/// transcripts when a PTY chunk splits a sequence.
 pub fn strip_ansi_ascii_only(text: &str) -> String {
-    let mut output = String::with_capacity(text.len());
-    let bytes = text.as_bytes();
-    let mut search_start = 0;
-    let mut copy_start = 0;
-
-    while let Some(offset) = memchr(ESC, &bytes[search_start..]) {
-        let esc_index = search_start + offset;
-        if let Some(len) = parse_ansi_sequence_bytes(&bytes[esc_index..]) {
-            if copy_start < esc_index {
-                output.push_str(&text[copy_start..esc_index]);
-            }
-            copy_start = esc_index + len;
-            search_start = copy_start;
-        } else {
-            search_start = esc_index + 1;
-        }
-    }
-
-    if copy_start < text.len() {
-        output.push_str(&text[copy_start..]);
-    }
-
-    output
+    strip_ansi(text)
 }
 
 /// Detect if text contains unicode characters that need special handling
@@ -300,7 +339,9 @@ pub fn contains_unicode(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CAN, SUB, strip_ansi, strip_ansi_ascii_only};
+    use super::{
+        AnsiStripStream, CAN, SUB, parse_ansi_sequence_bytes, push_visible_byte, strip_ansi, strip_ansi_ascii_only,
+    };
 
     #[test]
     fn strips_esc_csi_sequences() {
@@ -360,9 +401,11 @@ mod tests {
     }
 
     #[test]
-    fn ascii_only_incomplete_sequence_keeps_tail() {
+    fn ascii_only_incomplete_sequence_drops_tail() {
+        // The old ASCII fast path kept the unterminated tail, which leaked raw
+        // escape bytes into transcripts when a PTY chunk split a sequence.
         let input = "text\x1b[31";
-        assert_eq!(strip_ansi_ascii_only(input), input);
+        assert_eq!(strip_ansi_ascii_only(input), "text");
     }
 
     #[test]
@@ -409,10 +452,12 @@ mod tests {
     }
 
     #[test]
-    fn malformed_csi_does_not_consume_following_text() {
-        // 0x10 is not valid CSI parameter/intermediate/final.
+    fn malformed_csi_control_byte_lets_next_final_byte_terminate() {
+        // Per the ECMA-48/DEC state machine, a C0 control inside CSI is
+        // executed but does not abort the sequence. The next byte in 0x40..=0x7e
+        // ('v') is therefore the final byte and is consumed with the sequence.
         let malformed = format!("a\x1b[12{}visible", char::from(0x10));
-        assert_eq!(strip_ansi(&malformed), "avisible");
+        assert_eq!(strip_ansi(&malformed), "aisible");
     }
 
     #[test]
@@ -473,5 +518,128 @@ mod tests {
         // ESC # at end — incomplete, should not consume past end
         let input = "text\x1b#";
         assert_eq!(strip_ansi(input), "text");
+    }
+
+    /// Reference stripper built from the in-tree boundary parser, independent
+    /// of `anstream`. Used as the oracle for the delegation refactor.
+    fn legacy_strip(text: &str) -> String {
+        let bytes = text.as_bytes();
+        let mut output = Vec::with_capacity(bytes.len());
+        let mut index = 0;
+        while index < bytes.len() {
+            let next_esc = bytes[index..]
+                .iter()
+                .position(|&b| b == b'\x1b')
+                .map_or(bytes.len(), |o| index + o);
+            for &byte in &bytes[index..next_esc] {
+                push_visible_byte(&mut output, byte);
+            }
+            index = next_esc;
+            if index >= bytes.len() {
+                break;
+            }
+            if let Some(len) = parse_ansi_sequence_bytes(&bytes[index..]) {
+                index += len;
+            } else {
+                break;
+            }
+        }
+        String::from_utf8(output).expect("filtering ASCII controls cannot break UTF-8")
+    }
+
+    #[test]
+    fn anstream_matches_legacy_stripper_on_structured_corpus() {
+        let cases = [
+            "plain text",
+            "a\x1b[31mred\x1b[0mz",
+            "\r\x1b[2KProgress 10%\r\x1b[2KDone\n",
+            "go \x1b]8;;https://example.com\x1b\\here\x1b]8;;\x1b\\ now",
+            "out\x1b]7501;state=working\x07done",
+            "a\x1b#8b",
+            "a\x1b(Bb",
+            "a\x1b Fb",
+            "a\x1b%Gb",
+            "a\x1b[31\x1b[32mgreen\x1b[0mz",
+            "a\u{009b}31mred",
+            "x\x1b[38;5;196mred\x1b[0my",
+            "a\x1b[?25lb\x1b[?25hc",
+            "text\x1b[31",
+        ];
+        for case in cases {
+            assert_eq!(strip_ansi(case), legacy_strip(case), "case {case:?}");
+        }
+    }
+
+    #[test]
+    fn strip_stream_keeps_parser_state_across_split_sequences() {
+        let mut stream = AnsiStripStream::new();
+        let mut visible = stream.strip_chunk("text\x1b[3");
+        // Neither half is a valid sequence on its own; only together do they
+        // form SGR. A stateless stripper would leak "31m" into the output.
+        visible.push_str(&stream.strip_chunk("1mred\x1b[0mz"));
+        assert_eq!(visible, "textredz");
+
+        let mut stream = AnsiStripStream::new();
+        let mut visible = stream.strip_chunk("pre\x1b]8;;https://exa");
+        visible.push_str(&stream.strip_chunk("mple.com\x1b\\linkpost"));
+        assert_eq!(visible, "prelinkpost");
+    }
+
+    #[test]
+    fn strip_stream_output_is_independent_of_chunk_boundaries() {
+        // A C0 control inside CSI is executed, not an abort: the next 0x40..=0x7e
+        // byte is the sequence's final byte. Both the boundary detector and
+        // anstream must agree, or visible text appears/disappears based on the
+        // arbitrary PTY read boundary.
+        let whole = "PRE\x1b[31mMID\x1b[12\x10visiblePOST";
+        let expected = strip_ansi(whole);
+        for split in 0..=whole.len() {
+            if !whole.is_char_boundary(split) {
+                continue;
+            }
+            let (first, second) = whole.split_at(split);
+            let mut stream = AnsiStripStream::new();
+            let mut visible = stream.strip_chunk(first);
+            visible.push_str(&stream.strip_chunk(second));
+            assert_eq!(visible, expected, "split at byte {split}");
+        }
+    }
+
+    #[test]
+    fn strip_stream_passes_plain_text_through_unchanged() {
+        let mut stream = AnsiStripStream::new();
+        assert_eq!(stream.strip_chunk("plain text\n"), "plain text\n");
+        assert_eq!(stream.strip_chunk("second\rline"), "second\rline");
+    }
+
+    /// A PTY read can end at any byte boundary. Streaming output must match
+    /// one-shot stripping for every possible split, not just hand-picked ones.
+    #[test]
+    fn strip_stream_matches_one_shot_for_every_chunk_boundary() {
+        let cases = [
+            "a\x1b[31mred\x1b[0mz",
+            "go \x1b]8;;https://example.com\x1b\\here\x1b]8;;\x1b\\ now",
+            "out\x1b]7501;state=working\x07done",
+            "a\x1b#8b",
+            "a\x1b(Bb",
+            "a\x1b[31\x1b[32mgreen\x1b[0mz",
+            "\r\x1b[2KProgress 10%\r\x1b[2KDone\n",
+            "text\x1b[31",
+            "a\u{009b}31mred",
+            "x\x1b[38;5;196mred\x1b[0my",
+        ];
+        for case in cases {
+            let expected = strip_ansi(case);
+            for index in 0..=case.len() {
+                if !case.is_char_boundary(index) {
+                    continue;
+                }
+                let (first, second) = case.split_at(index);
+                let mut stream = AnsiStripStream::new();
+                let mut visible = stream.strip_chunk(first);
+                visible.push_str(&stream.strip_chunk(second));
+                assert_eq!(visible, expected, "split at {index} of {case:?}");
+            }
+        }
     }
 }

@@ -121,6 +121,7 @@ vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.185.0" }
 vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.185.0" }
 vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.185.0" }
 anstream = "1.0"
+anstyle-parse = "1.0"
 parking_lot = "0.13"
 terminal_size = "0.4.4"
 which = "8.0.2"

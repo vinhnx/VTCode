@@ -37,6 +37,8 @@ compact_str = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "sync", "time"] }
 tracing = { workspace = true }
 anstyle = { workspace = true }
+anstream = { workspace = true, default-features = false }
+anstyle-parse = { workspace = true }
 
 futures = { workspace = true }
 base64 = { workspace = true }

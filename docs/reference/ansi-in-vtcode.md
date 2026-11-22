@@ -13,8 +13,21 @@ notifications, and TUI rendering. This document maps the ANSI reference to VT Co
 
 ```rust
 pub fn strip_ansi(text: &str) -> String
-pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
+pub fn strip_ansi_codes(text: &str) -> Cow<'_, str>
+pub fn strip_ansi_ascii_only(text: &str) -> String
+pub struct AnsiStripStream  // stateful stripping across chunked PTY input
+pub fn parse_ansi_sequence(text: &str) -> Option<usize>
 ```
+
+Plain-text stripping is delegated to `anstream::adapter::strip_str`, an ANSI
+state machine that is already a workspace dependency. `AnsiStripStream` retains
+a trailing incomplete escape sequence and re-strips it with the next chunk,
+so a sequence split by a PTY read boundary never leaks raw control bytes.
+
+The hand-rolled ECMA-48 parser stays for the one thing `anstream` does not
+expose: byte boundaries and OSC payloads of individual sequences, used for
+OSC 8 link ranges and echo suppression. `strip_ansi_bytes` remains for raw
+8-bit C1 byte streams.
 
 **Used in**:
 
@@ -151,8 +164,9 @@ VT Code strips ANSI control sequences but preserves line-control characters like
 
 ### Important limitation
 
-`strip_ansi()` is a lexical stripper, not a terminal emulator. It removes control sequences but does not apply cursor
-movement effects (`CUU`/`CUD`/`CUF`/`CUB`) to reconstruct a final visual frame.
+`strip_ansi()` (and `AnsiStripStream`) are strippers, not terminal emulators. They remove control sequences but do not
+apply cursor movement effects (`CUU`/`CUD`/`CUF`/`CUB`) to reconstruct a final visual frame. For a final rendered screen
+snapshot, use `PtyPreviewRenderer`, which drives the `rio-vt` terminal state.
 
 ### Implementation
 
