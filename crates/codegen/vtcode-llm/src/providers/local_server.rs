@@ -150,8 +150,9 @@ fn take_managed_child(provider: LocalProvider) -> Option<Child> {
 
 fn store_managed_child(provider: LocalProvider, child: Child) {
     // Recover the guard on poison just like `take_managed_child` does. An
-    // `if let Ok(..)` here would drop the child on the floor, leaving an
-    // orphaned server process that shutdown can never reap.
+    // `if let Ok(..)` here would silently drop the `Child` (killing the server
+    // via `kill_on_drop`) and leave the registry out of sync with the process
+    // state that `stop_*` and the status probes rely on.
     let mut guard = MANAGED_PROCESSES.lock().unwrap_or_else(|e| e.into_inner());
     guard.entry(provider).or_insert_with(|| ManagedProcess { child: None }).child = Some(child);
 }
@@ -858,8 +859,8 @@ mod tests {
         assert!(poisoned.join().is_err());
         assert!(MANAGED_PROCESSES.is_poisoned());
 
-        // A poisoned lock must not drop the child on the floor (which would
-        // leave an orphaned server process that shutdown cannot reap).
+        // A poisoned lock must not silently skip registration: the registry
+        // has to reflect the process that `stop_*` and status paths manage.
         store_managed_child(LocalProvider::LmStudio, child);
 
         let mut taken = take_managed_child(LocalProvider::LmStudio).expect("child must be registered despite poison");
