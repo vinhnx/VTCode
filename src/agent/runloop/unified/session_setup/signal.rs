@@ -46,18 +46,20 @@ fn is_exit_postamble_armed() -> bool {
 ///    1 second, the handler calls `emergency_terminal_cleanup()` which:
 ///    - Restores the terminal to a usable state
 ///    - Flushes trace logs
-///    - Calls `std::process::exit(130)` to immediately terminate the process
+///    - Calls `emergency_exit(130)` to immediately terminate the process
 ///
-/// 4. **Emergency exit bypasses all other operations** - The `std::process::exit(130)`
-///    call bypasses Rust's drop logic and async runtime shutdown, ensuring the
-///    program exits immediately even if other tasks are blocked.
+/// 4. **Emergency exit bypasses all other operations** - The `emergency_exit(130)`
+///    call bypasses Rust's drop logic, libc `exit` handlers, and async runtime
+///    shutdown, ensuring the program exits immediately even if other tasks are
+///    blocked. It runs on this Tokio task, so avoiding `std::process::exit`
+///    also prevents racing the main thread's process-wide state.
 ///
 /// 5. **No signal masking** - SIGINT is never blocked or masked, ensuring the
 ///    OS can always deliver the signal to this handler.
 ///
 /// 6. **MCP shutdown has tight timeout** - On double Ctrl+C, MCP shutdown is
 ///    awaited inline with a 500ms timeout so MCP children shut down before
-///    `std::process::exit(130)`; on the first Ctrl+C (cancel path) it is
+///    `emergency_exit(130)`; on the first Ctrl+C (cancel path) it is
 ///    detached so the handler can process a second Ctrl+C without delay.
 ///
 /// # Signal Flow
@@ -65,7 +67,7 @@ fn is_exit_postamble_armed() -> bool {
 /// 1. OS delivers SIGINT → Tokio runtime wakes up the signal handler task
 /// 2. Signal handler calls `request_local_stop()` → `CtrlCState::register_signal()`
 /// 3. If `CtrlCSignal::Exit` is returned → MCP shutdown awaited inline (500ms timeout)
-/// 4. Call `emergency_terminal_cleanup()` → `restore_tui()` → `std::process::exit(130)`
+/// 4. Call `emergency_terminal_cleanup()` → `restore_tui()` → `emergency_exit(130)`
 ///
 /// # Emergency Terminal Cleanup
 ///
@@ -100,7 +102,7 @@ pub(crate) fn spawn_signal_handler(
                         }
                         // Await the bounded shutdown inline: the spawned variant
                         // never ran, because emergency_terminal_cleanup() calls
-                        // std::process::exit(130) before the task could make
+                        // emergency_exit(130) before the task could make
                         // progress, orphaning MCP children. Bounded at 500ms so
                         // double-Ctrl+C still exits promptly.
                         if let Some(mcp_manager) = &async_mcp_manager {
@@ -155,5 +157,5 @@ fn emergency_terminal_cleanup(terminal_enabled: bool) {
         eprintln!("Interrupted — exiting after repeated stop requests.");
     }
     let _ = std::io::Write::flush(&mut std::io::stderr());
-    std::process::exit(130);
+    vtcode_commons::process_exit::emergency_exit(130);
 }

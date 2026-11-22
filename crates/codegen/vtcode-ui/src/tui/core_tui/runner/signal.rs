@@ -45,7 +45,7 @@ impl SignalCleanupGuard {
                 eprintln!("\r\nReceived SIGTERM — terminal restored, exiting.");
                 let _ = std::io::Write::flush(&mut std::io::stdout());
                 let _ = std::io::Write::flush(&mut std::io::stderr());
-                std::process::exit(143);
+                vtcode_commons::process_exit::emergency_exit(143);
             }
         });
 

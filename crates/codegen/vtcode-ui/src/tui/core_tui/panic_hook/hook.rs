@@ -57,7 +57,14 @@ pub fn init_panic_hook() {
                 original_hook(panic_info);
             }
 
-            std::process::exit(1);
+            // A panic can arrive on any worker thread. Use the raw-exit helper
+            // so libc `exit` handlers and thread-local destructors cannot run
+            // while the rest of the process is still unwinding. The crash
+            // report is already written to disk and printed above, so flush
+            // the buffered streams explicitly before skipping their cleanup.
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+            let _ = std::io::Write::flush(&mut std::io::stderr());
+            vtcode_commons::process_exit::emergency_exit(1);
         }));
     });
 }
