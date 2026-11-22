@@ -114,6 +114,16 @@ cargo_verbosity() {
 	fi
 }
 
+# True when a compiler wrapper that rejects `-C incremental` is configured.
+# Cargo accepts the wrapper through RUSTC_WRAPPER (sccache's own docs) or the
+# build.rustc-wrapper config key (CARGO_BUILD_RUSTC_WRAPPER). Checking only the
+# former makes `check-dev.sh --test` force CARGO_INCREMENTAL=1 for contributors
+# who configure sccache the Cargo-native way, which sccache then rejects.
+uses_sccache_wrapper() {
+	local wrapper="${RUSTC_WRAPPER:-} ${CARGO_BUILD_RUSTC_WRAPPER:-}"
+	[[ "$wrapper" == *sccache* ]]
+}
+
 # Fingerprint of everything that can change cargo's verdict: tracked Rust and
 # manifest sources plus their current working-tree state. Used to skip the
 # minutes-long cargo stages when a repeated run has nothing new to compile,
@@ -335,13 +345,13 @@ for package_name in sorted(changed_packages):
 	local test_exit=0
 
 	# Enable incremental compilation for local test builds to avoid full
-	# recompiles on every test run. Skip this when a distributed compiler
-	# wrapper such as sccache (the repo's recommended dev setup, which sets
-	# `incremental = false` in the dev profile) is active: sccache forbids
-	# incremental compilation, so forcing `CARGO_INCREMENTAL=1` makes
-	# `check-dev.sh --test` fail for sccache users.
+	# recompiles on every test run. Skip this when a compiler wrapper such as
+	# sccache (the repo's recommended dev setup, which sets `incremental =
+	# false` in the dev profile) is active: sccache rejects `-C incremental`,
+	# so forcing `CARGO_INCREMENTAL=1` makes `check-dev.sh --test` fail for
+	# sccache users. The helper checks both supported wrapper env vars.
 	local nextest_env=()
-	if [[ -z "${RUSTC_WRAPPER:-}" || "${RUSTC_WRAPPER}" != *sccache* ]]; then
+	if ! uses_sccache_wrapper; then
 		nextest_env=(CARGO_INCREMENTAL=1)
 	fi
 	local nextest_verbosity=()

@@ -179,6 +179,48 @@ class FastPathCacheTests(unittest.TestCase):
         self.assertIn("WROTE", result.stdout + result.stderr)
 
 
+class SccacheWrapperDetectionTests(unittest.TestCase):
+    """sccache rejects `-C incremental`, so both Cargo wrapper paths must be seen."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="vtcode-checkdev-wrapper-")
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def detect(self, rustc_wrapper="", cargo_wrapper=""):
+        result = run(
+            self.root,
+            "if uses_sccache_wrapper; then echo yes; else echo no; fi",
+            env={
+                "RUSTC_WRAPPER": rustc_wrapper,
+                "CARGO_BUILD_RUSTC_WRAPPER": cargo_wrapper,
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_no_wrapper_allows_incremental(self):
+        self.assertEqual(self.detect(), "no")
+
+    def test_rustc_wrapper_sccache_disables_incremental(self):
+        self.assertEqual(self.detect(rustc_wrapper="sccache"), "yes")
+
+    def test_cargo_build_rustc_wrapper_sccache_disables_incremental(self):
+        # Ambient RUSTC_WRAPPER can be empty while Cargo's config-key env var
+        # still selects sccache; the old guard missed this path entirely.
+        self.assertEqual(self.detect(cargo_wrapper="sccache"), "yes")
+
+    def test_wrapper_path_containing_sccache_is_detected(self):
+        self.assertEqual(self.detect(cargo_wrapper="/usr/local/bin/sccache"), "yes")
+
+    def test_other_wrapper_allows_incremental(self):
+        self.assertEqual(
+            self.detect(rustc_wrapper="ccache", cargo_wrapper="ccache"), "no"
+        )
+
+
 class GateOrderTests(unittest.TestCase):
     def test_cheap_gates_are_ordered_before_cargo(self):
         """A fast gate should surface a sub-second failure before paying for clippy."""

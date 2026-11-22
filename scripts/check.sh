@@ -71,7 +71,7 @@ run_vtcode_command() {
 	fi
 
 	if command -v cargo >/dev/null 2>&1 && [ -f "Cargo.toml" ]; then
-		RUSTC_WRAPPER='' cargo run --quiet --bin vtcode -- "$@"
+		RUSTC_WRAPPER='' CARGO_BUILD_RUSTC_WRAPPER='' cargo run --quiet --bin vtcode -- "$@"
 		return $?
 	fi
 

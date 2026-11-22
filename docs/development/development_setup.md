@@ -75,6 +75,39 @@ cargo nextest run
 cargo test --workspace
 ```
 
+## Compiler caching (sccache)
+
+[sccache](https://github.com/mozilla/sccache) is a rustc wrapper that stores compilation results outside
+`target/`. A cache hit skips rustc entirely, and the results survive `cargo clean`, so clean rebuilds do not start
+from scratch. It is optional but recommended; the largest wins are clean builds and repeated CI jobs.
+
+```bash
+brew install sccache              # or: cargo install sccache --locked
+export RUSTC_WRAPPER=sccache
+export SCCACHE_CACHE_SIZE=2G      # size for at least one full build per profile/target/toolchain
+./scripts/check-dev.sh            # or: cargo check
+sccache --show-stats              # Rust cache hits/misses, non-cacheable calls, evictions
+```
+
+Cargo also accepts the wrapper through its `build.rustc-wrapper` config key (`CARGO_BUILD_RUSTC_WRAPPER`);
+`check-dev.sh` recognizes both. Settings such as the cache size are read when the sccache server starts — after
+changing them, run `sccache --stop-server` before the next build. `sccache --zero-stats` resets counters only, not
+stored results.
+
+**Incremental compilation:** sccache rejects `-C incremental`, so `Cargo.toml` disables it in `[profile.dev]`. The
+local, gitignored `.cargo/config.toml` re-enables it for workspace crates (fast edit loop) while keeping dependencies
+out of incremental mode (`[profile.dev.package."*"] incremental = false`) so they stay cacheable. Do not set
+`CARGO_INCREMENTAL=1` globally on sccache hosts: `check-dev.sh` deliberately omits it when a wrapper is detected.
+
+**Cache care:** a changed compiler, feature, profile, target, flag, source path, or environment produces a different
+cache key; it does not delete older entries. Local disk space is reclaimed by least-recently-used eviction once
+`SCCACHE_CACHE_SIZE` is reached. A limit that is too small evicts entries before the next build can reuse them, so
+compare `2G` against the peak size reported by `sccache --show-stats` before raising it — a much larger limit can
+thrash. `cargo clean` removes `target/` but not the sccache store, so prefer it only when disk space or
+troubleshooting calls for it. Binaries, proc macros, build scripts, and linking are never cached. For CI, sccache is
+an opt-in pilot; see [Compiler-cache pilot](./ci-cd.md#compiler-cache-pilot) and measure the whole job, including
+cache restore and upload, before enabling it by default.
+
 ## Full Quality Gate
 
 ```bash

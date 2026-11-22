@@ -87,8 +87,9 @@ cargo nextest run --release
 ### Local Test Build Optimization
 
 For local test iteration, the test build uses `CARGO_INCREMENTAL=1` (via `check-dev.sh`) to avoid full recompiles when
-only a few files have changed. This overrides the `incremental = false` setting in `[profile.dev]` (which is needed for
-sccache compatibility in CI).
+only a few files have changed. This overrides the `incremental = false` setting in `[profile.dev]`, which keeps builds
+cacheable by sccache. `check-dev.sh` skips the override when a compiler wrapper is configured; see
+[Compiler caching (sccache)](./development_setup.md#compiler-caching-sccache).
 
 ```bash
 # Fast local test builds with incremental compilation

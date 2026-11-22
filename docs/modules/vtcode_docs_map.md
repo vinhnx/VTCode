@@ -255,8 +255,8 @@ below based on the topic area.
 
 - **File**: `docs/development/development_setup.md`
   - **Content**: Development Setup
-  - **Topics**: Dev Container (Optional), One-Time Setup, Credential identities, Daily Development Loop, Full Quality
-    Gate
+  - **Topics**: Dev Container (Optional), One-Time Setup, Credential identities, Daily Development Loop, Compiler
+    caching (sccache)
   - **User Questions**: "What can you tell me about Development Setup?", "How does Dev Container (Optional) work?", "How
     does One-Time Setup work?"
 

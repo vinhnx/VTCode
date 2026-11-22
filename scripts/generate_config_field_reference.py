@@ -56,7 +56,7 @@ def load_schema_from_cargo() -> dict[str, Any]:
     result = subprocess.run(
         CARGO_SCHEMA_CMD,
         cwd=REPO_ROOT,
-        env={**os.environ, "RUSTC_WRAPPER": ""},
+        env={**os.environ, "RUSTC_WRAPPER": "", "CARGO_BUILD_RUSTC_WRAPPER": ""},
         capture_output=True,
         text=True,
         check=False,
@@ -156,7 +156,7 @@ def portable_default(value: Any, home: str | None = None) -> Any:
     if isinstance(value, str):
         if value == home:
             return "~"
-        return "~" + value[len(home):] if value.startswith(home + "/") else value
+        return "~" + value[len(home) :] if value.startswith(home + "/") else value
     if isinstance(value, list):
         return [portable_default(item, home) for item in value]
     if isinstance(value, dict):
@@ -423,7 +423,11 @@ def main() -> int:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(markdown, encoding="utf-8")
-    output_label = output_path.relative_to(REPO_ROOT) if output_path.is_relative_to(REPO_ROOT) else output_path
+    output_label = (
+        output_path.relative_to(REPO_ROOT)
+        if output_path.is_relative_to(REPO_ROOT)
+        else output_path
+    )
     print(f"Wrote {len(entries)} config fields to {output_label}")
     return 0
 

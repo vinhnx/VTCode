@@ -55,8 +55,11 @@ fi
 
 # `unset` actually clears a wrapper that may be set in the parent shell;
 # `${VAR:-}` only defaults on unset vars, so `export RUSTC_WRAPPER=""`
-# would not drop a pre-existing value.
+# would not drop a pre-existing value. Cargo accepts the wrapper through both
+# RUSTC_WRAPPER and build.rustc-wrapper (CARGO_BUILD_RUSTC_WRAPPER); leaving
+# either set would make sccache reject the CARGO_INCREMENTAL=1 build below.
 unset RUSTC_WRAPPER
+unset CARGO_BUILD_RUSTC_WRAPPER
 export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
 
 # On Apple Silicon, rustc is heavy enough per-thread that pinning cargo
