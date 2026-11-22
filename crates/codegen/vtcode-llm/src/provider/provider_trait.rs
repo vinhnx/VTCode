@@ -198,8 +198,9 @@ pub trait LLMProvider: Send + Sync {
 
     /// Run one request on the bound computer-use route. Only providers that
     /// declare native tools implement this; the default reports unsupported
-    /// without I/O. Implementations verify the target against the
-    /// computer-use gate before sending anything.
+    /// without I/O. Implementations verify the provider/protocol route
+    /// against the computer-use gate before sending anything; any model on a
+    /// declared route is admitted.
     async fn generate_native(&self, _request: LLMRequest) -> Result<NativeResponse, LLMError> {
         Err(LLMError::Provider {
             message: "Computer use is unsupported for this provider".to_owned(),

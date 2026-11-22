@@ -103,41 +103,46 @@ fn computer_use_native_declaration_preserves_function_tools() {
 }
 
 #[tokio::test]
-async fn computer_use_native_denies_unverified_targets_before_any_io() {
+async fn computer_use_native_accepts_arbitrary_model_and_endpoint() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use crate::provider::{LLMProvider, LLMRequest, Message};
     use crate::providers::openai::provider::OpenAIProvider;
-    use vtcode_config::constants::models;
 
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/responses"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"output": []})))
-        .expect(0)
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "output": [{"type": "message", "role": "assistant",
+                        "content": [{"type": "output_text", "text": "acting now"}]}]
+        })))
+        .expect(1)
         .mount(&server)
         .await;
 
+    // Neither the model nor the endpoint is in the probe matrix: a declared
+    // OpenAI route must still dispatch the native turn.
+    let model = "gpt-6-luna-preview";
     let provider = OpenAIProvider::new_with_client(
         "test-key".into(),
         None,
-        models::openai::GPT_6_LUNA.into(),
+        model.into(),
         reqwest::Client::builder().no_proxy().build().unwrap(),
         server.uri(),
         vtcode_config::TimeoutsConfig::default(),
     );
     assert!(provider.supports_computer_use());
-    let error = LLMProvider::generate_native(
+    let response = LLMProvider::generate_native(
         &provider,
         LLMRequest {
-            model: models::openai::GPT_6_LUNA.into(),
+            model: model.into(),
             messages: vec![Message::user("fixture".into())].into(),
             ..Default::default()
         },
     )
     .await
-    .unwrap_err();
-    assert!(error.to_string().contains("not verified"));
+    .expect("arbitrary model on a declared route must be admitted");
+    assert_eq!(response.content.as_deref(), Some("acting now"));
     server.verify().await;
 }

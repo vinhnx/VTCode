@@ -1,11 +1,44 @@
-//! Verified computer-use target matrix.
+//! Computer-use route admission and live-probe records.
 //!
-//! A (provider, model, endpoint, protocol) tuple becomes usable only after
-//! the acceptance runs in the approved plan prove it live. The matrix grows
-//! one entry per accepted probe: unknown tuples stay denied, and every
-//! denial happens before any network I/O.
+//! Admission is by declared native route (provider + protocol wire name): any
+//! model and any endpoint on a route the provider actually implements is
+//! admitted, so new models and custom proxies work without a gate change.
+//! Unknown routes stay denied before any network I/O.
+//!
+//! [`VERIFIED_MATRIX`] records tuples proven by live acceptance runs. It is
+//! advisory documentation of what was probed, not an admission list.
 
-/// One live-verified computer-use target.
+use vtcode_commons::provider::Provider;
+
+/// Wire name of the OpenAI Responses `computer` tool. The provider codecs
+/// declare this constant rather than restating the string, so a wire-version
+/// bump cannot silently desynchronize declaration, gate, and parser.
+pub const OPENAI_COMPUTER_PROTOCOL: &str = "computer";
+/// Wire name of the Anthropic Messages computer toolset.
+pub const ANTHROPIC_COMPUTER_PROTOCOL: &str = "computer_toolset_20260801";
+
+/// Native computer-use routes implemented and contract-tested in `vtcode-llm`.
+///
+/// Both halves of a route are canonical here: provider identity comes from
+/// [`Provider`] and protocol wire names from the constants above. Providers
+/// re-export those constants as their `computer_use::PROTOCOL`, so this table
+/// is the single source of truth for route admission.
+pub const NATIVE_ROUTES: &[(Provider, &str)] = &[
+    (Provider::OpenAI, OPENAI_COMPUTER_PROTOCOL),
+    (Provider::Anthropic, ANTHROPIC_COMPUTER_PROTOCOL),
+];
+
+/// Whether a provider implements a native computer-use route. Model and
+/// endpoint are deliberately absent: every model on a declared route can
+/// drive a turn, including models released after this crate was built and
+/// requests sent through a custom base URL.
+#[must_use]
+pub fn native_route_supported(provider: Provider, protocol: &str) -> bool {
+    NATIVE_ROUTES.contains(&(provider, protocol))
+}
+
+/// One tuple proven by a live acceptance probe. Advisory only; see
+/// [`native_route_supported`] for admission.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VerifiedTarget {
     /// Provider key, e.g. `"anthropic"`.
@@ -45,7 +78,8 @@ pub fn verified_target(matrix: &[VerifiedTarget], provider: &str, model: &str, e
     })
 }
 
-/// Whether [`VERIFIED_MATRIX`] admits the target.
+/// Whether [`VERIFIED_MATRIX`] recorded a probe for the target. Never used
+/// for admission: see [`native_route_supported`].
 #[must_use]
 pub fn verified_target_default(provider: &str, model: &str, endpoint: &str, protocol: &str) -> bool {
     verified_target(VERIFIED_MATRIX, provider, model, endpoint, protocol)

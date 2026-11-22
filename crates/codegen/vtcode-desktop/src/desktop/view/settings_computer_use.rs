@@ -94,7 +94,7 @@ fn computer_use_group_title(status: Option<bool>, colors: &gpui_kit::component::
 
 /// User guide block: title plus the four facts a first-time user needs
 /// (where the target lives, where turns run, what the requirements are,
-/// which models are verified).
+/// which providers' models are supported).
 /// Muted help-text styling shared with row descriptions; shown only while
 /// the snapshot is available, since the steps assume a live service.
 fn computer_use_guide(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {

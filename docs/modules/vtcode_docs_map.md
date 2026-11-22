@@ -158,9 +158,9 @@ below based on the topic area.
 
 - **File**: `docs/development/computer-use-quick-reference.md`
   - **Content**: Computer Use Quick Reference
-  - **Topics**: Config keys (`[computer_use]`), Verified matrix, Route anatomy, Resume contract, Events and redaction
+  - **Topics**: Config keys (`[computer_use]`), Route admission, Route anatomy, Resume contract, Events and redaction
   - **User Questions**: "What can you tell me about Computer Use Quick Reference?", "How does Config keys
-    (`[computer_use]`) work?", "How does Verified matrix work?"
+    (`[computer_use]`) work?", "How does Route admission work?"
 
 - **File**: `docs/development/computer-use-runloop-wiring.md`
   - **Content**: Computer-use run-loop wiring

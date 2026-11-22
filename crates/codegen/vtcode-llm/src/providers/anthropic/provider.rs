@@ -14,6 +14,7 @@ use crate::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, NativeResponse, NativeStream,
     ToolDefinition,
 };
+use vtcode_commons::provider::Provider;
 use vtcode_config::constants::{models, urls};
 use vtcode_config::core::{AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig};
 use vtcode_config::{AnthropicSpeed, TimeoutsConfig};
@@ -723,19 +724,14 @@ impl LLMProvider for AnthropicProvider {
     }
 
     fn supports_computer_use(&self) -> bool {
-        true
+        vtcode_computer_use::gate::native_route_supported(Provider::Anthropic, super::computer_use::PROTOCOL)
     }
 
     async fn generate_native(&self, request: LLMRequest) -> Result<NativeResponse, LLMError> {
         let resolved_model = self.resolved_request_model(&request).to_string();
-        if !vtcode_computer_use::gate::verified_target_default(
-            "anthropic",
-            &resolved_model,
-            &self.base_url,
-            super::computer_use::PROTOCOL,
-        ) {
+        if !vtcode_computer_use::gate::native_route_supported(Provider::Anthropic, super::computer_use::PROTOCOL) {
             return Err(LLMError::Provider {
-                message: format!("Computer use is not verified for model {resolved_model}"),
+                message: "Computer use is unavailable on this provider route".to_string(),
                 metadata: None,
             });
         }
@@ -755,14 +751,9 @@ impl LLMProvider for AnthropicProvider {
 
     async fn stream_native(&self, request: LLMRequest) -> Result<NativeStream, LLMError> {
         let resolved_model = self.resolved_request_model(&request).to_string();
-        if !vtcode_computer_use::gate::verified_target_default(
-            "anthropic",
-            &resolved_model,
-            &self.base_url,
-            super::computer_use::PROTOCOL,
-        ) {
+        if !vtcode_computer_use::gate::native_route_supported(Provider::Anthropic, super::computer_use::PROTOCOL) {
             return Err(LLMError::Provider {
-                message: format!("Computer use is not verified for model {resolved_model}"),
+                message: "Computer use is unavailable on this provider route".to_string(),
                 metadata: None,
             });
         }

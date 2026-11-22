@@ -16,14 +16,15 @@ and records only a redacted summary in the conversation.
   one approved static build from your `computer_use.browser_build` directory. External
   pages, local servers, and desktop apps are out of scope; for those, VT Code falls back to
   the shell recipes shown in the refusal message.
-- **Provider-native, provider-gated.** Turns run on OpenAI's Responses `computer` tool and
-  Anthropic's `computer_toolset_20260801` on models that passed a live acceptance probe
-  (see the [verified matrix](../development/computer-use-quick-reference.md#verified-matrix)).
-  Unverified models refuse with an off-state next step before any network I/O.
+- **Provider-native, route-gated.** Turns run on OpenAI's Responses `computer` tool and
+  Anthropic's `computer_toolset_20260801`. Any model on those routes works, including
+  models released later and custom endpoints; providers without a native route refuse
+  before any network I/O (see
+  [route admission](../development/computer-use-quick-reference.md#route-admission)).
 
 ## Enabling it
 
-1. Set a verified computer-use model (currently OpenAI `gpt-6-luna`).
+1. Select any OpenAI or Anthropic model on its native computer-use route.
 2. Approve the tool once per session — the model calls `computer_use` with a plain-words
    `task`; the batch review is the approval surface.
 3. Configure the target in `vtcode.toml`:
@@ -56,9 +57,9 @@ and `settings/computer-use` deeplink. Docker must be available for the browser t
 
 ## Limits and troubleshooting
 
-- **"Computer use is not verified for model …"** — the model/endpoint pair is not in the
-  verified matrix. Switch to a verified model; the matrix grows one entry per accepted
-  probe.
+- **"Computer turn did not run: unsupported provider"** — the active provider has no
+  native computer-use route. Switch to an OpenAI or Anthropic model; any model on those
+  routes is admitted.
 - **"No target configured"** — set `computer_use.browser_build` to an absolute directory
   containing the static build the preview should serve.
 - **Batch fails partway** — the remaining actions stop, the target lease is revoked, and

@@ -14,7 +14,8 @@ use vtcode_computer_use::{
 use crate::provider::{NativeCall, NativeCallBody};
 
 /// Native protocol version declared on the wire and checked by the gate.
-pub(crate) const PROTOCOL: &str = "computer";
+/// Re-exported from the owning gate table so declaration and admission cannot drift.
+pub(crate) use vtcode_computer_use::gate::OPENAI_COMPUTER_PROTOCOL as PROTOCOL;
 
 pub fn declaration() -> Value {
     json!({"type": PROTOCOL})

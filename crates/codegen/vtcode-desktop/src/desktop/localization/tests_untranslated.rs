@@ -71,17 +71,17 @@ fn computer_use_copy_resolves_in_every_language() {
 }
 
 #[test]
-fn computer_use_guide_models_names_every_verified_model() {
-    // The guide note is static locale prose; the verified matrix is the
-    // source of truth. Pin them together so accepting a new probe
-    // (VERIFIED_MATRIX growth) fails here until the note names it.
-    let matrix = vtcode_computer_use::gate::VERIFIED_MATRIX;
-    assert!(!matrix.is_empty(), "a supported-list note needs a non-empty matrix");
+fn computer_use_guide_models_names_every_supported_provider() {
+    // The guide note is static locale prose; native route admission is the
+    // source of truth. Pin them together so adding a route fails here until
+    // the guide names its provider.
+    let routes = vtcode_computer_use::gate::NATIVE_ROUTES;
+    assert!(!routes.is_empty(), "a supported-list note needs at least one route");
     let text = rust_i18n::t!("app.settings.computer_use.guide_models", locale = "en").to_string();
     let lowered = text.to_lowercase();
-    for target in matrix {
-        assert!(text.contains(target.model), "guide note must name verified model {}: {text}", target.model);
-        assert!(lowered.contains(target.provider), "guide note must name provider {}: {text}", target.provider);
+    for (provider, _protocol) in routes {
+        let provider = provider.to_string().to_lowercase();
+        assert!(lowered.contains(&provider), "guide note must name provider {provider}: {text}");
     }
 }
 

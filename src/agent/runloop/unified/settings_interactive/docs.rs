@@ -173,24 +173,24 @@ mod tests {
     use super::FIELD_DOCS;
 
     #[test]
-    fn computer_use_enabled_doc_names_every_verified_model() {
+    fn computer_use_enabled_doc_names_every_supported_provider() {
         // The settings note is generated from the `computer_use.enabled` doc
         // comment in crates/codegen/vtcode-config/src/computer_use.rs; update
         // that source and regenerate with scripts/generate_config_field_reference.py.
-        // The verified matrix is the source of truth. Pin them together so
-        // accepting a new probe (VERIFIED_MATRIX growth) fails here until the
+        // Admission is by native route, so the note must name every provider
+        // with a declared route. Adding a route fails here until the
         // regenerated note names it.
-        let matrix = vtcode_computer_use::gate::VERIFIED_MATRIX;
-        assert!(!matrix.is_empty(), "a supported-list note needs a non-empty matrix");
+        let routes = vtcode_computer_use::gate::NATIVE_ROUTES;
+        assert!(!routes.is_empty(), "a supported-list note needs at least one route");
         let doc = FIELD_DOCS
             .lookup("computer_use.enabled")
             .expect("computer_use.enabled doc")
             .description
             .clone();
         let lowered = doc.to_lowercase();
-        for target in matrix {
-            assert!(doc.contains(target.model), "settings note must name verified model {}: {doc}", target.model);
-            assert!(lowered.contains(target.provider), "settings note must name provider {}: {doc}", target.provider);
+        for (provider, _protocol) in routes {
+            let provider = provider.to_string().to_lowercase();
+            assert!(lowered.contains(&provider), "settings note must name provider {provider}: {doc}");
         }
     }
 }

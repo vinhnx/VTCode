@@ -16,7 +16,8 @@ use crate::provider::{NativeCall, NativeCallBody};
 
 pub(super) const TOOLSET: &str = "computer";
 /// Native protocol version declared on the wire and checked by the gate.
-pub(crate) const PROTOCOL: &str = "computer_toolset_20260801";
+/// Re-exported from the owning gate table so declaration and admission cannot drift.
+pub(crate) use vtcode_computer_use::gate::ANTHROPIC_COMPUTER_PROTOCOL as PROTOCOL;
 const NOT_EXECUTED: &str = "Not executed: an earlier computer action in this turn failed.";
 
 pub(super) fn unbound_route_error() -> crate::provider::LLMError {

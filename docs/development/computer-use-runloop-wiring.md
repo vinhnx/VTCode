@@ -187,7 +187,7 @@ accumulation in the OpenAI and Anthropic SSE paths, parity-tested against the
 non-streaming parsers), and the resume contract (provider history replays from redacted
 summaries; interrupted turns synthesize aborted results — see the
 [quick reference](computer-use-quick-reference.md)). Still open: multi-turn
-chaining/continuation, more verified model/action matrix entries (the Anthropic probe
-script is ready; add its matrix entry only after a live run), possible `ThreadEvent`
+chaining/continuation, additional native provider routes (admission is per provider/protocol,
+so new models need no gate change), possible `ThreadEvent`
 contract updates if turn-specific events prove necessary. macOS driver isolation stays a
 separate release gate behind signed-app acceptance.

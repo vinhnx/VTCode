@@ -981,3 +981,15 @@ async fn launch_failure_message_preserves_error_chain() {
     assert!(message.contains("Failed to canonicalize"), "{message}");
     assert!(message.contains("No such file or directory"), "{message}");
 }
+
+#[test]
+fn unreachable_container_engine_gives_actionable_launch_failure() {
+    // A stopped daemon otherwise fails deep inside `docker run` with a bare
+    // ENOENT from the missing socket. The guard must refuse with a next step
+    // the model can relay, and stay silent when the engine is available.
+    let error = ensure_container_engine(false).expect_err("stopped daemon must refuse the turn");
+    assert!(error.to_string().contains("Docker daemon is not available"), "{error}");
+    assert!(error.to_string().contains("start your container engine"), "{error}");
+    assert_eq!(error.to_string(), DOCKER_UNAVAILABLE_GUIDANCE);
+    ensure_container_engine(true).expect("available engine must proceed");
+}

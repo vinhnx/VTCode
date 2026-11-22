@@ -180,40 +180,44 @@ async fn computer_use_native_parse_and_execute_agree_on_actions() {
 }
 
 #[tokio::test]
-async fn computer_use_native_denies_unverified_targets_before_any_io() {
+async fn computer_use_native_accepts_arbitrary_model_and_endpoint() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use crate::provider::{LLMProvider, LLMRequest, Message};
     use crate::providers::anthropic::provider::AnthropicProvider;
-    use vtcode_config::constants::models;
 
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"content": []})))
-        .expect(0)
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "content": [{"type": "text", "text": "acting now"}]
+        })))
+        .expect(1)
         .mount(&server)
         .await;
 
+    // Anthropic has no probe-matrix entry at all: a declared Anthropic route
+    // must dispatch the native turn for any model on any endpoint.
+    let model = "claude-future-1";
     let provider = AnthropicProvider::new_with_client(
         "test-key".into(),
-        models::CLAUDE_SONNET_5.into(),
+        model.into(),
         reqwest::Client::builder().no_proxy().build().unwrap(),
         format!("{}/v1", server.uri()),
         vtcode_config::TimeoutsConfig::default(),
     );
     assert!(provider.supports_computer_use());
-    let error = LLMProvider::generate_native(
+    let response = LLMProvider::generate_native(
         &provider,
         LLMRequest {
-            model: models::CLAUDE_SONNET_5.into(),
+            model: model.into(),
             messages: vec![Message::user("fixture".into())].into(),
             ..Default::default()
         },
     )
     .await
-    .unwrap_err();
-    assert!(error.to_string().contains("not verified"));
+    .expect("arbitrary model on a declared route must be admitted");
+    assert_eq!(response.content.as_deref(), Some("acting now"));
     server.verify().await;
 }

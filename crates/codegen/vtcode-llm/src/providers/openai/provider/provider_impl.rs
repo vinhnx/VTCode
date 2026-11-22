@@ -9,6 +9,7 @@ use crate::types as llm_types;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde_json::Value;
+use vtcode_commons::provider::Provider;
 use vtcode_config::constants::models;
 
 #[async_trait]
@@ -189,7 +190,7 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn supports_computer_use(&self) -> bool {
-        true
+        vtcode_computer_use::gate::native_route_supported(Provider::OpenAI, super::super::computer_use::PROTOCOL)
     }
 
     async fn generate_native(
@@ -197,20 +198,15 @@ impl provider::LLMProvider for OpenAIProvider {
         request: provider::LLMRequest,
     ) -> Result<provider::NativeResponse, provider::LLMError> {
         // No WebSocket, harmony, chat fallback, flex retry, or model fallback:
-        // native turns run Responses HTTP on verified models only, and any
+        // native turns run Responses HTTP on any model that declares this route, and any
         // failure surfaces for the run loop to decide on. Rate limits keep
         // their retryable error shape.
         let mut request = request;
         crate::providers::common::ensure_model(&mut request, &self.model);
         let model = request.model.clone();
-        if !vtcode_computer_use::gate::verified_target_default(
-            "openai",
-            &model,
-            &self.base_url,
-            super::super::computer_use::PROTOCOL,
-        ) {
+        if !vtcode_computer_use::gate::native_route_supported(Provider::OpenAI, super::super::computer_use::PROTOCOL) {
             return Err(provider::LLMError::Provider {
-                message: format!("Computer use is not verified for model {model}"),
+                message: "Computer use is unavailable on this provider route".to_string(),
                 metadata: None,
             });
         }
@@ -253,19 +249,14 @@ impl provider::LLMProvider for OpenAIProvider {
     async fn stream_native(&self, request: provider::LLMRequest) -> Result<provider::NativeStream, provider::LLMError> {
         // Same discipline as `generate_native`: no WebSocket, harmony, chat
         // fallback, flex retry, or model fallback. Native turns run
-        // Responses SSE on verified models only, and any failure surfaces
+        // Responses SSE on any model that declares this route, and any failure surfaces
         // for the run loop to decide on.
         let mut request = request;
         crate::providers::common::ensure_model(&mut request, &self.model);
         let model = request.model.clone();
-        if !vtcode_computer_use::gate::verified_target_default(
-            "openai",
-            &model,
-            &self.base_url,
-            super::super::computer_use::PROTOCOL,
-        ) {
+        if !vtcode_computer_use::gate::native_route_supported(Provider::OpenAI, super::super::computer_use::PROTOCOL) {
             return Err(provider::LLMError::Provider {
-                message: format!("Computer use is not verified for model {model}"),
+                message: "Computer use is unavailable on this provider route".to_string(),
                 metadata: None,
             });
         }

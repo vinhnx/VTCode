@@ -11,12 +11,12 @@
 use std::future::Future;
 use std::time::Duration;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, ensure};
 use serde_json::Value;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use vtcode_computer_use::browser::BrowserDriver;
-use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, TerminateOutcome};
+use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, TerminateOutcome, docker_available};
 use vtcode_computer_use::{Driver, TurnControl};
 use vtcode_config::ComputerUseConfig;
 use vtcode_core::exec::events::{
@@ -505,6 +505,21 @@ enum GuardedOutcome {
     Cancelled,
 }
 
+/// Actionable guidance when the container engine is unreachable. Spawning
+/// `docker run` against a stopped daemon surfaces only an opaque ENOENT from
+/// the missing socket, so refuse before the launch with a message the model
+/// and user can act on. Kept as a constant so the durable failure line is
+/// stable and independently testable.
+const DOCKER_UNAVAILABLE_GUIDANCE: &str =
+    "Docker daemon is not available; start your container engine (e.g. Docker Desktop) and retry";
+
+/// Fail closed on an unreachable container engine. The availability bit is
+/// injected so the actionable failure text stays testable without a daemon.
+fn ensure_container_engine(available: bool) -> Result<()> {
+    ensure!(available, "{DOCKER_UNAVAILABLE_GUIDANCE}");
+    Ok(())
+}
+
 /// Launch, execute, and tear down with stop awareness. Stopping abandons
 /// in-flight work (revocation guards fire on drop) and still removes an
 /// already-launched target; a stop that lands mid-launch is honored by the
@@ -529,6 +544,11 @@ async fn run_guarded_execution(
         // macOS variant must force this launch site to handle it at compile time.
         let ComputerUseTarget::Browser { build_dir } = target;
         let spec = ContainerSpec::approved(image, build_dir).await?;
+        // Check the daemon after validating the build dir so configuration
+        // errors keep their precise diagnostics (see the canonicalize
+        // regression test). A stopped daemon otherwise fails later with a
+        // bare "No such file or directory" from the missing socket.
+        ensure_container_engine(docker_available().await)?;
         let (handle, replies, commands) = ContainerHandle::launch(&spec).await?;
         let driver = BrowserDriver::connect(replies, commands).await?;
         Ok((handle, driver))

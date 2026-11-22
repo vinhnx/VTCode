@@ -10,25 +10,27 @@ drivers own target verification and input delivery.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `enabled` | `false` | Master switch; needs a verified model. |
+| `enabled` | `false` | Master switch; any model on an OpenAI or Anthropic native route. |
 | `browser_build` | `null` | Absolute path to the approved static build served by the preview. |
 | `image` | `vtcode-computer-use-browser:1.65.1` | Pinned container image (tag or digest). |
 | `max_actions_per_turn` | `50` | Batch budget (1–1000). |
 | `turn_timeout_secs` | `300` | Wall-clock turn budget (1–3600). |
 | `decisions_review` | `false` | OpenAI Decisions screens each batch before approval (OpenAI routes only). |
 
-## Verified matrix
+## Route admission
 
-`vtcode-computer-use/src/gate.rs` holds `VERIFIED_MATRIX` — one
-`(provider, model, endpoint, protocol)` entry per accepted live probe. `verified_target_default`
-denies unknown tuples before any network I/O, and both `generate_native`/`stream_native`
-check it first. Current entry:
+`vtcode-computer-use/src/gate.rs` holds `NATIVE_ROUTES` — the provider/protocol pairs with
+an implemented native computer-use tool. `native_route_supported` admits **any model and
+any endpoint** on a declared route and denies unknown routes before any network I/O; both
+`generate_native`/`stream_native` check it first. Declared routes:
 
-- OpenAI `gpt-6-luna` @ `https://api.openai.com/v1`, protocol `computer` (accepted 2026-11-19, `scripts/probe_openai_computer_use.py`)
+- OpenAI `computer` (Responses API)
+- Anthropic `computer_toolset_20260801` (Messages API)
 
-Anthropic `computer_toolset_20260801` is implemented and contract-tested; add its entry
-only after `scripts/probe_anthropic_computer_use.py` passes P1+P2 against the live endpoint.
-The merge gateway mistranslates native tool declarations — probe direct endpoints.
+`VERIFIED_MATRIX` records tuples proven by live probes and is advisory documentation, not
+an admission list. Current record: OpenAI `gpt-6-luna` @ `https://api.openai.com/v1`
+(accepted 2026-11-19, `scripts/probe_openai_computer_use.py`). Adding a provider route
+requires a native implementation and contract tests, not a per-model matrix entry.
 
 ## Route anatomy
 
@@ -79,7 +81,7 @@ in-memory, non-serializable, and their `Debug` impls expose routing metadata onl
 | `scripts/probe_anthropic_computer_use.py` | P1 declare `{type:computer_toolset_20260801}`, expect computer toolset blocks; P2 replay `tool_use` + screenshot `tool_result`. |
 
 Both print statuses, item/block types, and usage only — never credentials — and record
-the accepted tuple for `VERIFIED_MATRIX` with the probe date.
+the probed tuple in `VERIFIED_MATRIX` with the probe date as advisory history.
 
 ## Hard limits
 
