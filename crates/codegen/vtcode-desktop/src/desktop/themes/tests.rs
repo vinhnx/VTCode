@@ -285,19 +285,38 @@ fn faded_chrome_meets_non_text_contrast_on_canvas() {
 }
 
 #[gpui_kit::test]
-fn faded_chrome_on_toolbar_rail_meets_non_text_contrast(cx: &mut gpui_kit::TestAppContext) {
+fn toolbar_icon_tone_meets_non_text_contrast_in_both_modes(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         for theme in all_themes() {
             let _mode = apply_by_id(theme.id, None, cx);
             let colors = cx.theme().colors;
-            // The quiet zen-entry icon is painted on the toolbar band, whose
-            // fill is the navigation rail rather than the canvas. Calibrating
-            // against the canvas leaves every theme short of the 3:1 floor.
             let rail = navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;
-            let faded = faded_chrome(rail, colors.foreground);
-            let ratio = contrast_ratio(faded, rail);
-            assert!(ratio >= 3.0, "{}: faded chrome on toolbar rail is {ratio:.2} (below 3:1)", theme.id);
+
+            let opaque = toolbar_chrome(false, colors.background, colors.secondary, colors.foreground);
+            let translucent = toolbar_chrome(true, colors.background, colors.secondary, colors.foreground);
+
+            assert_eq!(opaque.band, rail, "{}: opaque band paints the rail", theme.id);
+            assert_eq!(translucent.band.a, 0., "{}: translucent band stays empty glass", theme.id);
+            assert_eq!(
+                opaque.icon_tone, translucent.icon_tone,
+                "{}: the icon tone must not depend on translucency; glass is modeled by the rail",
+                theme.id
+            );
+
+            let ratio = contrast_ratio(opaque.icon_tone, rail);
+            assert!(ratio >= 3.0, "{}: toolbar icon tone on the rail is {ratio:.2} (below 3:1)", theme.id);
+
+            // Asymmetric control: when the rail is a distinct surface, the
+            // band-calibrated tone must differ from a canvas-calibrated one.
+            if rail != colors.background {
+                assert_ne!(
+                    opaque.icon_tone,
+                    faded_chrome(colors.background, colors.foreground),
+                    "{}: icon tone must follow the band surface, not the canvas",
+                    theme.id
+                );
+            }
         }
     });
 }

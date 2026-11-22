@@ -29,7 +29,9 @@ pub(super) use custom::{
 mod terminal;
 pub(super) use terminal::{ciapre_ansi_slots, latte_ansi_slots, light_ansi_slots};
 mod toolbar;
+#[cfg(test)]
 pub(super) use toolbar::toolbar_band_surface;
+pub(super) use toolbar::toolbar_chrome;
 mod swatches;
 pub(super) use swatches::*;
 

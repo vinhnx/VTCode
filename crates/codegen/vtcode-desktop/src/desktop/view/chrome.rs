@@ -485,11 +485,14 @@ impl DesktopView {
         let swipe_cue_foreground = theme.colors.foreground;
         // The toolbar is chrome, not content: in translucent mode it floats
         // fully transparent on the window vibrancy instead of painting a
-        // band over it (see `toolbar_band_surface`).
-        let toolbar_surface = themes::toolbar_band_surface(
+        // band over it (see `toolbar_chrome`).
+        let toolbar_surface = themes::toolbar_chrome(
             self.effective_translucent_sidebar(),
-            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail,
-        );
+            theme.colors.background,
+            theme.colors.secondary,
+            theme.colors.foreground,
+        )
+        .band;
         // Fullscreen hides the traffic lights, so the leading cluster hugs the
         // window edge; windowed mode keeps the 80px light clearance. The kit
         // adds its own fullscreen pl_3 on the inner bar, which stacks here.
@@ -686,12 +689,16 @@ impl DesktopView {
         group = group.content(
             self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),
         );
-        // The quiet entry icon paints on the toolbar band, whose fill is the
-        // navigation rail, not the canvas. Calibrate against that surface so
-        // the icon holds the 3:1 non-text contrast floor in every theme.
-        let rail =
-            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
-        let faded = themes::faded_chrome(rail, theme.colors.foreground);
+        // Share the toolbar's surface derivation with the band fill so the
+        // quiet entry icon is always calibrated to the surface it paints on,
+        // including the translucent window-vibrancy case modeled by the rail.
+        let faded = themes::toolbar_chrome(
+            self.effective_translucent_sidebar(),
+            theme.colors.background,
+            theme.colors.secondary,
+            theme.colors.foreground,
+        )
+        .icon_tone;
         // The toolbar only renders outside zen mode; the toggle always offers entry here.
         group = group.child(zen_mode_toggle(false, Some(faded), &self.focus_handle));
         Toolbar::new("header-toolbar").small().child(group)
