@@ -4,6 +4,8 @@ use super::*;
 #[tokio::test]
 #[serial]
 async fn code_search_fixture_composes_exact_classifications_deterministically() {
+    const USAGE_LIMIT_HINT: &str = "Usage results are unavailable for some requested file types.";
+
     let fixture = code_search_fixture();
     let payload = json!({
         "query": "Widget",
@@ -57,6 +59,7 @@ async fn code_search_fixture_composes_exact_classifications_deterministically() 
             .any(|result| { result.result_type == CodeSearchResultType::Path && result.path == "src/WidgetConfig.rs" })
     );
     assert!(first.hints.iter().any(|hint| hint.contains("syntactic")));
+    assert!(!first.hints.iter().any(|hint| hint == USAGE_LIMIT_HINT));
 
     let lower_case_usage = execute(
         fixture.workspace.path(),
@@ -79,7 +82,12 @@ async fn code_search_fixture_composes_exact_classifications_deterministically() 
             .all(|result| result.name.as_deref() == Some("Widget"))
     );
 
-    for result_type in ["definition", "usage", "text", "path"] {
+    for (result_type, path, line) in [
+        (CodeSearchResultType::Definition, "src/widget.rs", Some(1)),
+        (CodeSearchResultType::Usage, "src/widget.rs", Some(2)),
+        (CodeSearchResultType::Text, "src/widget.rs", Some(9)),
+        (CodeSearchResultType::Path, "src/WidgetConfig.rs", None),
+    ] {
         let response = execute(
             fixture.workspace.path(),
             request(json!({
@@ -92,9 +100,8 @@ async fn code_search_fixture_composes_exact_classifications_deterministically() 
         )
         .await
         .expect("result subset");
-        assert!(response.results.iter().all(|result| {
-            serde_json::to_value(result.result_type).expect("result type").as_str() == Some(result_type)
-        }));
+        assert!(response.results.iter().all(|result| result.result_type == result_type));
+        assert!(response.results.iter().any(|result| result.path == path && result.line == line));
     }
 
     let unfiltered = execute(
@@ -114,7 +121,10 @@ async fn code_search_fixture_composes_exact_classifications_deterministically() 
             .iter()
             .any(|result| { result.result_type == CodeSearchResultType::Text && result.path == "src/widget.sh" })
     );
-    assert!(unfiltered.hints.iter().any(|hint| hint.contains("file types")));
+    assert!(unfiltered.hints.iter().any(|hint| hint == USAGE_LIMIT_HINT));
+    assert!(unfiltered.results.iter().any(|result| {
+        result.result_type == CodeSearchResultType::Usage && result.path == "src/widget.rs" && result.line == Some(2)
+    }));
 }
 #[tokio::test]
 async fn code_search_literal_smart_case_paths_and_policy_are_bounded() {
@@ -291,6 +301,7 @@ async fn code_search_bash_definition_remains_available() {
         request(json!({
             "query": "Widget",
             "path": "src/widget.sh",
+            "file_types": ["bash"],
             "result_types": ["definition"]
         })),
     )
@@ -300,6 +311,7 @@ async fn code_search_bash_definition_remains_available() {
     assert_eq!(response.returned, 1);
     assert_eq!(response.results[0].result_type, CodeSearchResultType::Definition);
     assert_eq!(response.results[0].name.as_deref(), Some("Widget"));
+    assert!(response.hints.is_empty());
 }
 #[tokio::test]
 async fn code_search_usage_only_requires_an_eligible_supported_inventory() {

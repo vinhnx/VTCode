@@ -38,6 +38,9 @@ pub fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[CodeLanguag
         requested_unsupported_file_types: languages.iter().any(|language| !language.supports_usage_classification()),
         ..UsageScopeSupport::default()
     };
+    let can_match_supported =
+        languages.is_empty() || languages.iter().any(|language| language.supports_usage_classification());
+    let can_match_unsupported = languages.is_empty() || support.requested_unsupported_file_types;
     for path in &scope.allowed_files {
         let Some(language) = CodeLanguage::from_path(path) else {
             continue;
@@ -49,6 +52,11 @@ pub fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[CodeLanguag
             support.has_supported_files = true;
         } else {
             support.has_unsupported_files = true;
+        }
+        if (support.has_supported_files || !can_match_supported)
+            && (support.has_unsupported_files || !can_match_unsupported)
+        {
+            break;
         }
     }
     support

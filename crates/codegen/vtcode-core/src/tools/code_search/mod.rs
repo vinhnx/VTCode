@@ -174,22 +174,29 @@ fn normalise_result_types(result_types: Option<Vec<CodeSearchResultType>>) -> Re
 
 pub async fn execute(workspace_root: &Path, request: CodeSearchRequest) -> Result<CodeSearchResponse> {
     let mut request = request.normalise()?;
-    let scope = spawn_blocking({
+    let usage_enabled = request.filters.result_types.contains(&CodeSearchResultType::Usage);
+    let languages = scope::requested_languages(&request.filters);
+    let (scope, languages, usage_support) = spawn_blocking({
         let workspace_root = workspace_root.to_path_buf();
         let path = request.filters.path.clone();
-        move || scope::resolve_scope(&workspace_root, &path)
+        move || {
+            let scope = scope::resolve_scope(&workspace_root, &path)?;
+            let usage_support = if usage_enabled {
+                scope::usage_scope_support(&scope, &languages)
+            } else {
+                scope::UsageScopeSupport::default()
+            };
+            Ok::<_, anyhow::Error>((scope, languages, usage_support))
+        }
     })
     .await
     .context("Failed to resolve search scope")??;
     request.filters.path = scope::response_path(&scope);
-    let languages = scope::requested_languages(&request.filters);
     let candidate_cap = backend_candidate_cap(request.filters.max_results);
     let definition_enabled = request.filters.result_types.contains(&CodeSearchResultType::Definition);
-    let usage_enabled = request.filters.result_types.contains(&CodeSearchResultType::Usage);
     let text_enabled = request.filters.result_types.contains(&CodeSearchResultType::Text);
     let path_enabled = request.filters.result_types.contains(&CodeSearchResultType::Path);
 
-    let usage_support = scope::usage_scope_support(&scope, &languages);
     let usage_backend_needed = usage_enabled && usage_support.has_supported_files;
     let literal_query = request.query.clone();
     let literal_path = scope.requested_path.clone();
