@@ -60,16 +60,15 @@ pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
 /// The canonical path, or the normalized path if no parent exists. Existing
 /// symlinks must resolve, including symlinks whose targets do not yet exist.
 pub async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
-    // Inspect the link itself: try_exists follows symlinks and reports a
-    // dangling link as absent, which would leave it unresolved in the result.
+    // Use the canonicalize result directly instead of probing with
+    // `symlink_metadata` first and re-deriving the answer with a second call.
+    // Two calls on the same path let a component change in between (the
+    // validate-then-rederive trap), and the probe is redundant work on the
+    // common path where the component exists.
     let mut current = normalized.to_path_buf();
     loop {
-        match tokio::fs::symlink_metadata(&current).await {
-            Ok(_) => {
-                let canonical_parent = canonicalize_async(&current)
-                    .await
-                    .map_err(|e| anyhow!("Failed to resolve canonical path for '{}': {}", current.display(), e))?;
-
+        match canonicalize_async(&current).await {
+            Ok(canonical_parent) => {
                 let remainder = normalized.strip_prefix(&current).unwrap_or_else(|_| Path::new(""));
 
                 // Return the canonical parent + remaining components
@@ -79,8 +78,24 @@ pub async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
                     Ok(canonical_parent.join(remainder))
                 };
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(anyhow!("Failed to inspect path '{}': {}", current.display(), error)),
+            // `canonicalize` reports NotFound both for missing components and
+            // for dangling symlinks. Only the latter needs a second look: probe
+            // the link itself so a dangling symlink fails closed instead of
+            // being silently treated as a missing path component.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match tokio::fs::symlink_metadata(&current).await {
+                    Ok(_) => {
+                        return Err(anyhow!("Failed to resolve canonical path for '{}': {}", current.display(), error));
+                    }
+                    Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(metadata_error) => {
+                        return Err(anyhow!("Failed to inspect path '{}': {}", current.display(), metadata_error));
+                    }
+                }
+            }
+            Err(error) => {
+                return Err(anyhow!("Failed to resolve canonical path for '{}': {}", current.display(), error));
+            }
         }
         let Some(parent) = current.parent() else { break };
         current = parent.to_path_buf();
@@ -169,5 +184,27 @@ mod tests {
         std::os::unix::fs::symlink(outside.path(), &valid_link).unwrap();
         let resolved = canonicalize_allow_missing(&valid_link.join("new/child")).await.unwrap();
         assert_eq!(resolved, canonicalize_async(outside.path()).await.unwrap().join("new/child"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn existing_symlink_resolves_to_its_target_on_the_success_path() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("target");
+        std::fs::create_dir(&target).unwrap();
+
+        // Canonicalize succeeds on the first call, so its result is reused
+        // directly: the symlink must resolve to the target, not the link path.
+        let link = workspace.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let resolved = canonicalize_allow_missing(&link.join("new/child")).await.unwrap();
+        assert_eq!(resolved, canonicalize_async(&target).await.unwrap().join("new/child"));
+
+        // Asymmetric case: the same shape with a missing target must fail
+        // closed, proving the follow-up probe only distinguishes dangling links.
+        let dangling = workspace.path().join("dangling");
+        std::os::unix::fs::symlink(outside.path().join("missing"), &dangling).unwrap();
+        assert!(canonicalize_allow_missing(&dangling.join("child")).await.is_err());
     }
 }
