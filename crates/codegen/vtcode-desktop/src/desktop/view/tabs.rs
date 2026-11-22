@@ -222,10 +222,10 @@ impl DesktopView {
     /// close affordance, a trailing new-thread button, an overflow menu, and
     /// a right-click menu per tab. Rendered only while more than one tab is
     /// open; zero/single-tab windows use the compact thread header instead.
-    /// Tabs take no keyboard focus themselves (Kit contract), so the strip
-    /// keeps its single tab stop while Left/Right/Home/End rove the shared
-    /// thread highlight. The bar sits flush on the canvas so the selected
-    /// tab joins the conversation below it.
+    /// Inner tabs stay pointer-only (`keyboard_navigation(false)` in the
+    /// shared builder), so the strip keeps its single tab stop while
+    /// Left/Right/Home/End rove the shared thread highlight. The bar sits
+    /// flush on the canvas so the selected tab joins the conversation below it.
     pub(super) fn render_thread_tabs(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let selected_position = self

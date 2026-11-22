@@ -13,7 +13,11 @@ use gpui_kit::component::tab::TabVariant;
 /// overflow scrolls, and strips with many tabs chain `.menu(true)` for the
 /// dropdown.
 fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>, variant: TabVariant) -> TabBar {
-    TabBar::new(id).with_variant(variant)
+    // VT Code owns every bar's keyboard contract (single-stop strips and
+    // radio-like segmented choices with their own highlight memory), so the
+    // inner Kit tabs stay pointer-only: no roving tab stop, no arrow/Enter
+    // handling inside the bar. See the `keyboard_navigation` patch note.
+    TabBar::new(id).with_variant(variant).keyboard_navigation(false)
 }
 
 /// Document tabs: the selected tab joins the content below, so callers on
@@ -25,9 +29,10 @@ pub(in crate::desktop::view) fn desktop_folder_tab_bar(id: impl Into<gpui_kit::E
 /// Mutually exclusive choices (source switches, preference choices): Kit's
 /// segmented variant owns the track, sliding pill, concentric corners and
 /// hover/selected states; the palette colors come from
-/// `themes/fills.rs`. Kit tabs are not focusable themselves,
-/// so callers wrap the bar in a focusable element with arrow/Home/End handling
-/// through [`segmented_choice_index`].
+/// `themes/fills.rs`. Inner tabs stay pointer-only
+/// (`keyboard_navigation(false)` in [`desktop_tab_bar`]), so callers wrap
+/// the bar in a focusable element with arrow/Home/End handling through
+/// [`segmented_choice_index`].
 pub(in crate::desktop::view) fn desktop_segmented_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
     desktop_tab_bar(id, TabVariant::Segmented).small()
 }
@@ -53,15 +58,16 @@ pub(in crate::desktop::view) fn segmented_choice_index(
     }
 }
 
-/// Focus stop and keyboard contract for a [`desktop_segmented_tab_bar`]: Kit
-/// tabs cannot own focus, so this wrapper owns the handle, visible focus ring,
-/// click-to-focus, and Left/Right/Home/End selection. Callers pass the selected
-/// index, a state updater, an accessible name that includes the current value,
-/// and the built bar; the bar itself stays a stateless Kit element. The wrapper
-/// is the only focus stop, so it must carry a role and name: the inner Kit tabs
-/// expose their own `Tab`/`aria_selected` semantics, but focus never lands on
-/// them. Returns a ready-to-mount element with the lookup id on the wrapper
-/// (Kit bars register no observable id of their own).
+/// Focus stop and keyboard contract for a [`desktop_segmented_tab_bar`]:
+/// inner tabs stay pointer-only, so this wrapper owns the handle, visible
+/// focus ring, click-to-focus, and Left/Right/Home/End selection. Callers
+/// pass the selected index, a state updater, an accessible name that
+/// includes the current value, and the built bar; the bar itself stays a
+/// stateless Kit element. The wrapper is the only focus stop, so it must
+/// carry a role and name: the inner Kit tabs expose their own
+/// `Tab`/`aria_selected` semantics, but focus never lands on them. Returns
+/// a ready-to-mount element with the lookup id on the wrapper (Kit bars
+/// register no observable id of their own).
 pub(in crate::desktop::view) fn segmented_choice_wrapper(
     id: impl Into<gpui_kit::ElementId>,
     focus: &FocusHandle,

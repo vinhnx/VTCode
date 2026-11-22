@@ -164,11 +164,11 @@ where
                             })
                             .detach();
 
-                        menu.clone()
+                        menu
                     }
                 };
 
-                menu.clone()
+                menu
             })
     }
 }
@@ -207,6 +207,7 @@ impl TriggerFocus {
     }
 }
 
+#[cfg(not(feature = "gpui-fast"))]
 impl IntoElement for TriggerFocus {
     type Element = Self;
 

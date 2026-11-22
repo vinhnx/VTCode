@@ -208,8 +208,8 @@ mac-notification-sys = { path = "patches/mac-notification-sys" }
 # `enum Class {}` (fixes `static_of_uninhabited_type` future-compat warning;
 # see patches/block/PATCH.md). Upstream is abandoned with no fixed release.
 block = { path = "patches/block" }
-# Patched gpui-component 0.9.1: expose MessageScrollerState::pause_following_tail
-# (see patches/gpui-component/PATCH.md). Drop when upstream publishes it.
+# Patched gpui-component 0.10.0: tail-follow pause, trigger contract, cursors
+# (see patches/gpui-component/PATCH.md). Drop when upstream publishes them.
 gpui-component = { path = "patches/gpui-component" }
 vtcode-diff = { path = "crates/common/vtcode-diff" }
 vtcode-commons = { path = "crates/common/vtcode-commons" }

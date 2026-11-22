@@ -110,6 +110,7 @@ impl<E: ParentElement + Styled> Styled for ContextMenu<E> {
     }
 }
 
+#[cfg(not(feature = "gpui-fast"))]
 impl<E: ParentElement + Styled + IntoElement + 'static> IntoElement for ContextMenu<E> {
     type Element = Self;
 
@@ -200,6 +201,7 @@ impl DeferredMenu {
     }
 }
 
+#[cfg(not(feature = "gpui-fast"))]
 impl IntoElement for DeferredMenu {
     type Element = Self;
 
@@ -288,7 +290,8 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
         window: &mut Window,
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
-        let anchor = self.anchor;
+        // At the pointer, the menu opens toward the end edge.
+        let anchor = gpui_base::logical_anchor(self.anchor, gpui_base::LayoutDirection::global(cx));
 
         self.with_element_state(
             id.unwrap(),

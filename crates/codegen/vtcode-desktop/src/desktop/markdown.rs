@@ -416,6 +416,11 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         // A richer renderer must not fetch URLs or local files from agent output:
         // every image stays blocked.
         .image_source(|_| blocked_image_source())
+        // Links that fail the gate never paint as links at all (no link
+        // color or underline, not clickable) instead of rendering as links
+        // that refuse to open. The click handler below stays as the opener
+        // for the surviving web links.
+        .link(|link, _| transcript_link_target(link))
         .on_link_click(|url, event, _, cx| {
             if !event.is_right_click()
                 && let Some(url) = external_web_url(url)
@@ -467,6 +472,13 @@ pub(super) fn external_web_url(raw_url: &str) -> Option<url::Url> {
     let has_no_embedded_credentials = url.username().is_empty() && url.password().is_none();
 
     (is_web_scheme && has_host && has_no_embedded_credentials).then_some(url)
+}
+
+/// Draw-time link filter for [`harden_transcript_text_view`]: keep links
+/// that pass [`external_web_url`], drop the rest to plain text. Runs per
+/// draw per link, so it stays a pure URL check with no I/O.
+fn transcript_link_target(link: &gpui_kit::base::text::Link) -> Option<gpui_kit::base::text::Link> {
+    external_web_url(&link.url).map(|_| link.clone())
 }
 
 #[cfg(test)]

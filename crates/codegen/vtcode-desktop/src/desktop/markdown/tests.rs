@@ -313,6 +313,24 @@ fn external_links_require_valid_credential_free_web_urls() {
 }
 
 #[test]
+fn transcript_link_filter_draws_only_web_links_as_links() {
+    use gpui_kit::base::text::Link;
+
+    use super::transcript_link_target;
+
+    let kept = transcript_link_target(&Link::new("https://example.test/docs")).expect("web link draws");
+    assert_eq!(kept.url.to_string(), "https://example.test/docs");
+    for raw in [
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "https://user@example.test/path",
+        "ftp://example.test/x",
+    ] {
+        assert!(transcript_link_target(&Link::new(raw)).is_none(), "must drop {raw:?} to plain text");
+    }
+}
+
+#[test]
 fn html_filter_preserves_unicode_and_inline_code() {
     let source = "Kế hoạch: <b>đúng</b> `x < y` — café";
     let prepared = prepare_markdown(&source.into());
