@@ -226,6 +226,53 @@ async fn reports_oversized_physical_lines_as_truncated() -> Result<()> {
 }
 
 #[tokio::test]
+async fn truncation_flag_excludes_skipped_prefix_and_lookahead_lines() -> Result<()> {
+    let mut temp = NamedTempFile::new()?;
+    let long_line = "x".repeat(crate::tools::file_ops::MAX_LINE_READ_BYTES + 1);
+    writeln!(temp, "{long_line}")?; // skipped by offset 2
+    writeln!(temp, "plain")?; // returned
+    writeln!(temp, "{long_line}")?; // lookahead past the limit of 1
+
+    let slice = read(temp.path(), 2, 1).await?;
+    assert_eq!(slice.lines, vec!["plain".to_string()]);
+    assert!(!slice.line_truncated, "neither the skipped prefix nor the lookahead line was returned");
+
+    // Control side: the same oversized line is flagged when it is returned.
+    let full = read(temp.path(), 1, 3).await?;
+    assert!(full.line_truncated);
+    Ok(())
+}
+
+#[tokio::test]
+async fn multi_range_truncation_is_attributed_per_range() -> Result<()> {
+    let mut temp = NamedTempFile::new()?;
+    let long_line = "x".repeat(crate::tools::file_ops::MAX_LINE_READ_BYTES + 1);
+    writeln!(temp, "{long_line}")?; // line 1, returned by the second range
+    writeln!(temp, "plain")?; // line 2, returned by the first range
+    writeln!(temp, "third")?; // line 3, returned by the first range
+    writeln!(temp, "{long_line}")?; // line 4, lookahead beyond both ranges
+
+    let range = |offset| ReadRange {
+        offset,
+        limit: 2,
+        mode: ReadMode::Slice,
+        indentation: None,
+    };
+    // Deliberately out of physical order: attribution must follow input
+    // position, not the sorted range layout used by the scan.
+    let ranges = vec![range(2), ReadRange { limit: 1, ..range(1) }];
+    let result = read_ranges(temp.path(), &ranges).await?;
+
+    let first = result.results[0].as_ref().unwrap().as_ref().unwrap();
+    assert_eq!(first.lines, vec!["plain".to_string(), "third".to_string()]);
+    assert!(!first.line_truncated, "the oversized lines are outside this range");
+
+    let second = result.results[1].as_ref().unwrap().as_ref().unwrap();
+    assert!(second.line_truncated, "the returned oversized line belongs to this range");
+    Ok(())
+}
+
+#[tokio::test]
 async fn trims_crlf_endings() -> Result<()> {
     let mut temp = NamedTempFile::new()?;
     write!(temp, "one\r\ntwo\r\n")?;

@@ -1,5 +1,6 @@
 use super::*;
 use crate::llm::provider::{Message, MessageRole};
+use proptest::prelude::*;
 /// Helper: Create test messages
 fn make_tool_call(call_id: &str, tool_name: &str) -> Message {
     Message::assistant_with_tools(
@@ -391,6 +392,99 @@ fn test_find_safe_split_point() {
     // Split at 4 is safe: call_b (3) and response_b (4) are both kept.
     let safe2 = safe_history_split_point(&messages, conversation_len, 4);
     assert_eq!(safe2, 4, "Should stay at 4 as it is safe");
+}
+
+#[test]
+fn safe_history_split_point_uses_tightest_crossing_call() {
+    let messages = vec![
+        Message::user("start".into()),      // 0
+        make_tool_call("call_a", "tool_a"), // 1
+        make_tool_response("call_a", "A"),  // 2
+        make_tool_call("call_b", "tool_b"), // 3
+        make_tool_call("call_c", "tool_c"), // 4
+        make_tool_response("call_c", "C"),  // 5
+        make_tool_response("call_b", "B"),  // 6
+    ];
+    let len = messages.len();
+
+    // Only B is right of the split: its call at 3 forces the split to 2.
+    assert_eq!(safe_history_split_point(&messages, len, 5), 2);
+    // C (call at 4) and B (call at 3) both cross; the earlier call binds.
+    assert_eq!(safe_history_split_point(&messages, len, 4), 2);
+    // Nothing crosses when every result is inside the kept prefix.
+    assert_eq!(safe_history_split_point(&messages, len, 6), 6);
+}
+
+#[test]
+fn safe_history_split_point_floors_at_zero_without_underflow() {
+    let messages = vec![
+        make_tool_call("call_a", "tool_a"), // 0
+        Message::user("between".into()),    // 1
+        make_tool_response("call_a", "A"),  // 2
+    ];
+
+    // The only result belongs to the call at index 0, so the split cannot move
+    // below zero; it must clamp rather than wrap.
+    assert_eq!(safe_history_split_point(&messages, messages.len(), 1), 0);
+}
+
+/// Reference implementation retained as a differential oracle: the one-pass
+/// computation must agree with the original decrement-and-rescan loop for
+/// every history shape, including duplicate call ids and orphan results.
+fn iterative_safe_split_oracle(messages: &[Message], conversation_len: usize, preferred: usize) -> usize {
+    if preferred == 0 || preferred >= conversation_len {
+        return preferred;
+    }
+    let mut call_indices: HashMap<&str, usize> = HashMap::new();
+    for (i, msg) in messages.iter().enumerate() {
+        if let Some(tool_calls) = &msg.tool_calls {
+            for call in tool_calls {
+                call_indices.insert(call.id.as_str(), i);
+            }
+        }
+    }
+    let mut split = preferred;
+    loop {
+        if split == 0 {
+            break;
+        }
+        let has_orphan = ((split + 1)..messages.len()).any(|i| {
+            messages
+                .get(i)
+                .and_then(|msg| msg.tool_call_id.as_ref())
+                .and_then(|id| call_indices.get(id.as_str()))
+                .is_some_and(|&call_idx| call_idx <= split)
+        });
+        if !has_orphan {
+            break;
+        }
+        split -= 1;
+    }
+    split
+}
+
+proptest! {
+    #[test]
+    fn safe_history_split_point_matches_iterative_oracle(
+        specs in prop::collection::vec((0u8..3, 0u8..6), 0..20),
+        preferred in 0usize..21,
+    ) {
+        let messages: Vec<Message> = specs
+            .into_iter()
+            .map(|(kind, id)| {
+                let id = format!("c{id}");
+                match kind {
+                    0 => Message::user("user".into()),
+                    1 => make_tool_call(&id, "tool"),
+                    _ => make_tool_response(&id, "result"),
+                }
+            })
+            .collect();
+        prop_assert_eq!(
+            safe_history_split_point(&messages, messages.len(), preferred),
+            iterative_safe_split_oracle(&messages, messages.len(), preferred),
+        );
+    }
 }
 
 #[test]

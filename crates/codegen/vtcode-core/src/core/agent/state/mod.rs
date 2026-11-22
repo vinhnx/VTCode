@@ -756,25 +756,36 @@ pub fn safe_history_split_point(messages: &[Message], conversation_len: usize, p
         }
     }
 
+    // A result at index `i` paired with a call at index `c` forbids every
+    // split in `[c, i - 1]`. Find the topmost connected run of forbidden
+    // splits by sweeping those intervals once; the safe split is just below
+    // it. This replaces a full suffix re-scan per decrement (quadratic on
+    // long histories) without changing which split is chosen.
+    let mut forbidden: Vec<(usize, usize)> = Vec::new();
+    for (i, msg) in messages.iter().enumerate() {
+        let Some(id) = msg.tool_call_id.as_deref() else {
+            continue;
+        };
+        let Some(&call_idx) = call_indices.get(id) else {
+            continue;
+        };
+        if call_idx < i && call_idx <= preferred_split_at {
+            forbidden.push((call_idx, i - 1));
+        }
+    }
+    forbidden.sort_unstable_by_key(|&(start, _)| std::cmp::Reverse(start));
+
     let mut safe_split_at = preferred_split_at;
-    loop {
-        if safe_split_at == 0 {
-            break;
+    for (start, end) in forbidden {
+        if start > safe_split_at {
+            continue;
         }
-
-        let has_orphan = ((safe_split_at + 1)..messages.len()).any(|i| {
-            messages
-                .get(i)
-                .and_then(|msg| msg.tool_call_id.as_ref())
-                .and_then(|id| call_indices.get(id.as_str()))
-                .is_some_and(|&call_idx| call_idx <= safe_split_at)
-        });
-
-        if !has_orphan {
-            break;
+        if end >= safe_split_at {
+            safe_split_at = start.saturating_sub(1);
+            if safe_split_at == 0 {
+                break;
+            }
         }
-
-        safe_split_at -= 1;
     }
 
     safe_split_at

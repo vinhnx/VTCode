@@ -541,7 +541,6 @@ mod slice {
                 reached_eof = true;
                 break;
             };
-            line_truncated |= truncated;
 
             seen = seen.saturating_add(1);
 
@@ -554,6 +553,9 @@ mod slice {
             }
 
             collected.push(line);
+            // Only lines actually returned may set this flag: the skipped
+            // prefix and the lookahead line are not part of the result.
+            line_truncated |= truncated;
         }
 
         // A successful empty read is necessary to inspect an existing empty
@@ -584,21 +586,23 @@ mod slice {
             .collect();
         let max_line = normalized_ranges.iter().map(|(_, end)| *end).max().unwrap_or(0);
         let mut collected: Vec<Vec<String>> = normalized_ranges.iter().map(|_| Vec::new()).collect();
+        // Truncation is per range: a long line belongs to exactly the ranges
+        // that returned it, never to sibling ranges in the same batch.
+        let mut truncated_in_range = vec![false; normalized_ranges.len()];
         let mut reader = BufReader::new(file);
         let mut buffer = Vec::new();
         let mut line_number = 0usize;
         let mut has_lookahead = false;
-        let mut line_truncated = false;
         let mut scan_error = None;
 
         while line_number < max_line {
             match read_formatted_line(&mut reader, &mut buffer).await {
                 Ok(Some((line, truncated))) => {
-                    line_truncated |= truncated;
                     line_number += 1;
                     for (index, (offset, end)) in normalized_ranges.iter().enumerate() {
                         if (*offset..=*end).contains(&line_number) {
                             collected[index].push(line.clone());
+                            truncated_in_range[index] |= truncated;
                         }
                     }
                 }
@@ -611,11 +615,10 @@ mod slice {
         }
 
         if scan_error.is_none() && line_number == max_line {
+            // The lookahead line decides `has_more` but is never returned, so
+            // its truncation must not leak into any range's result.
             match read_formatted_line(&mut reader, &mut buffer).await {
-                Ok(Some((_, truncated))) => {
-                    line_truncated |= truncated;
-                    has_lookahead = true;
-                }
+                Ok(Some(_)) => has_lookahead = true,
                 Ok(None) => {}
                 Err(error) => scan_error = Some(error),
             }
@@ -624,7 +627,8 @@ mod slice {
         let results = normalized_ranges
             .into_iter()
             .zip(collected)
-            .map(|((offset, end), lines)| {
+            .zip(truncated_in_range)
+            .map(|(((offset, end), lines), line_truncated)| {
                 if line_number < offset && !(line_number == 0 && offset == 1) {
                     scan_error
                         .is_none()
