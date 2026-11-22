@@ -165,10 +165,12 @@ pub fn resolve_cwd(cwd: Option<&str>, plugin_root: &Path, plugin_data: &Path) ->
 }
 
 pub(crate) fn canonicalize_allow_missing(path: &Path) -> std::io::Result<PathBuf> {
-    if let Ok(canonical) = vtcode_commons::canonicalize(path) {
-        return Ok(canonical);
-    }
     // Walk to the deepest existing ancestor, canonicalize it, re-append suffix.
+    // The first loop iteration probes `path` itself, so a separate leading
+    // `canonicalize(path)` would observe the same path twice: on a missing tail
+    // the second call can resolve a symlink planted in between and describe a
+    // different filesystem than the first. Canonicalize each path exactly once
+    // and keep that result, matching `vtcode-commons`' canonicalize_allow_missing.
     // Any `..` in the missing suffix is rejected: re-appended `..` would make
     // `starts_with` checks lexically true while escaping at runtime.
     let mut probe = path;
@@ -276,5 +278,41 @@ pub fn validate_plugin_relative(value: &str, root: &Path) -> Result<PathBuf, cra
                 probe = parent;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn canonicalize_allow_missing_resolves_existing_path_on_first_walk_step() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let target = temp.path().join("target");
+        std::fs::create_dir(&target).expect("create target");
+        let link = temp.path().join("link");
+        symlink(&target, &link).expect("symlink");
+
+        // The removed leading `canonicalize(path)` used to short-circuit here;
+        // the walk-up loop must produce the same answer on its first iteration.
+        assert_eq!(
+            canonicalize_allow_missing(&link).expect("canonicalize link"),
+            vtcode_commons::canonicalize(&target).expect("canonicalize target"),
+        );
+    }
+
+    #[test]
+    fn canonicalize_allow_missing_appends_missing_tail_to_canonical_parent() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let missing = temp.path().join("absent").join("child");
+        let canonical_temp = vtcode_commons::canonicalize(temp.path()).expect("canonicalize temp");
+
+        assert_eq!(
+            canonicalize_allow_missing(&missing).expect("canonicalize missing"),
+            canonical_temp.join("absent").join("child"),
+        );
     }
 }

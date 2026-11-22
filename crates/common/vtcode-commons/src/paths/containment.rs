@@ -47,6 +47,11 @@ pub fn validate_no_escaping_symlink_ancestors(path: &Path, allow_missing_tail: b
                 .filter(|parent| !parent.as_os_str().is_empty())
                 .unwrap_or_else(|| Path::new("."));
             let canonical_parent = canonicalize(parent)?;
+            // Keep the single resolution of `current`: it answers both the
+            // containment question and the "is a directory" question. Re-stating
+            // `current` afterwards would observe a path a concurrent actor can
+            // swap between the two calls, so the verdict could describe a
+            // different entry than the one whose target we just validated.
             let canonical_target = canonicalize(&current)?;
             if !canonical_target.starts_with(&canonical_parent) {
                 return Err(std::io::Error::other(format!(
@@ -54,7 +59,7 @@ pub fn validate_no_escaping_symlink_ancestors(path: &Path, allow_missing_tail: b
                     current.display()
                 )));
             }
-            if !fs::metadata(&current)?.is_dir() {
+            if !canonical_target.is_dir() {
                 return Err(std::io::Error::other(format!("path component {} is not a directory", current.display())));
             }
         } else if !is_leaf && !metadata.is_dir() {
@@ -669,5 +674,23 @@ mod tests {
         // still fails closed.
         assert!(validate_no_escaping_symlink_ancestors(&temp.path().join("alias").join("child"), true).is_ok());
         assert!(validate_no_escaping_symlink_ancestors(&temp.path().join("alias"), false).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_ancestor_validation_rejects_link_to_regular_file() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let file = temp.path().join("plain-file");
+        std::fs::write(&file, b"data").expect("write file");
+        let link = temp.path().join("link-to-file");
+        symlink(&file, &link).expect("symlink");
+
+        // Checks the directory verdict is derived from the single resolved
+        // target rather than a second stat of the (swappable) link path.
+        let error = validate_no_escaping_symlink_ancestors(&link.join("child"), false)
+            .expect_err("non-directory symlink ancestor must fail");
+        assert!(error.to_string().contains("is not a directory"), "{error}");
     }
 }
