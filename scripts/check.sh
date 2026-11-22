@@ -323,6 +323,27 @@ run_agent_legibility_checks() {
 	fi
 }
 
+run_build_script_cfg_checks() {
+	print_status "Running build-script host/target cfg gate..."
+	local failed=0
+	if python3 -m unittest scripts.tests.test_check_build_script_cfg; then
+		print_success "Build-script cfg gate tests passed."
+	else
+		print_error "Build-script cfg gate tests failed."
+		failed=1
+	fi
+	if python3 scripts/check_build_script_cfg.py --mode enforce; then
+		print_success "Build-script cfg gate passed."
+	else
+		print_error "Build-script cfg gate failed (see findings above)."
+		failed=1
+	fi
+	if [ "$failed" -eq 0 ]; then
+		return 0
+	fi
+	return 1
+}
+
 run_shell_scripts_lint() {
 	print_status "Running shell script lint (bash -n + nfo typo check)..."
 	local failed=0
@@ -425,6 +446,7 @@ main() {
 	run_cargo_deny || ((failed_checks++))
 	run_cargo_vet || ((failed_checks++))
 	run_agent_legibility_checks || ((failed_checks++))
+	run_build_script_cfg_checks || ((failed_checks++))
 	run_clippy || ((failed_checks++))
 	run_headless_check || ((failed_checks++))
 	run_build || ((failed_checks++))
@@ -494,6 +516,7 @@ case "${1:-}" in
 	echo "  build   - Build the project"
 	echo "  docs    - Generate documentation and run doctests"
 	echo "  legibility - Run agent legibility hotspot checks"
+	echo "  build-script-cfg - Gate host-target cfg checks in build.rs (enforce)"
 	echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
 	echo "  contracts - Run release-artifact contract tests"
 	echo "  zen     - Run Zen governance checks (unwrap + panic-in-Result enforced, hygiene warn)"
@@ -526,6 +549,9 @@ case "${1:-}" in
 	;;
 "legibility")
 	run_agent_legibility_checks
+	;;
+"build-script-cfg")
+	run_build_script_cfg_checks
 	;;
 "workflow-security")
 	run_workflow_security_lint

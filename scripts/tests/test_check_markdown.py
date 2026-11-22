@@ -16,6 +16,10 @@ spec = importlib.util.spec_from_file_location("check_markdown", Path(__file__).p
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+# Derive the pinned token from the gate so a version bump cannot silently rot
+# these expectations (the package.json guard test catches the other direction).
+PINNED = f"markdownlint-cli2@{module.MARKDOWNLINT_CLI2_VERSION}"
+
 
 class MarkdownSelectionTests(unittest.TestCase):
     def test_only_tracked_maintained_regular_files_are_selected(self):
@@ -70,7 +74,7 @@ class MarkdownSelectionTests(unittest.TestCase):
 class MarkdownInvocationTests(unittest.TestCase):
     def test_linter_exit_status_is_preserved_with_a_bounded_summary(self):
         files = ["README.md", "docs/another guide.md"]
-        base = ["bun", "x", "--no-install", "--silent", "markdownlint-cli2@0.23.3",
+        base = ["bun", "x", "--no-install", "--silent", PINNED,
                 "--config", ".markdownlint-cli2.jsonc"]
         for exit_code, status in [(0, "passed"), (1, "failed (exit 1)"), (2, "failed (exit 2)")]:
             with self.subTest(exit_code=exit_code), \
@@ -83,7 +87,7 @@ class MarkdownInvocationTests(unittest.TestCase):
                     self.assertEqual(module.main(), exit_code)
                 command = run.call_args.args[0]
                 self.assertIn("--silent", command)
-                self.assertIn("markdownlint-cli2@0.23.3", command)
+                self.assertIn(PINNED, command)
                 self.assertEqual(command[-2:], [":README.md", ":docs/another guide.md"])
                 self.assertEqual(run.call_args.kwargs, {"cwd": module.ROOT, "check": False})
                 self.assertEqual(output.getvalue(), f"Markdown lint {status}: 2 selected files.\n")
@@ -99,7 +103,7 @@ class MarkdownInvocationTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_missing_linter_binary_reports_a_toolchain_error_with_exit_two(self):
-        base = ["bun", "x", "--no-install", "--silent", "markdownlint-cli2@0.23.3",
+        base = ["bun", "x", "--no-install", "--silent", PINNED,
                 "--config", ".markdownlint-cli2.jsonc"]
         with mock.patch.object(module, "tracked_markdown", return_value=["README.md"]), \
                 mock.patch.object(module, "linter_command", return_value=list(base)), \
@@ -115,7 +119,7 @@ class MarkdownInvocationTests(unittest.TestCase):
 
     def test_scoped_paths_lint_only_the_requested_files_in_requested_order(self):
         files = ["README.md", "docs/guide.md", "docs/other.md"]
-        base = ["bun", "x", "--no-install", "--silent", "markdownlint-cli2@0.23.3",
+        base = ["bun", "x", "--no-install", "--silent", PINNED,
                 "--config", ".markdownlint-cli2.jsonc"]
         with mock.patch.object(module, "tracked_markdown", return_value=files), \
                 mock.patch.object(module, "linter_command", return_value=list(base)), \
@@ -173,7 +177,7 @@ class LinterCommandTests(unittest.TestCase):
     def test_missing_local_install_falls_back_to_a_pinned_fetch(self):
         expected = [
             "bun", "x", "--silent",
-            "markdownlint-cli2@0.23.3", "--config", ".markdownlint-cli2.jsonc",
+            PINNED, "--config", ".markdownlint-cli2.jsonc",
         ]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -17,7 +17,7 @@ EXCLUDED_FILES = {"docs/project/TODO.md"}
 # Vendored upstream content: lint fixes belong upstream, local edits would fork it.
 VENDORED_PREFIXES = ("patches/", ".agents/skills/rust-skills/")
 EXCLUDED_PARTS = {"fixtures", "snapshots", "embedded_assets_source"}
-MARKDOWNLINT_CLI2_VERSION = "0.23.3"
+MARKDOWNLINT_CLI2_VERSION = "0.24.2"
 MISSING_TOOLCHAIN_EXIT = 2
 
 
